@@ -1,9 +1,10 @@
-use std::{
-    iter::successors,
-    sync::Arc,
-};
+use std::sync::Arc;
 
-use crate::utils::make_receipts;
+use crate::utils::{
+    linear,
+    linear_short,
+    make_receipts,
+};
 
 use super::run_group_ref;
 
@@ -19,10 +20,7 @@ use fuel_core::{
         GenesisDatabase,
     },
     service::Config,
-    state::rocks_db::{
-        RocksDb,
-        ShallowTempDir,
-    },
+    state::historical_rocksdb::HistoricalRocksDB,
 };
 use fuel_core_benches::*;
 use fuel_core_storage::{
@@ -66,15 +64,21 @@ use rand::{
 pub struct BenchDb {
     db: GenesisDatabase,
     /// Used for RAII cleanup. Contents of this directory are deleted on drop.
-    _tmp_dir: ShallowTempDir,
+    _tmp_dir: utils::ShallowTempDir,
 }
 
 impl BenchDb {
     fn new(contract_id: &ContractId) -> anyhow::Result<Self> {
-        let tmp_dir = ShallowTempDir::new();
+        let tmp_dir = utils::ShallowTempDir::new();
 
-        let db =
-            Arc::new(RocksDb::<OnChain>::default_open(tmp_dir.path(), None).unwrap());
+        let db = HistoricalRocksDB::<OnChain>::default_open(
+            tmp_dir.path(),
+            None,
+            Default::default(),
+            -1,
+        )
+        .unwrap();
+        let db = Arc::new(db);
         let mut storage_key = primitive_types::U256::zero();
         let mut key_bytes = Bytes32::zeroed();
 
@@ -151,16 +155,8 @@ impl BenchDb {
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
-    const LAST_VALUE: u64 = 100_000;
-    let mut linear: Vec<u64> = vec![1, 10, 100, 1000, 10_000];
-    let mut linear_short = linear.clone();
-    linear_short.push(LAST_VALUE);
-    let mut l = successors(Some(LAST_VALUE as f64), |n| Some(n / 1.5))
-        .take(5)
-        .map(|f| f as u64)
-        .collect::<Vec<_>>();
-    l.sort_unstable();
-    linear.extend(l);
+    let linear_short = linear_short();
+    let linear = linear();
 
     let asset = AssetId::zeroed();
     let contract: ContractId = VmBench::CONTRACT;
@@ -287,7 +283,7 @@ pub fn run(c: &mut Criterion) {
     let mut call = c.benchmark_group("call");
 
     for i in linear.clone() {
-        let mut code = vec![0u8; i as usize];
+        let mut code = vec![123u8; i as usize];
 
         rng.fill_bytes(&mut code);
 
@@ -360,7 +356,7 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut ldc,
             format!("{i}"),
-            VmBench::new(op::ldc(0x10, RegId::ZERO, 0x13))
+            VmBench::new(op::ldc(0x10, RegId::ZERO, 0x13, 0))
                 .with_contract_code(code)
                 .with_data(data)
                 .with_prepare_script(prepare_script),
@@ -372,7 +368,7 @@ pub fn run(c: &mut Criterion) {
     let mut ccp = c.benchmark_group("ccp");
 
     for i in linear.clone() {
-        let mut code = vec![op::noop(); i as usize].into_iter().collect::<Vec<_>>();
+        let mut code = vec![0; i as usize];
 
         rng.fill_bytes(&mut code);
 
@@ -396,10 +392,7 @@ pub fn run(c: &mut Criterion) {
             op::movi(0x12, 100_000),
             op::movi(0x13, i.try_into().unwrap()),
             op::cfe(0x13),
-            op::movi(0x14, i.try_into().unwrap()),
             op::movi(0x15, i.try_into().unwrap()),
-            op::add(0x15, 0x15, 0x15),
-            op::addi(0x15, 0x15, 32),
             op::aloc(0x15),
             op::move_(0x15, RegId::HP),
         ];
@@ -417,6 +410,51 @@ pub fn run(c: &mut Criterion) {
     }
 
     ccp.finish();
+
+    let mut bldd = c.benchmark_group("bldd");
+
+    for i in linear.clone() {
+        let mut code = vec![0; i as usize];
+
+        rng.fill_bytes(&mut code);
+
+        let blob = BlobCode::from(code);
+
+        let data = blob
+            .id
+            .iter()
+            .copied()
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain(AssetId::default().iter().copied())
+            .collect();
+
+        let prepare_script = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, BlobId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::movi(0x12, 100_000),
+            op::movi(0x13, i.try_into().unwrap()),
+            op::cfe(0x13),
+            op::movi(0x15, i.try_into().unwrap()),
+            op::aloc(0x15),
+            op::move_(0x15, RegId::HP),
+        ];
+
+        bldd.throughput(Throughput::Bytes(i));
+
+        run_group_ref(
+            &mut bldd,
+            format!("{i}"),
+            VmBench::new(op::bldd(0x15, 0x10, RegId::ZERO, 0x13))
+                .with_blob(blob)
+                .with_data(data)
+                .with_prepare_script(prepare_script),
+        );
+    }
+
+    bldd.finish();
 
     let mut csiz = c.benchmark_group("csiz");
 
@@ -445,6 +483,33 @@ pub fn run(c: &mut Criterion) {
     }
 
     csiz.finish();
+
+    let mut bsiz = c.benchmark_group("bsiz");
+
+    for i in linear.clone() {
+        let mut code = vec![0u8; i as usize];
+
+        rng.fill_bytes(&mut code);
+
+        let blob = BlobCode::from(code);
+
+        let data = blob.id.iter().copied().collect();
+
+        let prepare_script = vec![op::gtf_args(0x10, 0x00, GTFArgs::ScriptData)];
+
+        bsiz.throughput(Throughput::Bytes(i));
+
+        run_group_ref(
+            &mut bsiz,
+            format!("{i}"),
+            VmBench::new(op::bsiz(0x11, 0x10))
+                .with_blob(blob)
+                .with_data(data)
+                .with_prepare_script(prepare_script),
+        );
+    }
+
+    bsiz.finish();
 
     run_group_ref(
         &mut c.benchmark_group("bhei"),
@@ -634,7 +699,7 @@ pub fn run(c: &mut Criterion) {
             let coin_input = Input::coin_predicate(
                 Default::default(),
                 owner,
-                Word::MAX,
+                Word::MAX >> 2,
                 AssetId::zeroed(),
                 Default::default(),
                 Default::default(),

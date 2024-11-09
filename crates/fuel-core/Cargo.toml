@@ -12,18 +12,22 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-async-graphql = { version = "4.0", features = [
+async-graphql = { version = "7.0.11", features = [
+  "playground",
   "tracing",
 ], default-features = false }
+async-graphql-value = "7.0.11"
 async-trait = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 derive_more = { version = "0.99" }
 enum-iterator = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
+fuel-core-compression = { workspace = true }
 fuel-core-consensus-module = { workspace = true }
 fuel-core-database = { workspace = true }
 fuel-core-executor = { workspace = true, features = ["std"] }
+fuel-core-gas-price-service = { workspace = true }
 fuel-core-importer = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-p2p = { workspace = true, optional = true }
@@ -34,15 +38,17 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
 fuel-core-txpool = { workspace = true }
-fuel-core-types = { workspace = true, features = ["serde"] }
+fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 fuel-core-upgradable-executor = { workspace = true }
 fuel-core-shared-sequencer-client = { workspace = true, optional = true }
 futures = { workspace = true }
-hex = { version = "0.4", features = ["serde"] }
+hex = { workspace = true }
 hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
 num_cpus = { version = "1.16.0", optional = true }
+paste = { workspace = true }
+postcard = { workspace = true, optional = true }
 rand = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
   "lz4",
@@ -55,15 +61,17 @@ strum_macros = { workspace = true }
 tempfile = { workspace = true, optional = true }
 thiserror = "1.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio-rayon = { workspace = true }
 tokio-stream = { workspace = true, features = ["sync"] }
 tokio-util = { workspace = true }
-tower-http = { version = "0.3", features = ["set-header", "trace", "timeout"] }
+tower = { version = "0.4", features = ["limit"] }
+tower-http = { version = "0.4", features = ["set-header", "trace", "timeout"] }
 tracing = { workspace = true }
 uuid = { version = "1.1", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
-fuel-core = { path = ".", features = ["test-helpers"] }
+fuel-core = { path = ".", features = ["smt", "test-helpers"] }
 fuel-core-executor = { workspace = true, features = ["std", "test-helpers"] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
@@ -79,18 +87,25 @@ test-strategy = { workspace = true }
 
 [features]
 default = ["rocksdb"]
+smt = [
+  "fuel-core-storage/smt",
+  "fuel-core-executor/smt",
+  "fuel-core-upgradable-executor/smt",
+]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 shared-sequencer = ["dep:fuel-core-shared-sequencer-client"]
-rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus"]
+rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus", "dep:postcard"]
 test-helpers = [
   "fuel-core-database/test-helpers",
   "fuel-core-p2p?/test-helpers",
   "fuel-core-storage/test-helpers",
   "fuel-core-chain-config/test-helpers",
+  "fuel-core-compression/test-helpers",
   "fuel-core-txpool/test-helpers",
   "fuel-core-services/test-helpers",
   "fuel-core-shared-sequencer-client?/test-helpers",
+  "fuel-core-importer/test-helpers",
 ]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]

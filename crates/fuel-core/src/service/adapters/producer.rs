@@ -1,5 +1,5 @@
 use crate::{
-    database::Database,
+    database::OnChainIterableKeyValueView,
     service::{
         adapters::{
             BlockProducerAdapter,
@@ -13,14 +13,15 @@ use crate::{
         sub_services::BlockProducerService,
     },
 };
-use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_producer::{
     block_producer::gas_price::{
         ConsensusParametersProvider as ConsensusParametersProviderTrait,
-        GasPriceParams,
         GasPriceProvider,
     },
-    ports::TxPool,
+    ports::{
+        RelayerBlockInfo,
+        TxPool,
+    },
 };
 use fuel_core_storage::{
     iter::{
@@ -77,12 +78,21 @@ impl BlockProducerAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl TxPool for TxPoolAdapter {
     type TxSource = TransactionsSource;
 
-    fn get_source(&self, block_height: BlockHeight) -> Self::TxSource {
-        TransactionsSource::new(self.service.clone(), block_height)
+    async fn get_source(
+        &self,
+        gas_price: u64,
+        _: BlockHeight,
+    ) -> anyhow::Result<Self::TxSource> {
+        let tx_pool = self
+            .service
+            .borrow_txpool()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        Ok(TransactionsSource::new(gas_price, tx_pool))
     }
 }
 
@@ -100,17 +110,7 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
         &self,
         component: Components<Vec<Transaction>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let new_components = Components {
-            header_to_produce: component.header_to_produce,
-            transactions_source: OnceTransactionsSource::new(
-                component.transactions_source,
-            ),
-            gas_price: component.gas_price,
-            coinbase_recipient: component.coinbase_recipient,
-        };
-
-        self.executor
-            .produce_without_commit_with_source(new_components)
+        self.produce_without_commit_from_vector(component)
     }
 }
 
@@ -151,13 +151,19 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
         }
     }
 
-    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {
+    async fn get_cost_and_transactions_number_for_block(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<RelayerBlockInfo> {
         #[cfg(feature = "relayer")]
         {
             if let Some(sync) = self.relayer_synced.as_ref() {
-                get_gas_cost_for_height(**height, sync)
+                get_gas_cost_and_transactions_number_for_height(**height, sync)
             } else {
-                Ok(0)
+                Ok(RelayerBlockInfo {
+                    gas_cost: 0,
+                    tx_count: 0,
+                })
             }
         }
         #[cfg(not(feature = "relayer"))]
@@ -167,30 +173,48 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
                 "Cannot have a da height above zero without a relayer"
             );
             // If the relayer is not enabled, then all blocks are zero.
-            Ok(0)
+            Ok(RelayerBlockInfo {
+                gas_cost: 0,
+                tx_count: 0,
+            })
         }
     }
 }
 
 #[cfg(feature = "relayer")]
-fn get_gas_cost_for_height(
+fn get_gas_cost_and_transactions_number_for_height(
     height: u64,
     sync: &fuel_core_relayer::SharedState<
-        Database<crate::database::database_description::relayer::Relayer>,
+        crate::database::Database<
+            crate::database::database_description::relayer::Relayer,
+        >,
     >,
-) -> anyhow::Result<u64> {
+) -> anyhow::Result<RelayerBlockInfo> {
     let da_height = DaBlockHeight(height);
-    let cost = sync
+    let (gas_cost, tx_count) = sync
         .database()
         .storage::<fuel_core_relayer::storage::EventsHistory>()
         .get(&da_height)?
         .unwrap_or_default()
         .iter()
-        .fold(0u64, |acc, event| acc.saturating_add(event.cost()));
-    Ok(cost)
+        .fold((0u64, 0u64), |(gas_cost, tx_count), event| {
+            let gas_cost = gas_cost.saturating_add(event.cost());
+            let tx_count = match event {
+                fuel_core_types::services::relayer::Event::Message(_) => tx_count,
+                fuel_core_types::services::relayer::Event::Transaction(_) => {
+                    tx_count.saturating_add(1)
+                }
+            };
+            (gas_cost, tx_count)
+        });
+    Ok(RelayerBlockInfo { gas_cost, tx_count })
 }
 
-impl fuel_core_producer::ports::BlockProducerDatabase for Database {
+impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableKeyValueView {
+    fn latest_height(&self) -> Option<BlockHeight> {
+        self.latest_height().ok()
+    }
+
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
         self.storage::<FuelBlocks>()
             .get(height)?
@@ -224,9 +248,10 @@ impl fuel_core_producer::ports::BlockProducerDatabase for Database {
     }
 }
 
+#[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    fn gas_price(&self, _block_height: GasPriceParams) -> Option<u64> {
-        Some(self.gas_price)
+    async fn next_gas_price(&self) -> anyhow::Result<u64> {
+        Ok(self.gas_price)
     }
 }
 

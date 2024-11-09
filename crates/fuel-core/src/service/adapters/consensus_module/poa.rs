@@ -15,6 +15,7 @@ use fuel_core_poa::{
         BlockImporter,
         P2pPort,
         SharedSequencerPort,
+        PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
     },
@@ -31,6 +32,8 @@ use fuel_core_types::{
         SealedBlock,
     },
     fuel_tx::TxId,
+    blockchain::block::Block,
+    fuel_tx::Bytes32,
     fuel_types::BlockHeight,
     secrecy::Secret,
     services::{
@@ -38,14 +41,15 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImporterResult,
         },
-        executor::{
-            Error as ExecutorError,
-            UncommittedResult,
-        },
-        txpool::ArcPoolTx,
+        executor::UncommittedResult,
     },
     tai64::Tai64,
 };
+use std::path::{
+    Path,
+    PathBuf,
+};
+use tokio::sync::watch;
 use tokio_stream::{
     wrappers::BroadcastStream,
     StreamExt,
@@ -82,27 +86,12 @@ impl ConsensusModulePort for PoAAdapter {
 }
 
 impl TransactionPool for TxPoolAdapter {
-    fn pending_number(&self) -> usize {
-        self.service.pending_number()
+    fn new_txs_watcher(&self) -> watch::Receiver<()> {
+        self.service.get_new_txs_notifier()
     }
 
-    fn total_consumable_gas(&self) -> u64 {
-        self.service.total_consumable_gas()
-    }
-
-    fn remove_txs(&self, ids: Vec<(TxId, ExecutorError)>) -> Vec<ArcPoolTx> {
-        self.service.remove_txs(
-            ids.into_iter()
-                .map(|(tx_id, err)| (tx_id, err.to_string()))
-                .collect(),
-        )
-    }
-
-    fn transaction_status_events(&self) -> BoxStream<TxId> {
-        Box::pin(
-            BroadcastStream::new(self.service.new_tx_notification_subscribe())
-                .filter_map(|result| result.ok()),
-        )
+    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
+        self.service.notify_skipped_txs(tx_ids_and_reasons)
     }
 }
 
@@ -127,6 +116,15 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
             }
         }
     }
+
+    async fn produce_predefined_block(
+        &self,
+        block: &Block,
+    ) -> anyhow::Result<UncommittedResult<Changes>> {
+        self.block_producer
+            .produce_and_execute_predefined(block)
+            .await
+    }
 }
 
 #[async_trait::async_trait]
@@ -145,7 +143,7 @@ impl BlockImporter for BlockImporterAdapter {
         Box::pin(
             BroadcastStream::new(self.block_importer.subscribe())
                 .filter_map(|result| result.ok())
-                .map(BlockImportInfo::from),
+                .map(|result| BlockImportInfo::from(result.shared_result)),
         )
     }
 }
@@ -195,4 +193,39 @@ impl SharedSequencerPort for SharedSequencerAdapter {
     ) -> anyhow::Result<()> {
         Ok(())
     }
+}
+pub struct InDirectoryPredefinedBlocks {
+    path_to_directory: Option<PathBuf>,
+}
+
+impl InDirectoryPredefinedBlocks {
+    pub fn new(path_to_directory: Option<PathBuf>) -> Self {
+        Self { path_to_directory }
+    }
+}
+
+impl PredefinedBlocks for InDirectoryPredefinedBlocks {
+    fn get_block(&self, height: &BlockHeight) -> anyhow::Result<Option<Block>> {
+        let Some(path) = &self.path_to_directory else {
+            return Ok(None);
+        };
+
+        let block_height: u32 = (*height).into();
+        if block_exists(path.as_path(), block_height) {
+            let block_path = block_path(path.as_path(), block_height);
+            let block_bytes = std::fs::read(block_path)?;
+            let block: Block = serde_json::from_slice(block_bytes.as_slice())?;
+            Ok(Some(block))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+pub fn block_path(path_to_directory: &Path, block_height: u32) -> PathBuf {
+    path_to_directory.join(format!("{}.json", block_height))
+}
+
+pub fn block_exists(path_to_directory: &Path, block_height: u32) -> bool {
+    block_path(path_to_directory, block_height).exists()
 }

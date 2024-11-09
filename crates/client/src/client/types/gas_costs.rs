@@ -19,10 +19,6 @@ impl GasCosts {
         self.0.addi()
     }
 
-    pub fn aloc(&self) -> Word {
-        self.0.aloc()
-    }
-
     pub fn and(&self) -> Word {
         self.0.and()
     }
@@ -51,10 +47,6 @@ impl GasCosts {
         self.0.cb()
     }
 
-    pub fn cfei(&self) -> Word {
-        self.0.cfei()
-    }
-
     pub fn cfsi(&self) -> Word {
         self.0.cfsi()
     }
@@ -73,10 +65,6 @@ impl GasCosts {
 
     pub fn ecr1(&self) -> Word {
         self.0.ecr1()
-    }
-
-    pub fn ed19(&self) -> Word {
-        self.0.ed19()
     }
 
     pub fn eq_(&self) -> Word {
@@ -362,6 +350,18 @@ impl GasCosts {
         self.0.xori()
     }
 
+    pub fn aloc(&self) -> DependentCost {
+        self.0.aloc().into()
+    }
+
+    pub fn cfe(&self) -> DependentCost {
+        self.0.cfe().into()
+    }
+
+    pub fn cfei(&self) -> DependentCost {
+        self.0.cfei().into()
+    }
+
     pub fn call(&self) -> DependentCost {
         self.0.call().into()
     }
@@ -376,6 +376,10 @@ impl GasCosts {
 
     pub fn csiz(&self) -> DependentCost {
         self.0.csiz().into()
+    }
+
+    pub fn ed19(&self) -> DependentCost {
+        self.0.ed19().into()
     }
 
     pub fn k256(&self) -> DependentCost {

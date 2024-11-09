@@ -13,11 +13,12 @@ version = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 fuel-core-services = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
 mockall = { workspace = true, optional = true }
 rand = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]

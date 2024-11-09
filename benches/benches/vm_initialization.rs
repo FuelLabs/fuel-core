@@ -3,7 +3,6 @@ use criterion::{
     Criterion,
     Throughput,
 };
-use fuel_core_storage::InterpreterStorage;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -17,16 +16,14 @@ use fuel_core_types::{
         Output,
         Script,
         Transaction,
+        TxParameters,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::{
         checked_transaction::{
             Checked,
             IntoChecked,
-            Ready,
         },
-        constraints::reg_key::Reg,
-        consts::VM_MAX_RAM,
         interpreter::NotSupportedEcal,
         Interpreter,
     },
@@ -43,7 +40,7 @@ fn transaction<R: Rng>(
     script_data: Vec<u8>,
     consensus_params: &ConsensusParameters,
 ) -> Checked<Script> {
-    let inputs = (0..1)
+    let mut inputs = (0..1)
         .map(|_| {
             Input::coin_predicate(
                 rng.gen(),
@@ -56,13 +53,33 @@ fn transaction<R: Rng>(
                 vec![255; 1],
             )
         })
-        .collect();
+        .collect::<Vec<_>>();
 
-    let outputs = (0..1)
+    const CONTRACTS_NUMBER: u16 = 254;
+
+    for i in 0..CONTRACTS_NUMBER {
+        inputs.push(Input::contract(
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            rng.gen(),
+            [i as u8; 32].into(),
+        ));
+    }
+
+    let mut outputs = (0..1)
         .map(|_| {
             Output::variable(Default::default(), Default::default(), Default::default())
         })
-        .collect();
+        .collect::<Vec<_>>();
+
+    for i in 0..CONTRACTS_NUMBER {
+        outputs.push(Output::contract(
+            i + 1,
+            Default::default(),
+            Default::default(),
+        ));
+    }
 
     Transaction::script(
         1_000_000,
@@ -79,7 +96,8 @@ fn transaction<R: Rng>(
 
 pub fn vm_initialization(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(8586);
-    let consensus_params = ConsensusParameters::default();
+    let mut consensus_params = ConsensusParameters::default();
+    consensus_params.set_tx_params(TxParameters::default().with_max_size(256 * 1024));
     let mut group = c.benchmark_group("vm_initialization");
 
     // Increase the size of the script to measure the performance of the VM initialization
@@ -98,57 +116,20 @@ pub fn vm_initialization(c: &mut Criterion) {
         let tx = tx.test_into_ready();
 
         let name = format!("vm_initialization_with_tx_size_{}", tx_size);
+        let mut vm = black_box(
+            Interpreter::<_, _, Script, NotSupportedEcal>::with_memory_storage(),
+        );
         group.throughput(Throughput::Bytes(tx_size as u64));
         group.bench_function(name, |b| {
             b.iter(|| {
-                unoptimized_vm_initialization_with_allocating_full_range_of_memory(&tx);
+                #[allow(clippy::unit_arg)]
+                black_box(
+                    vm.init_script(tx.clone())
+                        .expect("Should be able to execute transaction"),
+                );
             })
         });
     }
 
     group.finish();
-}
-
-fn unoptimized_vm_initialization_with_allocating_full_range_of_memory(
-    ready_tx: &Ready<Script>,
-) {
-    let vm = black_box(Interpreter::<_, Script, NotSupportedEcal>::with_memory_storage());
-
-    black_box(initialize_vm_with_allocated_full_range_of_memory(
-        black_box(ready_tx.clone()),
-        vm,
-    ));
-}
-
-fn initialize_vm_with_allocated_full_range_of_memory<S>(
-    ready_tx: Ready<Script>,
-    mut vm: Interpreter<S, Script>,
-) -> Interpreter<S, Script>
-where
-    S: InterpreterStorage,
-{
-    vm.init_script(ready_tx)
-        .expect("Should be able to execute transaction");
-
-    const POWER_OF_TWO_OF_HALF_VM: u64 = 25;
-    const VM_MEM_HALF: u64 = 1 << POWER_OF_TWO_OF_HALF_VM;
-    assert_eq!(VM_MEM_HALF, VM_MAX_RAM / 2);
-
-    for i in 0..=POWER_OF_TWO_OF_HALF_VM {
-        let stack = 1 << i;
-        let heap = VM_MAX_RAM - stack;
-
-        vm.memory_mut()
-            .grow_stack(stack)
-            .expect("Should be able to grow stack");
-        vm.memory_mut()
-            .grow_heap(Reg::new(&0), heap)
-            .expect("Should be able to grow heap");
-    }
-
-    vm.memory_mut()
-        .grow_heap(Reg::new(&0), 0)
-        .expect("Should be able to grow heap");
-
-    vm
 }

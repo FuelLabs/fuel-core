@@ -1,4 +1,7 @@
 use crate::config::Config;
+#[cfg(feature = "wasm-executor")]
+use crate::error::UpgradableError;
+
 use fuel_core_executor::{
     executor::{
         ExecutionInstance,
@@ -16,14 +19,19 @@ use fuel_core_storage::{
     transactional::{
         AtomicView,
         Changes,
+        HistoricalView,
         Modifiable,
     },
 };
+#[cfg(feature = "wasm-executor")]
+use fuel_core_types::fuel_types::Bytes32;
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        header::StateTransitionBytecodeVersion,
-        primitives::DaBlockHeight,
+        header::{
+            StateTransitionBytecodeVersion,
+            LATEST_STATE_TRANSITION_VERSION,
+        },
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
@@ -34,6 +42,7 @@ use fuel_core_types::{
             ExecutionResult,
             Result as ExecutorResult,
             TransactionExecutionStatus,
+            ValidationResult,
         },
         Uncommitted,
     },
@@ -54,7 +63,12 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::block::PartialFuelBlock;
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::services::executor::UncommittedResult;
-use fuel_core_types::services::executor::ValidationResult;
+#[cfg(feature = "wasm-executor")]
+use fuel_core_wasm_executor::utils::{
+    convert_from_v0_execution_result,
+    convert_from_v1_execution_result,
+    ReturnType,
+};
 
 #[cfg(feature = "wasm-executor")]
 enum ExecutionStrategy {
@@ -81,10 +95,7 @@ pub struct Executor<S, R> {
     execution_strategy: ExecutionStrategy,
     #[cfg(feature = "wasm-executor")]
     cached_modules: parking_lot::Mutex<
-        std::collections::HashMap<
-            fuel_core_types::blockchain::header::StateTransitionBytecodeVersion,
-            wasmtime::Module,
-        >,
+        std::collections::HashMap<StateTransitionBytecodeVersion, wasmtime::Module>,
     >,
 }
 
@@ -114,11 +125,38 @@ impl<S, R> Executor<S, R> {
     /// we need to use a native executor or WASM. If the version is the same as
     /// on the block, native execution is used. If the version is not the same
     /// as in the block, then the WASM executor is used.
-    pub const VERSION: u32 = StateTransitionBytecodeVersion::MIN;
+    pub const VERSION: u32 = LATEST_STATE_TRANSITION_VERSION;
+
     /// This constant is used along with the `version_check` test.
     /// To avoid automatic bumping during release, the constant uses `-` instead of `.`.
-    #[cfg(test)]
-    pub const CRATE_VERSION: &'static str = "0-26-0";
+    /// Each release should have its own new version of the executor.
+    /// The version of the executor should grow without gaps.
+    /// If publishing the release fails or the release is invalid, and
+    /// we don't plan to upgrade the network to use this release,
+    /// we still need to increase the version. The network can
+    /// easily skip releases by upgrading to the old state transition function.
+    pub const CRATE_VERSIONS: &'static [(
+        &'static str,
+        StateTransitionBytecodeVersion,
+    )] = &[
+        ("0-26-0", StateTransitionBytecodeVersion::MIN),
+        ("0-27-0", 1),
+        ("0-28-0", 2),
+        ("0-29-0", 3),
+        ("0-30-0", 4),
+        ("0-31-0", 5),
+        ("0-32-0", 6),
+        ("0-32-1", 7),
+        ("0-33-0", 8),
+        ("0-34-0", 9),
+        ("0-35-0", 10),
+        ("0-36-0", 11),
+        ("0-37-0", 12),
+        ("0-37-1", 13),
+        ("0-38-0", 14),
+        ("0-39-0", 15),
+        ("0-40-0", LATEST_STATE_TRANSITION_VERSION),
+    ];
 
     pub fn new(
         storage_view_provider: S,
@@ -172,7 +210,7 @@ impl<S, R> Executor<S, R> {
         let engine = private::DEFAULT_ENGINE.get_or_init(wasmtime::Engine::default);
         let module = private::COMPILED_UNDERLYING_EXECUTOR.get_or_init(|| {
             wasmtime::Module::new(engine, crate::WASM_BYTECODE)
-                .expect("Failed to compile the WASM bytecode")
+                .expect("Failed to validate the WASM bytecode")
         });
 
         Self {
@@ -188,12 +226,13 @@ impl<S, R> Executor<S, R> {
     }
 }
 
-impl<D, R> Executor<D, R>
+impl<S, R> Executor<S, R>
 where
-    R: AtomicView<Height = DaBlockHeight>,
-    R::View: RelayerPort + Send + Sync + 'static,
-    D: AtomicView<Height = BlockHeight> + Modifiable,
-    D::View: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    S: HistoricalView<Height = BlockHeight> + Modifiable,
+    S::LatestView: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    S::ViewAtHeight: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    R: AtomicView,
+    R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     #[cfg(any(test, feature = "test-helpers"))]
     /// Executes the block and commits the result of the execution into the inner `Database`.
@@ -222,10 +261,11 @@ where
 #[cfg(any(test, feature = "test-helpers"))]
 impl<S, R> Executor<S, R>
 where
-    S: AtomicView<Height = BlockHeight>,
-    S::View: KeyValueInspect<Column = Column> + Send + Sync + 'static,
-    R: AtomicView<Height = DaBlockHeight>,
-    R::View: RelayerPort + Send + Sync + 'static,
+    S: HistoricalView<Height = BlockHeight>,
+    S::LatestView: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    S::ViewAtHeight: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    R: AtomicView,
+    R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Executes the block and returns the result of the execution with storage changes.
     pub fn produce_without_commit(
@@ -269,10 +309,11 @@ where
 
 impl<S, R> Executor<S, R>
 where
-    S: AtomicView,
-    S::View: KeyValueInspect<Column = Column> + Send + Sync + 'static,
-    R: AtomicView<Height = DaBlockHeight>,
-    R::View: RelayerPort + Send + Sync + 'static,
+    S: HistoricalView<Height = BlockHeight>,
+    S::LatestView: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    S::ViewAtHeight: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    R: AtomicView,
+    R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
     pub fn produce_without_commit_with_source<TxSource>(
@@ -351,12 +392,16 @@ where
                     self.native_produce_inner(block, options, dry_run)
                 }
                 ExecutionStrategy::Wasm { module } => {
-                    self.wasm_produce_inner(module, block, options, dry_run)
+                    let maybe_blocks_module = self.get_module(block_version).ok();
+                    if let Some(blocks_module) = maybe_blocks_module {
+                        self.wasm_produce_inner(&blocks_module, block, options, dry_run)
+                    } else {
+                        self.wasm_produce_inner(module, block, options, dry_run)
+                    }
                 }
             }
         } else {
             let module = self.get_module(block_version)?;
-            Self::trace_block_version_warning(block_version);
             self.wasm_produce_inner(&module, block, options, dry_run)
         }
     }
@@ -395,23 +440,27 @@ where
             match &self.execution_strategy {
                 ExecutionStrategy::Native => self.native_validate_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
-                    self.wasm_validate_inner(module, block, options)
+                    let maybe_blocks_module = self.get_module(block_version).ok();
+                    if let Some(blocks_module) = maybe_blocks_module {
+                        self.wasm_validate_inner(&blocks_module, block, options)
+                    } else {
+                        self.wasm_validate_inner(module, block, options)
+                    }
                 }
             }
         } else {
             let module = self.get_module(block_version)?;
-            Self::trace_block_version_warning(block_version);
             self.wasm_validate_inner(&module, block, self.config.as_ref().into())
         }
     }
 
     #[cfg(feature = "wasm-executor")]
-    fn trace_block_version_warning(block_version: StateTransitionBytecodeVersion) {
+    fn trace_block_version_warning(&self, block_version: StateTransitionBytecodeVersion) {
         tracing::warn!(
             "The block version({}) is different from the native executor version({}). \
                 The WASM executor will be used.",
             block_version,
-            Self::VERSION
+            self.native_executor_version()
         );
     }
 
@@ -450,6 +499,9 @@ where
             coinbase_recipient,
             gas_price,
         } = component;
+        self.trace_block_version_warning(
+            header_to_produce.state_transition_bytecode_version,
+        );
 
         let source = Some(transactions_source);
 
@@ -460,13 +512,29 @@ where
             gas_price,
         };
 
-        let storage = self.storage_view_provider.latest_view();
-        let relayer = self.relayer_view_provider.latest_view();
+        let previous_block_height = if !dry_run {
+            block.header_to_produce.height().pred()
+        } else {
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/2062
+            None
+        };
 
-        let instance_without_input = crate::instance::Instance::new(&self.engine)
-            .add_source(source)?
-            .add_storage(storage)?
-            .add_relayer(relayer)?;
+        let instance_without_input =
+            crate::instance::Instance::new(&self.engine).add_source(source)?;
+
+        let instance_without_input = if let Some(previous_block_height) =
+            previous_block_height
+        {
+            let storage = self.storage_view_provider.view_at(&previous_block_height)?;
+            instance_without_input.add_storage(storage)?
+        } else {
+            let storage = self.storage_view_provider.latest_view()?;
+            instance_without_input.add_storage(storage)?
+        };
+
+        let relayer = self.relayer_view_provider.latest_view()?;
+        let instance_without_input = instance_without_input.add_relayer(relayer)?;
+
         let instance = if dry_run {
             instance_without_input.add_dry_run_input_data(block, options)?
         } else {
@@ -476,7 +544,18 @@ where
         let output = instance.run(module)?;
 
         match output {
-            fuel_core_wasm_executor::utils::ReturnType::V1(result) => result,
+            ReturnType::ExecutionV0(result) => {
+                convert_from_v0_execution_result(result)
+            },
+            ReturnType::ExecutionV1(result) => {
+                convert_from_v1_execution_result(result)
+            }
+            ReturnType::Validation(_) => {
+                Err(ExecutorError::Other(
+                    "The WASM executor returned a validation result instead of an execution result"
+                        .to_string(),
+                ))
+            }
         }
     }
 
@@ -487,21 +566,37 @@ where
         block: &Block,
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
-        let storage = self.storage_view_provider.latest_view();
-        let relayer = self.relayer_view_provider.latest_view();
+        self.trace_block_version_warning(
+            block.header().state_transition_bytecode_version,
+        );
+        let previous_block_height = block.header().height().pred();
 
-        let instance = crate::instance::Instance::new(&self.engine)
-            .no_source()?
-            .add_storage(storage)?
+        let instance = crate::instance::Instance::new(&self.engine).no_source()?;
+
+        let instance = if let Some(previous_block_height) = previous_block_height {
+            let storage = self.storage_view_provider.view_at(&previous_block_height)?;
+            instance.add_storage(storage)?
+        } else {
+            let storage = self.storage_view_provider.latest_view()?;
+            instance.add_storage(storage)?
+        };
+
+        let relayer = self.relayer_view_provider.latest_view()?;
+        let instance = instance
             .add_relayer(relayer)?
             .add_validation_input_data(block, options)?;
 
         let output = instance.run(module)?;
 
         match output {
-            fuel_core_wasm_executor::utils::ReturnType::V1(result) => {
-                Ok(result?.into_validation_result())
+            ReturnType::ExecutionV0(result) => {
+                Ok(convert_from_v0_execution_result(result)?.into_validation_result())
             }
+            ReturnType::ExecutionV1(result) => {
+                let result = convert_from_v1_execution_result(result)?;
+                Ok(result.into_validation_result())
+            }
+            ReturnType::Validation(result) => Ok(result?),
         }
     }
 
@@ -514,8 +609,23 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let instance = self.new_native_executor_instance(options);
-        instance.produce_without_commit(block, dry_run)
+        let previous_block_height = if !dry_run {
+            block.header_to_produce.height().pred()
+        } else {
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/2062
+            None
+        };
+        let relayer = self.relayer_view_provider.latest_view()?;
+
+        if let Some(previous_block_height) = previous_block_height {
+            let database = self.storage_view_provider.view_at(&previous_block_height)?;
+            ExecutionInstance::new(relayer, database, options)
+                .produce_without_commit(block, dry_run)
+        } else {
+            let database = self.storage_view_provider.latest_view()?;
+            ExecutionInstance::new(relayer, database, options)
+                .produce_without_commit(block, dry_run)
+        }
     }
 
     fn native_validate_inner(
@@ -523,22 +633,67 @@ where
         block: &Block,
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
-        let instance = self.new_native_executor_instance(options);
-        instance.validate_without_commit(block)
+        let previous_block_height = block.header().height().pred();
+        let relayer = self.relayer_view_provider.latest_view()?;
+
+        if let Some(previous_block_height) = previous_block_height {
+            let database = self.storage_view_provider.view_at(&previous_block_height)?;
+            ExecutionInstance::new(relayer, database, options)
+                .validate_without_commit(block)
+        } else {
+            let database = self.storage_view_provider.latest_view()?;
+            ExecutionInstance::new(relayer, database, options)
+                .validate_without_commit(block)
+        }
     }
 
-    fn new_native_executor_instance(
+    /// Attempt to fetch and validate an uploaded WASM module.
+    #[cfg(feature = "wasm-executor")]
+    pub fn validate_uploaded_wasm(
         &self,
-        options: ExecutionOptions,
-    ) -> ExecutionInstance<<R as AtomicView>::View, <S as AtomicView>::View> {
-        let relayer = self.relayer_view_provider.latest_view();
-        let storage = self.storage_view_provider.latest_view();
+        wasm_root: &Bytes32,
+    ) -> Result<(), UpgradableError> {
+        self.get_module_by_root_and_validate(*wasm_root).map(|_| ())
+    }
 
-        ExecutionInstance {
-            relayer,
-            database: storage,
-            options,
+    /// Find an uploaded WASM blob by it's hash and validate it.
+    /// This is a slow operation, and the cached result should be used if possible,
+    /// for instancy by calling `get_module` below.
+    #[cfg(feature = "wasm-executor")]
+    fn get_module_by_root_and_validate(
+        &self,
+        bytecode_root: Bytes32,
+    ) -> Result<wasmtime::Module, UpgradableError> {
+        let view = StructuredStorage::new(
+            self.storage_view_provider
+                .latest_view()
+                .map_err(ExecutorError::from)?,
+        );
+        let uploaded_bytecode = view
+            .storage::<UploadedBytecodes>()
+            .get(&bytecode_root)
+            .map_err(ExecutorError::from)?
+            .ok_or(not_found!(UploadedBytecodes))
+            .map_err(ExecutorError::from)?;
+
+        let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
+            uploaded_bytecode.as_ref()
+        else {
+            return Err(UpgradableError::IncompleteUploadedBytecode(bytecode_root))
+        };
+
+        // If the bytecode is the same as the native executor, we don't need to compile it.
+        if bytecode == crate::WASM_BYTECODE {
+            let engine = private::DEFAULT_ENGINE.get_or_init(wasmtime::Engine::default);
+            let module = private::COMPILED_UNDERLYING_EXECUTOR.get_or_init(|| {
+                wasmtime::Module::new(engine, crate::WASM_BYTECODE)
+                    .expect("Failed to validate the WASM bytecode")
+            });
+            return Ok(module.clone());
         }
+
+        wasmtime::Module::new(&self.engine, bytecode)
+            .map_err(|e| UpgradableError::InvalidWasm(e.to_string()))
     }
 
     /// Returns the compiled WASM module of the state transition function.
@@ -548,47 +703,45 @@ where
     #[cfg(feature = "wasm-executor")]
     fn get_module(
         &self,
-        version: fuel_core_types::blockchain::header::StateTransitionBytecodeVersion,
+        version: StateTransitionBytecodeVersion,
     ) -> ExecutorResult<wasmtime::Module> {
-        let guard = self.cached_modules.lock();
+        let mut guard = self.cached_modules.lock();
         if let Some(module) = guard.get(&version) {
             return Ok(module.clone());
         }
-        drop(guard);
 
-        let view = StructuredStorage::new(self.storage_view_provider.latest_view());
+        let view = StructuredStorage::new(
+            self.storage_view_provider
+                .latest_view()
+                .map_err(ExecutorError::from)?,
+        );
         let bytecode_root = *view
             .storage::<StateTransitionBytecodeVersions>()
-            .get(&version)?
-            .ok_or(not_found!(StateTransitionBytecodeVersions))?;
-        let uploaded_bytecode = view
-            .storage::<UploadedBytecodes>()
-            .get(&bytecode_root)?
-            .ok_or(not_found!(UploadedBytecodes))?;
+            .get(&version)
+            .map_err(ExecutorError::from)?
+            .ok_or(not_found!(StateTransitionBytecodeVersions))
+            .map_err(ExecutorError::from)?;
 
-        let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
-            uploaded_bytecode.as_ref()
-        else {
-            return Err(ExecutorError::Other(format!(
-                "The bytecode under the bytecode_root(`{bytecode_root}`) is not completed",
-            )))
-        };
+        let module = self
+            .get_module_by_root_and_validate(bytecode_root)
+            .map_err(|err| match err {
+                UpgradableError::InvalidWasm(_) => ExecutorError::Other(format!("Attempting to load invalid wasm bytecode, version={version}. Current version is `{}`", Self::VERSION)),
+                UpgradableError::IncompleteUploadedBytecode(_) => ExecutorError::Other(format!("Attempting to load wasm bytecode failed since the upload is incomplete, version={version}. Current version is `{}`", Self::VERSION)),
+                UpgradableError::ExecutorError(err) => err
+            })?;
 
-        // Compiles the module
-        let module = wasmtime::Module::new(&self.engine, bytecode).map_err(|e| {
-            ExecutorError::Other(format!(
-                "Failed to compile the module for the version `{}` with {e}",
-                version,
-            ))
-        })?;
-
-        self.cached_modules.lock().insert(version, module.clone());
+        guard.insert(version, module.clone());
         Ok(module)
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
+#[allow(unexpected_cfgs)] // for cfg(coverage)
 #[cfg(test)]
 mod test {
+    #[cfg(coverage)]
+    use ntest as _; // Only used outside cdg(coverage)
+
     use super::*;
     use fuel_core_storage::{
         kv_store::Value,
@@ -610,7 +763,10 @@ mod test {
                 PartialBlockHeader,
                 StateTransitionBytecodeVersion,
             },
-            primitives::Empty,
+            primitives::{
+                DaBlockHeight,
+                Empty,
+            },
         },
         fuel_tx::{
             AssetId,
@@ -620,24 +776,32 @@ mod test {
         services::relayer::Event,
         tai64::Tai64,
     };
+    use std::collections::{
+        BTreeMap,
+        BTreeSet,
+    };
 
     #[derive(Clone, Debug)]
     struct Storage(InMemoryStorage<Column>);
 
     impl AtomicView for Storage {
-        type View = InMemoryStorage<Column>;
+        type LatestView = InMemoryStorage<Column>;
+
+        fn latest_view(&self) -> StorageResult<Self::LatestView> {
+            Ok(self.0.clone())
+        }
+    }
+
+    impl HistoricalView for Storage {
         type Height = BlockHeight;
+        type ViewAtHeight = Self::LatestView;
 
         fn latest_height(&self) -> Option<Self::Height> {
             None
         }
 
-        fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
-            unimplemented!()
-        }
-
-        fn latest_view(&self) -> Self::View {
-            self.0.clone()
+        fn view_at(&self, _: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
+            self.latest_view()
         }
     }
 
@@ -669,34 +833,67 @@ mod test {
     }
 
     impl AtomicView for DisabledRelayer {
-        type View = Self;
-        type Height = DaBlockHeight;
+        type LatestView = Self;
 
-        fn latest_height(&self) -> Option<Self::Height> {
-            None
-        }
-
-        fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
-            unimplemented!()
-        }
-
-        fn latest_view(&self) -> Self::View {
-            *self
+        fn latest_view(&self) -> StorageResult<Self::LatestView> {
+            Ok(*self)
         }
     }
 
+    // When this test fails, it is a sign that we need to increase the `Executor::VERSION`.
     #[test]
     fn version_check() {
         let crate_version = env!("CARGO_PKG_VERSION");
-        let executor_cate_version = Executor::<Storage, DisabledRelayer>::CRATE_VERSION
-            .to_string()
-            .replace('-', ".");
+        let dashed_crate_version = crate_version.to_string().replace('.', "-");
+        let mut seen_executor_versions =
+            BTreeSet::<StateTransitionBytecodeVersion>::new();
+        let seen_crate_versions = Executor::<Storage, DisabledRelayer>::CRATE_VERSIONS
+            .iter()
+            .map(|(crate_version, version)| {
+                let executor_crate_version = crate_version.to_string().replace('-', ".");
+                seen_executor_versions.insert(*version);
+                (executor_crate_version, *version)
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        if let Some(expected_version) = seen_crate_versions.get(crate_version) {
+            assert_eq!(
+                *expected_version,
+                Executor::<Storage, DisabledRelayer>::VERSION,
+                "The version of the executor should be the same as in the `CRATE_VERSIONS` constant"
+            );
+        } else {
+            let next_version = Executor::<Storage, DisabledRelayer>::VERSION + 1;
+            panic!(
+                "New release {crate_version} is not mentioned in the `CRATE_VERSIONS` constant.\
+                Please add the new entry `(\"{dashed_crate_version}\", {next_version})` \
+                to the `CRATE_VERSIONS` constant."
+            );
+        }
+
+        let last_crate_version = seen_crate_versions.last_key_value().unwrap().0.clone();
         assert_eq!(
-            executor_cate_version, crate_version,
-            "When this test fails, \
-            it is a sign that maybe we need to increase the `Executor::VERSION`. \
-            If there are no breaking changes that affect the execution, \
-            then you can only increase `Executor::CRATE_VERSION` to pass this test."
+            crate_version, last_crate_version,
+            "The last version in the `CRATE_VERSIONS` constant \
+                   should be the same as the current crate version."
+        );
+
+        assert_eq!(
+            seen_executor_versions.len(),
+            seen_crate_versions.len(),
+            "Each executor version should be unique"
+        );
+
+        assert_eq!(
+            seen_executor_versions.len() as u32 - 1,
+            Executor::<Storage, DisabledRelayer>::VERSION,
+            "The version of the executor should monotonically grow without gaps"
+        );
+
+        assert_eq!(
+            seen_executor_versions.last().cloned().unwrap(),
+            Executor::<Storage, DisabledRelayer>::VERSION,
+            "The latest version of the executor should be the last version in the `CRATE_VERSIONS` constant"
         );
     }
 
@@ -749,6 +946,7 @@ mod test {
     mod native {
         use super::*;
         use crate::executor::Executor;
+        use ntest as _;
 
         #[test]
         fn can_validate_block() {
@@ -759,7 +957,7 @@ mod test {
             let block = valid_block(Executor::<Storage, DisabledRelayer>::VERSION);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             assert_eq!(Ok(()), result);
@@ -775,7 +973,7 @@ mod test {
             let block = valid_block(wrong_version);
 
             // When
-            let result = executor.validate_without_commit(block).map(|_| ());
+            let result = executor.validate(&block).map(|_| ());
 
             // Then
             result.expect_err("The validation should fail because of versions mismatch");
@@ -912,6 +1110,7 @@ mod test {
         // The test verifies that `Executor::get_module` method caches the compiled WASM module.
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
+        #[cfg(not(coverage))] // Too slow for coverage
         #[ntest::timeout(60_000)]
         fn reuse_cached_compiled_module__native_strategy() {
             // Given
@@ -932,6 +1131,7 @@ mod test {
         // The test verifies that `Executor::get_module` method caches the compiled WASM module.
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
+        #[cfg(not(coverage))] // Too slow for coverage
         #[ntest::timeout(60_000)]
         fn reuse_cached_compiled_module__wasm_strategy() {
             // Given

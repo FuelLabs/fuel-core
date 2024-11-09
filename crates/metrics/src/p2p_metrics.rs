@@ -1,33 +1,36 @@
-use once_cell::race::OnceBox;
-use prometheus_client::{
-    metrics::counter::Counter,
-    registry::Registry,
+use crate::global_registry;
+use prometheus_client::metrics::{
+    counter::Counter,
+    gauge::Gauge,
 };
 use std::sync::OnceLock;
 
 pub struct P2PMetrics {
-    pub gossip_sub_registry: OnceBox<Registry>,
-    // For descriptions of each Counter, see the `new` function where each Counter/Histogram is initialized
-    pub peer_metrics: Registry,
     pub unique_peers: Counter,
+    pub blocks_requested: Gauge,
 }
 
 impl P2PMetrics {
     fn new() -> Self {
-        let peer_metrics = Registry::default();
-
         let unique_peers = Counter::default();
+        let blocks_requested = Gauge::default();
 
-        let mut metrics = P2PMetrics {
-            gossip_sub_registry: OnceBox::new(),
-            peer_metrics,
+        let metrics = P2PMetrics {
             unique_peers,
+            blocks_requested,
         };
 
-        metrics.peer_metrics.register(
+        let mut registry = global_registry().registry.lock();
+        registry.register(
             "Peer_Counter",
             "A Counter which keeps track of each unique peer the p2p service has connected to",
             metrics.unique_peers.clone(),
+        );
+
+        registry.register(
+            "Blocks_Requested",
+            "A Gauge which keeps track of how many blocks were requested and served over the p2p req/res protocol",
+            metrics.blocks_requested.clone()
         );
 
         metrics
@@ -38,4 +41,12 @@ static P2P_METRICS: OnceLock<P2PMetrics> = OnceLock::new();
 
 pub fn p2p_metrics() -> &'static P2PMetrics {
     P2P_METRICS.get_or_init(P2PMetrics::new)
+}
+
+pub fn increment_unique_peers() {
+    p2p_metrics().unique_peers.inc();
+}
+
+pub fn set_blocks_requested(count: usize) {
+    p2p_metrics().blocks_requested.set(count as i64);
 }

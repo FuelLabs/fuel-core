@@ -2,9 +2,11 @@ use super::{
     BlockImporterAdapter,
     BlockProducerAdapter,
     ConsensusParametersProvider,
+    SharedMemoryPool,
     StaticGasPrice,
 };
 use crate::{
+    database::OnChainIterableKeyValueView,
     fuel_core_graphql_api::ports::{
         worker,
         BlockProducerPort,
@@ -14,37 +16,35 @@ use crate::{
         P2pPort,
         TxPoolPort,
     },
+    graphql_api::ports::MemoryPool,
     service::{
         adapters::{
+            import_result_provider::ImportResultProvider,
             P2PAdapter,
             TxPoolAdapter,
         },
-        Database,
+        vm_pool::MemoryFromPool,
     },
 };
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::{
-    service::TxStatusMessage,
-    types::TxId,
-};
+use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
+    blockchain::header::ConsensusParametersVersion,
     entities::relayer::message::MerkleProof,
     fuel_tx::{
         Bytes32,
         ConsensusParameters,
         Transaction,
+        TxId,
     },
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
         executor::TransactionExecutionStatus,
         p2p::PeerInfo,
-        txpool::{
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::TransactionStatus,
     },
     tai64::Tai64,
 };
@@ -58,28 +58,36 @@ mod on_chain;
 
 #[async_trait]
 impl TxPoolPort for TxPoolAdapter {
-    fn transaction(&self, id: TxId) -> Option<Transaction> {
-        self.service
+    async fn transaction(&self, id: TxId) -> anyhow::Result<Option<Transaction>> {
+        Ok(self
+            .service
             .find_one(id)
-            .map(|info| info.tx().clone().deref().into())
-    }
-
-    fn submission_time(&self, id: TxId) -> Option<Tai64> {
-        self.service
-            .find_one(id)
-            .map(|info| Tai64::from_unix(info.submitted_time().as_secs() as i64))
-    }
-
-    async fn insert(
-        &self,
-        txs: Vec<Arc<Transaction>>,
-    ) -> Vec<anyhow::Result<InsertionResult>> {
-        self.service
-            .insert(txs)
             .await
-            .into_iter()
-            .map(|res| res.map_err(anyhow::Error::from))
-            .collect()
+            .map_err(|e| anyhow::anyhow!(e))?
+            .map(|info| info.tx().clone().deref().into()))
+    }
+
+    async fn submission_time(&self, id: TxId) -> anyhow::Result<Option<Tai64>> {
+        Ok(self
+            .service
+            .find_one(id)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?
+            .map(|info| {
+                Tai64::from_unix(
+                    info.creation_instant()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time can't be lower than 0")
+                        .as_secs() as i64,
+                )
+            }))
+    }
+
+    async fn insert(&self, tx: Transaction) -> anyhow::Result<()> {
+        self.service
+            .insert(tx)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))
     }
 
     fn tx_update_subscribe(
@@ -90,13 +98,13 @@ impl TxPoolPort for TxPoolAdapter {
     }
 }
 
-impl DatabaseMessageProof for Database {
+impl DatabaseMessageProof for OnChainIterableKeyValueView {
     fn block_history_proof(
         &self,
         message_block_height: &BlockHeight,
         commit_block_height: &BlockHeight,
     ) -> StorageResult<MerkleProof> {
-        Database::block_history_proof(self, message_block_height, commit_block_height)
+        self.block_history_proof(message_block_height, commit_block_height)
     }
 }
 
@@ -106,10 +114,12 @@ impl BlockProducerPort for BlockProducerAdapter {
         &self,
         transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
+        time: Option<Tai64>,
         utxo_validation: Option<bool>,
+        gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         self.block_producer
-            .dry_run(transactions, height, utxo_validation)
+            .dry_run(transactions, height, time, utxo_validation, gas_price)
             .await
     }
 }
@@ -152,12 +162,6 @@ impl P2pPort for P2PAdapter {
     }
 }
 
-impl worker::BlockImporter for BlockImporterAdapter {
-    fn block_events(&self) -> BoxStream<SharedImportResult> {
-        self.events()
-    }
-}
-
 impl worker::TxPool for TxPoolAdapter {
     fn send_complete(
         &self,
@@ -165,19 +169,66 @@ impl worker::TxPool for TxPoolAdapter {
         block_height: &BlockHeight,
         status: TransactionStatus,
     ) {
-        self.service.send_complete(id, block_height, status)
+        self.service.notify_complete_tx(id, block_height, status)
     }
 }
 
 #[async_trait::async_trait]
 impl GasPriceEstimate for StaticGasPrice {
-    async fn worst_case_gas_price(&self, _height: BlockHeight) -> u64 {
-        self.gas_price
+    async fn worst_case_gas_price(&self, _height: BlockHeight) -> Option<u64> {
+        Some(self.gas_price)
     }
 }
 
 impl ConsensusProvider for ConsensusParametersProvider {
     fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
         self.shared_state.latest_consensus_parameters()
+    }
+
+    fn consensus_params_at_version(
+        &self,
+        version: &ConsensusParametersVersion,
+    ) -> anyhow::Result<Arc<ConsensusParameters>> {
+        Ok(self.shared_state.get_consensus_parameters(version)?)
+    }
+}
+
+#[derive(Clone)]
+pub struct GraphQLBlockImporter {
+    block_importer_adapter: BlockImporterAdapter,
+    import_result_provider_adapter: ImportResultProvider,
+}
+
+impl GraphQLBlockImporter {
+    pub fn new(
+        block_importer_adapter: BlockImporterAdapter,
+        import_result_provider_adapter: ImportResultProvider,
+    ) -> Self {
+        Self {
+            block_importer_adapter,
+            import_result_provider_adapter,
+        }
+    }
+}
+
+impl worker::BlockImporter for GraphQLBlockImporter {
+    fn block_events(&self) -> BoxStream<SharedImportResult> {
+        self.block_importer_adapter.events_shared_result()
+    }
+
+    fn block_event_at_height(
+        &self,
+        height: Option<BlockHeight>,
+    ) -> anyhow::Result<SharedImportResult> {
+        self.import_result_provider_adapter.result_at_height(height)
+    }
+}
+
+#[async_trait::async_trait]
+impl MemoryPool for SharedMemoryPool {
+    type Memory = MemoryFromPool;
+
+    async fn get_memory(&self) -> Self::Memory {
+        self.memory_pool.take_raw().await
     }
 }

@@ -1,3 +1,5 @@
+#[cfg(feature = "subscriptions")]
+use crate::client::types::StatusWithTransaction;
 use crate::client::{
     schema::{
         block::BlockByHeightArgs,
@@ -23,10 +25,16 @@ use crate::client::{
             ContractId,
             UtxoId,
         },
+        upgrades::StateTransitionBytecode,
         RelayedTransactionStatus,
     },
 };
 use anyhow::Context;
+#[cfg(feature = "subscriptions")]
+use base64::prelude::{
+    Engine as _,
+    BASE64_STANDARD,
+};
 #[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
 use cynic::{
@@ -43,24 +51,26 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
+        BlobId,
         Bytes32,
+        ConsensusParameters,
         Receipt,
         Transaction,
         TxId,
     },
-    fuel_types,
     fuel_types::{
+        self,
         canonical::Serialize,
         BlockHeight,
         Nonce,
     },
-    services::{
-        executor::TransactionExecutionStatus,
-        p2p::PeerInfo,
-    },
+    services::executor::TransactionExecutionStatus,
 };
 #[cfg(feature = "subscriptions")]
-use futures::StreamExt;
+use futures::{
+    Stream,
+    StreamExt,
+};
 use itertools::Itertools;
 use pagination::{
     PageDirection,
@@ -69,9 +79,11 @@ use pagination::{
 };
 use schema::{
     balance::BalanceArgs,
+    blob::BlobByIdArgs,
     block::BlockByIdArgs,
     coins::CoinByIdArgs,
     contract::ContractByIdArgs,
+    da_compressed::DaCompressedBlockByHeightArgs,
     tx::{
         TxArg,
         TxIdArgs,
@@ -266,6 +278,19 @@ impl FuelClient {
                     format!("Failed to add header to client {e:?}"),
                 )
             })?;
+        if let Some(password) = url.password() {
+            let username = url.username();
+            let credentials = format!("{}:{}", username, password);
+            let authorization = format!("Basic {}", BASE64_STANDARD.encode(credentials));
+            client_builder = client_builder
+                .header("Authorization", &authorization)
+                .map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Failed to add header to client {e:?}"),
+                    )
+                })?;
+        }
 
         if let Some(value) = self.cookie.deref().cookies(&self.url) {
             let value = value.to_str().map_err(|e| {
@@ -366,7 +391,10 @@ impl FuelClient {
         self.query(query).await.map(|r| r.estimate_gas_price)
     }
 
-    pub async fn connected_peers_info(&self) -> io::Result<Vec<PeerInfo>> {
+    #[cfg(feature = "std")]
+    pub async fn connected_peers_info(
+        &self,
+    ) -> io::Result<Vec<fuel_core_types::services::p2p::PeerInfo>> {
         let query = schema::node_info::QueryPeersInfo::build(());
         self.query(query)
             .await
@@ -381,12 +409,65 @@ impl FuelClient {
         })
     }
 
+    pub async fn consensus_parameters(
+        &self,
+        version: i32,
+    ) -> io::Result<Option<ConsensusParameters>> {
+        let args = schema::upgrades::ConsensusParametersByVersionArgs { version };
+        let query = schema::upgrades::ConsensusParametersByVersionQuery::build(args);
+
+        let result = self
+            .query(query)
+            .await?
+            .consensus_parameters
+            .map(TryInto::try_into)
+            .transpose()?;
+
+        Ok(result)
+    }
+
+    pub async fn state_transition_byte_code_by_version(
+        &self,
+        version: i32,
+    ) -> io::Result<Option<StateTransitionBytecode>> {
+        let args = schema::upgrades::StateTransitionBytecodeByVersionArgs { version };
+        let query = schema::upgrades::StateTransitionBytecodeByVersionQuery::build(args);
+
+        let result = self
+            .query(query)
+            .await?
+            .state_transition_bytecode_by_version
+            .map(TryInto::try_into)
+            .transpose()?;
+
+        Ok(result)
+    }
+
+    pub async fn state_transition_byte_code_by_root(
+        &self,
+        root: Bytes32,
+    ) -> io::Result<Option<StateTransitionBytecode>> {
+        let args = schema::upgrades::StateTransitionBytecodeByRootArgs {
+            root: HexString(Bytes(root.to_vec())),
+        };
+        let query = schema::upgrades::StateTransitionBytecodeByRootQuery::build(args);
+
+        let result = self
+            .query(query)
+            .await?
+            .state_transition_bytecode_by_root
+            .map(TryInto::try_into)
+            .transpose()?;
+
+        Ok(result)
+    }
+
     /// Default dry run, matching the exact configuration as the node
     pub async fn dry_run(
         &self,
         txs: &[Transaction],
     ) -> io::Result<Vec<TransactionExecutionStatus>> {
-        self.dry_run_opt(txs, None).await
+        self.dry_run_opt(txs, None, None).await
     }
 
     /// Dry run with options to override the node behavior
@@ -395,6 +476,7 @@ impl FuelClient {
         txs: &[Transaction],
         // Disable utxo input checks (exists, unspent, and valid signature)
         utxo_validation: Option<bool>,
+        gas_price: Option<u64>,
     ) -> io::Result<Vec<TransactionExecutionStatus>> {
         let txs = txs
             .iter()
@@ -404,6 +486,7 @@ impl FuelClient {
             schema::tx::DryRun::build(DryRunArg {
                 txs,
                 utxo_validation,
+                gas_price: gas_price.map(|gp| gp.into()),
             });
         let tx_statuses = self.query(query).await.map(|r| r.dry_run)?;
         tx_statuses
@@ -466,6 +549,57 @@ impl FuelClient {
         ))??;
 
         Ok(status)
+    }
+
+    /// Similar to [`Self::submit_and_await_commit`], but the status also contains transaction.
+    #[cfg(feature = "subscriptions")]
+    pub async fn submit_and_await_commit_with_tx(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<StatusWithTransaction> {
+        use cynic::SubscriptionBuilder;
+        let tx = tx.clone().to_bytes();
+        let s = schema::tx::SubmitAndAwaitSubscriptionWithTransaction::build(TxArg {
+            tx: HexString(Bytes(tx)),
+        });
+
+        let mut stream = self.subscribe(s).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitSubscriptionWithTransaction>| {
+                let status: StatusWithTransaction = r?.submit_and_await.try_into()?;
+                Result::<_, io::Error>::Ok(status)
+            },
+        );
+
+        let status = stream.next().await.ok_or(io::Error::new(
+            io::ErrorKind::Other,
+            "Failed to get status from the submission",
+        ))??;
+
+        Ok(status)
+    }
+
+    /// Submits the transaction to the `TxPool` and returns a stream of events.
+    /// Compared to the `submit_and_await_commit`, the stream also contains
+    /// `SubmittedStatus` as an intermediate state.
+    #[cfg(feature = "subscriptions")]
+    pub async fn submit_and_await_status(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>>> {
+        use cynic::SubscriptionBuilder;
+        let tx = tx.clone().to_bytes();
+        let s = schema::tx::SubmitAndAwaitStatusSubscription::build(TxArg {
+            tx: HexString(Bytes(tx)),
+        });
+
+        let stream = self.subscribe(s).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitStatusSubscription>| {
+                let status: TransactionStatus = r?.submit_and_await_status.try_into()?;
+                Result::<_, io::Error>::Ok(status)
+            },
+        );
+
+        Ok(stream)
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
@@ -585,16 +719,17 @@ impl FuelClient {
 
     /// Get the status of a transaction
     pub async fn transaction_status(&self, id: &TxId) -> io::Result<TransactionStatus> {
-        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
+        let query =
+            schema::tx::TransactionStatusQuery::build(TxIdArgs { id: (*id).into() });
 
-        let tx = self.query(query).await?.transaction.ok_or_else(|| {
+        let status = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(
                 ErrorKind::NotFound,
                 format!("status not found for transaction {id} "),
             )
         })?;
 
-        let status = tx
+        let status = status
             .status
             .ok_or_else(|| {
                 io::Error::new(
@@ -682,7 +817,8 @@ impl FuelClient {
     }
 
     pub async fn receipts(&self, id: &TxId) -> io::Result<Option<Vec<Receipt>>> {
-        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
+        let query =
+            schema::tx::TransactionStatusQuery::build(TxIdArgs { id: (*id).into() });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {id} not found"))
@@ -772,6 +908,36 @@ impl FuelClient {
             .transpose()?;
 
         Ok(block)
+    }
+
+    pub async fn da_compressed_block(
+        &self,
+        height: BlockHeight,
+    ) -> io::Result<Option<Vec<u8>>> {
+        let query = schema::da_compressed::DaCompressedBlockByHeightQuery::build(
+            DaCompressedBlockByHeightArgs {
+                height: U32(height.into()),
+            },
+        );
+
+        Ok(self
+            .query(query)
+            .await?
+            .da_compressed_block
+            .map(|b| b.bytes.into()))
+    }
+
+    /// Retrieve a blob by its ID
+    pub async fn blob(&self, id: BlobId) -> io::Result<Option<types::Blob>> {
+        let query = schema::blob::BlobByIdQuery::build(BlobByIdArgs { id: id.into() });
+        let blob = self.query(query).await?.blob.map(Into::into);
+        Ok(blob)
+    }
+
+    /// Check whether a blob with ID exists
+    pub async fn blob_exists(&self, id: BlobId) -> io::Result<bool> {
+        let query = schema::blob::BlobExistsQuery::build(BlobByIdArgs { id: id.into() });
+        Ok(self.query(query).await?.blob.is_some())
     }
 
     /// Retrieve multiple blocks
@@ -948,6 +1114,17 @@ impl FuelClient {
         Ok(messages)
     }
 
+    pub async fn contract_info(
+        &self,
+        contract: &ContractId,
+    ) -> io::Result<Option<types::Contract>> {
+        let query = schema::contract::ContractByIdQuery::build(ContractByIdArgs {
+            id: (*contract).into(),
+        });
+        let contract_info = self.query(query).await?.contract.map(Into::into);
+        Ok(contract_info)
+    }
+
     pub async fn message_status(&self, nonce: &Nonce) -> io::Result<MessageStatus> {
         let query = schema::message::MessageStatusQuery::build(MessageStatusArgs {
             nonce: (*nonce).into(),
@@ -1016,6 +1193,11 @@ impl FuelClient {
 
         let transaction = self.query(query).await?.transaction;
 
-        Ok(transaction.map(|tx| tx.try_into()).transpose()?)
+        Ok(transaction
+            .map(|tx| {
+                let response: TransactionResponse = tx.try_into()?;
+                Ok::<_, ConversionError>(response.transaction)
+            })
+            .transpose()?)
     }
 }

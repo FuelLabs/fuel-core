@@ -28,7 +28,7 @@ impl-tools = "0.10"
 itertools = { workspace = true, features = ["use_alloc"] }
 mockall = { workspace = true, optional = true }
 num_enum = { workspace = true }
-paste = "1"
+paste = { workspace = true }
 postcard = { workspace = true, features = ["alloc"] }
 primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true, optional = true }
@@ -47,5 +47,7 @@ test-case = { workspace = true }
 
 [features]
 default = ["std"]
-std = ["fuel-core-types/std"]
+alloc = ["fuel-vm-private/alloc", "fuel-core-types/alloc"]
+std = ["alloc", "fuel-vm-private/std", "fuel-core-types/std"]
+smt = []
 test-helpers = ["dep:mockall", "dep:rand"]

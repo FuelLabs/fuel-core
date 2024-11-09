@@ -14,6 +14,7 @@ use fuel_core_services::{
 use fuel_core_storage::{
     not_found,
     tables::ConsensusParametersVersions,
+    transactional::AtomicView,
     Result as StorageResult,
     StorageAsRef,
 };
@@ -32,10 +33,11 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub struct SharedState {
-    latest_consensus_parameters_version: SharedMutex<ConsensusParametersVersion>,
-    consensus_parameters:
+    pub(crate) latest_consensus_parameters_version:
+        SharedMutex<ConsensusParametersVersion>,
+    pub(crate) consensus_parameters:
         SharedMutex<HashMap<ConsensusParametersVersion, Arc<ConsensusParameters>>>,
-    database: Database,
+    pub(crate) database: Database,
 }
 
 pub struct Task {
@@ -94,9 +96,16 @@ impl SharedState {
     }
 
     pub fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters> {
+        self.latest_consensus_parameters_with_version().1
+    }
+
+    pub fn latest_consensus_parameters_with_version(
+        &self,
+    ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>) {
         let version = *self.latest_consensus_parameters_version.lock();
-        self.get_consensus_parameters(&version)
-            .expect("The latest consensus parameters always are available unless this function was called before regenesis.")
+        let params = self.get_consensus_parameters(&version)
+            .expect("The latest consensus parameters always are available unless this function was called before regenesis.");
+        (version, params)
     }
 }
 
@@ -163,6 +172,7 @@ impl RunnableService for Task {
         let latest_consensus_parameters_version = self
             .shared_state
             .database
+            .latest_view()?
             .latest_consensus_parameters_version()?;
         self.shared_state
             .cache_consensus_parameters(latest_consensus_parameters_version)?;

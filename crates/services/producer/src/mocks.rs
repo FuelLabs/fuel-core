@@ -1,7 +1,9 @@
 use crate::ports::{
     BlockProducer,
     BlockProducerDatabase,
+    DryRunner,
     Relayer,
+    RelayerBlockInfo,
     TxPool,
 };
 use fuel_core_storage::{
@@ -24,6 +26,7 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
+    fuel_tx::Transaction,
     fuel_types::{
         Address,
         BlockHeight,
@@ -36,6 +39,7 @@ use fuel_core_types::{
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
+            TransactionExecutionStatus,
             UncommittedResult,
         },
         txpool::ArcPoolTx,
@@ -50,14 +54,14 @@ use std::{
         Mutex,
     },
 };
-
 // TODO: Replace mocks with `mockall`.
 
 #[derive(Default, Clone)]
 pub struct MockRelayer {
     pub block_production_key: Address,
     pub latest_block_height: DaBlockHeight,
-    pub latest_da_blocks_with_costs: HashMap<DaBlockHeight, u64>,
+    pub latest_da_blocks_with_costs_and_transactions_number:
+        HashMap<DaBlockHeight, (u64, u64)>,
 }
 
 #[async_trait::async_trait]
@@ -70,47 +74,32 @@ impl Relayer for MockRelayer {
         Ok(highest)
     }
 
-    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64> {
-        let cost = self
-            .latest_da_blocks_with_costs
+    async fn get_cost_and_transactions_number_for_block(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<RelayerBlockInfo> {
+        let (gas_cost, tx_count) = self
+            .latest_da_blocks_with_costs_and_transactions_number
             .get(height)
             .cloned()
             .unwrap_or_default();
-        Ok(cost)
+        Ok(RelayerBlockInfo { gas_cost, tx_count })
     }
 }
 
 #[derive(Default)]
 pub struct MockTxPool(pub Vec<ArcPoolTx>);
 
-#[async_trait::async_trait]
 impl TxPool for MockTxPool {
     type TxSource = Vec<ArcPoolTx>;
 
-    fn get_source(&self, _: BlockHeight) -> Self::TxSource {
-        self.0.clone()
+    async fn get_source(&self, _: u64, _: BlockHeight) -> anyhow::Result<Self::TxSource> {
+        Ok(self.0.clone())
     }
 }
 
 #[derive(Default)]
 pub struct MockExecutor(pub MockDb);
-
-#[derive(Debug)]
-struct DatabaseTransaction {
-    database: MockDb,
-}
-
-impl AsMut<MockDb> for DatabaseTransaction {
-    fn as_mut(&mut self) -> &mut MockDb {
-        &mut self.database
-    }
-}
-
-impl AsRef<MockDb> for DatabaseTransaction {
-    fn as_ref(&self) -> &MockDb {
-        &self.database
-    }
-}
 
 impl AsMut<MockDb> for MockDb {
     fn as_mut(&mut self) -> &mut MockDb {
@@ -124,7 +113,7 @@ impl AsRef<MockDb> for MockDb {
     }
 }
 
-fn to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
+fn arc_pool_tx_comp_to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
     let transactions = component
         .transactions_source
         .clone()
@@ -140,12 +129,23 @@ fn to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
     .unwrap()
 }
 
+fn tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block {
+    let transactions = component.transactions_source.clone();
+    Block::new(
+        component.header_to_produce,
+        transactions,
+        &[],
+        Default::default(),
+    )
+    .unwrap()
+}
+
 impl BlockProducer<Vec<ArcPoolTx>> for MockExecutor {
     fn produce_without_commit(
         &self,
         component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let block = to_block(&component);
+        let block = arc_pool_tx_comp_to_block(&component);
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
         block_db.insert(
@@ -176,7 +176,7 @@ impl BlockProducer<Vec<ArcPoolTx>> for FailingMockExecutor {
         if let Some(err) = err.take() {
             Err(err)
         } else {
-            let block = to_block(&component);
+            let block = arc_pool_tx_comp_to_block(&component);
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block,
@@ -191,16 +191,16 @@ impl BlockProducer<Vec<ArcPoolTx>> for FailingMockExecutor {
 }
 
 #[derive(Clone)]
-pub struct MockExecutorWithCapture {
-    pub captured: Arc<Mutex<Option<Components<Vec<ArcPoolTx>>>>>,
+pub struct MockExecutorWithCapture<Tx> {
+    pub captured: Arc<Mutex<Option<Components<Vec<Tx>>>>>,
 }
 
-impl BlockProducer<Vec<ArcPoolTx>> for MockExecutorWithCapture {
+impl BlockProducer<Vec<ArcPoolTx>> for MockExecutorWithCapture<ArcPoolTx> {
     fn produce_without_commit(
         &self,
         component: Components<Vec<ArcPoolTx>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let block = to_block(&component);
+        let block = arc_pool_tx_comp_to_block(&component);
         *self.captured.lock().unwrap() = Some(component);
         Ok(UncommittedResult::new(
             ExecutionResult {
@@ -214,7 +214,38 @@ impl BlockProducer<Vec<ArcPoolTx>> for MockExecutorWithCapture {
     }
 }
 
-impl Default for MockExecutorWithCapture {
+impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture<Transaction> {
+    fn produce_without_commit(
+        &self,
+        component: Components<Vec<Transaction>>,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        let block = tx_comp_to_block(&component);
+        *self.captured.lock().unwrap() = Some(component);
+        Ok(UncommittedResult::new(
+            ExecutionResult {
+                block,
+                skipped_transactions: vec![],
+                tx_status: vec![],
+                events: vec![],
+            },
+            Default::default(),
+        ))
+    }
+}
+
+impl DryRunner for MockExecutorWithCapture<Transaction> {
+    fn dry_run(
+        &self,
+        block: Components<Vec<Transaction>>,
+        _utxo_validation: Option<bool>,
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+        *self.captured.lock().unwrap() = Some(block);
+
+        Ok(Vec::new())
+    }
+}
+
+impl<Tx> Default for MockExecutorWithCapture<Tx> {
     fn default() -> Self {
         Self {
             captured: Arc::new(Mutex::new(None)),
@@ -230,26 +261,20 @@ pub struct MockDb {
 }
 
 impl AtomicView for MockDb {
-    type View = Self;
+    type LatestView = Self;
 
-    type Height = BlockHeight;
+    fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        Ok(self.clone())
+    }
+}
 
+impl BlockProducerDatabase for MockDb {
     fn latest_height(&self) -> Option<BlockHeight> {
         let blocks = self.blocks.lock().unwrap();
 
         blocks.keys().max().cloned()
     }
 
-    fn view_at(&self, _: &BlockHeight) -> StorageResult<Self::View> {
-        Ok(self.latest_view())
-    }
-
-    fn latest_view(&self) -> Self::View {
-        self.clone()
-    }
-}
-
-impl BlockProducerDatabase for MockDb {
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
         let blocks = self.blocks.lock().unwrap();
         blocks

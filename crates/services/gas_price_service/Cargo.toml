@@ -1,0 +1,34 @@
+[package]
+name = "fuel-core-gas-price-service"
+description = "Service for updating the gas price algorithm"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+enum-iterator = { workspace = true }
+fuel-core-services = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std"] }
+fuel-gas-price-algorithm = { workspace = true }
+futures = { workspace = true }
+num_enum = { workspace = true }
+parking_lot = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+fuel-core-services = { workspace = true, features = ["test-helpers"] }
+fuel-core-storage = { workspace = true, features = ["test-helpers"] }
+fuel-core-types = { path = "./../../types", features = ["test-helpers"] }

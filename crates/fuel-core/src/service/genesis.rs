@@ -1,11 +1,16 @@
+use self::importer::SnapshotImporter;
 use crate::{
-    combined_database::CombinedDatabase,
+    combined_database::{
+        CombinedDatabase,
+        CombinedGenesisDatabase,
+    },
     database::{
         database_description::{
             off_chain::OffChain,
             on_chain::OnChain,
         },
         genesis_progress::GenesisMetadata,
+        Database,
     },
     service::config::Config,
 };
@@ -13,12 +18,14 @@ use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
     iter::IteratorOverTable,
+    not_found,
     tables::{
         ConsensusParametersVersions,
         StateTransitionBytecodeVersions,
         UploadedBytecodes,
     },
     transactional::{
+        AtomicView,
         Changes,
         IntoTransaction,
         ReadTransaction,
@@ -53,15 +60,13 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
+pub use exporter::Exporter;
+pub use task_manager::NotifyCancel;
+
 mod exporter;
 mod importer;
 mod progress;
 mod task_manager;
-
-pub use exporter::Exporter;
-pub use task_manager::NotifyCancel;
-
-use self::importer::SnapshotImporter;
 
 /// Performs the importing of the genesis block from the snapshot.
 pub async fn execute_genesis_block(
@@ -71,10 +76,24 @@ pub async fn execute_genesis_block(
 ) -> anyhow::Result<UncommittedImportResult<Changes>> {
     let genesis_block = create_genesis_block(config);
     tracing::info!("Genesis block created: {:?}", genesis_block.header());
-    let db = db.clone().into_genesis();
+    let on_chain = db
+        .on_chain()
+        .clone()
+        .into_genesis()
+        .map_err(|_| anyhow::anyhow!("On chain database is already initialized"))?;
+    let off_chain = db
+        .off_chain()
+        .clone()
+        .into_genesis()
+        .map_err(|_| anyhow::anyhow!("Off chain database is already initialized"))?;
+
+    let genesis_db = CombinedGenesisDatabase {
+        on_chain,
+        off_chain,
+    };
 
     SnapshotImporter::import(
-        db.clone(),
+        genesis_db.clone(),
         genesis_block.clone(),
         config.snapshot_reader.clone(),
         watcher,
@@ -83,22 +102,20 @@ pub async fn execute_genesis_block(
 
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()
-        .iter_all::<GenesisMetadata<OnChain>>(None)
-        .map_ok(|(k, _)| k)
+        .iter_all_keys::<GenesisMetadata<OnChain>>(None)
         .try_collect()?;
     let genesis_progress_off_chain: Vec<String> = db
         .off_chain()
-        .iter_all::<GenesisMetadata<OffChain>>(None)
-        .map_ok(|(k, _)| k)
+        .iter_all_keys::<GenesisMetadata<OffChain>>(None)
         .try_collect()?;
 
     let chain_config = config.snapshot_reader.chain_config();
     let genesis = Genesis {
         chain_config_hash: chain_config.root()?.into(),
-        coins_root: db.on_chain().genesis_coins_root()?.into(),
-        messages_root: db.on_chain().genesis_messages_root()?.into(),
-        contracts_root: db.on_chain().genesis_contracts_root()?.into(),
-        transactions_root: db.on_chain().processed_transactions_root()?.into(),
+        coins_root: genesis_db.on_chain().genesis_coins_root()?.into(),
+        messages_root: genesis_db.on_chain().genesis_messages_root()?.into(),
+        contracts_root: genesis_db.on_chain().genesis_contracts_root()?.into(),
+        transactions_root: genesis_db.on_chain().processed_transactions_root()?.into(),
     };
 
     let consensus = Consensus::Genesis(genesis);
@@ -150,6 +167,38 @@ pub async fn execute_genesis_block(
     );
 
     Ok(result)
+}
+
+pub async fn recover_missing_tables_from_genesis_state_config(
+    watcher: StateWatcher,
+    config: &Config,
+    db: &CombinedDatabase,
+) -> anyhow::Result<()> {
+    // TODO: The code below only modifies the contract of the genesis block of the off chain database.
+    //  It is safe to initialize some missing data, for now, but it can change in the future.
+    //  We plan to remove this code later, see: https://github.com/FuelLabs/fuel-core/issues/2326
+    let Err(off_chain) = db.off_chain().clone().into_genesis() else {
+        return Ok(())
+    };
+
+    let genesis_db = CombinedGenesisDatabase {
+        on_chain: Database::default(),
+        off_chain,
+    };
+    let genesis_block = db
+        .on_chain()
+        .latest_view()?
+        .genesis_block()?
+        .ok_or(not_found!("Genesis block"))?;
+    let genesis_block = genesis_block.uncompress(vec![]);
+
+    SnapshotImporter::repopulate_maybe_missing_tables(
+        genesis_db,
+        genesis_block,
+        config.snapshot_reader.clone(),
+        watcher,
+    )
+    .await
 }
 
 #[cfg(feature = "test-helpers")]
@@ -214,7 +263,11 @@ pub fn create_genesis_block(config: &Config) -> Block {
             da_height = 0u64.into();
         }
         consensus_parameters_version = ConsensusParametersVersion::MIN;
-        state_transition_bytecode_version = StateTransitionBytecodeVersion::MIN;
+        state_transition_bytecode_version = config
+            .snapshot_reader
+            .chain_config()
+            .genesis_state_transition_version
+            .unwrap_or(StateTransitionBytecodeVersion::MIN);
         prev_root = Bytes32::zeroed();
     }
 
@@ -253,10 +306,11 @@ mod tests {
         service::{
             config::Config,
             FuelService,
-            Task,
         },
+        ShutdownListener,
     };
     use fuel_core_chain_config::{
+        BlobConfig,
         CoinConfig,
         ContractConfig,
         LastBlockConfig,
@@ -265,12 +319,15 @@ mod tests {
         StateConfig,
     };
     use fuel_core_producer::ports::BlockProducerDatabase;
-    use fuel_core_services::RunnableService;
     use fuel_core_storage::{
         tables::{
             Coins,
             ContractsAssets,
             ContractsState,
+        },
+        transactional::{
+            AtomicView,
+            HistoricalView,
         },
         StorageAsRef,
     };
@@ -315,7 +372,6 @@ mod tests {
         assert_eq!(
             genesis_block_height,
             db.latest_height()
-                .unwrap()
                 .expect("Expected a block height to be set")
         )
     }
@@ -338,6 +394,10 @@ mod tests {
         .take(1000)
         .collect_vec();
 
+        let blobs = std::iter::repeat_with(|| BlobConfig::randomize(&mut rng))
+            .take(1000)
+            .collect_vec();
+
         let contracts = std::iter::repeat_with(|| given_contract_config(&mut rng))
             .take(1000)
             .collect_vec();
@@ -345,6 +405,7 @@ mod tests {
         let state = StateConfig {
             coins,
             messages,
+            blobs,
             contracts,
             last_block: Some(LastBlockConfig {
                 block_height: BlockHeight::from(0u32),
@@ -574,8 +635,9 @@ mod tests {
         let service_config = Config::local_node_with_state_config(state);
 
         let db = CombinedDatabase::default();
-        let task = Task::new(db, service_config).unwrap();
-        let init_result = task.into_task(&Default::default(), ()).await;
+        let mut shutdown = ShutdownListener::spawn();
+        let task = FuelService::new(db, service_config, &mut shutdown).unwrap();
+        let init_result = task.start_and_await().await;
 
         assert!(init_result.is_err())
     }
@@ -600,14 +662,17 @@ mod tests {
         let service_config = Config::local_node_with_state_config(state);
 
         let db = CombinedDatabase::default();
-        let task = Task::new(db, service_config).unwrap();
-        let init_result = task.into_task(&Default::default(), ()).await;
+        let mut shutdown = ShutdownListener::spawn();
+        let task = FuelService::new(db, service_config, &mut shutdown).unwrap();
+        let init_result = task.start_and_await().await;
 
         assert!(init_result.is_err())
     }
 
     fn get_coins(db: &CombinedDatabase, owner: &Address) -> Vec<Coin> {
         db.off_chain()
+            .latest_view()
+            .unwrap()
             .owned_coins_ids(owner, None, None)
             .map(|r| {
                 let coin_id = r.unwrap();
@@ -645,9 +710,14 @@ mod tests {
         let actual_state = db.read_state_config().unwrap();
         let mut expected_state = initial_state;
         let mut last_block = LastBlockConfig::default();
-        last_block.block_height = db.on_chain().latest_height().unwrap().unwrap();
-        last_block.blocks_root = db
-            .on_chain()
+        let view = db.on_chain().latest_view().unwrap();
+        last_block.block_height = view.latest_height().unwrap();
+        last_block.state_transition_version = view
+            .latest_block()
+            .unwrap()
+            .header()
+            .state_transition_bytecode_version;
+        last_block.blocks_root = view
             .block_header_merkle_root(&last_block.block_height)
             .unwrap();
         expected_state.last_block = Some(last_block);

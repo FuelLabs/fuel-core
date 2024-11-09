@@ -59,6 +59,7 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_types::BlockHeight,
+    fuel_vm::BlobData,
 };
 use import_task::{
     ImportTable,
@@ -108,10 +109,26 @@ impl SnapshotImporter {
             .await
     }
 
+    pub async fn repopulate_maybe_missing_tables(
+        db: CombinedGenesisDatabase,
+        genesis_block: Block,
+        snapshot_reader: SnapshotReader,
+        watcher: StateWatcher,
+    ) -> anyhow::Result<()> {
+        let mut importer = Self::new(db, genesis_block, snapshot_reader, watcher);
+
+        // the below tables were not populated from the genesis snapshot on older versions
+        importer.spawn_worker_off_chain::<ContractsInfo, ContractsInfo>()?;
+
+        importer.task_manager.wait().await?;
+        Ok(())
+    }
+
     async fn run_workers(mut self) -> anyhow::Result<()> {
         tracing::info!("Running imports");
         self.spawn_worker_on_chain::<Coins>()?;
         self.spawn_worker_on_chain::<Messages>()?;
+        self.spawn_worker_on_chain::<BlobData>()?;
         self.spawn_worker_on_chain::<ContractsRawCode>()?;
         self.spawn_worker_on_chain::<ContractsLatestUtxo>()?;
         self.spawn_worker_on_chain::<ContractsState>()?;
@@ -128,6 +145,7 @@ impl SnapshotImporter {
         self.spawn_worker_off_chain::<FuelBlocks, OldFuelBlocks>()?;
         self.spawn_worker_off_chain::<Transactions, OldTransactions>()?;
         self.spawn_worker_off_chain::<SealedBlockConsensus, OldFuelBlockConsensus>()?;
+        self.spawn_worker_off_chain::<ContractsInfo, ContractsInfo>()?;
         self.spawn_worker_off_chain::<Transactions, ContractsInfo>()?;
         self.spawn_worker_off_chain::<OldTransactions, ContractsInfo>()?;
         self.spawn_worker_off_chain::<OldFuelBlocks, OldFuelBlocks>()?;

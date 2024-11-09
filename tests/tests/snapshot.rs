@@ -10,7 +10,11 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_poa::ports::Database;
+use fuel_core_poa::{
+    ports::Database,
+    Trigger,
+};
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{
     rngs::StdRng,
@@ -35,7 +39,10 @@ async fn loads_snapshot() {
         }),
         ..StateConfig::randomize(&mut rng)
     };
-    let config = Config::local_node_with_state_config(starting_state.clone());
+    // Disable block production
+    let mut config = Config::local_node_with_state_config(starting_state.clone());
+    config.debug = false;
+    config.block_production = Trigger::Never;
 
     // setup server & client
     let _ = FuelService::from_combined_database(db.clone(), config)
@@ -51,6 +58,8 @@ async fn loads_snapshot() {
         state_transition_version: u32::MAX,
         blocks_root: db
             .on_chain()
+            .latest_view()
+            .unwrap()
             .block_header_merkle_root(&u32::MAX.into())
             .unwrap(),
     });

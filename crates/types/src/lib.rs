@@ -2,12 +2,19 @@
 //! libraries. This crate doesn't contain any business logic and is to be such primitive as that
 //! is possible.
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+#[doc(no_inline)]
+#[cfg(feature = "da-compression")]
+pub use fuel_vm_private::fuel_compression;
 #[doc(no_inline)]
 pub use fuel_vm_private::{
     fuel_asm,
@@ -39,6 +46,7 @@ pub mod fuel_vm {
         double_key,
         error::PredicateVerificationFailed,
         interpreter,
+        pool::VmMemoryPool,
         prelude::{
             Backtrace,
             Call,
@@ -56,9 +64,14 @@ pub mod fuel_vm {
         },
         script_with_data_offset,
         state,
+        storage::predicate,
         storage::ContractsAssetKey,
         storage::ContractsStateKey,
         storage::UploadedBytecode,
+        storage::{
+            BlobBytes,
+            BlobData,
+        },
         util,
     };
 }

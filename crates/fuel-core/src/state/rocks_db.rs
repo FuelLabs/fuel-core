@@ -5,12 +5,14 @@ use crate::{
         Error as DatabaseError,
         Result as DatabaseResult,
     },
-    state::{
-        IterDirection,
-        TransactableStorage,
-    },
+    state::IterDirection,
 };
-use fuel_core_metrics::core_metrics::database_metrics;
+
+use super::rocks_db_key_iterator::{
+    ExtractItem,
+    RocksDBKeyIterator,
+};
+use fuel_core_metrics::core_metrics::DatabaseMetrics;
 use fuel_core_storage::{
     iter::{
         BoxedIter,
@@ -19,6 +21,7 @@ use fuel_core_storage::{
     },
     kv_store::{
         KVItem,
+        KeyItem,
         KeyValueInspect,
         StorageColumn,
         Value,
@@ -27,13 +30,15 @@ use fuel_core_storage::{
     transactional::Changes,
     Result as StorageResult,
 };
-use rand::RngCore;
+use itertools::Itertools;
 use rocksdb::{
     BlockBasedOptions,
     BoundColumnFamily,
     Cache,
     ColumnFamilyDescriptor,
+    DBAccess,
     DBCompressionType,
+    DBRawIteratorWithThreadMode,
     DBWithThreadMode,
     IteratorMode,
     MultiThreaded,
@@ -44,12 +49,9 @@ use rocksdb::{
 };
 use std::{
     cmp,
-    env,
+    collections::BTreeMap,
     fmt,
-    fmt::{
-        Debug,
-        Formatter,
-    },
+    fmt::Formatter,
     iter,
     path::{
         Path,
@@ -60,41 +62,6 @@ use std::{
 use tempfile::TempDir;
 
 type DB = DBWithThreadMode<MultiThreaded>;
-
-/// Reimplementation of `tempdir::TempDir` that allows creating a new
-/// instance without actually creating a new directory on the filesystem.
-/// This is needed since rocksdb requires empty directory for checkpoints.
-pub struct ShallowTempDir {
-    path: PathBuf,
-}
-
-impl Default for ShallowTempDir {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl ShallowTempDir {
-    /// Creates a random directory.
-    pub fn new() -> Self {
-        let mut rng = rand::thread_rng();
-        let mut path = env::temp_dir();
-        path.push(format!("fuel-core-shallow-{}", rng.next_u64()));
-        Self { path }
-    }
-
-    /// Returns the path of the directory.
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
-}
-
-impl Drop for ShallowTempDir {
-    fn drop(&mut self) {
-        // Ignore errors
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
-}
 
 type DropFn = Box<dyn FnOnce() + Send + Sync>;
 #[derive(Default)]
@@ -125,12 +92,28 @@ impl Drop for DropResources {
     }
 }
 
-#[derive(Debug)]
 pub struct RocksDb<Description> {
-    db: DB,
+    read_options: ReadOptions,
+    db: Arc<DB>,
+    snapshot: Option<rocksdb::SnapshotWithThreadMode<'static, DB>>,
+    metrics: Arc<DatabaseMetrics>,
     // used for RAII
-    _drop: DropResources,
+    _drop: Arc<DropResources>,
     _marker: core::marker::PhantomData<Description>,
+}
+
+impl<Description> Drop for RocksDb<Description> {
+    fn drop(&mut self) {
+        // Drop the snapshot before the db.
+        // Dropping the snapshot after the db will cause a sigsegv.
+        self.snapshot = None;
+    }
+}
+
+impl<Description> std::fmt::Debug for RocksDb<Description> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("RocksDb").field("db", &self.db).finish()
+    }
 }
 
 impl<Description> RocksDb<Description>
@@ -144,16 +127,19 @@ where
             path,
             enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
             capacity,
+            512,
         );
         let mut db = result?;
 
-        db._drop = {
-            move || {
-                // cleanup temp dir
-                drop(tmp_dir);
+        db._drop = Arc::new(
+            {
+                move || {
+                    // cleanup temp dir
+                    drop(tmp_dir);
+                }
             }
-        }
-        .into();
+            .into(),
+        );
 
         Ok(db)
     }
@@ -161,11 +147,13 @@ where
     pub fn default_open<P: AsRef<Path>>(
         path: P,
         capacity: Option<usize>,
+        max_fds: i32,
     ) -> DatabaseResult<Self> {
         Self::open(
             path,
             enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
             capacity,
+            max_fds,
         )
     }
 
@@ -180,8 +168,86 @@ where
         path: P,
         columns: Vec<Description::Column>,
         capacity: Option<usize>,
+        max_fds: i32,
     ) -> DatabaseResult<Self> {
-        let path = path.as_ref().join(Description::name());
+        Self::open_with(DB::open_cf_descriptors, path, columns, capacity, max_fds)
+    }
+
+    pub fn open_read_only<P: AsRef<Path>>(
+        path: P,
+        columns: Vec<Description::Column>,
+        capacity: Option<usize>,
+        error_if_log_file_exist: bool,
+        max_fds: i32,
+    ) -> DatabaseResult<Self> {
+        Self::open_with(
+            |options, primary_path, cfs| {
+                DB::open_cf_descriptors_read_only(
+                    options,
+                    primary_path,
+                    cfs,
+                    error_if_log_file_exist,
+                )
+            },
+            path,
+            columns,
+            capacity,
+            max_fds,
+        )
+    }
+
+    pub fn open_secondary<PrimaryPath, SecondaryPath>(
+        path: PrimaryPath,
+        secondary_path: SecondaryPath,
+        columns: Vec<Description::Column>,
+        capacity: Option<usize>,
+        max_fds: i32,
+    ) -> DatabaseResult<Self>
+    where
+        PrimaryPath: AsRef<Path>,
+        SecondaryPath: AsRef<Path>,
+    {
+        Self::open_with(
+            |options, primary_path, cfs| {
+                DB::open_cf_descriptors_as_secondary(
+                    options,
+                    primary_path,
+                    secondary_path.as_ref().to_path_buf(),
+                    cfs,
+                )
+            },
+            path,
+            columns,
+            capacity,
+            max_fds,
+        )
+    }
+
+    pub fn open_with<F, P>(
+        opener: F,
+        path: P,
+        columns: Vec<Description::Column>,
+        capacity: Option<usize>,
+        max_fds: i32,
+    ) -> DatabaseResult<Self>
+    where
+        F: Fn(
+            &Options,
+            PathBuf,
+            Vec<ColumnFamilyDescriptor>,
+        ) -> Result<DB, rocksdb::Error>,
+        P: AsRef<Path>,
+    {
+        let original_path = path.as_ref().to_path_buf();
+        let path = original_path.join(Description::name());
+        let metric_columns = columns
+            .iter()
+            .map(|column| (column.id(), column.name()))
+            .collect::<Vec<_>>();
+        let metrics = Arc::new(DatabaseMetrics::new(
+            Description::name().as_str(),
+            &metric_columns,
+        ));
         let mut block_opts = BlockBasedOptions::default();
         // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
         block_opts.set_format_version(5);
@@ -201,6 +267,7 @@ where
             block_opts.disable_cache();
         }
         block_opts.set_bloom_filter(10.0, true);
+        block_opts.set_block_size(16 * 1024);
 
         let mut opts = Options::default();
         opts.create_if_missing(true);
@@ -219,41 +286,57 @@ where
             let cache = Cache::new_lru_cache(row_cache_size);
             opts.set_row_cache(&cache);
         }
+        opts.set_max_background_jobs(6);
+        opts.set_bytes_per_sync(1048576);
+        opts.set_max_open_files(max_fds);
 
         let existing_column_families = DB::list_cf(&opts, &path).unwrap_or_default();
 
-        let mut cf_descriptors_to_open = vec![];
-        let mut cf_descriptors_to_create = vec![];
+        let mut cf_descriptors_to_open = BTreeMap::new();
+        let mut cf_descriptors_to_create = BTreeMap::new();
         for column in columns.clone() {
             let column_name = Self::col_name(column.id());
             let opts = Self::cf_opts(column, &block_opts);
             if existing_column_families.contains(&column_name) {
-                cf_descriptors_to_open.push((column_name, opts));
+                cf_descriptors_to_open.insert(column_name, opts);
             } else {
-                cf_descriptors_to_create.push((column_name, opts));
+                cf_descriptors_to_create.insert(column_name, opts);
             }
         }
+
+        let unknown_columns_to_open: BTreeMap<_, _> = existing_column_families
+            .iter()
+            .filter(|column_name| {
+                !cf_descriptors_to_open.contains_key(*column_name)
+                    && !cf_descriptors_to_create.contains_key(*column_name)
+            })
+            .map(|unknown_column_name| {
+                let unknown_column_options = Self::default_opts(&block_opts);
+                (unknown_column_name.clone(), unknown_column_options)
+            })
+            .collect();
+        cf_descriptors_to_open.extend(unknown_columns_to_open);
 
         let iterator = cf_descriptors_to_open
             .clone()
             .into_iter()
-            .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts));
+            .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts))
+            .collect::<Vec<_>>();
 
-        let db = match DB::open_cf_descriptors(&opts, &path, iterator) {
+        let db = match opener(&opts, path.clone(), iterator) {
             Ok(db) => {
                 Ok(db)
             },
             Err(err) => {
-                tracing::error!("Couldn't open the database with an error: {}. \nTrying to repair the database", err);
-                DB::repair(&opts, &path)
-                    .map_err(|e| DatabaseError::Other(e.into()))?;
+                tracing::error!("Couldn't open the database with an error: {}. \nTrying to reopen the database", err);
 
                 let iterator = cf_descriptors_to_open
                     .clone()
                     .into_iter()
-                    .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts));
+                    .map(|(name, opts)| ColumnFamilyDescriptor::new(name, opts))
+                    .collect::<Vec<_>>();
 
-                DB::open_cf_descriptors(&opts, &path, iterator)
+                opener(&opts, path.clone(), iterator)
             },
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
@@ -264,12 +347,65 @@ where
                 .map_err(|e| DatabaseError::Other(e.into()))?;
         }
 
+        let db = Arc::new(db);
+
         let rocks_db = RocksDb {
+            read_options: Self::generate_read_options(&None),
+            snapshot: None,
             db,
+            metrics,
             _drop: Default::default(),
             _marker: Default::default(),
         };
         Ok(rocks_db)
+    }
+
+    fn generate_read_options(
+        snapshot: &Option<rocksdb::SnapshotWithThreadMode<DB>>,
+    ) -> ReadOptions {
+        let mut opts = ReadOptions::default();
+        opts.set_verify_checksums(false);
+        if let Some(snapshot) = &snapshot {
+            opts.set_snapshot(snapshot);
+        }
+        opts
+    }
+
+    fn read_options(&self) -> ReadOptions {
+        Self::generate_read_options(&self.snapshot)
+    }
+
+    pub fn create_snapshot(&self) -> Self {
+        self.create_snapshot_generic()
+    }
+
+    pub fn create_snapshot_generic<TargetDescription>(
+        &self,
+    ) -> RocksDb<TargetDescription> {
+        let db = self.db.clone();
+        let metrics = self.metrics.clone();
+        let _drop = self._drop.clone();
+
+        // Safety: We are transmuting the snapshot to 'static lifetime, but it's safe
+        // because we are not going to use it after the RocksDb is dropped.
+        // We control the lifetime of the `Self` - RocksDb, so we can guarantee that
+        // the snapshot will be dropped before the RocksDb.
+        #[allow(clippy::missing_transmute_annotations)]
+        // Remove this and see for yourself
+        let snapshot = unsafe {
+            let snapshot = db.snapshot();
+            core::mem::transmute(snapshot)
+        };
+        let snapshot = Some(snapshot);
+
+        RocksDb {
+            read_options: Self::generate_read_options(&snapshot),
+            snapshot,
+            db,
+            metrics,
+            _drop,
+            _marker: Default::default(),
+        }
     }
 
     fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {
@@ -286,11 +422,17 @@ where
         format!("col-{}", column)
     }
 
-    fn cf_opts(column: Description::Column, block_opts: &BlockBasedOptions) -> Options {
+    fn default_opts(block_opts: &BlockBasedOptions) -> Options {
         let mut opts = Options::default();
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
         opts.set_block_based_table_factory(block_opts);
+
+        opts
+    }
+
+    fn cf_opts(column: Description::Column, block_opts: &BlockBasedOptions) -> Options {
+        let mut opts = Self::default_opts(block_opts);
 
         // All double-keys should be configured here
         if let Some(size) = Description::prefix(&column) {
@@ -307,11 +449,14 @@ where
     /// but skip the first element to jump on the previous prefix.
     /// If we can't find the next element, we are at the end of the list,
     /// so we can use `IteratorMode::End` to start reverse iteration.
-    fn reverse_prefix_iter(
+    fn reverse_prefix_iter<T>(
         &self,
         prefix: &[u8],
         column: Description::Column,
-    ) -> impl Iterator<Item = KVItem> + '_ {
+    ) -> impl Iterator<Item = StorageResult<T::Item>> + '_
+    where
+        T: ExtractItem,
+    {
         let maybe_next_item = next_prefix(prefix.to_vec())
             .and_then(|next_prefix| {
                 self.iter_store(
@@ -331,12 +476,12 @@ where
             );
             let prefix = prefix.to_vec();
             self
-                ._iter_all(column, ReadOptions::default(), iter_mode)
+                .iterator::<T>(column, self.read_options(), iter_mode)
                 // Skip the element under the `next_start_key` key.
                 .skip(1)
                 .take_while(move |item| {
-                    if let Ok((key, _)) = item {
-                        key.starts_with(prefix.as_slice())
+                    if let Ok(item) = item {
+                        T::starts_with(item, prefix.as_slice())
                     } else {
                         true
                     }
@@ -345,10 +490,10 @@ where
         } else {
             // No next item, so we can start backward iteration from the end.
             let prefix = prefix.to_vec();
-            self._iter_all(column, ReadOptions::default(), IteratorMode::End)
+            self.iterator::<T>(column, self.read_options(), IteratorMode::End)
                 .take_while(move |item| {
-                    if let Ok((key, _)) = item {
-                        key.starts_with(prefix.as_slice())
+                    if let Ok(item) = item {
+                        T::starts_with(item, prefix.as_slice())
                     } else {
                         true
                     }
@@ -357,28 +502,190 @@ where
         }
     }
 
-    fn _iter_all(
+    pub(crate) fn iterator<T>(
         &self,
         column: Description::Column,
         opts: ReadOptions,
         iter_mode: IteratorMode,
-    ) -> impl Iterator<Item = KVItem> + '_ {
-        self.db
-            .iterator_cf_opt(&self.cf(column), opts, iter_mode)
-            .map(|item| {
-                item.map(|(key, value)| {
-                    let value_as_vec = Vec::from(value);
-                    let key_as_vec = Vec::from(key);
+    ) -> impl Iterator<Item = StorageResult<T::Item>> + '_
+    where
+        T: ExtractItem,
+    {
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
 
-                    database_metrics().read_meter.inc();
-                    database_metrics().bytes_read.observe(
-                        (key_as_vec.len().saturating_add(value_as_vec.len())) as f64,
+        RocksDBKeyIterator::<_, T>::new(
+            self.db.raw_iterator_cf_opt(&self.cf(column), opts),
+            iter_mode,
+        )
+        .map(move |item| {
+            item.map(|item| {
+                self.metrics.read_meter.inc();
+                column_metrics.map(|metric| metric.inc());
+                self.metrics.bytes_read.inc_by(T::size(&item));
+
+                item
+            })
+            .map_err(|e| DatabaseError::Other(e.into()).into())
+        })
+    }
+
+    pub fn multi_get<K, I>(
+        &self,
+        column: u32,
+        iterator: I,
+    ) -> DatabaseResult<Vec<Option<Vec<u8>>>>
+    where
+        I: Iterator<Item = K>,
+        K: AsRef<[u8]>,
+    {
+        let column_metrics = self.metrics.columns_read_statistic.get(&column);
+        let cl = self.cf_u32(column);
+        let results = self
+            .db
+            .multi_get_cf_opt(iterator.map(|k| (&cl, k)), &self.read_options)
+            .into_iter()
+            .map(|el| {
+                self.metrics.read_meter.inc();
+                column_metrics.map(|metric| metric.inc());
+                el.map(|value| {
+                    value.map(|vec| {
+                        self.metrics.bytes_read.inc_by(vec.len() as u64);
+                        vec
+                    })
+                })
+                .map_err(|err| DatabaseError::Other(err.into()))
+            })
+            .try_collect()?;
+        Ok(results)
+    }
+
+    fn _iter_store<T>(
+        &self,
+        column: Description::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<StorageResult<T::Item>>
+    where
+        T: ExtractItem,
+    {
+        match (prefix, start) {
+            (None, None) => {
+                let iter_mode =
+                    // if no start or prefix just start iterating over entire keyspace
+                    match direction {
+                        IterDirection::Forward => IteratorMode::Start,
+                        // end always iterates in reverse
+                        IterDirection::Reverse => IteratorMode::End,
+                    };
+                self.iterator::<T>(column, self.read_options(), iter_mode)
+                    .into_boxed()
+            }
+            (Some(prefix), None) => {
+                if direction == IterDirection::Reverse {
+                    self.reverse_prefix_iter::<T>(prefix, column).into_boxed()
+                } else {
+                    // start iterating in a certain direction within the keyspace
+                    let iter_mode = IteratorMode::From(
+                        prefix,
+                        convert_to_rocksdb_direction(direction),
                     );
 
-                    (key_as_vec, Arc::new(value_as_vec))
-                })
-                .map_err(|e| DatabaseError::Other(e.into()).into())
-            })
+                    // Setting prefix on the RocksDB level to optimize iteration.
+                    let mut opts = self.read_options();
+                    opts.set_prefix_same_as_start(true);
+
+                    let prefix = prefix.to_vec();
+                    self.iterator::<T>(column, opts, iter_mode)
+                        // Not all tables has a prefix set, so we need to filter out the keys.
+                        .take_while(move |item| {
+                            if let Ok(item) = item {
+                                T::starts_with(item, prefix.as_slice())
+                            } else {
+                                true
+                            }
+                        })
+                        .into_boxed()
+                }
+            }
+            (None, Some(start)) => {
+                // start iterating in a certain direction from the start key
+                let iter_mode =
+                    IteratorMode::From(start, convert_to_rocksdb_direction(direction));
+                self.iterator::<T>(column, self.read_options(), iter_mode)
+                    .into_boxed()
+            }
+            (Some(prefix), Some(start)) => {
+                // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
+                // If the `start` doesn't have the same `prefix`, return nothing.
+                if !start.starts_with(prefix) {
+                    return iter::empty().into_boxed();
+                }
+
+                // start iterating in a certain direction from the start key
+                // and end iterating when we've gone outside the prefix
+                let prefix = prefix.to_vec();
+                let iter_mode =
+                    IteratorMode::From(start, convert_to_rocksdb_direction(direction));
+                self.iterator::<T>(column, self.read_options(), iter_mode)
+                    .take_while(move |item| {
+                        if let Ok(item) = item {
+                            T::starts_with(item, prefix.as_slice())
+                        } else {
+                            true
+                        }
+                    })
+                    .into_boxed()
+            }
+        }
+    }
+}
+
+pub(crate) struct KeyOnly;
+
+impl ExtractItem for KeyOnly {
+    type Item = Vec<u8>;
+
+    fn extract_item<D>(
+        raw_iterator: &DBRawIteratorWithThreadMode<D>,
+    ) -> Option<Self::Item>
+    where
+        D: DBAccess,
+    {
+        raw_iterator.key().map(|key| key.to_vec())
+    }
+
+    fn size(item: &Self::Item) -> u64 {
+        item.len() as u64
+    }
+
+    fn starts_with(item: &Self::Item, prefix: &[u8]) -> bool {
+        item.starts_with(prefix)
+    }
+}
+
+pub(crate) struct KeyAndValue;
+
+impl ExtractItem for KeyAndValue {
+    type Item = (Vec<u8>, Value);
+
+    fn extract_item<D>(
+        raw_iterator: &DBRawIteratorWithThreadMode<D>,
+    ) -> Option<Self::Item>
+    where
+        D: DBAccess,
+    {
+        raw_iterator
+            .item()
+            .map(|(key, value)| (key.to_vec(), Arc::new(value.to_vec())))
+    }
+
+    fn size(item: &Self::Item) -> u64 {
+        item.0.len().saturating_add(item.1.len()) as u64
+    }
+
+    fn starts_with(item: &Self::Item, prefix: &[u8]) -> bool {
+        item.0.starts_with(prefix)
     }
 }
 
@@ -393,25 +700,29 @@ where
         key: &[u8],
         column: Self::Column,
     ) -> StorageResult<Option<usize>> {
-        database_metrics().read_meter.inc();
+        self.metrics.read_meter.inc();
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
+        column_metrics.map(|metric| metric.inc());
 
         Ok(self
             .db
-            .get_pinned_cf(&self.cf(column), key)
+            .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?
             .map(|value| value.len()))
     }
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        database_metrics().read_meter.inc();
+        self.metrics.read_meter.inc();
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
+        column_metrics.map(|metric| metric.inc());
 
         let value = self
             .db
-            .get_cf(&self.cf(column), key)
+            .get_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?;
 
         if let Some(value) = &value {
-            database_metrics().bytes_read.observe(value.len() as f64);
+            self.metrics.bytes_read.inc_by(value.len() as u64);
         }
 
         Ok(value.map(Arc::new))
@@ -423,11 +734,13 @@ where
         column: Self::Column,
         mut buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        database_metrics().read_meter.inc();
+        self.metrics.read_meter.inc();
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
+        column_metrics.map(|metric| metric.inc());
 
         let r = self
             .db
-            .get_pinned_cf(&self.cf(column), key)
+            .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?
             .map(|value| {
                 let read = value.len();
@@ -438,7 +751,7 @@ where
             .transpose()?;
 
         if let Some(r) = &r {
-            database_metrics().bytes_read.observe(*r as f64);
+            self.metrics.bytes_read.inc_by(*r as u64);
         }
 
         Ok(r)
@@ -456,94 +769,37 @@ where
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
-        match (prefix, start) {
-            (None, None) => {
-                let iter_mode =
-                    // if no start or prefix just start iterating over entire keyspace
-                    match direction {
-                        IterDirection::Forward => IteratorMode::Start,
-                        // end always iterates in reverse
-                        IterDirection::Reverse => IteratorMode::End,
-                    };
-                self._iter_all(column, ReadOptions::default(), iter_mode)
-                    .into_boxed()
-            }
-            (Some(prefix), None) => {
-                if direction == IterDirection::Reverse {
-                    self.reverse_prefix_iter(prefix, column).into_boxed()
-                } else {
-                    // start iterating in a certain direction within the keyspace
-                    let iter_mode = IteratorMode::From(
-                        prefix,
-                        convert_to_rocksdb_direction(direction),
-                    );
+        self._iter_store::<KeyAndValue>(column, prefix, start, direction)
+    }
 
-                    // Setting prefix on the RocksDB level to optimize iteration.
-                    let mut opts = ReadOptions::default();
-                    opts.set_prefix_same_as_start(true);
-
-                    let prefix = prefix.to_vec();
-                    self._iter_all(column, opts, iter_mode)
-                        // Not all tables has a prefix set, so we need to filter out the keys.
-                        .take_while(move |item| {
-                            if let Ok((key, _)) = item {
-                                key.starts_with(prefix.as_slice())
-                            } else {
-                                true
-                            }
-                        })
-                        .into_boxed()
-                }
-            }
-            (None, Some(start)) => {
-                // start iterating in a certain direction from the start key
-                let iter_mode =
-                    IteratorMode::From(start, convert_to_rocksdb_direction(direction));
-                self._iter_all(column, ReadOptions::default(), iter_mode)
-                    .into_boxed()
-            }
-            (Some(prefix), Some(start)) => {
-                // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
-                // If the `start` doesn't have the same `prefix`, return nothing.
-                if !start.starts_with(prefix) {
-                    return iter::empty().into_boxed();
-                }
-
-                // start iterating in a certain direction from the start key
-                // and end iterating when we've gone outside the prefix
-                let prefix = prefix.to_vec();
-                let iter_mode =
-                    IteratorMode::From(start, convert_to_rocksdb_direction(direction));
-                self._iter_all(column, ReadOptions::default(), iter_mode)
-                    .take_while(move |item| {
-                        if let Ok((key, _)) = item {
-                            key.starts_with(prefix.as_slice())
-                        } else {
-                            true
-                        }
-                    })
-                    .into_boxed()
-            }
-        }
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem> {
+        self._iter_store::<KeyOnly>(column, prefix, start, direction)
     }
 }
 
-impl<Description> TransactableStorage<Description::Height> for RocksDb<Description>
+impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    fn commit_changes(
-        &self,
-        _: Option<Description::Height>,
-        changes: Changes,
-    ) -> StorageResult<()> {
+    pub fn commit_changes(&self, changes: &Changes) -> StorageResult<()> {
+        let instant = std::time::Instant::now();
         let mut batch = WriteBatch::default();
 
         for (column, ops) in changes {
-            let cf = self.cf_u32(column);
+            let cf = self.cf_u32(*column);
+            let column_metrics = self.metrics.columns_write_statistic.get(column);
             for (key, op) in ops {
+                self.metrics.write_meter.inc();
+                column_metrics.map(|metric| metric.inc());
                 match op {
                     WriteOperation::Insert(value) => {
+                        self.metrics.bytes_written.inc_by(value.len() as u64);
                         batch.put_cf(&cf, key, value.as_ref());
                     }
                     WriteOperation::Remove => {
@@ -553,14 +809,16 @@ where
             }
         }
 
-        database_metrics().write_meter.inc();
-        database_metrics()
-            .bytes_written
-            .observe(batch.size_in_bytes() as f64);
-
         self.db
             .write(batch)
-            .map_err(|e| DatabaseError::Other(e.into()).into())
+            .map_err(|e| DatabaseError::Other(e.into()))?;
+        // TODO: Use `u128` when `AtomicU128` is stable.
+        self.metrics.database_commit_time.inc_by(
+            u64::try_from(instant.elapsed().as_nanos())
+                .expect("The commit shouldn't take longer than `u64`"),
+        );
+
+        Ok(())
     }
 }
 
@@ -575,20 +833,13 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
     None
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers {
     use super::*;
-    use crate::database::database_description::on_chain::OnChain;
     use fuel_core_storage::{
-        column::Column,
         kv_store::KeyValueMutate,
         transactional::ReadTransaction,
     };
-    use std::collections::{
-        BTreeMap,
-        HashMap,
-    };
-    use tempfile::TempDir;
 
     impl<Description> KeyValueMutate for RocksDb<Description>
     where
@@ -603,7 +854,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(None, changes)?;
+            self.commit_changes(&changes)?;
 
             Ok(len)
         }
@@ -612,15 +863,31 @@ mod tests {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(None, changes)?;
+            self.commit_changes(&changes)?;
             Ok(())
         }
     }
+}
+
+#[allow(non_snake_case)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::database_description::on_chain::OnChain;
+    use fuel_core_storage::{
+        column::Column,
+        kv_store::KeyValueMutate,
+    };
+    use std::collections::{
+        BTreeMap,
+        HashMap,
+    };
+    use tempfile::TempDir;
 
     fn create_db() -> (RocksDb<OnChain>, TempDir) {
         let tmp_dir = TempDir::new().unwrap();
         (
-            RocksDb::default_open(tmp_dir.path(), None).unwrap(),
+            RocksDb::default_open(tmp_dir.path(), None, 512).unwrap(),
             tmp_dir,
         )
     }
@@ -633,7 +900,7 @@ mod tests {
         let old_columns =
             vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
         let database_with_old_columns =
-            RocksDb::<OnChain>::open(tmp_dir.path(), old_columns.clone(), None)
+            RocksDb::<OnChain>::open(tmp_dir.path(), old_columns.clone(), None, 512)
                 .expect("Failed to open database with old columns");
         drop(database_with_old_columns);
 
@@ -642,7 +909,7 @@ mod tests {
         new_columns.push(Column::ContractsAssets);
         new_columns.push(Column::Metadata);
         let database_with_new_columns =
-            RocksDb::<OnChain>::open(tmp_dir.path(), new_columns, None).map(|_| ());
+            RocksDb::<OnChain>::open(tmp_dir.path(), new_columns, None, 512).map(|_| ());
 
         // Then
         assert_eq!(Ok(()), database_with_new_columns);
@@ -705,12 +972,12 @@ mod tests {
         let ops = vec![(
             Column::Metadata.id(),
             BTreeMap::from_iter(vec![(
-                key.clone(),
+                key.clone().into(),
                 WriteOperation::Insert(value.clone()),
             )]),
         )];
 
-        db.commit_changes(None, HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(&HashMap::from_iter(ops)).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
@@ -724,9 +991,9 @@ mod tests {
 
         let ops = vec![(
             Column::Metadata.id(),
-            BTreeMap::from_iter(vec![(key.clone(), WriteOperation::Remove)]),
+            BTreeMap::from_iter(vec![(key.clone().into(), WriteOperation::Remove)]),
         )];
-        db.commit_changes(None, HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(&HashMap::from_iter(ops)).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }
@@ -801,5 +1068,154 @@ mod tests {
         assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
 
         assert!(!db.exists(&key, Column::Metadata).unwrap());
+    }
+
+    #[test]
+    fn open_primary_db_second_time_fails() {
+        // Given
+        let (_primary_db, tmp_dir) = create_db();
+
+        // When
+        let columns = enum_iterator::all::<<OnChain as DatabaseDescription>::Column>()
+            .collect::<Vec<_>>();
+        let result = RocksDb::<OnChain>::open(tmp_dir.path(), columns, None, 512);
+
+        // Then
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn open_second_read_only_db() {
+        // Given
+        let (_primary_db, tmp_dir) = create_db();
+
+        // When
+        let old_columns =
+            vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
+        let result = RocksDb::<OnChain>::open_read_only(
+            tmp_dir.path(),
+            old_columns.clone(),
+            None,
+            false,
+            512,
+        )
+        .map(|_| ());
+
+        // Then
+        assert_eq!(Ok(()), result);
+    }
+
+    #[test]
+    fn open_secondary_db() {
+        // Given
+        let (_primary_db, tmp_dir) = create_db();
+        let secondary_temp = TempDir::new().unwrap();
+
+        // When
+        let old_columns =
+            vec![Column::Coins, Column::Messages, Column::UploadedBytecodes];
+        let result = RocksDb::<OnChain>::open_secondary(
+            tmp_dir.path(),
+            secondary_temp.path(),
+            old_columns.clone(),
+            None,
+            512,
+        )
+        .map(|_| ());
+
+        // Then
+        assert_eq!(Ok(()), result);
+    }
+
+    #[test]
+    fn snapshot_allows_get_entry_after_it_was_removed() {
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(vec![1, 2, 3]);
+
+        // Given
+        let key_1 = [1; 32];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        let snapshot = db.create_snapshot();
+
+        // When
+        db.delete(&key_1, Column::Metadata).unwrap();
+
+        // Then
+        let db_get = db.get(&key_1, Column::Metadata).unwrap();
+        assert!(db_get.is_none());
+
+        let snapshot_get = snapshot.get(&key_1, Column::Metadata).unwrap();
+        assert_eq!(snapshot_get, Some(value));
+    }
+
+    #[test]
+    fn snapshot_allows_correct_iteration_even_after_all_elements_where_removed() {
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(vec![1, 2, 3]);
+
+        // Given
+        let key_1 = [1; 32];
+        let key_2 = [2; 32];
+        let key_3 = [3; 32];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+        let snapshot = db.create_snapshot();
+
+        // When
+        db.delete(&key_1, Column::Metadata).unwrap();
+        db.delete(&key_2, Column::Metadata).unwrap();
+        db.delete(&key_3, Column::Metadata).unwrap();
+
+        // Then
+        let db_iter = db
+            .iter_store(Column::Metadata, None, None, IterDirection::Forward)
+            .collect::<Vec<_>>();
+        assert!(db_iter.is_empty());
+
+        let snapshot_iter = snapshot
+            .iter_store(Column::Metadata, None, None, IterDirection::Forward)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            snapshot_iter,
+            vec![
+                Ok((key_1.to_vec(), value.clone())),
+                Ok((key_2.to_vec(), value.clone())),
+                Ok((key_3.to_vec(), value))
+            ]
+        );
+    }
+
+    #[test]
+    fn drop_snapshot_after_dropping_main_database_shouldn_panic() {
+        let (db, _tmp) = create_db();
+
+        // Given
+        let snapshot = db.create_snapshot();
+
+        // When
+        drop(db);
+
+        // Then
+        drop(snapshot);
+    }
+
+    #[test]
+    fn open__opens_subset_of_columns_after_opening_all_columns() {
+        // Given
+        let (first_open_with_all_columns, tmp_dir) = create_db();
+
+        // When
+        drop(first_open_with_all_columns);
+        let part_of_columns =
+            enum_iterator::all::<<OnChain as DatabaseDescription>::Column>()
+                .skip(1)
+                .collect::<Vec<_>>();
+        let open_with_part_of_columns =
+            RocksDb::<OnChain>::open(tmp_dir.path(), part_of_columns, None, 512);
+
+        // Then
+        let _ = open_with_part_of_columns
+            .expect("Should open the database with shorter number of columns");
     }
 }

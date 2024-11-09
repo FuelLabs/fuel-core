@@ -145,9 +145,8 @@ impl CursorType for SortedTxCursor {
             s.split_once('#').ok_or("Incorrect format provided")?;
 
         Ok(Self::new(
-            u32::from_str(block_height)
-                .map_err(|_| "Failed to decode block_height")?
-                .into(),
+            BlockHeight::from_str(block_height)
+                .map_err(|_| "Failed to decode block_height")?,
             Bytes32::decode_cursor(tx_id)?,
         ))
     }
@@ -296,6 +295,7 @@ fuel_type_scalar!("Bytes32", Bytes32, Bytes32, 32);
 fuel_type_scalar!("Address", Address, Address, 32);
 fuel_type_scalar!("BlockId", BlockId, Bytes32, 32);
 fuel_type_scalar!("AssetId", AssetId, AssetId, 32);
+fuel_type_scalar!("BlobId", BlobId, BlobId, 32);
 fuel_type_scalar!("ContractId", ContractId, ContractId, 32);
 fuel_type_scalar!("Salt", Salt, Salt, 32);
 fuel_type_scalar!("TransactionId", TransactionId, Bytes32, 32);

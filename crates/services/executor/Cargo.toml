@@ -11,9 +11,13 @@ description = "Fuel Block Executor"
 
 [dependencies]
 anyhow = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true, default-features = false }
-hex = { version = "0.4", features = ["serde"] }
+fuel-core-storage = { workspace = true, default-features = false, features = [
+  "alloc",
+] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "alloc",
+] }
+hex = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
@@ -25,7 +29,9 @@ fuel-core-types = { workspace = true, features = ["test-helpers"] }
 
 [features]
 default = ["std"]
-std = ["fuel-core-types/default"]
+std = ["fuel-core-types/std", "fuel-core-storage/std"]
+alloc = ["fuel-core-types/alloc", "fuel-core-storage/alloc"]
+smt = ["fuel-core-storage/smt"]
 test-helpers = [
   "fuel-core-types/test-helpers",
   "fuel-core-storage/test-helpers",

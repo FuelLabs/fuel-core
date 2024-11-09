@@ -10,12 +10,14 @@ use fuel_core::{
     },
     service::{
         Config,
+        DbType,
         FuelService,
     },
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
     fuel_asm::op,
     fuel_tx::{
         field::Inputs,
@@ -89,11 +91,13 @@ pub struct TestSetupBuilder {
     pub rng: StdRng,
     pub contracts: HashMap<ContractId, ContractConfig>,
     pub initial_coins: Vec<CoinConfig>,
-    pub min_gas_price: u64,
+    pub starting_gas_price: u64,
     pub gas_limit: Option<u64>,
+    pub block_size_limit: Option<u64>,
     pub starting_block: Option<BlockHeight>,
     pub utxo_validation: bool,
     pub privileged_address: Address,
+    pub base_asset_id: AssetId,
     pub trigger: Trigger,
 }
 
@@ -186,9 +190,7 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
-        let metadata =
-            SnapshotMetadata::read("../bin/fuel-core/chainspec/testnet").unwrap();
-        let mut chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
+        let mut chain_conf = local_chain_config();
 
         if let Some(gas_limit) = self.gas_limit {
             let tx_params = *chain_conf.consensus_parameters.tx_params();
@@ -200,13 +202,25 @@ impl TestSetupBuilder {
                 .set_block_gas_limit(gas_limit);
         }
 
+        if let Some(block_size_limit) = self.block_size_limit {
+            chain_conf
+                .consensus_parameters
+                .set_block_transaction_size_limit(block_size_limit)
+                .expect("Should set new block size limit");
+        }
+
         chain_conf
             .consensus_parameters
             .set_privileged_address(self.privileged_address);
+        chain_conf
+            .consensus_parameters
+            .set_base_asset_id(self.base_asset_id);
+        chain_conf.state_transition_bytecode =
+            fuel_core::upgradable_executor::WASM_BYTECODE.to_vec();
 
         let latest_block = self.starting_block.map(|starting_block| LastBlockConfig {
             block_height: starting_block,
-            state_transition_version: 0,
+            state_transition_version: LATEST_STATE_TRANSITION_VERSION - 1,
             ..Default::default()
         });
 
@@ -219,11 +233,12 @@ impl TestSetupBuilder {
 
         let config = Config {
             utxo_validation: self.utxo_validation,
-            txpool: fuel_core_txpool::Config::default(),
+            txpool: fuel_core_txpool::config::Config::default(),
             block_production: self.trigger,
-            static_gas_price: self.min_gas_price,
+            starting_gas_price: self.starting_gas_price,
             ..Config::local_node_with_configs(chain_conf, state)
         };
+        assert_eq!(config.combined_db_config.database_type, DbType::RocksDb);
 
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
@@ -242,12 +257,20 @@ impl Default for TestSetupBuilder {
             rng: StdRng::seed_from_u64(2322u64),
             contracts: Default::default(),
             initial_coins: vec![],
-            min_gas_price: 0,
+            starting_gas_price: 0,
             gas_limit: None,
+            block_size_limit: None,
             starting_block: None,
             utxo_validation: true,
             privileged_address: Default::default(),
+            base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
         }
     }
+}
+
+pub fn local_chain_config() -> ChainConfig {
+    let metadata =
+        SnapshotMetadata::read("../bin/fuel-core/chainspec/local-testnet").unwrap();
+    ChainConfig::from_snapshot_metadata(&metadata).unwrap()
 }

@@ -1,0 +1,19 @@
+[package]
+name = "fuel-gas-price-analysis"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.16", features = ["derive"] }
+csv = "1.3.0"
+fuel-gas-price-algorithm = { path = ".." }
+futures = "0.3.30"
+plotters = "0.3.5"
+rand = "0.8.5"
+rand_distr = "0.4.3"
+serde = { version = "1.0.209", features = ["derive"] }
+tokio = { version = "1.40.0", features = ["macros", "rt", "rt-multi-thread"] }

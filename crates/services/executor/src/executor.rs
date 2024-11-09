@@ -9,7 +9,6 @@ use crate::{
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
-    structured_storage::StructuredStorage,
     tables::{
         Coins,
         ConsensusParametersVersions,
@@ -66,8 +65,8 @@ use fuel_core_types::{
             OutputContract,
             TxPointer as TxPointerField,
         },
-        input,
         input::{
+            self,
             coin::{
                 CoinPredicate,
                 CoinSigned,
@@ -102,8 +101,8 @@ use fuel_core_types::{
         ContractId,
         MessageId,
     },
-    fuel_vm,
     fuel_vm::{
+        self,
         checked_transaction::{
             CheckPredicateParams,
             CheckPredicates,
@@ -116,6 +115,8 @@ use fuel_core_types::{
             CheckedMetadata as CheckedMetadataTrait,
             ExecutableTransaction,
             InterpreterParams,
+            Memory,
+            MemoryInstance,
         },
         state::StateTransition,
         Backtrace as FuelBacktrace,
@@ -141,11 +142,29 @@ use fuel_core_types::{
     },
 };
 use parking_lot::Mutex as ParkingMutex;
-use std::borrow::Cow;
 use tracing::{
     debug,
     warn,
 };
+
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
+
+use crate::ports::TransactionExt;
+#[cfg(feature = "alloc")]
+use alloc::{
+    format,
+    string::ToString,
+    vec,
+    vec::Vec,
+};
+
+/// The maximum amount of transactions that can be included in a block,
+/// excluding the mint transaction.
+pub const MAX_TX_COUNT: u16 = u16::MAX.saturating_sub(1);
 
 pub struct OnceTransactionsSource {
     transactions: ParkingMutex<Vec<MaybeCheckedTransaction>>,
@@ -162,12 +181,26 @@ impl OnceTransactionsSource {
             ),
         }
     }
+
+    pub fn new_maybe_checked(transactions: Vec<MaybeCheckedTransaction>) -> Self {
+        Self {
+            transactions: ParkingMutex::new(transactions),
+        }
+    }
 }
 
 impl TransactionsSource for OnceTransactionsSource {
-    fn next(&self, _: u64) -> Vec<MaybeCheckedTransaction> {
+    fn next(
+        &self,
+        _: u64,
+        transactions_limit: u16,
+        _: u32,
+    ) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
-        core::mem::take(lock.as_mut())
+        let transactions: &mut Vec<MaybeCheckedTransaction> = lock.as_mut();
+        // Avoid panicking if we request more transactions than there are in the vector
+        let transactions_limit = (transactions_limit as usize).min(transactions.len());
+        transactions.drain(..transactions_limit).collect()
     }
 }
 
@@ -176,6 +209,7 @@ impl TransactionsSource for OnceTransactionsSource {
 pub struct ExecutionData {
     coinbase: u64,
     used_gas: u64,
+    used_size: u32,
     tx_count: u16,
     found_mint: bool,
     message_ids: Vec<MessageId>,
@@ -191,6 +225,7 @@ impl ExecutionData {
         ExecutionData {
             coinbase: 0,
             used_gas: 0,
+            used_size: 0,
             tx_count: 0,
             found_mint: false,
             message_ids: Vec::new(),
@@ -227,6 +262,14 @@ where
     R: RelayerPort,
     D: KeyValueInspect<Column = Column>,
 {
+    pub fn new(relayer: R, database: D, options: ExecutionOptions) -> Self {
+        Self {
+            relayer,
+            database,
+            options,
+        }
+    }
+
     #[tracing::instrument(skip_all)]
     pub fn produce_without_commit<TxSource>(
         self,
@@ -255,6 +298,7 @@ where
             skipped_transactions,
             coinbase,
             used_gas,
+            used_size,
             ..
         } = execution_data;
 
@@ -265,8 +309,8 @@ where
         let finalized_block_id = block.id();
 
         debug!(
-            "Block {:#x} fees: {} gas: {}",
-            finalized_block_id, coinbase, used_gas
+            "Block {:#x} fees: {} gas: {} tx_size: {}",
+            finalized_block_id, coinbase, used_gas, used_size
         );
 
         let result = ExecutionResult {
@@ -290,6 +334,7 @@ where
         let ExecutionData {
             coinbase,
             used_gas,
+            used_size,
             tx_status,
             events,
             changes,
@@ -299,8 +344,8 @@ where
         let finalized_block_id = block.id();
 
         debug!(
-            "Block {:#x} fees: {} gas: {}",
-            finalized_block_id, coinbase, used_gas
+            "Block {:#x} fees: {} gas: {} tx_size: {}",
+            finalized_block_id, coinbase, used_gas, used_size
         );
 
         let result = ValidationResult { tx_status, events };
@@ -370,18 +415,21 @@ where
         let mut partial_block =
             PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
+        let mut memory = MemoryInstance::new();
 
         self.process_l1_txs(
             &mut partial_block,
             components.coinbase_recipient,
             &mut block_storage_tx,
             &mut data,
+            &mut memory,
         )?;
         self.process_l2_txs(
             &mut partial_block,
             &components,
             &mut block_storage_tx,
             &mut data,
+            &mut memory,
         )?;
 
         self.produce_mint_tx(
@@ -389,6 +437,7 @@ where
             &components,
             &mut block_storage_tx,
             &mut data,
+            &mut memory,
         )?;
         debug_assert!(data.found_mint, "Mint transaction is not found");
 
@@ -402,6 +451,7 @@ where
         components: &Components<TxSource>,
         storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -445,6 +495,7 @@ where
             MaybeCheckedTransaction::Transaction(coinbase_tx.into()),
             gas_price,
             coinbase_contract_id,
+            memory,
         )?;
 
         Ok(())
@@ -469,6 +520,7 @@ where
             &components,
             &mut block_storage_tx,
             &mut data,
+            &mut MemoryInstance::new(),
         )?;
 
         data.changes = block_storage_tx.into_changes();
@@ -481,14 +533,20 @@ where
         coinbase_contract_id: ContractId,
         storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
     {
         let block_height = *block.header.height();
         let da_block_height = block.header.da_height;
-        let relayed_txs =
-            self.get_relayed_txs(block_height, da_block_height, data, storage_tx)?;
+        let relayed_txs = self.get_relayed_txs(
+            block_height,
+            da_block_height,
+            data,
+            storage_tx,
+            memory,
+        )?;
 
         self.process_relayed_txs(
             relayed_txs,
@@ -496,6 +554,7 @@ where
             storage_tx,
             data,
             coinbase_contract_id,
+            memory,
         )?;
 
         Ok(())
@@ -507,6 +566,7 @@ where
         components: &Components<TxSource>,
         storage_tx: &mut StorageTransaction<T>,
         data: &mut ExecutionData,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -519,16 +579,46 @@ where
             ..
         } = components;
         let block_gas_limit = self.consensus_params.block_gas_limit();
+        let block_transaction_size_limit = self
+            .consensus_params
+            .block_transaction_size_limit()
+            .try_into()
+            .unwrap_or(u32::MAX);
 
-        let remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+        let mut remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+        let mut remaining_block_transaction_size_limit =
+            block_transaction_size_limit.saturating_sub(data.used_size);
+
+        // We allow at most u16::MAX transactions in a block, including the mint transaction.
+        // When processing l2 transactions, we must take into account transactions from the l1
+        // that have been included in the block already (stored in `data.tx_count`), as well
+        // as the final mint transaction.
+        let mut remaining_tx_count = MAX_TX_COUNT.saturating_sub(data.tx_count);
 
         let mut regular_tx_iter = l2_tx_source
-            .next(remaining_gas_limit)
+            .next(
+                remaining_gas_limit,
+                remaining_tx_count,
+                remaining_block_transaction_size_limit,
+            )
             .into_iter()
+            .take(remaining_tx_count as usize)
             .peekable();
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
+                let tx_max_gas = transaction.max_gas(&self.consensus_params)?;
+                if tx_max_gas > remaining_gas_limit {
+                    data.skipped_transactions.push((
+                        tx_id,
+                        ExecutorError::GasOverflow(
+                            format!("Transaction cannot fit in remaining gas limit: ({remaining_gas_limit})."),
+                            tx_max_gas,
+                            remaining_gas_limit,
+                        ),
+                    ));
+                    continue;
+                }
                 match self.execute_transaction_and_commit(
                     block,
                     storage_tx,
@@ -536,25 +626,34 @@ where
                     transaction,
                     *gas_price,
                     *coinbase_contract_id,
+                    memory,
                 ) {
                     Ok(_) => {}
                     Err(err) => {
                         data.skipped_transactions.push((tx_id, err));
                     }
                 }
+                remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
+                remaining_block_transaction_size_limit =
+                    block_transaction_size_limit.saturating_sub(data.used_size);
+                remaining_tx_count = MAX_TX_COUNT.saturating_sub(data.tx_count);
             }
 
-            let new_remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
-
             regular_tx_iter = l2_tx_source
-                .next(new_remaining_gas_limit)
+                .next(
+                    remaining_gas_limit,
+                    remaining_tx_count,
+                    remaining_block_transaction_size_limit,
+                )
                 .into_iter()
+                .take(remaining_tx_count as usize)
                 .peekable();
         }
 
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_transaction_and_commit<'a, W>(
         &'a self,
         block: &'a mut PartialFuelBlock,
@@ -563,6 +662,7 @@ where
         tx: MaybeCheckedTransaction,
         gas_price: Word,
         coinbase_contract_id: ContractId,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
         W: KeyValueInspect<Column = Column>,
@@ -581,6 +681,7 @@ where
                 gas_price,
                 execution_data,
                 &mut tx_st_transaction,
+                memory,
             )?;
             tx_st_transaction.commit()?;
             tx
@@ -608,6 +709,7 @@ where
         let partial_header = PartialBlockHeader::from(block.header());
         let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
         let transactions = block.transactions();
+        let mut memory = MemoryInstance::new();
 
         let (gas_price, coinbase_contract_id) =
             Self::get_coinbase_info_from_mint_tx(transactions)?;
@@ -617,6 +719,7 @@ where
             coinbase_contract_id,
             &mut block_storage_tx,
             &mut data,
+            &mut memory,
         )?;
         let processed_l1_tx_count = partial_block.transactions.len();
 
@@ -630,6 +733,7 @@ where
                 maybe_checked_tx,
                 gas_price,
                 coinbase_contract_id,
+                &mut memory,
             )?;
         }
 
@@ -658,16 +762,20 @@ where
         storage_tx: &mut BlockStorageTransaction<T>,
         data: &mut ExecutionData,
         coinbase_contract_id: ContractId,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
     {
         let block_header = partial_block.header;
         let block_height = block_header.height();
+        let consensus_parameters_version = block_header.consensus_parameters_version;
         let relayed_tx_iter = forced_transactions.into_iter();
-        for transaction in relayed_tx_iter {
-            let maybe_checked_transaction =
-                MaybeCheckedTransaction::CheckedTransaction(transaction);
+        for checked in relayed_tx_iter {
+            let maybe_checked_transaction = MaybeCheckedTransaction::CheckedTransaction(
+                checked,
+                consensus_parameters_version,
+            );
             let tx_id = maybe_checked_transaction.id(&self.consensus_params.chain_id());
             match self.execute_transaction_and_commit(
                 partial_block,
@@ -676,6 +784,7 @@ where
                 maybe_checked_transaction,
                 Self::RELAYED_GAS_PRICE,
                 coinbase_contract_id,
+                memory,
             ) {
                 Ok(_) => {}
                 Err(err) => {
@@ -697,12 +806,19 @@ where
         da_block_height: DaBlockHeight,
         data: &mut ExecutionData,
         block_storage_tx: &mut BlockStorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<Vec<CheckedTransaction>>
     where
         D: KeyValueInspect<Column = Column>,
     {
         let forced_transactions = if self.relayer.enabled() {
-            self.process_da(block_height, da_block_height, data, block_storage_tx)?
+            self.process_da(
+                block_height,
+                da_block_height,
+                data,
+                block_storage_tx,
+                memory,
+            )?
         } else {
             Vec::with_capacity(0)
         };
@@ -729,6 +845,14 @@ where
                 if new_tx != old_tx {
                     let chain_id = self.consensus_params.chain_id();
                     let transaction_id = old_tx.id(&chain_id);
+
+                    tracing::info!(
+                        "Transaction {:?} does not match: new_tx {:?} and old_tx {:?}",
+                        transaction_id,
+                        new_tx,
+                        old_tx
+                    );
+
                     Err(ExecutorError::InvalidTransactionOutcome { transaction_id })
                 } else {
                     Ok(())
@@ -739,6 +863,12 @@ where
             .generate(&message_ids[..], *event_inbox_root)
             .map_err(ExecutorError::BlockHeaderError)?;
         if new_block.header() != old_block.header() {
+            tracing::info!(
+                "Headers does not match: new_block {:?} and old_block {:?}",
+                new_block,
+                old_block
+            );
+
             Err(ExecutorError::BlockMismatch)
         } else {
             Ok(())
@@ -751,6 +881,7 @@ where
         da_block_height: DaBlockHeight,
         execution_data: &mut ExecutionData,
         block_storage_tx: &mut BlockStorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<Vec<CheckedTransaction>>
     where
         D: KeyValueInspect<Column = Column>,
@@ -798,6 +929,8 @@ where
                             relayed_tx,
                             block_height,
                             &self.consensus_params,
+                            memory,
+                            block_storage_tx,
                         );
                         match checked_tx_res {
                             Ok(checked_tx) => {
@@ -824,11 +957,16 @@ where
     }
 
     /// Parse forced transaction payloads and perform basic checks
-    fn validate_forced_tx(
+    fn validate_forced_tx<D>(
         relayed_tx: RelayedTransaction,
         block_height: BlockHeight,
         consensus_params: &ConsensusParameters,
-    ) -> Result<CheckedTransaction, ForcedTransactionFailure> {
+        memory: &mut MemoryInstance,
+        block_storage_tx: &BlockStorageTransaction<D>,
+    ) -> Result<CheckedTransaction, ForcedTransactionFailure>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
         let parsed_tx = Self::parse_tx_bytes(&relayed_tx)?;
         Self::tx_is_valid_variant(&parsed_tx)?;
         Self::relayed_tx_claimed_enough_max_gas(
@@ -836,7 +974,13 @@ where
             &relayed_tx,
             consensus_params,
         )?;
-        let checked_tx = Self::get_checked_tx(parsed_tx, block_height, consensus_params)?;
+        let checked_tx = Self::get_checked_tx(
+            parsed_tx,
+            block_height,
+            consensus_params,
+            memory,
+            block_storage_tx,
+        )?;
         Ok(CheckedTransaction::from(checked_tx))
     }
 
@@ -849,13 +993,23 @@ where
         Ok(tx)
     }
 
-    fn get_checked_tx(
+    fn get_checked_tx<D>(
         tx: Transaction,
         height: BlockHeight,
         consensus_params: &ConsensusParameters,
-    ) -> Result<Checked<Transaction>, ForcedTransactionFailure> {
+        memory: &mut MemoryInstance,
+        block_storage_tx: &BlockStorageTransaction<D>,
+    ) -> Result<Checked<Transaction>, ForcedTransactionFailure>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
         let checked_tx = tx
-            .into_checked(height, consensus_params)
+            .into_checked_reusable_memory(
+                height,
+                consensus_params,
+                memory,
+                block_storage_tx,
+            )
             .map_err(ForcedTransactionFailure::CheckError)?;
         Ok(checked_tx)
     }
@@ -866,7 +1020,8 @@ where
             Transaction::Script(_)
             | Transaction::Create(_)
             | Transaction::Upgrade(_)
-            | Transaction::Upload(_) => Ok(()),
+            | Transaction::Upload(_)
+            | Transaction::Blob(_) => Ok(()),
         }
     }
 
@@ -876,17 +1031,9 @@ where
         consensus_params: &ConsensusParameters,
     ) -> Result<(), ForcedTransactionFailure> {
         let claimed_max_gas = relayed_tx.max_gas();
-        let gas_costs = consensus_params.gas_costs();
-        let fee_params = consensus_params.fee_params();
-        let actual_max_gas = match tx {
-            Transaction::Script(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Create(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Mint(_) => {
-                return Err(ForcedTransactionFailure::InvalidTransactionType)
-            }
-            Transaction::Upgrade(tx) => tx.max_gas(gas_costs, fee_params),
-            Transaction::Upload(tx) => tx.max_gas(gas_costs, fee_params),
-        };
+        let actual_max_gas = tx
+            .max_gas(consensus_params)
+            .map_err(|_| ForcedTransactionFailure::InvalidTransactionType)?;
         if actual_max_gas > claimed_max_gas {
             return Err(ForcedTransactionFailure::InsufficientMaxGas {
                 claimed_max_gas,
@@ -906,6 +1053,7 @@ where
         gas_price: Word,
         execution_data: &mut ExecutionData,
         storage_tx: &mut TxStorageTransaction<T>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<Transaction>
     where
         T: KeyValueInspect<Column = Column>,
@@ -922,6 +1070,7 @@ where
                 gas_price,
                 execution_data,
                 storage_tx,
+                memory,
             ),
             CheckedTransaction::Create(tx) => self.execute_chargeable_transaction(
                 tx,
@@ -930,6 +1079,7 @@ where
                 gas_price,
                 execution_data,
                 storage_tx,
+                memory,
             ),
             CheckedTransaction::Mint(mint) => self.execute_mint(
                 mint,
@@ -946,6 +1096,7 @@ where
                 gas_price,
                 execution_data,
                 storage_tx,
+                memory,
             ),
             CheckedTransaction::Upload(tx) => self.execute_chargeable_transaction(
                 tx,
@@ -954,6 +1105,16 @@ where
                 gas_price,
                 execution_data,
                 storage_tx,
+                memory,
+            ),
+            CheckedTransaction::Blob(tx) => self.execute_chargeable_transaction(
+                tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                storage_tx,
+                memory,
             ),
         }
     }
@@ -987,11 +1148,21 @@ where
         header: &PartialBlockHeader,
     ) -> ExecutorResult<CheckedTransaction> {
         let block_height = *header.height();
+        let actual_version = header.consensus_parameters_version;
         let checked_tx = match tx {
             MaybeCheckedTransaction::Transaction(tx) => tx
                 .into_checked_basic(block_height, &self.consensus_params)?
                 .into(),
-            MaybeCheckedTransaction::CheckedTransaction(checked_tx) => checked_tx,
+            MaybeCheckedTransaction::CheckedTransaction(checked_tx, checked_version) => {
+                if actual_version == checked_version {
+                    checked_tx
+                } else {
+                    let checked_tx: Checked<Transaction> = checked_tx.into();
+                    let (tx, _) = checked_tx.into();
+                    tx.into_checked_basic(block_height, &self.consensus_params)?
+                        .into()
+                }
+            }
         };
         Ok(checked_tx)
     }
@@ -1061,6 +1232,7 @@ where
         gas_price: Word,
         execution_data: &mut ExecutionData,
         storage_tx: &mut TxStorageTransaction<T>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<Transaction>
     where
         Tx: ExecutableTransaction + Cacheable + Send + Sync + 'static,
@@ -1070,7 +1242,7 @@ where
         let tx_id = checked_tx.id();
 
         if self.options.extra_tx_checks {
-            checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx)?;
+            checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
         let (reverted, state, tx, receipts) = self.attempt_tx_execution_with_vm(
@@ -1079,6 +1251,7 @@ where
             coinbase_contract_id,
             gas_price,
             storage_tx,
+            memory,
         )?;
 
         self.spend_input_utxos(tx.inputs(), storage_tx, reverted, execution_data)?;
@@ -1179,7 +1352,7 @@ where
 
         if storage_tx
             .storage::<ProcessedTransactions>()
-            .insert(&coinbase_id, &())?
+            .replace(&coinbase_id, &())?
             .is_some()
         {
             return Err(ExecutorError::TransactionIdCollision(coinbase_id))
@@ -1240,10 +1413,14 @@ where
             storage_tx,
         )?;
         let Input::Contract(input) = core::mem::take(input) else {
-            unreachable!()
+            return Err(ExecutorError::Other(
+                "Input of the `Mint` transaction is not a contract".to_string(),
+            ))
         };
         let Output::Contract(output) = outputs[0] else {
-            unreachable!()
+            return Err(ExecutorError::Other(
+                "The output of the `Mint` transaction is not a contract".to_string(),
+            ))
         };
         Ok((input, output))
     }
@@ -1281,17 +1458,30 @@ where
         tx_id: TxId,
     ) -> ExecutorResult<()> {
         let (used_gas, tx_fee) = self.total_fee_paid(tx, &receipts, gas_price)?;
+        let used_size = tx.metered_bytes_size().try_into().unwrap_or(u32::MAX);
+
         execution_data.coinbase = execution_data
             .coinbase
             .checked_add(tx_fee)
             .ok_or(ExecutorError::FeeOverflow)?;
-        execution_data.used_gas = execution_data
-            .used_gas
-            .checked_add(used_gas)
-            .ok_or(ExecutorError::GasOverflow)?;
-        execution_data
-            .message_ids
-            .extend(receipts.iter().filter_map(|r| r.message_id()));
+        execution_data.used_gas = execution_data.used_gas.checked_add(used_gas).ok_or(
+            ExecutorError::GasOverflow(
+                "Execution used gas overflowed.".into(),
+                execution_data.used_gas,
+                used_gas,
+            ),
+        )?;
+        execution_data.used_size = execution_data
+            .used_size
+            .checked_add(used_size)
+            .ok_or(ExecutorError::TxSizeOverflow)?;
+
+        if !reverted {
+            execution_data
+                .message_ids
+                .extend(receipts.iter().filter_map(|r| r.message_id()));
+        }
+
         let status = if reverted {
             TransactionExecutionResult::Failed {
                 result: Some(state),
@@ -1360,7 +1550,8 @@ where
         &self,
         mut checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
-        storage_tx: &mut TxStorageTransaction<T>,
+        storage_tx: &TxStorageTransaction<T>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<Checked<Tx>>
     where
         Tx: ExecutableTransaction + Send + Sync + 'static,
@@ -1368,7 +1559,11 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         checked_tx = checked_tx
-            .check_predicates(&CheckPredicateParams::from(&self.consensus_params))
+            .check_predicates(
+                &CheckPredicateParams::from(&self.consensus_params),
+                memory,
+                storage_tx,
+            )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
                     e,
@@ -1395,6 +1590,7 @@ where
         coinbase_contract_id: ContractId,
         gas_price: Word,
         storage_tx: &mut TxStorageTransaction<T>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
     where
         Tx: ExecutableTransaction + Cacheable,
@@ -1414,11 +1610,6 @@ where
             coinbase_contract_id,
         );
 
-        let mut vm = Interpreter::with_storage(
-            vm_db,
-            InterpreterParams::new(gas_price, &self.consensus_params),
-        );
-
         let gas_costs = self.consensus_params.gas_costs();
         let fee_params = self.consensus_params.fee_params();
 
@@ -1429,6 +1620,12 @@ where
             .map(|input| input.predicate_gas_used())
             .collect();
         let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
+
+        let mut vm = Interpreter::with_storage(
+            memory,
+            vm_db,
+            InterpreterParams::new(gas_price, &self.consensus_params),
+        );
 
         let vm_result: StateTransition<_> = vm
             .transact(ready_tx)
@@ -1477,10 +1674,7 @@ where
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
-                        if !coin
-                            .matches_input(input)
-                            .expect("The input is a coin above")
-                        {
+                        if !coin.matches_input(input).unwrap_or_default() {
                             return Err(
                                 TransactionValidityError::CoinMismatch(*utxo_id).into()
                             )
@@ -1514,10 +1708,7 @@ where
                             .into())
                         }
 
-                        if !message
-                            .matches_input(input)
-                            .expect("The input is message above")
-                        {
+                        if !message.matches_input(input).unwrap_or_default() {
                             return Err(
                                 TransactionValidityError::MessageMismatch(*nonce).into()
                             )
@@ -1564,7 +1755,7 @@ where
                     // prune utxo from db
                     let coin = db
                         .storage::<Coins>()
-                        .remove(utxo_id)
+                        .take(utxo_id)
                         .map_err(Into::into)
                         .transpose()
                         .unwrap_or_else(|| {
@@ -1593,7 +1784,7 @@ where
                     // and cleanup message contents
                     let message = db
                         .storage::<Messages>()
-                        .remove(nonce)?
+                        .take(nonce)?
                         .ok_or(ExecutorError::MessageDoesNotExist(*nonce))?;
                     execution_data
                         .events
@@ -1632,15 +1823,18 @@ where
                 gas_price,
             )
             .ok_or(ExecutorError::FeeOverflow)?;
-        let total_used_gas = min_gas
-            .checked_add(used_gas)
-            .ok_or(ExecutorError::GasOverflow)?;
+        let total_used_gas =
+            min_gas
+                .checked_add(used_gas)
+                .ok_or(ExecutorError::GasOverflow(
+                    "Total used gas overflowed.".into(),
+                    min_gas,
+                    used_gas,
+                ))?;
         // if there's no script result (i.e. create) then fee == base amount
         Ok((
             total_used_gas,
-            max_fee
-                .checked_sub(fee)
-                .expect("Refunded fee can't be more than `max_fee`."),
+            max_fee.checked_sub(fee).ok_or(ExecutorError::FeeOverflow)?,
         ))
     }
 
@@ -1683,8 +1877,7 @@ where
                     ref contract_id,
                     ..
                 }) => {
-                    let contract =
-                        ContractRef::new(StructuredStorage::new(db), *contract_id);
+                    let contract = ContractRef::new(db, *contract_id);
                     let utxo_info =
                         contract.validated_utxo(self.options.extra_tx_checks)?;
                     *utxo_id = *utxo_info.utxo_id();
@@ -1728,7 +1921,7 @@ where
                         })
                     };
 
-                let contract = ContractRef::new(StructuredStorage::new(db), *contract_id);
+                let contract = ContractRef::new(db, *contract_id);
                 contract_output.balance_root = contract.balance_root()?;
                 contract_output.state_root = contract.state_root()?;
             }
@@ -1769,11 +1962,13 @@ where
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace<T, Tx>(
+    fn log_backtrace<M, T, Tx>(
         &self,
-        vm: &Interpreter<VmStorage<T>, Tx>,
+        vm: &Interpreter<M, VmStorage<T>, Tx>,
         receipts: &[Receipt],
-    ) {
+    ) where
+        M: Memory,
+    {
         if self.options.backtrace {
             if let Some(backtrace) = receipts
                 .iter()
@@ -1812,8 +2007,8 @@ where
     {
         let tx_idx = execution_data.tx_count;
         for (output_index, output) in outputs.iter().enumerate() {
-            let index = u16::try_from(output_index)
-                .expect("Transaction can have only up to `u16::MAX` outputs");
+            let index =
+                u16::try_from(output_index).map_err(|_| ExecutorError::TooManyOutputs)?;
             let utxo_id = UtxoId::new(*tx_id, index);
             match output {
                 Output::Coin {
@@ -1908,7 +2103,7 @@ where
             }
             .into();
 
-            if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
+            if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
             }
             execution_data

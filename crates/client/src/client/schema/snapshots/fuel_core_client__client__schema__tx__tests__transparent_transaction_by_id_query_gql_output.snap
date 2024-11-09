@@ -53,6 +53,7 @@ query($id: TransactionId!) {
     isMint
     isUpgrade
     isUpload
+    isBlob
     outputs {
       __typename
       ... on CoinOutput {
@@ -95,10 +96,7 @@ query($id: TransactionId!) {
         time
       }
       ... on SuccessStatus {
-        transactionId
-        block {
-          height
-        }
+        blockHeight
         time
         programState {
           returnType
@@ -141,10 +139,7 @@ query($id: TransactionId!) {
         reason
       }
       ... on FailureStatus {
-        transactionId
-        block {
-          height
-        }
+        blockHeight
         time
         reason
         programState {
@@ -211,5 +206,6 @@ query($id: TransactionId!) {
         root
       }
     }
+    blobId
   }
 }

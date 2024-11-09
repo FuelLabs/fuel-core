@@ -3,10 +3,10 @@
 use crate::{
     block_producer::{
         gas_price::{
-            GasPriceParams,
             GasPriceProvider,
             MockConsensusParametersProvider,
         },
+        Bytes32,
         Error,
     },
     mocks::{
@@ -24,6 +24,7 @@ use fuel_core_producer as _;
 use fuel_core_types::{
     blockchain::{
         block::{
+            Block,
             CompressedBlock,
             PartialFuelBlock,
         },
@@ -34,7 +35,14 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx::ConsensusParameters,
+    fuel_tx,
+    fuel_tx::{
+        field::InputContract,
+        ConsensusParameters,
+        Mint,
+        Script,
+        Transaction,
+    },
     fuel_types::BlockHeight,
     services::executor::Error as ExecutorError,
     tai64::Tai64,
@@ -62,9 +70,11 @@ impl MockProducerGasPrice {
     }
 }
 
+#[async_trait::async_trait]
 impl GasPriceProvider for MockProducerGasPrice {
-    fn gas_price(&self, _params: GasPriceParams) -> Option<u64> {
+    async fn next_gas_price(&self) -> anyhow::Result<u64> {
         self.gas_price
+            .ok_or_else(|| anyhow::anyhow!("Gas price not provided"))
     }
 }
 
@@ -275,7 +285,7 @@ mod produce_and_execute_block_txpool {
         let da_height = DaBlockHeight(100u64);
         let prev_height = 1u32.into();
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height(da_height)
+            .with_latest_da_block_height_from_relayer(da_height)
             .with_prev_da_height(da_height)
             .with_prev_height(prev_height)
             .build();
@@ -301,7 +311,7 @@ mod produce_and_execute_block_txpool {
         let prev_da_height = DaBlockHeight(100u64);
         let prev_height = 1u32.into();
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height(prev_da_height - 1u64.into())
+            .with_latest_da_block_height_from_relayer(prev_da_height - 1u64.into())
             .with_prev_da_height(prev_da_height)
             .with_prev_height(prev_height)
             .build();
@@ -350,10 +360,56 @@ mod produce_and_execute_block_txpool {
         .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
 
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height((prev_da_height + 4u64).into())
+            .with_latest_da_block_height_from_relayer((prev_da_height + 4u64).into())
             .with_latest_blocks_with_gas_costs(latest_blocks_with_gas_costs)
             .with_prev_da_height(prev_da_height.into())
             .with_block_gas_limit(block_gas_limit)
+            .with_prev_height(prev_height)
+            .build();
+
+        let producer = ctx.producer();
+        let next_height = prev_height
+            .succ()
+            .expect("The block height should be valid");
+
+        // when
+        let res = producer
+            .produce_and_execute_block_txpool(next_height, Tai64::now())
+            .await
+            .unwrap();
+
+        // then
+        let expected = prev_da_height + 3;
+        let actual: u64 = res
+            .into_result()
+            .block
+            .header()
+            .application()
+            .da_height
+            .into();
+        assert_eq!(expected, actual);
+    }
+
+    #[tokio::test]
+    async fn will_only_advance_da_height_if_enough_transactions_remaining() {
+        // given
+        let prev_da_height = 100;
+        let prev_height = 1u32.into();
+        // 0 + 15_000 + 15_000 + 15_000 + 21_000 = 66_000 > 65_535
+        let latest_blocks_with_transaction_numbers = vec![
+            (prev_da_height, 0u64),
+            (prev_da_height + 1, 15_000),
+            (prev_da_height + 2, 15_000),
+            (prev_da_height + 3, 15_000),
+            (prev_da_height + 4, 21_000),
+        ]
+        .into_iter()
+        .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
+
+        let ctx = TestContextBuilder::new()
+            .with_latest_da_block_height_from_relayer((prev_da_height + 4u64).into())
+            .with_latest_blocks_with_transactions(latest_blocks_with_transaction_numbers)
+            .with_prev_da_height(prev_da_height.into())
             .with_prev_height(prev_height)
             .build();
 
@@ -397,7 +453,7 @@ mod produce_and_execute_block_txpool {
         .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
 
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height((prev_da_height + 4u64).into())
+            .with_latest_da_block_height_from_relayer((prev_da_height + 4u64).into())
             .with_latest_blocks_with_gas_costs(latest_blocks_with_gas_costs)
             .with_prev_da_height(prev_da_height.into())
             .with_block_gas_limit(block_gas_limit)
@@ -445,7 +501,7 @@ mod produce_and_execute_block_txpool {
                 .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
 
         let ctx = TestContextBuilder::new()
-            .with_latest_block_height((prev_da_height + 1u64).into())
+            .with_latest_da_block_height_from_relayer((prev_da_height + 1u64).into())
             .with_latest_blocks_with_gas_costs(latest_blocks_with_gas_costs)
             .with_prev_da_height(prev_da_height.into())
             .with_block_gas_limit(block_gas_limit)
@@ -531,6 +587,255 @@ mod produce_and_execute_block_txpool {
         // then
         assert!(result.is_err());
     }
+}
+
+// Tests for the `dry_run` method.
+mod dry_run {
+    use super::*;
+
+    #[tokio::test]
+    async fn dry_run__executes_with_given_timestamp() {
+        // Given
+        let simulated_block_time = Tai64::from_unix(1337);
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContext::default_from_executor(executor.clone());
+
+        // When
+        let _ = ctx
+            .producer()
+            .dry_run(vec![], None, Some(simulated_block_time), None, None)
+            .await;
+
+        // Then
+        assert_eq!(executor.captured_block_timestamp(), simulated_block_time);
+    }
+
+    #[tokio::test]
+    async fn dry_run__executes_with_past_timestamp() {
+        // Given
+        let simulated_block_time = Tai64::UNIX_EPOCH;
+        let last_block_time = Tai64::from_unix(1337);
+
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContextBuilder::new()
+            .with_prev_time(last_block_time)
+            .build_with_executor(executor.clone());
+
+        // When
+        let _ = ctx
+            .producer()
+            .dry_run(vec![], None, Some(simulated_block_time), None, None)
+            .await;
+
+        // Then
+        assert_eq!(executor.captured_block_timestamp(), simulated_block_time);
+    }
+
+    #[tokio::test]
+    async fn dry_run__uses_last_block_timestamp_when_no_time_provided() {
+        // Given
+        let last_block_time = Tai64::from_unix(1337);
+
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContextBuilder::new()
+            .with_prev_time(last_block_time)
+            .build_with_executor(executor.clone());
+
+        // When
+        let _ = ctx.producer().dry_run(vec![], None, None, None, None).await;
+
+        // Then
+        assert_eq!(executor.captured_block_timestamp(), last_block_time);
+    }
+
+    #[tokio::test]
+    async fn dry_run__errors_early_if_height_is_lower_than_chain_tip() {
+        // Given
+        let last_block_height = BlockHeight::new(42);
+
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContextBuilder::new()
+            .with_prev_height(last_block_height)
+            .build_with_executor(executor.clone());
+
+        // When
+        let _ = ctx
+            .producer()
+            .dry_run(vec![], last_block_height.pred(), None, None, None)
+            .await
+            .expect_err("expected failure");
+
+        // Then
+        assert!(executor.has_no_captured_block_timestamp());
+    }
+
+    impl MockExecutorWithCapture<Transaction> {
+        fn captured_block_timestamp(&self) -> Tai64 {
+            *self
+                .captured
+                .lock()
+                .unwrap()
+                .as_ref()
+                .expect("should have captured a block")
+                .header_to_produce
+                .time()
+        }
+
+        fn has_no_captured_block_timestamp(&self) -> bool {
+            self.captured.lock().unwrap().is_none()
+        }
+    }
+}
+
+use fuel_core_types::fuel_tx::field::MintGasPrice;
+use proptest::{
+    prop_compose,
+    proptest,
+};
+
+prop_compose! {
+    fn arb_block()(height in 1..255u8, da_height in 1..255u64, gas_price: u64, coinbase_recipient: [u8; 32], num_txs in 0..100u32) -> Block {
+        let mut txs : Vec<_> = (0..num_txs).map(|_| Transaction::Script(Script::default())).collect();
+        let mut inner_mint = Mint::default();
+        *inner_mint.gas_price_mut() = gas_price;
+        *inner_mint.input_contract_mut() = fuel_tx::input::contract::Contract{
+            contract_id: coinbase_recipient.into(),
+            ..Default::default()
+        };
+
+        let mint = Transaction::Mint(inner_mint);
+        txs.push(mint);
+        let header = PartialBlockHeader {
+            consensus: ConsensusHeader {
+                height: (height as u32).into(),
+                ..Default::default()
+            },
+            application: ApplicationHeader {
+                da_height: DaBlockHeight(da_height),
+                ..Default::default()
+            },
+        };
+        let outbox_message_ids = vec![];
+        let event_inbox_root = Bytes32::default();
+        Block::new(header, txs, &outbox_message_ids, event_inbox_root).unwrap()
+    }
+}
+
+#[allow(clippy::arithmetic_side_effects)]
+fn ctx_for_block<Tx>(
+    block: &Block,
+    executor: MockExecutorWithCapture<Tx>,
+) -> TestContext<MockExecutorWithCapture<Tx>> {
+    let prev_height = block.header().height().pred().unwrap();
+    let prev_da_height = block.header().da_height.as_u64() - 1;
+    TestContextBuilder::new()
+        .with_prev_height(prev_height)
+        .with_prev_da_height(prev_da_height.into())
+        .build_with_executor(executor)
+}
+
+// gas_price
+proptest! {
+    #[test]
+    fn produce_and_execute_predefined_block__contains_expected_gas_price(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let expected_gas_price = *block
+            .transactions().last().and_then(|tx| tx.as_mint()).unwrap().gas_price();
+        let captured = executor.captured.lock().unwrap();
+        let actual = captured.as_ref().unwrap().gas_price;
+        assert_eq!(expected_gas_price, actual);
+    }
+
+    // time
+    #[test]
+    fn produce_and_execute_predefined_block__contains_expected_time(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let expected_time = block.header().consensus().time;
+        let captured = executor.captured.lock().unwrap();
+        let actual = captured.as_ref().unwrap().header_to_produce.consensus.time;
+        assert_eq!(expected_time, actual);
+    }
+
+    // coinbase
+    #[test]
+    fn produce_and_execute_predefined_block__contains_expected_coinbase_recipient(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let expected_coinbase = block.transactions().last().and_then(|tx| tx.as_mint()).unwrap().input_contract().contract_id;
+        let captured = executor.captured.lock().unwrap();
+        let actual = captured.as_ref().unwrap().coinbase_recipient;
+        assert_eq!(expected_coinbase, actual);
+    }
+
+    // DA height
+    #[test]
+    fn produce_and_execute_predefined_block__contains_expected_da_height(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let expected_da_height = block.header().application().da_height;
+        let captured = executor.captured.lock().unwrap();
+        let actual = captured.as_ref().unwrap().header_to_produce.application.da_height;
+        assert_eq!(expected_da_height, actual);
+    }
+
+    #[test]
+    fn produce_and_execute_predefined_block__do_not_include_original_mint_in_txs_source(block in arb_block()) {
+        let rt = multithreaded_runtime();
+
+        // given
+        let executor = MockExecutorWithCapture::default();
+        let ctx = ctx_for_block(&block, executor.clone());
+
+        //when
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+
+        // then
+        let captured = executor.captured.lock().unwrap();
+        let txs_source = &captured.as_ref().unwrap().transactions_source;
+        let has_a_mint = txs_source.iter().any(|tx| matches!(tx, Transaction::Mint(_)));
+        assert!(!has_a_mint);
+    }
+}
+
+fn multithreaded_runtime() -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
 }
 
 struct TestContext<Executor> {
@@ -639,34 +944,74 @@ impl<Executor> TestContext<Executor> {
 
 struct TestContextBuilder {
     latest_block_height: DaBlockHeight,
-    blocks_with_gas_costs: HashMap<DaBlockHeight, u64>,
+    blocks_with_gas_costs_and_transactions_number: HashMap<DaBlockHeight, (u64, u64)>,
     prev_da_height: DaBlockHeight,
     block_gas_limit: Option<u64>,
     prev_height: BlockHeight,
+    prev_time: Tai64,
 }
 
 impl TestContextBuilder {
     fn new() -> Self {
         Self {
             latest_block_height: 0u64.into(),
-            blocks_with_gas_costs: HashMap::new(),
+            blocks_with_gas_costs_and_transactions_number: HashMap::new(),
             prev_da_height: 1u64.into(),
             block_gas_limit: None,
             prev_height: 0u32.into(),
+            prev_time: Tai64::UNIX_EPOCH,
         }
     }
 
-    fn with_latest_block_height(mut self, latest_block_height: DaBlockHeight) -> Self {
+    fn with_latest_da_block_height_from_relayer(
+        mut self,
+        latest_block_height: DaBlockHeight,
+    ) -> Self {
         self.latest_block_height = latest_block_height;
         self
     }
 
+    fn with_latest_blocks_with_gas_costs_and_transactions_number(
+        mut self,
+        latest_blocks_with_gas_costs_and_transactions: impl Iterator<
+            Item = (DaBlockHeight, (u64, u64)),
+        >,
+    ) -> Self {
+        self.blocks_with_gas_costs_and_transactions_number
+            .extend(latest_blocks_with_gas_costs_and_transactions);
+        self
+    }
+
+    // Helper function that can be used in tests where transaction numbers in a da block are irrelevant
     fn with_latest_blocks_with_gas_costs(
         mut self,
         latest_blocks_with_gas_costs: impl Iterator<Item = (DaBlockHeight, u64)>,
     ) -> Self {
-        self.blocks_with_gas_costs
-            .extend(latest_blocks_with_gas_costs);
+        let latest_blocks_with_gas_costs_and_transactions_number =
+            latest_blocks_with_gas_costs
+                .into_iter()
+                .map(|(da_block_height, gas_costs)| (da_block_height, (gas_costs, 0)));
+        // Assigning `self` necessary to avoid the compiler complaining about the mutability of `self`
+        self = self.with_latest_blocks_with_gas_costs_and_transactions_number(
+            latest_blocks_with_gas_costs_and_transactions_number,
+        );
+        self
+    }
+
+    // Helper function that can be used in tests where gas costs in a da block are irrelevant
+    fn with_latest_blocks_with_transactions(
+        mut self,
+        latest_blocks_with_transactions: impl Iterator<Item = (DaBlockHeight, u64)>,
+    ) -> Self {
+        let latest_blocks_with_gas_costs_and_transactions_number =
+            latest_blocks_with_transactions.into_iter().map(
+                |(da_block_height, transactions)| (da_block_height, (0, transactions)),
+            );
+
+        // Assigning `self` necessary to avoid the compiler complaining about the mutability of `self`
+        self = self.with_latest_blocks_with_gas_costs_and_transactions_number(
+            latest_blocks_with_gas_costs_and_transactions_number,
+        );
         self
     }
 
@@ -685,16 +1030,25 @@ impl TestContextBuilder {
         self
     }
 
-    fn build(&self) -> TestContext<MockExecutor> {
+    fn with_prev_time(mut self, prev_time: Tai64) -> Self {
+        self.prev_time = prev_time;
+        self
+    }
+
+    fn pre_existing_blocks(&self) -> Arc<Mutex<HashMap<BlockHeight, CompressedBlock>>> {
         let da_height = self.prev_da_height;
-        let previous_block = PartialFuelBlock {
+        let height = self.prev_height;
+        let time = self.prev_time;
+
+        let block = PartialFuelBlock {
             header: PartialBlockHeader {
                 application: ApplicationHeader {
                     da_height,
                     ..Default::default()
                 },
                 consensus: ConsensusHeader {
-                    height: self.prev_height,
+                    height,
+                    time,
                     ..Default::default()
                 },
             },
@@ -704,26 +1058,54 @@ impl TestContextBuilder {
         .unwrap()
         .compress(&Default::default());
 
+        Arc::new(Mutex::new(HashMap::from_iter(Some((height, block)))))
+    }
+
+    fn build(self) -> TestContext<MockExecutor> {
+        let block_gas_limit = self.block_gas_limit.unwrap_or_default();
+
+        let mock_relayer = MockRelayer {
+            latest_block_height: self.latest_block_height,
+            latest_da_blocks_with_costs_and_transactions_number: self
+                .blocks_with_gas_costs_and_transactions_number
+                .clone(),
+            ..Default::default()
+        };
+
         let db = MockDb {
-            blocks: Arc::new(Mutex::new(
-                vec![(self.prev_height, previous_block)]
-                    .into_iter()
-                    .collect(),
-            )),
+            blocks: self.pre_existing_blocks(),
             consensus_parameters_version: 0,
             state_transition_bytecode_version: 0,
         };
 
+        TestContext {
+            relayer: mock_relayer,
+            block_gas_limit,
+            ..TestContext::default_from_db(db)
+        }
+    }
+
+    fn build_with_executor<Ex>(self, executor: Ex) -> TestContext<Ex> {
+        let block_gas_limit = self.block_gas_limit.unwrap_or_default();
+
         let mock_relayer = MockRelayer {
             latest_block_height: self.latest_block_height,
-            latest_da_blocks_with_costs: self.blocks_with_gas_costs.clone(),
+            latest_da_blocks_with_costs_and_transactions_number: self
+                .blocks_with_gas_costs_and_transactions_number
+                .clone(),
             ..Default::default()
+        };
+
+        let db = MockDb {
+            blocks: self.pre_existing_blocks(),
+            consensus_parameters_version: 0,
+            state_transition_bytecode_version: 0,
         };
 
         TestContext {
             relayer: mock_relayer,
-            block_gas_limit: self.block_gas_limit.unwrap_or_default(),
-            ..TestContext::default_from_db(db)
+            block_gas_limit,
+            ..TestContext::default_from_db_and_executor(db, executor)
         }
     }
 }

@@ -27,7 +27,6 @@ use fuel_core::{
         Config,
         FuelService,
     },
-    txpool::types::Word,
 };
 use fuel_core_benches::{
     default_gas_costs::default_gas_costs,
@@ -38,7 +37,6 @@ use fuel_core_chain_config::{
     ContractConfig,
     StateConfig,
 };
-use fuel_core_services::Service;
 use fuel_core_storage::{
     tables::ContractsRawCode,
     vm_storage::IncreaseStorageKey,
@@ -58,6 +56,7 @@ use fuel_core_types::{
         GTFArgs,
         Instruction,
         RegId,
+        Word,
     },
     fuel_crypto::{
         secp256r1,
@@ -83,6 +82,8 @@ use fuel_core_types::{
     fuel_vm::{
         checked_transaction::EstimatePredicates,
         consts::WORD_SIZE,
+        interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
     services::executor::TransactionExecutionResult,
 };
@@ -336,12 +337,19 @@ fn service_with_many_contracts(
             .unwrap();
     }
 
-    let service = FuelService::new(
-        CombinedDatabase::new(database, Default::default(), Default::default()),
-        config.clone(),
-    )
-    .expect("Unable to start a FuelService");
-    service.start().expect("Unable to start the service");
+    let service = rt.block_on(async move {
+        FuelService::from_combined_database(
+            CombinedDatabase::new(
+                database,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            ),
+            config.clone(),
+        )
+        .await
+        .expect("Unable to start FuelService")
+    });
     (service, rt)
 }
 
@@ -408,19 +416,20 @@ fn run_with_service_with_extra_inputs(
             }
             let mut tx = tx_builder.finalize_as_transaction();
             let chain_config = shared.config.snapshot_reader.chain_config().clone();
-            tx.estimate_predicates(&chain_config.consensus_parameters.clone().into())
-                .unwrap();
+            tx.estimate_predicates(
+                &chain_config.consensus_parameters.clone().into(),
+                MemoryInstance::new(),
+                &EmptyStorage,
+            )
+            .unwrap();
             async move {
                 let tx_id = tx.id(&chain_config.consensus_parameters.chain_id());
 
                 let mut sub = shared.block_importer.block_importer.subscribe();
                 shared
                     .txpool_shared_state
-                    .insert(vec![std::sync::Arc::new(tx)])
+                    .insert(tx)
                     .await
-                    .into_iter()
-                    .next()
-                    .expect("Should be at least 1 element")
                     .expect("Should include transaction successfully");
                 let res = sub.recv().await.expect("Should produce a block");
                 assert_eq!(res.tx_status.len(), 2, "res.tx_status: {:?}", res.tx_status);

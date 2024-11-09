@@ -2,14 +2,16 @@ use crate::{
     database::{
         database_description::off_chain::OffChain,
         Database,
+        OffChainIterableKeyValueView,
     },
     fuel_core_graphql_api::{
         ports::{
-            worker::Transactional,
+            worker,
             OffChainDatabase,
         },
         storage::{
             contracts::ContractsInfo,
+            da_compression::DaCompressedBlocks,
             relayed_transactions::RelayedTransactionStatuses,
             transactions::OwnedTransactionIndexCursor,
         },
@@ -21,13 +23,17 @@ use crate::{
     },
 };
 use fuel_core_storage::{
+    blueprint::BlueprintInspect,
+    codec::Encode,
     iter::{
         BoxedIter,
         IntoBoxedIter,
         IterDirection,
         IteratorOverTable,
     },
+    kv_store::KeyValueInspect,
     not_found,
+    structured_storage::TableWithBlueprint,
     transactional::{
         IntoTransaction,
         StorageTransaction,
@@ -35,10 +41,6 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
-};
-use fuel_core_txpool::types::{
-    ContractId,
-    TxId,
 };
 use fuel_core_types::{
     blockchain::{
@@ -50,8 +52,10 @@ use fuel_core_types::{
     fuel_tx::{
         Address,
         Bytes32,
+        ContractId,
         Salt,
         Transaction,
+        TxId,
         TxPointer,
         UtxoId,
     },
@@ -62,10 +66,23 @@ use fuel_core_types::{
     services::txpool::TransactionStatus,
 };
 
-impl OffChainDatabase for Database<OffChain> {
+impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
         self.get_block_height(id)
             .and_then(|height| height.ok_or(not_found!("BlockHeight")))
+    }
+
+    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>> {
+        let column = <DaCompressedBlocks as TableWithBlueprint>::column();
+        let encoder =
+            <<DaCompressedBlocks as TableWithBlueprint>::Blueprint as BlueprintInspect<
+                DaCompressedBlocks,
+                Self,
+            >>::KeyCodec::encode(height);
+
+        self.get(encoder.as_ref(), column)?
+            .ok_or_else(|| not_found!(DaCompressedBlocks))
+            .map(|value| value.as_ref().clone())
     }
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
@@ -172,8 +189,12 @@ impl OffChainDatabase for Database<OffChain> {
     }
 }
 
-impl Transactional for Database<OffChain> {
+impl worker::OffChainDatabase for Database<OffChain> {
     type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
+
+    fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
+        Ok(fuel_core_storage::transactional::HistoricalView::latest_height(self))
+    }
 
     fn transaction(&mut self) -> Self::Transaction<'_> {
         self.into_transaction()

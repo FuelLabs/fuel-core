@@ -13,10 +13,11 @@ description = "Fuel Block Importer"
 anyhow = { workspace = true }
 derive_more = { workspace = true }
 fuel-core-metrics = { workspace = true }
-fuel-core-storage = { workspace = true }
-fuel-core-types = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std"] }
+parking_lot = { workspace = true }
+rayon = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tokio-rayon = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
@@ -24,3 +25,9 @@ fuel-core-trace = { path = "./../../trace" }
 fuel-core-types = { path = "./../../types", features = ["test-helpers"] }
 mockall = { workspace = true }
 test-case = { workspace = true }
+
+[features]
+test-helpers = [
+  "fuel-core-types/test-helpers",
+  "fuel-core-storage/test-helpers",
+]

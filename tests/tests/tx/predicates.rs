@@ -11,9 +11,13 @@ use fuel_core_types::{
         *,
     },
     fuel_types::ChainId,
-    fuel_vm::checked_transaction::{
-        CheckPredicateParams,
-        EstimatePredicates,
+    fuel_vm::{
+        checked_transaction::{
+            CheckPredicateParams,
+            EstimatePredicates,
+        },
+        interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
 };
 use rand::{
@@ -58,15 +62,19 @@ async fn transaction_with_valid_predicate_is_executed() {
     assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
 
     predicate_tx
-        .estimate_predicates(&CheckPredicateParams::from(
-            &context
-                .srv
-                .shared
-                .config
-                .snapshot_reader
-                .chain_config()
-                .consensus_parameters,
-        ))
+        .estimate_predicates(
+            &CheckPredicateParams::from(
+                &context
+                    .srv
+                    .shared
+                    .config
+                    .snapshot_reader
+                    .chain_config()
+                    .consensus_parameters,
+            ),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
         .expect("Predicate check failed");
 
     assert_ne!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);

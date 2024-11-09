@@ -1,13 +1,9 @@
 use crate::{
     fuel_core_graphql_api::{
         api_service::ConsensusProvider,
-        database::ReadView,
+        query_costs,
     },
     graphql_api::Config,
-    query::{
-        BlockQueryData,
-        ChainQueryData,
-    },
     schema::{
         block::Block,
         scalars::{
@@ -17,6 +13,7 @@ use crate::{
             U32,
             U64,
         },
+        ReadViewProvider,
     },
 };
 use async_graphql::{
@@ -35,7 +32,7 @@ use std::{
 };
 
 pub struct ChainInfo;
-pub struct ConsensusParameters(Arc<fuel_tx::ConsensusParameters>);
+pub struct ConsensusParameters(pub Arc<fuel_tx::ConsensusParameters>);
 pub struct TxParameters(fuel_tx::TxParameters);
 pub struct PredicateParameters(fuel_tx::PredicateParameters);
 pub struct ScriptParameters(fuel_tx::ScriptParameters);
@@ -116,99 +113,54 @@ impl From<fuel_tx::DependentCost> for DependentCost {
 impl ConsensusParameters {
     async fn version(&self) -> ConsensusParametersVersion {
         match self.0.as_ref() {
-            fuel_tx::ConsensusParameters::V1(_) => ConsensusParametersVersion::V1,
+            fuel_tx::ConsensusParameters::V1(_) | fuel_tx::ConsensusParameters::V2(_) => {
+                ConsensusParametersVersion::V1
+            }
         }
     }
 
-    async fn tx_params(&self, ctx: &Context<'_>) -> async_graphql::Result<TxParameters> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(TxParameters(params.tx_params().to_owned()))
+    async fn tx_params(&self) -> TxParameters {
+        TxParameters(self.0.tx_params().to_owned())
     }
 
-    async fn predicate_params(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<PredicateParameters> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(PredicateParameters(params.predicate_params().to_owned()))
+    async fn predicate_params(&self) -> PredicateParameters {
+        PredicateParameters(self.0.predicate_params().to_owned())
     }
 
-    async fn script_params(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<ScriptParameters> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(ScriptParameters(params.script_params().to_owned()))
+    async fn script_params(&self) -> ScriptParameters {
+        ScriptParameters(self.0.script_params().to_owned())
     }
 
-    async fn contract_params(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<ContractParameters> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(ContractParameters(params.contract_params().to_owned()))
+    async fn contract_params(&self) -> ContractParameters {
+        ContractParameters(self.0.contract_params().to_owned())
     }
 
-    async fn fee_params(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<FeeParameters> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(FeeParameters(params.fee_params().to_owned()))
+    async fn fee_params(&self) -> FeeParameters {
+        FeeParameters(self.0.fee_params().to_owned())
     }
 
-    async fn base_asset_id(&self, ctx: &Context<'_>) -> async_graphql::Result<AssetId> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(AssetId(*params.base_asset_id()))
+    async fn base_asset_id(&self) -> AssetId {
+        AssetId(*self.0.base_asset_id())
     }
 
-    async fn block_gas_limit(&self, ctx: &Context<'_>) -> async_graphql::Result<U64> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+    async fn block_gas_limit(&self) -> U64 {
+        self.0.block_gas_limit().into()
+    }
 
-        Ok(params.block_gas_limit().into())
+    async fn block_transaction_size_limit(&self) -> U64 {
+        self.0.block_transaction_size_limit().into()
     }
 
     async fn chain_id(&self) -> U64 {
         (*self.0.chain_id()).into()
     }
 
-    async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(GasCosts(params.gas_costs().clone()))
+    async fn gas_costs(&self) -> async_graphql::Result<GasCosts> {
+        Ok(GasCosts(self.0.gas_costs().clone()))
     }
 
-    async fn privileged_address(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Address> {
-        let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
-
-        Ok(Address(*params.privileged_address()))
+    async fn privileged_address(&self) -> async_graphql::Result<Address> {
+        Ok(Address(*self.0.privileged_address()))
     }
 }
 
@@ -325,7 +277,10 @@ impl FeeParameters {
 impl GasCosts {
     async fn version(&self) -> GasCostsVersion {
         match self.0.deref() {
-            GasCostsValues::V1(_) => GasCostsVersion::V1,
+            GasCostsValues::V1(_)
+            | GasCostsValues::V2(_)
+            | GasCostsValues::V3(_)
+            | GasCostsValues::V4(_) => GasCostsVersion::V1,
         }
     }
 
@@ -338,7 +293,7 @@ impl GasCosts {
     }
 
     async fn aloc(&self) -> U64 {
-        self.0.aloc().into()
+        self.0.aloc().base().into()
     }
 
     async fn and(&self) -> U64 {
@@ -370,7 +325,7 @@ impl GasCosts {
     }
 
     async fn cfei(&self) -> U64 {
-        self.0.cfei().into()
+        self.0.cfei().base().into()
     }
 
     async fn cfsi(&self) -> U64 {
@@ -394,7 +349,7 @@ impl GasCosts {
     }
 
     async fn ed19(&self) -> U64 {
-        self.0.ed19().into()
+        self.0.ed19().base().into()
     }
 
     async fn eq(&self) -> U64 {
@@ -681,6 +636,26 @@ impl GasCosts {
         self.0.xori().into()
     }
 
+    async fn aloc_dependent_cost(&self) -> DependentCost {
+        self.0.aloc().into()
+    }
+
+    async fn bldd(&self) -> Option<DependentCost> {
+        self.0.bldd().ok().map(Into::into)
+    }
+
+    async fn bsiz(&self) -> Option<DependentCost> {
+        self.0.bsiz().ok().map(Into::into)
+    }
+
+    async fn cfe(&self) -> DependentCost {
+        self.0.cfe().into()
+    }
+
+    async fn cfei_dependent_cost(&self) -> DependentCost {
+        self.0.cfei().into()
+    }
+
     async fn call(&self) -> DependentCost {
         self.0.call().into()
     }
@@ -695,6 +670,10 @@ impl GasCosts {
 
     async fn csiz(&self) -> DependentCost {
         self.0.csiz().into()
+    }
+
+    async fn ed19_dependent_cost(&self) -> DependentCost {
+        self.0.ed19().into()
     }
 
     async fn k256(&self) -> DependentCost {
@@ -796,28 +775,30 @@ impl HeavyOperation {
 
 #[Object]
 impl ChainInfo {
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         let config: &Config = ctx.data_unchecked();
         Ok(config.chain_name.clone())
     }
 
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
 
         let latest_block = query.latest_block()?.into();
         Ok(latest_block)
     }
 
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn da_height(&self, ctx: &Context<'_>) -> U64 {
-        let query: &ReadView = ctx.data_unchecked();
+        let Ok(query) = ctx.read_view() else {
+            return 0.into();
+        };
 
-        let height = query
-            .da_height()
-            .expect("The blockchain always should have genesis block");
-
-        height.0.into()
+        query.da_height().unwrap_or_default().0.into()
     }
 
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn consensus_parameters(
         &self,
         ctx: &Context<'_>,
@@ -829,6 +810,7 @@ impl ChainInfo {
         Ok(ConsensusParameters(params))
     }
 
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()

@@ -1,0 +1,66 @@
+{
+  "Script": {
+    "body": {
+      "script_gas_limit": 100000,
+      "receipts_root": "0000000000000000000000000000000000000000000000000000000000000000",
+      "script": [
+        36,
+        0,
+        0,
+        0
+      ],
+      "script_data": []
+    },
+    "policies": {
+      "bits": "MaxFee",
+      "values": [
+        0,
+        0,
+        0,
+        30000000
+      ]
+    },
+    "inputs": [
+      {
+        "CoinSigned": {
+          "utxo_id": {
+            "tx_id": "8b5a47933cbb7ddbc0392a45a124a2a01f17c657d34d4951324003a2f9aff24a",
+            "output_index": 1
+          },
+          "owner": "57cd0f26d30e6e0361742800f0cb39b87d2bd58e052c4389d7e507e39e504a01",
+          "amount": 489989998,
+          "asset_id": "f8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07",
+          "tx_pointer": {
+            "block_height": 0,
+            "tx_index": 0
+          },
+          "witness_index": 0,
+          "predicate_gas_used": null,
+          "predicate": null,
+          "predicate_data": null
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "Coin": {
+          "to": "eeb709945b9058c3d50f3922bd1b49f92ced2950a9ecaf810aa7829295550cd2",
+          "amount": 10000,
+          "asset_id": "f8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07"
+        }
+      },
+      {
+        "Variable": {
+          "to": "57cd0f26d30e6e0361742800f0cb39b87d2bd58e052c4389d7e507e39e504a01",
+          "amount": 0,
+          "asset_id": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      }
+    ],
+    "witnesses": [
+      {
+        "data": []
+      }
+    ]
+  }
+}

@@ -65,9 +65,9 @@ impl HeartbeatData {
 }
 
 #[allow(clippy::cast_possible_truncation)]
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
-    #![allow(non_snake_case)]
     use super::*;
 
     #[tokio::test(start_paused = true)]

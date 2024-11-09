@@ -6,12 +6,14 @@ use async_graphql::{
         NextParseQuery,
         NextRequest,
         NextResolve,
+        NextValidation,
         ResolveInfo,
     },
     parser::types::ExecutableDocument,
-    QueryPathSegment,
     Response,
+    ServerError,
     ServerResult,
+    ValidationResult,
     Value,
     Variables,
 };
@@ -85,10 +87,15 @@ impl Extension for MetricsExtInner {
         info: ResolveInfo<'_>,
         next: NextResolve<'_>,
     ) -> ServerResult<Option<Value>> {
-        let field_name = match (info.path_node.parent, info.path_node.segment) {
-            (None, QueryPathSegment::Name(field_name)) => Some(field_name),
+        let field_name = match (info.path_node.parent, info.name) {
+            (None, field_name) => Some(field_name),
             _ => None,
         };
+
+        // If it is not a query, skip time metering.
+        if field_name.is_none() {
+            return next.run(ctx, info).await
+        }
 
         let start_time = Instant::now();
         let res = next.run(ctx, info).await;
@@ -113,5 +120,15 @@ impl Extension for MetricsExtInner {
         }
 
         res
+    }
+
+    async fn validation(
+        &self,
+        ctx: &ExtensionContext<'_>,
+        next: NextValidation<'_>,
+    ) -> Result<ValidationResult, Vec<ServerError>> {
+        let result = next.run(ctx).await?;
+        graphql_metrics().graphql_complexity_observe(result.complexity as f64);
+        Ok(result)
     }
 }

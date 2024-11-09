@@ -1,5 +1,8 @@
 use clap::Parser;
-use fuel_core::service::genesis::NotifyCancel;
+use fuel_core::{
+    upgradable_executor,
+    ShutdownListener,
+};
 use fuel_core_chain_config::{
     ChainConfig,
     SnapshotReader,
@@ -10,7 +13,6 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
-use tokio_util::sync::CancellationToken;
 use tracing_subscriber::{
     filter::EnvFilter,
     layer::SubscriberExt,
@@ -26,9 +28,12 @@ pub fn default_db_path() -> PathBuf {
 }
 
 pub mod fee_contract;
+#[cfg(feature = "rocksdb")]
+pub mod rollback;
 pub mod run;
-#[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+#[cfg(feature = "rocksdb")]
 pub mod snapshot;
+
 // Default database cache is 1 GB
 pub const DEFAULT_DATABASE_CACHE_SIZE: usize = 1024 * 1024 * 1024;
 
@@ -48,8 +53,10 @@ pub struct Opt {
 #[derive(Debug, Parser)]
 pub enum Fuel {
     Run(run::Command),
-    #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+    #[cfg(feature = "rocksdb")]
     Snapshot(snapshot::Command),
+    #[cfg(feature = "rocksdb")]
+    Rollback(rollback::Command),
     GenerateFeeContract(fee_contract::Command),
 }
 
@@ -128,9 +135,10 @@ pub async fn run_cli() -> anyhow::Result<()> {
     match opt {
         Ok(opt) => match opt.command {
             Fuel::Run(command) => run::exec(command).await,
-            #[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+            #[cfg(feature = "rocksdb")]
             Fuel::Snapshot(command) => snapshot::exec(command).await,
             Fuel::GenerateFeeContract(command) => fee_contract::exec(command).await,
+            Fuel::Rollback(command) => rollback::exec(command).await,
         },
         Err(e) => {
             // Prints the error and exits.
@@ -142,78 +150,25 @@ pub async fn run_cli() -> anyhow::Result<()> {
 /// Returns the chain configuration for the local testnet.
 pub fn local_testnet_chain_config() -> ChainConfig {
     const TESTNET_CHAIN_CONFIG: &[u8] =
-        include_bytes!("../chainspec/testnet/chain_config.json");
-    const TESTNET_CHAIN_CONFIG_STATE_BYTECODE: &[u8] =
-        include_bytes!("../chainspec/testnet/state_transition_bytecode.wasm");
+        include_bytes!("../chainspec/local-testnet/chain_config.json");
 
     let mut config: ChainConfig = serde_json::from_slice(TESTNET_CHAIN_CONFIG).unwrap();
-    config.state_transition_bytecode = TESTNET_CHAIN_CONFIG_STATE_BYTECODE.to_vec();
+    config.state_transition_bytecode = upgradable_executor::WASM_BYTECODE.to_vec();
+
     config
 }
 
 /// Returns the chain configuration for the local testnet.
 pub fn local_testnet_reader() -> SnapshotReader {
     const TESTNET_STATE_CONFIG: &[u8] =
-        include_bytes!("../chainspec/testnet/state_config.json");
+        include_bytes!("../chainspec/local-testnet/state_config.json");
 
     let state_config: StateConfig = serde_json::from_slice(TESTNET_STATE_CONFIG).unwrap();
 
     SnapshotReader::new_in_memory(local_testnet_chain_config(), state_config)
 }
 
-#[derive(Clone)]
-pub struct ShutdownListener {
-    token: CancellationToken,
-}
-
-impl ShutdownListener {
-    pub fn spawn() -> Self {
-        let token = CancellationToken::new();
-        {
-            let token = token.clone();
-            tokio::spawn(async move {
-                let mut sigterm = tokio::signal::unix::signal(
-                    tokio::signal::unix::SignalKind::terminate(),
-                )?;
-
-                let mut sigint = tokio::signal::unix::signal(
-                    tokio::signal::unix::SignalKind::interrupt(),
-                )?;
-                #[cfg(unix)]
-                tokio::select! {
-                    _ = sigterm.recv() => {
-                        tracing::info!("Received SIGTERM");
-                    }
-                    _ = sigint.recv() => {
-                        tracing::info!("Received SIGINT");
-                    }
-                }
-                #[cfg(not(unix))]
-                {
-                    tokio::signal::ctrl_c().await?;
-                    tracing::info!("Received ctrl_c");
-                }
-                token.cancel();
-                tokio::io::Result::Ok(())
-            });
-        }
-        Self { token }
-    }
-}
-
-#[async_trait::async_trait]
-impl NotifyCancel for ShutdownListener {
-    async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
-        self.token.cancelled().await;
-        Ok(())
-    }
-
-    fn is_cancelled(&self) -> bool {
-        self.token.is_cancelled()
-    }
-}
-
-#[cfg(any(feature = "rocksdb", feature = "rocksdb-production"))]
+#[cfg(feature = "rocksdb")]
 #[cfg(test)]
 mod tests {
     use anyhow::anyhow;

@@ -1,11 +1,16 @@
 #![allow(clippy::let_unit_value)]
+
 use super::{
     adapters::{
         P2PAdapter,
         SharedSequencerAdapter,
+        FuelBlockSigner,
+        P2PAdapter,
     },
     genesis::create_genesis_block,
 };
+#[cfg(feature = "relayer")]
+use crate::relayer::Config as RelayerConfig;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -14,14 +19,19 @@ use crate::{
     schema::build_schema,
     service::{
         adapters::{
+            consensus_module::poa::InDirectoryPredefinedBlocks,
             consensus_parameters_provider,
+            fuel_gas_price_provider::FuelGasPriceProvider,
+            graphql_api::GraphQLBlockImporter,
+            import_result_provider::ImportResultProvider,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ConsensusParametersProvider,
             ExecutorAdapter,
             MaybeRelayerAdapter,
             PoAAdapter,
-            StaticGasPrice,
+            SharedMemoryPool,
+            SystemTime,
             TxPoolAdapter,
             VerifierAdapter,
         },
@@ -30,7 +40,21 @@ use crate::{
         SubServices,
     },
 };
-use fuel_core_poa::Trigger;
+use fuel_core_gas_price_service::v0::uninitialized_task::{
+    new_gas_price_service_v0,
+    AlgorithmV0,
+};
+use fuel_core_poa::{
+    signer::SignMode,
+    Trigger,
+};
+use fuel_core_storage::{
+    self,
+    structured_storage::StructuredStorage,
+    transactional::AtomicView,
+};
+#[cfg(feature = "relayer")]
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -39,27 +63,35 @@ use crate::relayer::Config as RelayerConfig;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
+#[cfg(feature = "p2p")]
+pub type P2PService = fuel_core_p2p::service::Service<Database>;
+
 pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
     BlockProducerAdapter,
     BlockImporterAdapter,
     SharedSequencerAdapter,
 >;
-#[cfg(feature = "p2p")]
-pub type P2PService = fuel_core_p2p::service::Service<Database>;
 pub type TxPoolSharedState = fuel_core_txpool::service::SharedState<
     P2PAdapter,
     Database,
     StaticGasPrice,
     ConsensusParametersProvider,
+    SignMode,
+    InDirectoryPredefinedBlocks,
+    SystemTime,
 >;
+#[cfg(feature = "p2p")]
+pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
+pub type TxPoolSharedState = fuel_core_txpool::SharedState;
 pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
-    StaticGasPrice,
+    FuelGasPriceProvider<AlgorithmV0>,
     ConsensusParametersProvider,
 >;
+
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 
 pub fn init_sub_services(
@@ -69,13 +101,12 @@ pub fn init_sub_services(
     let chain_config = config.snapshot_reader.chain_config();
     let chain_id = chain_config.consensus_parameters.chain_id();
     let chain_name = chain_config.chain_name.clone();
+    let on_chain_view = database.on_chain().latest_view()?;
 
-    let genesis_block = database
-        .on_chain()
+    let genesis_block = on_chain_view
         .genesis_block()?
         .unwrap_or(create_genesis_block(config).compress(&chain_id));
-    let last_block_header = database
-        .on_chain()
+    let last_block_header = on_chain_view
         .get_current_block()?
         .map(|block| block.header().clone())
         .unwrap_or(genesis_block.header().clone());
@@ -91,10 +122,12 @@ pub fn init_sub_services(
             native_executor_version: config.native_executor_version,
         },
     );
+    let import_result_provider =
+        ImportResultProvider::new(database.on_chain().clone(), executor.clone());
 
     let verifier = VerifierAdapter::new(
         &genesis_block,
-        chain_config.consensus,
+        chain_config.consensus.clone(),
         database.on_chain().clone(),
     );
 
@@ -136,14 +169,10 @@ pub fn init_sub_services(
     };
 
     #[cfg(feature = "p2p")]
-    let mut network = config.p2p.clone().map(|p2p_config| {
-        fuel_core_p2p::service::new_service(
-            chain_id,
-            p2p_config,
-            database.on_chain().clone(),
-            importer_adapter.clone(),
-        )
-    });
+    let p2p_externals = config
+        .p2p
+        .clone()
+        .map(fuel_core_p2p::service::build_shared_state);
 
     #[cfg(feature = "p2p")]
     let p2p_adapter = {
@@ -159,37 +188,69 @@ pub fn init_sub_services(
             invalid_transactions: -100.,
         };
         P2PAdapter::new(
-            network.as_ref().map(|network| network.shared.clone()),
+            p2p_externals.as_ref().map(|ext| ext.0.clone()),
             peer_report_config,
         )
     };
 
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
-
     #[cfg(feature = "shared-sequencer")]
     let shared_sequencer = SharedSequencerAdapter::new(config.shared_sequencer.clone());
 
     #[cfg(not(feature = "shared-sequencer"))]
     let shared_sequencer = SharedSequencerAdapter {};
 
-    let gas_price_provider = StaticGasPrice::new(config.static_gas_price);
-    let txpool = fuel_core_txpool::new_service(
-        config.txpool.clone(),
+    let genesis_block_height = *genesis_block.header().height();
+    let settings = consensus_parameters_provider.clone();
+    let block_stream = importer_adapter.events_shared_result();
+    let metadata = StructuredStorage::new(database.gas_price().clone());
+
+    let gas_price_service_v0 = new_gas_price_service_v0(
+        config.clone().into(),
+        genesis_block_height,
+        settings,
+        block_stream,
+        database.gas_price().clone(),
+        metadata,
         database.on_chain().clone(),
-        importer_adapter.clone(),
+    )?;
+
+    let gas_price_provider =
+        FuelGasPriceProvider::new(gas_price_service_v0.shared.clone());
+    let txpool = fuel_core_txpool::new_service(
+        chain_id,
+        config.txpool.clone(),
         p2p_adapter.clone(),
+        importer_adapter.clone(),
+        database.on_chain().clone(),
+        consensus_parameters_provider.clone(),
         last_height,
         gas_price_provider.clone(),
-        consensus_parameters_provider.clone(),
+        executor.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
+
+    #[cfg(feature = "p2p")]
+    let mut network = config.p2p.clone().zip(p2p_externals).map(
+        |(p2p_config, (shared_state, request_receiver))| {
+            fuel_core_p2p::service::new_service(
+                chain_id,
+                p2p_config,
+                shared_state,
+                request_receiver,
+                database.on_chain().clone(),
+                importer_adapter.clone(),
+                tx_pool_adapter.clone(),
+            )
+        },
+    );
 
     let block_producer = fuel_core_producer::Producer {
         config: config.block_producer.clone(),
         view_provider: database.on_chain().clone(),
         txpool: tx_pool_adapter.clone(),
-        executor: Arc::new(executor),
+        executor: Arc::new(executor.clone()),
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
         gas_price_provider: gas_price_provider.clone(),
@@ -205,6 +266,8 @@ pub fn init_sub_services(
         tracing::info!("Enabled manual block production because of `debug` flag");
     }
 
+    let predefined_blocks =
+        InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
     let poa = (production_enabled).then(|| {
         fuel_core_poa::new_service(
             &last_block_header,
@@ -214,6 +277,9 @@ pub fn init_sub_services(
             importer_adapter.clone(),
             p2p_adapter.clone(),
             shared_sequencer.clone(),
+            FuelBlockSigner::new(config.consensus_signer.clone()),
+            predefined_blocks,
+            SystemTime,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
@@ -234,20 +300,25 @@ pub fn init_sub_services(
     let schema = crate::schema::dap::init(build_schema(), config.debug)
         .data(database.on_chain().clone());
 
+    let graphql_block_importer =
+        GraphQLBlockImporter::new(importer_adapter.clone(), import_result_provider);
     let graphql_worker = fuel_core_graphql_api::worker_service::new_service(
         tx_pool_adapter.clone(),
-        importer_adapter.clone(),
+        graphql_block_importer,
+        database.on_chain().clone(),
         database.off_chain().clone(),
         chain_id,
+        config.da_compression.clone(),
+        config.continue_on_error,
     );
 
     let graphql_config = GraphQLConfig {
-        addr: config.addr,
+        config: config.graphql_config.clone(),
         utxo_validation: config.utxo_validation,
         debug: config.debug,
         vm_backtrace: config.vm.backtrace,
-        max_tx: config.txpool.max_tx,
-        max_depth: config.txpool.max_depth,
+        max_tx: config.txpool.pool_limits.max_txs,
+        max_txpool_dependency_chain_length: config.txpool.max_txs_chain_count,
         chain_name,
     };
 
@@ -263,8 +334,7 @@ pub fn init_sub_services(
         Box::new(p2p_adapter),
         Box::new(gas_price_provider),
         Box::new(consensus_parameters_provider),
-        config.query_log_threshold_time,
-        config.api_request_timeout,
+        SharedMemoryPool::new(config.memory_pool_size),
     )?;
 
     let shared = SharedState {
@@ -277,14 +347,14 @@ pub fn init_sub_services(
         graph_ql: graph_ql.shared.clone(),
         database,
         block_importer: importer_adapter,
+        executor,
         config: config.clone(),
     };
 
     #[allow(unused_mut)]
     // `FuelService` starts and shutdowns all sub-services in the `services` order
     let mut services: SubServices = vec![
-        // GraphQL should be shutdown first, so let's start it first.
-        Box::new(graph_ql),
+        Box::new(gas_price_service_v0),
         Box::new(txpool),
         Box::new(consensus_parameters_provider_service),
     ];
@@ -306,6 +376,7 @@ pub fn init_sub_services(
         }
     }
 
+    services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
 
     Ok((services, shared))

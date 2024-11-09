@@ -111,7 +111,7 @@ where
     M: Mappable + 'static,
     Storage: MockStorageMethods,
 {
-    fn insert(
+    fn replace(
         &mut self,
         key: &M::Key,
         value: &M::Value,
@@ -119,7 +119,7 @@ where
         MockStorageMethods::insert::<M>(&mut self.storage, key, value)
     }
 
-    fn remove(&mut self, key: &M::Key) -> StorageResult<Option<M::OwnedValue>> {
+    fn take(&mut self, key: &M::Key) -> StorageResult<Option<M::OwnedValue>> {
         MockStorageMethods::remove::<M>(&mut self.storage, key)
     }
 }

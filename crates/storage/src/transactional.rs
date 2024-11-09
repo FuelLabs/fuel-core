@@ -12,13 +12,16 @@ use crate::{
     structured_storage::StructuredStorage,
     Result as StorageResult,
 };
-use std::{
+use core::borrow::Borrow;
+
+#[cfg(feature = "alloc")]
+use alloc::{
+    boxed::Box,
     collections::{
-        btree_map::Entry,
+        btree_map,
         BTreeMap,
-        HashMap,
     },
-    sync::Arc,
+    vec::Vec,
 };
 
 #[cfg(feature = "test-helpers")]
@@ -28,26 +31,36 @@ use crate::{
         IterDirection,
         IterableStore,
     },
-    kv_store::KVItem,
+    kv_store::{
+        KVItem,
+        KeyItem,
+    },
 };
 
-/// Provides a view of the storage at the given height.
-/// It guarantees to be atomic, meaning the view is immutable to outside modifications.
+/// Provides an atomic view of the storage at the latest height at
+/// the moment of view instantiation. All modifications to the storage
+/// after this point will not affect the view.
 pub trait AtomicView: Send + Sync {
-    /// The type of the storage view.
-    type View;
+    /// The type of the latest storage view.
+    type LatestView;
 
+    /// Returns current the view of the storage.
+    fn latest_view(&self) -> StorageResult<Self::LatestView>;
+}
+
+/// Provides an atomic view of the storage at the given height.
+/// The view is guaranteed to be unmodifiable for the given height.
+pub trait HistoricalView: AtomicView {
     /// The type used by the storage to track the commitments at a specific height.
     type Height;
+    /// The type of the storage view at `Self::Height`.
+    type ViewAtHeight;
 
-    /// Returns the latest block height.
+    /// Returns the latest height.
     fn latest_height(&self) -> Option<Self::Height>;
 
     /// Returns the view of the storage at the given `height`.
-    fn view_at(&self, height: &Self::Height) -> StorageResult<Self::View>;
-
-    /// Returns the view of the storage for the latest block height.
-    fn latest_view(&self) -> Self::View;
+    fn view_at(&self, height: &Self::Height) -> StorageResult<Self::ViewAtHeight>;
 }
 
 /// Storage transaction on top of the storage.
@@ -89,6 +102,11 @@ impl<S> StorageTransaction<S> {
         })
     }
 
+    /// Getter to the changes.
+    pub fn changes(&self) -> &Changes {
+        &self.inner.changes
+    }
+
     /// Returns the changes to the storage.
     pub fn into_changes(self) -> Changes {
         self.inner.changes
@@ -117,8 +135,79 @@ pub trait Modifiable {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()>;
 }
 
+/// The wrapper around the `Vec<u8>` that supports `Borrow<[u8]>`.
+/// It allows the use of bytes slices to do lookups in the collections.
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct ReferenceBytesKey(Vec<u8>);
+
+impl From<Vec<u8>> for ReferenceBytesKey {
+    fn from(value: Vec<u8>) -> Self {
+        ReferenceBytesKey(value)
+    }
+}
+
+impl From<ReferenceBytesKey> for Vec<u8> {
+    fn from(value: ReferenceBytesKey) -> Self {
+        value.0
+    }
+}
+
+impl Borrow<[u8]> for ReferenceBytesKey {
+    fn borrow(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+}
+
+impl Borrow<Vec<u8>> for ReferenceBytesKey {
+    fn borrow(&self) -> &Vec<u8> {
+        &self.0
+    }
+}
+
+impl AsRef<[u8]> for ReferenceBytesKey {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+}
+
+impl AsMut<[u8]> for ReferenceBytesKey {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut_slice()
+    }
+}
+
+impl core::ops::Deref for ReferenceBytesKey {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl core::ops::DerefMut for ReferenceBytesKey {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(not(feature = "std"))]
 /// The type describing the list of changes to the storage.
-pub type Changes = HashMap<u32, BTreeMap<Vec<u8>, WriteOperation>>;
+pub type Changes = BTreeMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>;
+
+#[cfg(feature = "std")]
+/// The type describing the list of changes to the storage.
+pub type Changes =
+    std::collections::HashMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>;
 
 impl<Storage> From<StorageTransaction<Storage>> for Changes {
     fn from(transaction: StorageTransaction<Storage>) -> Self {
@@ -172,7 +261,7 @@ pub trait WriteTransaction {
 
 impl<S> WriteTransaction for S
 where
-    S: KeyValueInspect + Modifiable,
+    S: Modifiable,
 {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self> {
         StorageTransaction::transaction(
@@ -197,22 +286,34 @@ where
 
 impl<Storage> Modifiable for InMemoryTransaction<Storage> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        #[cfg(not(feature = "std"))]
+        use btree_map::Entry;
+        #[cfg(feature = "std")]
+        use std::collections::hash_map::Entry;
+
         for (column, value) in changes.into_iter() {
-            let btree = self.changes.entry(column).or_default();
+            let btree = match self.changes.entry(column) {
+                Entry::Vacant(vacant) => {
+                    vacant.insert(value);
+                    continue;
+                }
+                Entry::Occupied(occupied) => occupied.into_mut(),
+            };
+
             for (k, v) in value {
                 match &self.policy {
                     ConflictPolicy::Fail => {
                         let entry = btree.entry(k);
 
                         match entry {
-                            Entry::Occupied(occupied) => {
+                            btree_map::Entry::Occupied(occupied) => {
                                 return Err(anyhow::anyhow!(
                                     "Conflicting operation {v:?} for the {:?}",
                                     occupied.key()
                                 )
                                 .into());
                             }
-                            Entry::Vacant(vacant) => {
+                            btree_map::Entry::Vacant(vacant) => {
                                 vacant.insert(v);
                             }
                         }
@@ -233,10 +334,9 @@ where
     S: KeyValueInspect<Column = Column>,
 {
     fn get_from_changes(&self, key: &[u8], column: Column) -> Option<&WriteOperation> {
-        let k = key.to_vec();
         self.changes
             .get(&column.id())
-            .and_then(|btree| btree.get(&k))
+            .and_then(|btree| btree.get(key))
     }
 }
 
@@ -321,7 +421,7 @@ where
         column: Self::Column,
         value: Value,
     ) -> StorageResult<()> {
-        let k = key.to_vec();
+        let k = key.to_vec().into();
         self.changes
             .entry(column.id())
             .or_default()
@@ -335,11 +435,11 @@ where
         column: Self::Column,
         value: Value,
     ) -> StorageResult<Option<Value>> {
-        let k = key.to_vec();
+        let k = key.to_vec().into();
         let entry = self.changes.entry(column.id()).or_default().entry(k);
 
         match entry {
-            Entry::Occupied(mut occupied) => {
+            btree_map::Entry::Occupied(mut occupied) => {
                 let old = occupied.insert(WriteOperation::Insert(value));
 
                 match old {
@@ -347,7 +447,7 @@ where
                     WriteOperation::Remove => Ok(None),
                 }
             }
-            Entry::Vacant(vacant) => {
+            btree_map::Entry::Vacant(vacant) => {
                 vacant.insert(WriteOperation::Insert(value));
                 self.storage.get(key, column)
             }
@@ -360,20 +460,20 @@ where
         column: Self::Column,
         buf: &[u8],
     ) -> StorageResult<usize> {
-        let k = key.to_vec();
+        let k = key.to_vec().into();
         self.changes
             .entry(column.id())
             .or_default()
-            .insert(k, WriteOperation::Insert(Arc::new(buf.to_vec())));
+            .insert(k, WriteOperation::Insert(Value::new(buf.to_vec())));
         Ok(buf.len())
     }
 
     fn take(&mut self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-        let k = key.to_vec();
+        let k = key.to_vec().into();
         let entry = self.changes.entry(column.id()).or_default().entry(k);
 
         match entry {
-            Entry::Occupied(mut occupied) => {
+            btree_map::Entry::Occupied(mut occupied) => {
                 let old = occupied.insert(WriteOperation::Remove);
 
                 match old {
@@ -381,7 +481,7 @@ where
                     WriteOperation::Remove => Ok(None),
                 }
             }
-            Entry::Vacant(vacant) => {
+            btree_map::Entry::Vacant(vacant) => {
                 vacant.insert(WriteOperation::Remove);
                 self.storage.get(key, column)
             }
@@ -389,7 +489,7 @@ where
     }
 
     fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
-        let k = key.to_vec();
+        let k = key.to_vec().into();
         self.changes
             .entry(column.id())
             .or_default()
@@ -409,7 +509,7 @@ where
     {
         let btree = self.changes.entry(column.id()).or_default();
         entries.for_each(|(key, operation)| {
-            btree.insert(key, operation);
+            btree.insert(key.into(), operation);
         });
         Ok(())
     }
@@ -437,6 +537,16 @@ where
     ) -> BoxedIter<KVItem> {
         unimplemented!()
     }
+
+    fn iter_store_keys(
+        &self,
+        _: Self::Column,
+        _: Option<&[u8]>,
+        _: Option<&[u8]>,
+        _: IterDirection,
+    ) -> BoxedIter<KeyItem> {
+        unimplemented!()
+    }
 }
 
 #[cfg(feature = "test-helpers")]
@@ -448,6 +558,8 @@ mod test {
         tables::Messages,
         StorageAsMut,
     };
+    #[allow(unused_imports)]
+    use std::sync::Arc;
 
     impl<Column> Modifiable for InMemoryStorage<Column> {
         fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
@@ -455,10 +567,10 @@ mod test {
                 for (key, value) in value {
                     match value {
                         WriteOperation::Insert(value) => {
-                            self.storage.insert((column, key), value);
+                            self.storage.insert((column, key.into()), value);
                         }
                         WriteOperation::Remove => {
-                            self.storage.remove(&(column, key));
+                            self.storage.remove(&(column, key.into()));
                         }
                     }
                 }

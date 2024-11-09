@@ -4,17 +4,31 @@ use crate::{
     Error as StorageError,
     Result as StorageResult,
 };
-use std::sync::Arc;
 
+#[cfg(feature = "alloc")]
+use alloc::{
+    boxed::Box,
+    string::String,
+    vec::Vec,
+};
+
+#[cfg(feature = "std")]
+use core::ops::Deref;
+
+/// The key of the storage.
+pub type Key = Vec<u8>;
 /// The value of the storage. It is wrapped into the `Arc` to provide less cloning of massive objects.
-pub type Value = Arc<Vec<u8>>;
+pub type Value = alloc::sync::Arc<Vec<u8>>;
+
 /// The pair of key and value from the storage.
-pub type KVItem = StorageResult<(Vec<u8>, Value)>;
+pub type KVItem = StorageResult<(Key, Value)>;
+/// The key from the storage.
+pub type KeyItem = StorageResult<Key>;
 
 /// A column of the storage.
 pub trait StorageColumn: Copy + core::fmt::Debug {
     /// Returns the name of the column.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> String;
 
     /// Returns the id of the column.
     fn id(&self) -> u32;
@@ -26,7 +40,7 @@ pub trait StorageColumn: Copy + core::fmt::Debug {
 }
 
 /// The definition of the key-value inspection store.
-#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>, Arc<T>)]
+#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>)]
 pub trait KeyValueInspect {
     /// The type of the column.
     type Column: StorageColumn;
@@ -67,6 +81,39 @@ pub trait KeyValueInspect {
                 Ok(read)
             })
             .transpose()
+    }
+}
+
+#[cfg(feature = "std")]
+impl<T> KeyValueInspect for std::sync::Arc<T>
+where
+    T: KeyValueInspect,
+{
+    type Column = T::Column;
+
+    fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
+        self.deref().exists(key, column)
+    }
+
+    fn size_of_value(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+    ) -> StorageResult<Option<usize>> {
+        self.deref().size_of_value(key, column)
+    }
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        self.deref().get(key, column)
+    }
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        buf: &mut [u8],
+    ) -> StorageResult<Option<usize>> {
+        self.deref().read(key, column, buf)
     }
 }
 

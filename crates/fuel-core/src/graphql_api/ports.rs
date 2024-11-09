@@ -6,20 +6,25 @@ use fuel_core_storage::{
         IterDirection,
     },
     tables::{
+        BlobData,
         Coins,
         ContractsAssets,
         ContractsRawCode,
         Messages,
+        StateTransitionBytecodeVersions,
+        UploadedBytecodes,
     },
     Error as StorageError,
     Result as StorageResult,
     StorageInspect,
+    StorageRead,
 };
-use fuel_core_txpool::service::TxStatusMessage;
+use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
+        header::ConsensusParametersVersion,
         primitives::{
             BlockId,
             DaBlockHeight,
@@ -48,14 +53,12 @@ use fuel_core_types::{
         ContractId,
         Nonce,
     },
+    fuel_vm::interpreter::Memory,
     services::{
         executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
         p2p::PeerInfo,
-        txpool::{
-            InsertionResult,
-            TransactionStatus,
-        },
+        txpool::TransactionStatus,
     },
     tai64::Tai64,
 };
@@ -63,6 +66,8 @@ use std::sync::Arc;
 
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
+
+    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>>;
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
 
@@ -116,6 +121,9 @@ pub trait OnChainDatabase:
     + DatabaseBlocks
     + DatabaseMessages
     + StorageInspect<Coins, Error = StorageError>
+    + StorageRead<BlobData, Error = StorageError>
+    + StorageInspect<StateTransitionBytecodeVersions, Error = StorageError>
+    + StorageInspect<UploadedBytecodes, Error = StorageError>
     + DatabaseContracts
     + DatabaseChain
     + DatabaseMessageProof
@@ -140,6 +148,14 @@ pub trait DatabaseBlocks {
 
     /// Get the consensus for a block.
     fn consensus(&self, id: &BlockHeight) -> StorageResult<Consensus>;
+}
+
+/// Trait that specifies all the getters required for DA compressed blocks.
+pub trait DatabaseDaCompressedBlocks {
+    /// Get a DA compressed block by its height.
+    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>>;
+
+    fn latest_height(&self) -> StorageResult<BlockHeight>;
 }
 
 /// Trait that specifies all the getters required for messages.
@@ -180,14 +196,11 @@ pub trait DatabaseChain {
 
 #[async_trait]
 pub trait TxPoolPort: Send + Sync {
-    fn transaction(&self, id: TxId) -> Option<Transaction>;
+    async fn transaction(&self, id: TxId) -> anyhow::Result<Option<Transaction>>;
 
-    fn submission_time(&self, id: TxId) -> Option<Tai64>;
+    async fn submission_time(&self, id: TxId) -> anyhow::Result<Option<Tai64>>;
 
-    async fn insert(
-        &self,
-        txs: Vec<Arc<Transaction>>,
-    ) -> Vec<anyhow::Result<InsertionResult>>;
+    async fn insert(&self, txs: Transaction) -> anyhow::Result<()>;
 
     fn tx_update_subscribe(
         &self,
@@ -201,7 +214,9 @@ pub trait BlockProducerPort: Send + Sync {
         &self,
         transactions: Vec<Transaction>,
         height: Option<BlockHeight>,
+        time: Option<Tai64>,
         utxo_validation: Option<bool>,
+        gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>>;
 }
 
@@ -234,7 +249,16 @@ pub trait P2pPort: Send + Sync {
 #[async_trait::async_trait]
 pub trait GasPriceEstimate: Send + Sync {
     /// The worst case scenario for gas price at a given horizon
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> u64;
+    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64>;
+}
+
+/// Trait for getting VM memory.
+#[async_trait::async_trait]
+pub trait MemoryPool {
+    type Memory: Memory + Send + Sync + 'static;
+
+    /// Get the memory instance.
+    async fn get_memory(&self) -> Self::Memory;
 }
 
 pub mod worker {
@@ -249,6 +273,7 @@ pub mod worker {
             },
         },
         graphql_api::storage::{
+            da_compression::*,
             old::{
                 OldFuelBlockConsensus,
                 OldFuelBlocks,
@@ -275,16 +300,24 @@ pub mod worker {
         },
     };
 
-    pub trait Transactional: Send + Sync {
-        type Transaction<'a>: OffChainDatabase
+    pub trait OnChainDatabase: Send + Sync {
+        /// Returns the latest block height.
+        fn latest_height(&self) -> StorageResult<Option<BlockHeight>>;
+    }
+
+    pub trait OffChainDatabase: Send + Sync {
+        type Transaction<'a>: OffChainDatabaseTransaction
         where
             Self: 'a;
+
+        /// Returns the latest block height.
+        fn latest_height(&self) -> StorageResult<Option<BlockHeight>>;
 
         /// Creates a write database transaction.
         fn transaction(&mut self) -> Self::Transaction<'_>;
     }
 
-    pub trait OffChainDatabase:
+    pub trait OffChainDatabaseTransaction:
         StorageMutate<OwnedMessageIds, Error = StorageError>
         + StorageMutate<OwnedCoins, Error = StorageError>
         + StorageMutate<FuelBlockIdsToHeights, Error = StorageError>
@@ -294,6 +327,15 @@ pub mod worker {
         + StorageMutate<OldTransactions, Error = StorageError>
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
+        + StorageMutate<DaCompressedBlocks, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryContractId, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryScriptCode, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryPredicateCode, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryIndex, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryTimestamps, Error = StorageError>
+        + StorageMutate<DaCompressionTemporalRegistryEvictorCache, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,
@@ -301,7 +343,7 @@ pub mod worker {
             block_height: BlockHeight,
             tx_idx: u16,
             tx_id: &Bytes32,
-        ) -> StorageResult<Option<Bytes32>>;
+        ) -> StorageResult<()>;
 
         fn update_tx_status(
             &mut self,
@@ -320,9 +362,15 @@ pub mod worker {
         fn commit(self) -> StorageResult<()>;
     }
 
-    pub trait BlockImporter {
+    pub trait BlockImporter: Send + Sync {
         /// Returns a stream of imported block.
         fn block_events(&self) -> BoxStream<SharedImportResult>;
+
+        /// Return the import result at the given height.
+        fn block_event_at_height(
+            &self,
+            height: Option<BlockHeight>,
+        ) -> anyhow::Result<SharedImportResult>;
     }
 
     pub trait TxPool: Send + Sync {
@@ -339,4 +387,9 @@ pub mod worker {
 pub trait ConsensusProvider: Send + Sync {
     /// Returns latest consensus parameters.
     fn latest_consensus_params(&self) -> Arc<ConsensusParameters>;
+
+    fn consensus_params_at_version(
+        &self,
+        version: &ConsensusParametersVersion,
+    ) -> anyhow::Result<Arc<ConsensusParameters>>;
 }

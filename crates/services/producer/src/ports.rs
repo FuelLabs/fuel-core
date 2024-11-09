@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use fuel_core_storage::{
     transactional::Changes,
     Result as StorageResult,
@@ -29,6 +28,9 @@ use fuel_core_types::{
 use std::borrow::Cow;
 
 pub trait BlockProducerDatabase: Send + Sync {
+    /// Returns the latest block height.
+    fn latest_height(&self) -> Option<BlockHeight>;
+
     /// Gets the committed block at the `height`.
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>>;
 
@@ -46,17 +48,23 @@ pub trait BlockProducerDatabase: Send + Sync {
     ) -> StorageResult<StateTransitionBytecodeVersion>;
 }
 
-#[async_trait]
 pub trait TxPool: Send + Sync {
     /// The source of the transactions used by the executor.
     type TxSource;
 
     /// Returns the source of includable transactions.
-    fn get_source(
+    #[allow(async_fn_in_trait)]
+    async fn get_source(
         &self,
+        gas_price: u64,
         // could be used by the txpool to filter txs based on maturity
         block_height: BlockHeight,
-    ) -> Self::TxSource;
+    ) -> anyhow::Result<Self::TxSource>;
+}
+
+pub struct RelayerBlockInfo {
+    pub gas_cost: u64,
+    pub tx_count: u64,
 }
 
 #[async_trait::async_trait]
@@ -68,7 +76,10 @@ pub trait Relayer: Send + Sync {
     ) -> anyhow::Result<DaBlockHeight>;
 
     /// Get the total Forced Transaction gas cost for the block at the given height.
-    async fn get_cost_for_block(&self, height: &DaBlockHeight) -> anyhow::Result<u64>;
+    async fn get_cost_and_transactions_number_for_block(
+        &self,
+        height: &DaBlockHeight,
+    ) -> anyhow::Result<RelayerBlockInfo>;
 }
 
 pub trait BlockProducer<TxSource>: Send + Sync {

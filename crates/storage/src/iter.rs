@@ -9,20 +9,27 @@ use crate::{
     },
     kv_store::{
         KVItem,
+        KeyItem,
         KeyValueInspect,
     },
     structured_storage::TableWithBlueprint,
+    transactional::ReferenceBytesKey,
 };
 use fuel_vm_private::fuel_storage::Mappable;
-use std::{
+
+#[cfg(feature = "alloc")]
+use alloc::{
+    boxed::Box,
     collections::BTreeMap,
-    sync::Arc,
+    vec::Vec,
 };
+
+pub mod changes_iterator;
 
 // TODO: BoxedIter to be used until RPITIT lands in stable rust.
 /// A boxed variant of the iterator that can be used as a return type of the traits.
 pub struct BoxedIter<'a, T> {
-    iter: Box<dyn Iterator<Item = T> + 'a>,
+    iter: Box<dyn Iterator<Item = T> + 'a + Send>,
 }
 
 impl<'a, T> Iterator for BoxedIter<'a, T> {
@@ -41,7 +48,7 @@ pub trait IntoBoxedIter<'a, T> {
 
 impl<'a, T, I> IntoBoxedIter<'a, T> for I
 where
-    I: Iterator<Item = T> + 'a,
+    I: Iterator<Item = T> + 'a + Send,
 {
     fn into_boxed(self) -> BoxedIter<'a, T> {
         BoxedIter {
@@ -66,7 +73,7 @@ impl Default for IterDirection {
 }
 
 /// A trait for iterating over the storage of [`KeyValueInspect`].
-#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>, Arc<T>)]
+#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>)]
 pub trait IterableStore: KeyValueInspect {
     /// Returns an iterator over the values in the storage.
     fn iter_store(
@@ -76,6 +83,44 @@ pub trait IterableStore: KeyValueInspect {
         start: Option<&[u8]>,
         direction: IterDirection,
     ) -> BoxedIter<KVItem>;
+
+    /// Returns an iterator over keys in the storage.
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem>;
+}
+
+#[cfg(feature = "std")]
+impl<T> IterableStore for std::sync::Arc<T>
+where
+    T: IterableStore,
+{
+    fn iter_store(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVItem> {
+        use core::ops::Deref;
+        self.deref().iter_store(column, prefix, start, direction)
+    }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem> {
+        use core::ops::Deref;
+        self.deref()
+            .iter_store_keys(column, prefix, start, direction)
+    }
 }
 
 /// A trait for iterating over the `Mappable` table.
@@ -83,6 +128,16 @@ pub trait IterableTable<M>
 where
     M: Mappable,
 {
+    /// Returns an iterator over the all keys in the table with a prefix after a specific start key.
+    fn iter_table_keys<P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        P: AsRef<[u8]>;
+
     /// Returns an iterator over the all entries in the table with a prefix after a specific start key.
     fn iter_table<P>(
         &self,
@@ -100,6 +155,40 @@ where
     M::Blueprint: BlueprintInspect<M, S>,
     S: IterableStore<Column = Column>,
 {
+    fn iter_table_keys<P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<crate::Result<M::OwnedKey>>
+    where
+        P: AsRef<[u8]>,
+    {
+        let encoder = start.map(|start| {
+            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
+        });
+
+        let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
+
+        IterableStore::iter_store_keys(
+            self,
+            M::column(),
+            prefix.as_ref().map(|p| p.as_ref()),
+            start.as_ref().map(|cow| cow.as_ref()),
+            direction.unwrap_or_default(),
+        )
+        .map(|res| {
+            res.and_then(|key| {
+                let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
+                    key.as_slice(),
+                )
+                .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                Ok(key)
+            })
+        })
+        .into_boxed()
+    }
+
     fn iter_table<P>(
         &self,
         prefix: Option<P>,
@@ -142,6 +231,59 @@ where
 
 /// A helper trait to provide a user-friendly API over table iteration.
 pub trait IteratorOverTable {
+    /// Returns an iterator over the all keys in the table.
+    fn iter_all_keys<M>(
+        &self,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        Self: IterableTable<M>,
+    {
+        self.iter_all_filtered_keys::<M, [u8; 0]>(None, None, direction)
+    }
+
+    /// Returns an iterator over the all keys in the table with the specified prefix.
+    fn iter_all_by_prefix_keys<M, P>(
+        &self,
+        prefix: Option<P>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        P: AsRef<[u8]>,
+        Self: IterableTable<M>,
+    {
+        self.iter_all_filtered_keys::<M, P>(prefix, None, None)
+    }
+
+    /// Returns an iterator over the all keys in the table after a specific start key.
+    fn iter_all_by_start_keys<M>(
+        &self,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        Self: IterableTable<M>,
+    {
+        self.iter_all_filtered_keys::<M, [u8; 0]>(None, start, direction)
+    }
+
+    /// Returns an iterator over the all keys in the table with a prefix after a specific start key.
+    fn iter_all_filtered_keys<M, P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        P: AsRef<[u8]>,
+        Self: IterableTable<M>,
+    {
+        self.iter_table_keys(prefix, start, direction)
+    }
+
     /// Returns an iterator over the all entries in the table.
     fn iter_all<M>(
         &self,
@@ -200,11 +342,14 @@ impl<S> IteratorOverTable for S {}
 
 /// Returns an iterator over the values in the `BTreeMap`.
 pub fn iterator<'a, V>(
-    tree: &'a BTreeMap<Vec<u8>, V>,
+    tree: &'a BTreeMap<ReferenceBytesKey, V>,
     prefix: Option<&[u8]>,
     start: Option<&[u8]>,
     direction: IterDirection,
-) -> impl Iterator<Item = (&'a Vec<u8>, &'a V)> + 'a {
+) -> impl Iterator<Item = (&'a ReferenceBytesKey, &'a V)> + 'a
+where
+    V: Send + Sync,
+{
     match (prefix, start) {
         (None, None) => {
             if direction == IterDirection::Forward {
@@ -250,5 +395,30 @@ pub fn iterator<'a, V>(
                     .into_boxed()
             }
         }
+    }
+}
+
+/// Returns an iterator over the keys in the `BTreeMap`.
+pub fn keys_iterator<'a, V>(
+    tree: &'a BTreeMap<ReferenceBytesKey, V>,
+    prefix: Option<&[u8]>,
+    start: Option<&[u8]>,
+    direction: IterDirection,
+) -> impl Iterator<Item = &'a ReferenceBytesKey> + 'a
+where
+    V: Send + Sync,
+{
+    match (prefix, start) {
+        (None, None) => {
+            if direction == IterDirection::Forward {
+                tree.keys().into_boxed()
+            } else {
+                tree.keys().rev().into_boxed()
+            }
+        }
+        // all the other cases require using a range, so we can't use the keys() method
+        (_, _) => iterator(tree, prefix, start, direction)
+            .map(|(key, _)| key)
+            .into_boxed(),
     }
 }

@@ -14,12 +14,11 @@ publish = true
 
 [dependencies]
 anyhow = { workspace = true }
-fuel-core = { workspace = true, default-features = false, optional = true }
 fuel-core-chain-config = { workspace = true, features = ["default"] }
 fuel-core-client = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
-futures = "0.3"
-hex = "0.4"
+futures = { workspace = true }
+hex = { workspace = true }
 humantime-serde = "1.1"
 itertools = { workspace = true }
 libtest-mimic = "0.6.0"
@@ -31,14 +30,15 @@ toml = { version = "0.5" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
-e2e_client = { path = ".", features = [
-  "dev-deps",
-], package = "fuel-core-e2e-client", default-features = false }
+fuel-core = { workspace = true, features = [
+  "rocksdb",
+  "wasm-executor",
+  "p2p",
+  "test-helpers",
+] }
 fuel-core-trace = { path = "../../crates/trace" }
 insta = { workspace = true }
 tempfile = { workspace = true }
 
 [features]
-default = ["fuel-core?/default"]
-p2p = ["fuel-core?/p2p"]
-dev-deps = ["fuel-core/test-helpers"]
+default = []

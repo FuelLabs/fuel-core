@@ -1,9 +1,0 @@
-apiVersion: snapshot.storage.k8s.io/v1
-kind: VolumeSnapshot
-metadata:
-  name: ${fuel_core_pvc_snapshot_id}
-  namespace: ${k8s_namespace}
-spec:
-  volumeSnapshotClassName: ebs-csi-aws
-  source:
-    volumeSnapshotContentName: ${fuel_core_pvc_snapshot_id}

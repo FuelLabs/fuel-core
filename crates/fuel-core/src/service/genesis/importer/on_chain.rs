@@ -35,6 +35,7 @@ use fuel_core_types::{
         Message,
     },
     fuel_types::BlockHeight,
+    fuel_vm::BlobData,
 };
 
 impl ImportTable for Handler<Coins, Coins> {
@@ -86,6 +87,22 @@ impl ImportTable for Handler<ProcessedTransactions, ProcessedTransactions> {
                 .map(|_| ())
         })?;
         Ok(())
+    }
+}
+
+impl ImportTable for Handler<BlobData, BlobData> {
+    type TableInSnapshot = BlobData;
+    type TableBeingWritten = BlobData;
+    type DbDesc = OnChain;
+
+    fn process(
+        &mut self,
+        group: Vec<TableEntry<Self::TableInSnapshot>>,
+        tx: &mut StorageTransaction<&mut GenesisDatabase>,
+    ) -> anyhow::Result<()> {
+        group
+            .into_iter()
+            .try_for_each(|entry| init_blob_payload(tx, &entry))
     }
 }
 
@@ -220,7 +237,7 @@ fn init_coin(
 
     if transaction
         .storage::<Coins>()
-        .insert(&utxo_id, &compressed_coin)?
+        .replace(&utxo_id, &compressed_coin)?
         .is_some()
     {
         return Err(anyhow!("Coin should not exist"));
@@ -244,10 +261,29 @@ fn init_contract_latest_utxo(
 
     if transaction
         .storage::<ContractsLatestUtxo>()
-        .insert(&contract_id, &entry.value)?
+        .replace(&contract_id, &entry.value)?
         .is_some()
     {
         return Err(anyhow!("Contract utxo should not exist"));
+    }
+
+    Ok(())
+}
+
+fn init_blob_payload(
+    transaction: &mut StorageTransaction<&mut GenesisDatabase>,
+    entry: &TableEntry<BlobData>,
+) -> anyhow::Result<()> {
+    let payload = entry.value.as_ref();
+    let blob_id = entry.key;
+
+    // insert blob payload
+    if transaction
+        .storage::<BlobData>()
+        .replace(&blob_id, payload)?
+        .is_some()
+    {
+        return Err(anyhow!("Blob should not exist"));
     }
 
     Ok(())
@@ -263,7 +299,7 @@ fn init_contract_raw_code(
     // insert contract code
     if transaction
         .storage::<ContractsRawCode>()
-        .insert(&contract_id, contract)?
+        .replace(&contract_id, contract)?
         .is_some()
     {
         return Err(anyhow!("Contract code should not exist"));
@@ -287,7 +323,7 @@ fn init_da_message(
 
     if transaction
         .storage::<Messages>()
-        .insert(message.id(), &message)?
+        .replace(message.id(), &message)?
         .is_some()
     {
         return Err(anyhow!("Message should not exist"));

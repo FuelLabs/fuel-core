@@ -20,6 +20,7 @@ pub struct ConsensusParameters {
     pub fee_params: FeeParameters,
     pub base_asset_id: AssetId,
     pub block_gas_limit: U64,
+    pub block_transaction_size_limit: U64,
     pub chain_id: U64,
     pub gas_costs: GasCosts,
     pub privileged_address: Address,
@@ -199,7 +200,6 @@ pub struct GasCosts {
     pub version: GasCostsVersion,
     pub add: U64,
     pub addi: U64,
-    pub aloc: U64,
     pub and: U64,
     pub andi: U64,
     pub bal: U64,
@@ -207,7 +207,6 @@ pub struct GasCosts {
     pub bhsh: U64,
     pub burn: U64,
     pub cb: U64,
-    pub cfei: U64,
     pub cfsi: U64,
     pub div: U64,
     pub divi: U64,
@@ -286,10 +285,16 @@ pub struct GasCosts {
     pub xor: U64,
     pub xori: U64,
 
+    pub aloc_dependent_cost: DependentCost,
+    pub bsiz: Option<DependentCost>,
+    pub bldd: Option<DependentCost>,
+    pub cfe: DependentCost,
+    pub cfei_dependent_cost: DependentCost,
     pub call: DependentCost,
     pub ccp: DependentCost,
     pub croo: DependentCost,
     pub csiz: DependentCost,
+    pub ed19_dependent_cost: DependentCost,
     pub k256: DependentCost,
     pub ldc: DependentCost,
     pub logd: DependentCost,
@@ -323,11 +328,10 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
 
     fn try_from(value: GasCosts) -> Result<Self, Self::Error> {
         match value.version {
-            GasCostsVersion::V1 => {
-                let values = fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV1 {
+            GasCostsVersion::V1 => Ok(fuel_core_types::fuel_tx::GasCosts::new(
+                fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV4 {
                     add: value.add.into(),
                     addi: value.addi.into(),
-                    aloc: value.aloc.into(),
                     and: value.and.into(),
                     andi: value.andi.into(),
                     bal: value.bal.into(),
@@ -335,13 +339,11 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     bhsh: value.bhsh.into(),
                     burn: value.burn.into(),
                     cb: value.cb.into(),
-                    cfei: value.cfei.into(),
                     cfsi: value.cfsi.into(),
                     div: value.div.into(),
                     divi: value.divi.into(),
                     eck1: value.eck1.into(),
                     ecr1: value.ecr1.into(),
-                    ed19: value.ed19.into(),
                     eq: value.eq.into(),
                     exp: value.exp.into(),
                     expi: value.expi.into(),
@@ -413,10 +415,17 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     wqmm: value.wqmm.into(),
                     xor: value.xor.into(),
                     xori: value.xori.into(),
+
+                    aloc: value.aloc_dependent_cost.into(),
+                    bsiz: value.bsiz.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
+                    bldd: value.bldd.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
+                    cfe: value.cfe.into(),
+                    cfei: value.cfei_dependent_cost.into(),
                     call: value.call.into(),
                     ccp: value.ccp.into(),
                     croo: value.croo.into(),
                     csiz: value.csiz.into(),
+                    ed19: value.ed19_dependent_cost.into(),
                     k256: value.k256.into(),
                     ldc: value.ldc.into(),
                     logd: value.logd.into(),
@@ -435,9 +444,9 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     state_root: value.state_root.into(),
                     vm_initialization: value.vm_initialization.into(),
                     new_storage_per_byte: value.new_storage_per_byte.into(),
-                };
-                Ok(fuel_core_types::fuel_tx::GasCosts::new(values.into()))
-            }
+                }
+                .into(),
+            )),
         }
     }
 }
@@ -471,7 +480,7 @@ impl TryFrom<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParamet
     fn try_from(params: ConsensusParameters) -> Result<Self, Self::Error> {
         match params.version {
             ConsensusParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV1 {
+                fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV2 {
                     tx_params: params.tx_params.try_into()?,
                     predicate_params: params.predicate_params.try_into()?,
                     script_params: params.script_params.try_into()?,
@@ -479,6 +488,9 @@ impl TryFrom<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParamet
                     fee_params: params.fee_params.try_into()?,
                     base_asset_id: params.base_asset_id.into(),
                     block_gas_limit: params.block_gas_limit.into(),
+                    block_transaction_size_limit: params
+                        .block_transaction_size_limit
+                        .into(),
                     chain_id: params.chain_id.0.into(),
                     gas_costs: params.gas_costs.try_into()?,
                     privileged_address: params.privileged_address.into(),

@@ -11,8 +11,10 @@ use crate::{
         build_transport_function,
         Config,
     },
+    dnsaddr_resolution::DnsResolver,
     gossipsub::{
         messages::{
+            GossipTopicTag,
             GossipsubBroadcastRequest,
             GossipsubMessage as FuelGossipsubMessage,
         },
@@ -28,13 +30,16 @@ use crate::{
         RequestError,
         RequestMessage,
         ResponseError,
-        ResponseMessage,
         ResponseSendError,
         ResponseSender,
+        V2ResponseMessage,
     },
     TryPeerId,
 };
-use fuel_core_metrics::p2p_metrics::p2p_metrics;
+use fuel_core_metrics::{
+    global_registry,
+    p2p_metrics::increment_unique_peers,
+};
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::peer_reputation::AppScore,
@@ -49,6 +54,10 @@ use libp2p::{
         TopicHash,
     },
     identify,
+    metrics::{
+        Metrics,
+        Recorder,
+    },
     multiaddr::Protocol,
     request_response::{
         self,
@@ -57,6 +66,7 @@ use libp2p::{
         ResponseChannel,
     },
     swarm::SwarmEvent,
+    tcp,
     Multiaddr,
     PeerId,
     Swarm,
@@ -109,7 +119,7 @@ pub struct FuelP2PService {
     /// Whenever we're done processing the request, it's removed from this table,
     /// and the channel is used to send the result to libp2p, which will forward it
     /// to the peer that requested it.
-    inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<ResponseMessage>>,
+    inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<V2ResponseMessage>>,
 
     /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
     network_codec: PostcardCodec,
@@ -119,6 +129,9 @@ pub struct FuelP2PService {
 
     /// Whether or not metrics collection is enabled
     metrics: bool,
+
+    /// libp2p metrics registry
+    libp2p_metrics_registry: Option<Metrics>,
 
     /// Holds peers' information, and manages existing connections
     peer_manager: PeerManager,
@@ -150,6 +163,10 @@ pub enum FuelP2PEvent {
         topic_hash: TopicHash,
         message: FuelGossipsubMessage,
     },
+    NewSubscription {
+        peer_id: PeerId,
+        tag: GossipTopicTag,
+    },
     InboundRequestMessage {
         request_id: InboundRequestId,
         request_message: RequestMessage,
@@ -162,38 +179,98 @@ pub enum FuelP2PEvent {
     },
 }
 
+async fn parse_multiaddrs(multiaddrs: Vec<Multiaddr>) -> anyhow::Result<Vec<Multiaddr>> {
+    let dnsaddr_urls = multiaddrs
+        .iter()
+        .filter_map(|multiaddr| {
+            if let Protocol::Dnsaddr(dnsaddr_url) = multiaddr.iter().next()? {
+                Some(dnsaddr_url.clone())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let dns_resolver = DnsResolver::new().await?;
+    let mut dnsaddr_multiaddrs = vec![];
+
+    for dnsaddr in dnsaddr_urls {
+        let multiaddrs = dns_resolver.lookup_dnsaddr(dnsaddr.as_ref()).await?;
+        dnsaddr_multiaddrs.extend(multiaddrs);
+    }
+
+    let resolved_multiaddrs = multiaddrs
+        .into_iter()
+        .filter(|multiaddr| !multiaddr.iter().any(|p| matches!(p, Protocol::Dnsaddr(_))))
+        .chain(dnsaddr_multiaddrs.into_iter())
+        .collect();
+    Ok(resolved_multiaddrs)
+}
+
 impl FuelP2PService {
-    pub fn new(
+    pub async fn new(
         reserved_peers_updates: broadcast::Sender<usize>,
         config: Config,
         codec: PostcardCodec,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
+        let metrics = config.metrics;
+
         let gossipsub_data =
             GossipsubData::with_topics(GossipsubTopics::new(&config.network_name));
         let network_metadata = NetworkMetadata { gossipsub_data };
 
+        let mut config = config;
+        // override the configuration with the parsed multiaddrs from dnsaddr resolution
+        config.bootstrap_nodes = parse_multiaddrs(config.bootstrap_nodes).await?;
+        config.reserved_nodes = parse_multiaddrs(config.reserved_nodes).await?;
+
         // configure and build P2P Service
         let (transport_function, connection_state) = build_transport_function(&config);
-        let behaviour = FuelBehaviour::new(&config, codec.clone());
+        let tcp_config = tcp::Config::new().port_reuse(true);
+        let behaviour = FuelBehaviour::new(&config, codec.clone())?;
 
-        let mut swarm = SwarmBuilder::with_existing_identity(config.keypair.clone())
+        let swarm_builder = SwarmBuilder::with_existing_identity(config.keypair.clone())
             .with_tokio()
-            .with_other_transport(transport_function)
-            .unwrap()
-            .with_behaviour(|_| behaviour)
-            .unwrap()
-            .with_swarm_config(|cfg| {
-                if let Some(timeout) = config.connection_idle_timeout {
-                    cfg.with_idle_connection_timeout(timeout)
-                } else {
-                    cfg
-                }
-            })
-            .build();
+            .with_tcp(
+                tcp_config,
+                transport_function,
+                libp2p::yamux::Config::default,
+            )
+            .map_err(|_| anyhow::anyhow!("Failed to build Swarm"))?
+            .with_dns()?;
+
+        let mut libp2p_metrics_registry = None;
+        let mut swarm = if metrics {
+            // we use the global registry to store the metrics without needing to create a new one
+            // since libp2p already creates sub-registries
+            let mut registry = global_registry().registry.lock();
+            libp2p_metrics_registry = Some(Metrics::new(&mut registry));
+
+            swarm_builder
+                .with_bandwidth_metrics(&mut registry)
+                .with_behaviour(|_| behaviour)?
+                .with_swarm_config(|cfg| {
+                    if let Some(timeout) = config.connection_idle_timeout {
+                        cfg.with_idle_connection_timeout(timeout)
+                    } else {
+                        cfg
+                    }
+                })
+                .build()
+        } else {
+            swarm_builder
+                .with_behaviour(|_| behaviour)?
+                .with_swarm_config(|cfg| {
+                    if let Some(timeout) = config.connection_idle_timeout {
+                        cfg.with_idle_connection_timeout(timeout)
+                    } else {
+                        cfg
+                    }
+                })
+                .build()
+        };
 
         let local_peer_id = swarm.local_peer_id().to_owned();
-
-        let metrics = config.metrics;
 
         if let Some(public_address) = config.public_address.clone() {
             swarm.add_external_address(public_address);
@@ -205,7 +282,7 @@ impl FuelP2PService {
             .filter_map(|m| m.try_to_peer_id())
             .collect();
 
-        Self {
+        Ok(Self {
             local_peer_id,
             local_address: config.address,
             tcp_port: config.tcp_port,
@@ -215,13 +292,14 @@ impl FuelP2PService {
             inbound_requests_table: HashMap::default(),
             network_metadata,
             metrics,
+            libp2p_metrics_registry,
             peer_manager: PeerManager::new(
                 reserved_peers_updates,
                 reserved_peers,
                 connection_state,
                 config.max_peers_connected as usize,
             ),
-        }
+        })
     }
 
     pub async fn start(&mut self) -> anyhow::Result<()> {
@@ -258,6 +336,24 @@ impl FuelP2PService {
         }
     }
 
+    pub fn update_metrics<T>(&self, update_fn: T)
+    where
+        T: FnOnce(),
+    {
+        if self.metrics {
+            update_fn();
+        }
+    }
+
+    pub fn update_libp2p_metrics<E>(&self, event: &E)
+    where
+        Metrics: Recorder<E>,
+    {
+        if let Some(registry) = self.libp2p_metrics_registry.as_ref() {
+            self.update_metrics(|| registry.record(event));
+        }
+    }
+
     #[cfg(feature = "test-helpers")]
     pub fn multiaddrs(&self) -> Vec<Multiaddr> {
         let local_peer = self.local_peer_id;
@@ -279,17 +375,17 @@ impl FuelP2PService {
         &mut self,
         message: GossipsubBroadcastRequest,
     ) -> Result<MessageId, PublishError> {
-        let topic = self
+        let topic_hash = self
             .network_metadata
             .gossipsub_data
             .topics
-            .get_gossipsub_topic(&message);
+            .get_gossipsub_topic_hash(&message);
 
         match self.network_codec.encode(message) {
             Ok(encoded_data) => self
                 .swarm
                 .behaviour_mut()
-                .publish_message(topic, encoded_data),
+                .publish_message(topic_hash, encoded_data),
             Err(e) => Err(PublishError::TransformFailed(e)),
         }
     }
@@ -332,7 +428,7 @@ impl FuelP2PService {
     pub fn send_response_msg(
         &mut self,
         request_id: InboundRequestId,
-        message: ResponseMessage,
+        message: V2ResponseMessage,
     ) -> Result<(), ResponseSendError> {
         let Some(channel) = self.inbound_requests_table.remove(&request_id) else {
             debug!("ResponseChannel for {:?} does not exist!", request_id);
@@ -438,7 +534,10 @@ impl FuelP2PService {
                 );
                 None
             }
-            _ => None,
+            _ => {
+                self.update_libp2p_metrics(&event);
+                None
+            }
         }
     }
 
@@ -446,18 +545,40 @@ impl FuelP2PService {
         &self.peer_manager
     }
 
+    fn get_topic_tag(&self, topic_hash: &TopicHash) -> Option<GossipTopicTag> {
+        let topic = self
+            .network_metadata
+            .gossipsub_data
+            .topics
+            .get_gossipsub_tag(topic_hash);
+        if topic.is_none() {
+            warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &topic_hash);
+        }
+        topic
+    }
+
     fn handle_behaviour_event(
         &mut self,
         event: FuelBehaviourEvent,
     ) -> Option<FuelP2PEvent> {
         match event {
-            FuelBehaviourEvent::Gossipsub(event) => self.handle_gossipsub_event(event),
+            FuelBehaviourEvent::Gossipsub(event) => {
+                self.update_libp2p_metrics(&event);
+                self.handle_gossipsub_event(event)
+            }
             FuelBehaviourEvent::PeerReport(event) => self.handle_peer_report_event(event),
             FuelBehaviourEvent::RequestResponse(event) => {
                 self.handle_request_response_event(event)
             }
-            FuelBehaviourEvent::Identify(event) => self.handle_identify_event(event),
+            FuelBehaviourEvent::Identify(event) => {
+                self.update_libp2p_metrics(&event);
+                self.handle_identify_event(event)
+            }
             FuelBehaviourEvent::Heartbeat(event) => self.handle_heartbeat_event(event),
+            FuelBehaviourEvent::Discovery(event) => {
+                self.update_libp2p_metrics(&event);
+                None
+            }
             _ => None,
         }
     }
@@ -466,27 +587,20 @@ impl FuelP2PService {
         &mut self,
         event: gossipsub::Event,
     ) -> Option<FuelP2PEvent> {
-        if let gossipsub::Event::Message {
-            propagation_source,
-            message,
-            message_id,
-        } = event
-        {
-            if let Some(correct_topic) = self
-                .network_metadata
-                .gossipsub_data
-                .topics
-                .get_gossipsub_tag(&message.topic)
-            {
+        match event {
+            gossipsub::Event::Message {
+                propagation_source,
+                message,
+                message_id,
+            } => {
+                let correct_topic = self.get_topic_tag(&message.topic)?;
                 match self.network_codec.decode(&message.data, correct_topic) {
-                    Ok(decoded_message) => {
-                        return Some(FuelP2PEvent::GossipsubMessage {
-                            peer_id: propagation_source,
-                            message_id,
-                            topic_hash: message.topic,
-                            message: decoded_message,
-                        })
-                    }
+                    Ok(decoded_message) => Some(FuelP2PEvent::GossipsubMessage {
+                        peer_id: propagation_source,
+                        message_id,
+                        topic_hash: message.topic,
+                        message: decoded_message,
+                    }),
                     Err(err) => {
                         warn!(target: "fuel-p2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
 
@@ -495,13 +609,16 @@ impl FuelP2PService {
                             propagation_source,
                             MessageAcceptance::Reject,
                         );
+                        None
                     }
                 }
-            } else {
-                warn!(target: "fuel-p2p", "GossipTopicTag does not exist for {:?}", &message.topic);
             }
+            gossipsub::Event::Subscribed { peer_id, topic } => {
+                let tag = self.get_topic_tag(&topic)?;
+                Some(FuelP2PEvent::NewSubscription { peer_id, tag })
+            }
+            _ => None,
         }
-        None
     }
 
     fn handle_peer_report_event(
@@ -512,36 +629,15 @@ impl FuelP2PService {
             PeerReportEvent::PerformDecay => {
                 self.peer_manager.batch_update_score_with_decay()
             }
-            PeerReportEvent::CheckReservedNodesHealth => {
-                let disconnected_peers: Vec<_> = self
-                    .peer_manager
-                    .get_disconnected_reserved_peers()
-                    .copied()
-                    .collect();
-
-                for peer_id in disconnected_peers {
-                    debug!(target: "fuel-p2p", "Trying to reconnect to reserved peer {:?}", peer_id);
-
-                    let _ = self.swarm.dial(peer_id);
-                }
-            }
-            PeerReportEvent::PeerConnected {
-                peer_id,
-                initial_connection,
-            } => {
-                if self
-                    .peer_manager
-                    .handle_peer_connected(&peer_id, initial_connection)
-                {
+            PeerReportEvent::PeerConnected { peer_id } => {
+                if self.peer_manager.handle_peer_connected(&peer_id) {
                     let _ = self.swarm.disconnect_peer_id(peer_id);
-                } else if initial_connection {
+                } else {
                     return Some(FuelP2PEvent::PeerConnected(peer_id));
                 }
             }
             PeerReportEvent::PeerDisconnected { peer_id } => {
-                if self.peer_manager.handle_peer_disconnect(peer_id) {
-                    let _ = self.swarm.dial(peer_id);
-                }
+                self.peer_manager.handle_peer_disconnect(peer_id);
                 return Some(FuelP2PEvent::PeerDisconnected(peer_id));
             }
         }
@@ -550,7 +646,7 @@ impl FuelP2PService {
 
     fn handle_request_response_event(
         &mut self,
-        event: request_response::Event<RequestMessage, ResponseMessage>,
+        event: request_response::Event<RequestMessage, V2ResponseMessage>,
     ) -> Option<FuelP2PEvent> {
         match event {
             request_response::Event::Message { peer, message } => match message {
@@ -578,8 +674,36 @@ impl FuelP2PService {
 
                     let send_ok = match channel {
                         ResponseSender::SealedHeaders(c) => match response {
-                            ResponseMessage::SealedHeaders(v) => {
-                                c.send((peer, Ok(v))).is_ok()
+                            V2ResponseMessage::SealedHeaders(v) => {
+                                // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
+                                // Change type of ResponseSender and remove the .ok() here
+                                c.send(Ok((peer, Ok(v.ok())))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send(Ok((peer, Err(ResponseError::TypeMismatch))))
+                                    .is_ok()
+                            }
+                        },
+                        ResponseSender::Transactions(c) => match response {
+                            V2ResponseMessage::Transactions(v) => {
+                                c.send(Ok((peer, Ok(v.ok())))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send(Ok((peer, Err(ResponseError::TypeMismatch))))
+                                    .is_ok()
+                            }
+                        },
+                        ResponseSender::TransactionsFromPeer(c) => match response {
+                            V2ResponseMessage::Transactions(v) => {
+                                c.send((peer, Ok(v.ok()))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -589,9 +713,21 @@ impl FuelP2PService {
                                 c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
                             }
                         },
-                        ResponseSender::Transactions(c) => match response {
-                            ResponseMessage::Transactions(v) => {
-                                c.send((peer, Ok(v))).is_ok()
+                        ResponseSender::TxPoolAllTransactionsIds(c) => match response {
+                            V2ResponseMessage::TxPoolAllTransactionsIds(v) => {
+                                c.send((peer, Ok(v.ok()))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
+                            }
+                        },
+                        ResponseSender::TxPoolFullTransactions(c) => match response {
+                            V2ResponseMessage::TxPoolFullTransactions(v) => {
+                                c.send((peer, Ok(v.ok()))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -628,9 +764,18 @@ impl FuelP2PService {
                 if let Some(channel) = self.outbound_requests_table.remove(&request_id) {
                     match channel {
                         ResponseSender::SealedHeaders(c) => {
-                            let _ = c.send((peer, Err(ResponseError::P2P(error))));
+                            let _ = c.send(Ok((peer, Err(ResponseError::P2P(error)))));
                         }
                         ResponseSender::Transactions(c) => {
+                            let _ = c.send(Ok((peer, Err(ResponseError::P2P(error)))));
+                        }
+                        ResponseSender::TransactionsFromPeer(c) => {
+                            let _ = c.send((peer, Err(ResponseError::P2P(error))));
+                        }
+                        ResponseSender::TxPoolAllTransactionsIds(c) => {
+                            let _ = c.send((peer, Err(ResponseError::P2P(error))));
+                        }
+                        ResponseSender::TxPoolFullTransactions(c) => {
                             let _ = c.send((peer, Err(ResponseError::P2P(error))));
                         }
                     };
@@ -644,9 +789,7 @@ impl FuelP2PService {
     fn handle_identify_event(&mut self, event: identify::Event) -> Option<FuelP2PEvent> {
         match event {
             identify::Event::Received { peer_id, info } => {
-                if self.metrics {
-                    p2p_metrics().unique_peers.inc();
-                }
+                self.update_metrics(increment_unique_peers);
 
                 let mut addresses = info.listen_addrs;
                 let agent_version = info.agent_version;
@@ -713,18 +856,15 @@ mod tests {
                 GossipsubBroadcastRequest,
                 GossipsubMessage,
             },
-            topics::{
-                GossipTopic,
-                NEW_TX_GOSSIP_TOPIC,
-            },
+            topics::NEW_TX_GOSSIP_TOPIC,
         },
         p2p_service::FuelP2PEvent,
         peer_manager::PeerInfo,
         request_response::messages::{
             RequestMessage,
             ResponseError,
-            ResponseMessage,
             ResponseSender,
+            V2ResponseMessage,
         },
         service::to_message_acceptance,
     };
@@ -740,9 +880,13 @@ mod tests {
         fuel_tx::{
             Transaction,
             TransactionBuilder,
+            TxId,
+            UniqueIdentifier,
         },
+        fuel_types::ChainId,
         services::p2p::{
             GossipsubMessageAcceptance,
+            NetworkableTransactionPool,
             Transactions,
         },
     };
@@ -751,7 +895,10 @@ mod tests {
         StreamExt,
     };
     use libp2p::{
-        gossipsub::Topic,
+        gossipsub::{
+            Sha256Topic,
+            Topic,
+        },
         identity::Keypair,
         swarm::{
             ListenError,
@@ -785,7 +932,9 @@ mod tests {
             broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
 
         let mut service =
-            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size));
+            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size))
+                .await
+                .unwrap();
         service.start().await.unwrap();
         service
     }
@@ -923,7 +1072,7 @@ mod tests {
             let mut p2p_config = p2p_config.clone();
             p2p_config.max_peers_connected = node_a_max_peers_allowed as u32;
             // it still tries to dial all nodes!
-            p2p_config.bootstrap_nodes = nodes_multiaddrs.clone();
+            p2p_config.bootstrap_nodes.clone_from(&nodes_multiaddrs);
 
             build_service_from_config(p2p_config).await
         };
@@ -933,7 +1082,7 @@ mod tests {
             let mut p2p_config = p2p_config.clone();
             p2p_config.max_peers_connected = node_b_max_peers_allowed as u32;
             // it still tries to dial all nodes!
-            p2p_config.bootstrap_nodes = nodes_multiaddrs.clone();
+            p2p_config.bootstrap_nodes.clone_from(&nodes_multiaddrs);
 
             build_service_from_config(p2p_config).await
         };
@@ -1023,12 +1172,12 @@ mod tests {
         let (mut second_guarded_node, second_sentry_nodes) =
             build_sentry_nodes(p2p_config).await;
 
-        let mut first_sentry_set: HashSet<_> = first_sentry_nodes
+        let first_sentry_set: HashSet<_> = first_sentry_nodes
             .iter()
             .map(|node| node.local_peer_id)
             .collect();
 
-        let mut second_sentry_set: HashSet<_> = second_sentry_nodes
+        let second_sentry_set: HashSet<_> = second_sentry_nodes
             .iter()
             .map(|node| node.local_peer_id)
             .collect();
@@ -1051,7 +1200,7 @@ mod tests {
             tokio::select! {
                 event_from_first_guarded = first_guarded_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_guarded {
-                        if !first_sentry_set.remove(&peer_id) {
+                        if !first_sentry_set.contains(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }
@@ -1059,7 +1208,7 @@ mod tests {
                 },
                 event_from_second_guarded = second_guarded_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_guarded {
-                        if !second_sentry_set.remove(&peer_id) {
+                        if !second_sentry_set.contains(&peer_id) {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }
@@ -1075,10 +1224,7 @@ mod tests {
 
             // This reserved node has connected to more than the number of reserved nodes it is part of.
             // It means it has discovered other nodes in the network.
-            if !(sentry_node_connections.len() >= 2 * RESERVED_NODE_SIZE
-                && first_sentry_set.is_empty()
-                && first_sentry_set.is_empty())
-            {
+            if sentry_node_connections.len() < 2 * RESERVED_NODE_SIZE {
                 instance = tokio::time::Instant::now();
             }
         }
@@ -1239,21 +1385,37 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn gossipsub_broadcast_tx_with_accept() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx())),
-            GossipsubMessageAcceptance::Accept,
-        )
-        .await;
+        for _ in 0..100 {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                gossipsub_broadcast(
+                    GossipsubBroadcastRequest::NewTx(Arc::new(
+                        Transaction::default_test_tx(),
+                    )),
+                    GossipsubMessageAcceptance::Accept,
+                ),
+            )
+            .await
+            .unwrap();
+        }
     }
 
     #[tokio::test]
     #[instrument]
     async fn gossipsub_broadcast_tx_with_reject() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx())),
-            GossipsubMessageAcceptance::Reject,
-        )
-        .await;
+        for _ in 0..100 {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                gossipsub_broadcast(
+                    GossipsubBroadcastRequest::NewTx(Arc::new(
+                        Transaction::default_test_tx(),
+                    )),
+                    GossipsubMessageAcceptance::Reject,
+                ),
+            )
+            .await
+            .unwrap();
+        }
     }
 
     #[tokio::test]
@@ -1383,7 +1545,7 @@ mod tests {
     ) {
         let mut p2p_config = Config::default_initialized("gossipsub_exchanges_messages");
 
-        let selected_topic: GossipTopic = {
+        let selected_topic: Sha256Topic = {
             let topic = match broadcast_request {
                 GossipsubBroadcastRequest::NewTx(_) => NEW_TX_GOSSIP_TOPIC,
             };
@@ -1411,23 +1573,32 @@ mod tests {
             .behaviour_mut()
             .block_peer(node_a.local_peer_id);
 
+        let mut a_connected_to_b = false;
+        let mut b_connected_to_c = false;
         loop {
+            // verifies that we've got at least a single peer address to send message to
+            if a_connected_to_b && b_connected_to_c && !message_sent {
+                message_sent = true;
+                let broadcast_request = broadcast_request.clone();
+                node_a.publish_message(broadcast_request).unwrap();
+            }
+
             tokio::select! {
                 node_a_event = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                        if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
-                            // verifies that we've got at least a single peer address to send message to
-                            if !message_sent  {
-                                message_sent = true;
-                                let broadcast_request = broadcast_request.clone();
-                                node_a.publish_message(broadcast_request).unwrap();
-                            }
+                    if let Some(FuelP2PEvent::NewSubscription { peer_id, .. }) = &node_a_event {
+                        if peer_id == &node_b.local_peer_id {
+                            a_connected_to_b = true;
                         }
                     }
-
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
+                    if let Some(FuelP2PEvent::NewSubscription { peer_id, .. }) = &node_b_event {
+                        if peer_id == &node_c.local_peer_id {
+                            b_connected_to_c = true;
+                        }
+                    }
+
                     if let Some(FuelP2PEvent::GossipsubMessage { topic_hash, message, message_id, peer_id }) = node_b_event.clone() {
                         // Message Validation must be reported
                         // If it's `Accept`, Node B will propagate the message to Node C
@@ -1546,9 +1717,25 @@ mod tests {
 
                                             let expected = arbitrary_headers_for_range(range.clone());
 
-                                            if let Ok((_, Ok(sealed_headers))) = response_message {
-                                                let check = expected.iter().zip(sealed_headers.unwrap().iter()).all(|(a, b)| eq_except_metadata(a, b));
-                                                let _ = tx_test_end.send(check).await;
+                                            if let Ok(response) = response_message {
+                                                match response {
+                                                    Ok((_, Ok(Some(sealed_headers)))) => {
+                                                        let check = expected.iter().zip(sealed_headers.iter()).all(|(a, b)| eq_except_metadata(a, b));
+                                                        let _ = tx_test_end.send(check).await;
+                                                    },
+                                                    Ok((_, Ok(None))) => {
+                                                        tracing::error!("Node A did not return any headers");
+                                                        let _ = tx_test_end.send(false).await;
+                                                    },
+                                                    Ok((_, Err(e))) => {
+                                                        tracing::error!("Error in P2P communication: {:?}", e);
+                                                        let _ = tx_test_end.send(false).await;
+                                                    },
+                                                    Err(e) => {
+                                                        tracing::error!("Error in P2P before sending message: {:?}", e);
+                                                        let _ = tx_test_end.send(false).await;
+                                                    },
+                                                }
                                             } else {
                                                 tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
                                                 let _ = tx_test_end.send(false).await;
@@ -1563,8 +1750,64 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
+                                            if let Ok(response) = response_message {
+                                                match response {
+                                                    Ok((_, Ok(Some(transactions)))) => {
+                                                        let check = transactions.len() == 1 && transactions[0].0.len() == 5;
+                                                        let _ = tx_test_end.send(check).await;
+                                                    },
+                                                    Ok((_, Ok(None))) => {
+                                                        tracing::error!("Node A did not return any transactions");
+                                                        let _ = tx_test_end.send(false).await;
+                                                    },
+                                                    Ok((_, Err(e))) => {
+                                                        tracing::error!("Error in P2P communication: {:?}", e);
+                                                        let _ = tx_test_end.send(false).await;
+                                                    },
+                                                    Err(e) => {
+                                                        tracing::error!("Error in P2P before sending message: {:?}", e);
+                                                        let _ = tx_test_end.send(false).await;
+                                                    },
+                                                }
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
+                                    }
+                                    RequestMessage::TxPoolAllTransactionsIds => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::TxPoolAllTransactionsIds(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
+                                            if let Ok((_, Ok(Some(transaction_ids)))) = response_message {
+                                                let tx_ids: Vec<TxId> = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
+                                                let check = transaction_ids.len() == 5 && transaction_ids.iter().zip(tx_ids.iter()).all(|(a, b)| a == b);
+                                                let _ = tx_test_end.send(check).await;
+                                            } else {
+                                                tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                                let _ = tx_test_end.send(false).await;
+                                            }
+                                        });
+                                    }
+                                    RequestMessage::TxPoolFullTransactions(tx_ids) => {
+                                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                        assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::TxPoolFullTransactions(tx_orchestrator)).is_ok());
+                                        let tx_test_end = tx_test_end.clone();
+                                        tokio::spawn(async move {
+                                            let response_message = rx_orchestrator.await;
+
                                             if let Ok((_, Ok(Some(transactions)))) = response_message {
-                                                let check = transactions.len() == 1 && transactions[0].0.len() == 5;
+                                                let txs: Vec<Option<NetworkableTransactionPool>> = tx_ids.iter().enumerate().map(|(i, _)| {
+                                                    if i == 0 {
+                                                        None
+                                                    } else {
+                                                        Some(NetworkableTransactionPool::Transaction(Transaction::default_test_tx()))
+                                                    }
+                                                }).collect();
+                                                let check = transactions.len() == tx_ids.len() && transactions.iter().zip(txs.iter()).all(|(a, b)| a == b);
                                                 let _ = tx_test_end.send(check).await;
                                             } else {
                                                 tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
@@ -1586,12 +1829,26 @@ mod tests {
                             RequestMessage::SealedHeaders(range) => {
                                 let sealed_headers: Vec<_> = arbitrary_headers_for_range(range.clone());
 
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::SealedHeaders(Some(sealed_headers)));
+                                let _ = node_b.send_response_msg(*request_id, V2ResponseMessage::SealedHeaders(Ok(sealed_headers)));
                             }
                             RequestMessage::Transactions(_) => {
                                 let txs = (0..5).map(|_| Transaction::default_test_tx()).collect();
                                 let transactions = vec![Transactions(txs)];
-                                let _ = node_b.send_response_msg(*request_id, ResponseMessage::Transactions(Some(transactions)));
+                                let _ = node_b.send_response_msg(*request_id, V2ResponseMessage::Transactions(Ok(transactions)));
+                            }
+                            RequestMessage::TxPoolAllTransactionsIds => {
+                                let tx_ids = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
+                                let _ = node_b.send_response_msg(*request_id, V2ResponseMessage::TxPoolAllTransactionsIds(Ok(tx_ids)));
+                            }
+                            RequestMessage::TxPoolFullTransactions(tx_ids) => {
+                                let txs = tx_ids.iter().enumerate().map(|(i, _)| {
+                                    if i == 0 {
+                                        None
+                                    } else {
+                                        Some(NetworkableTransactionPool::Transaction(Transaction::default_test_tx()))
+                                    }
+                                }).collect();
+                                let _ = node_b.send_response_msg(*request_id, V2ResponseMessage::TxPoolFullTransactions(Ok(txs)));
                             }
                         }
                     }
@@ -1614,6 +1871,21 @@ mod tests {
     async fn request_response_works_with_sealed_headers_range_inclusive() {
         let arbitrary_range = 2..6;
         request_response_works_with(RequestMessage::SealedHeaders(arbitrary_range)).await
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_transactions_ids() {
+        request_response_works_with(RequestMessage::TxPoolAllTransactionsIds).await
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn request_response_works_with_full_transactions() {
+        let tx_ids = (0..10)
+            .map(|_| Transaction::default_test_tx().id(&ChainId::new(1)))
+            .collect();
+        request_response_works_with(RequestMessage::TxPoolFullTransactions(tx_ids)).await
     }
 
     /// We send a request for transactions, but it's responded by only headers
@@ -1655,23 +1927,28 @@ mod tests {
                                 tokio::spawn(async move {
                                     let response_message = rx_orchestrator.await;
 
-                                    match response_message {
-                                        Ok((_, Ok(_))) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Request succeeded unexpectedly");
-                                        },
-                                        Ok((_, Err(ResponseError::TypeMismatch))) => {
-                                            // Got Invalid Response Type as expected, so end test
-                                            let _ = tx_test_end.send(true).await;
-                                        },
-                                        Ok((_, Err(err))) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Unexpected error: {:?}", err);
-                                        },
-                                        Err(_) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Channel closed unexpectedly");
-                                        },
+                                    if let Ok(response) = response_message {
+                                        match response {
+                                            Ok((_, Ok(_))) => {
+                                                let _ = tx_test_end.send(false).await;
+                                                panic!("Request succeeded unexpectedly");
+                                            },
+                                            Ok((_, Err(ResponseError::TypeMismatch))) => {
+                                                // Got Invalid Response Type as expected, so end test
+                                                let _ = tx_test_end.send(true).await;
+                                            },
+                                            Ok((_, Err(err))) => {
+                                                let _ = tx_test_end.send(false).await;
+                                                panic!("Unexpected error in P2P communication: {:?}", err);
+                                            },
+                                            Err(e) => {
+                                                let _ = tx_test_end.send(false).await;
+                                                panic!("Error in P2P before sending message: {:?}", e);
+                                            },
+                                        }
+                                    } else {
+                                        let _ = tx_test_end.send(false).await;
+                                        panic!("Orchestrator failed to receive a message: {:?}", response_message);
                                     }
                                 });
                             }
@@ -1684,7 +1961,7 @@ mod tests {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let Some(FuelP2PEvent::InboundRequestMessage{ request_id, request_message: _ }) = &node_b_event {
                         let sealed_headers: Vec<_> = arbitrary_headers_for_range(1..3);
-                        let _ = node_b.send_response_msg(*request_id, ResponseMessage::SealedHeaders(Some(sealed_headers)));
+                        let _ = node_b.send_response_msg(*request_id, V2ResponseMessage::SealedHeaders(Ok(sealed_headers)));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
@@ -1741,21 +2018,29 @@ mod tests {
 
                                 tokio::spawn(async move {
                                     // 3. Simulating NetworkOrchestrator receiving a Timeout Error Message!
-                                    match rx_orchestrator.await {
-                                        Ok((_, Ok(_))) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Request succeeded unexpectedly")},
-                                        Ok((_, Err(ResponseError::P2P(_)))) => {
-                                            // Got timeout as expected, so end test
-                                            let _ = tx_test_end.send(true).await;
-                                        },
-                                        Ok((_, Err(err))) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Unexpected error: {:?}", err);
-                                        },
-                                        Err(e) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Channel closed unexpectedly: {:?}", e)},
+                                    let response_message = rx_orchestrator.await;
+                                    if let Ok(response) = response_message {
+                                        match response {
+                                            Ok((_, Ok(_))) => {
+                                                let _ = tx_test_end.send(false).await;
+                                                panic!("Request succeeded unexpectedly");
+                                            },
+                                            Ok((_, Err(ResponseError::P2P(_)))) => {
+                                                // Got Invalid Response Type as expected, so end test
+                                                let _ = tx_test_end.send(true).await;
+                                            },
+                                            Ok((_, Err(err))) => {
+                                                let _ = tx_test_end.send(false).await;
+                                                panic!("Unexpected error in P2P communication: {:?}", err);
+                                            },
+                                            Err(e) => {
+                                                let _ = tx_test_end.send(false).await;
+                                                panic!("Error in P2P before sending message: {:?}", e);
+                                            },
+                                        }
+                                    } else {
+                                        let _ = tx_test_end.send(false).await;
+                                        panic!("Orchestrator failed to receive a message: {:?}", response_message);
                                     }
                                 });
                             }

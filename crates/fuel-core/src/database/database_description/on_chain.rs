@@ -1,7 +1,7 @@
 use crate::database::database_description::DatabaseDescription;
 use fuel_core_types::fuel_types::BlockHeight;
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct OnChain;
 
 impl DatabaseDescription for OnChain {
@@ -12,8 +12,8 @@ impl DatabaseDescription for OnChain {
         0
     }
 
-    fn name() -> &'static str {
-        "on_chain"
+    fn name() -> String {
+        "on_chain".to_string()
     }
 
     fn metadata_column() -> Self::Column {

@@ -4,18 +4,30 @@
 //! defined here are used by services but are flexible enough to customize the
 //! logic when the `Database` is known.
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 #![deny(warnings)]
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+use anyhow::anyhow;
 use core::array::TryFromSliceError;
 use fuel_core_types::services::executor::Error as ExecutorError;
+
+#[cfg(feature = "alloc")]
+use alloc::{
+    boxed::Box,
+    string::ToString,
+};
 
 pub use fuel_vm_private::{
     fuel_storage::*,
     storage::{
+        predicate::PredicateStorageRequirements,
         ContractsAssetsStorage,
         InterpreterStorage,
     },
@@ -33,6 +45,7 @@ pub mod test_helpers;
 pub mod transactional;
 pub mod vm_storage;
 
+use fuel_core_types::fuel_merkle::binary::MerkleTreeError;
 pub use fuel_vm_private::storage::{
     ContractsAssetKey,
     ContractsStateData,
@@ -58,12 +71,19 @@ pub enum Error {
     #[display(fmt = "error occurred in the underlying datastore `{_0:?}`")]
     DatabaseError(Box<dyn core::fmt::Debug + Send + Sync>),
     /// This error should be created with `not_found` macro.
-    #[display(fmt = "resource of type `{_0}` was not found at the: {_1}")]
+    #[display(fmt = "resource was not found in table `{_0}` at the: {_1}")]
     NotFound(&'static str, &'static str),
     // TODO: Do we need this type at all?
     /// Unknown or not expected(by architecture) error.
     #[from]
     Other(anyhow::Error),
+}
+
+#[cfg(feature = "test-helpers")]
+impl PartialEq for Error {
+    fn eq(&self, other: &Self) -> bool {
+        self.to_string().eq(&other.to_string())
+    }
 }
 
 impl From<Error> for anyhow::Error {
@@ -93,6 +113,15 @@ impl From<Error> for fuel_vm_private::prelude::InterpreterError<Error> {
 impl From<Error> for fuel_vm_private::prelude::RuntimeError<Error> {
     fn from(e: Error) -> Self {
         fuel_vm_private::prelude::RuntimeError::Storage(e)
+    }
+}
+
+impl From<MerkleTreeError<Error>> for Error {
+    fn from(e: MerkleTreeError<Error>) -> Self {
+        match e {
+            MerkleTreeError::StorageError(s) => s,
+            e => Error::Other(anyhow!(e)),
+        }
     }
 }
 
@@ -166,7 +195,7 @@ macro_rules! not_found {
     };
     ($ty: path) => {
         $crate::Error::NotFound(
-            ::core::any::type_name::<<$ty as $crate::Mappable>::OwnedValue>(),
+            ::core::any::type_name::<$ty>(),
             concat!(file!(), ":", line!()),
         )
     };
@@ -181,12 +210,12 @@ mod test {
         #[rustfmt::skip]
         assert_eq!(
             format!("{}", not_found!("BlockId")),
-            format!("resource of type `BlockId` was not found at the: {}:{}", file!(), line!() - 1)
+            format!("resource was not found in table `BlockId` at the: {}:{}", file!(), line!() - 1)
         );
         #[rustfmt::skip]
         assert_eq!(
             format!("{}", not_found!(Coins)),
-            format!("resource of type `fuel_core_types::entities::coins::coin::CompressedCoin` was not found at the: {}:{}", file!(), line!() - 1)
+            format!("resource was not found in table `fuel_core_storage::tables::Coins` at the: {}:{}", file!(), line!() - 1)
         );
     }
 }

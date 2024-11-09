@@ -10,16 +10,14 @@ use crate::{
             TxPool,
         },
         database::ReadView,
+        query_costs,
         IntoApiResult,
-    },
-    query::{
-        SimpleBlockData,
-        TransactionQueryData,
     },
     schema::{
         block::Block,
         scalars::{
             AssetId,
+            BlobId,
             Bytes32,
             ContractId,
             HexString,
@@ -36,6 +34,7 @@ use crate::{
             output,
             upgrade_purpose::UpgradePurpose,
         },
+        ReadViewProvider,
     },
 };
 use async_graphql::{
@@ -51,6 +50,7 @@ use fuel_core_types::{
         field::{
             BytecodeRoot,
             BytecodeWitnessIndex,
+            ChargeableBody,
             InputContract,
             Inputs,
             Maturity,
@@ -84,11 +84,14 @@ use fuel_core_types::{
             TransactionExecutionResult,
             TransactionExecutionStatus,
         },
-        txpool,
-        txpool::TransactionStatus as TxStatus,
+        txpool::{
+            self,
+            TransactionStatus as TxStatus,
+        },
     },
     tai64::Tai64,
 };
+use std::vec::IntoIter;
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -170,10 +173,22 @@ impl SuccessStatus {
         self.tx_id.into()
     }
 
+    async fn block_height(&self) -> U32 {
+        self.block_height.into()
+    }
+
+    #[graphql(complexity = "query_costs().block_header + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
+    }
+
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn transaction(&self, ctx: &Context<'_>) -> async_graphql::Result<Transaction> {
+        let query = ctx.read_view()?;
+        let transaction = query.transaction(&self.tx_id)?;
+        Ok(Transaction::from_tx(self.tx_id, transaction))
     }
 
     async fn time(&self) -> Tai64Timestamp {
@@ -214,10 +229,22 @@ impl FailureStatus {
         self.tx_id.into()
     }
 
+    async fn block_height(&self) -> U32 {
+        self.block_height.into()
+    }
+
+    #[graphql(complexity = "query_costs().block_header + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let block = query.block(&self.block_height)?;
         Ok(block.into())
+    }
+
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn transaction(&self, ctx: &Context<'_>) -> async_graphql::Result<Transaction> {
+        let query = ctx.read_view()?;
+        let transaction = query.transaction(&self.tx_id)?;
+        Ok(Transaction::from_tx(self.tx_id, transaction))
     }
 
     async fn time(&self) -> Tai64Timestamp {
@@ -385,6 +412,7 @@ impl Transaction {
         TransactionId(self.1)
     }
 
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
@@ -412,25 +440,33 @@ impl Transaction {
                     .map(|c| AssetId(*c))
                     .collect(),
             ),
+            fuel_tx::Transaction::Blob(tx) => Some(
+                tx.input_asset_ids(base_asset_id)
+                    .map(|c| AssetId(*c))
+                    .collect(),
+            ),
         }
     }
 
     async fn input_contracts(&self) -> Option<Vec<ContractId>> {
         match &self.0 {
-            fuel_tx::Transaction::Script(script) => {
-                Some(script.input_contracts().map(|v| (*v).into()).collect())
+            fuel_tx::Transaction::Script(tx) => {
+                Some(input_contracts(tx).map(|v| (*v).into()).collect())
             }
-            fuel_tx::Transaction::Create(create) => {
-                Some(create.input_contracts().map(|v| (*v).into()).collect())
+            fuel_tx::Transaction::Create(tx) => {
+                Some(input_contracts(tx).map(|v| (*v).into()).collect())
             }
             fuel_tx::Transaction::Mint(mint) => {
                 Some(vec![mint.input_contract().contract_id.into()])
             }
             fuel_tx::Transaction::Upgrade(tx) => {
-                Some(tx.input_contracts().map(|v| (*v).into()).collect())
+                Some(input_contracts(tx).map(|v| (*v).into()).collect())
             }
             fuel_tx::Transaction::Upload(tx) => {
-                Some(tx.input_contracts().map(|v| (*v).into()).collect())
+                Some(input_contracts(tx).map(|v| (*v).into()).collect())
+            }
+            fuel_tx::Transaction::Blob(tx) => {
+                Some(input_contracts(tx).map(|v| (*v).into()).collect())
             }
         }
     }
@@ -440,7 +476,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.input_contract().into()),
         }
     }
@@ -452,6 +489,7 @@ impl Transaction {
             fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(tx) => Some((*tx.policies()).into()),
             fuel_tx::Transaction::Upload(tx) => Some((*tx.policies()).into()),
+            fuel_tx::Transaction::Blob(tx) => Some((*tx.policies()).into()),
         }
     }
 
@@ -463,7 +501,8 @@ impl Transaction {
             fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -474,6 +513,7 @@ impl Transaction {
             fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(tx) => Some(tx.maturity().into()),
             fuel_tx::Transaction::Upload(tx) => Some(tx.maturity().into()),
+            fuel_tx::Transaction::Blob(tx) => Some(tx.maturity().into()),
         }
     }
 
@@ -482,7 +522,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_amount()).into()),
         }
     }
@@ -492,7 +533,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_asset_id()).into()),
         }
     }
@@ -502,7 +544,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.gas_price()).into()),
         }
     }
@@ -513,7 +556,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.tx_pointer()).into()),
         }
     }
@@ -538,6 +582,10 @@ impl Transaction {
         self.0.is_upload()
     }
 
+    async fn is_blob(&self) -> bool {
+        self.0.is_blob()
+    }
+
     async fn inputs(&self) -> Option<Vec<Input>> {
         match &self.0 {
             fuel_tx::Transaction::Script(tx) => {
@@ -551,6 +599,9 @@ impl Transaction {
                 Some(tx.inputs().iter().map(Into::into).collect())
             }
             fuel_tx::Transaction::Upload(tx) => {
+                Some(tx.inputs().iter().map(Into::into).collect())
+            }
+            fuel_tx::Transaction::Blob(tx) => {
                 Some(tx.inputs().iter().map(Into::into).collect())
             }
         }
@@ -571,6 +622,9 @@ impl Transaction {
             fuel_tx::Transaction::Upload(tx) => {
                 tx.outputs().iter().map(Into::into).collect()
             }
+            fuel_tx::Transaction::Blob(tx) => {
+                tx.outputs().iter().map(Into::into).collect()
+            }
         }
     }
 
@@ -579,7 +633,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.output_contract().into()),
         }
     }
@@ -611,6 +666,12 @@ impl Transaction {
                     .map(|w| HexString(w.clone().into_inner()))
                     .collect(),
             ),
+            fuel_tx::Transaction::Blob(tx) => Some(
+                tx.witnesses()
+                    .iter()
+                    .map(|w| HexString(w.clone().into_inner()))
+                    .collect(),
+            ),
         }
     }
 
@@ -622,18 +683,22 @@ impl Transaction {
             fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
+    #[graphql(complexity = "query_costs().tx_status_read + child_complexity")]
     async fn status(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.1;
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, query, txpool).map_err(Into::into)
+        get_tx_status(id, query.as_ref(), txpool)
+            .await
+            .map_err(Into::into)
     }
 
     async fn script(&self) -> Option<HexString> {
@@ -644,7 +709,8 @@ impl Transaction {
             fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -656,7 +722,8 @@ impl Transaction {
             fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
             | fuel_tx::Transaction::Upgrade(_)
-            | fuel_tx::Transaction::Upload(_) => None,
+            | fuel_tx::Transaction::Upload(_)
+            | fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -671,6 +738,14 @@ impl Transaction {
             fuel_tx::Transaction::Upload(tx) => {
                 Some((*tx.bytecode_witness_index()).into())
             }
+            fuel_tx::Transaction::Blob(tx) => Some((*tx.bytecode_witness_index()).into()),
+        }
+    }
+
+    async fn blob_id(&self) -> Option<BlobId> {
+        match &self.0 {
+            fuel_tx::Transaction::Blob(blob) => Some(blob.body().id.into()),
+            _ => None,
         }
     }
 
@@ -681,6 +756,7 @@ impl Transaction {
             fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(_) => None,
             fuel_tx::Transaction::Upload(_) => None,
+            fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -706,6 +782,7 @@ impl Transaction {
             fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(_) => None,
             fuel_tx::Transaction::Upload(_) => None,
+            fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
@@ -714,7 +791,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
-            | fuel_tx::Transaction::Upgrade(_) => None,
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => Some((*tx.bytecode_root()).into()),
         }
     }
@@ -724,7 +802,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
-            | fuel_tx::Transaction::Upgrade(_) => None,
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => Some((*tx.subsection_index()).into()),
         }
     }
@@ -734,7 +813,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
-            | fuel_tx::Transaction::Upgrade(_) => None,
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => Some((*tx.subsections_number()).into()),
         }
     }
@@ -744,7 +824,8 @@ impl Transaction {
             fuel_tx::Transaction::Script(_)
             | fuel_tx::Transaction::Create(_)
             | fuel_tx::Transaction::Mint(_)
-            | fuel_tx::Transaction::Upgrade(_) => None,
+            | fuel_tx::Transaction::Upgrade(_)
+            | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => {
                 Some(tx.proof_set().iter().map(|proof| (*proof).into()).collect())
             }
@@ -758,9 +839,11 @@ impl Transaction {
             | fuel_tx::Transaction::Mint(_) => None,
             fuel_tx::Transaction::Upgrade(tx) => Some((*tx.upgrade_purpose()).into()),
             fuel_tx::Transaction::Upload(_) => None,
+            fuel_tx::Transaction::Blob(_) => None,
         }
     }
 
+    #[graphql(complexity = "query_costs().tx_raw_payload")]
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
@@ -800,6 +883,26 @@ impl DryRunTransactionStatus {
             }),
         }
     }
+}
+
+fn input_contracts<Tx>(tx: &Tx) -> IntoIter<&fuel_core_types::fuel_types::ContractId>
+where
+    Tx: Inputs,
+{
+    let mut inputs: Vec<_> = tx
+        .inputs()
+        .iter()
+        .filter_map(|input| match input {
+            fuel_tx::Input::Contract(fuel_tx::input::contract::Contract {
+                contract_id,
+                ..
+            }) => Some(contract_id),
+            _ => None,
+        })
+        .collect();
+    inputs.sort();
+    inputs.dedup();
+    inputs.into_iter()
 }
 
 #[derive(Debug)]
@@ -878,25 +981,31 @@ impl DryRunTransactionExecutionStatus {
 }
 
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
-pub(crate) fn get_tx_status(
+pub(crate) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
     query: &ReadView,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query
-        .status(&id)
+        .tx_status(&id)
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
         Some(status) => {
             let status = TransactionStatus::new(id, status);
             Ok(Some(status))
         }
-        None => match txpool.submission_time(id) {
-            Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
-                SubmittedStatus(submitted_time),
-            ))),
-            _ => Ok(None),
-        },
+        None => {
+            let submitted_time = txpool
+                .submission_time(id)
+                .await
+                .map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
+            match submitted_time {
+                Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
+                    SubmittedStatus(submitted_time),
+                ))),
+                _ => Ok(None),
+            }
+        }
     }
 }
 

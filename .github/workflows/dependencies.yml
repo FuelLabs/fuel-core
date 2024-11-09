@@ -16,7 +16,7 @@ defaults:
 env:
   # So cargo doesn't complain about unstable features
   RUSTC_BOOTSTRAP: 1
-  RUST_VERSION: 1.75.0
+  RUST_VERSION: 1.79.0
   PR_TITLE: Weekly `cargo update`
   PR_MESSAGE: |
     Automation to keep dependencies in `Cargo.lock` current.
@@ -112,4 +112,4 @@ jobs:
         if: steps.edit.outcome != 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh pr create --title "${PR_TITLE}" --body-file body.md --repo $GITHUB_REPOSITORY
+        run: gh pr create --title "${PR_TITLE}" --body-file body.md --repo $GITHUB_REPOSITORY --label "no changelog"

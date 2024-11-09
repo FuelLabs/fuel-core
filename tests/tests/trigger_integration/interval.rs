@@ -12,7 +12,10 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
-use fuel_core_poa::Trigger;
+use fuel_core_poa::{
+    signer::SignMode,
+    Trigger,
+};
 use fuel_core_types::{
     fuel_asm::*,
     fuel_crypto::SecretKey,
@@ -35,7 +38,9 @@ async fn poa_interval_produces_empty_blocks_at_correct_rate() {
 
     let db = Database::default();
     let mut config = Config::local_node();
-    config.consensus_key = Some(Secret::new(SecretKey::random(&mut rng).into()));
+    config.graphql_config.max_queries_complexity = 1_000_000;
+    config.consensus_signer =
+        SignMode::Key(Secret::new(SecretKey::random(&mut rng).into()));
     config.block_production = Trigger::Interval {
         block_time: Duration::new(round_time_seconds, 0),
     };
@@ -97,7 +102,9 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
 
     let db = Database::default();
     let mut config = Config::local_node();
-    config.consensus_key = Some(Secret::new(SecretKey::random(&mut rng).into()));
+    config.graphql_config.max_queries_complexity = 1_000_000;
+    config.consensus_signer =
+        SignMode::Key(Secret::new(SecretKey::random(&mut rng).into()));
     config.block_production = Trigger::Interval {
         block_time: Duration::new(round_time_seconds, 0),
     };

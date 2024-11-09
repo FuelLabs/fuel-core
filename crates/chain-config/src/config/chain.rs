@@ -1,5 +1,6 @@
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
     fuel_crypto::Hasher,
     fuel_tx::ConsensusParameters,
     fuel_types::{
@@ -32,8 +33,11 @@ pub const BYTECODE_NAME: &str = "state_transition_bytecode.wasm";
 pub struct ChainConfig {
     pub chain_name: String,
     pub consensus_parameters: ConsensusParameters,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub genesis_state_transition_version: Option<StateTransitionBytecodeVersion>,
     /// Note: The state transition bytecode is stored in a separate file
-    /// under the `BYTECODE NAME` name in serialization form.
+    /// under the `BYTECODE_NAME` name in serialization form.
     #[serde(skip)]
     #[derivative(Debug(format_with = "fmt_truncated_hex::<16>"))]
     pub state_transition_bytecode: Vec<u8>,
@@ -46,8 +50,11 @@ impl Default for ChainConfig {
         Self {
             chain_name: "local".into(),
             consensus_parameters: ConsensusParameters::default(),
+            genesis_state_transition_version: Some(
+                fuel_core_types::blockchain::header::LATEST_STATE_TRANSITION_VERSION,
+            ),
             // Note: It is invalid bytecode.
-            state_transition_bytecode: vec![123; 1024],
+            state_transition_bytecode: vec![],
             consensus: ConsensusConfig::default_poa(),
         }
     }
@@ -71,13 +78,17 @@ impl ChainConfig {
             })?;
 
         let bytecode_path = path.with_file_name(BYTECODE_NAME);
-        let bytecode = std::fs::read(bytecode_path).map_err(|e| {
-            anyhow::Error::new(e).context(format!(
-                "an error occurred while loading the state transition bytecode: {:?}",
-                path.to_str()
-            ))
-        })?;
 
+        let bytecode = if bytecode_path.exists() {
+            std::fs::read(bytecode_path).map_err(|e| {
+                anyhow::Error::new(e).context(format!(
+                    "an error occurred while loading the state transition bytecode: {:?}",
+                    path.to_str()
+                ))
+            })?
+        } else {
+            Vec::new()
+        };
         chain_config.state_transition_bytecode = bytecode;
 
         Ok(chain_config)

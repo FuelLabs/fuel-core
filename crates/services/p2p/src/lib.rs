@@ -5,6 +5,7 @@ pub mod behavior;
 pub mod codecs;
 pub mod config;
 pub mod discovery;
+mod dnsaddr_resolution;
 pub mod gossipsub;
 pub mod heartbeat;
 pub mod p2p_service;
@@ -13,6 +14,7 @@ pub mod peer_report;
 pub mod ports;
 pub mod request_response;
 pub mod service;
+mod utils;
 
 pub use gossipsub::config as gossipsub_config;
 pub use heartbeat::Config;
@@ -22,6 +24,7 @@ pub use libp2p::{
     Multiaddr,
     PeerId,
 };
+use tracing::warn;
 
 #[cfg(feature = "test-helpers")]
 pub mod network_service {
@@ -37,6 +40,13 @@ impl TryPeerId for Multiaddr {
     fn try_to_peer_id(&self) -> Option<PeerId> {
         self.iter().last().and_then(|p| match p {
             Protocol::P2p(peer_id) => Some(peer_id),
+            Protocol::Dnsaddr(multiaddr) => {
+                warn!(
+                    "synchronous recursive dnsaddr resolution is not yet supported: {:?}",
+                    multiaddr
+                );
+                None
+            }
             _ => None,
         })
     }

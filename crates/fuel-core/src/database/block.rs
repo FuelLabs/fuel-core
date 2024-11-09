@@ -1,7 +1,7 @@
 use crate::{
     database::{
-        database_description::off_chain::OffChain,
-        Database,
+        OffChainIterableKeyValueView,
+        OnChainIterableKeyValueView,
     },
     fuel_core_graphql_api::storage::blocks::FuelBlockIdsToHeights,
 };
@@ -39,7 +39,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::borrow::Cow;
 
-impl Database<OffChain> {
+impl OffChainIterableKeyValueView {
     pub fn get_block_height(&self, id: &BlockId) -> StorageResult<Option<BlockHeight>> {
         self.storage::<FuelBlockIdsToHeights>()
             .get(id)
@@ -47,7 +47,7 @@ impl Database<OffChain> {
     }
 }
 
-impl Database {
+impl OnChainIterableKeyValueView {
     pub fn latest_compressed_block(&self) -> StorageResult<Option<CompressedBlock>> {
         let pair = self
             .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
@@ -63,14 +63,12 @@ impl Database {
     }
 
     /// Retrieve the full block and all associated transactions
-    pub(crate) fn get_full_block(
-        &self,
-        height: &BlockHeight,
-    ) -> StorageResult<Option<Block>> {
+    pub fn get_full_block(&self, height: &BlockHeight) -> StorageResult<Option<Block>> {
         let db_block = self.storage::<FuelBlocks>().get(height)?;
         if let Some(block) = db_block {
             // fetch all the transactions
-            // TODO: optimize with multi-key get
+            // TODO: Use multiget when it's implemented.
+            //  https://github.com/FuelLabs/fuel-core/issues/2344
             let txs = block
                 .transactions()
                 .iter()
@@ -88,7 +86,7 @@ impl Database {
     }
 }
 
-impl Database {
+impl OnChainIterableKeyValueView {
     pub fn block_history_proof(
         &self,
         message_block_height: &BlockHeight,
@@ -134,7 +132,11 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_storage::StorageMutate;
+    use crate::database::Database;
+    use fuel_core_storage::{
+        transactional::AtomicView,
+        StorageMutate,
+    };
     use fuel_core_types::{
         blockchain::{
             block::PartialFuelBlock,
@@ -203,10 +205,11 @@ mod tests {
         let mut database = Database::default();
 
         insert_test_ascending_blocks(&mut database, BlockHeight::from(genesis_height));
+        let view = database.latest_view().unwrap();
 
         for l in 0..TEST_BLOCKS_COUNT {
             for r in l..TEST_BLOCKS_COUNT {
-                let proof = database
+                let proof = view
                     .block_history_proof(
                         &BlockHeight::from(genesis_height + l),
                         &BlockHeight::from(genesis_height + r),
@@ -222,8 +225,9 @@ mod tests {
         let mut database = Database::default();
 
         insert_test_ascending_blocks(&mut database, BlockHeight::from(0));
+        let view = database.latest_view().unwrap();
 
-        let result = database.block_history_proof(
+        let result = view.block_history_proof(
             &BlockHeight::from(TEST_BLOCKS_COUNT),
             &BlockHeight::from(TEST_BLOCKS_COUNT - 1),
         );

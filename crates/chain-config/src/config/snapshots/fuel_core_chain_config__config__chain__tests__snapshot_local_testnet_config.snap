@@ -5,7 +5,7 @@ expression: json
 {
   "chain_name": "local_testnet",
   "consensus_parameters": {
-    "V1": {
+    "V2": {
       "tx_params": {
         "V1": {
           "max_inputs": 255,
@@ -44,10 +44,9 @@ expression: json
       },
       "chain_id": 0,
       "gas_costs": {
-        "V1": {
+        "V4": {
           "add": 1,
           "addi": 1,
-          "aloc": 1,
           "and": 1,
           "andi": 1,
           "bal": 13,
@@ -55,13 +54,11 @@ expression: json
           "bhsh": 1,
           "burn": 132,
           "cb": 1,
-          "cfei": 1,
           "cfsi": 1,
           "div": 1,
           "divi": 1,
           "eck1": 951,
           "ecr1": 3000,
-          "ed19": 3000,
           "eq": 1,
           "exp": 1,
           "expi": 1,
@@ -133,6 +130,36 @@ expression: json
           "wqmm": 3,
           "xor": 1,
           "xori": 1,
+          "aloc": {
+            "LightOperation": {
+              "base": 2,
+              "units_per_gas": 214
+            }
+          },
+          "bsiz": {
+            "LightOperation": {
+              "base": 17,
+              "units_per_gas": 790
+            }
+          },
+          "bldd": {
+            "LightOperation": {
+              "base": 15,
+              "units_per_gas": 272
+            }
+          },
+          "cfe": {
+            "LightOperation": {
+              "base": 2,
+              "units_per_gas": 214
+            }
+          },
+          "cfei": {
+            "LightOperation": {
+              "base": 2,
+              "units_per_gas": 214
+            }
+          },
           "call": {
             "LightOperation": {
               "base": 144,
@@ -155,6 +182,12 @@ expression: json
             "LightOperation": {
               "base": 17,
               "units_per_gas": 790
+            }
+          },
+          "ed19": {
+            "LightOperation": {
+              "base": 3000,
+              "units_per_gas": 214
             }
           },
           "k256": {
@@ -264,12 +297,15 @@ expression: json
       },
       "base_asset_id": "0000000000000000000000000000000000000000000000000000000000000000",
       "block_gas_limit": 100000000,
+      "block_transaction_size_limit": 129024,
       "privileged_address": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   },
+  "genesis_state_transition_version": 16,
   "consensus": {
-    "PoA": {
-      "signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb"
+    "PoAV2": {
+      "genesis_signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb",
+      "signing_key_overrides": {}
     }
   }
 }

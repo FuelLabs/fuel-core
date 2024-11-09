@@ -102,6 +102,8 @@ This is a rough outline of what a contributor's workflow looks like:
 -   Write code, add test cases, and commit your work.
 -   Run tests and make sure all tests pass.
 -   If the PR contains any breaking changes, add the breaking label to your PR.
+-   Update `CHANGELOG.md` with a proper description of your changes.
+    -   If the change is breaking, please include a migration guide.
 -   If you are part of the FuelLabs Github org, please open a PR from the repository itself.
 -   Otherwise, push your changes to a branch in your fork of the repository and submit a pull request.
     -   Make sure mention the issue, which is created at step 1, in the commit message.
@@ -149,4 +151,37 @@ Multiple issues should use full syntax for each issue and separate by a comma, l
 
 ```md
 close #123, ref #456
+```
+
+### Releasing
+
+Each release should have its own new version of the `fuel_core_upgradable_executor::Executor` regardless of minor or major release. The version of the executor should grow without gaps.
+If publishing the release fails or the release is invalid and
+we don't plan to upgrade the network to use this release, 
+we still need to increase the version. 
+The network can easily skip releases by upgrading to the old state transition function.
+
+The `fuel_core_upgradable_executor` crate also contains the mapping of the crate 
+version to the executor's version(`CRATE_VERSIONS`). For each release, 
+we need to add a new entry there. The version of the crate uses `-` instead 
+of the `.` to avoid overriding old entries accidentally. 
+If you forgot to upgrade the version or add a new entry, the `version_check` test will fail.
+
+```rust
+/// This constant is used along with the `version_check` test.
+/// To avoid automatic bumping during release, the constant uses `-` instead of `.`.
+/// Each release should have its own new version of the executor.
+/// The version of the executor should grow without gaps.
+/// If publishing the release fails or the release is invalid, and
+/// we don't plan to upgrade the network to use this release,
+/// we still need to increase the version. The network can
+/// easily skip releases by upgrading to the old state transition function.
+pub const CRATE_VERSIONS: &'static [(
+    &'static str,
+    StateTransitionBytecodeVersion,
+)] = &[
+    ("0-26-0", StateTransitionBytecodeVersion::MIN),
+    ("0-27-0", 1),
+    ...
+];
 ```

@@ -36,6 +36,9 @@ use crate::{
 };
 use fuel_core_types::fuel_merkle::binary::Primitive;
 
+#[cfg(feature = "alloc")]
+use alloc::borrow::ToOwned;
+
 /// The `Merklized` blueprint builds the storage as a [`Plain`](super::plain::Plain)
 /// blueprint and maintains the binary merkle tree by the `Metadata` table.
 ///
@@ -174,12 +177,12 @@ where
         let key_encoder = KeyCodec::encode(key);
         let key_bytes = key_encoder.as_bytes();
         let encoded_value = ValueCodec::encode_as_value(value);
-        let prev = storage
-            .replace(key_bytes.as_ref(), column, encoded_value)?
-            .map(|value| {
-                ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
-            })
-            .transpose()?;
+        let prev =
+            KeyValueMutate::replace(storage, key_bytes.as_ref(), column, encoded_value)?
+                .map(|value| {
+                    ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
+                })
+                .transpose()?;
 
         if prev.is_some() {
             Self::remove(storage, key_bytes.as_ref(), column)?;
@@ -198,8 +201,7 @@ where
         let key_encoder = KeyCodec::encode(key);
         let key_bytes = key_encoder.as_bytes();
         Self::remove(storage, key_bytes.as_ref(), column)?;
-        let prev = storage
-            .take(key_bytes.as_ref(), column)?
+        let prev = KeyValueMutate::take(storage, key_bytes.as_ref(), column)?
             .map(|value| {
                 ValueCodec::decode_from_value(value).map_err(StorageError::Codec)
             })

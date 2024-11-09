@@ -172,6 +172,7 @@ mod tests {
         },
         kv_store::{
             KVItem,
+            KeyItem,
             KeyValueInspect,
             Value,
         },
@@ -205,6 +206,8 @@ mod tests {
         },
         state::{
             in_memory::memory_store::MemoryStore,
+            IterableKeyValueView,
+            KeyValueView,
             TransactableStorage,
         },
     };
@@ -551,6 +554,16 @@ mod tests {
         ) -> BoxedIter<KVItem> {
             unimplemented!()
         }
+
+        fn iter_store_keys(
+            &self,
+            _: Self::Column,
+            _: Option<&[u8]>,
+            _: Option<&[u8]>,
+            _: IterDirection,
+        ) -> BoxedIter<KeyItem> {
+            unimplemented!()
+        }
     }
 
     impl TransactableStorage<BlockHeight> for BrokenTransactions {
@@ -559,6 +572,21 @@ mod tests {
             _: Option<BlockHeight>,
             _: Changes,
         ) -> StorageResult<()> {
+            Err(anyhow::anyhow!("I refuse to work!").into())
+        }
+
+        fn view_at_height(
+            &self,
+            _: &BlockHeight,
+        ) -> StorageResult<KeyValueView<Self::Column>> {
+            Err(anyhow::anyhow!("I refuse to work!").into())
+        }
+
+        fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
+            Err(anyhow::anyhow!("I refuse to work!").into())
+        }
+
+        fn rollback_block_to(&self, _: &BlockHeight) -> StorageResult<()> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
     }

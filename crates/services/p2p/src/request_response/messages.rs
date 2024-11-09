@@ -1,6 +1,10 @@
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
-    services::p2p::Transactions,
+    fuel_tx::TxId,
+    services::p2p::{
+        NetworkableTransactionPool,
+        Transactions,
+    },
 };
 use libp2p::{
     request_response::OutboundFailure,
@@ -14,7 +18,10 @@ use std::ops::Range;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
-pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
+use crate::service::TaskError;
+
+pub(crate) const V1_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
+pub(crate) const V2_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.2";
 
 /// Max Size in Bytes of the Request Message
 #[cfg(test)]
@@ -24,20 +31,93 @@ pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>(
 pub enum RequestMessage {
     SealedHeaders(Range<u32>),
     Transactions(Range<u32>),
+    TxPoolAllTransactionsIds,
+    TxPoolFullTransactions(Vec<TxId>),
+}
+
+#[derive(Error, Debug, Clone, Serialize, Deserialize)]
+pub enum ResponseMessageErrorCode {
+    /// The peer sent an empty response using protocol `/fuel/req_res/0.0.1`
+    #[error("Empty response sent by peer using legacy protocol /fuel/req_res/0.0.1")]
+    ProtocolV1EmptyResponse = 0,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ResponseMessage {
+pub enum V1ResponseMessage {
     SealedHeaders(Option<Vec<SealedBlockHeader>>),
     Transactions(Option<Vec<Transactions>>),
+    TxPoolAllTransactionsIds(Option<Vec<TxId>>),
+    TxPoolFullTransactions(Option<Vec<Option<NetworkableTransactionPool>>>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum V2ResponseMessage {
+    SealedHeaders(Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>),
+    Transactions(Result<Vec<Transactions>, ResponseMessageErrorCode>),
+    TxPoolAllTransactionsIds(Result<Vec<TxId>, ResponseMessageErrorCode>),
+    TxPoolFullTransactions(
+        Result<Vec<Option<NetworkableTransactionPool>>, ResponseMessageErrorCode>,
+    ),
+}
+
+impl From<V1ResponseMessage> for V2ResponseMessage {
+    fn from(v1_response: V1ResponseMessage) -> Self {
+        match v1_response {
+            V1ResponseMessage::SealedHeaders(sealed_headers) => {
+                V2ResponseMessage::SealedHeaders(
+                    sealed_headers
+                        .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
+                )
+            }
+            V1ResponseMessage::Transactions(vec) => V2ResponseMessage::Transactions(
+                vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
+            ),
+            V1ResponseMessage::TxPoolAllTransactionsIds(vec) => {
+                V2ResponseMessage::TxPoolAllTransactionsIds(
+                    vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
+                )
+            }
+            V1ResponseMessage::TxPoolFullTransactions(vec) => {
+                V2ResponseMessage::TxPoolFullTransactions(
+                    vec.ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse),
+                )
+            }
+        }
+    }
+}
+
+impl From<V2ResponseMessage> for V1ResponseMessage {
+    fn from(response: V2ResponseMessage) -> Self {
+        match response {
+            V2ResponseMessage::SealedHeaders(sealed_headers) => {
+                V1ResponseMessage::SealedHeaders(sealed_headers.ok())
+            }
+            V2ResponseMessage::Transactions(transactions) => {
+                V1ResponseMessage::Transactions(transactions.ok())
+            }
+            V2ResponseMessage::TxPoolAllTransactionsIds(tx_ids) => {
+                V1ResponseMessage::TxPoolAllTransactionsIds(tx_ids.ok())
+            }
+            V2ResponseMessage::TxPoolFullTransactions(tx_pool) => {
+                V1ResponseMessage::TxPoolFullTransactions(tx_pool.ok())
+            }
+        }
+    }
 }
 
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
+// This type is more complex because it's used in tasks that need to select a peer to send the request and this
+// can cause errors where the peer is not defined.
+pub type OnResponseWithPeerSelection<T> =
+    oneshot::Sender<Result<(PeerId, Result<T, ResponseError>), TaskError>>;
 
 #[derive(Debug)]
 pub enum ResponseSender {
-    SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
-    Transactions(OnResponse<Option<Vec<Transactions>>>),
+    SealedHeaders(OnResponseWithPeerSelection<Option<Vec<SealedBlockHeader>>>),
+    Transactions(OnResponseWithPeerSelection<Option<Vec<Transactions>>>),
+    TransactionsFromPeer(OnResponse<Option<Vec<Transactions>>>),
+    TxPoolAllTransactionsIds(OnResponse<Option<Vec<TxId>>>),
+    TxPoolFullTransactions(OnResponse<Option<Vec<Option<NetworkableTransactionPool>>>>),
 }
 
 #[derive(Debug, Error)]

@@ -1,74 +1,98 @@
-use prometheus_client::{
-    metrics::{
-        counter::Counter,
-        histogram::Histogram,
-    },
-    registry::Registry,
-};
-use std::sync::OnceLock;
+use crate::global_registry;
+use prometheus_client::metrics::counter::Counter;
+use std::collections::HashMap;
 
+#[derive(Debug)]
 pub struct DatabaseMetrics {
-    pub registry: Registry,
     // For descriptions of each Counter, see the `new` function where each Counter/Histogram is initialized
     pub write_meter: Counter,
     pub read_meter: Counter,
-    pub bytes_written: Histogram,
-    pub bytes_read: Histogram,
+    pub bytes_written: Counter,
+    pub bytes_read: Counter,
+    pub database_commit_time: Counter,
+    pub columns_read_statistic: HashMap<u32, Counter>,
+    pub columns_write_statistic: HashMap<u32, Counter>,
 }
 
 impl DatabaseMetrics {
-    fn new() -> Self {
-        let registry = Registry::default();
+    pub fn new(name: &str, columns: &[(u32, String)]) -> Self {
+        let mut registry = global_registry().registry.lock();
+
+        let columns_read_statistic = columns
+            .iter()
+            .map(|(column_id, column_name)| {
+                let counter: Counter = Counter::default();
+                registry.register(
+                    format!("{}_Column_{}_Reads", name, column_name),
+                    format!(
+                        "Number of {} read operations on column {}",
+                        name, column_name
+                    ),
+                    counter.clone(),
+                );
+                (*column_id, counter)
+            })
+            .collect();
+
+        let columns_write_statistic = columns
+            .iter()
+            .map(|(column_id, column_name)| {
+                let counter: Counter = Counter::default();
+                registry.register(
+                    format!("{}_Column_{}_Writes", name, column_name),
+                    format!(
+                        "Number of {} write operations on column {}",
+                        name, column_name
+                    ),
+                    counter.clone(),
+                );
+                (*column_id, counter)
+            })
+            .collect();
 
         let write_meter: Counter = Counter::default();
         let read_meter: Counter = Counter::default();
+        let bytes_written = Counter::default();
+        let bytes_read = Counter::default();
+        let database_commit_time: Counter = Counter::default();
 
-        let bytes_written = Vec::new();
-        let bytes_written_histogram = Histogram::new(bytes_written.into_iter());
-
-        let bytes_read = Vec::new();
-        let bytes_read_histogram = Histogram::new(bytes_read.into_iter());
+        registry.register(
+            format!("{}_Database_Writes", name),
+            format!("Number of {} database write operations", name),
+            write_meter.clone(),
+        );
+        registry.register(
+            format!("{}_Database_Reads", name),
+            format!("Number of {} database read operations", name),
+            read_meter.clone(),
+        );
+        registry.register(
+            format!("{}_Bytes_Read", name),
+            format!("The total amount of read bytes from {}", name),
+            bytes_read.clone(),
+        );
+        registry.register(
+            format!("{}_Bytes_Written", name),
+            format!("The total amount of written bytes into {}", name),
+            bytes_written.clone(),
+        );
+        registry.register(
+            format!("{}_Database_Commit_Time", name),
+            format!(
+                "The total commit time of the {} database including all sub-databases",
+                name
+            ),
+            database_commit_time.clone(),
+        );
 
         DatabaseMetrics {
-            registry,
             write_meter,
             read_meter,
-            bytes_read: bytes_read_histogram,
-            bytes_written: bytes_written_histogram,
+            bytes_read,
+            bytes_written,
+            database_commit_time,
+            columns_read_statistic,
+            columns_write_statistic,
         }
     }
-}
-
-pub fn init(mut metrics: DatabaseMetrics) -> DatabaseMetrics {
-    metrics.registry.register(
-        "Database_Writes",
-        "Number of database write operations",
-        metrics.write_meter.clone(),
-    );
-    metrics.registry.register(
-        "Database_Reads",
-        "Number of database read operations",
-        metrics.read_meter.clone(),
-    );
-    metrics.registry.register(
-        "Bytes_Read",
-        "Histogram containing values of amount of bytes read per operation",
-        metrics.bytes_read.clone(),
-    );
-    metrics.registry.register(
-        "Bytes_Written",
-        "Histogram containing values of amount of bytes written per operation",
-        metrics.bytes_written.clone(),
-    );
-
-    metrics
-}
-
-static DATABASE_METRICS: OnceLock<DatabaseMetrics> = OnceLock::new();
-
-pub fn database_metrics() -> &'static DatabaseMetrics {
-    DATABASE_METRICS.get_or_init(|| {
-        let registry = DatabaseMetrics::new();
-        init(registry)
-    })
 }

@@ -1,0 +1,23 @@
+[package]
+name = "fuel-gas-price-algorithm"
+authors = { workspace = true }
+categories = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "fuel", "fuel-vm", "gas-price"]
+license = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+description = "Fuel gas price algorithm"
+
+[lib]
+name = "fuel_gas_price_algorithm"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+rand = { workspace = true }

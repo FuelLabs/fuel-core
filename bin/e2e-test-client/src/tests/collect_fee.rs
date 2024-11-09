@@ -1,15 +1,15 @@
 use crate::test_context::TestContext;
-use fuel_core_types::fuel_tx::{
-    AssetId,
-    Receipt,
-};
+use fuel_core_types::fuel_tx::Receipt;
 use libtest_mimic::Failed;
 
 // Alice collects tokens from coinbase contract.
 pub async fn collect_fee(ctx: &TestContext) -> Result<(), Failed> {
     let tx = ctx
         .alice
-        .collect_fee_tx(ctx.config.coinbase_contract_id, AssetId::BASE)
+        .collect_fee_tx(
+            ctx.config.coinbase_contract_id,
+            *ctx.alice.consensus_params.base_asset_id(),
+        )
         .await?;
     let tx_status = ctx.alice.client.submit_and_await_commit(&tx).await?;
 
@@ -32,7 +32,8 @@ pub async fn collect_fee(ctx: &TestContext) -> Result<(), Failed> {
         .iter()
         .any(|receipt| matches!(receipt, Receipt::TransferOut { .. }))
     {
-        return Err("collect fee hasn't produced `TransferOut` receipt".into())
+        let msg = format!("TransferOut receipt not found in receipts: {:?}", receipts);
+        return Err(msg.into())
     }
 
     Ok(())

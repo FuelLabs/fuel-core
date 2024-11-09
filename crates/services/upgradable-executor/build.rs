@@ -45,6 +45,9 @@ fn build_wasm() {
         bin_dir,
     ];
 
+    #[cfg(feature = "smt")]
+    args.extend(["--features".to_owned(), "smt".to_owned()]);
+
     let manifest_dir =
         env::var_os("CARGO_MANIFEST_DIR").expect("The manifest directory is not set");
     let manifest_path = Path::new(&manifest_dir);
@@ -62,9 +65,6 @@ fn build_wasm() {
         args.extend([
             "--version".to_owned(),
             crate_version.to_owned(),
-            // We can use the offline mode because it was already downloaded
-            // by the `build.rs` dependencies requirements.
-            "--offline".to_string(),
             "fuel-core-wasm-executor".to_string(),
         ]);
     }
@@ -76,6 +76,10 @@ fn build_wasm() {
     cargo.env("CARGO_PROFILE_RELEASE_OPT_LEVEL", "3");
     cargo.env("CARGO_PROFILE_RELEASE_STRIP", "symbols");
     cargo.env("CARGO_PROFILE_RELEASE_DEBUG", "false");
+    if env::var("CARGO_CFG_COVERAGE").is_ok() {
+        // wasm doesn't support coverage
+        cargo.env("CARGO_ENCODED_RUSTFLAGS", "");
+    }
     cargo.current_dir(project_root()).args(args);
 
     let output = cargo.output();

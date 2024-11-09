@@ -29,15 +29,8 @@ impl Counts {
         self.now.transactions += 1;
         self.max.transactions = self.max.transactions.max(self.now.transactions);
     }
-    pub fn add_transactions(&mut self, transactions: usize) {
-        self.now.transactions += transactions;
-        self.max.transactions = self.max.transactions.max(self.now.transactions);
-    }
     pub fn dec_transactions(&mut self) {
         self.now.transactions -= 1;
-    }
-    pub fn sub_transactions(&mut self, transactions: usize) {
-        self.now.transactions -= transactions;
     }
     pub fn inc_consensus(&mut self) {
         self.now.consensus += 1;

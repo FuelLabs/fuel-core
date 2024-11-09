@@ -1,15 +1,17 @@
 use crate::{
     fuel_core_graphql_api::{
-        database::ReadView,
+        query_costs,
         IntoApiResult,
     },
-    query::ContractQueryData,
-    schema::scalars::{
-        AssetId,
-        ContractId,
-        HexString,
-        Salt,
-        U64,
+    schema::{
+        scalars::{
+            AssetId,
+            ContractId,
+            HexString,
+            Salt,
+            U64,
+        },
+        ReadViewProvider,
     },
 };
 use async_graphql::{
@@ -21,10 +23,15 @@ use async_graphql::{
     InputObject,
     Object,
 };
+use fuel_core_storage::{
+    not_found,
+    tables::ContractsRawCode,
+};
 use fuel_core_types::{
     fuel_types,
     services::graphql_api,
 };
+use futures::StreamExt;
 
 pub struct Contract(pub(crate) fuel_types::ContractId);
 
@@ -40,18 +47,20 @@ impl Contract {
         self.0.into()
     }
 
+    #[graphql(complexity = "query_costs().bytecode_read")]
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         query
             .contract_bytecode(self.0)
             .map(HexString)
             .map_err(Into::into)
     }
 
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         query
-            .contract_salt(self.0)
+            .contract_salt(&self.0)
             .map(Into::into)
             .map_err(Into::into)
     }
@@ -62,13 +71,23 @@ pub struct ContractQuery;
 
 #[Object]
 impl ContractQuery {
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn contract(
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the Contract")] id: ContractId,
     ) -> async_graphql::Result<Option<Contract>> {
-        let query: &ReadView = ctx.data_unchecked();
-        query.contract_id(id.0).into_api_result()
+        let query = ctx.read_view()?;
+        query
+            .contract_exists(id.0)
+            .and_then(|contract_exists| {
+                if contract_exists {
+                    Ok(id.0)
+                } else {
+                    Err(not_found!(ContractsRawCode))
+                }
+            })
+            .into_api_result()
     }
 }
 
@@ -100,6 +119,7 @@ pub struct ContractBalanceQuery;
 
 #[Object]
 impl ContractBalanceQuery {
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn contract_balance(
         &self,
         ctx: &Context<'_>,
@@ -108,7 +128,7 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<ContractBalance> {
         let contract_id = contract.into();
         let asset_id = asset.into();
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
         query
             .contract_balance(contract_id, asset_id)
             .into_api_result()
@@ -124,6 +144,11 @@ impl ContractBalanceQuery {
             })
     }
 
+    #[graphql(complexity = "{\
+        query_costs().storage_iterator\
+        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity\
+    }")]
     async fn contract_balances(
         &self,
         ctx: &Context<'_>,
@@ -135,7 +160,7 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<
         Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>,
     > {
-        let query: &ReadView = ctx.data_unchecked();
+        let query = ctx.read_view()?;
 
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             let balances = query
@@ -144,7 +169,7 @@ impl ContractBalanceQuery {
                     (*start).map(Into::into),
                     direction,
                 )
-                .map(move |balance| {
+                .map(|balance| {
                     let balance = balance?;
                     let asset_id = balance.asset_id;
 

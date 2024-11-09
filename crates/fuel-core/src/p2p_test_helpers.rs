@@ -6,27 +6,39 @@ use crate::{
         CoinConfigGenerator,
     },
     combined_database::CombinedDatabase,
-    database::Database,
+    database::{
+        database_description::off_chain::OffChain,
+        Database,
+    },
+    fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     p2p::Multiaddr,
+    schema::tx::types::TransactionStatus,
     service::{
         Config,
         FuelService,
-        ServiceTrait,
     },
 };
-use fuel_core_chain_config::StateConfig;
+use fuel_core_chain_config::{
+    ConsensusConfig,
+    StateConfig,
+};
 use fuel_core_p2p::{
     codecs::postcard::PostcardCodec,
     network_service::FuelP2PService,
     p2p_service::FuelP2PEvent,
+    request_response::messages::{
+        RequestMessage,
+        V2ResponseMessage,
+    },
     service::to_message_acceptance,
 };
 use fuel_core_poa::{
     ports::BlockImporter,
+    signer::SignMode,
     Trigger,
 };
 use fuel_core_storage::{
-    tables::Transactions,
+    transactional::AtomicView,
     StorageAsRef,
 };
 use fuel_core_types::{
@@ -51,7 +63,6 @@ use fuel_core_types::{
     services::p2p::GossipsubMessageAcceptance,
 };
 use futures::StreamExt;
-use itertools::Itertools;
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -62,7 +73,6 @@ use std::{
         Index,
         IndexMut,
     },
-    sync::Arc,
     time::Duration,
 };
 use tokio::sync::broadcast;
@@ -130,13 +140,13 @@ pub struct NamedNodes(pub HashMap<String, Node>);
 
 impl Bootstrap {
     /// Spawn a bootstrap node.
-    pub async fn new(node_config: &Config) -> Self {
+    pub async fn new(node_config: &Config) -> anyhow::Result<Self> {
         let bootstrap_config = extract_p2p_config(node_config).await;
         let codec = PostcardCodec::new(bootstrap_config.max_block_size);
         let (sender, _) =
             broadcast::channel(bootstrap_config.reserved_nodes.len().saturating_add(1));
-        let mut bootstrap = FuelP2PService::new(sender, bootstrap_config, codec);
-        bootstrap.start().await.unwrap();
+        let mut bootstrap = FuelP2PService::new(sender, bootstrap_config, codec).await?;
+        bootstrap.start().await?;
 
         let listeners = bootstrap.multiaddrs();
         let (kill, mut shutdown) = broadcast::channel(1);
@@ -149,23 +159,37 @@ impl Bootstrap {
                     }
                     event = bootstrap.next_event() => {
                         // The bootstrap node only forwards data without validating it.
-                        if let Some(FuelP2PEvent::GossipsubMessage {
-                            peer_id,
-                            message_id,
-                            ..
-                        }) = event {
-                            bootstrap.report_message_validation_result(
-                                &message_id,
+                        match event {
+                            Some(FuelP2PEvent::GossipsubMessage {
                                 peer_id,
-                                to_message_acceptance(&GossipsubMessageAcceptance::Accept)
-                            )
+                                message_id,
+                                ..
+                            }) => {
+                                bootstrap.report_message_validation_result(
+                                    &message_id,
+                                    peer_id,
+                                    to_message_acceptance(&GossipsubMessageAcceptance::Accept)
+                                )
+                            },
+                            Some(FuelP2PEvent::InboundRequestMessage {
+                                request_id,
+                                request_message
+                            }) => {
+                                if request_message == RequestMessage::TxPoolAllTransactionsIds {
+                                    let _ = bootstrap.send_response_msg(
+                                        request_id,
+                                        V2ResponseMessage::TxPoolAllTransactionsIds(Ok(vec![])),
+                                    );
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
             }
         });
 
-        Bootstrap { listeners, kill }
+        Ok(Bootstrap { listeners, kill })
     }
 
     pub fn listeners(&self) -> Vec<Multiaddr> {
@@ -265,7 +289,9 @@ pub async fn make_nodes(
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         update_signing_key(&mut node_config, pub_key);
                     }
-                    Bootstrap::new(&node_config).await
+                    Bootstrap::new(&node_config)
+                        .await
+                        .expect("Failed to create bootstrap node")
                 }
             })
             .collect()
@@ -299,17 +325,27 @@ pub async fn make_nodes(
         {
             match bootstrap_type {
                 BootstrapType::BootstrapNodes => {
-                    node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
+                    node_config
+                        .p2p
+                        .as_mut()
+                        .unwrap()
+                        .bootstrap_nodes
+                        .clone_from(&boots);
                 }
                 BootstrapType::ReservedNodes => {
-                    node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
+                    node_config
+                        .p2p
+                        .as_mut()
+                        .unwrap()
+                        .reserved_nodes
+                        .clone_from(&boots);
                 }
             }
 
             node_config.utxo_validation = utxo_validation;
             update_signing_key(&mut node_config, Input::owner(&secret.public_key()));
 
-            node_config.consensus_key = Some(Secret::new(secret.into()));
+            node_config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
 
             test_txs = txs;
         }
@@ -341,10 +377,20 @@ pub async fn make_nodes(
 
             match bootstrap_type {
                 BootstrapType::BootstrapNodes => {
-                    node_config.p2p.as_mut().unwrap().bootstrap_nodes = boots.clone();
+                    node_config
+                        .p2p
+                        .as_mut()
+                        .unwrap()
+                        .bootstrap_nodes
+                        .clone_from(&boots);
                 }
                 BootstrapType::ReservedNodes => {
-                    node_config.p2p.as_mut().unwrap().reserved_nodes = boots.clone();
+                    node_config
+                        .p2p
+                        .as_mut()
+                        .unwrap()
+                        .reserved_nodes
+                        .clone_from(&boots);
                 }
             }
             update_signing_key(&mut node_config, pub_key);
@@ -364,8 +410,11 @@ fn update_signing_key(config: &mut Config, key: Address) {
 
     let mut chain_config = snapshot_reader.chain_config().clone();
     match &mut chain_config.consensus {
-        crate::chain_config::ConsensusConfig::PoA { signing_key } => {
+        ConsensusConfig::PoA { signing_key } => {
             *signing_key = key;
+        }
+        ConsensusConfig::PoAV2(poa) => {
+            poa.set_genesis_signing_key(key);
         }
     }
     config.snapshot_reader = snapshot_reader.clone().with_chain_config(chain_config)
@@ -380,7 +429,10 @@ pub fn make_config(name: String, mut node_config: Config) -> Config {
 
 pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
     let db = Database::in_memory();
-    let time_limit = Duration::from_secs(4);
+    // Test coverage slows down the execution a lot, and while running all tests,
+    // it may require a lot of time to start the node. We have a
+    // timeout here to watch infinity loops, so it is okay to use 120 seconds.
+    let time_limit = Duration::from_secs(120);
     let node = tokio::time::timeout(
         time_limit,
         FuelService::from_database(db.clone(), node_config),
@@ -411,7 +463,7 @@ async fn extract_p2p_config(node_config: &Config) -> fuel_core_p2p::config::Conf
         .unwrap();
     bootstrap_config
         .unwrap()
-        .init(db.on_chain().get_genesis().unwrap())
+        .init(db.on_chain().latest_view().unwrap().get_genesis().unwrap())
         .unwrap()
 }
 
@@ -441,24 +493,34 @@ impl Node {
 
     /// Wait for the node to reach consistency with the given transactions.
     pub async fn consistency(&mut self, txs: &HashMap<Bytes32, Transaction>) {
-        let Self { db, .. } = self;
-        let mut blocks = self.node.shared.block_importer.block_stream();
-        while !not_found_txs(db, txs).is_empty() {
-            tokio::select! {
-                result = blocks.next() => {
-                    result.unwrap();
-                }
-                _ = self.node.await_stop() => {
-                    panic!("Got a stop signal")
+        let db = self.node.shared.database.off_chain();
+        loop {
+            let not_found = not_found_txs(db, txs);
+
+            if not_found.is_empty() {
+                break;
+            }
+
+            let tx_id = not_found[0];
+            let mut wait_transaction =
+                self.node.transaction_status_change(tx_id).await.unwrap();
+
+            loop {
+                tokio::select! {
+                    result = wait_transaction.next() => {
+                        let status = result.unwrap().unwrap();
+
+                        if matches!(status, TransactionStatus::Failed { .. })
+                            || matches!(status, TransactionStatus::Success { .. }) {
+                            break
+                        }
+                    }
+                    _ = self.node.await_shutdown() => {
+                        panic!("Got a stop signal")
+                    }
                 }
             }
         }
-
-        let count = db
-            .all_transactions(None, None)
-            .filter_ok(|tx| tx.is_script())
-            .count();
-        assert_eq!(count, txs.len());
     }
 
     /// Wait for the node to reach consistency with the given transactions within 10 seconds.
@@ -483,20 +545,15 @@ impl Node {
     pub async fn insert_txs(&self) -> HashMap<Bytes32, Transaction> {
         let mut expected = HashMap::new();
         for tx in &self.test_txs {
-            let tx_result = self
-                .node
+            let tx_id = tx.id(&ChainId::default());
+            self.node
                 .shared
                 .txpool_shared_state
-                .insert(vec![Arc::new(tx.clone())])
+                .insert(tx.clone())
                 .await
-                .pop()
-                .unwrap()
                 .unwrap();
 
-            let tx = Transaction::from(tx_result.inserted.as_ref());
-            expected.insert(tx.id(&ChainId::default()), tx);
-
-            assert!(tx_result.removed.is_empty());
+            expected.insert(tx_id, tx.clone());
         }
         expected
     }
@@ -512,18 +569,25 @@ impl Node {
 
     /// Stop a node.
     pub async fn shutdown(&mut self) {
-        self.node.stop_and_await().await.unwrap();
+        self.node
+            .send_stop_signal_and_await_shutdown()
+            .await
+            .unwrap();
     }
 }
 
 fn not_found_txs<'iter>(
-    db: &'iter Database,
+    db: &'iter Database<OffChain>,
     txs: &'iter HashMap<Bytes32, Transaction>,
 ) -> Vec<TxId> {
     let mut not_found = vec![];
     txs.iter().for_each(|(id, tx)| {
         assert_eq!(id, &tx.id(&Default::default()));
-        if !db.storage::<Transactions>().contains_key(id).unwrap() {
+        let found = db
+            .storage::<TransactionStatuses>()
+            .contains_key(id)
+            .unwrap();
+        if !found {
             not_found.push(*id);
         }
     });

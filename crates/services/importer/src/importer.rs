@@ -3,9 +3,11 @@ use crate::{
         BlockVerifier,
         DatabaseTransaction,
         ImporterDatabase,
+        Transactional,
         Validator,
     },
     Config,
+    ImporterResult,
 };
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
@@ -23,6 +25,10 @@ use fuel_core_types::{
         primitives::BlockId,
         SealedBlock,
     },
+    fuel_tx::{
+        field::MintGasPrice,
+        Transaction,
+    },
     fuel_types::{
         BlockHeight,
         ChainId,
@@ -30,23 +36,22 @@ use fuel_core_types::{
     services::{
         block_importer::{
             ImportResult,
-            SharedImportResult,
             UncommittedResult,
         },
-        executor,
-        executor::ValidationResult,
+        executor::{
+            self,
+            ValidationResult,
+        },
         Uncommitted,
     },
 };
+use parking_lot::Mutex;
 use std::{
     ops::{
         Deref,
         DerefMut,
     },
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::Arc,
     time::{
         Instant,
         SystemTime,
@@ -55,9 +60,11 @@ use std::{
 };
 use tokio::sync::{
     broadcast,
-    oneshot,
+    OwnedSemaphorePermit,
+    Semaphore,
     TryAcquireError,
 };
+use tracing::warn;
 
 #[cfg(test)]
 pub mod test;
@@ -91,9 +98,13 @@ pub enum Error {
     ExecuteGenesis,
     #[display(fmt = "The database already contains the data at the height {_0}.")]
     NotUnique(BlockHeight),
+    #[display(fmt = "The previous block processing is not finished yet.")]
+    PreviousBlockProcessingNotFinished,
     #[from]
     StorageError(StorageError),
     UnsupportedConsensusVariant(String),
+    ActiveBlockResultsSemaphoreClosed(tokio::sync::AcquireError),
+    RayonTaskWasCanceled,
 }
 
 impl From<Error> for anyhow::Error {
@@ -114,12 +125,16 @@ pub struct Importer<D, E, V> {
     executor: Arc<E>,
     verifier: Arc<V>,
     chain_id: ChainId,
-    broadcast: broadcast::Sender<SharedImportResult>,
-    /// The channel to notify about the end of the processing of the previous block by all listeners.
-    /// It is used to await until all receivers of the notification process the `SharedImportResult`
-    /// before starting committing a new block.
-    prev_block_process_result: Mutex<Option<oneshot::Receiver<()>>>,
-    guard: tokio::sync::Semaphore,
+    broadcast: broadcast::Sender<ImporterResult>,
+    guard: Semaphore,
+    /// The semaphore tracks the number of unprocessed `SharedImportResult`.
+    /// If the number of unprocessed results is more than the threshold,
+    /// the block importer stops committing new blocks and waits for
+    /// the resolution of the previous one.
+    active_import_results: Arc<Semaphore>,
+    process_thread: rayon::ThreadPool,
+    /// Enables prometheus metrics for this fuel-service
+    metrics: bool,
 }
 
 impl<D, E, V> Importer<D, E, V> {
@@ -130,7 +145,15 @@ impl<D, E, V> Importer<D, E, V> {
         executor: E,
         verifier: V,
     ) -> Self {
-        let (broadcast, _) = broadcast::channel(config.max_block_notify_buffer);
+        // We use semaphore as a back pressure mechanism instead of a `broadcast`
+        // channel because we want to prevent committing to the database results
+        // that will not be processed.
+        let max_block_notify_buffer = config.max_block_notify_buffer;
+        let (broadcast, _) = broadcast::channel(max_block_notify_buffer);
+        let process_thread = rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .expect("Failed to create a thread pool for the block processing");
 
         Self {
             database: Mutex::new(database),
@@ -138,8 +161,10 @@ impl<D, E, V> Importer<D, E, V> {
             verifier: Arc::new(verifier),
             chain_id,
             broadcast,
-            prev_block_process_result: Default::default(),
-            guard: tokio::sync::Semaphore::new(1),
+            active_import_results: Arc::new(Semaphore::new(max_block_notify_buffer)),
+            guard: Semaphore::new(1),
+            process_thread,
+            metrics: config.metrics,
         }
     }
 
@@ -154,7 +179,7 @@ impl<D, E, V> Importer<D, E, V> {
         )
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<SharedImportResult> {
+    pub fn subscribe(&self) -> broadcast::Receiver<ImporterResult> {
         self.broadcast.subscribe()
     }
 
@@ -171,11 +196,28 @@ impl<D, E, V> Importer<D, E, V> {
             }
         }
     }
+
+    async fn async_run<OP, Output>(&self, op: OP) -> Result<Output, Error>
+    where
+        OP: FnOnce() -> Output,
+        OP: Send,
+        Output: Send,
+    {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        self.process_thread.scope_fifo(|_| {
+            let result = op();
+            let _ = sender.send(result);
+        });
+        let result = receiver.await.map_err(|_| Error::RayonTaskWasCanceled)?;
+        Ok(result)
+    }
 }
 
 impl<D, E, V> Importer<D, E, V>
 where
-    D: ImporterDatabase,
+    D: ImporterDatabase + Transactional,
+    E: Send + Sync,
+    V: Send + Sync,
 {
     /// The method commits the result of the block execution attaching the consensus data.
     /// It expects that the `UncommittedResult` contains the result of the block
@@ -195,24 +237,33 @@ where
         result: UncommittedResult<Changes>,
     ) -> Result<(), Error> {
         let _guard = self.lock()?;
-        // It is safe to unwrap the channel because we have the `_guard`.
-        let previous_block_result = self
-            .prev_block_process_result
-            .lock()
-            .expect("poisoned")
-            .take();
 
         // Await until all receivers of the notification process the result.
-        if let Some(channel) = previous_block_result {
-            let _ = channel.await;
-        }
-        let mut guard = self
-            .database
-            .try_lock()
-            .expect("Semaphore prevents concurrent access to the database");
-        let database = guard.deref_mut();
+        const TIMEOUT: u64 = 20;
+        let await_result = tokio::time::timeout(
+            tokio::time::Duration::from_secs(TIMEOUT),
+            self.active_import_results.clone().acquire_owned(),
+        )
+        .await;
 
-        self._commit_result(result, database)
+        let Ok(permit) = await_result else {
+            tracing::error!(
+                "The previous block processing \
+                    was not finished for {TIMEOUT} seconds."
+            );
+            return Err(Error::PreviousBlockProcessingNotFinished)
+        };
+        let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
+
+        self.async_run(move || {
+            let mut guard = self
+                .database
+                .try_lock()
+                .expect("Semaphore prevents concurrent access to the database");
+            let database = guard.deref_mut();
+            self._commit_result(result, permit, database)
+        })
+        .await?
     }
 
     /// The method commits the result of the block execution and notifies about a new imported block.
@@ -228,6 +279,7 @@ where
     fn _commit_result(
         &self,
         result: UncommittedResult<Changes>,
+        permit: OwnedSemaphorePermit,
         database: &mut D,
     ) -> Result<(), Error> {
         let (result, changes) = result.into();
@@ -282,6 +334,8 @@ where
         // execution without block itself.
         let expected_block_root = database.latest_block_root()?;
 
+        #[cfg(feature = "test-helpers")]
+        let changes_clone = changes.clone();
         let mut db_after_execution = database.storage_transaction(changes);
         let actual_block_root = db_after_execution.latest_block_root()?;
         if actual_block_root != expected_block_root {
@@ -297,25 +351,17 @@ where
 
         db_after_execution.commit()?;
 
-        // update the importer metrics after the block is successfully committed
-        importer_metrics()
-            .block_height
-            .set(*actual_next_height.deref() as i64);
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs_f64();
-        importer_metrics()
-            .latest_block_import_timestamp
-            .set(current_time);
-
+        if self.metrics {
+            Self::update_metrics(&result, &actual_next_height);
+        }
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
 
-        // The `tokio::sync::oneshot::Sender` is used to notify about the end
-        // of the processing of a new block by all listeners.
-        let (sender, receiver) = oneshot::channel();
-        let _ = self.broadcast.send(Arc::new(Awaiter::new(result, sender)));
-        *self.prev_block_process_result.lock().expect("poisoned") = Some(receiver);
+        let result = ImporterResult {
+            shared_result: Arc::new(Awaiter::new(result, permit)),
+            #[cfg(feature = "test-helpers")]
+            changes: Arc::new(changes_clone),
+        };
+        let _ = self.broadcast.send(result);
 
         Ok(())
     }
@@ -345,6 +391,52 @@ where
         importer_metrics()
             .latest_block_import_timestamp
             .set(current_time);
+    }
+
+    fn update_metrics(result: &ImportResult, actual_next_height: &BlockHeight) {
+        let (total_gas_used, total_fee): (u64, u64) = result
+            .tx_status
+            .iter()
+            .map(|tx_result| {
+                (*tx_result.result.total_gas(), *tx_result.result.total_fee())
+            })
+            .fold((0_u64, 0_u64), |(acc_gas, acc_fee), (used_gas, fee)| {
+                (
+                    acc_gas.saturating_add(used_gas),
+                    acc_fee.saturating_add(fee),
+                )
+            });
+        let maybe_last_tx = result.sealed_block.entity.transactions().last();
+        if let Some(last_tx) = maybe_last_tx {
+            if let Transaction::Mint(mint) = last_tx {
+                importer_metrics()
+                    .gas_price
+                    .set((*mint.gas_price()).try_into().unwrap_or(i64::MAX));
+            } else {
+                warn!("Last transaction is not a mint transaction");
+            }
+        }
+
+        let total_transactions = result.tx_status.len();
+        importer_metrics()
+            .block_height
+            .set(*actual_next_height.deref() as i64);
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64();
+        importer_metrics()
+            .latest_block_import_timestamp
+            .set(current_time);
+        importer_metrics()
+            .gas_per_block
+            .set(total_gas_used.try_into().unwrap_or(i64::MAX));
+        importer_metrics()
+            .fee_per_block
+            .set(total_fee.try_into().unwrap_or(i64::MAX));
+        importer_metrics()
+            .transactions_per_block
+            .set(total_transactions.try_into().unwrap_or(i64::MAX));
     }
 }
 
@@ -421,7 +513,7 @@ where
 
 impl<IDatabase, E, V> Importer<IDatabase, E, V>
 where
-    IDatabase: ImporterDatabase + 'static,
+    IDatabase: ImporterDatabase + Transactional + 'static,
     E: Validator + 'static,
     V: BlockVerifier + 'static,
 {
@@ -435,71 +527,68 @@ where
 
         let executor = self.executor.clone();
         let verifier = self.verifier.clone();
-        let (result, execute_time) = tokio_rayon::spawn_fifo(|| {
-            let start = Instant::now();
-            let result =
-                Self::verify_and_execute_block_inner(executor, verifier, sealed_block);
-            let execute_time = start.elapsed().as_secs_f64();
-            (result, execute_time)
-        })
-        .await;
+        let (result, execute_time) = self
+            .async_run(|| {
+                let start = Instant::now();
+                let result = Self::verify_and_execute_block_inner(
+                    executor,
+                    verifier,
+                    sealed_block,
+                );
+                let execute_time = start.elapsed().as_secs_f64();
+                (result, execute_time)
+            })
+            .await?;
 
         let result = result?;
 
-        // It is safe to unwrap the channel because we have the `_guard`.
-        let previous_block_result = self
-            .prev_block_process_result
-            .lock()
-            .expect("poisoned")
-            .take();
-
         // Await until all receivers of the notification process the result.
-        if let Some(channel) = previous_block_result {
-            let _ = channel.await;
-        }
+        const TIMEOUT: u64 = 20;
+        let await_result = tokio::time::timeout(
+            tokio::time::Duration::from_secs(TIMEOUT),
+            self.active_import_results.clone().acquire_owned(),
+        )
+        .await;
 
-        let start = Instant::now();
+        let Ok(permit) = await_result else {
+            tracing::error!(
+                "The previous block processing \
+                     was not finished for {TIMEOUT} seconds."
+            );
+            return Err(Error::PreviousBlockProcessingNotFinished)
+        };
+        let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
-        let mut guard = self
-            .database
-            .try_lock()
-            .expect("Semaphore prevents concurrent access to the database");
-        let database = guard.deref_mut();
-        let commit_result = self._commit_result(result, database);
-        let commit_time = start.elapsed().as_secs_f64();
-        let time = execute_time + commit_time;
+        let commit_result = self
+            .async_run(move || {
+                let mut guard = self
+                    .database
+                    .try_lock()
+                    .expect("Semaphore prevents concurrent access to the database");
+                let database = guard.deref_mut();
+
+                let start = Instant::now();
+                self._commit_result(result, permit, database).map(|_| start)
+            })
+            .await?;
+
+        let time = if let Ok(start_instant) = commit_result {
+            let commit_time = start_instant.elapsed().as_secs_f64();
+            execute_time + commit_time
+        } else {
+            execute_time
+        };
+
         importer_metrics().execute_and_commit_duration.observe(time);
         // return execution result
-        commit_result
-    }
-}
-
-trait ShouldBeUnique {
-    fn should_be_unique(&self, height: &BlockHeight) -> Result<(), Error>;
-}
-
-impl<T> ShouldBeUnique for Option<T> {
-    fn should_be_unique(&self, height: &BlockHeight) -> Result<(), Error> {
-        if self.is_some() {
-            Err(Error::NotUnique(*height))
-        } else {
-            Ok(())
-        }
+        commit_result.map(|_| ())
     }
 }
 
 /// The wrapper around `ImportResult` to notify about the end of the processing of a new block.
 struct Awaiter {
     result: ImportResult,
-    release_channel: Option<oneshot::Sender<()>>,
-}
-
-impl Drop for Awaiter {
-    fn drop(&mut self) {
-        if let Some(release_channel) = core::mem::take(&mut self.release_channel) {
-            let _ = release_channel.send(());
-        }
-    }
+    _permit: OwnedSemaphorePermit,
 }
 
 impl Deref for Awaiter {
@@ -511,10 +600,10 @@ impl Deref for Awaiter {
 }
 
 impl Awaiter {
-    fn new(result: ImportResult, channel: oneshot::Sender<()>) -> Self {
+    fn new(result: ImportResult, permit: OwnedSemaphorePermit) -> Self {
         Self {
             result,
-            release_channel: Some(channel),
+            _permit: permit,
         }
     }
 }

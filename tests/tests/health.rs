@@ -4,7 +4,6 @@ use fuel_core::{
     service::{
         Config,
         FuelService,
-        ServiceTrait,
     },
     types::fuel_tx::Transaction,
 };
@@ -29,15 +28,22 @@ async fn can_restart_node() {
 
     // start node once
     {
-        let database = Database::open_rocksdb(tmp_dir.path(), None).unwrap();
+        let database =
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                .unwrap();
         let first_startup = FuelService::from_database(database, Config::local_node())
             .await
             .unwrap();
-        first_startup.stop_and_await().await.unwrap();
+        first_startup
+            .send_stop_signal_and_await_shutdown()
+            .await
+            .unwrap();
     }
 
     {
-        let database = Database::open_rocksdb(tmp_dir.path(), None).unwrap();
+        let database =
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                .unwrap();
         let _second_startup = FuelService::from_database(database, Config::local_node())
             .await
             .unwrap();
@@ -51,7 +57,9 @@ async fn can_restart_node_with_transactions() {
 
     {
         // Given
-        let database = CombinedDatabase::open(tmp_dir.path(), capacity).unwrap();
+        let database =
+            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default(), 512)
+                .unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
             .await
             .unwrap();
@@ -63,12 +71,14 @@ async fn can_restart_node_with_transactions() {
             client.submit_and_await_commit(&tx).await.unwrap();
         }
 
-        service.stop_and_await().await.unwrap();
+        service.send_stop_signal_and_await_shutdown().await.unwrap();
     }
 
     {
         // When
-        let database = CombinedDatabase::open(tmp_dir.path(), capacity).unwrap();
+        let database =
+            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default(), 512)
+                .unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
             .await
             .unwrap();
@@ -76,6 +86,6 @@ async fn can_restart_node_with_transactions() {
 
         // Then
         client.health().await.unwrap();
-        service.stop_and_await().await.unwrap();
+        service.send_stop_signal_and_await_shutdown().await.unwrap();
     }
 }

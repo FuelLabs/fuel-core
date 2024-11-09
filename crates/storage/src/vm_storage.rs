@@ -51,13 +51,25 @@ use fuel_core_types::{
 use fuel_vm_private::{
     fuel_storage::StorageWrite,
     storage::{
+        BlobData,
         ContractsStateData,
         UploadedBytecodes,
     },
 };
 use itertools::Itertools;
 use primitive_types::U256;
+
+#[cfg(feature = "std")]
 use std::borrow::Cow;
+
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
+
+#[cfg(feature = "alloc")]
+use alloc::{
+    borrow::ToOwned,
+    vec::Vec,
+};
 
 /// Used to store metadata relevant during the execution of a transaction.
 #[derive(Clone, Debug)]
@@ -144,16 +156,24 @@ impl<D, M: Mappable> StorageMutate<M> for VmStorage<D>
 where
     D: StorageMutate<M, Error = StorageError>,
 {
-    fn insert(
+    fn insert(&mut self, key: &M::Key, value: &M::Value) -> Result<(), Self::Error> {
+        StorageMutate::<M>::insert(&mut self.database, key, value)
+    }
+
+    fn replace(
         &mut self,
         key: &M::Key,
         value: &M::Value,
     ) -> Result<Option<M::OwnedValue>, Self::Error> {
-        StorageMutate::<M>::insert(&mut self.database, key, value)
+        StorageMutate::<M>::replace(&mut self.database, key, value)
     }
 
-    fn remove(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
+    fn remove(&mut self, key: &M::Key) -> Result<(), Self::Error> {
         StorageMutate::<M>::remove(&mut self.database, key)
+    }
+
+    fn take(&mut self, key: &M::Key) -> Result<Option<M::OwnedValue>, Self::Error> {
+        StorageMutate::<M>::take(&mut self.database, key)
     }
 }
 
@@ -186,20 +206,20 @@ impl<D, M: Mappable> StorageWrite<M> for VmStorage<D>
 where
     D: StorageWrite<M, Error = StorageError>,
 {
-    fn write(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
-        StorageWrite::<M>::write(&mut self.database, key, buf)
+    fn write_bytes(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
+        StorageWrite::<M>::write_bytes(&mut self.database, key, buf)
     }
 
-    fn replace(
+    fn replace_bytes(
         &mut self,
         key: &M::Key,
         buf: &[u8],
     ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
-        StorageWrite::<M>::replace(&mut self.database, key, buf)
+        StorageWrite::<M>::replace_bytes(&mut self.database, key, buf)
     }
 
-    fn take(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
-        StorageWrite::<M>::take(&mut self.database, key)
+    fn take_bytes(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
+        StorageWrite::<M>::take_bytes(&mut self.database, key)
     }
 }
 
@@ -229,6 +249,9 @@ where
         + StorageMutate<ConsensusParametersVersions, Error = StorageError>
         + StorageMutate<StateTransitionBytecodeVersions, Error = StorageError>
         + StorageMutate<UploadedBytecodes, Error = StorageError>
+        + StorageWrite<BlobData, Error = StorageError>
+        + StorageSize<BlobData, Error = StorageError>
+        + StorageRead<BlobData, Error = StorageError>
         + VmStorageRequirements<Error = StorageError>,
 {
     type DataError = StorageError;
@@ -283,7 +306,7 @@ where
     ) -> Result<Option<ConsensusParameters>, Self::DataError> {
         self.database
             .storage_as_mut::<ConsensusParametersVersions>()
-            .insert(&version, consensus_parameters)
+            .replace(&version, consensus_parameters)
     }
 
     fn set_state_transition_bytecode(
@@ -293,7 +316,7 @@ where
     ) -> Result<Option<Bytes32>, Self::DataError> {
         self.database
             .storage_as_mut::<StateTransitionBytecodeVersions>()
-            .insert(&version, hash)
+            .replace(&version, hash)
     }
 
     fn deploy_contract_with_id(
@@ -355,7 +378,7 @@ where
             let option = self
                 .database
                 .storage::<ContractsState>()
-                .insert(&(contract_id, &key_bytes).into(), value)?;
+                .replace(&(contract_id, &key_bytes).into(), value)?;
 
             if option.is_none() {
                 found_unset = found_unset
@@ -386,7 +409,7 @@ where
             let option = self
                 .database
                 .storage::<ContractsState>()
-                .remove(&(contract_id, &key_bytes).into())?;
+                .take(&(contract_id, &key_bytes).into())?;
 
             found_unset |= option.is_none();
 

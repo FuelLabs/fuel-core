@@ -1,0 +1,44 @@
+[package]
+name = "fuel-core-compression"
+version = { workspace = true }
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = [
+  "blockchain",
+  "cryptocurrencies",
+  "fuel-core",
+  "fuel-client",
+  "fuel-compression",
+]
+license = { workspace = true }
+repository = { workspace = true }
+description = "Compression and decompression of Fuel blocks for DA storage."
+
+[dependencies]
+anyhow = { workspace = true }
+fuel-core-types = { workspace = true, features = [
+  "alloc",
+  "serde",
+  "da-compression",
+] }
+paste = { workspace = true }
+rand = { workspace = true, optional = true }
+serde = { version = "1.0", features = ["derive"] }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+
+[dev-dependencies]
+fuel-core-compression = { path = ".", features = ["test-helpers"] }
+postcard = { version = "1.0", features = ["use-std"] }
+proptest = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+test-helpers = [
+  "dep:rand",
+  "fuel-core-types/test-helpers",
+  "fuel-core-types/random",
+  "fuel-core-types/std",
+]

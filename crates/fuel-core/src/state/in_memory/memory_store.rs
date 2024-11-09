@@ -4,30 +4,40 @@ use crate::{
         DatabaseDescription,
     },
     state::{
+        in_memory::memory_view::MemoryView,
+        iterable_key_value_view::IterableKeyValueViewWrapper,
         IterDirection,
+        IterableKeyValueView,
+        KeyValueView,
         TransactableStorage,
     },
 };
 use fuel_core_storage::{
     iter::{
         iterator,
+        keys_iterator,
         BoxedIter,
         IntoBoxedIter,
         IterableStore,
     },
     kv_store::{
         KVItem,
+        KeyItem,
         KeyValueInspect,
         StorageColumn,
         Value,
         WriteOperation,
     },
-    transactional::Changes,
+    transactional::{
+        Changes,
+        ReferenceBytesKey,
+    },
     Result as StorageResult,
 };
 use std::{
     collections::BTreeMap,
     fmt::Debug,
+    ops::Deref,
     sync::Mutex,
 };
 
@@ -36,7 +46,7 @@ pub struct MemoryStore<Description = OnChain>
 where
     Description: DatabaseDescription,
 {
-    inner: Vec<Mutex<BTreeMap<Vec<u8>, Value>>>,
+    inner: Vec<Mutex<BTreeMap<ReferenceBytesKey, Value>>>,
     _marker: core::marker::PhantomData<Description>,
 }
 
@@ -59,6 +69,23 @@ impl<Description> MemoryStore<Description>
 where
     Description: DatabaseDescription,
 {
+    fn create_view(&self) -> MemoryView<Description> {
+        // Lock all tables at the same time to have consistent view.
+        let locks = self
+            .inner
+            .iter()
+            .map(|lock| lock.lock().expect("Poisoned lock"))
+            .collect::<Vec<_>>();
+        let inner = locks
+            .iter()
+            .map(|btree| btree.deref().clone())
+            .collect::<Vec<_>>();
+        MemoryView {
+            inner,
+            _marker: Default::default(),
+        }
+    }
+
     pub fn iter_all(
         &self,
         column: Description::Column,
@@ -68,12 +95,24 @@ where
     ) -> impl Iterator<Item = KVItem> {
         let lock = self.inner[column.as_usize()].lock().expect("poisoned");
 
-        fn clone<K: Clone, V: Clone>(kv: (&K, &V)) -> (K, V) {
-            (kv.0.clone(), kv.1.clone())
-        }
-
         let collection: Vec<_> = iterator(&lock, prefix, start, direction)
-            .map(clone)
+            .map(|(key, value)| (key.clone().into(), value.clone()))
+            .collect();
+
+        collection.into_iter().map(Ok)
+    }
+
+    pub fn iter_all_keys(
+        &self,
+        column: Description::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> impl Iterator<Item = KeyItem> {
+        let lock = self.inner[column.as_usize()].lock().expect("poisoned");
+
+        let collection: Vec<_> = keys_iterator(&lock, prefix, start, direction)
+            .map(|key| key.to_vec())
             .collect();
 
         collection.into_iter().map(Ok)
@@ -90,7 +129,7 @@ where
         Ok(self.inner[column.as_usize()]
             .lock()
             .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?
-            .get(&key.to_vec())
+            .get(key)
             .cloned())
     }
 }
@@ -107,6 +146,17 @@ where
         direction: IterDirection,
     ) -> BoxedIter<KVItem> {
         self.iter_all(column, prefix, start, direction).into_boxed()
+    }
+
+    fn iter_store_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+        self.iter_all_keys(column, prefix, start, direction)
+            .into_boxed()
     }
 }
 
@@ -136,6 +186,32 @@ where
             }
         }
         Ok(())
+    }
+
+    fn view_at_height(
+        &self,
+        _: &Description::Height,
+    ) -> StorageResult<KeyValueView<Self::Column>> {
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
+        Err(
+            anyhow::anyhow!("The historical view is not implemented for `MemoryStore`")
+                .into(),
+        )
+    }
+
+    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
+        let view = self.create_view();
+        Ok(IterableKeyValueView::from_storage(
+            IterableKeyValueViewWrapper::new(view),
+        ))
+    }
+
+    fn rollback_block_to(&self, _: &Description::Height) -> StorageResult<()> {
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
+        Err(
+            anyhow::anyhow!("The historical view is not implemented for `MemoryStore`")
+                .into(),
+        )
     }
 }
 

@@ -9,7 +9,10 @@ use std::{
 };
 
 use crate::{
-    abi::bridge::MessageSentFilter,
+    abi::bridge::{
+        MessageSentFilter,
+        TransactionFilter,
+    },
     service::state::EthSyncGap,
     test_helpers::{
         middleware::{
@@ -47,17 +50,47 @@ fn message(nonce: u64, block_number: u64, contract_address: u32, index: u64) -> 
         ..Default::default()
     };
     let mut log = message.into_log();
-    log.address = u32_to_contract(contract_address);
+    log.address = crate::test_helpers::convert_to_address(
+        u32_to_contract(contract_address).as_slice(),
+    );
     log.block_number = Some(block_number.into());
     log.log_index = Some(index.into());
     log
 }
 
-fn contracts(c: &[u32]) -> Vec<H160> {
+fn transactions(
+    nonce: RangeInclusive<u64>,
+    block_number: RangeInclusive<u64>,
+    contracts: RangeInclusive<u32>,
+) -> Vec<Log> {
+    let contracts = contracts.cycle();
+    nonce
+        .zip(block_number)
+        .zip(contracts)
+        .map(|((n, b), c)| transaction(n, b, c, 0))
+        .collect()
+}
+
+fn transaction(nonce: u64, block_number: u64, contract_address: u32, index: u64) -> Log {
+    let transaction = TransactionFilter {
+        nonce: U256::from_dec_str(nonce.to_string().as_str())
+            .expect("Should convert into U256"),
+        ..Default::default()
+    };
+    let mut log = transaction.into_log();
+    log.address = crate::test_helpers::convert_to_address(
+        u32_to_contract(contract_address).as_slice(),
+    );
+    log.block_number = Some(block_number.into());
+    log.log_index = Some(index.into());
+    log
+}
+
+fn contracts(c: &[u32]) -> Vec<Bytes20> {
     c.iter().copied().map(u32_to_contract).collect()
 }
 
-fn u32_to_contract(n: u32) -> H160 {
+fn u32_to_contract(n: u32) -> Bytes20 {
     let address: [u8; 20] = n
         .to_ne_bytes()
         .into_iter()
@@ -72,7 +105,7 @@ fn u32_to_contract(n: u32) -> H160 {
 #[derive(Clone, Debug)]
 struct Input {
     eth_gap: RangeInclusive<u64>,
-    c: Vec<H160>,
+    c: Vec<Bytes20>,
     m: Vec<Log>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,6 +143,28 @@ const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
     => Expected{ num_get_logs_calls: 2, m: messages(0..=10, 5..=10, 0..=0) }
     ; "Get messages from blocks 5..=10"
 )]
+#[test_case(
+    Input {
+        eth_gap: 0..=1,
+        c: contracts(&[0]),
+        m: {
+            let mut logs = messages(0..=0, 1..=1, 0..=0);
+            let txs = transactions(0..=0, 1..=1, 0..=0);
+            logs.extend(txs);
+            logs
+        },
+    }
+    => Expected{
+        num_get_logs_calls: 1,
+        m: {
+            let mut logs = messages(0..=0, 1..=1, 0..=0);
+            let txs = transactions(0..=0, 1..=1, 0..=0);
+            logs.extend(txs);
+            logs
+        }
+    }
+    ; "Filters MessageSent and Transaction events"
+)]
 #[tokio::test]
 async fn can_paginate_logs(input: Input) -> Expected {
     let Input {
@@ -137,7 +192,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
         &eth_node,
         DEFAULT_LOG_PAGE_SIZE,
     )
-    .map_ok(|(_, l)| l)
+    .map_ok(|logs| logs.logs)
     .try_concat()
     .await
     .unwrap();
@@ -148,32 +203,39 @@ async fn can_paginate_logs(input: Input) -> Expected {
 }
 
 #[test_case(vec![
-    Ok((1, messages_n(1, 0)))
+    Ok((1, 1, messages_n(1, 0)))
     ] => 1 ; "Can add single"
 )]
 #[test_case(vec![
-    Ok((3, messages_n(3, 0))),
-    Ok((4, messages_n(1, 4)))
+    Ok((3, 3, messages_n(3, 0))),
+    Ok((4, 4, messages_n(1, 4)))
     ] => 4 ; "Can add two"
 )]
 #[test_case(vec![
-    Ok((3, messages_n(3, 0))),
-    Ok((4, vec![]))
+    Ok((3, 3, messages_n(3, 0))),
+    Ok((4, 4, vec![]))
     ] => 4 ; "Can add empty"
 )]
 #[test_case(vec![
-    Ok((7, messages_n(3, 0))),
-    Ok((19, messages_n(1, 4))),
+    Ok((1, 7, messages_n(3, 0))),
+    Ok((8, 19, messages_n(1, 4))),
     Err(ProviderError::CustomError("".to_string()))
     ] => 19 ; "Still adds height when error"
 )]
 #[tokio::test]
+#[allow(clippy::type_complexity)]
 async fn test_da_height_updates(
-    stream: Vec<Result<(u64, Vec<Log>), ProviderError>>,
+    stream: Vec<Result<(u64, u64, Vec<Log>), ProviderError>>,
 ) -> u64 {
     let mut mock_db = crate::mock_db::MockDb::default();
 
-    let logs = futures::stream::iter(stream);
+    let logs = futures::stream::iter(stream).map(|result| {
+        result.map(|(start_height, last_height, logs)| DownloadedLogs {
+            start_height,
+            last_height,
+            logs,
+        })
+    });
 
     let _ = write_logs(&mut mock_db, logs).await;
 

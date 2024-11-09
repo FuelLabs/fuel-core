@@ -38,9 +38,7 @@ query {
           signature
         }
       }
-      transactions {
-        id
-      }
+      transactionIds
     }
     consensusParameters {
       version
@@ -77,12 +75,12 @@ query {
       }
       baseAssetId
       blockGasLimit
+      blockTransactionSizeLimit
       chainId
       gasCosts {
         version
         add
         addi
-        aloc
         and
         andi
         bal
@@ -90,7 +88,6 @@ query {
         bhsh
         burn
         cb
-        cfei
         cfsi
         div
         divi
@@ -168,6 +165,61 @@ query {
         wqmm
         xor
         xori
+        alocDependentCost {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        bsiz {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        bldd {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        cfe {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        cfeiDependentCost {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
         call {
           __typename
           ... on LightOperation {
@@ -202,6 +254,17 @@ query {
           }
         }
         csiz {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        ed19DependentCost {
           __typename
           ... on LightOperation {
             base

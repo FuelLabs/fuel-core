@@ -9,7 +9,7 @@ use crate::{
             TransactionStatuses,
         },
     },
-    graphql_api::ports::worker::OffChainDatabase,
+    graphql_api::ports::worker::OffChainDatabaseTransaction,
 };
 use fuel_core_storage::{
     kv_store::{
@@ -39,6 +39,7 @@ use statistic::StatisticTable;
 pub mod blocks;
 pub mod coins;
 pub mod contracts;
+pub mod da_compression;
 pub mod messages;
 pub mod old;
 pub mod statistic;
@@ -93,6 +94,25 @@ pub enum Column {
     /// Existence of a key in this column means that the message has been spent.
     /// See [`SpentMessages`](messages::SpentMessages)
     SpentMessages = 13,
+    /// DA compression and postcard serialized blocks.
+    /// See [`DaCompressedBlocks`](da_compression::DaCompressedBlocks)
+    DaCompressedBlocks = 14,
+    /// See [`DaCompressionTemporalRegistryIndex`](da_compression::DaCompressionTemporalRegistryIndex)
+    DaCompressionTemporalRegistryIndex = 15,
+    /// See [`DaCompressionTemporalRegistryTimestamps`](da_compression::DaCompressionTemporalRegistryTimestamps)
+    DaCompressionTemporalRegistryTimestamps = 16,
+    /// See [`DaCompressionTemporalRegistryEvictorCache`](da_compression::DaCompressionTemporalRegistryEvictorCache)
+    DaCompressionTemporalRegistryEvictorCache = 17,
+    /// See [`DaCompressionTemporalRegistryAddress`](da_compression::DaCompressionTemporalRegistryAddress)
+    DaCompressionTemporalRegistryAddress = 18,
+    /// See [`DaCompressionTemporalRegistryAssetId`](da_compression::DaCompressionTemporalRegistryAssetId)
+    DaCompressionTemporalRegistryAssetId = 19,
+    /// See [`DaCompressionTemporalRegistryContractId`](da_compression::DaCompressionTemporalRegistryContractId)
+    DaCompressionTemporalRegistryContractId = 20,
+    /// See [`DaCompressionTemporalRegistryScriptCode`](da_compression::DaCompressionTemporalRegistryScriptCode)
+    DaCompressionTemporalRegistryScriptCode = 21,
+    /// See [`DaCompressionTemporalRegistryPredicateCode`](da_compression::DaCompressionTemporalRegistryPredicateCode)
+    DaCompressionTemporalRegistryPredicateCode = 22,
 }
 
 impl Column {
@@ -106,8 +126,9 @@ impl Column {
 }
 
 impl StorageColumn for Column {
-    fn name(&self) -> &'static str {
-        self.into()
+    fn name(&self) -> String {
+        let str: &str = self.into();
+        str.to_string()
     }
 
     fn id(&self) -> u32 {
@@ -115,7 +136,7 @@ impl StorageColumn for Column {
     }
 }
 
-impl<S> OffChainDatabase for StorageTransaction<S>
+impl<S> OffChainDatabaseTransaction for StorageTransaction<S>
 where
     S: KeyValueInspect<Column = Column> + Modifiable,
     StorageTransaction<S>: StorageMutate<OwnedMessageIds, Error = StorageError>
@@ -128,7 +149,7 @@ where
         block_height: BlockHeight,
         tx_idx: u16,
         tx_id: &Bytes32,
-    ) -> StorageResult<Option<Bytes32>> {
+    ) -> StorageResult<()> {
         self.storage::<OwnedTransactions>().insert(
             &OwnedTransactionIndexKey::new(owner, block_height, tx_idx),
             tx_id,
@@ -140,7 +161,7 @@ where
         id: &Bytes32,
         status: TransactionStatus,
     ) -> StorageResult<Option<TransactionStatus>> {
-        self.storage::<TransactionStatuses>().insert(id, &status)
+        self.storage::<TransactionStatuses>().replace(id, &status)
     }
 
     fn increase_tx_count(&mut self, new_txs_count: u64) -> StorageResult<u64> {

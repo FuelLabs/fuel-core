@@ -66,11 +66,11 @@ fn block_importer_for_event(event: Event) -> BoxStream<SharedImportResult> {
         events: vec![event],
         source: Default::default(),
     });
-    let blocks: Vec<Arc<dyn Deref<Target = ImportResult> + Send + Sync>> = vec![block];
+    let blocks: Vec<SharedImportResult> = vec![block];
     tokio_stream::iter(blocks).into_boxed()
 }
 
-fn worker_task_with_block_importer_and_db<D: ports::worker::Transactional>(
+fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
     block_importer: BoxStream<SharedImportResult>,
     database: D,
 ) -> Task<MockTxPool, D> {
@@ -81,5 +81,7 @@ fn worker_task_with_block_importer_and_db<D: ports::worker::Transactional>(
         block_importer,
         database,
         chain_id,
+        da_compression_config: DaCompressionConfig::Disabled,
+        continue_on_error: false,
     }
 }

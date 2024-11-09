@@ -2,7 +2,6 @@ use fuel_core::service::{
     Config,
     DbType,
     FuelService,
-    ServiceTrait,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
@@ -10,6 +9,7 @@ use fuel_core_types::{
     fuel_tx::*,
 };
 use tempfile::TempDir;
+use test_helpers::send_graph_ql_query;
 
 #[tokio::test]
 async fn test_metrics_endpoint() {
@@ -42,7 +42,7 @@ async fn test_metrics_endpoint() {
         .submit_and_await_commit(
             &TransactionBuilder::script(script, vec![])
                 .script_gas_limit(1000000)
-                .add_random_fee_input()
+                .add_fee_input()
                 .finalize_as_transaction(),
         )
         .await
@@ -57,8 +57,40 @@ async fn test_metrics_endpoint() {
 
     let categories = resp.split('\n').collect::<Vec<&str>>();
 
-    srv.stop_and_await().await.unwrap();
+    srv.send_stop_signal_and_await_shutdown().await.unwrap();
 
     // Gt check exists because testing can be weird with multiple instances running
     assert!(categories.len() >= 16);
+}
+
+#[tokio::test]
+async fn metrics_include_real_query_name_instead_of_alias() {
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+
+    // Given
+    const ALIAS: &str = "bbbbblooooocks";
+    let query = r#"
+        query {
+          bbbbblooooocks: blocks(first: 1) {
+            nodes {
+              transactions {
+                id
+              }
+            }
+          }
+        }
+    "#;
+
+    // When
+    send_graph_ql_query(&url, query).await;
+
+    // Then
+    let resp = reqwest::get(format!("http://{}/v1/metrics", node.bound_address))
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(!resp.contains(ALIAS))
 }

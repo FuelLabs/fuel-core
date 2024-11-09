@@ -6,14 +6,372 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [2321](https://github.com/FuelLabs/fuel-core/pull/2321): New metrics for the TxPool:
+    - The size of transactions in the txpool (`txpool_tx_size`)
+    - The time spent by a transaction in the txpool in seconds (`txpool_tx_time_in_txpool_seconds`)
+    - The number of transactions in the txpool (`txpool_number_of_transactions`)
+    - The number of transactions pending verification before entering the txpool (`txpool_number_of_transactions_pending_verification`)
+    - The number of executable transactions in the txpool (`txpool_number_of_executable_transactions`)
+    - The time it took to select transactions for inclusion in a block in microseconds (`txpool_select_transactions_time_microseconds`)
+    - The time it took to insert a transaction in the txpool in microseconds (`transaction_insertion_time_in_thread_pool_microseconds`)
+- [2385](https://github.com/FuelLabs/fuel-core/pull/2385): Added new histogram buckets for some of the TxPool metrics, optimize the way they are collected.
+- [2347](https://github.com/FuelLabs/fuel-core/pull/2364): Add activity concept in order to protect against infinitely increasing DA gas price scenarios
+- [2362](https://github.com/FuelLabs/fuel-core/pull/2362): Added a new request_response protocol version `/fuel/req_res/0.0.2`. In comparison with `/fuel/req/0.0.1`, which returns an empty response when a request cannot be fulfilled, this version returns more meaningful error codes. Nodes still support the version `0.0.1` of the protocol to guarantee backward compatibility with fuel-core nodes. Empty responses received from nodes using the old protocol `/fuel/req/0.0.1` are automatically converted into an error `ProtocolV1EmptyResponse` with error code 0, which is also the only error code implemented. More specific error codes will be added in the future.
+- [2386](https://github.com/FuelLabs/fuel-core/pull/2386): Add a flag to define the maximum number of file descriptors that RocksDB can use. By default it's half of the OS limit.
+- [2376](https://github.com/FuelLabs/fuel-core/pull/2376): Add a way to fetch transactions in P2P without specifying a peer.
+
+### Fixed
+- [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.
+- [2369](https://github.com/FuelLabs/fuel-core/pull/2369): The `transaction_insertion_time_in_thread_pool_milliseconds` metric is properly collected.
+- [2413](https://github.com/FuelLabs/fuel-core/issues/2413): block production immediately errors if unable to lock the mutex.
+
+### Changed
+- [2378](https://github.com/FuelLabs/fuel-core/pull/2378): Use cached hash of the topic instead of calculating it on each publishing gossip message.
+
+## [Version 0.40.0]
+
+### Added
+- [2347](https://github.com/FuelLabs/fuel-core/pull/2347): Add GraphQL complexity histogram to metrics.
+- [2350](https://github.com/FuelLabs/fuel-core/pull/2350): Added a new CLI flag `graphql-number-of-threads` to limit the number of threads used by the GraphQL service. The default value is `2`, `0` enables the old behavior.
+- [2335](https://github.com/FuelLabs/fuel-core/pull/2335): Added CLI arguments for configuring GraphQL query costs.
+
+### Fixed
+- [2345](https://github.com/FuelLabs/fuel-core/pull/2345): In PoA increase priority of block creation timer trigger compare to txpool event management
+
+### Changed
+- [2334](https://github.com/FuelLabs/fuel-core/pull/2334): Prepare the GraphQL service for the switching to `async` methods.
+- [2310](https://github.com/FuelLabs/fuel-core/pull/2310): New metrics: "The gas prices used in a block" (`importer_gas_price_for_block`), "The total gas used in a block" (`importer_gas_per_block`), "The total fee (gwei) paid by transactions in a block" (`importer_fee_per_block_gwei`), "The total number of transactions in a block" (`importer_transactions_per_block`), P2P metrics for swarm and protocol.
+- [2340](https://github.com/FuelLabs/fuel-core/pull/2340): Avoid long heavy tasks in the GraphQL service by splitting work into batches.
+- [2341](https://github.com/FuelLabs/fuel-core/pull/2341): Updated all pagination queries to work with the async stream instead of the sync iterator.
+- [2350](https://github.com/FuelLabs/fuel-core/pull/2350): Limited the number of threads used by the GraphQL service.
+
+#### Breaking
+- [2310](https://github.com/FuelLabs/fuel-core/pull/2310): The `metrics` command-line parameter has been replaced with `disable-metrics`. Metrics are now enabled by default, with the option to disable them entirely or on a per-module basis.
+- [2341](https://github.com/FuelLabs/fuel-core/pull/2341): The maximum number of processed coins from the `coins_to_spend` query is limited to `max_inputs`.
+
+## [Version 0.39.0]
+
+### Added
+- [2324](https://github.com/FuelLabs/fuel-core/pull/2324): Added metrics for sync, async processor and for all GraphQL queries.
+- [2320](https://github.com/FuelLabs/fuel-core/pull/2320): Added new CLI flag `graphql-max-resolver-recursive-depth` to limit recursion within resolver. The default value it "1".
+
+
+## Fixed
+- [2320](https://github.com/FuelLabs/fuel-core/issues/2320): Prevent `/health` and `/v1/health` from being throttled by the concurrency limiter.
+- [2322](https://github.com/FuelLabs/fuel-core/issues/2322): Set the salt of genesis contracts to zero on execution.
+- [2324](https://github.com/FuelLabs/fuel-core/pull/2324): Ignore peer if we already are syncing transactions from it.
+
+#### Breaking
+
+- [2320](https://github.com/FuelLabs/fuel-core/pull/2330): Reject queries that are recursive during the resolution of the query.
+
 ### Changed
 
+#### Breaking
+- [2311](https://github.com/FuelLabs/fuel-core/pull/2311): Changed the text of the error returned by the executor if gas overflows.
+
+
+## [Version 0.38.0]
+
+### Added
+- [2309](https://github.com/FuelLabs/fuel-core/pull/2309): Limit number of concurrent queries to the graphql service.
+- [2216](https://github.com/FuelLabs/fuel-core/pull/2216): Add more function to the state and task of TxPoolV2 to handle the future interactions with others modules (PoA, BlockProducer, BlockImporter and P2P).
+- [2263](https://github.com/FuelLabs/fuel-core/pull/2263): Transaction pool is now included in all modules of the code it has requires modifications on different modules : 
+    - The PoA is now notify only when there is new transaction and not using the `tx_update_sender` anymore.
+    - The Pool transaction source for the executor is now locking the pool until the block production is finished.
+    - Reading operations on the pool is now asynchronous and it’s the less prioritized operation on the Pool, API has been updated accordingly.
+    - GasPrice is no more using async to allow the transactions verifications to not use async anymore 
+
+    We also added a lot of new configuration cli parameters to fine-tune TxPool configuration.
+    This PR also changes the way we are making the heavy work processor and a sync and asynchronous version is available in services folder (usable by anyone)
+    P2P now use separate heavy work processor for DB and TxPool interactions.
+
+### Removed
+- [2306](https://github.com/FuelLabs/fuel-core/pull/2306): Removed hack for genesis asset contract from the code.
+
+## [Version 0.37.1]
+
+### Fixed
+- [2304](https://github.com/FuelLabs/fuel-core/pull/2304): Add initialization for the genesis base asset contract.
+
+### Added
+- [2288](https://github.com/FuelLabs/fuel-core/pull/2288): Specify `V1Metadata` for `GasPriceServiceV1`.
+
+## [Version 0.37.0]
+
+### Added
+- [1609](https://github.com/FuelLabs/fuel-core/pull/1609): Add DA compression support. Compressed blocks are stored in the offchain database when blocks are produced, and can be fetched using the GraphQL API.
+- [2290](https://github.com/FuelLabs/fuel-core/pull/2290): Added a new CLI argument `--graphql-max-directives`. The default value is `10`.
+- [2195](https://github.com/FuelLabs/fuel-core/pull/2195): Added enforcement of the limit on the size of the L2 transactions per block according to the `block_transaction_size_limit` parameter.
+- [2131](https://github.com/FuelLabs/fuel-core/pull/2131): Add flow in TxPool in order to ask to newly connected peers to share their transaction pool
+- [2182](https://github.com/FuelLabs/fuel-core/pull/2151): Limit number of transactions that can be fetched via TxSource::next
+- [2189](https://github.com/FuelLabs/fuel-core/pull/2151): Select next DA height to never include more than u16::MAX -1 transactions from L1.
+- [2265](https://github.com/FuelLabs/fuel-core/pull/2265): Integrate Block Committer API for DA Block Costs.
+- [2162](https://github.com/FuelLabs/fuel-core/pull/2162): Pool structure with dependencies, etc.. for the next transaction pool module. Also adds insertion/verification process in PoolV2 and tests refactoring
+- [2280](https://github.com/FuelLabs/fuel-core/pull/2280): Allow comma separated relayer addresses in cli
+- [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Support blobs in the predicates.
+- [2300](https://github.com/FuelLabs/fuel-core/pull/2300): Added new function to `fuel-core-client` for checking whether a blob exists.
+
+### Changed
+
+#### Breaking
+- [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Anyone who wants to participate in the transaction broadcasting via p2p must upgrade to support new predicates on the TxPool level.
+- [2299](https://github.com/FuelLabs/fuel-core/pull/2299): Upgraded `fuel-vm` to `0.58.0`. More information in the [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.58.0).
+- [2276](https://github.com/FuelLabs/fuel-core/pull/2276): Changed how complexity for blocks is calculated. The default complexity now is 80_000. All queries that somehow touch the block header now are more expensive.
+- [2290](https://github.com/FuelLabs/fuel-core/pull/2290): Added a new GraphQL limit on number of `directives`. The default value is `10`.
+- [2206](https://github.com/FuelLabs/fuel-core/pull/2206): Use timestamp of last block when dry running transactions.
+- [2153](https://github.com/FuelLabs/fuel-core/pull/2153): Updated default gas costs for the local testnet configuration to match `fuel-core 0.35.0`.
+
+## [Version 0.36.0]
+
+### Added
+- [2135](https://github.com/FuelLabs/fuel-core/pull/2135): Added metrics logging for number of blocks served over the p2p req/res protocol.
+- [2151](https://github.com/FuelLabs/fuel-core/pull/2151): Added limitations on gas used during dry_run in API.
+- [2188](https://github.com/FuelLabs/fuel-core/pull/2188): Added the new variant `V2` for the `ConsensusParameters` which contains the new `block_transaction_size_limit` parameter.
+- [2163](https://github.com/FuelLabs/fuel-core/pull/2163): Added runnable task for fetching block committer data.
+- [2204](https://github.com/FuelLabs/fuel-core/pull/2204): Added `dnsaddr` resolution for TLD without suffixes.
+
+### Changed
+
+#### Breaking
+- [2199](https://github.com/FuelLabs/fuel-core/pull/2199): Applying several breaking changes to the WASM interface from backlog:
+  - Get the module to execute WASM byte code from the storage first, an fallback to the built-in version in the case of the `FUEL_ALWAYS_USE_WASM`.
+  - Added `host_v1` with a new `peek_next_txs_size` method, that accepts `tx_number_limit` and `size_limit`.
+  - Added new variant of the return type to pass the validation result. It removes block serialization and deserialization and should improve performance.
+  - Added a V1 execution result type that uses `JSONError` instead of postcard serialized error. It adds flexibility of how variants of the error can be managed. More information about it in https://github.com/FuelLabs/fuel-vm/issues/797. The change also moves `TooManyOutputs` error to the top. It shows that `JSONError` works as expected.
+- [2145](https://github.com/FuelLabs/fuel-core/pull/2145): feat: Introduce time port in PoA service.
+- [2155](https://github.com/FuelLabs/fuel-core/pull/2155): Added trait declaration for block committer data
+- [2142](https://github.com/FuelLabs/fuel-core/pull/2142): Added benchmarks for varied forms of db lookups to assist in optimizations.
+- [2158](https://github.com/FuelLabs/fuel-core/pull/2158): Log the public address of the signing key, if it is specified
+- [2188](https://github.com/FuelLabs/fuel-core/pull/2188): Upgraded the `fuel-vm` to `0.57.0`. More information in the [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.57.0).
+
+## [Version 0.35.0]
+
+### Added
+- [2122](https://github.com/FuelLabs/fuel-core/pull/2122): Changed the relayer URI address to be a vector and use a quorum provider. The `relayer` argument now supports multiple URLs to fetch information from different sources.
+- [2119](https://github.com/FuelLabs/fuel-core/pull/2119): GraphQL query fields for retrieving information about upgrades.
+
+### Changed
+- [2113](https://github.com/FuelLabs/fuel-core/pull/2113): Modify the way the gas price service and shared algo is initialized to have some default value based on best guess instead of `None`, and initialize service before graphql.
+- [2112](https://github.com/FuelLabs/fuel-core/pull/2112): Alter the way the sealed blocks are fetched with a given height.
+- [2120](https://github.com/FuelLabs/fuel-core/pull/2120): Added `submitAndAwaitStatus` subscription endpoint which returns the `SubmittedStatus` after the transaction is submitted as well as the `TransactionStatus` subscription.
+- [2115](https://github.com/FuelLabs/fuel-core/pull/2115): Add test for `SignMode` `is_available` method.
+- [2124](https://github.com/FuelLabs/fuel-core/pull/2124): Generalize the way p2p req/res protocol handles requests.
+
+#### Breaking
+
+- [2040](https://github.com/FuelLabs/fuel-core/pull/2040): Added full `no_std` support state transition related crates. The crates now require the "alloc" feature to be enabled. Following crates are affected:
+  - `fuel-core-types`
+  - `fuel-core-storage`
+  - `fuel-core-executor`
+- [2116](https://github.com/FuelLabs/fuel-core/pull/2116): Replace `H160` in config and cli options of relayer by `Bytes20` of `fuel-types`
+
+### Fixed
+- [2134](https://github.com/FuelLabs/fuel-core/pull/2134): Perform RecoveryID normalization for AWS KMS -generated signatures.
+
+## [Version 0.34.0]
+
+### Added
+- [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Add support for AWS KMS signing for the PoA consensus module. The new key can be specified with `--consensus-aws-kms AWS_KEY_ARN`.
+- [2092](https://github.com/FuelLabs/fuel-core/pull/2092): Allow iterating by keys in rocksdb, and other storages.
+- [2096](https://github.com/FuelLabs/fuel-core/pull/2096): GraphQL query field to fetch blob byte code by its blob ID.
+
+### Changed
+- [2106](https://github.com/FuelLabs/fuel-core/pull/2106): Remove deadline clock in POA and replace with tokio time functions.
+
+- [2035](https://github.com/FuelLabs/fuel-core/pull/2035): Small code optimizations.
+    - The optimized code specifies the capacity when initializing the HashSet, avoiding potential multiple reallocations of memory during element insertion.
+    - The optimized code uses the return value of HashSet::insert to check if the insertion was successful. If the insertion fails (i.e., the element already exists), it returns an error. This reduces one lookup operation.
+    - The optimized code simplifies the initialization logic of exclude by using the Option::map_or_else method.
+
+#### Breaking
+- [2051](https://github.com/FuelLabs/fuel-core/pull/2051): Misdocumented `CONSENSUS_KEY` environ variable has been removed, use `CONSENSUS_KEY_SECRET` instead. Also raises MSRV to `1.79.0`.
+
+### Fixed
+
+- [2106](https://github.com/FuelLabs/fuel-core/pull/2106): Handle the case when nodes with overriding start on the fresh network.
+- [2105](https://github.com/FuelLabs/fuel-core/pull/2105): Fixed the rollback functionality to work with empty gas price database.
+
+## [Version 0.33.0]
+
+### Added
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Added support for predefined blocks provided via the filesystem.
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Added `--predefined-blocks-path` CLI argument to pass the path to the predefined blocks.
+- [2081](https://github.com/FuelLabs/fuel-core/pull/2081): Enable producer to include predefined blocks.
+- [2079](https://github.com/FuelLabs/fuel-core/pull/2079): Open unknown columns in the RocksDB for forward compatibility.
+
+### Changed
+- [2076](https://github.com/FuelLabs/fuel-core/pull/2076): Replace usages of `iter_all` with `iter_all_keys` where necessary.
+
+#### Breaking
+- [2080](https://github.com/FuelLabs/fuel-core/pull/2080): Reject Upgrade txs with invalid wasm on txpool level.
+- [2082](https://github.com/FuelLabs/fuel-core/pull/2088): Move `TxPoolError` from `fuel-core-types` to `fuel-core-txpool`.
+- [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Added support for PoA key rotation.
+- [2086](https://github.com/FuelLabs/fuel-core/pull/2086): Support overriding of the non consensus parameters in the chain config.
+
+### Fixed
+
+- [2094](https://github.com/FuelLabs/fuel-core/pull/2094): Fixed bug in rollback logic because of wrong ordering of modifications.
+
+## [Version 0.32.1]
+
+### Added
+- [2061](https://github.com/FuelLabs/fuel-core/pull/2061): Allow querying filled transaction body from the status.
+
+### Changed
+- [2067](https://github.com/FuelLabs/fuel-core/pull/2067): Return error from TxPool level if the `BlobId` is known.
+- [2064](https://github.com/FuelLabs/fuel-core/pull/2064): Allow gas price metadata values to be overridden with config
+
+### Fixes
+- [2060](https://github.com/FuelLabs/fuel-core/pull/2060): Use `min-gas-price` as a starting point if `start-gas-price` is zero.
+- [2059](https://github.com/FuelLabs/fuel-core/pull/2059): Remove unwrap that is breaking backwards compatibility
+- [2063](https://github.com/FuelLabs/fuel-core/pull/2063): Don't use historical view during dry run.
+
+## [Version 0.32.0]
+
+### Added
+- [1983](https://github.com/FuelLabs/fuel-core/pull/1983): Add adapters for gas price service for accessing database values
+
+### Breaking
+- [2048](https://github.com/FuelLabs/fuel-core/pull/2048): Disable SMT for `ContractsAssets` and `ContractsState` for the production mode of the `fuel-core`. The SMT still is used in benchmarks and tests.
+- [#1988](https://github.com/FuelLabs/fuel-core/pull/1988): Updated `fuel-vm` to `0.56.0` ([release notes](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.55.0)). Adds Blob transaction support.
+- [2025](https://github.com/FuelLabs/fuel-core/pull/2025): Add new V0 algorithm for gas price to services.
+    This change includes new flags for the CLI:
+        - "starting-gas-price" - the starting gas price for the gas price algorithm
+        - "gas-price-change-percent" - the percent change for each gas price update
+        - "gas-price-threshold-percent" - the threshold percent for determining if the gas price will be increase or decreased
+    And the following CLI flags are serving a new purpose
+        - "min-gas-price" - the minimum gas price that the gas price algorithm will return
+- [2045](https://github.com/FuelLabs/fuel-core/pull/2045): Include withdrawal message only if transaction is executed successfully.
+- [2041](https://github.com/FuelLabs/fuel-core/pull/2041): Add code for startup of the gas price algorithm updater so 
+    the gas price db on startup is always in sync with the on chain db
+
+## [Version 0.31.0]
+
+### Added
+- [#2014](https://github.com/FuelLabs/fuel-core/pull/2014): Added a separate thread for the block importer.
+- [#2013](https://github.com/FuelLabs/fuel-core/pull/2013): Added a separate thread to process P2P database lookups.
+- [#2004](https://github.com/FuelLabs/fuel-core/pull/2004): Added new CLI argument `continue-services-on-error` to control internal flow of services.
+- [#2004](https://github.com/FuelLabs/fuel-core/pull/2004): Added handling of incorrect shutdown of the off-chain GraphQL worker by using state rewind feature.
+- [#2007](https://github.com/FuelLabs/fuel-core/pull/2007): Improved metrics:
+  - Added database metrics per column.
+  - Added statistic about commit time of each database.
+  - Refactored how metrics are registered: Now, we use only one register shared between all metrics. This global register is used to encode all metrics.
+- [#1996](https://github.com/FuelLabs/fuel-core/pull/1996): Added support for rollback command when state rewind feature is enabled. The command allows the rollback of the state of the blockchain several blocks behind until the end of the historical window. The default historical window it 7 days.
+- [#1996](https://github.com/FuelLabs/fuel-core/pull/1996): Added support for the state rewind feature. The feature allows the execution of the blocks in the past and the same execution results to be received. Together with forkless upgrades, execution of any block from the past is possible if historical data exist for the target block height.
+- [#1994](https://github.com/FuelLabs/fuel-core/pull/1994): Added the actual implementation for the `AtomicView::latest_view`.
+- [#1972](https://github.com/FuelLabs/fuel-core/pull/1972): Implement `AlgorithmUpdater` for `GasPriceService`
+- [#1948](https://github.com/FuelLabs/fuel-core/pull/1948): Add new `AlgorithmV1` and `AlgorithmUpdaterV1` for the gas price. Include tools for analysis
+- [#1676](https://github.com/FuelLabs/fuel-core/pull/1676): Added new CLI arguments:
+    - `graphql-max-depth`
+    - `graphql-max-complexity`
+    - `graphql-max-recursive-depth`
+
+### Changed
+- [#2015](https://github.com/FuelLabs/fuel-core/pull/2015): Small fixes for the database:
+  - Fixed the name for historical columns - Metrics was working incorrectly for historical columns.
+  - Added recommended setting for the RocksDB - The source of recommendation is official documentation https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#other-general-options.
+  - Removed repairing since it could corrupt the database if fails - Several users reported about the corrupted state of the database after having a "Too many descriptors" error where in logs, repairing of the database also failed with this error creating a `lost` folder.
+- [#2010](https://github.com/FuelLabs/fuel-core/pull/2010): Updated the block importer to allow more blocks to be in the queue. It improves synchronization speed and mitigate the impact of other services on synchronization speed.
+- [#2006](https://github.com/FuelLabs/fuel-core/pull/2006): Process block importer events first under P2P pressure.
+- [#2002](https://github.com/FuelLabs/fuel-core/pull/2002): Adapted the block producer to react to checked transactions that were using another version of consensus parameters during validation in the TxPool. After an upgrade of the consensus parameters of the network, TxPool could store invalid `Checked` transactions. This change fixes that by tracking the version that was used to validate the transactions.
+- [#1999](https://github.com/FuelLabs/fuel-core/pull/1999): Minimize the number of panics in the codebase.
+- [#1990](https://github.com/FuelLabs/fuel-core/pull/1990): Use latest view for mutate GraphQL queries after modification of the node.
+- [#1992](https://github.com/FuelLabs/fuel-core/pull/1992): Parse multiple relayer contracts, `RELAYER-V2-LISTENING-CONTRACTS` env variable using a `,` delimiter.
+- [#1980](https://github.com/FuelLabs/fuel-core/pull/1980): Add `Transaction` to relayer 's event filter
+
+#### Breaking
+- [#2012](https://github.com/FuelLabs/fuel-core/pull/2012): Bumped the `fuel-vm` to `0.55.0` release. More about the change [here](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.55.0).
+- [#2001](https://github.com/FuelLabs/fuel-core/pull/2001): Prevent GraphQL query body to be huge and cause OOM. The default body size is `1MB`. The limit can be changed by the `graphql-request-body-bytes-limit` CLI argument.
+- [#1991](https://github.com/FuelLabs/fuel-core/pull/1991): Prepare the database to use different types than `Database` for atomic view.
+- [#1989](https://github.com/FuelLabs/fuel-core/pull/1989): Extract `HistoricalView` trait from the `AtomicView`.
+- [#1676](https://github.com/FuelLabs/fuel-core/pull/1676): New `fuel-core-client` is incompatible with the old `fuel-core` because of two requested new fields.
+- [#1676](https://github.com/FuelLabs/fuel-core/pull/1676): Changed default value for `api-request-timeout` to be `30s`.
+- [#1676](https://github.com/FuelLabs/fuel-core/pull/1676): Now, GraphQL API has complexity and depth limitations on the queries. The default complexity limit is `20000`. It is ~50 blocks per request with transaction IDs and ~2-5 full blocks.
+
+### Fixed
+- [#2000](https://github.com/FuelLabs/fuel-core/pull/2000): Use correct query name in metrics for aliased queries.
+
+## [Version 0.30.0]
+
+### Added
+- [#1975](https://github.com/FuelLabs/fuel-core/pull/1975): Added `DependentCost` benchmarks for the `cfe` and `cfei` opcodes.
+- [#1975](https://github.com/FuelLabs/fuel-core/pull/1975): Added `DependentCost` for the `cfe` opcode to the `GasCosts` endpoint.
+- [#1974](https://github.com/FuelLabs/fuel-core/pull/1974): Optimized the work of `InMemoryTransaction` for lookups and empty insertion.
+
+### Changed
+- [#1973](https://github.com/FuelLabs/fuel-core/pull/1973): Updated VM initialization benchmark to include many inputs and outputs.
+
+#### Breaking
+- [#1975](https://github.com/FuelLabs/fuel-core/pull/1975): Updated gas prices according to new release.
+- [#1975](https://github.com/FuelLabs/fuel-core/pull/1975): Changed `GasCosts` endpoint to return `DependentCost` for the `cfei` opcode via `cfeiDependentCost`.
+- [#1975](https://github.com/FuelLabs/fuel-core/pull/1975): Use `fuel-vm 0.54.0`. More information in the [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.54.0).
+
+## [Version 0.29.0]
+
+### Added
+- [#1889](https://github.com/FuelLabs/fuel-core/pull/1889): Add new `FuelGasPriceProvider` that receives the gas price algorithm from a `GasPriceService`
+
+### Changed
+- [#1942](https://github.com/FuelLabs/fuel-core/pull/1942): Sequential relayer's commits.
+- [#1952](https://github.com/FuelLabs/fuel-core/pull/1952): Change tip sorting to ratio between tip and max gas sorting in txpool
+- [#1960](https://github.com/FuelLabs/fuel-core/pull/1960): Update fuel-vm to v0.53.0.
+- [#1964](https://github.com/FuelLabs/fuel-core/pull/1964): Add `creation_instant` as second sort key in tx pool
+
+### Fixed
+- [#1962](https://github.com/FuelLabs/fuel-core/pull/1962): Fixes the error message for incorrect keypair's path.
+- [#1950](https://github.com/FuelLabs/fuel-core/pull/1950): Fix cursor `BlockHeight` encoding in `SortedTXCursor`
+
+## [Version 0.28.0]
+
+### Changed
+- [#1934](https://github.com/FuelLabs/fuel-core/pull/1934): Updated benchmark for the `aloc` opcode to be `DependentCost`. Updated `vm_initialization` benchmark to exclude growing of memory(It is handled by VM reuse).
+- [#1916](https://github.com/FuelLabs/fuel-core/pull/1916): Speed up synchronisation of the blocks for the `fuel-core-sync` service.
+- [#1888](https://github.com/FuelLabs/fuel-core/pull/1888): optimization: Reuse VM memory across executions.
+
+#### Breaking
+
+- [#1934](https://github.com/FuelLabs/fuel-core/pull/1934): Changed `GasCosts` endpoint to return `DependentCost` for the `aloc` opcode via `alocDependentCost`.
+- [#1934](https://github.com/FuelLabs/fuel-core/pull/1934): Updated default gas costs for the local testnet configuration. All opcodes became cheaper.
+- [#1924](https://github.com/FuelLabs/fuel-core/pull/1924): `dry_run_opt` has new `gas_price: Option<u64>` argument
+- [#1888](https://github.com/FuelLabs/fuel-core/pull/1888): Upgraded `fuel-vm` to `0.51.0`. See [release](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.51.0) for more information.
+
+### Added
+- [#1939](https://github.com/FuelLabs/fuel-core/pull/1939): Added API functions to open a RocksDB in different modes.
+- [#1929](https://github.com/FuelLabs/fuel-core/pull/1929): Added support of customization of the state transition version in the `ChainConfig`.
+
+### Removed
+- [#1913](https://github.com/FuelLabs/fuel-core/pull/1913): Removed dead code from the project.
+
+### Fixed
+- [#1921](https://github.com/FuelLabs/fuel-core/pull/1921): Fixed unstable `gossipsub_broadcast_tx_with_accept` test.
+- [#1915](https://github.com/FuelLabs/fuel-core/pull/1915): Fixed reconnection issue in the dev cluster with AWS cluster.
+- [#1914](https://github.com/FuelLabs/fuel-core/pull/1914): Fixed halting of the node during synchronization in PoA service.
+
+## [Version 0.27.0]
+
+### Added
+
+- [#1895](https://github.com/FuelLabs/fuel-core/pull/1895): Added backward and forward compatibility integration tests for forkless upgrades.
+- [#1898](https://github.com/FuelLabs/fuel-core/pull/1898): Enforce increasing of the `Executor::VERSION` on each release.
+
+### Changed
+
+- [#1906](https://github.com/FuelLabs/fuel-core/pull/1906): Makes `cli::snapshot::Command` members public such that clients can create and execute snapshot commands programmatically. This enables snapshot execution in external programs, such as the regenesis test suite. 
 - [#1891](https://github.com/FuelLabs/fuel-core/pull/1891): Regenesis now preserves `FuelBlockMerkleData` and `FuelBlockMerkleMetadata` in the off-chain table. These tables are checked when querying message proofs.
 - [#1886](https://github.com/FuelLabs/fuel-core/pull/1886): Use ref to `Block` in validation code
 - [#1876](https://github.com/FuelLabs/fuel-core/pull/1876): Updated benchmark to include the worst scenario for `CROO` opcode. Also include consensus parameters in bench output.
 - [#1879](https://github.com/FuelLabs/fuel-core/pull/1879): Return the old behaviour for the `discovery_works` test.
 - [#1848](https://github.com/FuelLabs/fuel-core/pull/1848): Added `version` field to the `Block` and `BlockHeader` GraphQL entities. Added corresponding `version` field to the `Block` and `BlockHeader` client types in `fuel-core-client`.
 - [#1873](https://github.com/FuelLabs/fuel-core/pull/1873/): Separate dry runs from block production in executor code, remove `ExecutionKind` and `ExecutionType`, remove `thread_block_transaction` concept, remove `PartialBlockComponent` type, refactor away `inner` functions.
+- [#1900](https://github.com/FuelLabs/fuel-core/pull/1900): Update the root README as `fuel-core run` no longer has `--chain` as an option. It has been replaced by `--snapshot`.
+
+#### Breaking
+
+- [#1894](https://github.com/FuelLabs/fuel-core/pull/1894): Use testnet configuration for local testnet.
+- [#1894](https://github.com/FuelLabs/fuel-core/pull/1894): Removed support for helm chart.
+- [#1910](https://github.com/FuelLabs/fuel-core/pull/1910): `fuel-vm` upgraded to `0.50.0`. More information in the [changelog](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.50.0).
 
 ## [Version 0.26.0]
 

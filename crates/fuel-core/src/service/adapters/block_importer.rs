@@ -32,12 +32,17 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
 };
+use fuel_core_txpool::ports::{
+    WasmChecker,
+    WasmValidityError,
+};
 use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
         SealedBlock,
     },
+    fuel_tx::Bytes32,
     fuel_types::{
         BlockHeight,
         ChainId,
@@ -57,8 +62,11 @@ impl BlockImporterAdapter {
         executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
+        let metrics = config.metrics;
         let importer = Importer::new(chain_id, config, database, executor, verifier);
-        importer.init_metrics();
+        if metrics {
+            importer.init_metrics();
+        }
         Self {
             block_importer: Arc::new(importer),
         }
@@ -85,11 +93,9 @@ impl BlockVerifier for VerifierAdapter {
 
 impl ImporterDatabase for Database {
     fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>> {
-        Ok(self
-            .iter_all::<FuelBlocks>(Some(IterDirection::Reverse))
+        self.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
             .next()
-            .transpose()?
-            .map(|(height, _)| height))
+            .transpose()
     }
 
     fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>> {
@@ -106,5 +112,32 @@ impl Validator for ExecutorAdapter {
         block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
         self.executor.validate(block)
+    }
+}
+
+#[cfg(feature = "wasm-executor")]
+impl WasmChecker for ExecutorAdapter {
+    fn validate_uploaded_wasm(
+        &self,
+        wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        self.executor
+            .validate_uploaded_wasm(wasm_root)
+            .map_err(|err| match err {
+                fuel_core_upgradable_executor::error::UpgradableError::InvalidWasm(_) => {
+                    WasmValidityError::NotValid
+                }
+                _ => WasmValidityError::NotFound,
+            })
+    }
+}
+
+#[cfg(not(feature = "wasm-executor"))]
+impl WasmChecker for ExecutorAdapter {
+    fn validate_uploaded_wasm(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        Err(WasmValidityError::NotEnabled)
     }
 }

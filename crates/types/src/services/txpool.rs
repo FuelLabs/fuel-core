@@ -1,7 +1,10 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::block::Block,
+    blockchain::{
+        block::Block,
+        header::ConsensusParametersVersion,
+    },
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -10,6 +13,7 @@ use crate::{
             ScriptGasLimit,
             Tip,
         },
+        Blob,
         Cacheable,
         Chargeable,
         Create,
@@ -21,12 +25,6 @@ use crate::{
         TxId,
         Upgrade,
         Upload,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        ContractId,
-        Nonce,
     },
     fuel_vm::{
         checked_transaction::Checked,
@@ -35,65 +33,188 @@ use crate::{
     services::executor::TransactionExecutionResult,
 };
 use fuel_vm_private::{
-    checked_transaction::{
-        CheckError,
-        CheckedTransaction,
-    },
+    checked_transaction::CheckedTransaction,
     fuel_types::BlockHeight,
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::sync::Arc;
 use tai64::Tai64;
 
-/// The alias for transaction pool result.
-pub type Result<T> = core::result::Result<T, Error>;
 /// Pool transaction wrapped in an Arc for thread-safe sharing
 pub type ArcPoolTx = Arc<PoolTransaction>;
 
-/// Transaction type used by the transaction pool. Transaction pool supports not
-/// all `fuel_tx::Transaction` variants.
-#[derive(Debug, Eq, PartialEq)]
+/// Metadata for the transaction pool.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct Metadata {
+    version: ConsensusParametersVersion,
+    size: Option<usize>,
+    max_gas_price: Word,
+    #[cfg(feature = "test-helpers")]
+    max_gas: Option<Word>,
+    #[cfg(feature = "test-helpers")]
+    tx_id: Option<TxId>,
+}
+
+impl Metadata {
+    /// Create a new metadata for the transaction from the pool.
+    pub fn new(
+        version: ConsensusParametersVersion,
+        size: usize,
+        max_gas_price: Word,
+    ) -> Self {
+        Self {
+            version,
+            size: Some(size),
+            max_gas_price,
+            #[cfg(feature = "test-helpers")]
+            max_gas: None,
+            #[cfg(feature = "test-helpers")]
+            tx_id: None,
+        }
+    }
+
+    /// Create a new test metadata for the transaction from the pool.
+    #[cfg(feature = "test-helpers")]
+    pub fn new_test(
+        version: ConsensusParametersVersion,
+        max_gas: Option<u64>,
+        tx_id: Option<TxId>,
+    ) -> Self {
+        Self {
+            version,
+            size: None,
+            max_gas_price: 0,
+            max_gas,
+            tx_id,
+        }
+    }
+
+    /// Returns the max gas price for the transaction.
+    pub fn max_gas_price(&self) -> Word {
+        self.max_gas_price
+    }
+}
+
+/// Transaction type used by the transaction pool.
+/// Not all `fuel_tx::Transaction` variants are supported by the txpool.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum PoolTransaction {
     /// Script
-    Script(Checked<Script>),
+    Script(Checked<Script>, Metadata),
     /// Create
-    Create(Checked<Create>),
+    Create(Checked<Create>, Metadata),
     /// Upgrade
-    Upgrade(Checked<Upgrade>),
+    Upgrade(Checked<Upgrade>, Metadata),
     /// Upload
-    Upload(Checked<Upload>),
+    Upload(Checked<Upload>, Metadata),
+    /// Blob
+    Blob(Checked<Blob>, Metadata),
 }
 
 impl PoolTransaction {
+    /// Returns the version of the consensus parameters used to create `Checked` transaction.
+    pub fn used_consensus_parameters_version(&self) -> ConsensusParametersVersion {
+        self.metadata_inner().version
+    }
+
     /// Used for accounting purposes when charging byte based fees.
     pub fn metered_bytes_size(&self) -> usize {
+        if let Some(size) = self.metadata_inner().size {
+            size
+        } else {
+            match self {
+                PoolTransaction::Script(tx, _) => tx.transaction().metered_bytes_size(),
+                PoolTransaction::Create(tx, _) => tx.transaction().metered_bytes_size(),
+                PoolTransaction::Upgrade(tx, _) => tx.transaction().metered_bytes_size(),
+                PoolTransaction::Upload(tx, _) => tx.transaction().metered_bytes_size(),
+                PoolTransaction::Blob(tx, _) => tx.transaction().metered_bytes_size(),
+            }
+        }
+    }
+
+    /// Returns the maximum gas price for the transaction.
+    pub fn max_gas_price(&self) -> Word {
         match self {
-            PoolTransaction::Script(tx) => tx.transaction().metered_bytes_size(),
-            PoolTransaction::Create(tx) => tx.transaction().metered_bytes_size(),
-            PoolTransaction::Upgrade(tx) => tx.transaction().metered_bytes_size(),
-            PoolTransaction::Upload(tx) => tx.transaction().metered_bytes_size(),
+            PoolTransaction::Script(_, metadata) => metadata.max_gas_price,
+            PoolTransaction::Create(_, metadata) => metadata.max_gas_price,
+            PoolTransaction::Upgrade(_, metadata) => metadata.max_gas_price,
+            PoolTransaction::Upload(_, metadata) => metadata.max_gas_price,
+            PoolTransaction::Blob(_, metadata) => metadata.max_gas_price,
+        }
+    }
+
+    #[cfg(feature = "test-helpers")]
+    fn id_inner(&self) -> TxId {
+        match self {
+            PoolTransaction::Script(tx, _) => tx.id(),
+            PoolTransaction::Create(tx, _) => tx.id(),
+            PoolTransaction::Upgrade(tx, _) => tx.id(),
+            PoolTransaction::Upload(tx, _) => tx.id(),
+            PoolTransaction::Blob(tx, _) => tx.id(),
+        }
+    }
+
+    #[cfg(feature = "test-helpers")]
+    fn max_gas_inner(&self) -> Word {
+        match self {
+            PoolTransaction::Script(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Create(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Upgrade(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Upload(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Blob(tx, _) => tx.metadata().max_gas,
+        }
+    }
+
+    fn metadata_inner(&self) -> &Metadata {
+        match self {
+            PoolTransaction::Script(_, metadata) => metadata,
+            PoolTransaction::Create(_, metadata) => metadata,
+            PoolTransaction::Upgrade(_, metadata) => metadata,
+            PoolTransaction::Upload(_, metadata) => metadata,
+            PoolTransaction::Blob(_, metadata) => metadata,
         }
     }
 
     /// Returns the transaction ID
+    #[cfg(not(feature = "test-helpers"))]
     pub fn id(&self) -> TxId {
         match self {
-            PoolTransaction::Script(tx) => tx.id(),
-            PoolTransaction::Create(tx) => tx.id(),
-            PoolTransaction::Upgrade(tx) => tx.id(),
-            PoolTransaction::Upload(tx) => tx.id(),
+            PoolTransaction::Script(tx, _) => tx.id(),
+            PoolTransaction::Create(tx, _) => tx.id(),
+            PoolTransaction::Upgrade(tx, _) => tx.id(),
+            PoolTransaction::Upload(tx, _) => tx.id(),
+            PoolTransaction::Blob(tx, _) => tx.id(),
+        }
+    }
+
+    /// Returns the transaction ID
+    #[cfg(feature = "test-helpers")]
+    pub fn id(&self) -> TxId {
+        if let Some(tx_id) = self.metadata_inner().tx_id {
+            tx_id
+        } else {
+            self.id_inner()
         }
     }
 
     /// Returns the maximum amount of gas that the transaction can consume.
+    #[cfg(not(feature = "test-helpers"))]
     pub fn max_gas(&self) -> Word {
         match self {
-            PoolTransaction::Script(tx) => tx.metadata().max_gas,
-            PoolTransaction::Create(tx) => tx.metadata().max_gas,
-            PoolTransaction::Upgrade(tx) => tx.metadata().max_gas,
-            PoolTransaction::Upload(tx) => tx.metadata().max_gas,
+            PoolTransaction::Script(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Create(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Upgrade(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Upload(tx, _) => tx.metadata().max_gas,
+            PoolTransaction::Blob(tx, _) => tx.metadata().max_gas,
+        }
+    }
+
+    /// Returns the maximum amount of gas that the transaction can consume.
+    #[cfg(feature = "test-helpers")]
+    pub fn max_gas(&self) -> Word {
+        if let Some(max_gas) = self.metadata_inner().max_gas {
+            max_gas
+        } else {
+            self.max_gas_inner()
         }
     }
 }
@@ -102,48 +223,65 @@ impl PoolTransaction {
 impl PoolTransaction {
     pub fn script_gas_limit(&self) -> Option<Word> {
         match self {
-            PoolTransaction::Script(script) => {
+            PoolTransaction::Script(script, _) => {
                 Some(*script.transaction().script_gas_limit())
             }
-            PoolTransaction::Create(_) => None,
-            PoolTransaction::Upgrade(_) => None,
-            PoolTransaction::Upload(_) => None,
+            PoolTransaction::Create(_, _) => None,
+            PoolTransaction::Upgrade(_, _) => None,
+            PoolTransaction::Upload(_, _) => None,
+            PoolTransaction::Blob(_, _) => None,
         }
     }
 
     pub fn tip(&self) -> Word {
         match self {
-            Self::Script(tx) => tx.transaction().tip(),
-            Self::Create(tx) => tx.transaction().tip(),
-            Self::Upload(tx) => tx.transaction().tip(),
-            Self::Upgrade(tx) => tx.transaction().tip(),
+            Self::Script(tx, _) => tx.transaction().tip(),
+            Self::Create(tx, _) => tx.transaction().tip(),
+            Self::Upload(tx, _) => tx.transaction().tip(),
+            Self::Upgrade(tx, _) => tx.transaction().tip(),
+            Self::Blob(tx, _) => tx.transaction().tip(),
         }
     }
 
     pub fn is_computed(&self) -> bool {
         match self {
-            PoolTransaction::Script(tx) => tx.transaction().is_computed(),
-            PoolTransaction::Create(tx) => tx.transaction().is_computed(),
-            PoolTransaction::Upgrade(tx) => tx.transaction().is_computed(),
-            PoolTransaction::Upload(tx) => tx.transaction().is_computed(),
+            PoolTransaction::Script(tx, _) => tx.transaction().is_computed(),
+            PoolTransaction::Create(tx, _) => tx.transaction().is_computed(),
+            PoolTransaction::Upgrade(tx, _) => tx.transaction().is_computed(),
+            PoolTransaction::Upload(tx, _) => tx.transaction().is_computed(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().is_computed(),
         }
     }
 
     pub fn inputs(&self) -> &Vec<Input> {
         match self {
-            PoolTransaction::Script(tx) => tx.transaction().inputs(),
-            PoolTransaction::Create(tx) => tx.transaction().inputs(),
-            PoolTransaction::Upgrade(tx) => tx.transaction().inputs(),
-            PoolTransaction::Upload(tx) => tx.transaction().inputs(),
+            PoolTransaction::Script(tx, _) => tx.transaction().inputs(),
+            PoolTransaction::Create(tx, _) => tx.transaction().inputs(),
+            PoolTransaction::Upgrade(tx, _) => tx.transaction().inputs(),
+            PoolTransaction::Upload(tx, _) => tx.transaction().inputs(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().inputs(),
         }
     }
 
     pub fn outputs(&self) -> &Vec<Output> {
         match self {
-            PoolTransaction::Script(tx) => tx.transaction().outputs(),
-            PoolTransaction::Create(tx) => tx.transaction().outputs(),
-            PoolTransaction::Upgrade(tx) => tx.transaction().outputs(),
-            PoolTransaction::Upload(tx) => tx.transaction().outputs(),
+            PoolTransaction::Script(tx, _) => tx.transaction().outputs(),
+            PoolTransaction::Create(tx, _) => tx.transaction().outputs(),
+            PoolTransaction::Upgrade(tx, _) => tx.transaction().outputs(),
+            PoolTransaction::Upload(tx, _) => tx.transaction().outputs(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().outputs(),
+        }
+    }
+}
+
+impl From<PoolTransaction> for CheckedTransaction {
+    fn from(tx: PoolTransaction) -> Self {
+        match tx {
+            PoolTransaction::Script(tx, _) => CheckedTransaction::Script(tx),
+            PoolTransaction::Create(tx, _) => CheckedTransaction::Create(tx),
+            PoolTransaction::Upgrade(tx, _) => CheckedTransaction::Upgrade(tx),
+            PoolTransaction::Upload(tx, _) => CheckedTransaction::Upload(tx),
+            PoolTransaction::Blob(tx, _) => CheckedTransaction::Blob(tx),
         }
     }
 }
@@ -151,12 +289,19 @@ impl PoolTransaction {
 impl From<&PoolTransaction> for Transaction {
     fn from(tx: &PoolTransaction) -> Self {
         match tx {
-            PoolTransaction::Script(tx) => Transaction::Script(tx.transaction().clone()),
-            PoolTransaction::Create(tx) => Transaction::Create(tx.transaction().clone()),
-            PoolTransaction::Upgrade(tx) => {
+            PoolTransaction::Script(tx, _) => {
+                Transaction::Script(tx.transaction().clone())
+            }
+            PoolTransaction::Create(tx, _) => {
+                Transaction::Create(tx.transaction().clone())
+            }
+            PoolTransaction::Upgrade(tx, _) => {
                 Transaction::Upgrade(tx.transaction().clone())
             }
-            PoolTransaction::Upload(tx) => Transaction::Upload(tx.transaction().clone()),
+            PoolTransaction::Upload(tx, _) => {
+                Transaction::Upload(tx.transaction().clone())
+            }
+            PoolTransaction::Blob(tx, _) => Transaction::Blob(tx.transaction().clone()),
         }
     }
 }
@@ -164,36 +309,13 @@ impl From<&PoolTransaction> for Transaction {
 impl From<&PoolTransaction> for CheckedTransaction {
     fn from(tx: &PoolTransaction) -> Self {
         match tx {
-            PoolTransaction::Script(tx) => CheckedTransaction::Script(tx.clone()),
-            PoolTransaction::Create(tx) => CheckedTransaction::Create(tx.clone()),
-            PoolTransaction::Upgrade(tx) => CheckedTransaction::Upgrade(tx.clone()),
-            PoolTransaction::Upload(tx) => CheckedTransaction::Upload(tx.clone()),
+            PoolTransaction::Script(tx, _) => CheckedTransaction::Script(tx.clone()),
+            PoolTransaction::Create(tx, _) => CheckedTransaction::Create(tx.clone()),
+            PoolTransaction::Upgrade(tx, _) => CheckedTransaction::Upgrade(tx.clone()),
+            PoolTransaction::Upload(tx, _) => CheckedTransaction::Upload(tx.clone()),
+            PoolTransaction::Blob(tx, _) => CheckedTransaction::Blob(tx.clone()),
         }
     }
-}
-
-impl From<Checked<Script>> for PoolTransaction {
-    fn from(checked: Checked<Script>) -> Self {
-        Self::Script(checked)
-    }
-}
-
-impl From<Checked<Create>> for PoolTransaction {
-    fn from(checked: Checked<Create>) -> Self {
-        Self::Create(checked)
-    }
-}
-
-/// The `removed` field contains the list of removed transactions during the insertion
-/// of the `inserted` transaction.
-#[derive(Debug)]
-pub struct InsertionResult {
-    /// This was inserted
-    pub inserted: ArcPoolTx,
-    /// The time the transaction was inserted.
-    pub submitted_time: Duration,
-    /// These were removed during the insertion
-    pub removed: Vec<ArcPoolTx>,
 }
 
 /// The status of the transaction during its life from the tx pool until the block.
@@ -276,99 +398,5 @@ pub fn from_executor_to_status(
             total_gas,
             total_fee,
         },
-    }
-}
-
-#[allow(missing_docs)]
-#[derive(thiserror::Error, Debug, Clone)]
-#[non_exhaustive]
-pub enum Error {
-    #[error("Gas price not found for block height {0}")]
-    GasPriceNotFound(BlockHeight),
-    #[error("TxPool required that transaction contains metadata")]
-    NoMetadata,
-    #[error("TxPool doesn't support this type of transaction.")]
-    NotSupportedTransactionType,
-    #[error("Transaction is not inserted. Hash is already known")]
-    NotInsertedTxKnown,
-    #[error("Transaction is not inserted. Pool limit is hit, try to increase gas_price")]
-    NotInsertedLimitHit,
-    #[error("Transaction is not inserted. The gas price is too low.")]
-    NotInsertedGasPriceTooLow,
-    #[error(
-        "Transaction is not inserted. More priced tx {0:#x} already spend this UTXO output: {1:#x}"
-    )]
-    NotInsertedCollision(TxId, UtxoId),
-    #[error(
-        "Transaction is not inserted. More priced tx has created contract with ContractId {0:#x}"
-    )]
-    NotInsertedCollisionContractId(ContractId),
-    #[error(
-        "Transaction is not inserted. A higher priced tx {0:#x} is already spending this message: {1:#x}"
-    )]
-    NotInsertedCollisionMessageId(TxId, Nonce),
-    #[error("Transaction is not inserted. UTXO input does not exist: {0:#x}")]
-    NotInsertedOutputDoesNotExist(UtxoId),
-    #[error("Transaction is not inserted. UTXO input contract does not exist or was already spent: {0:#x}")]
-    NotInsertedInputContractDoesNotExist(ContractId),
-    #[error("Transaction is not inserted. ContractId is already taken {0:#x}")]
-    NotInsertedContractIdAlreadyTaken(ContractId),
-    #[error("Transaction is not inserted. UTXO does not exist: {0:#x}")]
-    NotInsertedInputUtxoIdNotDoesNotExist(UtxoId),
-    #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
-    NotInsertedInputUtxoIdSpent(UtxoId),
-    #[error("Transaction is not inserted. Message id {0:#x} does not match any received message from the DA layer.")]
-    NotInsertedInputMessageUnknown(Nonce),
-    #[error(
-        "Transaction is not inserted. UTXO requires Contract input {0:#x} that is priced lower"
-    )]
-    NotInsertedContractPricedLower(ContractId),
-    #[error("Transaction is not inserted. Input coin mismatch the values from database")]
-    NotInsertedIoCoinMismatch,
-    #[error("Transaction is not inserted. Input output mismatch. Coin owner is different from expected input")]
-    NotInsertedIoWrongOwner,
-    #[error("Transaction is not inserted. Input output mismatch. Coin output does not match expected input")]
-    NotInsertedIoWrongAmount,
-    #[error("Transaction is not inserted. Input output mismatch. Coin output asset_id does not match expected inputs")]
-    NotInsertedIoWrongAssetId,
-    #[error(
-        "Transaction is not inserted. Input message mismatch the values from database"
-    )]
-    NotInsertedIoMessageMismatch,
-    #[error(
-        "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
-    )]
-    NotInsertedIoContractOutput,
-    #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
-    NotInsertedMaxDepth,
-    // small todo for now it can pass but in future we should include better messages
-    #[error("Transaction removed.")]
-    Removed,
-    #[error("Transaction expired because it exceeded the configured time to live `tx-pool-ttl`.")]
-    TTLReason,
-    #[error("Transaction squeezed out because {0}")]
-    SqueezedOut(String),
-    #[error("Invalid transaction data: {0:?}")]
-    ConsensusValidity(CheckError),
-    #[error("Mint transactions are disallowed from the txpool")]
-    MintIsDisallowed,
-    #[error("The UTXO `{0}` is blacklisted")]
-    BlacklistedUTXO(UtxoId),
-    #[error("The owner `{0}` is blacklisted")]
-    BlacklistedOwner(Address),
-    #[error("The contract `{0}` is blacklisted")]
-    BlacklistedContract(ContractId),
-    #[error("The message `{0}` is blacklisted")]
-    BlacklistedMessage(Nonce),
-    #[error("Database error: {0}")]
-    Database(String),
-    // TODO: We need it for now until channels are removed from TxPool.
-    #[error("Got some unexpected error: {0}")]
-    Other(String),
-}
-
-impl From<CheckError> for Error {
-    fn from(e: CheckError) -> Self {
-        Error::ConsensusValidity(e)
     }
 }

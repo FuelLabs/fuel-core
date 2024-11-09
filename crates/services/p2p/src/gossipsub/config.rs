@@ -1,11 +1,13 @@
+use super::topics::NEW_TX_GOSSIP_TOPIC;
 use crate::{
     config::{
         Config,
         MAX_RESPONSE_SIZE,
     },
+    utils::is_dialable,
     TryPeerId,
 };
-use fuel_core_metrics::p2p_metrics::p2p_metrics;
+use fuel_core_metrics::global_registry;
 use libp2p::gossipsub::{
     self,
     MessageAuthenticity,
@@ -13,6 +15,7 @@ use libp2p::gossipsub::{
     MetricsConfig,
     PeerScoreParams,
     PeerScoreThresholds,
+    Sha256Topic,
     Topic,
     TopicScoreParams,
 };
@@ -20,11 +23,9 @@ use sha2::{
     Digest,
     Sha256,
 };
-use std::time::Duration;
-
-use super::topics::{
-    GossipTopic,
-    NEW_TX_GOSSIP_TOPIC,
+use std::{
+    ops::DerefMut,
+    time::Duration,
 };
 
 // The number of slots in each epoch.
@@ -174,24 +175,17 @@ fn initialize_peer_score_thresholds() -> PeerScoreThresholds {
 /// Given a `P2pConfig` containing `GossipsubConfig` creates a Gossipsub Behaviour
 pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> gossipsub::Behaviour {
     let mut gossipsub = if p2p_config.metrics {
-        // Move to Metrics related feature flag
-        let mut p2p_registry = prometheus_client::registry::Registry::default();
+        let mut registry = global_registry().registry.lock();
 
         let metrics_config = MetricsConfig::default();
 
         let mut gossipsub = gossipsub::Behaviour::new_with_metrics(
             MessageAuthenticity::Signed(p2p_config.keypair.clone()),
             p2p_config.gossipsub_config.clone(),
-            &mut p2p_registry,
+            registry.deref_mut(),
             metrics_config,
         )
         .expect("gossipsub initialized");
-
-        // This couldn't be set unless multiple p2p services are running? So it's ok to unwrap
-        p2p_metrics()
-            .gossip_sub_registry
-            .set(Box::new(p2p_registry))
-            .unwrap_or(());
 
         initialize_gossipsub(&mut gossipsub, p2p_config);
 
@@ -210,6 +204,8 @@ pub(crate) fn build_gossipsub_behaviour(p2p_config: &Config) -> gossipsub::Behav
     let reserved_nodes = p2p_config.reserved_nodes.clone();
     let explicit_peers = reserved_nodes
         .iter()
+        // skip undialable multiaddresses
+        .filter(|multiaddr| is_dialable(multiaddr))
         .filter_map(|address| address.try_to_peer_id());
     for peer_id in explicit_peers {
         gossipsub.add_explicit_peer(&peer_id);
@@ -230,7 +226,7 @@ fn initialize_gossipsub(gossipsub: &mut gossipsub::Behaviour, p2p_config: &Confi
 
     // subscribe to gossipsub topics with the network name suffix
     for (topic, weight) in topics {
-        let t: GossipTopic = Topic::new(format!("{}/{}", topic, p2p_config.network_name));
+        let t: Sha256Topic = Topic::new(format!("{}/{}", topic, p2p_config.network_name));
 
         gossipsub
             .set_topic_params(t.clone(), initialize_topic_score_params(weight))

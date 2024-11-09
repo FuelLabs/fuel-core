@@ -75,8 +75,7 @@ impl BlockHeader {
         }
     }
 
-    /// Mutable getter for consensus portion of header
-    fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+    fn _consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
         match self {
             BlockHeader::V1(v1) => &mut v1.consensus,
         }
@@ -85,6 +84,10 @@ impl BlockHeader {
 
 #[cfg(feature = "test-helpers")]
 impl BlockHeader {
+    /// Mutable getter for consensus portion of header
+    pub fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+        self._consensus_mut()
+    }
     /// Set the entire consensus header
     pub fn set_consensus_header(
         &mut self,
@@ -145,9 +148,9 @@ impl BlockHeader {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+#[derive(Default)]
 /// A partially complete fuel block header that does not
 /// have any generated fields because it has not been executed yet.
 pub struct PartialBlockHeader {
@@ -162,9 +165,11 @@ pub type ConsensusParametersVersion = u32;
 /// The type representing the version of the state transition bytecode.
 pub type StateTransitionBytecodeVersion = u32;
 
+/// The latest version of the state transition bytecode.
+pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 16;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 /// The fuel block application header.
 /// Contains everything except consensus related data.
 pub struct ApplicationHeader<Generated> {
@@ -181,6 +186,20 @@ pub struct ApplicationHeader<Generated> {
     pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
     /// Generated application fields.
     pub generated: Generated,
+}
+
+impl<Generated> Default for ApplicationHeader<Generated>
+where
+    Generated: Default,
+{
+    fn default() -> Self {
+        Self {
+            da_height: Default::default(),
+            consensus_parameters_version: Default::default(),
+            state_transition_bytecode_version: LATEST_STATE_TRANSITION_VERSION,
+            generated: Default::default(),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -336,7 +355,7 @@ impl BlockHeader {
     /// Re-generate the header metadata.
     pub fn recalculate_metadata(&mut self) {
         let application_hash = self.application().hash();
-        self.consensus_mut().generated.application_hash = application_hash;
+        self._consensus_mut().generated.application_hash = application_hash;
         let id = self.hash();
         match self {
             BlockHeader::V1(v1) => {
@@ -523,7 +542,6 @@ impl ConsensusHeader<GeneratedConsensusFields> {
     }
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
 impl<T> Default for ConsensusHeader<T>
 where
     T: Default,

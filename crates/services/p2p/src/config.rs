@@ -7,26 +7,15 @@ use crate::{
 use fuel_core_types::blockchain::consensus::Genesis;
 
 use libp2p::{
-    core::{
-        muxing::StreamMuxerBox,
-        transport::Boxed,
-    },
     gossipsub,
     identity::{
         secp256k1,
         Keypair,
     },
     noise,
-    tcp::{
-        self,
-        tokio,
-    },
-    yamux,
     Multiaddr,
     PeerId,
-    Transport,
 };
-use libp2p_mplex::MplexConfig;
 use std::{
     collections::HashSet,
     net::{
@@ -44,12 +33,10 @@ use self::{
     connection_tracker::ConnectionTracker,
     fuel_authenticated::FuelAuthenticated,
     fuel_upgrade::Checksum,
-    guarded_node::GuardedNode,
 };
 mod connection_tracker;
 mod fuel_authenticated;
 pub(crate) mod fuel_upgrade;
-mod guarded_node;
 
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -59,16 +46,15 @@ const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 /// - `nginx.ingress.kubernetes.io/proxy-body-size`
 pub const MAX_RESPONSE_SIZE: usize = 18 * 1024 * 1024;
 
-/// Maximum number of headers per request.
-pub const MAX_HEADERS_PER_REQUEST: u32 = 100;
+/// Maximum number of blocks per request.
+pub const MAX_HEADERS_PER_REQUEST: usize = 100;
 
-/// Adds a timeout to the setup and protocol upgrade process for all
-/// inbound and outbound connections established through the transport.
-const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
+/// Maximum number of transactions ids asked per request.
+pub const MAX_TXS_PER_REQUEST: usize = 10000;
 
 #[derive(Clone, Debug)]
 pub struct Config<State = Initialized> {
-    /// The keypair used for for handshake during communication with other p2p nodes.
+    /// The keypair used for handshake during communication with other p2p nodes.
     pub keypair: Keypair,
 
     /// Name of the Network
@@ -88,7 +74,10 @@ pub struct Config<State = Initialized> {
 
     /// Max Size of a Block in bytes
     pub max_block_size: usize,
-    pub max_headers_per_request: u32,
+    pub max_headers_per_request: usize,
+
+    // Maximum of txs id asked in a single request
+    pub max_txs_per_request: usize,
 
     // `DiscoveryBehaviour` related fields
     pub bootstrap_nodes: Vec<Multiaddr>,
@@ -126,6 +115,8 @@ pub struct Config<State = Initialized> {
     // RequestResponse related fields
     /// Sets the timeout for inbound and outbound requests.
     pub set_request_timeout: Duration,
+    /// Sets the maximum number of concurrent streams for a connection.
+    pub max_concurrent_streams: usize,
     /// Sets the keep-alive timeout of idle connections.
     pub set_connection_keep_alive: Duration,
 
@@ -138,6 +129,12 @@ pub struct Config<State = Initialized> {
 
     /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
+
+    /// Number of threads to read from the database.
+    pub database_read_threads: usize,
+
+    /// Number of threads to read from the TxPool.
+    pub tx_pool_threads: usize,
 
     /// It is the state of the config initialization. Everyone can create an instance of the `Self`
     /// with the `NotInitialized` state. But it can be set into the `Initialized` state only with
@@ -166,6 +163,7 @@ impl Config<NotInitialized> {
             tcp_port: self.tcp_port,
             max_block_size: self.max_block_size,
             max_headers_per_request: self.max_headers_per_request,
+            max_txs_per_request: self.max_txs_per_request,
             bootstrap_nodes: self.bootstrap_nodes,
             enable_mdns: self.enable_mdns,
             max_peers_connected: self.max_peers_connected,
@@ -180,11 +178,14 @@ impl Config<NotInitialized> {
             gossipsub_config: self.gossipsub_config,
             heartbeat_config: self.heartbeat_config,
             set_request_timeout: self.set_request_timeout,
+            max_concurrent_streams: self.max_concurrent_streams,
             set_connection_keep_alive: self.set_connection_keep_alive,
             heartbeat_check_interval: self.heartbeat_check_interval,
             heartbeat_max_avg_interval: self.heartbeat_max_time_since_last,
             heartbeat_max_time_since_last: self.heartbeat_max_time_since_last,
             metrics: self.metrics,
+            database_read_threads: self.database_read_threads,
+            tx_pool_threads: self.tx_pool_threads,
             state: Initialized(()),
         })
     }
@@ -214,6 +215,7 @@ impl Config<NotInitialized> {
             tcp_port: 0,
             max_block_size: MAX_RESPONSE_SIZE,
             max_headers_per_request: MAX_HEADERS_PER_REQUEST,
+            max_txs_per_request: MAX_TXS_PER_REQUEST,
             bootstrap_nodes: vec![],
             enable_mdns: false,
             max_peers_connected: 50,
@@ -226,6 +228,7 @@ impl Config<NotInitialized> {
             gossipsub_config: default_gossipsub_config(),
             heartbeat_config: heartbeat::Config::default(),
             set_request_timeout: REQ_RES_TIMEOUT,
+            max_concurrent_streams: 256,
             set_connection_keep_alive: REQ_RES_TIMEOUT,
             heartbeat_check_interval: Duration::from_secs(10),
             heartbeat_max_avg_interval: Duration::from_secs(20),
@@ -233,6 +236,8 @@ impl Config<NotInitialized> {
             info_interval: Some(Duration::from_secs(3)),
             identify_interval: Some(Duration::from_secs(5)),
             metrics: false,
+            database_read_threads: 0,
+            tx_pool_threads: 0,
             state: NotInitialized,
         }
     }
@@ -254,71 +259,29 @@ impl Config<Initialized> {
 pub(crate) fn build_transport_function(
     p2p_config: &Config,
 ) -> (
-    impl FnOnce(&Keypair) -> Boxed<(PeerId, StreamMuxerBox)> + '_,
+    impl FnOnce(&Keypair) -> Result<FuelAuthenticated<ConnectionTracker>, ()> + '_,
     Arc<RwLock<ConnectionState>>,
 ) {
     let connection_state = ConnectionState::new();
     let kept_connection_state = connection_state.clone();
     let transport_function = move |keypair: &Keypair| {
-        let transport = {
-            let generate_tcp_transport = || {
-                tokio::Transport::new(tcp::Config::new().port_reuse(true).nodelay(true))
-            };
-
-            let tcp = generate_tcp_transport();
-
-            let ws_tcp = libp2p::websocket::WsConfig::new(generate_tcp_transport())
-                .or_transport(tcp);
-
-            libp2p::dns::tokio::Transport::system(ws_tcp).unwrap()
-        }
-        .upgrade(libp2p::core::upgrade::Version::V1Lazy);
-
         let noise_authenticated =
             noise::Config::new(keypair).expect("Noise key generation failed");
 
-        let multiplex_config = {
-            let mplex_config = MplexConfig::default();
-
-            let mut yamux_config = yamux::Config::default();
-            // TODO: remove deprecated method call https://github.com/FuelLabs/fuel-core/issues/1592
-            #[allow(deprecated)]
-            yamux_config.set_max_buffer_size(MAX_RESPONSE_SIZE);
-            libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
+        let connection_state = if p2p_config.reserved_nodes_only_mode {
+            None
+        } else {
+            Some(connection_state)
         };
 
-        if p2p_config.reserved_nodes_only_mode {
-            let guarded_node = GuardedNode::new(&p2p_config.reserved_nodes);
+        let connection_tracker =
+            ConnectionTracker::new(&p2p_config.reserved_nodes, connection_state);
 
-            let fuel_authenticated = FuelAuthenticated::new(
-                noise_authenticated,
-                guarded_node,
-                p2p_config.checksum,
-            );
-
-            transport
-                .authenticate(fuel_authenticated)
-                .multiplex(multiplex_config)
-                .timeout(TRANSPORT_TIMEOUT)
-                .boxed()
-        } else {
-            let connection_tracker = ConnectionTracker::new(
-                &p2p_config.reserved_nodes,
-                connection_state.clone(),
-            );
-
-            let fuel_authenticated = FuelAuthenticated::new(
-                noise_authenticated,
-                connection_tracker,
-                p2p_config.checksum,
-            );
-
-            transport
-                .authenticate(fuel_authenticated)
-                .multiplex(multiplex_config)
-                .timeout(TRANSPORT_TIMEOUT)
-                .boxed()
-        }
+        Ok(FuelAuthenticated::new(
+            noise_authenticated,
+            connection_tracker,
+            p2p_config.checksum,
+        ))
     };
 
     (transport_function, kept_connection_state)

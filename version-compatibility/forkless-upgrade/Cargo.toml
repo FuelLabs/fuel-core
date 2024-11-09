@@ -1,0 +1,50 @@
+[package]
+edition = "2021"
+license = "BUSL-1.1"
+name = "forkless-upgrade"
+publish = false
+version = "0.0.0"
+build = "build.rs"
+
+[dev-dependencies]
+anyhow = "1.0"
+clap = "4.4"
+libp2p = "0.53.2"
+hex = "0.4.3"
+rand = "0.8"
+tempfile = "3.4"
+tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
+
+# Neutral deps
+fuel-core-trace = { path = "../../crates/trace" }
+fuel-crypto = { version = "0.57.0" }
+fuel-tx = { version = "0.57.0", features = ["random"] }
+
+# Latest fuel-core
+latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin", features = [
+  "parquet",
+  "p2p",
+] }
+latest-fuel-core-type = { path = "../../crates/types", package = "fuel-core-types", features = [
+  "test-helpers",
+] }
+latest-fuel-core-client = { path = "../../crates/client", package = "fuel-core-client" }
+latest-fuel-core-upgradable-executor = { path = "../../crates/services/upgradable-executor", package = "fuel-core-upgradable-executor", features = [
+  "wasm-executor",
+] }
+
+# Genesis fuel-core
+genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", features = [
+  "parquet",
+  "p2p",
+] }
+genesis-fuel-core-client = { version = "0.26.0", package = "fuel-core-client" }
+genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services" }
+
+# Fuel core version 0.36.0
+version-36-fuel-core-bin = { version = "0.36.0", package = "fuel-core-bin", features = [
+  "parquet",
+  "p2p",
+] }
+version-36-fuel-core-client = { version = "0.36.0", package = "fuel-core-client" }
+version-36-fuel-core-services = { version = "0.36.0", package = "fuel-core-services" }

@@ -14,10 +14,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
             time
           }
           ... on SuccessStatus {
-            transactionId
-            block {
-              height
-            }
+            blockHeight
             time
             programState {
               returnType
@@ -60,10 +57,7 @@ query($owner: Address!, $after: String, $before: String, $first: Int, $last: Int
             reason
           }
           ... on FailureStatus {
-            transactionId
-            block {
-              height
-            }
+            blockHeight
             time
             reason
             programState {

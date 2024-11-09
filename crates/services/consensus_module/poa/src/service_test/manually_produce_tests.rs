@@ -52,7 +52,7 @@ async fn can_manually_produce_block(
     let mut ctx_builder = TestContextBuilder::new();
     ctx_builder.with_config(Config {
         trigger,
-        signing_key: Some(test_signing_key()),
+        signer: SignMode::Key(test_signing_key()),
         metrics: false,
         ..Default::default()
     });
@@ -61,7 +61,7 @@ async fn can_manually_produce_block(
     let txs = (0..num_txns).map(|_| make_tx(&mut rng)).collect::<Vec<_>>();
     let TxPoolContext {
         txpool,
-        status_sender,
+        new_txs_notifier,
         ..
     } = MockTransactionPool::new_with_txs(txs.clone());
     ctx_builder.with_txpool(txpool);
@@ -103,16 +103,14 @@ async fn can_manually_produce_block(
     ctx_builder.with_importer(importer);
     ctx_builder.with_producer(producer);
     ctx_builder.with_shared_sequencer(shared_sequencer);
-    let ctx = ctx_builder.build();
+    let ctx = ctx_builder.build().await;
 
     ctx.service
         .shared
         .manually_produce_block(Some(start_time), Mode::Blocks { number_of_blocks })
         .await
         .unwrap();
-    for tx in txs {
-        status_sender.send_replace(Some(tx.id(&ChainId::default())));
-    }
+    new_txs_notifier.send_replace(());
 
     for t in times.into_iter() {
         let block_time = rx.recv().await.unwrap();

@@ -1,10 +1,26 @@
 use self::adapters::BlockImporterAdapter;
 use crate::{
-    combined_database::CombinedDatabase,
+    combined_database::{
+        CombinedDatabase,
+        ShutdownListener,
+    },
     database::Database,
-    service::adapters::PoAAdapter,
+    service::{
+        adapters::{
+            ExecutorAdapter,
+            PoAAdapter,
+        },
+        sub_services::TxPoolSharedState,
+    },
 };
-use fuel_core_poa::ports::BlockImporter;
+use fuel_core_chain_config::{
+    ConsensusConfig,
+    GenesisCommitment,
+};
+use fuel_core_poa::{
+    ports::BlockImporter,
+    verifier::verify_consensus,
+};
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -12,10 +28,22 @@ use fuel_core_services::{
     State,
     StateWatcher,
 };
-use fuel_core_storage::IsNotFound;
-use std::net::SocketAddr;
+use fuel_core_storage::{
+    not_found,
+    tables::SealedBlockConsensus,
+    transactional::{
+        AtomicView,
+        ReadTransaction,
+    },
+    IsNotFound,
+    StorageAsMut,
+};
+use fuel_core_types::blockchain::consensus::Consensus;
+use std::{
+    net::SocketAddr,
+    sync::Arc,
+};
 
-use crate::service::sub_services::TxPoolSharedState;
 pub use config::{
     Config,
     DbType,
@@ -30,6 +58,7 @@ pub mod genesis;
 pub mod metrics;
 mod query;
 pub mod sub_services;
+pub mod vm_pool;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -53,6 +82,8 @@ pub struct SharedState {
     pub database: CombinedDatabase,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
+    /// The executor to validate blocks.
+    pub executor: ExecutorAdapter,
     /// The config of the service.
     pub config: Config,
 }
@@ -65,22 +96,54 @@ pub struct FuelService {
     /// is wrapped inside.
     runner: ServiceRunner<Task>,
     /// The shared state of the service
+    pub sub_services: Arc<SubServices>,
+    /// The shared state of the service
     pub shared: SharedState,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
 }
 
+impl Drop for FuelService {
+    fn drop(&mut self) {
+        self.send_stop_signal();
+    }
+}
+
 impl FuelService {
     /// Creates a `FuelService` instance from service config
     #[tracing::instrument(skip_all, fields(name = %config.name))]
-    pub fn new(database: CombinedDatabase, config: Config) -> anyhow::Result<Self> {
+    pub fn new<Shutdown>(
+        mut database: CombinedDatabase,
+        config: Config,
+        shutdown_listener: &mut Shutdown,
+    ) -> anyhow::Result<Self>
+    where
+        Shutdown: ShutdownListener,
+    {
         let config = config.make_config_consistent();
-        let task = Task::new(database, config)?;
+
+        // initialize state
+        tracing::info!("Initializing database");
+        database.check_version()?;
+
+        Self::make_database_compatible_with_config(
+            &mut database,
+            &config,
+            shutdown_listener,
+        )?;
+
+        // initialize sub services
+        tracing::info!("Initializing sub services");
+        database.sync_aux_db_heights(shutdown_listener)?;
+        let (services, shared) = sub_services::init_sub_services(&config, database)?;
+
+        let sub_services = Arc::new(services);
+        let task = Task::new(sub_services.clone(), shared.clone())?;
         let runner = ServiceRunner::new(task);
-        let shared = runner.shared.clone();
         let bound_address = runner.shared.graph_ql.bound_address;
 
         Ok(FuelService {
+            sub_services,
             bound_address,
             shared,
             runner,
@@ -101,8 +164,12 @@ impl FuelService {
         database: Database,
         config: Config,
     ) -> anyhow::Result<Self> {
-        let combined_database =
-            CombinedDatabase::new(database, Default::default(), Default::default());
+        let combined_database = CombinedDatabase::new(
+            database,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        );
         Self::from_combined_database(combined_database, config).await
     }
 
@@ -111,8 +178,9 @@ impl FuelService {
         combined_database: CombinedDatabase,
         config: Config,
     ) -> anyhow::Result<Self> {
-        let service = Self::new(combined_database, config)?;
-        let state = service.runner.start_and_await().await?;
+        let mut listener = crate::ShutdownListener::spawn();
+        let service = Self::new(combined_database, config, &mut listener)?;
+        let state = service.start_and_await().await?;
 
         if !state.started() {
             return Err(anyhow::anyhow!(
@@ -140,68 +208,188 @@ impl FuelService {
         }
         Ok(())
     }
-}
 
-#[async_trait::async_trait]
-impl ServiceTrait for FuelService {
-    fn start(&self) -> anyhow::Result<()> {
-        self.runner.start()
+    fn make_database_compatible_with_config<Shutdown>(
+        combined_database: &mut CombinedDatabase,
+        config: &Config,
+        shutdown_listener: &mut Shutdown,
+    ) -> anyhow::Result<()>
+    where
+        Shutdown: ShutdownListener,
+    {
+        let start_up_consensus_config = &config.snapshot_reader.chain_config().consensus;
+
+        let mut found_override_height = None;
+        match start_up_consensus_config {
+            ConsensusConfig::PoA { .. } => {
+                // We don't support overriding of the heights for PoA version 1.
+            }
+            ConsensusConfig::PoAV2(poa) => {
+                let on_chain_view = combined_database.on_chain().latest_view()?;
+
+                for override_height in poa.get_all_overrides().keys() {
+                    let Some(current_height) = on_chain_view.maybe_latest_height()?
+                    else {
+                        // Database is empty, nothing to rollback
+                        return Ok(());
+                    };
+
+                    if override_height > &current_height {
+                        return Ok(());
+                    }
+
+                    let block_header = on_chain_view
+                        .get_sealed_block_header(override_height)?
+                        .ok_or(not_found!("SealedBlockHeader"))?;
+                    let header = block_header.entity;
+                    let seal = block_header.consensus;
+
+                    if let Consensus::PoA(poa_seal) = seal {
+                        let block_valid = verify_consensus(
+                            start_up_consensus_config,
+                            &header,
+                            &poa_seal,
+                        );
+
+                        if !block_valid {
+                            found_override_height = Some(override_height);
+                        }
+                    } else {
+                        return Err(anyhow::anyhow!(
+                            "The consensus at override height {override_height} is not PoA."
+                        ));
+                    };
+                }
+            }
+        }
+
+        if let Some(override_height) = found_override_height {
+            let rollback_height = override_height.pred().ok_or(anyhow::anyhow!(
+                "The override height is zero. \
+                The override height should be greater than zero."
+            ))?;
+            tracing::warn!(
+                "The consensus at override height {override_height} \
+                does not match with the database. \
+                Rollbacking the database to the height {rollback_height}"
+            );
+            combined_database.rollback_to(rollback_height, shutdown_listener)?;
+        }
+
+        Ok(())
     }
 
-    async fn start_and_await(&self) -> anyhow::Result<State> {
+    fn override_chain_config_if_needed(&self) -> anyhow::Result<()> {
+        let chain_config = self.shared.config.snapshot_reader.chain_config();
+        let on_chain_view = self.shared.database.on_chain().latest_view()?;
+        let chain_config_hash = chain_config.root()?.into();
+        let mut initialized_genesis = on_chain_view.get_genesis()?;
+        let genesis_chain_config_hash = initialized_genesis.chain_config_hash;
+
+        if genesis_chain_config_hash != chain_config_hash {
+            tracing::warn!(
+                "The genesis chain config hash({genesis_chain_config_hash}) \
+                is different from the current one({chain_config_hash}). \
+                Updating the genesis consensus parameters."
+            );
+
+            let genesis_block_height =
+                on_chain_view.genesis_height()?.ok_or(anyhow::anyhow!(
+                    "The genesis block height is not found in the database \
+                    during overriding the chain config hash."
+                ))?;
+            let mut database_tx = on_chain_view.read_transaction();
+
+            initialized_genesis.chain_config_hash = chain_config_hash;
+            database_tx
+                .storage_as_mut::<SealedBlockConsensus>()
+                .insert(
+                    &genesis_block_height,
+                    &Consensus::Genesis(initialized_genesis),
+                )?;
+
+            self.shared
+                .database
+                .on_chain()
+                .data
+                .commit_changes(Some(genesis_block_height), database_tx.into_changes())?;
+        }
+
+        Ok(())
+    }
+
+    async fn prepare_genesis(&self, watcher: &StateWatcher) -> anyhow::Result<()> {
+        // check if chain is initialized
+        if let Err(err) = self.shared.database.on_chain().latest_view()?.get_genesis() {
+            if err.is_not_found() {
+                let result = genesis::execute_genesis_block(
+                    watcher.clone(),
+                    &self.shared.config,
+                    &self.shared.database,
+                )
+                .await?;
+
+                self.shared.block_importer.commit_result(result).await?;
+            }
+        }
+
+        // repopulate missing tables
+        genesis::recover_missing_tables_from_genesis_state_config(
+            watcher.clone(),
+            &self.shared.config,
+            &self.shared.database,
+        )
+        .await?;
+
+        self.override_chain_config_if_needed()
+    }
+}
+
+impl FuelService {
+    /// Start all sub services and await for them to start.
+    pub async fn start_and_await(&self) -> anyhow::Result<State> {
+        let watcher = self.runner.state_watcher();
+        self.prepare_genesis(&watcher).await?;
         self.runner.start_and_await().await
     }
 
-    async fn await_start_or_stop(&self) -> anyhow::Result<State> {
-        self.runner.await_start_or_stop().await
-    }
-
-    fn stop(&self) -> bool {
+    /// Sends the stop signal to all sub services.
+    pub fn send_stop_signal(&self) -> bool {
         self.runner.stop()
     }
 
-    async fn stop_and_await(&self) -> anyhow::Result<State> {
-        self.runner.stop_and_await().await
-    }
-
-    async fn await_stop(&self) -> anyhow::Result<State> {
+    /// Awaits for all services to shutdown.
+    pub async fn await_shutdown(&self) -> anyhow::Result<State> {
         self.runner.await_stop().await
     }
 
-    fn state(&self) -> State {
+    /// Sends the stop signal to all sub services and awaits for all services to shutdown.
+    pub async fn send_stop_signal_and_await_shutdown(&self) -> anyhow::Result<State> {
+        self.runner.stop_and_await().await
+    }
+
+    pub fn state(&self) -> State {
         self.runner.state()
     }
 
-    fn state_watcher(&self) -> StateWatcher {
-        self.runner.state_watcher()
+    pub fn sub_services(&self) -> &SubServices {
+        self.sub_services.as_ref()
     }
 }
 
 pub type SubServices = Vec<Box<dyn ServiceTrait + Send + Sync + 'static>>;
 
-pub struct Task {
+struct Task {
     /// The list of started sub services.
-    services: SubServices,
+    services: Arc<SubServices>,
     /// The address bound by the system for serving the API
     pub shared: SharedState,
 }
 
 impl Task {
     /// Private inner method for initializing the fuel service task
-    pub fn new(database: CombinedDatabase, config: Config) -> anyhow::Result<Task> {
-        // initialize state
-        tracing::info!("Initializing database");
-        database.check_version()?;
-
-        // initialize sub services
-        tracing::info!("Initializing sub services");
-        let (services, shared) = sub_services::init_sub_services(&config, database)?;
+    pub fn new(services: Arc<SubServices>, shared: SharedState) -> anyhow::Result<Task> {
         Ok(Task { services, shared })
-    }
-
-    #[cfg(test)]
-    pub fn sub_services(&mut self) -> &mut SubServices {
-        &mut self.services
     }
 }
 
@@ -217,26 +405,21 @@ impl RunnableService for Task {
     }
 
     async fn into_task(
-        self,
+        mut self,
         watcher: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        // check if chain is initialized
-        if let Err(err) = self.shared.database.on_chain().get_genesis() {
-            if err.is_not_found() {
-                let result = genesis::execute_genesis_block(
-                    watcher.clone(),
-                    &self.shared.config,
-                    &self.shared.database,
-                )
-                .await?;
+        let mut watcher = watcher.clone();
 
-                self.shared.block_importer.commit_result(result).await?;
+        for service in self.services.iter() {
+            tokio::select! {
+                _ = watcher.wait_stopping_or_stopped() => {
+                    break;
+                }
+                result = service.start_and_await() => {
+                    result?;
+                }
             }
-        }
-
-        for service in &self.services {
-            service.start_and_await().await?;
         }
         Ok(self)
     }
@@ -247,7 +430,7 @@ impl RunnableTask for Task {
     #[tracing::instrument(skip_all)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
         let mut stop_signals = vec![];
-        for service in &self.services {
+        for service in self.services.iter() {
             stop_signals.push(service.await_stop())
         }
         stop_signals.push(Box::pin(watcher.while_started()));
@@ -265,7 +448,7 @@ impl RunnableTask for Task {
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        for service in self.services {
+        for service in self.services.iter() {
             let result = service.stop_and_await().await;
 
             if let Err(err) = result {
@@ -279,48 +462,52 @@ impl RunnableTask for Task {
     }
 }
 
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
-    use crate::service::{
-        Config,
-        Task,
+    use crate::{
+        service::{
+            Config,
+            FuelService,
+        },
+        ShutdownListener,
     };
-    use fuel_core_services::{
-        RunnableService,
-        RunnableTask,
-        State,
-    };
+    use fuel_core_services::State;
     use std::{
         thread::sleep,
         time::Duration,
     };
 
     #[tokio::test]
-    async fn run_start_and_stop() {
+    async fn stop_sub_service_shutdown_all_services() {
         // The test verify that if we stop any of sub-services
         let mut i = 0;
         loop {
-            let task = Task::new(Default::default(), Config::local_node()).unwrap();
-            let (_, receiver) = tokio::sync::watch::channel(State::NotStarted);
-            let mut watcher = receiver.into();
-            let mut task = task.into_task(&watcher, ()).await.unwrap();
+            let mut shutdown = ShutdownListener::spawn();
+            let service =
+                FuelService::new(Default::default(), Config::local_node(), &mut shutdown)
+                    .unwrap();
+            service.start_and_await().await.unwrap();
             sleep(Duration::from_secs(1));
-            for service in task.sub_services() {
+            for service in service.sub_services() {
                 assert_eq!(service.state(), State::Started);
             }
 
-            if i < task.sub_services().len() {
-                task.sub_services()[i].stop_and_await().await.unwrap();
-                assert!(!task.run(&mut watcher).await.unwrap());
+            if i < service.sub_services().len() {
+                service.sub_services()[i].stop_and_await().await.unwrap();
+                tokio::time::timeout(Duration::from_secs(5), service.await_shutdown())
+                    .await
+                    .expect("Failed to stop the service in reasonable period of time")
+                    .expect("Failed to stop the service");
             } else {
                 break;
             }
             i += 1;
         }
 
-        // current services: graphql, graphql worker, txpool, PoA
+        // current services: graphql, graphql worker, txpool, PoA, gas price service
         #[allow(unused_mut)]
-        let mut expected_services = 5;
+        let mut expected_services = 6;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]
@@ -338,20 +525,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn shutdown_stops_all_services() {
-        let task = Task::new(Default::default(), Config::local_node()).unwrap();
-        let mut task = task.into_task(&Default::default(), ()).await.unwrap();
-        let sub_services_watchers: Vec<_> = task
+    async fn stop_and_await___stops_all_services() {
+        let mut shutdown = ShutdownListener::spawn();
+        let service =
+            FuelService::new(Default::default(), Config::local_node(), &mut shutdown)
+                .unwrap();
+        service.start_and_await().await.unwrap();
+        let sub_services_watchers: Vec<_> = service
             .sub_services()
             .iter()
             .map(|s| s.state_watcher())
             .collect();
 
         sleep(Duration::from_secs(1));
-        for service in task.sub_services() {
+        for service in service.sub_services() {
             assert_eq!(service.state(), State::Started);
         }
-        task.shutdown().await.unwrap();
+        service.send_stop_signal_and_await_shutdown().await.unwrap();
 
         for mut service in sub_services_watchers {
             // Check that the state is `Stopped`(not `StoppedWithError`)

@@ -27,12 +27,15 @@ use crate::client::pagination::{
 pub use primitives::*;
 
 pub mod balance;
+pub mod blob;
 pub mod block;
 pub mod chain;
 pub mod coins;
 pub mod contract;
+pub mod da_compressed;
 pub mod message;
 pub mod node_info;
+pub mod upgrades;
 
 pub mod gas_price;
 pub mod primitives;

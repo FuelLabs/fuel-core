@@ -30,46 +30,26 @@ impl<Provider, ArcView> ArcWrapper<Provider, ArcView> {
     }
 }
 
-impl<Provider, View, Height> AtomicView for ArcWrapper<Provider, OnChainView>
+impl<Provider, View> AtomicView for ArcWrapper<Provider, OnChainView>
 where
-    Provider: AtomicView<View = View, Height = Height>,
+    Provider: AtomicView<LatestView = View>,
     View: OnChainDatabase + 'static,
 {
-    type View = OnChainView;
-    type Height = Height;
+    type LatestView = OnChainView;
 
-    fn latest_height(&self) -> Option<Self::Height> {
-        self.inner.latest_height()
-    }
-
-    fn view_at(&self, height: &Height) -> StorageResult<Self::View> {
-        let view = self.inner.view_at(height)?;
-        Ok(Arc::new(view))
-    }
-
-    fn latest_view(&self) -> Self::View {
-        Arc::new(self.inner.latest_view())
+    fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        Ok(Arc::new(self.inner.latest_view()?))
     }
 }
 
-impl<Provider, View, Height> AtomicView for ArcWrapper<Provider, OffChainView>
+impl<Provider, View> AtomicView for ArcWrapper<Provider, OffChainView>
 where
-    Provider: AtomicView<View = View, Height = Height>,
+    Provider: AtomicView<LatestView = View>,
     View: OffChainDatabase + 'static,
 {
-    type View = OffChainView;
-    type Height = Height;
+    type LatestView = OffChainView;
 
-    fn latest_height(&self) -> Option<Self::Height> {
-        self.inner.latest_height()
-    }
-
-    fn view_at(&self, height: &Height) -> StorageResult<Self::View> {
-        let view = self.inner.view_at(height)?;
-        Ok(Arc::new(view))
-    }
-
-    fn latest_view(&self) -> Self::View {
-        Arc::new(self.inner.latest_view())
+    fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        Ok(Arc::new(self.inner.latest_view()?))
     }
 }

@@ -1,6 +1,6 @@
 use clap::Parser;
 use fuel_core_types::fuel_tx::{
-    consensus_parameters::gas::GasCostsValuesV1,
+    consensus_parameters::gas::GasCostsValuesV4,
     ConsensusParameters,
     GasCosts,
 };
@@ -371,7 +371,7 @@ pub const GIT: &str = ""#,
     r#"";"#,
     r##"
 pub fn default_gas_costs() -> GasCostsValues {
-    GasCostsValuesV1 {"##,
+    GasCostsValuesV4 {"##,
     r##"    }.into()
 }
 "##,
@@ -495,7 +495,7 @@ impl State {
         )
     }
 
-    fn to_gas_costs(&self) -> GasCostsValuesV1 {
+    fn to_gas_costs(&self) -> GasCostsValuesV4 {
         serde_yaml::from_value(self.to_yaml()).unwrap()
     }
 
@@ -642,12 +642,12 @@ fn linear_regression(x_y: Vec<(u64, u64)>) -> f64 {
 }
 
 fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> DependentCost {
-    const NEAR_LINEAR: f64 = 0.1;
+    const NEAR_LINEAR: f64 = 0.2;
 
     #[derive(PartialEq, Eq)]
     enum Type {
         /// The points have a linear property. The first point
-        /// and the last points are almost the same(The difference is < 0.1).
+        /// and the last points are almost the same(The difference is < `NEAR_LINEAR`).
         Linear,
         /// When the delta of the last point is much lower than
         /// the first point, it is a logarithmic chart.

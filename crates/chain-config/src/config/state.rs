@@ -1,4 +1,5 @@
 use super::{
+    blob::BlobConfig,
     coin::CoinConfig,
     contract::ContractConfig,
     message::MessageConfig,
@@ -33,6 +34,7 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
+    fuel_vm::BlobData,
 };
 use itertools::Itertools;
 use serde::{
@@ -121,6 +123,9 @@ pub struct StateConfig {
     pub coins: Vec<CoinConfig>,
     /// Messages from Layer 1
     pub messages: Vec<MessageConfig>,
+    /// Blobs
+    #[serde(default)]
+    pub blobs: Vec<BlobConfig>,
     /// Contracts
     pub contracts: Vec<ContractConfig>,
     /// Last block config.
@@ -131,6 +136,7 @@ pub struct StateConfig {
 pub struct StateConfigBuilder {
     coins: Vec<TableEntry<Coins>>,
     messages: Vec<TableEntry<Messages>>,
+    blobs: Vec<TableEntry<BlobData>>,
     contract_state: Vec<TableEntry<ContractsState>>,
     contract_balance: Vec<TableEntry<ContractsAssets>>,
     contract_code: Vec<TableEntry<ContractsRawCode>>,
@@ -141,6 +147,7 @@ impl StateConfigBuilder {
     pub fn merge(&mut self, builder: Self) -> &mut Self {
         self.coins.extend(builder.coins);
         self.messages.extend(builder.messages);
+        self.blobs.extend(builder.blobs);
         self.contract_state.extend(builder.contract_state);
         self.contract_balance.extend(builder.contract_balance);
         self.contract_code.extend(builder.contract_code);
@@ -162,6 +169,7 @@ impl StateConfigBuilder {
             .into_iter()
             .map(|message| message.into())
             .collect();
+        let blobs = self.blobs.into_iter().map(|blob| blob.into()).collect();
         let contract_ids = self
             .contract_code
             .iter()
@@ -240,6 +248,7 @@ impl StateConfigBuilder {
         Ok(StateConfig {
             coins,
             messages,
+            blobs,
             contracts,
             last_block: latest_block_config,
         })
@@ -285,6 +294,7 @@ impl crate::Randomize for StateConfig {
         Self {
             coins: rand_collection(&mut rng, amount),
             messages: rand_collection(&mut rng, amount),
+            blobs: rand_collection(&mut rng, amount),
             contracts: rand_collection(&mut rng, amount),
             last_block: Some(LastBlockConfig {
                 block_height: rng.gen(),
@@ -317,6 +327,22 @@ impl AsTable<Messages> for StateConfig {
 impl AddTable<Messages> for StateConfigBuilder {
     fn add(&mut self, entries: Vec<TableEntry<Messages>>) {
         self.messages.extend(entries);
+    }
+}
+
+impl AsTable<BlobData> for StateConfig {
+    fn as_table(&self) -> Vec<TableEntry<BlobData>> {
+        self.blobs
+            .clone()
+            .into_iter()
+            .map(|blob| blob.into())
+            .collect()
+    }
+}
+
+impl AddTable<BlobData> for StateConfigBuilder {
+    fn add(&mut self, entries: Vec<TableEntry<BlobData>>) {
+        self.blobs.extend(entries);
     }
 }
 
@@ -482,6 +508,12 @@ impl StateConfig {
             .sorted_by_key(|m| m.nonce)
             .collect();
 
+        self.blobs = self
+            .blobs
+            .into_iter()
+            .sorted_by_key(|b| b.blob_id)
+            .collect();
+
         self.contracts = self
             .contracts
             .into_iter()
@@ -524,6 +556,14 @@ impl StateConfig {
             .try_collect()?;
 
         builder.add(messages);
+
+        let blobs = reader
+            .read::<BlobData>()?
+            .into_iter()
+            .flatten_ok()
+            .try_collect()?;
+
+        builder.add(blobs);
 
         let contract_state = reader
             .read::<ContractsState>()?
@@ -667,6 +707,7 @@ mod tests {
 
         test_tables!(
             Coins,
+            BlobData,
             ContractsAssets,
             ContractsLatestUtxo,
             ContractsRawCode,
@@ -684,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn json_roundtrip_coins_and_messages() {
+    fn json_roundtrip_non_contract_related_tables() {
         let writer = |temp_dir: &Path| SnapshotWriter::json(temp_dir);
         let reader = |metadata: SnapshotMetadata, group_size: usize| {
             SnapshotReader::open_w_config(metadata, group_size).unwrap()
@@ -692,6 +733,7 @@ mod tests {
 
         assert_roundtrip::<Coins>(writer, reader);
         assert_roundtrip::<Messages>(writer, reader);
+        assert_roundtrip::<BlobData>(writer, reader);
     }
 
     #[test]
@@ -735,23 +777,21 @@ mod tests {
         let chain_config = ChainConfig::local_testnet();
 
         macro_rules! write_in_fragments {
-                ($($fragment_ty: ty,)*) => {
-                [
+            ($($fragment_ty: ty,)*) => {[
                 $({
                     let mut writer = create_writer();
                     writer
                         .write(AsTable::<$fragment_ty>::as_table(&state_config))
                         .unwrap();
                     writer.partial_close().unwrap()
-
                 }),*
-                ]
-            }
-            }
+            ]}
+        }
 
         let fragments = write_in_fragments!(
             Coins,
             Messages,
+            BlobData,
             ContractsState,
             ContractsAssets,
             ContractsRawCode,

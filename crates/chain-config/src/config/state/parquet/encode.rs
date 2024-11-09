@@ -19,10 +19,6 @@ use parquet::{
     data_type::ByteArrayType,
     schema::types::Type,
 };
-use postcard::ser_flavors::{
-    AllocVec,
-    Flavor,
-};
 
 pub struct Encoder<W>
 where
@@ -86,24 +82,5 @@ where
     pub fn close(self) -> anyhow::Result<()> {
         self.writer.close()?;
         Ok(())
-    }
-}
-
-pub trait Encode<T> {
-    fn encode(data: &T) -> anyhow::Result<Vec<u8>>;
-}
-
-pub struct PostcardEncode;
-
-impl<T> Encode<T> for PostcardEncode
-where
-    T: serde::Serialize,
-{
-    fn encode(data: &T) -> anyhow::Result<Vec<u8>> {
-        let mut serializer = postcard::Serializer {
-            output: AllocVec::new(),
-        };
-        data.serialize(&mut serializer)?;
-        Ok(serializer.output.finalize()?)
     }
 }

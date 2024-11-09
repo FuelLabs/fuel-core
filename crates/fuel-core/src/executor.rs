@@ -6,8 +6,15 @@ mod tests {
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
-        executor::OnceTransactionsSource,
-        ports::RelayerPort,
+        executor::{
+            OnceTransactionsSource,
+            MAX_TX_COUNT,
+        },
+        ports::{
+            MaybeCheckedTransaction,
+            RelayerPort,
+            TransactionsSource,
+        },
         refs::ContractRef,
     };
     use fuel_core_storage::{
@@ -32,6 +39,7 @@ mod tests {
                 PartialFuelBlock,
             },
             header::{
+                ApplicationHeader,
                 ConsensusHeader,
                 PartialBlockHeader,
             },
@@ -50,8 +58,12 @@ mod tests {
             RegId,
         },
         fuel_crypto::SecretKey,
-        fuel_merkle::sparse,
+        fuel_merkle::{
+            common::empty_sum_sha256,
+            sparse,
+        },
         fuel_tx::{
+            consensus_parameters::gas::GasCostsValuesV1,
             field::{
                 InputContract,
                 Inputs,
@@ -76,8 +88,10 @@ mod tests {
             Cacheable,
             ConsensusParameters,
             Create,
+            DependentCost,
             FeeParameters,
             Finalizable,
+            GasCostsValues,
             Output,
             Receipt,
             Script,
@@ -104,8 +118,13 @@ mod tests {
             checked_transaction::{
                 CheckError,
                 EstimatePredicates,
+                IntoChecked,
             },
-            interpreter::ExecutableTransaction,
+            interpreter::{
+                ExecutableTransaction,
+                MemoryInstance,
+            },
+            predicate::EmptyStorage,
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
             Call,
@@ -132,6 +151,7 @@ mod tests {
         Rng,
         SeedableRng,
     };
+    use std::sync::Mutex;
 
     #[derive(Clone, Debug, Default)]
     struct Config {
@@ -159,19 +179,36 @@ mod tests {
     }
 
     impl AtomicView for DisabledRelayer {
-        type View = Self;
-        type Height = DaBlockHeight;
+        type LatestView = Self;
 
-        fn latest_height(&self) -> Option<Self::Height> {
-            Some(0u64.into())
+        fn latest_view(&self) -> StorageResult<Self::LatestView> {
+            Ok(self.clone())
         }
+    }
 
-        fn view_at(&self, _: &Self::Height) -> StorageResult<Self::View> {
-            Ok(self.latest_view())
+    /// Bad transaction source: ignores the limit of `u16::MAX -1` transactions
+    /// that should be returned by [`TransactionsSource::next()`].
+    /// It is used only for testing purposes
+    pub struct BadTransactionsSource {
+        transactions: Mutex<Vec<MaybeCheckedTransaction>>,
+    }
+
+    impl BadTransactionsSource {
+        pub fn new(transactions: Vec<Transaction>) -> Self {
+            Self {
+                transactions: Mutex::new(
+                    transactions
+                        .into_iter()
+                        .map(MaybeCheckedTransaction::Transaction)
+                        .collect(),
+                ),
+            }
         }
+    }
 
-        fn latest_view(&self) -> Self::View {
-            self.clone()
+    impl TransactionsSource for BadTransactionsSource {
+        fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
+            std::mem::take(&mut *self.transactions.lock().unwrap())
         }
     }
 
@@ -317,7 +354,7 @@ mod tests {
 
         let tx =
             TransactionBuilder::create(contract_code.into(), salt, Default::default())
-                .add_random_fee_input()
+                .add_fee_input()
                 .add_output(Output::contract_created(contract_id, state_root))
                 .finalize();
         (tx, contract_id)
@@ -505,6 +542,7 @@ mod tests {
             } = producer
                 .storage_view_provider
                 .latest_view()
+                .unwrap()
                 .contract_balances(recipient, None, IterDirection::Forward)
                 .next()
                 .unwrap()
@@ -595,6 +633,7 @@ mod tests {
             } = producer
                 .storage_view_provider
                 .latest_view()
+                .unwrap()
                 .contract_balances(recipient, None, IterDirection::Forward)
                 .next()
                 .unwrap()
@@ -704,6 +743,7 @@ mod tests {
             } = validator
                 .storage_view_provider
                 .latest_view()
+                .unwrap()
                 .contract_balances(recipient, None, IterDirection::Forward)
                 .next()
                 .unwrap()
@@ -1430,6 +1470,67 @@ mod tests {
     }
 
     #[test]
+    fn transaction_consuming_too_much_gas_are_skipped() {
+        // Gather the gas consumption of the transaction
+        let mut executor = create_executor(Default::default(), Default::default());
+        let block: PartialFuelBlock = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(100_000_000)
+                .add_fee_input()
+                .script_gas_limit(0)
+                .tip(123)
+                .finalize_as_transaction()],
+        };
+
+        // When
+        let ExecutionResult { tx_status, .. } =
+            executor.produce_and_commit(block).unwrap();
+        let tx_gas_usage = tx_status[0].result.total_gas();
+
+        // Given
+        let mut txs = vec![];
+        for i in 0..10 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(100_000_000)
+                .add_fee_input()
+                .script_gas_limit(0)
+                .tip(i * 100)
+                .finalize_as_transaction();
+            txs.push(tx);
+        }
+        let mut config: Config = Default::default();
+        // Each TX consumes `tx_gas_usage` gas and so set the block gas limit to execute only 9 transactions.
+        let block_gas_limit = tx_gas_usage * 9;
+        config
+            .consensus_parameters
+            .set_block_gas_limit(block_gas_limit);
+        let mut executor = create_executor(Default::default(), config);
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: txs,
+        };
+
+        // When
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = executor.produce_and_commit(block).unwrap();
+
+        // Then
+        assert_eq!(skipped_transactions.len(), 1);
+        assert_eq!(
+            skipped_transactions[0].1,
+            ExecutorError::GasOverflow(
+                "Transaction cannot fit in remaining gas limit: (0).".into(),
+                *tx_gas_usage,
+                0
+            )
+        );
+    }
+
+    #[test]
     fn skipped_txs_not_affect_order() {
         // `tx1` is invalid because it doesn't have inputs for max fee.
         // `tx2` is a `Create` transaction with some code inside.
@@ -1439,7 +1540,7 @@ mod tests {
         // The test checks that execution for the block with transactions [tx1, tx2, tx3] skips
         // transaction `tx1` and produce a block [tx2, tx3] with the expected order.
         let tx1 = TransactionBuilder::script(vec![], vec![])
-            .add_random_fee_input()
+            .add_fee_input()
             .script_gas_limit(1000000)
             .tip(1000000)
             .finalize_as_transaction();
@@ -2300,7 +2401,7 @@ mod tests {
         };
 
         let mut exec = make_executor(&messages);
-        let view = exec.storage_view_provider.latest_view();
+        let view = exec.storage_view_provider.latest_view().unwrap();
         assert!(view.message_exists(message_coin.nonce()).unwrap());
         assert!(view.message_exists(message_data.nonce()).unwrap());
 
@@ -2311,7 +2412,7 @@ mod tests {
         assert_eq!(skipped_transactions.len(), 0);
 
         // Successful execution consumes `message_coin` and `message_data`.
-        let view = exec.storage_view_provider.latest_view();
+        let view = exec.storage_view_provider.latest_view().unwrap();
         assert!(!view.message_exists(message_coin.nonce()).unwrap());
         assert!(!view.message_exists(message_data.nonce()).unwrap());
         assert_eq!(
@@ -2347,7 +2448,7 @@ mod tests {
         };
 
         let mut exec = make_executor(&messages);
-        let view = exec.storage_view_provider.latest_view();
+        let view = exec.storage_view_provider.latest_view().unwrap();
         assert!(view.message_exists(message_coin.nonce()).unwrap());
         assert!(view.message_exists(message_data.nonce()).unwrap());
 
@@ -2358,7 +2459,7 @@ mod tests {
         assert_eq!(skipped_transactions.len(), 0);
 
         // We should spend only `message_coin`. The `message_data` should be unspent.
-        let view = exec.storage_view_provider.latest_view();
+        let view = exec.storage_view_provider.latest_view().unwrap();
         assert!(!view.message_exists(message_coin.nonce()).unwrap());
         assert!(view.message_exists(message_data.nonce()).unwrap());
         assert_eq!(*view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);
@@ -2524,6 +2625,109 @@ mod tests {
     }
 
     #[test]
+    fn withdrawal_message_included_in_header_for_successfully_executed_transaction() {
+        // Given
+        let amount_from_random_input = 1000;
+        let smo_tx = TransactionBuilder::script(
+            vec![
+                // The amount to send in coins.
+                op::movi(0x13, amount_from_random_input),
+                // Send the message output.
+                op::smo(0x0, 0x0, 0x0, 0x13),
+                op::ret(RegId::ONE),
+            ]
+            .into_iter()
+            .collect(),
+            vec![],
+        )
+        .add_fee_input()
+        .script_gas_limit(1000000)
+        .finalize_as_transaction();
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![smo_tx],
+        };
+
+        // When
+        let ExecutionResult { block, .. } =
+            create_executor(Default::default(), Default::default())
+                .produce_and_commit(block)
+                .expect("block execution failed unexpectedly");
+        let result = create_executor(Default::default(), Default::default())
+            .validate_and_commit(&block)
+            .expect("block validation failed unexpectedly");
+
+        // Then
+        let Some(Receipt::MessageOut {
+            sender,
+            recipient,
+            amount,
+            nonce,
+            data,
+            ..
+        }) = result.tx_status[0].result.receipts().first().cloned()
+        else {
+            panic!("Expected a MessageOut receipt");
+        };
+
+        // Reconstruct merkle message outbox merkle root  and see that it matches
+        let mut mt = fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new();
+        mt.push(
+            &Message::V1(MessageV1 {
+                sender,
+                recipient,
+                nonce,
+                amount,
+                data: data.unwrap_or_default(),
+                da_height: 1u64.into(),
+            })
+            .message_id()
+            .to_bytes(),
+        );
+        assert_eq!(block.header().message_outbox_root.as_ref(), mt.root());
+    }
+
+    #[test]
+    fn withdrawal_message_not_included_in_header_for_failed_transaction() {
+        // Given
+        let amount_from_random_input = 1000;
+        let smo_tx = TransactionBuilder::script(
+            vec![
+                // The amount to send in coins.
+                op::movi(0x13, amount_from_random_input),
+                // Send the message output.
+                op::smo(0x0, 0x0, 0x0, 0x13),
+                op::rvrt(0x0),
+            ]
+            .into_iter()
+            .collect(),
+            vec![],
+        )
+        .add_fee_input()
+        .script_gas_limit(1000000)
+        .finalize_as_transaction();
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![smo_tx],
+        };
+
+        // When
+        let ExecutionResult { block, .. } =
+            create_executor(Default::default(), Default::default())
+                .produce_and_commit(block)
+                .expect("block execution failed unexpectedly");
+        create_executor(Default::default(), Default::default())
+            .validate_and_commit(&block)
+            .expect("block validation failed unexpectedly");
+
+        // Then
+        let empty_root = empty_sum_sha256();
+        assert_eq!(block.header().message_outbox_root.as_ref(), empty_root)
+    }
+
+    #[test]
     fn get_block_height_returns_current_executing_block() {
         let mut rng = StdRng::seed_from_u64(1234);
 
@@ -2686,8 +2890,12 @@ mod tests {
             asset_id: Default::default(),
         })
         .finalize();
-        tx.estimate_predicates(&consensus_parameters.clone().into())
-            .unwrap();
+        tx.estimate_predicates(
+            &consensus_parameters.clone().into(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .unwrap();
         let db = &mut Database::default();
 
         // insert coin into state
@@ -2730,19 +2938,188 @@ mod tests {
         assert!(result.is_ok(), "{result:?}")
     }
 
+    #[test]
+    fn verifying_during_production_consensus_parameters_version_works() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let predicate: Vec<u8> = vec![op::ret(RegId::ONE)].into_iter().collect();
+        let owner = Input::predicate_owner(&predicate);
+        let amount = 1000;
+        let cheap_consensus_parameters = ConsensusParameters::default();
+
+        let mut tx = TransactionBuilder::script(vec![], vec![])
+            .max_fee_limit(amount)
+            .add_input(Input::coin_predicate(
+                rng.gen(),
+                owner,
+                amount,
+                AssetId::BASE,
+                rng.gen(),
+                0,
+                predicate,
+                vec![],
+            ))
+            .finalize();
+        tx.estimate_predicates(
+            &cheap_consensus_parameters.clone().into(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .unwrap();
+
+        // Given
+        let gas_costs: GasCostsValues = GasCostsValuesV1 {
+            vm_initialization: DependentCost::HeavyOperation {
+                base: u32::MAX as u64,
+                gas_per_unit: 0,
+            },
+            ..GasCostsValuesV1::free()
+        }
+        .into();
+        let expensive_consensus_parameters_version = 0;
+        let mut expensive_consensus_parameters = ConsensusParameters::default();
+        expensive_consensus_parameters.set_gas_costs(gas_costs.into());
+        // The block gas limit should cover `vm_initialization` cost
+        expensive_consensus_parameters.set_block_gas_limit(u64::MAX);
+        let config = Config {
+            consensus_parameters: expensive_consensus_parameters.clone(),
+            ..Default::default()
+        };
+        let producer = create_executor(Database::default(), config.clone());
+
+        let cheap_consensus_parameters_version = 1;
+        let cheaply_checked_tx = MaybeCheckedTransaction::CheckedTransaction(
+            tx.into_checked_basic(0u32.into(), &cheap_consensus_parameters)
+                .unwrap()
+                .into(),
+            cheap_consensus_parameters_version,
+        );
+
+        // When
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = producer
+            .produce_without_commit_with_source(Components {
+                header_to_produce: PartialBlockHeader {
+                    application: ApplicationHeader {
+                        consensus_parameters_version:
+                            expensive_consensus_parameters_version,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                transactions_source: OnceTransactionsSource::new_maybe_checked(vec![
+                    cheaply_checked_tx,
+                ]),
+                coinbase_recipient: Default::default(),
+                gas_price: 1,
+            })
+            .unwrap()
+            .into_result();
+
+        // Then
+        assert_eq!(skipped_transactions.len(), 1);
+        assert!(matches!(
+            skipped_transactions[0].1,
+            ExecutorError::InvalidTransaction(_)
+        ));
+    }
+
+    #[test]
+    fn block_producer_never_includes_more_than_max_tx_count_transactions() {
+        let block_height = 1u32;
+        let block_da_height = 2u64;
+
+        let mut consensus_parameters = ConsensusParameters::default();
+
+        // Given
+        let transactions_in_tx_source = (MAX_TX_COUNT as usize) + 10;
+        consensus_parameters.set_block_gas_limit(u64::MAX);
+        let config = Config {
+            consensus_parameters,
+            ..Default::default()
+        };
+
+        // When
+        let block = test_block(
+            block_height.into(),
+            block_da_height.into(),
+            transactions_in_tx_source,
+        );
+        let partial_fuel_block: PartialFuelBlock = block.into();
+
+        let producer = create_executor(Database::default(), config);
+        let (result, _) = producer
+            .produce_without_commit(partial_fuel_block)
+            .unwrap()
+            .into();
+
+        // Then
+        assert_eq!(
+            result.block.transactions().len(),
+            (MAX_TX_COUNT as usize + 1)
+        );
+    }
+
+    #[test]
+    fn block_producer_never_includes_more_than_max_tx_count_transactions_with_bad_tx_source(
+    ) {
+        let block_height = 1u32;
+        let block_da_height = 2u64;
+
+        let mut consensus_parameters = ConsensusParameters::default();
+
+        // Given
+        let transactions_in_tx_source = (MAX_TX_COUNT as usize) + 10;
+        consensus_parameters.set_block_gas_limit(u64::MAX);
+        let config = Config {
+            consensus_parameters,
+            ..Default::default()
+        };
+
+        let block = test_block(
+            block_height.into(),
+            block_da_height.into(),
+            transactions_in_tx_source,
+        );
+        let partial_fuel_block: PartialFuelBlock = block.into();
+        let components = Components {
+            header_to_produce: partial_fuel_block.header,
+            transactions_source: BadTransactionsSource::new(
+                partial_fuel_block.transactions,
+            ),
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        };
+
+        // When
+        let producer = create_executor(Database::default(), config);
+        let (result, _) = producer
+            .produce_without_commit_with_source(components)
+            .unwrap()
+            .into();
+
+        // Then
+        assert_eq!(
+            result.block.transactions().len(),
+            (MAX_TX_COUNT as usize + 1)
+        );
+    }
+
     #[cfg(feature = "relayer")]
     mod relayer {
         use super::*;
-        use crate::{
-            database::database_description::{
-                on_chain::OnChain,
-                relayer::Relayer,
-            },
-            state::ChangesIterator,
+        use crate::database::database_description::{
+            on_chain::OnChain,
+            relayer::Relayer,
         };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
-            iter::IteratorOverTable,
+            column::Column,
+            iter::{
+                changes_iterator::ChangesIterator,
+                IteratorOverTable,
+            },
             tables::FuelBlocks,
             StorageAsMut,
         };
@@ -2887,7 +3264,7 @@ mod tests {
             let (result, changes) = producer.produce_without_commit(block.into())?.into();
 
             // Then
-            let view = ChangesIterator::<OnChain>::new(&changes);
+            let view = ChangesIterator::<Column>::new(&changes);
             assert_eq!(
                 view.iter_all::<Messages>(None).count() as u64,
                 block_da_height - genesis_da_height
@@ -3274,11 +3651,11 @@ mod tests {
             );
 
             // when
-            let verifyer_db = database_with_genesis_block(genesis_da_height);
+            let verifier_db = database_with_genesis_block(genesis_da_height);
             let mut verifier_relayer_db = Database::<Relayer>::default();
             let events = vec![event];
             add_events_to_relayer(&mut verifier_relayer_db, da_height.into(), &events);
-            let verifier = create_relayer_executor(verifyer_db, verifier_relayer_db);
+            let verifier = create_relayer_executor(verifier_db, verifier_relayer_db);
             let (result, _) = verifier.validate(&produced_block).unwrap().into();
 
             // then
@@ -3496,7 +3873,7 @@ mod tests {
                 .into();
 
             // Then
-            let view = ChangesIterator::<OnChain>::new(&changes);
+            let view = ChangesIterator::<Column>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
         }
@@ -3538,7 +3915,7 @@ mod tests {
                 .into();
 
             // Then
-            let view = ChangesIterator::<OnChain>::new(&changes);
+            let view = ChangesIterator::<Column>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
             assert_eq!(result.events.len(), 2);

@@ -42,7 +42,7 @@ pub struct ContractConfig {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq, PartialOrd, Ord)]
 pub struct ContractStateConfig {
     pub key: Bytes32,
     #[serde_as(as = "HexIfHumanReadable")]
