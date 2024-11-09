@@ -20,6 +20,7 @@ async-graphql-value = "7.0.11"
 async-trait = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
+cosmrs = { version = "0.21", optional = true }
 derive_more = { version = "0.99" }
 enum-iterator = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
@@ -35,12 +36,12 @@ fuel-core-poa = { workspace = true }
 fuel-core-producer = { workspace = true }
 fuel-core-relayer = { workspace = true, optional = true }
 fuel-core-services = { workspace = true }
+fuel-core-shared-sequencer-client = { workspace = true, optional = true }
 fuel-core-storage = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
 fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 fuel-core-upgradable-executor = { workspace = true }
-fuel-core-shared-sequencer-client = { workspace = true, optional = true }
 futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
@@ -68,7 +69,6 @@ tower = { version = "0.4", features = ["limit"] }
 tower-http = { version = "0.4", features = ["set-header", "trace", "timeout"] }
 tracing = { workspace = true }
 uuid = { version = "1.1", features = ["v4"] }
-cosmrs = { version = "0.21", optional = true }
 
 [dev-dependencies]
 assert_matches = "1.5"

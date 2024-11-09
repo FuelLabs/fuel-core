@@ -16,26 +16,19 @@ repository = { workspace = true }
 version = { workspace = true }
 
 [dependencies]
+anyhow = { workspace = true }
 async-trait = { workspace = true }
 base64 = "0.22"
-# bip32 = { version = "0.5", features = ["mnemonic"] }
-cosmrs = "0.21"
 cosmos-sdk-proto = "0.26"
-tendermint-rpc = { version = "0.36", features = ["http-client"] }
-anyhow = { workspace = true }
-# tokio = { workspace = true, features = ["full"] }
-# tonic = "0.11.0"
-prost = "0.12"
-# hex = "0.4"
-postcard = { workspace = true }
+cosmrs = "0.21"
 fuel-core-types = { workspace = true }
-# fuel-vm-private = { workspace = true, default-features = false, features = [
-#   "std",
-# ] }
-fuel-sequencer-proto = { path = "../../../fuel-sequencer/rust_client" }
-reqwest = { version = "0.12", features = ["json"] }
+fuel-sequencer-proto = { path = "../../../fuel-sequencer/rust_client" } #  see https://github.com/fuel-infrastructure/fuel-sequencer/pull/363, TODO: release this as a crate
+postcard = { workspace = true }
+prost = "0.12"
+reqwest = { version = "0.12", features = ["json"], default-features = false }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0"
+tendermint-rpc = { version = "0.36", features = ["http-client"] }
 
 [features]
 test-helpers = []
