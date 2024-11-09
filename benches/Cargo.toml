@@ -23,6 +23,7 @@ fuel-core = { path = "../crates/fuel-core", default-features = false, features =
   "rocksdb-production",
 ] }
 fuel-core-chain-config = { workspace = true }
+fuel-core-client = { path = "./../crates/client" }
 fuel-core-database = { path = "./../crates/database" }
 fuel-core-services = { path = "./../crates/services" }
 fuel-core-storage = { path = "./../crates/storage", features = ["smt"] }

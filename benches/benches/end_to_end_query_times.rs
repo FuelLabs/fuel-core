@@ -5,6 +5,7 @@ use fuel_core::{
         FuelService,
     },
 };
+use fuel_core_client::client::FuelClient;
 use fuel_core_storage::{
     tables::FuelBlocks,
     transactional::WriteTransaction,
@@ -15,6 +16,10 @@ use fuel_core_types::{
     blockchain::block::CompressedBlock,
     fuel_types::BlockHeight,
 };
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -24,6 +29,7 @@ async fn main() -> anyhow::Result<()> {
 
     let height = BlockHeight::from(1);
     let block = CompressedBlock::default();
+    let client = FuelClient::from(node.bound_address);
 
     let mut transaction = db.write_transaction();
     transaction
@@ -36,10 +42,21 @@ async fn main() -> anyhow::Result<()> {
     //    .unwrap();
     transaction.commit().unwrap();
 
-    let url = format!("http://{}/v1/graphql", node.bound_address);
-    let response = test_helpers::send_graph_ql_query(&url, BLOCK_QUERY).await;
+    let tx_count: u64 = 66_000;
+    let max_gas_limit = 50_000_000;
+    let mut rng = StdRng::seed_from_u64(2322);
+    for tx in (1..=tx_count).map(|i| test_helpers::make_tx(&mut rng, i, max_gas_limit)) {
+        let _tx_id = client.submit(&tx).await?;
+    }
 
-    println!("Resp: {response}");
+    let last_block_height = client.produce_blocks(1, None).await?;
+
+    // let url = format!("http://{}/v1/graphql", node.bound_address);
+    // let response = test_helpers::send_graph_ql_query(&url, BLOCK_QUERY).await;
+    // println!("Resp: {response}");
+
+    let addr = node.bound_address;
+    println!("Serving at: {addr}");
 
     Ok(())
 }

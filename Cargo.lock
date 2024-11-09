@@ -3263,6 +3263,7 @@ dependencies = [
  "ethnum",
  "fuel-core",
  "fuel-core-chain-config",
+ "fuel-core-client",
  "fuel-core-database",
  "fuel-core-services",
  "fuel-core-storage",
