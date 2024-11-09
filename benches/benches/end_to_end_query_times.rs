@@ -6,7 +6,14 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_client::client::FuelClient;
+use fuel_core_chain_config::Randomize;
+use fuel_core_client::client::{
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
+    FuelClient,
+};
 use fuel_core_storage::{
     tables::FuelBlocks,
     transactional::WriteTransaction,
@@ -15,6 +22,7 @@ use fuel_core_storage::{
 
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
+    fuel_tx::Address,
     fuel_types::BlockHeight,
 };
 use rand::{
@@ -24,6 +32,8 @@ use rand::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let mut rng = StdRng::seed_from_u64(2322);
+
     let config = Config {
         block_production: Trigger::Never,
         ..Config::local_node()
@@ -50,12 +60,22 @@ async fn main() -> anyhow::Result<()> {
 
     let tx_count: u64 = 66_000;
     let max_gas_limit = 50_000_000;
-    let mut rng = StdRng::seed_from_u64(2322);
+
     for tx in (1..=tx_count).map(|i| test_helpers::make_tx(&mut rng, i, max_gas_limit)) {
         let _tx_id = client.submit(&tx).await?;
     }
 
-    let last_block_height = client.produce_blocks(1, None).await?;
+    let _last_block_height = client.produce_blocks(10, None).await?;
+
+    let elon_musk = Address::randomize(&mut rng);
+    let request = PaginationRequest {
+        cursor: None,
+        results: 2000,
+        direction: PageDirection::Forward,
+    };
+
+    let transaction_response = client.transactions_by_owner(&elon_musk, request).await?;
+    println!("Transactions len: {}", transaction_response.results.len());
 
     // let url = format!("http://{}/v1/graphql", node.bound_address);
     // let response = test_helpers::send_graph_ql_query(&url, BLOCK_QUERY).await;
