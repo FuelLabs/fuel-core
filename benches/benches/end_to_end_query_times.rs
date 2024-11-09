@@ -1,6 +1,7 @@
 use fuel_core::{
     database::Database,
     service::{
+        config::Trigger,
         Config,
         FuelService,
     },
@@ -23,24 +24,29 @@ use rand::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let config = Config::local_node();
-    let mut db: Database = Database::default();
-    let node = FuelService::from_database(db.clone(), config).await?;
+    let config = Config {
+        block_production: Trigger::Never,
+        ..Config::local_node()
+    };
+    // let mut db: Database = Database::default();
+    // let node = FuelService::from_database(db.clone(), config).await?;
+
+    let node = FuelService::new_node(config).await?;
 
     let height = BlockHeight::from(1);
     let block = CompressedBlock::default();
     let client = FuelClient::from(node.bound_address);
 
-    let mut transaction = db.write_transaction();
-    transaction
-        .storage::<FuelBlocks>()
-        .insert(&height, &block)
-        .unwrap();
+    // let mut transaction = db.write_transaction();
     // transaction
-    //    .storage::<SealedBlockConsensus>()
-    //    .insert(&height, &Consensus::PoA(Default::default()))
-    //    .unwrap();
-    transaction.commit().unwrap();
+    //     .storage::<FuelBlocks>()
+    //     .insert(&height, &block)
+    //     .unwrap();
+    // // transaction
+    // //    .storage::<SealedBlockConsensus>()
+    // //    .insert(&height, &Consensus::PoA(Default::default()))
+    // //    .unwrap();
+    // transaction.commit().unwrap();
 
     let tx_count: u64 = 66_000;
     let max_gas_limit = 50_000_000;
@@ -57,6 +63,7 @@ async fn main() -> anyhow::Result<()> {
 
     let addr = node.bound_address;
     println!("Serving at: {addr}");
+    tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
 
     Ok(())
 }
