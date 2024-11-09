@@ -76,3 +76,7 @@ name = "transaction_throughput"
 [[bench]]
 harness = false
 name = "db_lookup_times"
+
+[[bench]]
+harness = false
+name = "end_to_end_query_times"
