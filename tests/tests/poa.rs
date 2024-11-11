@@ -262,10 +262,6 @@ mod p2p {
     // after the first_producer stops, second_producer should start producing blocks
     #[tokio::test(flavor = "multi_thread")]
     async fn test_poa_multiple_producers() {
-        // Tracing layer with debug
-        tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::INFO)
-            .init();
         const SYNC_TIMEOUT: u64 = 5;
         const TIME_UNTIL_SYNCED: u64 = SYNC_TIMEOUT + 5;
 

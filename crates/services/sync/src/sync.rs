@@ -19,6 +19,7 @@ use crate::state::State;
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug)]
 pub(crate) enum IncomingHeight {
     Observed(BlockHeight),
     Committed(BlockHeight),
@@ -63,6 +64,7 @@ impl SyncHeights {
             IncomingHeight::Observed(height) => self.state.apply(|s| s.observe(*height)),
         };
         if state_change {
+            dbg!("notify");
             self.notify.notify_one();
         }
         Some(())

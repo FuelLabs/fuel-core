@@ -5,15 +5,16 @@ use crate::{
     import::test_helpers::{
         empty_header,
         random_peer,
-    },
-    ports::{
+    }, ports::{
         MockBlockImporterPort,
         MockConsensusPort,
         MockPeerToPeerPort,
         PeerReportReason,
-    },
+    }, state::Status, sync::SyncHeights
 };
+use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_types::services::p2p::Transactions;
+use mockall::Sequence;
 use std::time::Duration;
 
 use super::*;
@@ -273,6 +274,81 @@ async fn import__signature_fails_on_header_4_only() {
 
     // then
     assert_eq!((State::new(3, None), false), res);
+}
+
+#[tokio::test]
+async fn test() {
+    let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
+    let mut watcher = shutdown.into();
+    // given
+    let observed_height_stream =
+    futures::stream::iter([2, 2, 2, 2, 2].into_iter().map(BlockHeight::from)).into_boxed();
+    let committed_height_stream =
+    futures::stream::iter([]).into_boxed();
+    let mut p2p = MockPeerToPeerPort::default();
+    let mut seq = Sequence::new();
+    p2p.expect_get_sealed_block_headers()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_| {
+            dbg!("error p2p");
+            Err(anyhow::anyhow!("Some network error"))
+        });
+    p2p.expect_get_sealed_block_headers()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_| {
+            let peer = random_peer();
+            let headers = Some(vec![empty_header(2)]);
+            let headers = peer.bind(headers);
+            Ok(headers)
+        });
+    p2p.expect_get_transactions()
+    .times(1)
+    .in_sequence(&mut seq)
+    .returning(|block_ids| {
+        let data = block_ids.data;
+        let v = data.into_iter().map(|_| Transactions::default()).collect();
+        Ok(Some(v))
+    });
+    p2p.expect_report_peer().returning(|_, _| Ok(()));
+    let state = SharedMutex::new(State::new(1, None));
+    let notify = Arc::new(Notify::new());
+    let p2p = Arc::new(p2p);
+    let executor: Arc<MockBlockImporterPort> = Arc::new(DefaultMocks::times([1]));
+    let consensus: Arc<MockConsensusPort> = Arc::new(DefaultMocks::times([1]));
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 10,
+    };
+    let import = Import {
+        state: state.clone(),
+        notify: notify.clone(),
+        params,
+        p2p,
+        executor,
+        consensus,
+    };
+    let mut sync_heights = SyncHeights::new(observed_height_stream, committed_height_stream, state.clone(), notify.clone());
+
+    tokio::spawn(async move {
+        let mut should_continue = true;
+        while should_continue {
+            should_continue = import.import(&mut watcher).await.unwrap_or(true);
+        }
+    });
+    sync_heights.sync().await.unwrap();
+    let mut verif = false;
+    while !verif {
+        verif = state.lock().status() == &Status::Committed(1);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    sync_heights.sync().await.unwrap();
+    let mut verif = false;
+    while !verif {
+        verif = state.lock().status() == &Status::Committed(2);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 }
 
 #[tokio::test]

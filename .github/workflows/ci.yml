@@ -119,9 +119,9 @@ jobs:
           - command: make
             args: check --locked
           - command: nextest
-            args: run --workspace
+            args: run --workspace -- --nocapture
           - command: nextest
-            args: run --all-features --workspace
+            args: run --all-features --workspace -- --nocapture
           - command: nextest
             args: run -p fuel-core --no-default-features
           - command: nextest
