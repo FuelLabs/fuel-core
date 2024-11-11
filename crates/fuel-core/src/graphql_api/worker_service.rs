@@ -336,10 +336,7 @@ where
         if let Err(err) =
             process_balances_update(event.deref(), block_st_transaction, balances_enabled)
         {
-            // TODO[RC]: This means that we were not able to update the balances, most likely due to overflow.
-            // This is a fatal error, because the balances are not consistent with the actual state of the chain.
-            // However, if we bail here, a lot of integration tests will start failing, because they often
-            // use transactions that do not necessarily care about asset balances. This needs to be addressed in a separate PR.
+            // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
             tracing::error!(%err, "Processing balances")
         }
         match event.deref() {

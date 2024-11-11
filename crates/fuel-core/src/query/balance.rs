@@ -60,25 +60,15 @@ impl ReadView {
             )
             .coins()
             .map(|res| res.map(|coins| coins.amount()))
-            .try_fold(0u128, |balance, amount| {
-                async move {
-                    // Increase the balance
-                    let maybe_new_balance = balance.checked_add(amount as u128);
-                    match maybe_new_balance {
-                        Some(new_balance) => Ok(new_balance),
-                        None => {
-                            // TODO[RC]: This means that we were not able to update the balances, due to overflow.
-                            // This is a fatal error, because the balances are not consistent with the actual state of the chain.
-                            // However, if we bail here, a lot of integration tests will start failing, because they often
-                            // use transactions that do not necessarily care about asset balances. This needs to be addressed in a separate PR.
-                            error!(
-                                %asset_id,
-                                prev_balance=%balance,
-                                "unable to change balance due to overflow");
-                            Ok(balance.saturating_add(amount as u128))
-                        }
-                    }
-                }
+            .try_fold(0u128, |balance, amount| async move {
+                Ok(balance.checked_add(amount as u128).unwrap_or_else(|| {
+                    // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
+                    error!(
+                        %asset_id,
+                        prev_balance=%balance,
+                        "unable to change balance due to overflow");
+                    u128::MAX
+                }))
             })
             .await? as TotalBalanceAmount
         };
@@ -128,28 +118,18 @@ impl ReadView {
                     let amount: &mut TotalBalanceAmount = amounts_per_asset
                         .entry(*coin.asset_id(base_asset_id))
                         .or_default();
-                    let new_amount =
-                        amount.checked_add(coin.amount() as TotalBalanceAmount);
-                    match new_amount {
-                        Some(new_amount) => {
-                            *amount = new_amount;
-                            Ok(amounts_per_asset)
-                        }
-                        None => {
-                            // TODO[RC]: This means that we were not able to update the balances, due to overflow.
-                            // This is a fatal error, because the balances are not consistent with the actual state of the chain.
-                            // However, if we bail here, a lot of integration tests will start failing, because they often
-                            // use transactions that do not necessarily care about asset balances. This needs to be addressed in a separate PR.
+                    let new_amount = amount
+                        .checked_add(coin.amount() as TotalBalanceAmount)
+                        .unwrap_or_else(|| {
+                            // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
                             error!(
                                 asset_id=%coin.asset_id(base_asset_id),
                                 prev_balance=%amount,
                                 "unable to change balance due to overflow");
-                            let new_amount = amount
-                                .saturating_add(coin.amount() as TotalBalanceAmount);
-                            *amount = new_amount;
-                            Ok(amounts_per_asset)
-                        }
-                    }
+                            u128::MAX
+                        });
+                    *amount = new_amount;
+                    Ok(amounts_per_asset)
                 },
             )
             .into_stream()
