@@ -5,12 +5,15 @@ use crate::{
     import::test_helpers::{
         empty_header,
         random_peer,
-    }, ports::{
+    },
+    ports::{
         MockBlockImporterPort,
         MockConsensusPort,
         MockPeerToPeerPort,
         PeerReportReason,
-    }, state::Status, sync::SyncHeights
+    },
+    state::Status,
+    sync::SyncHeights,
 };
 use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_types::services::p2p::Transactions;
@@ -282,9 +285,9 @@ async fn test() {
     let mut watcher = shutdown.into();
     // given
     let observed_height_stream =
-    futures::stream::iter([2, 2, 2, 2, 2].into_iter().map(BlockHeight::from)).into_boxed();
-    let committed_height_stream =
-    futures::stream::iter([]).into_boxed();
+        futures::stream::iter([2, 2, 2, 2, 2].into_iter().map(BlockHeight::from))
+            .into_boxed();
+    let committed_height_stream = futures::stream::iter([]).into_boxed();
     let mut p2p = MockPeerToPeerPort::default();
     let mut seq = Sequence::new();
     p2p.expect_get_sealed_block_headers()
@@ -304,13 +307,13 @@ async fn test() {
             Ok(headers)
         });
     p2p.expect_get_transactions()
-    .times(1)
-    .in_sequence(&mut seq)
-    .returning(|block_ids| {
-        let data = block_ids.data;
-        let v = data.into_iter().map(|_| Transactions::default()).collect();
-        Ok(Some(v))
-    });
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|block_ids| {
+            let data = block_ids.data;
+            let v = data.into_iter().map(|_| Transactions::default()).collect();
+            Ok(Some(v))
+        });
     p2p.expect_report_peer().returning(|_, _| Ok(()));
     let state = SharedMutex::new(State::new(1, None));
     let notify = Arc::new(Notify::new());
@@ -329,7 +332,12 @@ async fn test() {
         executor,
         consensus,
     };
-    let mut sync_heights = SyncHeights::new(observed_height_stream, committed_height_stream, state.clone(), notify.clone());
+    let mut sync_heights = SyncHeights::new(
+        observed_height_stream,
+        committed_height_stream,
+        state.clone(),
+        notify.clone(),
+    );
 
     tokio::spawn(async move {
         let mut should_continue = true;

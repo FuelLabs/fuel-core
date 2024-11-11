@@ -253,8 +253,8 @@ mod p2p {
         fuel_tx::Input,
         fuel_types::Address,
     };
-    use tracing::info;
     use std::time::Duration;
+    use tracing::info;
 
     // Starts first_producer which creates some blocks
     // Then starts second_producer that uses the first one as a reserved peer.
