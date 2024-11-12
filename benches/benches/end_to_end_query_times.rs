@@ -1,13 +1,7 @@
-use std::time::Instant;
-
-use fuel_core::{
-    // database::Database,
-    // fuel_core_graphql_api::ServiceConfig,
-    service::{
-        config::Trigger,
-        Config,
-        FuelService,
-    },
+use fuel_core::service::{
+    config::Trigger,
+    Config,
+    FuelService,
 };
 use fuel_core_chain_config::Randomize;
 use fuel_core_client::client::{
@@ -17,17 +11,8 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
-// use fuel_core_storage::{
-//    tables::FuelBlocks,
-//    transactional::WriteTransaction,
-//    StorageAsMut,
-//};
 
-use fuel_core_types::{
-    // blockchain::block::CompressedBlock,
-    fuel_tx::Address,
-    // fuel_types::BlockHeight,
-};
+use fuel_core_types::fuel_tx::Address;
 use rand::{
     rngs::StdRng,
     SeedableRng,
@@ -35,97 +20,101 @@ use rand::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let mut rng = StdRng::seed_from_u64(2322);
+    println!("Setting up bench harness.");
+    let mut harness = Harness::new(StdRng::seed_from_u64(2322)).await?;
 
-    // let graphql_config = ServiceConfig {
-    //    max_queries_complexity: usize::MAX,
-    //};
+    println!("Populating storage with transactions.");
+    harness.produce_blocks_with_transactions().await?;
 
-    let mut config = Config::local_node();
+    println!("Querying transactions from storage.");
+    harness.query_transactions_multiple_times().await?;
 
-    config.block_production = Trigger::Never;
-    config.graphql_config.max_queries_complexity = usize::MAX;
-
-    // let mut db: Database = Database::default();
-    // let node = FuelService::from_database(db.clone(), config).await?;
-
-    let node = FuelService::new_node(config).await?;
-
-    // let height = BlockHeight::from(1);
-    // let block = CompressedBlock::default();
-    let client = FuelClient::from(node.bound_address);
-
-    // let mut transaction = db.write_transaction();
-    // transaction
-    //     .storage::<FuelBlocks>()
-    //     .insert(&height, &block)
-    //     .unwrap();
-    // // transaction
-    // //    .storage::<SealedBlockConsensus>()
-    // //    .insert(&height, &Consensus::PoA(Default::default()))
-    // //    .unwrap();
-    // transaction.commit().unwrap();
-
-    let num_queries: usize = 10;
-    let num_blocks: usize = 1000;
-    let tx_count_per_block: u64 = 100;
-    let max_gas_limit = 50_000_000;
-
-    let owner_address = Address::randomize(&mut rng);
-
-    for _ in 0..num_blocks {
-        for tx in (1..=tx_count_per_block).map(|i| {
-            test_helpers::make_tx_with_recipient(
-                &mut rng,
-                i,
-                max_gas_limit,
-                owner_address,
-            )
-        }) {
-            let _tx_id = client.submit(&tx).await?;
-        }
-        let _last_block_height = client.produce_blocks(1, None).await?;
-    }
-
-    for _ in 0..num_queries {
-        let request = PaginationRequest {
-            cursor: None,
-            results: 100_000,
-            direction: PageDirection::Forward,
-        };
-
-        let before_query = Instant::now();
-        let transaction_response = client
-            .transactions_by_owner(&owner_address, request)
-            .await?;
-        let cursor = transaction_response.cursor;
-        let has_next_page = transaction_response.has_next_page;
-        let query_time = before_query.elapsed().as_millis();
-
-        println!("Elapsed: {query_time}");
-        println!("Transactions len: {}", transaction_response.results.len());
-        println!("Cursor: {cursor:?}");
-        println!("Has next page: {has_next_page}");
-    }
-
-    // let url = format!("http://{}/v1/graphql", node.bound_address);
-    // let response = test_helpers::send_graph_ql_query(&url, BLOCK_QUERY).await;
-    // println!("Resp: {response}");
-
-    // let addr = node.bound_address;
-    // println!("Serving at: {addr}");
-    // tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+    println!("Shutting down.");
+    harness.shutdown();
 
     Ok(())
 }
 
-// const BLOCK_QUERY: &'static str = r#"
-//    query {
-//      block(height: "0") {
-//        id,
-//        transactions {
-//          id
-//        }
-//      }
-//    }
-//"#;
+struct Harness<Rng> {
+    rng: Rng,
+    params: Parameters,
+    client: FuelClient,
+    node: FuelService,
+    owner_address: Address,
+}
+
+impl<Rng: rand::RngCore + rand::CryptoRng> Harness<Rng> {
+    async fn new(mut rng: Rng) -> anyhow::Result<Self> {
+        let params = Parameters::hard_coded();
+
+        let mut config = Config::local_node();
+        config.block_production = Trigger::Never;
+        config.graphql_config.max_queries_complexity = usize::MAX;
+
+        let node = FuelService::new_node(config).await?;
+        let client = FuelClient::from(node.bound_address);
+        let owner_address = Address::randomize(&mut rng);
+
+        Ok(Self {
+            rng,
+            params,
+            client,
+            node,
+            owner_address,
+        })
+    }
+
+    async fn produce_blocks_with_transactions(&mut self) -> anyhow::Result<()> {
+        for _ in 0..self.params.num_blocks {
+            for tx in (1..=self.params.tx_count_per_block).map(|i| {
+                test_helpers::make_tx_with_recipient(
+                    &mut self.rng,
+                    i,
+                    u64::MAX / 2,
+                    self.owner_address,
+                )
+            }) {
+                let _tx_id = self.client.submit(&tx).await?;
+            }
+            self.client.produce_blocks(1, None).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn query_transactions_multiple_times(&self) -> anyhow::Result<()> {
+        for _ in 0..self.params.num_queries {
+            let request = PaginationRequest {
+                cursor: None,
+                results: 100_000,
+                direction: PageDirection::Forward,
+            };
+
+            self.client
+                .transactions_by_owner(&self.owner_address, request)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    fn shutdown(self) {
+        drop(self.node);
+    }
+}
+
+struct Parameters {
+    num_queries: usize,
+    num_blocks: usize,
+    tx_count_per_block: u64,
+}
+
+impl Parameters {
+    fn hard_coded() -> Self {
+        Self {
+            num_queries: 10,
+            num_blocks: 1000,
+            tx_count_per_block: 100,
+        }
+    }
+}
