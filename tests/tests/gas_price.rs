@@ -297,6 +297,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     let LatestGasPrice { gas_price, .. } = new_latest_gas_price;
     let actual = gas_price;
     assert_eq!(expected, actual);
+    recovered_driver.kill().await;
 }
 
 #[tokio::test]
