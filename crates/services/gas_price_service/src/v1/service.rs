@@ -392,6 +392,7 @@ mod tests {
             capped_range_size: 100,
             decrease_range_size: 4,
             block_activity_threshold: 20,
+            unrecorded_blocks: vec![],
         };
         let (algo_updater, shared_algo) =
             initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();
@@ -458,6 +459,7 @@ mod tests {
             capped_range_size: 100,
             decrease_range_size: 4,
             block_activity_threshold: 20,
+            unrecorded_blocks: vec![(1, 100)],
         };
         let (algo_updater, shared_algo) =
             initialize_algorithm(&config, block_height, &metadata_storage).unwrap();
@@ -472,7 +474,7 @@ mod tests {
                 }),
                 notifier.clone(),
             ),
-            Some(Duration::from_millis(100)),
+            Some(Duration::from_millis(1)),
         );
         let mut watcher = StateWatcher::default();
 
@@ -489,15 +491,16 @@ mod tests {
         // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
         // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
         // here we mimic that behaviour by running the da block cost service.
+        let mut da_source_watcher = StateWatcher::started();
         service
             .da_source_adapter_handle
-            .run(&mut watcher)
+            .run(&mut da_source_watcher)
             .await
             .unwrap();
 
         // when
         service.run(&mut watcher).await.unwrap();
-        l2_block_sender.send(l2_block).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
         service.shutdown().await.unwrap();
 
         // then

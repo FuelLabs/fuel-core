@@ -15,6 +15,7 @@ use tokio::{
 
 use crate::v1::da_source_service::DaBlockCosts;
 pub use anyhow::Result;
+use fuel_core_services::stream::BoxFuture;
 
 #[derive(Clone)]
 pub struct SharedState(Sender<DaBlockCosts>);
@@ -103,12 +104,14 @@ where
     async fn run(&mut self, state_watcher: &mut StateWatcher) -> Result<bool> {
         let continue_running;
 
+        let tick: BoxFuture<tokio::time::Instant> = Box::pin(self.poll_interval.tick());
+
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {
                 continue_running = false;
             }
-            _ = self.poll_interval.tick() => {
+            _ = tick => {
                 let da_block_costs = self.source.request_da_block_cost().await?;
                 self.shared_state.0.send(da_block_costs)?;
                 continue_running = true;
