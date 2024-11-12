@@ -244,48 +244,6 @@ jobs:
       - name: Run integration tests for kms only
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
-  publish-codecov:
-    name: Publish code coverage report on GitHub pages branch
-    runs-on: buildjet-4vcpu-ubuntu-2204
-    needs:
-      - cargo-verifications
-    permissions: # Write access to push changes to pages
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install latest Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_VERSION_COV }}
-          targets: wasm32-unknown-unknown
-
-      - name: Install cargo-llvm-codecov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Code coverage report
-        run: cargo  +${{ env.RUST_VERSION_COV }} llvm-cov --all-features --html --branch
-
-      - name: Checkout the repo again for pushing pages revision
-        uses: actions/checkout@v4
-        with:
-          ref: 'codecov-pages'
-          path: 'pages-branch'
-
-      - name: Push codecov report to pages branch
-        working-directory: ./pages-branch
-        run: |
-          export BRANCH_B64=$(echo -n "${{ env.GIT_BRANCH }}" | basenc --base64url)
-          git config user.email "2204863+Dentosal@users.noreply.github.com"
-          git config user.name "Dentosal"
-          cp -r ../target/llvm-cov/html "$BRANCH_B64"
-          python3 ../.github/workflows/scripts/generate_pages_index.py > index.html
-          git add .
-          git commit -m "Update codecov for ${{ env.GIT_BRANCH }}"
-          git push
-          export PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/$BRANCH_B64/index.html"
-          echo "$PAGES_URL"
-          echo "Codecov report $PAGES_URL" >> $GITHUB_STEP_SUMMARY          
-
   verifications-complete:
     needs:
       - cargo-verifications
