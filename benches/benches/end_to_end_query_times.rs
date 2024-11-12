@@ -66,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
     // //    .unwrap();
     // transaction.commit().unwrap();
 
-    let tx_count: u64 = 6_000;
+    let tx_count: u64 = 1_000;
     let max_gas_limit = 50_000_000;
 
     let elon_musk = Address::randomize(&mut rng);
