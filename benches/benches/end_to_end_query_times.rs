@@ -69,11 +69,16 @@ async fn main() -> anyhow::Result<()> {
     let tx_count: u64 = 1_000;
     let max_gas_limit = 50_000_000;
 
-    let elon_musk = Address::randomize(&mut rng);
+    let owner_address = Address::randomize(&mut rng);
 
     for _ in 0..100 {
         for tx in (1..=tx_count).map(|i| {
-            test_helpers::make_tx_with_recipient(&mut rng, i, max_gas_limit, elon_musk)
+            test_helpers::make_tx_with_recipient(
+                &mut rng,
+                i,
+                max_gas_limit,
+                owner_address,
+            )
         }) {
             let _tx_id = client.submit(&tx).await?;
         }
@@ -87,7 +92,9 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let before_query = Instant::now();
-    let transaction_response = client.transactions_by_owner(&elon_musk, request).await?;
+    let transaction_response = client
+        .transactions_by_owner(&owner_address, request)
+        .await?;
     let cursor = transaction_response.cursor;
     let has_next_page = transaction_response.has_next_page;
     let query_time = before_query.elapsed().as_millis();
