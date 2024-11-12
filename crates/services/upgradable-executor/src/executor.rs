@@ -740,8 +740,6 @@ where
 #[cfg(test)]
 mod test {
     #[cfg(coverage)]
-    use ntest as _; // Only used outside cdg(coverage)
-
     use super::*;
     use fuel_core_storage::{
         kv_store::Value,
@@ -946,7 +944,6 @@ mod test {
     mod native {
         use super::*;
         use crate::executor::Executor;
-        use ntest as _;
 
         #[test]
         fn can_validate_block() {
