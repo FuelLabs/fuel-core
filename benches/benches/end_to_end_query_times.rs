@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use fuel_core::{
     database::Database,
     fuel_core_graphql_api::ServiceConfig,
@@ -83,16 +85,20 @@ async fn main() -> anyhow::Result<()> {
         direction: PageDirection::Forward,
     };
 
+    let before_query = Instant::now();
     let transaction_response = client.transactions_by_owner(&elon_musk, request).await?;
+    let query_time = before_query.elapsed().as_millis();
+
+    println!("Elapsed: {query_time}");
     println!("Transactions len: {}", transaction_response.results.len());
 
     // let url = format!("http://{}/v1/graphql", node.bound_address);
     // let response = test_helpers::send_graph_ql_query(&url, BLOCK_QUERY).await;
     // println!("Resp: {response}");
 
-    let addr = node.bound_address;
-    println!("Serving at: {addr}");
-    tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+    // let addr = node.bound_address;
+    // println!("Serving at: {addr}");
+    // tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
 
     Ok(())
 }
