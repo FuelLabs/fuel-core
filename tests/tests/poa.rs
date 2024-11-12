@@ -254,7 +254,6 @@ mod p2p {
         fuel_types::Address,
     };
     use std::time::Duration;
-    use tracing::info;
 
     // Starts first_producer which creates some blocks
     // Then starts second_producer that uses the first one as a reserved peer.
@@ -265,7 +264,6 @@ mod p2p {
         const SYNC_TIMEOUT: u64 = 30;
         const TIME_UNTIL_SYNCED: u64 = SYNC_TIMEOUT + 10;
 
-        info!("Starting test_poa_multiple_producers");
         let mut rng = StdRng::seed_from_u64(2222);
 
         // Create a producer and a validator that share the same key pair.
