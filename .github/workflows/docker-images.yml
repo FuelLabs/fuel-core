@@ -2,14 +2,6 @@ name: Docker Images
 
 on:
   workflow_dispatch:
-  #TODO: Remove to only trigger on workflow dispatch
-  push:
-    branches:
-      - master
-  pull_request:
-    types: [ opened, synchronize, reopened, labeled, unlabeled ]
-  release:
-    types: [ published ]
 
 env:
     GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
