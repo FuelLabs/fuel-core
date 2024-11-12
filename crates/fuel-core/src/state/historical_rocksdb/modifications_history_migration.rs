@@ -39,36 +39,41 @@ use crate::{
 };
 use fuel_core_storage::codec::Decode;
 
+enum MigrationStatus {
+    InProgress { last_height_to_be_migrated: u64 },
+    Completed,
+}
+
 pub struct MigrationState<Description> {
     changes: Changes,
     // The height up to which the migration can be performed, included.
-    last_height_to_be_migrated: u64,
-    migration_in_progress: bool,
+    status: MigrationStatus,
     _description: PhantomData<Description>,
 }
 
-impl<Description> MigrationState<Description> {
-    pub fn new() -> Self {
+impl<Description> Default for MigrationState<Description> {
+    fn default() -> Self {
         Self {
             changes: Changes::default(),
-            last_height_to_be_migrated: u64::MAX,
-            migration_in_progress: false,
-
+            status: MigrationStatus::InProgress {
+                last_height_to_be_migrated: u64::MAX,
+            },
             _description: PhantomData,
         }
     }
+}
 
+impl<Description> MigrationState<Description> {
     pub fn is_migration_in_progress(&self) -> bool {
-        self.migration_in_progress;
+        matches!(self.status, MigrationStatus::InProgress { .. })
     }
 
-    pub fn signal_migration_complete(&mut self) {
-        self.migration_in_progress = false;
+    pub fn complete_migration(&mut self) {
+        self.status = MigrationStatus::Completed;
     }
 
     pub fn take_migration_changes(&mut self) -> Option<Changes> {
-        self.is_migration_in_progress()
-            .then(|| std::mem::take(&mut self.changes))
+        (self.is_migration_in_progress()).then(|| std::mem::take(&mut self.changes))
     }
 }
 
@@ -112,6 +117,13 @@ where
 
     // Remove the changes above the last migration height.
     fn remove_stale_migration_changes(&self, changes: Changes) -> StorageResult<Changes> {
+        let last_height_to_be_migrated = match self.status {
+            MigrationStatus::InProgress {
+                last_height_to_be_migrated,
+            } => last_height_to_be_migrated,
+            MigrationStatus::Completed => return Ok(Changes::default()),
+        };
+
         let mut revert_changes = Changes::default();
         revert_changes.insert(
             Column::<Description>::HistoryV2Column.id(),
@@ -138,7 +150,7 @@ where
                                 >
                             >
                         >::KeyCodec::decode(&serialized_height)?;
-            if height > self.last_height_to_be_migrated {
+            if height > last_height_to_be_migrated {
                 revert_changes
                     .get_mut(&Column::<Description>::HistoryV2Column.id())
                     .expect("Changes for HistoryV2Column were inserted in this function")
@@ -166,15 +178,16 @@ where
     }
 
     pub fn update_last_height_to_be_migrated(&mut self, last_height_to_be_migrated: u64) {
-        if self.is_migration_in_progress() {
-            let changes = std::mem::take(&mut self.changes);
-            self.last_height_to_be_migrated
-                .min(last_height_to_be_migrated);
-            if let Ok(consistent_changes) = self.remove_stale_migration_changes(changes) {
-                // If removing the stale migration changes is not successful, we adopt a pessimistic approach and throw
-                // away all the changes. This is because we cannot guarantee that the changes are consistent anymore.
-                self.changes = consistent_changes;
+        match self.status {
+            MigrationStatus::InProgress {
+                last_height_to_be_migrated: current_last_height_to_be_migrated,
+            } => {
+                self.status = MigrationStatus::InProgress {
+                    last_height_to_be_migrated: last_height_to_be_migrated
+                        .min(current_last_height_to_be_migrated),
+                };
             }
+            MigrationStatus::Completed => {}
         }
     }
 }

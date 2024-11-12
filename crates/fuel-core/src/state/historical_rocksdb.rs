@@ -57,7 +57,7 @@ use modifications_history::{
     ModificationsHistoryV2,
 };
 use modifications_history_migration::MigrationState;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use serde::{
     Deserialize,
     Serialize,
@@ -114,7 +114,7 @@ where
         state_rewind_policy: StateRewindPolicy,
     ) -> DatabaseResult<Self> {
         let v1_changes_to_migrate_at_once = 1000;
-        let shared_migration_state = Arc::new(Mutex::new(MigrationState::new()));
+        let shared_migration_state = Arc::new(RwLock::new(MigrationState::default()));
         let inner = Arc::new(InnerHistoricalRocksDB::new(
             db,
             state_rewind_policy,
@@ -134,7 +134,7 @@ where
         max_fds: i32,
     ) -> DatabaseResult<Self> {
         let v1_changes_to_migrate_at_once = 1000;
-        let shared_migration_state = Arc::new(Mutex::new(MigrationState::new()));
+        let shared_migration_state = Arc::new(RwLock::new(MigrationState::default()));
         let inner = Arc::new(InnerHistoricalRocksDB::default_open(
             path,
             capacity,
@@ -158,15 +158,15 @@ where
         let Some(last_migratable_height) = last_migratable_height else {
             historical_rocksdb
                 .shared_migration_state
-                .lock()
-                .signal_migration_complete();
+                .write()
+                .complete_migration();
             return
         };
 
         thread::spawn(move || {
             historical_rocksdb
                 .shared_migration_state
-                .lock()
+                .write()
                 .update_last_height_to_be_migrated(last_migratable_height);
 
             let mut v1_modifications_iterator = historical_rocksdb
@@ -201,7 +201,7 @@ where
                     }
                     historical_rocksdb
                         .shared_migration_state
-                        .lock()
+                        .write()
                         .add_migration_changes(storage_transaction.into_changes());
                 }
                 if should_continue {
@@ -216,8 +216,8 @@ where
 
             historical_rocksdb
                 .shared_migration_state
-                .lock()
-                .signal_migration_complete();
+                .write()
+                .complete_migration();
         });
     }
 
@@ -351,7 +351,7 @@ pub struct InnerHistoricalRocksDB<Description> {
     /// The Description of the database.
     db: RocksDb<Historical<Description>>,
     /// The migration state for the modification history, shared among all instances of the database
-    shared_migration_state: Arc<Mutex<MigrationState<Description>>>,
+    shared_migration_state: Arc<RwLock<MigrationState<Description>>>,
 }
 
 impl<Description> fmt::Debug for InnerHistoricalRocksDB<Description>
@@ -373,7 +373,7 @@ where
     pub fn new(
         db: RocksDb<Historical<Description>>,
         state_rewind_policy: StateRewindPolicy,
-        shared_migration_state: Arc<Mutex<MigrationState<Description>>>,
+        shared_migration_state: Arc<RwLock<MigrationState<Description>>>,
     ) -> DatabaseResult<Self> {
         Ok(Self {
             state_rewind_policy,
@@ -387,7 +387,7 @@ where
         capacity: Option<usize>,
         state_rewind_policy: StateRewindPolicy,
         max_fds: i32,
-        shared_migration_state: Arc<Mutex<MigrationState<Description>>>,
+        shared_migration_state: Arc<RwLock<MigrationState<Description>>>,
     ) -> DatabaseResult<Self> {
         let db =
             RocksDb::<Historical<Description>>::default_open(path, capacity, max_fds)?;
@@ -480,7 +480,7 @@ where
     {
         let modifications_history_migration_in_progress = self
             .shared_migration_state
-            .lock()
+            .read()
             .is_migration_in_progress();
 
         if self.state_rewind_policy == StateRewindPolicy::NoRewind {
@@ -577,7 +577,7 @@ where
     fn oldest_changes_height(&self) -> StorageResult<Option<u64>> {
         let modifications_history_migration_in_progress = self
             .shared_migration_state
-            .lock()
+            .read()
             .is_migration_in_progress();
 
         let (v2_oldest_height, v1_oldest_height) = self.multiversion_changes_heights(
@@ -602,7 +602,7 @@ where
     fn rollback_last_block(&self) -> StorageResult<u64> {
         let modifications_history_migration_in_progress = self
             .shared_migration_state
-            .lock()
+            .read()
             .is_migration_in_progress();
 
         let (v2_latest_height, v1_latest_height) = self.multiversion_changes_heights(
@@ -633,7 +633,7 @@ where
             &mut storage_transaction,
             height_to_rollback,
             self.shared_migration_state
-                .lock()
+                .read()
                 .is_migration_in_progress(),
         )?
         .ok_or(not_found!(ModificationsHistoryV1<Description>))?;
@@ -655,7 +655,7 @@ where
         // concurrency race condition where stale changes for the level being rollbacked are
         // committed before the latest migratable height is reduced.
         self.shared_migration_state
-            .lock()
+            .write()
             .update_last_height_to_be_migrated(height_to_rollback);
 
         self.db
@@ -881,7 +881,7 @@ where
         // Changes returend are guaranteed to be non-stale.
         let migration_changes = self
             .shared_migration_state
-            .lock()
+            .write()
             .take_migration_changes()
             .unwrap_or_default();
 
@@ -993,7 +993,7 @@ mod tests {
         let historical_rocks_db = InnerHistoricalRocksDB::new(
             rocks_db,
             StateRewindPolicy::RewindFullRange,
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
@@ -1037,7 +1037,7 @@ mod tests {
         let historical_rocks_db = InnerHistoricalRocksDB::new(
             rocks_db,
             StateRewindPolicy::RewindFullRange,
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
@@ -1081,7 +1081,7 @@ mod tests {
         let historical_rocks_db = InnerHistoricalRocksDB::new(
             rocks_db,
             StateRewindPolicy::NoRewind,
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
@@ -1112,7 +1112,7 @@ mod tests {
         let historical_rocks_db = InnerHistoricalRocksDB::new(
             rocks_db,
             StateRewindPolicy::NoRewind,
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
@@ -1141,7 +1141,7 @@ mod tests {
             StateRewindPolicy::RewindRange {
                 size: NonZeroU64::new(1).unwrap(),
             },
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
@@ -1189,7 +1189,7 @@ mod tests {
             StateRewindPolicy::RewindRange {
                 size: NonZeroU64::new(1).unwrap(),
             },
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
@@ -1228,7 +1228,7 @@ mod tests {
             StateRewindPolicy::RewindRange {
                 size: NonZeroU64::new(1).unwrap(),
             },
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
@@ -1264,7 +1264,7 @@ mod tests {
             StateRewindPolicy::RewindRange {
                 size: NonZeroU64::new(1).unwrap(),
             },
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
@@ -1338,7 +1338,7 @@ mod tests {
         let historical_rocks_db = InnerHistoricalRocksDB::new(
             rocks_db,
             StateRewindPolicy::RewindFullRange,
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
@@ -1376,7 +1376,7 @@ mod tests {
             StateRewindPolicy::RewindRange {
                 size: NonZeroU64::new(1).unwrap(),
             },
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
@@ -1407,7 +1407,7 @@ mod tests {
             StateRewindPolicy::RewindRange {
                 size: NonZeroU64::new(ITERATIONS as u64).unwrap(),
             },
-            Arc::new(Mutex::new(MigrationState::new())),
+            Arc::new(RwLock::new(MigrationState::default())),
         )
         .unwrap();
 
