@@ -83,6 +83,42 @@ pub trait RunnableService: Send {
     ) -> anyhow::Result<Self::Task>;
 }
 
+/// The result of a single iteration of the service task
+pub enum TaskRunResult {
+    /// Request the task to be run again
+    Continue,
+    /// Request the task to be abandoned
+    Stop,
+    /// Request the task to be run again, but report an error
+    ErrorContinue(anyhow::Error),
+}
+
+impl TaskRunResult {
+    /// Creates a `TaskRunResult` from a boolean value where `true` means `Continue` and `false` means `Stop`
+    pub fn should_continue(should_continue: bool) -> Self {
+        if should_continue {
+            TaskRunResult::Continue
+        } else {
+            TaskRunResult::Stop
+        }
+    }
+}
+
+impl From<Result<bool, anyhow::Error>> for TaskRunResult {
+    fn from(result: Result<bool, anyhow::Error>) -> Self {
+        match result {
+            Ok(should_continue) => TaskRunResult::should_continue(should_continue),
+            Err(e) => TaskRunResult::ErrorContinue(e),
+        }
+    }
+}
+
+impl From<anyhow::Error> for TaskRunResult {
+    fn from(e: anyhow::Error) -> Self {
+        TaskRunResult::ErrorContinue(e)
+    }
+}
+
 /// The trait is implemented by the service task and contains a single iteration of the infinity
 /// loop.
 #[async_trait::async_trait]
@@ -96,7 +132,7 @@ pub trait RunnableTask: Send {
     /// `State::Started`. So first, the `run` method should return a value, and after, the service
     /// will stop. If the service should react to the state change earlier, it should handle it in
     /// the `run` loop on its own. See [`StateWatcher::while_started`].
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool>;
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult;
 
     /// Gracefully shutdowns the task after the end of the execution cycle.
     async fn shutdown(self) -> anyhow::Result<()>;
@@ -361,14 +397,14 @@ async fn run_task<S: RunnableTask>(
         let result = tracked_result.extract(metric);
 
         match result {
-            Ok(should_continue) => {
-                if !should_continue {
-                    tracing::debug!("stopping");
-                    break;
-                }
+            TaskRunResult::Continue => {
                 tracing::debug!("run loop");
             }
-            Err(e) => {
+            TaskRunResult::Stop => {
+                tracing::debug!("stopping");
+                break;
+            }
+            TaskRunResult::ErrorContinue(e) => {
                 let e: &dyn std::error::Error = &*e;
                 tracing::error!(e);
             }
@@ -447,7 +483,7 @@ mod tests {
             fn run<'_self, '_state, 'a>(
                 &'_self mut self,
                 state: &'_state mut StateWatcher
-            ) -> BoxFuture<'a, anyhow::Result<bool>>
+            ) -> BoxFuture<'a, TaskRunResult>
             where
                 '_self: 'a,
                 '_state: 'a,
@@ -467,8 +503,7 @@ mod tests {
                     let mut watcher = watcher.clone();
                     Box::pin(async move {
                         watcher.while_started().await.unwrap();
-                        let should_continue = false;
-                        Ok(should_continue)
+                        TaskRunResult::Stop
                     })
                 });
                 mock.expect_shutdown().times(1).returning(|| Ok(()));
@@ -532,12 +567,8 @@ mod tests {
         mock.expect_shared_data().returning(|| EmptyShared);
         mock.expect_into_task().returning(|_, _| {
             let mut mock = MockTask::default();
-            mock.expect_run().returning(|_| {
-                Box::pin(async move {
-                    let should_continue = false;
-                    Ok(should_continue)
-                })
-            });
+            mock.expect_run()
+                .returning(|_| Box::pin(async move { TaskRunResult::Stop }));
             mock.expect_shutdown()
                 .times(1)
                 .returning(|| panic!("Shutdown should fail"));

@@ -42,6 +42,7 @@ use fuel_core_services::{
     Service as OtherService,
     ServiceRunner,
     StateWatcher,
+    TaskRunResult,
 };
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
@@ -518,7 +519,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
         let should_continue;
         let mut sync_state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
@@ -526,8 +527,7 @@ where
             tokio::select! {
                 biased;
                 result = watcher.while_started() => {
-                    should_continue = result?.started();
-                    return Ok(should_continue);
+                    return result.map(|state| state.started()).into()
                 }
                 _ = sync_state.changed() => {}
             }
@@ -538,20 +538,31 @@ where
         }
 
         let next_height = self.next_height();
-        let maybe_block = self.predefined_blocks.get_block(&next_height)?;
+        let maybe_block = match self.predefined_blocks.get_block(&next_height) {
+            Ok(option) => option,
+            Err(err) => return TaskRunResult::ErrorContinue(err),
+        };
         if let Some(block) = maybe_block {
-            self.produce_predefined_block(&block).await?;
-            should_continue = true;
-            return Ok(should_continue)
+            let res = self.produce_predefined_block(&block).await;
+            return match res {
+                Ok(()) => TaskRunResult::Continue,
+                Err(err) => TaskRunResult::ErrorContinue(err),
+            }
         }
 
         let next_block_production: BoxFuture<()> = match self.trigger {
             Trigger::Never | Trigger::Instant => Box::pin(core::future::pending()),
-            Trigger::Interval { block_time } => Box::pin(sleep_until(
-                self.last_block_created
+            Trigger::Interval { block_time } => {
+                let next_block_time = match self
+                    .last_block_created
                     .checked_add(block_time)
-                    .ok_or(anyhow!("Time exceeds system limits"))?,
-            )),
+                    .ok_or(anyhow!("Time exceeds system limits"))
+                {
+                    Ok(time) => time,
+                    Err(err) => return TaskRunResult::ErrorContinue(err),
+                };
+                Box::pin(sleep_until(next_block_time))
+            }
         };
 
         tokio::select! {
@@ -579,17 +590,21 @@ where
                     Err(err) => {
                         // Wait some time in case of error to avoid spamming retry block production
                         tokio::time::sleep(Duration::from_secs(1)).await;
-                        return Err(err);
+                        return TaskRunResult::ErrorContinue(err);
                     }
                 };
             }
             _ = self.new_txs_watcher.changed() => {
-                self.on_txpool_event().await.context("While processing txpool event")?;
-                should_continue = true;
+                match self.on_txpool_event().await.context("While processing txpool event") {
+                    Ok(()) => should_continue = true,
+                    Err(err) => {
+                        return TaskRunResult::ErrorContinue(err);
+                    }
+                };
             }
         }
 
-        Ok(should_continue)
+        TaskRunResult::should_continue(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {

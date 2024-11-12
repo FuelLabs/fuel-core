@@ -11,6 +11,7 @@ use fuel_core_services::{
     RunnableService,
     RunnableTask,
     StateWatcher,
+    TaskRunResult,
 };
 use fuel_core_types::{
     blockchain::header::BlockHeader,
@@ -137,8 +138,7 @@ impl RunnableService for SyncTask {
 
 #[async_trait::async_trait]
 impl RunnableTask for SyncTask {
-    #[tracing::instrument(level = "debug", skip_all, err, ret)]
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
         let mut should_continue = true;
 
         let tick: BoxFuture<tokio::time::Instant> = if let Some(timer) = &mut self.timer {
@@ -218,7 +218,7 @@ impl RunnableTask for SyncTask {
             }
         }
 
-        Ok(should_continue)
+        TaskRunResult::should_continue(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {

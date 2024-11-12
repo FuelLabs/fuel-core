@@ -27,6 +27,7 @@ use fuel_core_services::{
     ServiceRunner,
     State,
     StateWatcher,
+    TaskRunResult,
 };
 use fuel_core_storage::{
     not_found,
@@ -428,7 +429,7 @@ impl RunnableService for Task {
 #[async_trait::async_trait]
 impl RunnableTask for Task {
     #[tracing::instrument(skip_all)]
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
         let mut stop_signals = vec![];
         for service in self.services.iter() {
             stop_signals.push(service.await_stop())

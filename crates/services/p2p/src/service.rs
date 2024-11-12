@@ -38,6 +38,7 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
     SyncProcessor,
+    TaskRunResult,
     TraceErr,
 };
 use fuel_core_storage::transactional::AtomicView;
@@ -854,7 +855,7 @@ where
     B: Broadcast + 'static,
     T: TxPool + 'static,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
         tracing::debug!("P2P task is running");
         let mut should_continue;
 
@@ -889,7 +890,7 @@ where
                         let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
                         let Some(peer) = self.p2p_service.get_peer_id_with_height(&height) else {
                             let _ = channel.send(Err(TaskError::NoPeerFound));
-                            return Ok(should_continue);
+                            return TaskRunResult::should_continue(should_continue)
                         };
                         let channel = ResponseSender::SealedHeaders(channel);
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
@@ -899,7 +900,7 @@ where
                         let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
                         let Some(peer) = self.p2p_service.get_peer_id_with_height(&height) else {
                             let _ = channel.send(Err(TaskError::NoPeerFound));
-                            return Ok(should_continue);
+                            return TaskRunResult::should_continue(should_continue)
                         };
                         let channel = ResponseSender::Transactions(channel);
                         let request_msg = RequestMessage::Transactions(block_height_range.clone());
@@ -922,7 +923,12 @@ where
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         // report_message(&mut self.p2p_service, message, acceptance);
-                        self.p2p_service.report_message(message, acceptance)?;
+                        match self.p2p_service.report_message(message, acceptance) {
+                            Ok(_) => {},
+                            Err(e) => {
+                                return e.into()
+                            }
+                        };
                     }
                     Some(TaskRequest::RespondWithPeerReport { peer_id, score, reporting_service }) => {
                         let _ = self.p2p_service.report_peer(peer_id, score, reporting_service);
@@ -975,7 +981,12 @@ where
                         }
                     },
                     Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
-                        self.process_request(request_message, request_id)?
+                        match self.process_request(request_message, request_id) {
+                            Ok(_) => {},
+                            Err(err) => {
+                                return err.into()
+                            }
+                        }
                     },
                     Some(FuelP2PEvent::NewSubscription { peer_id, tag }) => {
                         if tag == GossipTopicTag::NewTx {
@@ -999,7 +1010,7 @@ where
         }
 
         tracing::debug!("P2P task is finished");
-        Ok(should_continue)
+        TaskRunResult::should_continue(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -1662,7 +1673,7 @@ pub mod tests {
         let mut watcher = StateWatcher::from(watch_receiver);
 
         // when
-        task.run(&mut watcher).await.unwrap();
+        task.run(&mut watcher).await;
 
         // then
         let (report_peer_id, report, reporting_service) =
@@ -1752,7 +1763,7 @@ pub mod tests {
         let mut watcher = StateWatcher::from(watch_receiver);
 
         // when
-        task.run(&mut watcher).await.unwrap();
+        task.run(&mut watcher).await;
 
         // then
         let (report_peer_id, report, reporting_service) =
@@ -1815,7 +1826,7 @@ pub mod tests {
 
         for _ in 0..100 {
             // When
-            task.run(&mut watcher).await.unwrap();
+            task.run(&mut watcher).await;
 
             // Then
             block_processed_receiver

@@ -3,6 +3,7 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
+    TaskRunResult,
 };
 use std::time::Duration;
 use tokio::{
@@ -100,21 +101,23 @@ where
 {
     /// This function polls the source according to a polling interval
     /// described by the DaBlockCostsService
-    async fn run(&mut self, state_watcher: &mut StateWatcher) -> Result<bool> {
-        let continue_running;
-
+    async fn run(&mut self, state_watcher: &mut StateWatcher) -> TaskRunResult {
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {
-                continue_running = false;
+                TaskRunResult::Stop
             }
             _ = self.poll_interval.tick() => {
-                let da_block_costs = self.source.request_da_block_cost().await?;
-                self.shared_state.0.send(da_block_costs)?;
-                continue_running = true;
+                match self.source.request_da_block_cost().await.and_then(|da_block_costs| self.shared_state.0.send(da_block_costs).map_err(|err| anyhow::anyhow!(err))) {
+                    Ok(da_block_costs) => {
+                        TaskRunResult::Continue
+                    }
+                    Err(err) => {
+                        TaskRunResult::ErrorContinue(err)
+                    }
+                }
             }
         }
-        Ok(continue_running)
     }
 
     /// There are no shutdown hooks required by the sources  *yet*

@@ -80,6 +80,7 @@ pub use service::{
     RunnableTask,
     Service,
     ServiceRunner,
+    TaskRunResult,
 };
 pub use state::{
     State,

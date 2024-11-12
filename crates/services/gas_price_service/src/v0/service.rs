@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use fuel_core_services::{
     RunnableTask,
     StateWatcher,
+    TaskRunResult,
 };
 use fuel_gas_price_algorithm::v0::{
     AlgorithmUpdaterV0,
@@ -121,24 +122,32 @@ where
     L2: L2BlockSource,
     Metadata: MetadataStorage,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        let should_continue;
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
                 tracing::debug!("Stopping gas price service");
-                should_continue = false;
+                TaskRunResult::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
                 tracing::info!("Received L2 block result: {:?}", l2_block_res);
-                let block = l2_block_res?;
+                let block = match l2_block_res {
+                    Ok(block) => block,
+                    Err(err) => {
+                        return anyhow!(err).into()
+                    }
+                };
 
                 tracing::debug!("Updating gas price algorithm");
-                self.apply_block_info_to_gas_algorithm(block).await?;
-                should_continue = true;
+                match self.apply_block_info_to_gas_algorithm(block).await {
+                    Ok(_) => {},
+                    Err(err) => {
+                        return err.into()
+                    }
+                }
+                TaskRunResult::Continue
             }
         }
-        Ok(should_continue)
     }
 
     async fn shutdown(mut self) -> anyhow::Result<()> {
@@ -253,7 +262,7 @@ mod tests {
         let initial_price = read_algo.next_gas_price();
 
         // when
-        service.run(&mut watcher).await.unwrap();
+        service.run(&mut watcher).await;
         l2_block_sender.send(l2_block).await.unwrap();
         service.shutdown().await.unwrap();
 
