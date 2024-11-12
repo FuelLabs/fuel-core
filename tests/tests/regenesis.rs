@@ -176,6 +176,7 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
             .expect("The block and all related data should migrate");
     }
 
+    core.kill().await;
     Ok(())
 }
 
@@ -334,6 +335,7 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
         "Unexpected message {reason:?}"
     );
 
+    core.kill().await;
     Ok(())
 }
 
@@ -481,6 +483,7 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
         ));
     }
 
+    core.kill().await;
     Ok(())
 }
 
@@ -542,6 +545,7 @@ async fn starting_node_with_same_chain_config_keeps_genesis() -> anyhow::Result<
         .consensus;
     assert_eq!(original_consensus, non_modified_consensus);
 
+    core.kill().await;
     Ok(())
 }
 
@@ -603,6 +607,7 @@ async fn starting_node_with_new_chain_config_updates_genesis() -> anyhow::Result
         .consensus;
     assert_ne!(original_consensus, modified_consensus);
 
+    core.kill().await;
     Ok(())
 }
 
@@ -691,6 +696,7 @@ async fn starting_node_with_overwritten_old_poa_key_doesnt_rollback_the_state(
         .height;
     assert_eq!(original_block_height, block_height_after_override);
 
+    core.kill().await;
     Ok(())
 }
 
@@ -732,6 +738,7 @@ async fn starting_empty_node_with_overwritten_poa_works() -> anyhow::Result<()> 
     let core = result.expect("Failed to start the node");
     produce_block_with_tx(&mut rng, &core.client).await;
 
+    core.kill().await;
     Ok(())
 }
 
@@ -814,7 +821,7 @@ async fn starting_node_with_overwritten_new_poa_key_rollbacks_the_state(
         .height;
     assert_ne!(original_block_height, block_height_after_override);
     assert_eq!(override_height - 1, block_height_after_override);
-
+    core.kill().await;
     Ok(())
 }
 
@@ -897,5 +904,6 @@ async fn starting_node_with_overwritten_new_poa_key_from_the_future_doesnt_rollb
         .height;
     assert_eq!(original_block_height, block_height_after_override);
 
+    core.kill().await;
     Ok(())
 }
