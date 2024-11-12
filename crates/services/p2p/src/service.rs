@@ -437,6 +437,7 @@ pub struct HeartbeatPeerReputationConfig {
 }
 
 impl<V, T> UninitializedTask<V, SharedState, T> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new<B: BlockHeightImporter>(
         chain_id: ChainId,
         last_height: BlockHeight,
@@ -1295,6 +1296,7 @@ pub fn build_shared_state(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn new_service<V, B, T>(
     chain_id: ChainId,
     last_height: BlockHeight,
