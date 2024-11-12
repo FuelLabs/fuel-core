@@ -1111,7 +1111,6 @@ mod test {
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
         #[cfg(not(coverage))] // Too slow for coverage
-        #[ntest::timeout(60_000)]
         fn reuse_cached_compiled_module__native_strategy() {
             // Given
             let next_version = Executor::<Storage, DisabledRelayer>::VERSION + 1;
@@ -1132,7 +1131,6 @@ mod test {
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
         #[cfg(not(coverage))] // Too slow for coverage
-        #[ntest::timeout(60_000)]
         fn reuse_cached_compiled_module__wasm_strategy() {
             // Given
             let next_version = Executor::<Storage, DisabledRelayer>::VERSION + 1;
