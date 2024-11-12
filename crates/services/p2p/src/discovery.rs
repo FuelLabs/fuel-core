@@ -253,7 +253,7 @@ mod tests {
 
     use libp2p_swarm_test::SwarmExt;
 
-    const MAX_PEERS: usize = 50;
+    const MAX_PEERS: usize = 1000;
 
     fn build_behavior_fn(
         bootstrap_nodes: Vec<Multiaddr>,
@@ -264,7 +264,8 @@ mod tests {
             config
                 .max_peers_connected(MAX_PEERS)
                 .with_bootstrap_nodes(bootstrap_nodes)
-                .with_random_walk(Duration::from_millis(500));
+                .with_random_walk(Duration::from_millis(200))
+                .set_connection_idle_timeout(Duration::from_secs(30));
 
             config.finish().expect("Config should be valid")
         }
@@ -309,7 +310,6 @@ mod tests {
         for _ in 1..num_of_swarms {
             let (swarm, peer_addr, peer_id) =
                 build_fuel_discovery(vec![bootstrap_addr.clone()]);
-
             discovery_swarms.push((swarm, peer_addr, peer_id));
         }
 
