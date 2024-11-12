@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use fuel_core::{
-    database::Database,
-    fuel_core_graphql_api::ServiceConfig,
+    // database::Database,
+    // fuel_core_graphql_api::ServiceConfig,
     service::{
         config::Trigger,
         Config,
@@ -17,16 +17,16 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
-use fuel_core_storage::{
-    tables::FuelBlocks,
-    transactional::WriteTransaction,
-    StorageAsMut,
-};
+// use fuel_core_storage::{
+//    tables::FuelBlocks,
+//    transactional::WriteTransaction,
+//    StorageAsMut,
+//};
 
 use fuel_core_types::{
-    blockchain::block::CompressedBlock,
+    // blockchain::block::CompressedBlock,
     fuel_tx::Address,
-    fuel_types::BlockHeight,
+    // fuel_types::BlockHeight,
 };
 use rand::{
     rngs::StdRng,
@@ -66,13 +66,15 @@ async fn main() -> anyhow::Result<()> {
     // //    .unwrap();
     // transaction.commit().unwrap();
 
-    let tx_count: u64 = 1_000;
+    let num_queries: usize = 10;
+    let num_blocks: usize = 1000;
+    let tx_count_per_block: u64 = 100;
     let max_gas_limit = 50_000_000;
 
     let owner_address = Address::randomize(&mut rng);
 
-    for _ in 0..100 {
-        for tx in (1..=tx_count).map(|i| {
+    for _ in 0..num_blocks {
+        for tx in (1..=tx_count_per_block).map(|i| {
             test_helpers::make_tx_with_recipient(
                 &mut rng,
                 i,
@@ -82,27 +84,29 @@ async fn main() -> anyhow::Result<()> {
         }) {
             let _tx_id = client.submit(&tx).await?;
         }
-        let _last_block_height = client.produce_blocks(10, None).await?;
+        let _last_block_height = client.produce_blocks(1, None).await?;
     }
 
-    let request = PaginationRequest {
-        cursor: None,
-        results: 100_000,
-        direction: PageDirection::Forward,
-    };
+    for _ in 0..num_queries {
+        let request = PaginationRequest {
+            cursor: None,
+            results: 100_000,
+            direction: PageDirection::Forward,
+        };
 
-    let before_query = Instant::now();
-    let transaction_response = client
-        .transactions_by_owner(&owner_address, request)
-        .await?;
-    let cursor = transaction_response.cursor;
-    let has_next_page = transaction_response.has_next_page;
-    let query_time = before_query.elapsed().as_millis();
+        let before_query = Instant::now();
+        let transaction_response = client
+            .transactions_by_owner(&owner_address, request)
+            .await?;
+        let cursor = transaction_response.cursor;
+        let has_next_page = transaction_response.has_next_page;
+        let query_time = before_query.elapsed().as_millis();
 
-    println!("Elapsed: {query_time}");
-    println!("Transactions len: {}", transaction_response.results.len());
-    println!("Cursor: {cursor:?}");
-    println!("Has next page: {has_next_page}");
+        println!("Elapsed: {query_time}");
+        println!("Transactions len: {}", transaction_response.results.len());
+        println!("Cursor: {cursor:?}");
+        println!("Has next page: {has_next_page}");
+    }
 
     // let url = format!("http://{}/v1/graphql", node.bound_address);
     // let response = test_helpers::send_graph_ql_query(&url, BLOCK_QUERY).await;
@@ -115,13 +119,13 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-const BLOCK_QUERY: &'static str = r#"
-    query {
-      block(height: "0") {
-        id,
-        transactions {
-          id
-        }
-      }
-    }
-"#;
+// const BLOCK_QUERY: &'static str = r#"
+//    query {
+//      block(height: "0") {
+//        id,
+//        transactions {
+//          id
+//        }
+//      }
+//    }
+//"#;
