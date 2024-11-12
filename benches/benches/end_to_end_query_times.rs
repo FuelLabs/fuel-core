@@ -77,20 +77,24 @@ async fn main() -> anyhow::Result<()> {
         let _tx_id = client.submit(&tx).await?;
     }
 
-    let _last_block_height = client.produce_blocks(10, None).await?;
+    let _last_block_height = client.produce_blocks(100, None).await?;
 
     let request = PaginationRequest {
         cursor: None,
-        results: 2000,
+        results: 20_000,
         direction: PageDirection::Forward,
     };
 
     let before_query = Instant::now();
     let transaction_response = client.transactions_by_owner(&elon_musk, request).await?;
+    let cursor = transaction_response.cursor;
+    let has_next_page = transaction_response.has_next_page;
     let query_time = before_query.elapsed().as_millis();
 
     println!("Elapsed: {query_time}");
     println!("Transactions len: {}", transaction_response.results.len());
+    println!("Cursor: {cursor:?}");
+    println!("Has next page: {has_next_page}");
 
     // let url = format!("http://{}/v1/graphql", node.bound_address);
     // let response = test_helpers::send_graph_ql_query(&url, BLOCK_QUERY).await;
