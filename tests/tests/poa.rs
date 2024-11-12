@@ -229,7 +229,7 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
         })
         .collect();
     assert_eq!(predefined_blocks, blocks_from_new_node);
-
+    new_core.kill().await;
     Ok(())
 }
 

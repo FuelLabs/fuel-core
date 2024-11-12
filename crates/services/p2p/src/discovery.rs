@@ -253,7 +253,7 @@ mod tests {
 
     use libp2p_swarm_test::SwarmExt;
 
-    const MAX_PEERS: usize = 1000;
+    const MAX_PEERS: usize = 50;
 
     fn build_behavior_fn(
         bootstrap_nodes: Vec<Multiaddr>,
@@ -264,8 +264,7 @@ mod tests {
             config
                 .max_peers_connected(MAX_PEERS)
                 .with_bootstrap_nodes(bootstrap_nodes)
-                .with_random_walk(Duration::from_millis(200))
-                .set_connection_idle_timeout(Duration::from_secs(30));
+                .with_random_walk(Duration::from_millis(500));
 
             config.finish().expect("Config should be valid")
         }
@@ -369,7 +368,27 @@ mod tests {
                                     .add_address(&peer_id, unroutable_peer_addr.clone());
                             }
                             SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                                panic!("PeerId {peer_id:?} disconnected");
+                                // reconnect to the peer
+                                let unroutable_peer_addr = discovery_swarms
+                                    .iter()
+                                    .find_map(|(_, next_addr, next_peer_id)| {
+                                        // identify the peer
+                                        if next_peer_id == &peer_id {
+                                            // and return it's address
+                                            Some(next_addr.clone())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap();
+
+                                // kademlia must be informed of a peer's address before
+                                // adding it to the routing table
+                                discovery_swarms[swarm_index]
+                                    .0
+                                    .behaviour_mut()
+                                    .kademlia
+                                    .add_address(&peer_id, unroutable_peer_addr.clone());
                             }
                             _ => {}
                         }

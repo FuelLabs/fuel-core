@@ -114,6 +114,7 @@ async fn validate_block_at_any_height__only_transfers() -> anyhow::Result<()> {
         assert_eq!(&actual_changes, expected_changes);
     }
 
+    driver.kill().await;
     Ok(())
 }
 
@@ -211,6 +212,7 @@ async fn rollback_existing_chain_to_target_height_and_verify(
         .latest_height_from_metadata();
     assert_eq!(Ok(Some(BlockHeight::new(target_height))), latest_height);
 
+    driver.kill().await;
     Ok(())
 }
 

@@ -61,6 +61,7 @@ async fn off_chain_worker_can_recover_on_start_up_when_is_behind() -> anyhow::Re
         Some(BlockHeight::new(HEIGHTS))
     );
 
+    recovered_driver.kill().await;
     Ok(())
 }
 
@@ -125,6 +126,7 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_ahead(
     assert_eq!(actual_onchain_height, expected_onchain_height);
     assert_eq!(actual_gas_price_height, expected_gas_price_height);
 
+    recovered_driver.kill().await;
     Ok(())
 }
 
@@ -190,6 +192,7 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_behind(
         Some(BlockHeight::new(height))
     );
 
+    recovered_driver.kill().await;
     Ok(())
 }
 
@@ -263,6 +266,7 @@ async fn gas_price_updater__if_no_metadata_history_start_from_current_block(
         Some(BlockHeight::new(next_height))
     );
 
+    recovered_driver.kill().await;
     Ok(())
 }
 
