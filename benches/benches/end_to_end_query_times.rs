@@ -51,8 +51,8 @@ async fn main() -> anyhow::Result<()> {
 
     let node = FuelService::new_node(config).await?;
 
-    let height = BlockHeight::from(1);
-    let block = CompressedBlock::default();
+    // let height = BlockHeight::from(1);
+    // let block = CompressedBlock::default();
     let client = FuelClient::from(node.bound_address);
 
     // let mut transaction = db.write_transaction();
@@ -66,22 +66,23 @@ async fn main() -> anyhow::Result<()> {
     // //    .unwrap();
     // transaction.commit().unwrap();
 
-    let tx_count: u64 = 66_000;
+    let tx_count: u64 = 6_000;
     let max_gas_limit = 50_000_000;
 
     let elon_musk = Address::randomize(&mut rng);
 
-    for tx in (1..=tx_count).map(|i| {
-        test_helpers::make_tx_with_recipient(&mut rng, i, max_gas_limit, elon_musk)
-    }) {
-        let _tx_id = client.submit(&tx).await?;
+    for _ in 0..100 {
+        for tx in (1..=tx_count).map(|i| {
+            test_helpers::make_tx_with_recipient(&mut rng, i, max_gas_limit, elon_musk)
+        }) {
+            let _tx_id = client.submit(&tx).await?;
+        }
+        let _last_block_height = client.produce_blocks(10, None).await?;
     }
-
-    let _last_block_height = client.produce_blocks(100, None).await?;
 
     let request = PaginationRequest {
         cursor: None,
-        results: 20_000,
+        results: 100_000,
         direction: PageDirection::Forward,
     };
 
