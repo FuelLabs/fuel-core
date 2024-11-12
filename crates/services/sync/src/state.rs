@@ -120,7 +120,6 @@ impl State {
     #[tracing::instrument]
     /// Record that a block has been observed.
     pub fn observe(&mut self, height: u32) -> bool {
-        dbg!(&height);
         let new_status = match &self.status {
             // Currently uninitialized so process from the start to the observed height.
             Status::Uninitialized => Some(Status::Processing(0..=height)),
@@ -141,7 +140,6 @@ impl State {
                 (!r.is_empty()).then_some(Status::Processing(r))
             }),
         };
-        dbg!(&new_status);
         let status_change = new_status.is_some();
         self.apply_status(new_status);
         status_change

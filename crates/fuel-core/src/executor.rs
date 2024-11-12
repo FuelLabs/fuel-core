@@ -2599,7 +2599,6 @@ mod tests {
         // One of two transactions is skipped.
         assert_eq!(skipped_transactions.len(), 1);
         let err = &skipped_transactions[0].1;
-        dbg!(err);
         assert!(matches!(
             err,
             &ExecutorError::TransactionValidity(

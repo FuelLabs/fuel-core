@@ -162,7 +162,6 @@ where
     pub async fn import(&self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
         self.import_inner(shutdown).await?;
 
-        dbg!("waiting for notify or shutdown");
         Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
     }
 
