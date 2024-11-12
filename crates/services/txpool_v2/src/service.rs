@@ -230,38 +230,38 @@ where
             biased;
 
             _ = watcher.while_started() => {
-                return TaskRunResult::Stop
+                TaskRunResult::Stop
             }
 
             block_result = self.subscriptions.imported_blocks.next() => {
                 if let Some(result) = block_result {
                     self.import_block(result);
-                    return TaskRunResult::Continue
+                    TaskRunResult::Continue
                 } else {
-                    return TaskRunResult::Stop
+                    TaskRunResult::Stop
                 }
             }
 
             select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
                     self.borrow_txpool(select_transaction_request);
-                    return TaskRunResult::Continue
+                    TaskRunResult::Continue
                 } else {
-                    return TaskRunResult::Stop
+                    TaskRunResult::Stop
                 }
             }
 
             _ = self.pruner.ttl_timer.tick() => {
                 self.try_prune_transactions();
-                return TaskRunResult::Continue
+                TaskRunResult::Continue
             }
 
             write_pool_request = self.subscriptions.write_pool.recv() => {
                 if let Some(write_pool_request) = write_pool_request {
                     self.process_write(write_pool_request);
-                    return TaskRunResult::Continue
+                    TaskRunResult::Continue
                 } else {
-                    return TaskRunResult::Continue
+                    TaskRunResult::Continue
                 }
             }
 
@@ -270,27 +270,27 @@ where
                     if let Some(tx) = data {
                         self.manage_tx_from_p2p(tx, message_id, peer_id);
                     }
-                    return TaskRunResult::Continue
+                    TaskRunResult::Continue
                 } else {
-                    return TaskRunResult::Stop
+                    TaskRunResult::Stop
                 }
             }
 
             new_peer_subscribed = self.subscriptions.new_tx_source.next() => {
                 if let Some(peer_id) = new_peer_subscribed {
                     self.manage_new_peer_subscribed(peer_id);
-                    return TaskRunResult::Continue
+                    TaskRunResult::Continue
                 } else {
-                    return TaskRunResult::Stop
+                    TaskRunResult::Stop
                 }
             }
 
             read_pool_request = self.subscriptions.read_pool.recv() => {
                 if let Some(read_pool_request) = read_pool_request {
                     self.process_read(read_pool_request);
-                    return TaskRunResult::Continue
+                    TaskRunResult::Continue
                 } else {
-                    return TaskRunResult::Stop
+                    TaskRunResult::Stop
                 }
             }
         }
