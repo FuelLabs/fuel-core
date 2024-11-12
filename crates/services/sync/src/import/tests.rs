@@ -11,7 +11,7 @@ use crate::{
         MockConsensusPort,
         MockPeerToPeerPort,
         PeerReportReason,
-    }
+    },
 };
 use fuel_core_types::services::p2p::Transactions;
 use std::time::Duration;
