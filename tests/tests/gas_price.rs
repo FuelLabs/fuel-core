@@ -298,6 +298,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     let actual = gas_price;
     assert_eq!(expected, actual);
     recovered_driver.kill().await;
+    tokio::time::sleep(Duration::from_millis(10)).await;
 }
 
 #[tokio::test]
