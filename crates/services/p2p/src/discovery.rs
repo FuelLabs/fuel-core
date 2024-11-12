@@ -367,7 +367,9 @@ mod tests {
                                     .kademlia
                                     .add_address(&peer_id, unroutable_peer_addr.clone());
                             }
-                            SwarmEvent::ConnectionClosed { .. } => {}
+                            SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                                dbg!(peer_id);
+                            }
                             _ => {}
                         }
                         continue 'polling
