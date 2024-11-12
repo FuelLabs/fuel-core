@@ -36,6 +36,7 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
+    TaskRunResult,
 };
 use fuel_core_storage::{
     Error as StorageError,
@@ -551,7 +552,7 @@ where
     TxPool: ports::worker::TxPool,
     D: ports::worker::OffChainDatabase,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
         let should_continue;
         tokio::select! {
             biased;
@@ -577,7 +578,7 @@ where
                 }
             }
         }
-        Ok(should_continue)
+        TaskRunResult::should_continue(should_continue)
     }
 
     async fn shutdown(mut self) -> anyhow::Result<()> {

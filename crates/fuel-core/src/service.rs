@@ -444,8 +444,7 @@ impl RunnableTask for Task {
 
         // We received the stop signal from any of one source, so stop this service and
         // all sub-services.
-        let should_continue = false;
-        Ok(should_continue)
+        TaskRunResult::Stop
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
