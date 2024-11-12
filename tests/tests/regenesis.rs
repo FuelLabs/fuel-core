@@ -268,6 +268,7 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
         .expect("Failed to get message status");
     assert_eq!(status, MessageStatus::Spent);
 
+    core.kill().await;
     Ok(())
 }
 
