@@ -358,7 +358,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
     assert_eq!(total_gas, total_gas_zero_gas_price);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn startup__can_override_gas_price_values_by_changing_config() {
     // given
     let args = vec![
@@ -414,4 +414,5 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
         l2_block_height, ..
     } = new_metadata.try_into().unwrap();
     assert_eq!(l2_block_height, new_height);
+    recovered_driver.kill().await;
 }
