@@ -367,29 +367,7 @@ mod tests {
                                     .kademlia
                                     .add_address(&peer_id, unroutable_peer_addr.clone());
                             }
-                            SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                                // reconnect to the peer
-                                let unroutable_peer_addr = discovery_swarms
-                                    .iter()
-                                    .find_map(|(_, next_addr, next_peer_id)| {
-                                        // identify the peer
-                                        if next_peer_id == &peer_id {
-                                            // and return it's address
-                                            Some(next_addr.clone())
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .unwrap();
-
-                                // kademlia must be informed of a peer's address before
-                                // adding it to the routing table
-                                discovery_swarms[swarm_index]
-                                    .0
-                                    .behaviour_mut()
-                                    .kademlia
-                                    .add_address(&peer_id, unroutable_peer_addr.clone());
-                            }
+                            SwarmEvent::ConnectionClosed { .. } => {}
                             _ => {}
                         }
                         continue 'polling
