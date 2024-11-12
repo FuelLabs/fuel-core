@@ -925,8 +925,8 @@ where
                         // report_message(&mut self.p2p_service, message, acceptance);
                         match self.p2p_service.report_message(message, acceptance) {
                             Ok(_) => {},
-                            Err(e) => {
-                                return e.into()
+                            Err(err) => {
+                                return err.into()
                             }
                         };
                     }
