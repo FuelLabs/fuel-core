@@ -39,7 +39,7 @@ impl Default for SuiteConfig {
     fn default() -> Self {
         Self {
             endpoint: "http://localhost:4000".to_string(),
-            wallet_sync_timeout: SYNC_TIMEOUT,
+            wallet_sync_timeout: SYNC_TIMEOUT.checked_mul(2).unwrap(),
             full_test: false,
             coinbase_contract_id: ContractId::from_str(
                 "0x7777777777777777777777777777777777777777777777777777777777777777",

@@ -49,7 +49,7 @@ pub async fn transfer_back(ctx: &TestContext) -> Result<(), Failed> {
     }
     // wait until alice sees the transaction
     timeout(
-        ctx.config.sync_timeout().checked_mul(2).unwrap(),
+        ctx.config.sync_timeout(),
         ctx.alice.client.await_transaction_commit(&result.tx_id),
     )
     .await??;

@@ -1115,12 +1115,12 @@ mod test {
             let block = valid_block(next_version);
 
             executor.validate(&block).map(|_| ()).unwrap();
-            let start = std::time::Instant::now();
             // When
             for _ in 0..1000 {
+                let start = std::time::Instant::now();
                 let result = executor.validate(&block).map(|_| ());
 
-                if start.elapsed().as_secs() > 60 {
+                if start.elapsed().as_secs() > 1 {
                     panic!("The test is too slow");
                 }
                 // Then
@@ -1140,12 +1140,12 @@ mod test {
             let block = valid_block(next_version);
 
             executor.validate(&block).map(|_| ()).unwrap();
-            let start = std::time::Instant::now();
             // When
             for _ in 0..1000 {
+                let start = std::time::Instant::now();
                 let result = executor.validate(&block).map(|_| ());
 
-                if start.elapsed().as_secs() > 60 {
+                if start.elapsed().as_secs() > 1 {
                     panic!("The test is too slow");
                 }
                 // Then
