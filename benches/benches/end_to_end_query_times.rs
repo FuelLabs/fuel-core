@@ -3,7 +3,11 @@ use fuel_core::service::{
     Config,
     FuelService,
 };
-use fuel_core_chain_config::Randomize;
+use fuel_core_chain_config::{
+    ChainConfig,
+    Randomize,
+    StateConfig,
+};
 use fuel_core_client::client::{
     pagination::{
         PageDirection,
@@ -47,7 +51,18 @@ impl<Rng: rand::RngCore + rand::CryptoRng> Harness<Rng> {
     async fn new(mut rng: Rng) -> anyhow::Result<Self> {
         let params = Parameters::hard_coded();
 
-        let mut config = Config::local_node();
+        let mut chain_config = ChainConfig::local_testnet();
+        chain_config
+            .consensus_parameters
+            .set_block_gas_limit(u64::MAX);
+        chain_config
+            .consensus_parameters
+            .set_block_transaction_size_limit(u64::MAX)
+            .unwrap();
+
+        let state_config = StateConfig::local_testnet();
+
+        let mut config = Config::local_node_with_configs(chain_config, state_config);
         config.block_production = Trigger::Never;
         config.graphql_config.max_queries_complexity = usize::MAX;
 
@@ -118,8 +133,8 @@ impl Parameters {
     fn hard_coded() -> Self {
         Self {
             num_queries: 10,
-            num_blocks: 1000,
-            tx_count_per_block: 100,
+            num_blocks: 10,
+            tx_count_per_block: 10_000,
         }
     }
 }
