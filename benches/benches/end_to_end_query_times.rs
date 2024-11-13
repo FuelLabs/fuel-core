@@ -132,9 +132,9 @@ struct Parameters {
 impl Parameters {
     fn hard_coded() -> Self {
         Self {
-            num_queries: 100,
-            num_results_per_query: 100_000,
-            num_blocks: 100,
+            num_queries: 10,
+            num_results_per_query: 10_000,
+            num_blocks: 10,
             tx_count_per_block: 1000,
         }
     }
