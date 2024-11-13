@@ -86,17 +86,13 @@ impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
         for _ in 0..self.params.num_queries {
             let request = PaginationRequest {
                 cursor: None,
-                results: 100_000,
+                results: self.params.num_results_per_query,
                 direction: PageDirection::Forward,
             };
 
-            let res = self
-                .client
+            self.client
                 .transactions_by_owner(&self.owner_address, request)
                 .await?;
-
-            println!("Got {} results", res.results.len());
-            println!("Has more results: {}", res.has_next_page);
         }
 
         Ok(())
@@ -128,6 +124,7 @@ fn node_config() -> Config {
 
 struct Parameters {
     num_queries: usize,
+    num_results_per_query: i32,
     num_blocks: usize,
     tx_count_per_block: u64,
 }
@@ -135,8 +132,9 @@ struct Parameters {
 impl Parameters {
     fn hard_coded() -> Self {
         Self {
-            num_queries: 10,
-            num_blocks: 10,
+            num_queries: 100,
+            num_results_per_query: 100_000,
+            num_blocks: 100,
             tx_count_per_block: 1000,
         }
     }
