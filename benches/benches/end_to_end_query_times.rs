@@ -91,9 +91,13 @@ impl<Rng: rand::RngCore + rand::CryptoRng> Harness<Rng> {
                 direction: PageDirection::Forward,
             };
 
-            self.client
+            let res = self
+                .client
                 .transactions_by_owner(&self.owner_address, request)
                 .await?;
+
+            println!("Got {} results", res.results.len());
+            println!("Has more results: {}", res.has_next_page);
         }
 
         Ok(())
