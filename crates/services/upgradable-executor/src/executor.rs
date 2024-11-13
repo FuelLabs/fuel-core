@@ -739,9 +739,6 @@ where
 #[allow(unexpected_cfgs)] // for cfg(coverage)
 #[cfg(test)]
 mod test {
-    #[cfg(coverage)]
-    use ntest as _; // Only used outside cdg(coverage)
-
     use super::*;
     use fuel_core_storage::{
         kv_store::Value,
@@ -946,7 +943,6 @@ mod test {
     mod native {
         use super::*;
         use crate::executor::Executor;
-        use ntest as _;
 
         #[test]
         fn can_validate_block() {
@@ -1111,7 +1107,6 @@ mod test {
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
         #[cfg(not(coverage))] // Too slow for coverage
-        #[ntest::timeout(90_000)]
         fn reuse_cached_compiled_module__native_strategy() {
             // Given
             let next_version = Executor::<Storage, DisabledRelayer>::VERSION + 1;
@@ -1119,10 +1114,15 @@ mod test {
             let executor = Executor::native(storage, DisabledRelayer, Config::default());
             let block = valid_block(next_version);
 
+            executor.validate(&block).map(|_| ()).unwrap();
+            let start = std::time::Instant::now();
             // When
             for _ in 0..1000 {
                 let result = executor.validate(&block).map(|_| ());
 
+                if start.elapsed().as_secs() > 60 {
+                    panic!("The test is too slow");
+                }
                 // Then
                 assert_eq!(Ok(()), result);
             }
@@ -1132,7 +1132,6 @@ mod test {
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
         #[cfg(not(coverage))] // Too slow for coverage
-        #[ntest::timeout(90_000)]
         fn reuse_cached_compiled_module__wasm_strategy() {
             // Given
             let next_version = Executor::<Storage, DisabledRelayer>::VERSION + 1;
@@ -1140,10 +1139,15 @@ mod test {
             let executor = Executor::wasm(storage, DisabledRelayer, Config::default());
             let block = valid_block(next_version);
 
+            executor.validate(&block).map(|_| ()).unwrap();
+            let start = std::time::Instant::now();
             // When
             for _ in 0..1000 {
                 let result = executor.validate(&block).map(|_| ());
 
+                if start.elapsed().as_secs() > 60 {
+                    panic!("The test is too slow");
+                }
                 // Then
                 assert_eq!(Ok(()), result);
             }
