@@ -50,23 +50,7 @@ struct Harness<Rng> {
 impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
     async fn new(mut rng: Rng) -> anyhow::Result<Self> {
         let params = Parameters::hard_coded();
-
-        let mut chain_config = ChainConfig::local_testnet();
-        chain_config
-            .consensus_parameters
-            .set_block_gas_limit(u64::MAX);
-        chain_config
-            .consensus_parameters
-            .set_block_transaction_size_limit(u64::MAX)
-            .unwrap();
-
-        let state_config = StateConfig::local_testnet();
-
-        let mut config = Config::local_node_with_configs(chain_config, state_config);
-        config.block_production = Trigger::Never;
-        config.graphql_config.max_queries_complexity = usize::MAX;
-
-        let node = FuelService::new_node(config).await?;
+        let node = FuelService::new_node(node_config()).await?;
         let client = FuelClient::from(node.bound_address);
         let owner_address = Address::randomize(&mut rng);
 
@@ -135,6 +119,25 @@ impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
     }
 }
 
+fn node_config() -> Config {
+    let mut chain_config = ChainConfig::local_testnet();
+    chain_config
+        .consensus_parameters
+        .set_block_gas_limit(u64::MAX);
+    chain_config
+        .consensus_parameters
+        .set_block_transaction_size_limit(u64::MAX)
+        .unwrap();
+
+    let state_config = StateConfig::local_testnet();
+
+    let mut config = Config::local_node_with_configs(chain_config, state_config);
+    config.block_production = Trigger::Never;
+    config.graphql_config.max_queries_complexity = usize::MAX;
+
+    config
+}
+
 struct Parameters {
     num_queries: usize,
     num_blocks: usize,
@@ -146,7 +149,7 @@ impl Parameters {
         Self {
             num_queries: 10,
             num_blocks: 10,
-            tx_count_per_block: 10_000,
+            tx_count_per_block: 1000,
         }
     }
 }
