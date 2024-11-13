@@ -242,6 +242,24 @@ where
     }
 }
 
+fn convert_to_v1_metadata(
+    updater_metadata: UpdaterMetadata,
+    config: &V1AlgorithmConfig,
+) -> crate::common::utils::Result<V1Metadata> {
+    if let Ok(v1_metadata) = V1Metadata::try_from(updater_metadata.clone()) {
+        Ok(v1_metadata)
+    } else {
+        let v0_metadata = V0Metadata::try_from(updater_metadata).map_err(|_| {
+            crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(
+                "Could not convert metadata to V0Metadata"
+            ))
+        })?;
+        V1Metadata::construct_from_v0_metadata(v0_metadata, config).map_err(|err| {
+            crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(err))
+        })
+    }
+}
+
 pub fn initialize_algorithm<Metadata>(
     config: &V1AlgorithmConfig,
     latest_block_height: u32,
@@ -257,20 +275,8 @@ where
             crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(err))
         })?
     {
-        if let Ok(v1_metadata) = V1Metadata::try_from(updater_metadata.clone()) {
-            algorithm_updater = v1_algorithm_from_metadata(v1_metadata, config);
-        } else {
-            let v0_metadata = V0Metadata::try_from(updater_metadata).map_err(|_| {
-                crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(
-                    "Could not convert metadata to V0Metadata"
-                ))
-            })?;
-            let v1_metadata = V1Metadata::construct_from_v0_metadata(v0_metadata, config)
-                .map_err(|err| {
-                    crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(err))
-                })?;
-            algorithm_updater = v1_algorithm_from_metadata(v1_metadata, config);
-        }
+        let v1_metadata = convert_to_v1_metadata(updater_metadata, config)?;
+        algorithm_updater = v1_algorithm_from_metadata(v1_metadata, config);
     } else {
         algorithm_updater = AlgorithmUpdaterV1::from(config);
     }
