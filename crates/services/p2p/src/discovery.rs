@@ -368,7 +368,7 @@ mod tests {
                                     .add_address(&peer_id, unroutable_peer_addr.clone());
                             }
                             SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                                dbg!(peer_id);
+                                left_to_discover[swarm_index].insert(peer_id);
                             }
                             _ => {}
                         }
