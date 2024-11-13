@@ -2,5 +2,5 @@
 slow-timeout = { period = "60s", terminate-after = 5 }
 
 [[profile.default.overrides]]
-filter = 'test(too_many_transactions_are_split_in_blocks | block_producer_never_includes_more_than_max_tx_count_transactions)'
+filter = 'test(too_many_transactions_are_split_in_blocks) + test(block_producer_never_includes_more_than_max_tx_count_transactions)'
 slow-timeout = { period = "60s", terminate-after = 20 }
