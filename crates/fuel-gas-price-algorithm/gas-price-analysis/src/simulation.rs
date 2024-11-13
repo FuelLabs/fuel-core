@@ -1,5 +1,8 @@
 use super::*;
-use fuel_gas_price_algorithm::v1::AlgorithmUpdaterV1;
+use fuel_gas_price_algorithm::v1::{
+    AlgorithmUpdaterV1,
+    L2ActivityTracker,
+};
 use std::{
     collections::BTreeMap,
     num::NonZeroU64,
@@ -83,7 +86,8 @@ impl Simulator {
     ) -> AlgorithmUpdaterV1 {
         // Scales the gas price internally, value is arbitrary
         let gas_price_factor = 100;
-        let updater = AlgorithmUpdaterV1 {
+        let always_normal_activity = L2ActivityTracker::new_always_normal();
+        AlgorithmUpdaterV1 {
             min_exec_gas_price: 10,
             min_da_gas_price: 10,
             // Change to adjust where the exec gas price starts on block 0
@@ -109,11 +113,11 @@ impl Simulator {
             da_d_component,
             last_profit: 0,
             second_to_last_profit: 0,
-        };
-        updater
+            l2_activity: always_normal_activity,
+        }
     }
 
-    fn execute_simulation<'a>(
+    fn execute_simulation(
         &self,
         capacity: u64,
         max_block_bytes: u64,
@@ -156,7 +160,7 @@ impl Simulator {
 
             // Update DA blocks on the occasion there is one
             if let Some((range, cost)) = da_block {
-                for height in range.to_owned() {
+                for height in range {
                     updater
                         .update_da_record_data(height..(height + 1), cost)
                         .unwrap();
@@ -173,7 +177,7 @@ impl Simulator {
         let bytes_and_costs: Vec<_> = bytes
             .iter()
             .zip(self.da_cost_per_byte.iter())
-            .map(|(bytes, da_cost_per_byte)| (*bytes, (*bytes * da_cost_per_byte) as u64))
+            .map(|(bytes, da_cost_per_byte)| (*bytes, *bytes * da_cost_per_byte))
             .collect();
 
         let actual_profit: Vec<i128> = actual_costs
@@ -204,7 +208,7 @@ impl Simulator {
         &self,
         da_recording_rate: usize,
         da_finalization_rate: usize,
-        fullness_and_bytes: &Vec<(u64, u64)>,
+        fullness_and_bytes: &[(u64, u64)],
     ) -> Vec<Option<(Range<u32>, u128)>> {
         let l2_blocks_with_no_da_blocks =
             std::iter::repeat(None).take(da_finalization_rate);
