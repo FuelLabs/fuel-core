@@ -65,8 +65,6 @@ impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
 
     async fn produce_blocks_with_transactions(&mut self) -> anyhow::Result<()> {
         for _ in 0..self.params.num_blocks {
-            let mut handles = Vec::new();
-
             for tx in (1..=self.params.tx_count_per_block).map(|i| {
                 let script_gas_limit = 26; // Cost of OP_RET * 2
                 test_helpers::make_tx_with_recipient(
@@ -76,19 +74,9 @@ impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
                     self.owner_address,
                 )
             }) {
-                let client = self.client.clone();
-                let handle =
-                    tokio::spawn(
-                        async move { client.submit_and_await_commit(&tx).await },
-                    );
-                handles.push(handle);
-                // let _tx_id = self.client.submit(&tx).await?;
+                self.client.submit(&tx).await?;
             }
             self.client.produce_blocks(1, None).await?;
-
-            for handle in handles {
-                handle.await??;
-            }
         }
 
         Ok(())
