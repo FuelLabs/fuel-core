@@ -1063,7 +1063,7 @@ mod tests {
         // to have the same PeerId
         let node_b = {
             // Given
-            p2p_config.reserved_nodes = vec![node_a.multiaddrs().pop().unwrap()];
+            p2p_config.reserved_nodes = node_a.multiaddrs();
             let max_block_size = p2p_config.max_block_size;
             let (sender, _) =
                 broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
