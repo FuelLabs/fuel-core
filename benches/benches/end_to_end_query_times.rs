@@ -67,10 +67,11 @@ impl<Rng: rand::RngCore + rand::CryptoRng> Harness<Rng> {
     async fn produce_blocks_with_transactions(&mut self) -> anyhow::Result<()> {
         for _ in 0..self.params.num_blocks {
             for tx in (1..=self.params.tx_count_per_block).map(|i| {
+                let script_gas_limit = 26; // Cost of OP_RET * 2
                 test_helpers::make_tx_with_recipient(
                     &mut self.rng,
                     i,
-                    u64::MAX / 2,
+                    script_gas_limit,
                     self.owner_address,
                 )
             }) {
