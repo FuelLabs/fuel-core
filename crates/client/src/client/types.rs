@@ -14,37 +14,71 @@ pub mod node_info;
 
 pub use balance::Balance;
 pub use blob::Blob;
-pub use block::{Block, Consensus};
+pub use block::{
+    Block,
+    Consensus,
+};
 pub use chain_info::ChainInfo;
-pub use coins::{Coin, CoinType, MessageCoin};
-pub use contract::{Contract, ContractBalance};
-pub use gas_costs::{DependentCost, GasCosts};
+pub use coins::{
+    Coin,
+    CoinType,
+    MessageCoin,
+};
+pub use contract::{
+    Contract,
+    ContractBalance,
+};
+pub use gas_costs::{
+    DependentCost,
+    GasCosts,
+};
 pub use merkle_proof::MerkleProof;
-pub use message::{Message, MessageProof};
+pub use message::{
+    Message,
+    MessageProof,
+};
 pub use node_info::NodeInfo;
 
 use crate::client::schema::{
     relayed_tx::RelayedTransactionStatus as SchemaRelayedTransactionStatus,
     tx::{
-        OpaqueTransactionWithStatus, StatusWithTransaction as SchemaStatusWithTx,
+        OpaqueTransactionWithStatus,
+        StatusWithTransaction as SchemaStatusWithTx,
         TransactionStatus as SchemaTxStatus,
     },
     ConversionError,
 };
 use fuel_core_types::{
-    fuel_tx::{Receipt, Transaction},
-    fuel_types::{canonical::Deserialize, BlockHeight},
+    fuel_tx::{
+        Receipt,
+        Transaction,
+    },
+    fuel_types::{
+        canonical::Deserialize,
+        BlockHeight,
+    },
     fuel_vm::ProgramState,
 };
 use tai64::Tai64;
 
 pub mod primitives {
     pub use fuel_core_types::{
-        fuel_crypto::{PublicKey, Signature},
+        fuel_crypto::{
+            PublicKey,
+            Signature,
+        },
         fuel_tx::UtxoId,
         fuel_types::{
-            Address, AssetId, BlobId, Bytes32, Bytes64, ChainId, ContractId, MessageId,
-            Nonce, Salt,
+            Address,
+            AssetId,
+            BlobId,
+            Bytes32,
+            Bytes64,
+            ChainId,
+            ContractId,
+            MessageId,
+            Nonce,
+            Salt,
         },
     };
 
