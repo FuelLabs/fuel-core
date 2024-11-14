@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2362](https://github.com/FuelLabs/fuel-core/pull/2362): Added a new request_response protocol version `/fuel/req_res/0.0.2`. In comparison with `/fuel/req/0.0.1`, which returns an empty response when a request cannot be fulfilled, this version returns more meaningful error codes. Nodes still support the version `0.0.1` of the protocol to guarantee backward compatibility with fuel-core nodes. Empty responses received from nodes using the old protocol `/fuel/req/0.0.1` are automatically converted into an error `ProtocolV1EmptyResponse` with error code 0, which is also the only error code implemented. More specific error codes will be added in the future.
 - [2386](https://github.com/FuelLabs/fuel-core/pull/2386): Add a flag to define the maximum number of file descriptors that RocksDB can use. By default it's half of the OS limit.
 - [2376](https://github.com/FuelLabs/fuel-core/pull/2376): Add a way to fetch transactions in P2P without specifying a peer.
+- [2327](https://github.com/FuelLabs/fuel-core/pull/2327): Add more services tests and more checks of the pool. Also add an high level documentation for users of the pool and contributors.
+- [2416](https://github.com/FuelLabs/fuel-core/issues/2416): Define the `GasPriceServiceV1` task.
+
 
 ### Fixed
 - [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.
@@ -55,7 +58,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - [2324](https://github.com/FuelLabs/fuel-core/pull/2324): Added metrics for sync, async processor and for all GraphQL queries.
 - [2320](https://github.com/FuelLabs/fuel-core/pull/2320): Added new CLI flag `graphql-max-resolver-recursive-depth` to limit recursion within resolver. The default value it "1".
-
 
 ## Fixed
 - [2320](https://github.com/FuelLabs/fuel-core/issues/2320): Prevent `/health` and `/v1/health` from being throttled by the concurrency limiter.
