@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - [2378](https://github.com/FuelLabs/fuel-core/pull/2378): Use cached hash of the topic instead of calculating it on each publishing gossip message.
 
+#### Breaking
+- [2389](https://github.com/FuelLabs/fuel-core/pull/2258): Updated the `messageProof` GraphQL schema to return a non-nullable `MessageProof`.
+
 ## [Version 0.40.0]
 
 ### Added
