@@ -272,7 +272,7 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
 }
 
 #[test]
-fn update_da_record_data__da_block_updates__da_gas_price() {
+fn update_da_record_data__da_block_lowers_da_gas_price() {
     // given
     let da_cost_per_byte = 40;
     let da_recorded_block_height = 10;
@@ -321,5 +321,115 @@ fn update_da_record_data__da_block_updates__da_gas_price() {
 
     // then
     let new_da_gas_price = updater.new_scaled_da_gas_price;
+    // because the profit is 10 and the da_p_component is 2, the new da gas price should be lesser than the previous one.
+    assert_eq!(new_da_gas_price, 0);
     assert_ne!(old_da_gas_price, new_da_gas_price);
+}
+
+#[test]
+fn update_da_record_data__da_block_increases_da_gas_price() {
+    // given
+    let da_cost_per_byte = 40;
+    let da_recorded_block_height = 10;
+    let l2_block_height = 11;
+    let original_known_total_cost = 150;
+    let unrecorded_blocks = vec![BlockBytes {
+        height: 11,
+        block_bytes: 3000,
+    }];
+    let da_p_component = 2;
+    let guessed_cost: u64 = unrecorded_blocks
+        .iter()
+        .map(|block| block.block_bytes * da_cost_per_byte)
+        .sum();
+    let projected_total_cost = original_known_total_cost + guessed_cost;
+
+    let mut updater = UpdaterBuilder::new()
+        .with_da_cost_per_byte(da_cost_per_byte as u128)
+        .with_da_p_component(da_p_component)
+        .with_last_profit(-10, 0)
+        .with_da_recorded_block_height(da_recorded_block_height)
+        .with_l2_block_height(l2_block_height)
+        .with_projected_total_cost(projected_total_cost as u128)
+        .with_known_total_cost(original_known_total_cost as u128)
+        .with_unrecorded_blocks(unrecorded_blocks.clone())
+        .build();
+
+    let new_cost_per_byte = 100;
+    let (recorded_heights, recorded_cost) =
+        unrecorded_blocks
+            .iter()
+            .fold((vec![], 0), |(mut range, cost), block| {
+                range.push(block.height);
+                (range, cost + block.block_bytes * new_cost_per_byte)
+            });
+    let min = recorded_heights.iter().min().unwrap();
+    let max = recorded_heights.iter().max().unwrap();
+    let recorded_range = *min..(max + 1);
+
+    let old_da_gas_price = updater.new_scaled_da_gas_price;
+
+    // when
+    updater
+        .update_da_record_data(recorded_range, recorded_cost as u128)
+        .unwrap();
+
+    // then
+    let new_da_gas_price = updater.new_scaled_da_gas_price;
+    // because the profit is -10 and the da_p_component is 2, the new da gas price should be greater than the previous one.
+    assert_eq!(new_da_gas_price, 6);
+    assert_ne!(old_da_gas_price, new_da_gas_price);
+}
+
+#[test]
+fn update_da_record_data__da_block_will_not_change_da_gas_price() {
+    // given
+    let da_cost_per_byte = 40;
+    let da_recorded_block_height = 10;
+    let l2_block_height = 11;
+    let original_known_total_cost = 150;
+    let unrecorded_blocks = vec![BlockBytes {
+        height: 11,
+        block_bytes: 3000,
+    }];
+    let da_p_component = 2;
+    let guessed_cost: u64 = unrecorded_blocks
+        .iter()
+        .map(|block| block.block_bytes * da_cost_per_byte)
+        .sum();
+    let projected_total_cost = original_known_total_cost + guessed_cost;
+
+    let mut updater = UpdaterBuilder::new()
+        .with_da_cost_per_byte(da_cost_per_byte as u128)
+        .with_da_p_component(da_p_component)
+        .with_last_profit(0, 0)
+        .with_da_recorded_block_height(da_recorded_block_height)
+        .with_l2_block_height(l2_block_height)
+        .with_projected_total_cost(projected_total_cost as u128)
+        .with_known_total_cost(original_known_total_cost as u128)
+        .with_unrecorded_blocks(unrecorded_blocks.clone())
+        .build();
+
+    let new_cost_per_byte = 100;
+    let (recorded_heights, recorded_cost) =
+        unrecorded_blocks
+            .iter()
+            .fold((vec![], 0), |(mut range, cost), block| {
+                range.push(block.height);
+                (range, cost + block.block_bytes * new_cost_per_byte)
+            });
+    let min = recorded_heights.iter().min().unwrap();
+    let max = recorded_heights.iter().max().unwrap();
+    let recorded_range = *min..(max + 1);
+
+    let old_da_gas_price = updater.new_scaled_da_gas_price;
+
+    // when
+    updater
+        .update_da_record_data(recorded_range, recorded_cost as u128)
+        .unwrap();
+
+    // then
+    let new_da_gas_price = updater.new_scaled_da_gas_price;
+    assert_eq!(old_da_gas_price, new_da_gas_price);
 }
