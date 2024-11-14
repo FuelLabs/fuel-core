@@ -772,6 +772,56 @@ async fn get_transactions_by_owner_returns_correct_number_of_results(
 #[test_case::test_case(PageDirection::Forward; "forward")]
 #[test_case::test_case(PageDirection::Backward; "backward")]
 #[tokio::test]
+async fn get_transactions_by_owners_multiple_owners_returns_correct_number_of_results(
+    direction: PageDirection,
+) {
+    let alice = Address::from([1; 32]);
+    let bob = Address::from([2; 32]);
+    let charlie = Address::from([3; 32]);
+
+    // Given
+    let mut context = TestContext::new(100).await;
+    let _ = context.transfer(bob, alice, 1).await.unwrap();
+    let _ = context.transfer(bob, alice, 2).await.unwrap();
+    let _ = context.transfer(bob, charlie, 1).await.unwrap();
+    let _ = context.transfer(alice, bob, 3).await.unwrap();
+    let _ = context.transfer(alice, bob, 4).await.unwrap();
+    let _ = context.transfer(alice, bob, 5).await.unwrap();
+    let _ = context.transfer(charlie, alice, 1).await.unwrap();
+    let _ = context.transfer(charlie, bob, 2).await.unwrap();
+    let _ = context.transfer(charlie, bob, 3).await.unwrap();
+    let _ = context.transfer(charlie, bob, 4).await.unwrap();
+    let _ = context.transfer(charlie, bob, 5).await.unwrap();
+
+    let client = context.client;
+    let all_transactions_with_direction = PaginationRequest {
+        cursor: None,
+        results: 10,
+        direction,
+    };
+
+    // When
+    let response = client
+        .transactions_by_owner(&bob, all_transactions_with_direction)
+        .await
+        .unwrap();
+
+    let transactions = response
+        .results
+        .into_iter()
+        .map(|tx| {
+            assert!(matches!(tx.status, TransactionStatus::Success { .. }));
+            tx.transaction
+        })
+        .collect_vec();
+
+    // Then
+    assert_eq!(transactions.len(), 10);
+}
+
+#[test_case::test_case(PageDirection::Forward; "forward")]
+#[test_case::test_case(PageDirection::Backward; "backward")]
+#[tokio::test]
 async fn get_transactions_by_owner_supports_cursor(direction: PageDirection) {
     let alice = Address::from([1; 32]);
     let bob = Address::from([2; 32]);
