@@ -443,12 +443,9 @@ where
     }
 
     /// RocksDB prefix iteration doesn't support reverse order,
-    /// but seeking the start key and iterating in reverse order works.
-    /// So we can create a workaround. We need to find the next available
-    /// element and use it as an anchor for reverse iteration,
-    /// but skip the first element to jump on the previous prefix.
-    /// If we can't find the next element, we are at the end of the list,
-    /// so we can use `IteratorMode::End` to start reverse iteration.
+    /// so we need to to force the RocksDB iterator to order
+    /// all the prefix in the iterator so that we can take the next prefix
+    /// as start of iterator and iterate in reverse.
     fn reverse_prefix_iter<T>(
         &self,
         prefix: &[u8],
@@ -457,28 +454,24 @@ where
     where
         T: ExtractItem,
     {
-        let maybe_next_item = next_prefix(prefix.to_vec())
-            .and_then(|next_prefix| {
-                self.iter_store(
-                    column,
-                    Some(next_prefix.as_slice()),
-                    None,
-                    IterDirection::Forward,
-                )
-                .next()
-            })
-            .and_then(|res| res.ok());
+        let reverse_iterator = next_prefix(prefix.to_vec()).map(|next_prefix| {
+            let mut opts = self.read_options();
+            // We need this option because our iterator start in the `next_prefix` prefix section
+            // and continue in `prefix` section. Without this option the correct
+            // iteration between prefix section isn't guaranteed
+            // Source : https://github.com/facebook/rocksdb/wiki/Prefix-Seek#how-to-ignore-prefix-bloom-filters-in-read
+            // and https://github.com/facebook/rocksdb/wiki/Prefix-Seek#general-prefix-seek-api
+            opts.set_total_order_seek(true);
+            self.iterator::<T>(
+                column,
+                opts,
+                IteratorMode::From(next_prefix.as_slice(), rocksdb::Direction::Reverse),
+            )
+        });
 
-        if let Some((next_start_key, _)) = maybe_next_item {
-            let iter_mode = IteratorMode::From(
-                next_start_key.as_slice(),
-                rocksdb::Direction::Reverse,
-            );
+        if let Some(iterator) = reverse_iterator {
             let prefix = prefix.to_vec();
-            self
-                .iterator::<T>(column, self.read_options(), iter_mode)
-                // Skip the element under the `next_start_key` key.
-                .skip(1)
+            iterator
                 .take_while(move |item| {
                     if let Ok(item) = item {
                         T::starts_with(item, prefix.as_slice())
@@ -612,8 +605,14 @@ where
                 // start iterating in a certain direction from the start key
                 let iter_mode =
                     IteratorMode::From(start, convert_to_rocksdb_direction(direction));
-                self.iterator::<T>(column, self.read_options(), iter_mode)
-                    .into_boxed()
+                let mut opts = self.read_options();
+                // We need this option because our iterator start in the `start` prefix section
+                // and continue in next sections. Without this option the correct
+                // iteration between prefix section isn't guaranteed
+                // Source : https://github.com/facebook/rocksdb/wiki/Prefix-Seek#how-to-ignore-prefix-bloom-filters-in-read
+                // and https://github.com/facebook/rocksdb/wiki/Prefix-Seek#general-prefix-seek-api
+                opts.set_total_order_seek(true);
+                self.iterator::<T>(column, opts, iter_mode).into_boxed()
             }
             (Some(prefix), Some(start)) => {
                 // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
@@ -1217,5 +1216,117 @@ mod tests {
         // Then
         let _ = open_with_part_of_columns
             .expect("Should open the database with shorter number of columns");
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__no_target_prefix() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(Vec::new());
+        let key_1 = [1, 1];
+        let key_2 = [2, 2];
+        let key_3 = [9, 3];
+        let key_4 = [10, 0];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_4, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![5].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![]);
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__target_prefix_at_the_middle() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(Vec::new());
+        let key_1 = [1, 1];
+        let key_2 = [2, 2];
+        let key_3 = [2, 3];
+        let key_4 = [10, 0];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_4, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![2].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__target_prefix_at_the_end() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(Vec::new());
+        let key_1 = [1, 1];
+        let key_2 = [2, 2];
+        let key_3 = [2, 3];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![2].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__target_prefix_at_the_end__overflow() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Arc::new(Vec::new());
+        let key_1 = [1, 1];
+        let key_2 = [255, 254];
+        let key_3 = [255, 255];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![255].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
     }
 }
