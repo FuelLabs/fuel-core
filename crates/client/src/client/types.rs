@@ -14,77 +14,37 @@ pub mod node_info;
 
 pub use balance::Balance;
 pub use blob::Blob;
-pub use block::{
-    Block,
-    Consensus,
-};
+pub use block::{Block, Consensus};
 pub use chain_info::ChainInfo;
-pub use coins::{
-    Coin,
-    CoinType,
-    MessageCoin,
-};
-pub use contract::{
-    Contract,
-    ContractBalance,
-};
-pub use gas_costs::{
-    DependentCost,
-    GasCosts,
-};
+pub use coins::{Coin, CoinType, MessageCoin};
+pub use contract::{Contract, ContractBalance};
+pub use gas_costs::{DependentCost, GasCosts};
 pub use merkle_proof::MerkleProof;
-pub use message::{
-    Message,
-    MessageProof,
-};
+pub use message::{Message, MessageProof};
 pub use node_info::NodeInfo;
 
 use crate::client::schema::{
     relayed_tx::RelayedTransactionStatus as SchemaRelayedTransactionStatus,
     tx::{
-        OpaqueTransactionWithStatus,
-        StatusWithTransaction as SchemaStatusWithTx,
+        OpaqueTransactionWithStatus, StatusWithTransaction as SchemaStatusWithTx,
         TransactionStatus as SchemaTxStatus,
     },
     ConversionError,
 };
 use fuel_core_types::{
-    fuel_tx::{
-        Blob as BlobTx,
-        Create,
-        Mint,
-        Receipt,
-        Script,
-        Transaction,
-        Upgrade,
-        Upload,
-    },
-    fuel_types::{
-        canonical::Deserialize,
-        BlockHeight,
-    },
+    fuel_tx::{Receipt, Transaction},
+    fuel_types::{canonical::Deserialize, BlockHeight},
     fuel_vm::ProgramState,
 };
 use tai64::Tai64;
 
 pub mod primitives {
     pub use fuel_core_types::{
-        fuel_crypto::{
-            PublicKey,
-            Signature,
-        },
+        fuel_crypto::{PublicKey, Signature},
         fuel_tx::UtxoId,
         fuel_types::{
-            Address,
-            AssetId,
-            BlobId,
-            Bytes32,
-            Bytes64,
-            ChainId,
-            ContractId,
-            MessageId,
-            Nonce,
-            Salt,
+            Address, AssetId, BlobId, Bytes32, Bytes64, ChainId, ContractId, MessageId,
+            Nonce, Salt,
         },
     };
 
@@ -301,25 +261,13 @@ impl TryFrom<SchemaRelayedTransactionStatus> for RelayedTransactionStatus {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum TransactionType {
-    Script(Script),
-    Create(Create),
-    Mint(Mint),
-    Upgrade(Upgrade),
-    Upload(Upload),
-    Blob(BlobTx),
+    Known(Transaction),
     Unknown,
 }
 
 impl From<Transaction> for TransactionType {
     fn from(value: Transaction) -> Self {
-        match value {
-            Transaction::Script(tx) => Self::Script(tx),
-            Transaction::Create(tx) => Self::Create(tx),
-            Transaction::Mint(tx) => Self::Mint(tx),
-            Transaction::Upgrade(tx) => Self::Upgrade(tx),
-            Transaction::Upload(tx) => Self::Upload(tx),
-            Transaction::Blob(tx) => Self::Blob(tx),
-        }
+        Self::Known(value)
     }
 }
 
@@ -328,12 +276,7 @@ impl TryFrom<TransactionType> for Transaction {
 
     fn try_from(value: TransactionType) -> Result<Self, ConversionError> {
         match value {
-            TransactionType::Script(tx) => Ok(Self::Script(tx)),
-            TransactionType::Create(tx) => Ok(Self::Create(tx)),
-            TransactionType::Mint(tx) => Ok(Self::Mint(tx)),
-            TransactionType::Upgrade(tx) => Ok(Self::Upgrade(tx)),
-            TransactionType::Upload(tx) => Ok(Self::Upload(tx)),
-            TransactionType::Blob(tx) => Ok(Self::Blob(tx)),
+            TransactionType::Known(tx) => Ok(tx),
             TransactionType::Unknown => {
                 Err(ConversionError::UnknownVariant("Transaction"))
             }
