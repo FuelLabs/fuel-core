@@ -1051,6 +1051,47 @@ mod tests {
         stop_sender.send(()).unwrap();
     }
 
+    #[tokio::test]
+    #[instrument]
+    async fn dont_connect_to_node_with_same_peer_id() {
+        let mut p2p_config =
+            Config::default_initialized("dont_connect_to_node_with_same_peer_id");
+        let mut node_a = build_service_from_config(p2p_config.clone()).await;
+        // We don't use build_service_from_config here, because we want to use the same keypair
+        // to have the same PeerId
+        let node_b = {
+            // Given
+            p2p_config.reserved_nodes = node_a.multiaddrs();
+            let max_block_size = p2p_config.max_block_size;
+            let (sender, _) =
+                broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
+
+            let mut service = FuelP2PService::new(
+                sender,
+                p2p_config,
+                PostcardCodec::new(max_block_size),
+            )
+            .await
+            .unwrap();
+            service.start().await.unwrap();
+            service
+        };
+        // When
+        tokio::time::timeout(Duration::from_secs(5), async move {
+            loop {
+                let event = node_a.next_event().await;
+                if let Some(FuelP2PEvent::PeerConnected(_)) = event {
+                    panic!("Node B should not connect to Node A because they have the same PeerId");
+                }
+                assert_eq!(node_a.peer_manager().total_peers_connected(), 0);
+            }
+        })
+        .await
+        // Then
+        .expect_err("The node should not connect to itself");
+        assert_eq!(node_b.peer_manager().total_peers_connected(), 0);
+    }
+
     // We start with two nodes, node_a and node_b, bootstrapped with `bootstrap_nodes_count` other nodes.
     // Yet node_a and node_b are only allowed to connect to specified amount of nodes.
     #[tokio::test]
