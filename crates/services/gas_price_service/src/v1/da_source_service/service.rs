@@ -15,6 +15,7 @@ use tokio::{
 
 use crate::v1::da_source_service::DaBlockCosts;
 pub use anyhow::Result;
+use fuel_core_services::stream::BoxFuture;
 
 #[derive(Clone)]
 pub struct SharedState(Sender<DaBlockCosts>);
