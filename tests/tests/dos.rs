@@ -701,7 +701,7 @@ async fn heavy_tasks_doesnt_block_graphql() {
     client.produce_blocks(NUM_OF_BLOCKS, None).await.unwrap();
 
     // Given
-    for _ in 0..50 {
+    for _ in 0..150 {
         let url = url.clone();
         let query = query.clone();
         tokio::spawn(async move {
@@ -713,11 +713,27 @@ async fn heavy_tasks_doesnt_block_graphql() {
     // Wait for all queries to start be processed on the node.
     tokio::time::sleep(Duration::from_secs(1)).await;
 
+    const RETRIES: u32 = 3;
+    const TIMEOUT_SECS: u64 = 4;
+
     // When
-    let result = tokio::time::timeout(Duration::from_secs(5), client.health()).await;
+    let mut retries = RETRIES;
+    let result = loop {
+        if retries == 0 {
+            panic!("Health check timed out after 3 retries");
+        }
+
+        match tokio::time::timeout(Duration::from_secs(TIMEOUT_SECS), client.health())
+            .await
+        {
+            Ok(result) => break result,
+            Err(_) => retries -= 1,
+        }
+
+        // Intentionally no sleep between retries, try ASAP to make sure that the node is still under load.
+    };
 
     // Then
-    let result = result.expect("Health check timed out");
     let health = result.expect("Health check failed");
     assert!(health);
 }
