@@ -3166,7 +3166,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm#486d06f83de6ea3411543f3034700b0157a65eb5"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
 dependencies = [
  "bitflags 2.6.0",
  "fuel-types 0.58.2",
@@ -3177,7 +3177,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm#486d06f83de6ea3411543f3034700b0157a65eb5"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
 dependencies = [
  "fuel-derive 0.58.2",
  "fuel-types 0.58.2",
@@ -3891,7 +3891,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm#486d06f83de6ea3411543f3034700b0157a65eb5"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3923,7 +3923,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm#486d06f83de6ea3411543f3034700b0157a65eb5"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3959,7 +3959,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm#486d06f83de6ea3411543f3034700b0157a65eb5"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
 dependencies = [
  "derive_more 0.99.18",
  "digest 0.10.7",
@@ -3979,7 +3979,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm#486d06f83de6ea3411543f3034700b0157a65eb5"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
 
 [[package]]
 name = "fuel-tx"
@@ -4006,7 +4006,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm#486d06f83de6ea3411543f3034700b0157a65eb5"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
 dependencies = [
  "bitflags 2.6.0",
  "derivative",
@@ -4039,7 +4039,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm#486d06f83de6ea3411543f3034700b0157a65eb5"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
 dependencies = [
  "fuel-derive 0.58.2",
  "hex",
@@ -4081,7 +4081,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm#486d06f83de6ea3411543f3034700b0157a65eb5"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
 dependencies = [
  "anyhow",
  "async-trait",
