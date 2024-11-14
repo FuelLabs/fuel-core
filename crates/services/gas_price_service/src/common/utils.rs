@@ -36,5 +36,9 @@ pub enum BlockInfo {
         gas_used: u64,
         // Total gas capacity of the block
         block_gas_capacity: u64,
+        // The size of block in bytes
+        block_bytes: u64,
+        // The fees the block has collected
+        block_fees: u64,
     },
 }

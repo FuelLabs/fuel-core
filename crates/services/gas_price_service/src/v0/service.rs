@@ -104,6 +104,7 @@ where
                 height,
                 gas_used,
                 block_gas_capacity,
+                ..
             } => {
                 self.handle_normal_block(height, gas_used, block_gas_capacity)
                     .await?;
@@ -225,6 +226,8 @@ mod tests {
             height: block_height,
             gas_used: 60,
             block_gas_capacity: 100,
+            block_bytes: 100,
+            block_fees: 100,
         };
 
         let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);

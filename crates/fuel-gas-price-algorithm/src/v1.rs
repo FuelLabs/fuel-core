@@ -313,6 +313,7 @@ impl AlgorithmUpdaterV1 {
         if !height_range.is_empty() {
             self.da_block_update(height_range, range_cost)?;
             self.recalculate_projected_cost();
+            self.update_da_gas_price();
         }
         Ok(())
     }
