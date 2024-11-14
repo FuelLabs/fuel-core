@@ -93,7 +93,10 @@ pub fn default_gas_costs() -> GasCostsValues {
         // TODO: Change
         eadd: 2,
         emul: 2,
-        epar: DependentCost::LightOperation { base: 2, units_per_gas: 30 },
+        epar: DependentCost::LightOperation {
+            base: 2,
+            units_per_gas: 30,
+        },
         aloc: DependentCost::LightOperation {
             base: 2,
             units_per_gas: 35,

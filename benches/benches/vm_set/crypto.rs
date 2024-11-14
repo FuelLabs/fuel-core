@@ -154,4 +154,26 @@ pub fn run(c: &mut Criterion) {
         );
     }
     bench_ed19.finish();
+
+    // TODO: Update with real values
+    // ec add
+    run_group_ref(
+        &mut c.benchmark_group("ecadd"),
+        "eadd",
+        VmBench::new(op::eadd(1, 1, 1, 1)),
+    );
+
+    // ec mul
+    run_group_ref(
+        &mut c.benchmark_group("ecmul"),
+        "emul",
+        VmBench::new(op::emul(1, 1, 1, 1)),
+    );
+
+    // ec pairing
+    run_group_ref(
+        &mut c.benchmark_group("ecpair"),
+        "epar",
+        VmBench::new(op::epar(1, 1, 1, 1)),
+    );
 }
