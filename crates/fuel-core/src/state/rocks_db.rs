@@ -28,6 +28,7 @@ use fuel_core_storage::{
         WriteOperation,
     },
     transactional::Changes,
+    Error as StorageError,
     Result as StorageResult,
 };
 use itertools::Itertools;
@@ -732,6 +733,7 @@ where
         &self,
         key: &[u8],
         column: Self::Column,
+        offset: usize,
         mut buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
         self.metrics.read_meter.inc();
@@ -743,10 +745,15 @@ where
             .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?
             .map(|value| {
-                let read = value.len();
-                std::io::Write::write_all(&mut buf, value.as_ref())
-                    .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
-                StorageResult::Ok(read)
+                if let Some(read) = value.len().checked_sub(offset) {
+                    std::io::Write::write_all(&mut buf, value[offset..].as_ref())
+                        .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
+                    StorageResult::Ok(read)
+                } else {
+                    Err(StorageError::Other(anyhow::anyhow!(
+                        "Offset is out of bounds"
+                    )))
+                }
             })
             .transpose()?;
 
