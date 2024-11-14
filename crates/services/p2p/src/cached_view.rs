@@ -58,6 +58,7 @@ impl CachedView {
 
         for height in range.clone() {
             if let Some(item) = cache.get(&height) {
+                // TODO(2436): replace with cheap Arc clone
                 items.push(item.clone());
             } else {
                 missing_start = Some(height);
@@ -76,6 +77,7 @@ impl CachedView {
         if let Some(fetched_items) = fetch_fn(view, missing_range.clone())? {
             for (height, item) in missing_range.zip(fetched_items.iter()) {
                 cache.insert(height, item.clone());
+                // TODO(2436): replace with cheap Arc clone
                 items.push(item.clone());
             }
 
