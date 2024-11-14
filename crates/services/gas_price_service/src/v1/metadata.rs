@@ -1,7 +1,6 @@
 use crate::v0::metadata::V0Metadata;
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
-    ClampedPercentage,
     L2ActivityTracker,
 };
 use std::num::NonZeroU64;
@@ -41,7 +40,7 @@ pub struct V1Metadata {
 impl V1Metadata {
     pub fn construct_from_v0_metadata(
         v0_metadata: V0Metadata,
-        config: V1AlgorithmConfig,
+        config: &V1AlgorithmConfig,
     ) -> anyhow::Result<Self> {
         let metadata = Self {
             new_scaled_exec_price: v0_metadata
@@ -68,19 +67,56 @@ impl V1Metadata {
 }
 
 pub struct V1AlgorithmConfig {
-    new_exec_gas_price: u64,
-    min_exec_gas_price: u64,
-    exec_gas_price_change_percent: u16,
-    l2_block_fullness_threshold_percent: u8,
-    gas_price_factor: NonZeroU64,
-    min_da_gas_price: u64,
-    max_da_gas_price_change_percent: u16,
-    da_p_component: i64,
-    da_d_component: i64,
-    normal_range_size: u16,
-    capped_range_size: u16,
-    decrease_range_size: u16,
-    block_activity_threshold: u8,
+    pub new_exec_gas_price: u64,
+    pub min_exec_gas_price: u64,
+    pub exec_gas_price_change_percent: u16,
+    pub l2_block_fullness_threshold_percent: u8,
+    pub gas_price_factor: NonZeroU64,
+    pub min_da_gas_price: u64,
+    pub max_da_gas_price_change_percent: u16,
+    pub da_p_component: i64,
+    pub da_d_component: i64,
+    pub normal_range_size: u16,
+    pub capped_range_size: u16,
+    pub decrease_range_size: u16,
+    pub block_activity_threshold: u8,
+    pub unrecorded_blocks: Vec<(u32, u64)>,
+}
+
+impl From<&V1AlgorithmConfig> for AlgorithmUpdaterV1 {
+    fn from(value: &V1AlgorithmConfig) -> Self {
+        let l2_activity = L2ActivityTracker::new_full(
+            value.normal_range_size,
+            value.capped_range_size,
+            value.decrease_range_size,
+            value.block_activity_threshold.into(),
+        );
+        let unrecorded_blocks = value.unrecorded_blocks.clone().into_iter().collect();
+        Self {
+            new_scaled_exec_price: value.new_exec_gas_price,
+            l2_block_height: 0,
+            new_scaled_da_gas_price: value.min_da_gas_price,
+            gas_price_factor: value.gas_price_factor,
+            total_da_rewards_excess: 0,
+            da_recorded_block_height: 0,
+            latest_known_total_da_cost_excess: 0,
+            projected_total_da_cost: 0,
+            last_profit: 0,
+            second_to_last_profit: 0,
+            latest_da_cost_per_byte: 0,
+            l2_activity,
+            min_exec_gas_price: value.min_exec_gas_price,
+            exec_gas_price_change_percent: value.exec_gas_price_change_percent,
+            l2_block_fullness_threshold_percent: value
+                .l2_block_fullness_threshold_percent
+                .into(),
+            min_da_gas_price: value.min_da_gas_price,
+            max_da_gas_price_change_percent: value.max_da_gas_price_change_percent,
+            da_p_component: value.da_p_component,
+            da_d_component: value.da_d_component,
+            unrecorded_blocks,
+        }
+    }
 }
 
 impl From<AlgorithmUpdaterV1> for V1Metadata {
@@ -104,7 +140,7 @@ impl From<AlgorithmUpdaterV1> for V1Metadata {
 
 pub fn v1_algorithm_from_metadata(
     metadata: V1Metadata,
-    config: V1AlgorithmConfig,
+    config: &V1AlgorithmConfig,
 ) -> AlgorithmUpdaterV1 {
     let l2_activity = L2ActivityTracker::new_full(
         config.normal_range_size,
@@ -112,7 +148,11 @@ pub fn v1_algorithm_from_metadata(
         config.decrease_range_size,
         config.block_activity_threshold.into(),
     );
-    let unrecorded_blocks = metadata.unrecorded_blocks.into_iter().collect();
+    let unrecorded_blocks = metadata
+        .unrecorded_blocks
+        .into_iter()
+        .chain(config.unrecorded_blocks.clone())
+        .collect();
     AlgorithmUpdaterV1 {
         new_scaled_exec_price: metadata.new_scaled_exec_price,
         l2_block_height: metadata.l2_block_height,

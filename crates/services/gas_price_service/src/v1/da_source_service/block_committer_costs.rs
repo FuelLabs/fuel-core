@@ -21,12 +21,12 @@ trait BlockCommitterApi: Send + Sync {
     /// Used to get the costs for a specific seqno
     async fn get_costs_by_seqno(
         &self,
-        number: u64,
+        number: u32,
     ) -> DaBlockCostsResult<Option<RawDaBlockCosts>>;
     /// Used to get the costs for a range of blocks (inclusive)
     async fn get_cost_bundles_by_range(
         &self,
-        range: core::ops::Range<u64>,
+        range: core::ops::Range<u32>,
     ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>>;
 }
 
@@ -40,9 +40,9 @@ pub struct BlockCommitterDaBlockCosts<BlockCommitter> {
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
 pub struct RawDaBlockCosts {
     /// Sequence number (Monotonically increasing nonce)
-    pub sequence_number: u64,
+    pub sequence_number: u32,
     /// The range of blocks that the costs apply to
-    pub blocks_range: core::ops::Range<u64>,
+    pub blocks_range: core::ops::Range<u32>,
     /// The DA block height of the last transaction for the range of blocks
     pub da_block_height: DaBlockHeight,
     /// Rolling sum cost of posting blobs (wei)
@@ -143,7 +143,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
 
     async fn get_costs_by_seqno(
         &self,
-        number: u64,
+        number: u32,
     ) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
         let response = self
             .client
@@ -157,7 +157,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
 
     async fn get_cost_bundles_by_range(
         &self,
-        range: core::ops::Range<u64>,
+        range: core::ops::Range<u32>,
     ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
         let response = self
             .client
@@ -192,7 +192,7 @@ mod tests {
         }
         async fn get_costs_by_seqno(
             &self,
-            seq_no: u64,
+            seq_no: u32,
         ) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
             // arbitrary logic to generate a new value
             let mut value = self.value.clone();
@@ -200,7 +200,8 @@ mod tests {
                 value.sequence_number = seq_no;
                 value.blocks_range =
                     value.blocks_range.end * seq_no..value.blocks_range.end * seq_no + 10;
-                value.da_block_height = value.da_block_height + (seq_no + 1).into();
+                value.da_block_height =
+                    value.da_block_height + ((seq_no + 1) as u64).into();
                 value.total_cost += 1;
                 value.total_size_bytes += 1;
             }
@@ -208,7 +209,7 @@ mod tests {
         }
         async fn get_cost_bundles_by_range(
             &self,
-            _: core::ops::Range<u64>,
+            _: core::ops::Range<u32>,
         ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
             Ok(vec![self.value.clone()])
         }
@@ -286,7 +287,7 @@ mod tests {
         }
         async fn get_costs_by_seqno(
             &self,
-            seq_no: u64,
+            seq_no: u32,
         ) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
             // arbitrary logic to generate a new value
             let mut value = self.value.clone();
@@ -301,7 +302,7 @@ mod tests {
         }
         async fn get_cost_bundles_by_range(
             &self,
-            _: core::ops::Range<u64>,
+            _: core::ops::Range<u32>,
         ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
             Ok(vec![self.value.clone()])
         }
