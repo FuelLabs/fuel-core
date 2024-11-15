@@ -117,6 +117,23 @@ where
     }
 }
 
+impl<L2, Metadata> GasPriceServiceV0<L2, Metadata>
+where
+    L2: L2BlockSource,
+    Metadata: MetadataStorage,
+{
+    async fn process_l2_block_res(
+        &mut self,
+        l2_block_res: crate::common::utils::Result<BlockInfo>,
+    ) -> anyhow::Result<()> {
+        tracing::info!("Received L2 block result: {:?}", l2_block_res);
+        let block = l2_block_res?;
+
+        tracing::debug!("Updating gas price algorithm");
+        self.apply_block_info_to_gas_algorithm(block).await?;
+        Ok(())
+    }
+}
 #[async_trait]
 impl<L2, Metadata> RunnableTask for GasPriceServiceV0<L2, Metadata>
 where
@@ -131,22 +148,8 @@ where
                 TaskRunResult::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
-                tracing::info!("Received L2 block result: {:?}", l2_block_res);
-                let block = match l2_block_res {
-                    Ok(block) => block,
-                    Err(err) => {
-                        return anyhow!(err).into()
-                    }
-                };
-
-                tracing::debug!("Updating gas price algorithm");
-                match self.apply_block_info_to_gas_algorithm(block).await {
-                    Ok(_) => {},
-                    Err(err) => {
-                        return err.into()
-                    }
-                }
-                TaskRunResult::Continue
+                let res = self.process_l2_block_res(l2_block_res).await;
+                TaskRunResult::continue_if_ok(res)
             }
         }
     }
