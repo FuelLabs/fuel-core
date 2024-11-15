@@ -1079,7 +1079,8 @@ mod tests {
             let mut service = FuelP2PService::new(
                 sender,
                 p2p_config,
-                PostcardCodec::new(max_block_size),
+                GossipsubMessageHandler::new(),
+                RequestResponseMessageHandler::new(max_block_size),
             )
             .await
             .unwrap();
