@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    collections::HashSet,
+    sync::Arc,
+};
 
 use fuel_core_types::{
     entities::{
@@ -197,10 +200,11 @@ impl TestPoolUniverse {
         tx_builder.finalize().into()
     }
 
+    // Returns the added transaction and the list of transactions that were removed from the pool
     pub fn verify_and_insert(
         &mut self,
         tx: Transaction,
-    ) -> Result<Vec<ArcPoolTx>, Error> {
+    ) -> Result<(ArcPoolTx, Vec<ArcPoolTx>), Error> {
         if let Some(pool) = &self.pool {
             let mut mock_consensus_params_provider =
                 MockConsensusParametersProvider::default();
@@ -222,7 +226,8 @@ impl TestPoolUniverse {
                 Default::default(),
                 true,
             )?;
-            pool.write().insert(Arc::new(tx), &self.mock_db)
+            let tx = Arc::new(tx);
+            Ok((tx.clone(), pool.write().insert(tx, &self.mock_db)?))
         } else {
             panic!("Pool needs to be built first");
         }
@@ -291,6 +296,28 @@ impl TestPoolUniverse {
         } else {
             panic!("Pool needs to be built first");
         }
+    }
+
+    pub fn assert_pool_integrity(&self, expected_txs: &[ArcPoolTx]) {
+        let pool = self.pool.as_ref().unwrap();
+        let pool = pool.read();
+        let storage_ids_dependencies = pool.storage.assert_integrity(expected_txs);
+        let txs_without_dependencies = expected_txs
+            .iter()
+            .zip(storage_ids_dependencies)
+            .filter_map(|(tx, (_, has_dependencies))| {
+                if !has_dependencies {
+                    Some(tx.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        pool.selection_algorithm
+            .assert_integrity(&txs_without_dependencies);
+        pool.collision_manager.assert_integrity(expected_txs);
+        let txs: HashSet<TxId> = expected_txs.iter().map(|tx| tx.id()).collect();
+        pool.assert_integrity(txs);
     }
 
     pub fn get_pool(&self) -> Shared<TxPool> {
