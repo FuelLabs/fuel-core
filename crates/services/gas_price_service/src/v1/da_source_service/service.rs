@@ -58,6 +58,12 @@ where
             source,
         }
     }
+
+    async fn process_block_costs(&mut self) -> Result<()> {
+        let da_block_costs = self.source.request_da_block_cost().await?;
+        self.shared_state.0.send(da_block_costs)?;
+        Ok(())
+    }
 }
 
 /// This trait is implemented by the sources to obtain the
@@ -108,15 +114,8 @@ where
                 TaskRunResult::Stop
             }
             _ = self.poll_interval.tick() => {
-                let da_block_costs_res = self.source.request_da_block_cost().await.and_then(|da_block_costs| self.shared_state.0.send(da_block_costs).map_err(|err| anyhow::anyhow!(err)));
-                match da_block_costs_res {
-                    Ok(da_block_costs) => {
-                        TaskRunResult::Continue
-                    }
-                    Err(err) => {
-                        TaskRunResult::ErrorContinue(err)
-                    }
-                }
+                let da_block_costs_res = self.process_block_costs().await;
+                TaskRunResult::continue_if_ok(da_block_costs_res)
             }
         }
     }
