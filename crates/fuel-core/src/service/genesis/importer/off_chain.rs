@@ -109,11 +109,17 @@ impl ImportTable for Handler<OwnedMessageIds, Messages> {
     ) -> anyhow::Result<()> {
         // We always want to enable balances indexation if we're starting at genesis.
         const BALANCES_INDEXATION_ENABLED: bool = true;
+        const COINS_TO_SPEND_INDEXATION_ENABLED: bool = true;
 
         let events = group
             .into_iter()
             .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
-        worker_service::process_executor_events(events, tx, BALANCES_INDEXATION_ENABLED)?;
+        worker_service::process_executor_events(
+            events,
+            tx,
+            BALANCES_INDEXATION_ENABLED,
+            COINS_TO_SPEND_INDEXATION_ENABLED,
+        )?;
         Ok(())
     }
 }
@@ -130,11 +136,17 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
     ) -> anyhow::Result<()> {
         // We always want to enable balances indexation if we're starting at genesis.
         const BALANCES_INDEXATION_ENABLED: bool = true;
+        const COINS_TO_SPEND_INDEXATION_ENABLED: bool = true;
 
         let events = group.into_iter().map(|TableEntry { value, key }| {
             Cow::Owned(Event::CoinCreated(value.uncompress(key)))
         });
-        worker_service::process_executor_events(events, tx, BALANCES_INDEXATION_ENABLED)?;
+        worker_service::process_executor_events(
+            events,
+            tx,
+            BALANCES_INDEXATION_ENABLED,
+            COINS_TO_SPEND_INDEXATION_ENABLED,
+        )?;
         Ok(())
     }
 }

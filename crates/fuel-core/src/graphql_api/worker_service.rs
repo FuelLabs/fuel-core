@@ -183,6 +183,7 @@ where
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
             self.balances_indexation_enabled,
+            self.coins_to_spend_indexation_enabled,
         )?;
 
         match self.da_compression_config {
@@ -323,25 +324,51 @@ where
     }
 }
 
+fn update_coins_to_spend_indexation<T>(
+    event: &Event,
+    block_st_transaction: &mut T,
+    coins_to_spend_indexation_enabled: bool,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    if !coins_to_spend_indexation_enabled {
+        return Ok(());
+    }
+
+    // match event {
+    // Event::MessageImported(message) => todo!(),
+    // Event::MessageConsumed(message) => todo!(),
+    // Event::CoinCreated(coin) => todo!(),
+    // Event::CoinConsumed(coin) => todo!(),
+    // Event::ForcedTransactionFailed {
+    // id,
+    // block_height,
+    // failure,
+    // } => todo!(),
+    // }
+
+    Ok(())
+}
+
 /// Process the executor events and update the indexes for the messages and coins.
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
     block_st_transaction: &mut T,
     balances_indexation_enabled: bool,
+    coins_to_spend_indexation_enabled: bool,
 ) -> anyhow::Result<()>
 where
     Iter: Iterator<Item = Cow<'a, Event>>,
     T: OffChainDatabaseTransaction,
 {
     for event in events {
-        if let Err(err) = update_balances_indexation(
-            event.deref(),
+        update_indexation(
+            &event,
             block_st_transaction,
             balances_indexation_enabled,
-        ) {
-            // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
-            tracing::error!(%err, "Processing balances")
-        }
+            coins_to_spend_indexation_enabled,
+        );
         match event.deref() {
             Event::MessageImported(message) => {
                 block_st_transaction
@@ -391,6 +418,31 @@ where
         }
     }
     Ok(())
+}
+
+fn update_indexation<T>(
+    event: &Cow<Event>,
+    block_st_transaction: &mut T,
+    balances_indexation_enabled: bool,
+    coins_to_spend_indexation_enabled: bool,
+) where
+    T: OffChainDatabaseTransaction,
+{
+    if let Err(err) = update_balances_indexation(
+        event.deref(),
+        block_st_transaction,
+        balances_indexation_enabled,
+    ) {
+        // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
+        tracing::error!(%err, "Processing balances indexation")
+    }
+    if let Err(err) = update_coins_to_spend_indexation(
+        event.deref(),
+        block_st_transaction,
+        coins_to_spend_indexation_enabled,
+    ) {
+        tracing::error!(%err, "Processing coins to spend indexation")
+    }
 }
 
 /// Associate all transactions within a block to their respective UTXO owners
