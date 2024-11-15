@@ -295,6 +295,7 @@ pub mod worker {
                 CoinBalances,
                 MessageBalances,
             },
+            coins::CoinsToSpendIndex,
             da_compression::*,
             old::{
                 OldFuelBlockConsensus,
@@ -357,6 +358,7 @@ pub mod worker {
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
         + StorageMutate<CoinBalances, Error = StorageError>
         + StorageMutate<MessageBalances, Error = StorageError>
+        + StorageMutate<CoinsToSpendIndex, Error = StorageError>
         + StorageMutate<DaCompressedBlocks, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>

@@ -118,6 +118,8 @@ pub enum Column {
     CoinBalances = 23,
     /// Message balances per user.
     MessageBalances = 24,
+    /// Index of the coins that are available to spend.
+    CoinsToSpend = 25,
 }
 
 impl Column {

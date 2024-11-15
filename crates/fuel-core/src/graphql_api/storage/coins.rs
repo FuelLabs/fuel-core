@@ -8,10 +8,14 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     Mappable,
 };
-use fuel_core_types::fuel_tx::{
-    Address,
-    TxId,
-    UtxoId,
+use fuel_core_types::{
+    entities::coins::coin::Coin,
+    fuel_tx::{
+        Address,
+        AssetId,
+        TxId,
+        UtxoId,
+    },
 };
 
 // TODO: Reuse `fuel_vm::storage::double_key` macro.
@@ -21,6 +25,44 @@ pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
     let utxo_id_bytes: [u8; TxId::LEN + 2] = utxo_id_to_bytes(coin_id);
     default[Address::LEN..].copy_from_slice(utxo_id_bytes.as_ref());
     default
+}
+
+/// The storage table for the index of coins to spend.
+
+pub struct CoinsToSpendIndex;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CoinsToSpendIndexKey(
+    pub [u8; { Address::LEN + AssetId::LEN + u64::BITS as usize / 8 + TxId::LEN + 2 }],
+);
+
+impl TryFrom<&[u8]> for CoinsToSpendIndexKey {
+    type Error = core::array::TryFromSliceError;
+    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
+impl AsRef<[u8]> for CoinsToSpendIndexKey {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
+impl Mappable for CoinsToSpendIndex {
+    type Key = Self::OwnedKey;
+    type OwnedKey = CoinsToSpendIndexKey;
+    type Value = Self::OwnedValue;
+    type OwnedValue = ();
+}
+
+impl TableWithBlueprint for CoinsToSpendIndex {
+    type Blueprint = Plain<Raw, Postcard>;
+    type Column = super::Column;
+
+    fn column() -> Self::Column {
+        Self::Column::CoinsToSpend
+    }
 }
 
 /// The storage table of owned coin ids. Maps addresses to owned coins.
