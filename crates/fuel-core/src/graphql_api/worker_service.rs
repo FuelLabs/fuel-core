@@ -553,12 +553,11 @@ where
     D: ports::worker::OffChainDatabase,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
-        let should_continue;
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                should_continue = false;
+                TaskRunResult::Stop
             }
 
             result = self.block_importer.next() => {
@@ -569,16 +568,19 @@ where
                     // de-synchronization between on-chain and off-chain databases.
                     if let Err(e) = result {
                         tracing::error!("Error processing block: {:?}", e);
-                        should_continue = self.continue_on_error;
+                        if self.continue_on_error {
+                            TaskRunResult::Continue
+                        } else {
+                            TaskRunResult::Stop
+                        }
                     } else {
-                        should_continue = true
+                        TaskRunResult::Continue
                     }
                 } else {
-                    should_continue = false
+                    TaskRunResult::Stop
                 }
             }
         }
-        TaskRunResult::should_continue(should_continue)
     }
 
     async fn shutdown(mut self) -> anyhow::Result<()> {

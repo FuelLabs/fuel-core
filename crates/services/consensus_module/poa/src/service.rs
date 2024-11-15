@@ -520,7 +520,6 @@ where
     C: GetTime,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
-        let should_continue;
         let mut sync_state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
         if *sync_state.borrow_and_update() == SyncState::NotSynced {
@@ -568,7 +567,7 @@ where
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
-                should_continue = false;
+                TaskRunResult::Stop
             }
             request = self.request_receiver.recv() => {
                 if let Some(request) = request {
@@ -578,33 +577,27 @@ where
                             let _ = response.send(result);
                         }
                     }
-                    should_continue = true;
+                    TaskRunResult::Continue
                 } else {
                     tracing::error!("The PoA task should be the holder of the `Sender`");
-                    should_continue = false;
+                    TaskRunResult::Stop
                 }
             }
             _ = next_block_production => {
                 match self.on_timer().await.context("While processing timer event") {
-                    Ok(()) => should_continue = true,
+                    Ok(()) => TaskRunResult::Continue,
                     Err(err) => {
                         // Wait some time in case of error to avoid spamming retry block production
                         tokio::time::sleep(Duration::from_secs(1)).await;
-                        return TaskRunResult::ErrorContinue(err);
+                        err.into()
                     }
-                };
+                }
             }
             _ = self.new_txs_watcher.changed() => {
-                match self.on_txpool_event().await.context("While processing txpool event") {
-                    Ok(()) => should_continue = true,
-                    Err(err) => {
-                        return TaskRunResult::ErrorContinue(err);
-                    }
-                };
+                let res = self.on_txpool_event().await.context("While processing txpool event");
+                TaskRunResult::continue_if_ok(res)
             }
         }
-
-        TaskRunResult::should_continue(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {

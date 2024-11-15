@@ -120,8 +120,10 @@ where
     C: ConsensusPort + Send + Sync + 'static,
 {
     async fn run(&mut self, _: &mut StateWatcher) -> TaskRunResult {
-        let should_continue = self.sync_heights.sync().await.is_some();
-        TaskRunResult::should_continue(should_continue)
+        match self.sync_heights.sync().await {
+            None => TaskRunResult::Stop,
+            Some(_) => TaskRunResult::Continue,
+        }
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {

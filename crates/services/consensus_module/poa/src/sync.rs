@@ -139,8 +139,6 @@ impl RunnableService for SyncTask {
 #[async_trait::async_trait]
 impl RunnableTask for SyncTask {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
-        let mut should_continue = true;
-
         let tick: BoxFuture<tokio::time::Instant> = if let Some(timer) = &mut self.timer {
             Box::pin(timer.tick())
         } else {
@@ -150,7 +148,7 @@ impl RunnableTask for SyncTask {
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
-                should_continue = false;
+                TaskRunResult::Stop
             }
             Some(latest_peer_count) = self.peer_connections_stream.next() => {
                 let sufficient_peers = latest_peer_count >= self.min_connected_reserved_peers;
@@ -172,6 +170,7 @@ impl RunnableTask for SyncTask {
                     }
                     _ => {},
                 }
+                TaskRunResult::Continue
             }
             Some(block_info) = self.block_stream.next() => {
                 let new_block_height = block_info.block_header.height();
@@ -205,6 +204,7 @@ impl RunnableTask for SyncTask {
                     }
                     _ => {}
                 }
+                TaskRunResult::Continue
             }
             _ = tick => {
                 if let InnerSyncState::SufficientPeers(block_header) = &self.inner_state {
@@ -215,10 +215,9 @@ impl RunnableTask for SyncTask {
                     };
                     self.update_sync_state(SyncState::Synced(Arc::new(block_header)));
                 }
+                TaskRunResult::Continue
             }
         }
-
-        TaskRunResult::should_continue(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {

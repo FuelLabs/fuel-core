@@ -113,12 +113,11 @@ impl SharedState {
 #[async_trait::async_trait]
 impl RunnableTask for Task {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
-        let should_continue;
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                should_continue = false;
+                TaskRunResult::Stop
             }
 
             Some(event) = self.blocks_events.next() => {
@@ -140,11 +139,9 @@ impl RunnableTask for Task {
                         }
                     }
                 }
-                should_continue = true;
+                TaskRunResult::Continue
             }
         }
-
-        TaskRunResult::should_continue(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {

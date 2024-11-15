@@ -94,15 +94,6 @@ pub enum TaskRunResult {
 }
 
 impl TaskRunResult {
-    /// Creates a `TaskRunResult` from a boolean value where `true` means `Continue` and `false` means `Stop`
-    pub fn should_continue(should_continue: bool) -> Self {
-        if should_continue {
-            TaskRunResult::Continue
-        } else {
-            TaskRunResult::Stop
-        }
-    }
-
     /// Creates a `TaskRunResult` from a `Result` where `Ok` means `Continue` and any error is reported
     pub fn continue_if_ok<T, E: Into<anyhow::Error>>(res: Result<T, E>) -> TaskRunResult {
         match res {
@@ -115,7 +106,13 @@ impl TaskRunResult {
 impl From<Result<bool, anyhow::Error>> for TaskRunResult {
     fn from(result: Result<bool, anyhow::Error>) -> Self {
         match result {
-            Ok(should_continue) => TaskRunResult::should_continue(should_continue),
+            Ok(should_continue) => {
+                if should_continue {
+                    TaskRunResult::Continue
+                } else {
+                    TaskRunResult::Stop
+                }
+            }
             Err(e) => TaskRunResult::ErrorContinue(e),
         }
     }
