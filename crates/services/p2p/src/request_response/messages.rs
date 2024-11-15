@@ -1,3 +1,4 @@
+use crate::service::TaskError;
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
     fuel_tx::TxId,
@@ -35,6 +36,15 @@ pub enum ResponseMessageErrorCode {
     /// The peer sent an empty response using protocol `/fuel/req_res/0.0.1`
     #[error("Empty response sent by peer using legacy protocol /fuel/req_res/0.0.1")]
     ProtocolV1EmptyResponse = 0,
+    #[error("The requested range is too large")]
+    RequestedRangeTooLarge = 1,
+    #[error("Timeout while processing request")]
+    Timeout = 2,
+    #[error("Sync processor is out of capacity")]
+    SyncProcessorOutOfCapacity = 3,
+    #[error("The peer sent an unknown error code")]
+    #[serde(skip_serializing, other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,13 +111,29 @@ impl From<V2ResponseMessage> for V1ResponseMessage {
 }
 
 pub type OnResponse<T> = oneshot::Sender<(PeerId, Result<T, ResponseError>)>;
+// This type is more complex because it's used in tasks that need to select a peer to send the request and this
+// can cause errors where the peer is not defined.
+pub type OnResponseWithPeerSelection<T> =
+    oneshot::Sender<Result<(PeerId, Result<T, ResponseError>), TaskError>>;
 
 #[derive(Debug)]
 pub enum ResponseSender {
-    SealedHeaders(OnResponse<Option<Vec<SealedBlockHeader>>>),
-    Transactions(OnResponse<Option<Vec<Transactions>>>),
-    TxPoolAllTransactionsIds(OnResponse<Option<Vec<TxId>>>),
-    TxPoolFullTransactions(OnResponse<Option<Vec<Option<NetworkableTransactionPool>>>>),
+    SealedHeaders(
+        OnResponseWithPeerSelection<
+            Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>,
+        >,
+    ),
+    Transactions(
+        OnResponseWithPeerSelection<Result<Vec<Transactions>, ResponseMessageErrorCode>>,
+    ),
+    TransactionsFromPeer(OnResponse<Result<Vec<Transactions>, ResponseMessageErrorCode>>),
+
+    TxPoolAllTransactionsIds(OnResponse<Result<Vec<TxId>, ResponseMessageErrorCode>>),
+    TxPoolFullTransactions(
+        OnResponse<
+            Result<Vec<Option<NetworkableTransactionPool>>, ResponseMessageErrorCode>,
+        >,
+    ),
 }
 
 #[derive(Debug, Error)]
@@ -135,4 +161,43 @@ pub enum ResponseSendError {
     SendingResponseFailed,
     #[error("Failed to convert response to intermediate format")]
     ConversionToIntermediateFailed,
+}
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod tests {
+    use super::ResponseMessageErrorCode;
+
+    #[test]
+    fn response_message_error_code__unknown_error_cannot_be_serialized() {
+        let error = super::ResponseMessageErrorCode::Unknown;
+        let serialized = postcard::to_allocvec(&error);
+        assert!(serialized.is_err());
+    }
+
+    #[test]
+    fn response_message_error_code__known_error_code_is_deserialized_to_variant() {
+        let serialized_error_code =
+            postcard::to_stdvec(&ResponseMessageErrorCode::ProtocolV1EmptyResponse)
+                .unwrap();
+        println!("Error code: {:?}", serialized_error_code);
+        let response_message_error_code: ResponseMessageErrorCode =
+            postcard::from_bytes(&serialized_error_code).unwrap();
+        assert!(matches!(
+            response_message_error_code,
+            ResponseMessageErrorCode::ProtocolV1EmptyResponse
+        ));
+    }
+
+    #[test]
+    fn response_message_error_code__unknown_error_code_is_deserialized_to_unknown_variant(
+    ) {
+        let serialized_error_code = vec![42];
+        let response_message_error_code: ResponseMessageErrorCode =
+            postcard::from_bytes(&serialized_error_code).unwrap();
+        assert!(matches!(
+            response_message_error_code,
+            ResponseMessageErrorCode::Unknown
+        ));
+    }
 }

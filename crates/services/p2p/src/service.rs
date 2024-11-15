@@ -24,6 +24,7 @@ use crate::{
     },
     request_response::messages::{
         OnResponse,
+        OnResponseWithPeerSelection,
         RequestMessage,
         ResponseMessageErrorCode,
         ResponseSender,
@@ -87,6 +88,7 @@ use std::{
     ops::Range,
     sync::Arc,
 };
+use thiserror::Error;
 use tokio::{
     sync::{
         broadcast,
@@ -107,6 +109,12 @@ const CHANNEL_SIZE: usize = 1024 * 10;
 
 pub type Service<V, T> = ServiceRunner<UninitializedTask<V, SharedState, T>>;
 
+#[derive(Debug, Error)]
+pub enum TaskError {
+    #[error("No peer found to send request to")]
+    NoPeerFound,
+}
+
 pub enum TaskRequest {
     // Broadcast requests to p2p network
     BroadcastTransaction(Arc<Transaction>),
@@ -116,21 +124,31 @@ pub enum TaskRequest {
     },
     GetSealedHeaders {
         block_height_range: Range<u32>,
-        channel: OnResponse<Option<Vec<SealedBlockHeader>>>,
+        channel: OnResponseWithPeerSelection<
+            Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>,
+        >,
     },
     GetTransactions {
         block_height_range: Range<u32>,
+        channel: OnResponseWithPeerSelection<
+            Result<Vec<Transactions>, ResponseMessageErrorCode>,
+        >,
+    },
+    GetTransactionsFromPeer {
+        block_height_range: Range<u32>,
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<Transactions>>>,
+        channel: OnResponse<Result<Vec<Transactions>, ResponseMessageErrorCode>>,
     },
     TxPoolGetAllTxIds {
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<TxId>>>,
+        channel: OnResponse<Result<Vec<TxId>, ResponseMessageErrorCode>>,
     },
     TxPoolGetFullTransactions {
         tx_ids: Vec<TxId>,
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<Option<NetworkableTransactionPool>>>>,
+        channel: OnResponse<
+            Result<Vec<Option<NetworkableTransactionPool>>, ResponseMessageErrorCode>,
+        >,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -169,6 +187,9 @@ impl Debug for TaskRequest {
             }
             TaskRequest::GetTransactions { .. } => {
                 write!(f, "TaskRequest::GetTransactions")
+            }
+            TaskRequest::GetTransactionsFromPeer { .. } => {
+                write!(f, "TaskRequest::GetTransactionsFromPeer")
             }
             TaskRequest::TxPoolGetAllTxIds { .. } => {
                 write!(f, "TaskRequest::TxPoolGetAllTxIds")
@@ -555,11 +576,9 @@ where
             tracing::error!(
                 requested_length = range.len(),
                 max_len,
-                "Requested range is too big"
+                "Requested range is too large"
             );
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-            // Return helpful error message to requester.
-            let response = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+            let response = Err(ResponseMessageErrorCode::RequestedRangeTooLarge);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(response));
@@ -573,22 +592,18 @@ where
                 return;
             }
 
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-            // Add new error code
             let response = db_lookup(&view, range.clone())
                 .ok()
                 .flatten()
-                .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+                .ok_or(ResponseMessageErrorCode::Timeout);
 
             let _ = response_channel
                 .try_send(task_request(response, request_id))
                 .trace_err("Failed to send response to the request channel");
         });
 
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-        // Handle error cases and return meaningful status codes
         if result.is_err() {
-            let err = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+            let err = Err(ResponseMessageErrorCode::SyncProcessorOutOfCapacity);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(err));
@@ -662,17 +677,13 @@ where
                 return;
             };
 
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-            // Return helpful error message to requester.
             let _ = response_channel
                 .try_send(task_request(Ok(response), request_id))
                 .trace_err("Failed to send response to the request channel");
         });
 
         if result.is_err() {
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-            // Return better error code
-            let res = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+            let res = Err(ResponseMessageErrorCode::SyncProcessorOutOfCapacity);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(res));
@@ -703,13 +714,11 @@ where
         tx_ids: Vec<TxId>,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-        // Return helpful error message to requester.
         if tx_ids.len() > self.max_txs_per_request {
             self.p2p_service.send_response_msg(
                 request_id,
                 V2ResponseMessage::TxPoolFullTransactions(Err(
-                    ResponseMessageErrorCode::ProtocolV1EmptyResponse,
+                    ResponseMessageErrorCode::RequestedRangeTooLarge,
                 )),
             )?;
             return Ok(());
@@ -873,19 +882,29 @@ where
                         }
                     }
                     Some(TaskRequest::GetSealedHeaders { block_height_range, channel}) => {
-                        let channel = ResponseSender::SealedHeaders(channel);
-                        let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
-
                         // Note: this range has already been checked for
                         // validity in `SharedState::get_sealed_block_headers`.
                         let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
-                        let peer = self.p2p_service.get_peer_id_with_height(&height);
-                        if self.p2p_service.send_request_msg(peer, request_msg, channel).is_err() {
-                            tracing::warn!("No peers found for block at height {:?}", height);
-                        }
+                        let Some(peer) = self.p2p_service.get_peer_id_with_height(&height) else {
+                            let _ = channel.send(Err(TaskError::NoPeerFound));
+                            return Ok(should_continue);
+                        };
+                        let channel = ResponseSender::SealedHeaders(channel);
+                        let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
+                        self.p2p_service.send_request_msg(Some(peer), request_msg, channel).expect("We always have a peer here, so send has a target");
                     }
-                    Some(TaskRequest::GetTransactions { block_height_range, from_peer, channel }) => {
+                    Some(TaskRequest::GetTransactions {block_height_range, channel }) => {
+                        let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
+                        let Some(peer) = self.p2p_service.get_peer_id_with_height(&height) else {
+                            let _ = channel.send(Err(TaskError::NoPeerFound));
+                            return Ok(should_continue);
+                        };
                         let channel = ResponseSender::Transactions(channel);
+                        let request_msg = RequestMessage::Transactions(block_height_range.clone());
+                        self.p2p_service.send_request_msg(Some(peer), request_msg, channel).expect("We always have a peer here, so send has a target");
+                    }
+                    Some(TaskRequest::GetTransactionsFromPeer { block_height_range, from_peer, channel }) => {
+                        let channel = ResponseSender::TransactionsFromPeer(channel);
                         let request_msg = RequestMessage::Transactions(block_height_range);
                         self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel).expect("We always a peer here, so send has a target");
                     }
@@ -1042,10 +1061,56 @@ impl SharedState {
             })
             .await?;
 
-        let (peer_id, response) = receiver.await.map_err(|e| anyhow!("{e}"))?;
+        let (peer_id, response) = receiver
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| anyhow!("{e}"))?;
 
         let data = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
-        Ok((peer_id.to_bytes(), data))
+        if let Err(ref response_error_code) = data {
+            warn!(
+                "Peer {peer_id:?} failed to respond with sealed headers: {response_error_code:?}"
+            );
+        };
+
+        Ok((peer_id.to_bytes(), data.ok()))
+    }
+
+    pub async fn get_transactions(
+        &self,
+        range: Range<u32>,
+    ) -> anyhow::Result<(Vec<u8>, Option<Vec<Transactions>>)> {
+        let (sender, receiver) = oneshot::channel();
+
+        if range.is_empty() {
+            return Err(anyhow!(
+                "Cannot retrieve transactions for an empty range of block heights"
+            ));
+        }
+
+        self.request_sender
+            .send(TaskRequest::GetTransactions {
+                block_height_range: range,
+                channel: sender,
+            })
+            .await?;
+
+        let (peer_id, response) = receiver
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .map_err(|e| anyhow!("{e}"))?;
+
+        let data = match response {
+            Err(request_response_protocol_error) => Err(anyhow!(
+                "Invalid response from peer {request_response_protocol_error:?}"
+            )),
+            Ok(Err(response_error_code)) => {
+                warn!("Peer {peer_id:?} failed to respond with sealed headers: {response_error_code:?}");
+                Ok(None)
+            }
+            Ok(Ok(headers)) => Ok(Some(headers)),
+        };
+        data.map(|data| (peer_id.to_bytes(), data))
     }
 
     pub async fn get_transactions_from_peer(
@@ -1056,7 +1121,7 @@ impl SharedState {
         let (sender, receiver) = oneshot::channel();
         let from_peer = PeerId::from_bytes(peer_id.as_ref()).expect("Valid PeerId");
 
-        let request = TaskRequest::GetTransactions {
+        let request = TaskRequest::GetTransactionsFromPeer {
             block_height_range: range,
             from_peer,
             channel: sender,
@@ -1071,7 +1136,18 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))
+        match response {
+            Err(request_response_protocol_error) => Err(anyhow!(
+                "Invalid response from peer {request_response_protocol_error:?}"
+            )),
+            Ok(Err(response_error_code)) => {
+                warn!(
+                    "Peer {peer_id:?} failed to respond with transactions: {response_error_code:?}"
+                );
+                Ok(None)
+            }
+            Ok(Ok(txs)) => Ok(Some(txs)),
+        }
     }
 
     pub async fn get_all_transactions_ids_from_peer(
@@ -1095,11 +1171,11 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        let Some(txs) =
-            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?
-        else {
-            return Ok(vec![]);
-        };
+        let response =
+            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+
+        let txs = response.inspect_err(|e| { warn!("Peer {peer_id:?} could not response to request to get all transactions ids: {e:?}"); } ).unwrap_or_default();
+
         if txs.len() > self.max_txs_per_request {
             return Err(anyhow!("Too many transactions requested: {}", txs.len()));
         }
@@ -1128,11 +1204,10 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        let Some(txs) =
-            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?
-        else {
-            return Ok(vec![]);
-        };
+        let response =
+            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+        let txs = response.inspect_err(|e| { warn!("Peer {peer_id:?} could not response to request to get full transactions: {e:?}"); } ).unwrap_or_default();
+
         if txs.len() > self.max_txs_per_request {
             return Err(anyhow!("Too many transactions requested: {}", txs.len()));
         }

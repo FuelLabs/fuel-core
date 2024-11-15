@@ -64,7 +64,6 @@ where
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
-
     use fuel_core_types::blockchain::SealedBlockHeader;
     use libp2p::request_response::Codec;
 
@@ -180,10 +179,8 @@ mod tests {
     async fn codec__serialzation_roundtrip_using_v1_on_error_response_returns_predefined_error_code(
     ) {
         // Given
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-        // Change this to a different ResponseMessageErrorCode once these have been implemented.
         let response = V2ResponseMessage::SealedHeaders(Err(
-            ResponseMessageErrorCode::ProtocolV1EmptyResponse,
+            ResponseMessageErrorCode::RequestedRangeTooLarge,
         ));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
             RequestResponseMessageHandler::new(1024);
