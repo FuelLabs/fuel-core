@@ -148,7 +148,8 @@ pub struct Task<TxPool, D> {
     chain_id: ChainId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
-    balances_enabled: bool,
+    balances_indexation_enabled: bool,
+    coins_to_spend_indexation_enabled: bool,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -181,7 +182,7 @@ where
         process_executor_events(
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
-            self.balances_enabled,
+            self.balances_indexation_enabled,
         )?;
 
         match self.da_compression_config {
@@ -290,15 +291,15 @@ impl BalanceIndexationUpdater for &Message {
     type TotalBalance = TotalBalanceAmount;
 }
 
-fn process_balances_update<T>(
+fn update_balances_indexation<T>(
     event: &Event,
     block_st_transaction: &mut T,
-    balances_enabled: bool,
+    balances_indexation_enabled: bool,
 ) -> StorageResult<()>
 where
     T: OffChainDatabaseTransaction,
 {
-    if !balances_enabled {
+    if !balances_indexation_enabled {
         return Ok(());
     }
     match event {
@@ -326,16 +327,18 @@ where
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
     block_st_transaction: &mut T,
-    balances_enabled: bool,
+    balances_indexation_enabled: bool,
 ) -> anyhow::Result<()>
 where
     Iter: Iterator<Item = Cow<'a, Event>>,
     T: OffChainDatabaseTransaction,
 {
     for event in events {
-        if let Err(err) =
-            process_balances_update(event.deref(), block_st_transaction, balances_enabled)
-        {
+        if let Err(err) = update_balances_indexation(
+            event.deref(),
+            block_st_transaction,
+            balances_indexation_enabled,
+        ) {
             // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
             tracing::error!(%err, "Processing balances")
         }
@@ -621,8 +624,15 @@ where
             graphql_metrics().total_txs_count.set(total_tx_count as i64);
         }
 
-        let balances_enabled = self.off_chain_database.balances_enabled()?;
-        info!("Balances cache available: {}", balances_enabled);
+        let balances_indexation_enabled =
+            self.off_chain_database.balances_indexation_enabled()?;
+        let coins_to_spend_indexation_enabled = self
+            .off_chain_database
+            .coins_to_spend_indexation_enabled()?;
+        info!(
+            balances_indexation_enabled,
+            coins_to_spend_indexation_enabled, "Indexation availability status"
+        );
 
         let InitializeTask {
             chain_id,
@@ -642,7 +652,8 @@ where
             chain_id,
             da_compression_config,
             continue_on_error,
-            balances_enabled,
+            balances_indexation_enabled,
+            coins_to_spend_indexation_enabled,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;

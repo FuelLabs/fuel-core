@@ -46,11 +46,11 @@ impl ReadView {
         asset_id: AssetId,
         base_asset_id: AssetId,
     ) -> StorageResult<AddressBalance> {
-        let amount = if self.balances_enabled {
-            debug!(%owner, %asset_id, "Querying balance with balances cache");
+        let amount = if self.balances_indexation_enabled {
+            debug!(%owner, %asset_id, "Querying balance with balances indexation");
             self.off_chain.balance(&owner, &asset_id, &base_asset_id)?
         } else {
-            debug!(%owner, %asset_id, "Querying balance without balances cache");
+            debug!(%owner, %asset_id, "Querying balance without balances indexation");
             AssetQuery::new(
                 &owner,
                 &AssetSpendTarget::new(asset_id, u64::MAX, u16::MAX),
@@ -86,7 +86,7 @@ impl ReadView {
         direction: IterDirection,
         base_asset_id: &'a AssetId,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        if self.balances_enabled {
+        if self.balances_indexation_enabled {
             futures::future::Either::Left(self.balances_with_cache(
                 owner,
                 base_asset_id,
@@ -107,7 +107,7 @@ impl ReadView {
         base_asset_id: &'a AssetId,
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        debug!(%owner, "Querying balances without balances cache");
+        debug!(%owner, "Querying balances without balances indexation");
         let query = AssetsQuery::new(owner, None, None, self, base_asset_id);
         let stream = query.coins();
 
@@ -168,7 +168,7 @@ impl ReadView {
         base_asset_id: &AssetId,
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        debug!(%owner, "Querying balances using balances cache");
+        debug!(%owner, "Querying balances using balances indexation");
         match self.off_chain.balances(owner, base_asset_id) {
             Ok(balances) => {
                 let iter = if direction == IterDirection::Reverse {

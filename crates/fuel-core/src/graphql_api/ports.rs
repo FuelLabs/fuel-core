@@ -338,8 +338,11 @@ pub mod worker {
         /// Creates a write database transaction.
         fn transaction(&mut self) -> Self::Transaction<'_>;
 
-        /// Checks if Balances cache functionality is available.
-        fn balances_enabled(&self) -> StorageResult<bool>;
+        /// Checks if Balances indexation functionality is available.
+        fn balances_indexation_enabled(&self) -> StorageResult<bool>;
+
+        /// Checks if CoinsToSpend indexation functionality is available.
+        fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool>;
     }
 
     pub trait OffChainDatabaseTransaction:

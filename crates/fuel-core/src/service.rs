@@ -221,7 +221,7 @@ impl FuelService {
         Ok(())
     }
 
-    // When genesis is missing write to the database that balances cache should be used.
+    // When genesis is missing write to the database that Balances indexation should be used.
     fn write_metadata_at_genesis(database: &CombinedDatabase) -> anyhow::Result<()> {
         let on_chain_view = database.on_chain().latest_view()?;
         if on_chain_view.get_genesis().is_err() {

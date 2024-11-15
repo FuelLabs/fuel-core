@@ -281,7 +281,11 @@ impl worker::OffChainDatabase for Database<OffChain> {
         self.into_transaction()
     }
 
-    fn balances_enabled(&self) -> StorageResult<bool> {
+    fn balances_indexation_enabled(&self) -> StorageResult<bool> {
         self.indexation_available(IndexationKind::Balances)
+    }
+
+    fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool> {
+        self.indexation_available(IndexationKind::CoinsToSpend)
     }
 }
