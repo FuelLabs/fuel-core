@@ -122,25 +122,31 @@ pub enum TaskRequest {
     },
     GetSealedHeaders {
         block_height_range: Range<u32>,
-        channel: OnResponseWithPeerSelection<Option<Vec<SealedBlockHeader>>>,
+        channel: OnResponseWithPeerSelection<
+            Result<Vec<SealedBlockHeader>, ResponseMessageErrorCode>,
+        >,
     },
     GetTransactions {
         block_height_range: Range<u32>,
-        channel: OnResponseWithPeerSelection<Option<Vec<Transactions>>>,
+        channel: OnResponseWithPeerSelection<
+            Result<Vec<Transactions>, ResponseMessageErrorCode>,
+        >,
     },
     GetTransactionsFromPeer {
         block_height_range: Range<u32>,
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<Transactions>>>,
+        channel: OnResponse<Result<Vec<Transactions>, ResponseMessageErrorCode>>,
     },
     TxPoolGetAllTxIds {
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<TxId>>>,
+        channel: OnResponse<Result<Vec<TxId>, ResponseMessageErrorCode>>,
     },
     TxPoolGetFullTransactions {
         tx_ids: Vec<TxId>,
         from_peer: PeerId,
-        channel: OnResponse<Option<Vec<Option<NetworkableTransactionPool>>>>,
+        channel: OnResponse<
+            Result<Vec<Option<NetworkableTransactionPool>>, ResponseMessageErrorCode>,
+        >,
     },
     // Responds back to the p2p network
     RespondWithGossipsubMessageReport((GossipsubMessageInfo, GossipsubMessageAcceptance)),
@@ -568,11 +574,9 @@ where
             tracing::error!(
                 requested_length = range.len(),
                 max_len,
-                "Requested range is too big"
+                "Requested range is too large"
             );
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-            // Return helpful error message to requester.
-            let response = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+            let response = Err(ResponseMessageErrorCode::RequestedRangeTooLarge);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(response));
@@ -586,22 +590,18 @@ where
                 return;
             }
 
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-            // Add new error code
             let response = db_lookup(&view, range.clone())
                 .ok()
                 .flatten()
-                .ok_or(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+                .ok_or(ResponseMessageErrorCode::Timeout);
 
             let _ = response_channel
                 .try_send(task_request(response, request_id))
                 .trace_err("Failed to send response to the request channel");
         });
 
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-        // Handle error cases and return meaningful status codes
         if result.is_err() {
-            let err = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+            let err = Err(ResponseMessageErrorCode::SyncProcessorOutOfCapacity);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(err));
@@ -675,17 +675,13 @@ where
                 return;
             };
 
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-            // Return helpful error message to requester.
             let _ = response_channel
                 .try_send(task_request(Ok(response), request_id))
                 .trace_err("Failed to send response to the request channel");
         });
 
         if result.is_err() {
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-            // Return better error code
-            let res = Err(ResponseMessageErrorCode::ProtocolV1EmptyResponse);
+            let res = Err(ResponseMessageErrorCode::SyncProcessorOutOfCapacity);
             let _ = self
                 .p2p_service
                 .send_response_msg(request_id, response_sender(res));
@@ -716,13 +712,11 @@ where
         tx_ids: Vec<TxId>,
         request_id: InboundRequestId,
     ) -> anyhow::Result<()> {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-        // Return helpful error message to requester.
         if tx_ids.len() > self.max_txs_per_request {
             self.p2p_service.send_response_msg(
                 request_id,
                 V2ResponseMessage::TxPoolFullTransactions(Err(
-                    ResponseMessageErrorCode::ProtocolV1EmptyResponse,
+                    ResponseMessageErrorCode::RequestedRangeTooLarge,
                 )),
             )?;
             return Ok(());
@@ -1080,7 +1074,13 @@ impl SharedState {
             .map_err(|e| anyhow!("{e}"))?;
 
         let data = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
-        Ok((peer_id.to_bytes(), data))
+        if let Err(ref response_error_code) = data {
+            warn!(
+                "Peer {peer_id:?} failed to respond with sealed headers: {response_error_code:?}"
+            );
+        };
+
+        Ok((peer_id.to_bytes(), data.ok()))
     }
 
     pub async fn get_transactions(
@@ -1107,8 +1107,17 @@ impl SharedState {
             .map_err(|e| anyhow!("{e}"))?
             .map_err(|e| anyhow!("{e}"))?;
 
-        let data = response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
-        Ok((peer_id.to_bytes(), data))
+        let data = match response {
+            Err(request_response_protocol_error) => Err(anyhow!(
+                "Invalid response from peer {request_response_protocol_error:?}"
+            )),
+            Ok(Err(response_error_code)) => {
+                warn!("Peer {peer_id:?} failed to respond with sealed headers: {response_error_code:?}");
+                Ok(None)
+            }
+            Ok(Ok(headers)) => Ok(Some(headers)),
+        };
+        data.map(|data| (peer_id.to_bytes(), data))
     }
 
     pub async fn get_transactions_from_peer(
@@ -1134,7 +1143,18 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))
+        match response {
+            Err(request_response_protocol_error) => Err(anyhow!(
+                "Invalid response from peer {request_response_protocol_error:?}"
+            )),
+            Ok(Err(response_error_code)) => {
+                warn!(
+                    "Peer {peer_id:?} failed to respond with transactions: {response_error_code:?}"
+                );
+                Ok(None)
+            }
+            Ok(Ok(txs)) => Ok(Some(txs)),
+        }
     }
 
     pub async fn get_all_transactions_ids_from_peer(
@@ -1158,11 +1178,11 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        let Some(txs) =
-            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?
-        else {
-            return Ok(vec![]);
-        };
+        let response =
+            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+
+        let txs = response.inspect_err(|e| { warn!("Peer {peer_id:?} could not response to request to get all transactions ids: {e:?}"); } ).unwrap_or_default();
+
         if txs.len() > self.max_txs_per_request {
             return Err(anyhow!("Too many transactions requested: {}", txs.len()));
         }
@@ -1191,11 +1211,10 @@ impl SharedState {
             "Bug: response from non-requested peer"
         );
 
-        let Some(txs) =
-            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?
-        else {
-            return Ok(vec![]);
-        };
+        let response =
+            response.map_err(|e| anyhow!("Invalid response from peer {e:?}"))?;
+        let txs = response.inspect_err(|e| { warn!("Peer {peer_id:?} could not response to request to get full transactions: {e:?}"); } ).unwrap_or_default();
+
         if txs.len() > self.max_txs_per_request {
             return Err(anyhow!("Too many transactions requested: {}", txs.len()));
         }

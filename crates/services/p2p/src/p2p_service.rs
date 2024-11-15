@@ -675,9 +675,7 @@ impl FuelP2PService {
                     let send_ok = match channel {
                         ResponseSender::SealedHeaders(c) => match response {
                             V2ResponseMessage::SealedHeaders(v) => {
-                                // TODO: https://github.com/FuelLabs/fuel-core/issues/1311
-                                // Change type of ResponseSender and remove the .ok() here
-                                c.send(Ok((peer, Ok(v.ok())))).is_ok()
+                                c.send(Ok((peer, Ok(v)))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -690,7 +688,7 @@ impl FuelP2PService {
                         },
                         ResponseSender::Transactions(c) => match response {
                             V2ResponseMessage::Transactions(v) => {
-                                c.send(Ok((peer, Ok(v.ok())))).is_ok()
+                                c.send(Ok((peer, Ok(v)))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -703,7 +701,7 @@ impl FuelP2PService {
                         },
                         ResponseSender::TransactionsFromPeer(c) => match response {
                             V2ResponseMessage::Transactions(v) => {
-                                c.send((peer, Ok(v.ok()))).is_ok()
+                                c.send((peer, Ok(v))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -715,7 +713,7 @@ impl FuelP2PService {
                         },
                         ResponseSender::TxPoolAllTransactionsIds(c) => match response {
                             V2ResponseMessage::TxPoolAllTransactionsIds(v) => {
-                                c.send((peer, Ok(v.ok()))).is_ok()
+                                c.send((peer, Ok(v))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -727,7 +725,7 @@ impl FuelP2PService {
                         },
                         ResponseSender::TxPoolFullTransactions(c) => match response {
                             V2ResponseMessage::TxPoolFullTransactions(v) => {
-                                c.send((peer, Ok(v.ok()))).is_ok()
+                                c.send((peer, Ok(v))).is_ok()
                             }
                             _ => {
                                 warn!(
@@ -1051,6 +1049,47 @@ mod tests {
             }
         }
         stop_sender.send(()).unwrap();
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn dont_connect_to_node_with_same_peer_id() {
+        let mut p2p_config =
+            Config::default_initialized("dont_connect_to_node_with_same_peer_id");
+        let mut node_a = build_service_from_config(p2p_config.clone()).await;
+        // We don't use build_service_from_config here, because we want to use the same keypair
+        // to have the same PeerId
+        let node_b = {
+            // Given
+            p2p_config.reserved_nodes = node_a.multiaddrs();
+            let max_block_size = p2p_config.max_block_size;
+            let (sender, _) =
+                broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
+
+            let mut service = FuelP2PService::new(
+                sender,
+                p2p_config,
+                PostcardCodec::new(max_block_size),
+            )
+            .await
+            .unwrap();
+            service.start().await.unwrap();
+            service
+        };
+        // When
+        tokio::time::timeout(Duration::from_secs(5), async move {
+            loop {
+                let event = node_a.next_event().await;
+                if let Some(FuelP2PEvent::PeerConnected(_)) = event {
+                    panic!("Node B should not connect to Node A because they have the same PeerId");
+                }
+                assert_eq!(node_a.peer_manager().total_peers_connected(), 0);
+            }
+        })
+        .await
+        // Then
+        .expect_err("The node should not connect to itself");
+        assert_eq!(node_b.peer_manager().total_peers_connected(), 0);
     }
 
     // We start with two nodes, node_a and node_b, bootstrapped with `bootstrap_nodes_count` other nodes.
@@ -1719,12 +1758,12 @@ mod tests {
 
                                             if let Ok(response) = response_message {
                                                 match response {
-                                                    Ok((_, Ok(Some(sealed_headers)))) => {
+                                                    Ok((_, Ok(Ok(sealed_headers)))) => {
                                                         let check = expected.iter().zip(sealed_headers.iter()).all(|(a, b)| eq_except_metadata(a, b));
                                                         let _ = tx_test_end.send(check).await;
                                                     },
-                                                    Ok((_, Ok(None))) => {
-                                                        tracing::error!("Node A did not return any headers");
+                                                    Ok((_, Ok(Err(e)))) => {
+                                                        tracing::error!("Node A did not return any headers: {:?}", e);
                                                         let _ = tx_test_end.send(false).await;
                                                     },
                                                     Ok((_, Err(e))) => {
@@ -1752,12 +1791,12 @@ mod tests {
 
                                             if let Ok(response) = response_message {
                                                 match response {
-                                                    Ok((_, Ok(Some(transactions)))) => {
+                                                    Ok((_, Ok(Ok(transactions)))) => {
                                                         let check = transactions.len() == 1 && transactions[0].0.len() == 5;
                                                         let _ = tx_test_end.send(check).await;
                                                     },
-                                                    Ok((_, Ok(None))) => {
-                                                        tracing::error!("Node A did not return any transactions");
+                                                    Ok((_, Ok(Err(e)))) => {
+                                                        tracing::error!("Node A did not return any transactions: {:?}", e);
                                                         let _ = tx_test_end.send(false).await;
                                                     },
                                                     Ok((_, Err(e))) => {
@@ -1782,7 +1821,7 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok((_, Ok(Some(transaction_ids)))) = response_message {
+                                            if let Ok((_, Ok(Ok(transaction_ids)))) = response_message {
                                                 let tx_ids: Vec<TxId> = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
                                                 let check = transaction_ids.len() == 5 && transaction_ids.iter().zip(tx_ids.iter()).all(|(a, b)| a == b);
                                                 let _ = tx_test_end.send(check).await;
@@ -1799,7 +1838,7 @@ mod tests {
                                         tokio::spawn(async move {
                                             let response_message = rx_orchestrator.await;
 
-                                            if let Ok((_, Ok(Some(transactions)))) = response_message {
+                                            if let Ok((_, Ok(Ok(transactions)))) = response_message {
                                                 let txs: Vec<Option<NetworkableTransactionPool>> = tx_ids.iter().enumerate().map(|(i, _)| {
                                                     if i == 0 {
                                                         None
