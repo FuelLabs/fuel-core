@@ -102,6 +102,14 @@ impl TaskRunResult {
             TaskRunResult::Stop
         }
     }
+
+    /// Creates a `TaskRunResult` from a `Result` where `Ok` means `Continue` and any error is reported
+    pub fn continue_if_ok<T, E: Into<anyhow::Error>>(res: Result<T, E>) -> TaskRunResult {
+        match res {
+            Ok(_) => TaskRunResult::Continue,
+            Err(e) => TaskRunResult::ErrorContinue(e.into()),
+        }
+    }
 }
 
 impl From<Result<bool, anyhow::Error>> for TaskRunResult {

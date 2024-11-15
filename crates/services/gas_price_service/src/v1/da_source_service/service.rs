@@ -16,7 +16,6 @@ use tokio::{
 
 use crate::v1::da_source_service::DaBlockCosts;
 pub use anyhow::Result;
-use fuel_core_services::stream::BoxFuture;
 
 #[derive(Clone)]
 pub struct SharedState(Sender<DaBlockCosts>);
@@ -109,7 +108,8 @@ where
                 TaskRunResult::Stop
             }
             _ = self.poll_interval.tick() => {
-                match self.source.request_da_block_cost().await.and_then(|da_block_costs| self.shared_state.0.send(da_block_costs).map_err(|err| anyhow::anyhow!(err))) {
+                let da_block_costs_res = self.source.request_da_block_cost().await.and_then(|da_block_costs| self.shared_state.0.send(da_block_costs).map_err(|err| anyhow::anyhow!(err)));
+                match da_block_costs_res {
                     Ok(da_block_costs) => {
                         TaskRunResult::Continue
                     }
