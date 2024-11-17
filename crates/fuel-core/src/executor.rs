@@ -6,10 +6,7 @@ mod tests {
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
-        executor::{
-            max_tx_count,
-            OnceTransactionsSource,
-        },
+        executor::OnceTransactionsSource,
         ports::{
             MaybeCheckedTransaction,
             RelayerPort,
@@ -2999,6 +2996,8 @@ mod tests {
     #[test]
     #[cfg(not(feature = "wasm-executor"))]
     fn block_producer_never_includes_more_than_max_tx_count_transactions() {
+        use fuel_core_executor::executor::max_tx_count;
+
         let block_height = 1u32;
         let block_da_height = 2u64;
 
@@ -3037,6 +3036,7 @@ mod tests {
     #[cfg(not(feature = "wasm-executor"))]
     fn block_producer_never_includes_more_than_max_tx_count_transactions_with_bad_tx_source(
     ) {
+        use fuel_core_executor::executor::max_tx_count;
         use std::sync::Mutex;
 
         /// Bad transaction source: ignores the limit of `u16::MAX -1` transactions
