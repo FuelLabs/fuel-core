@@ -139,7 +139,7 @@ where
         da_block_costs: DaBlockCosts,
     ) -> anyhow::Result<()> {
         self.algorithm_updater.update_da_record_data(
-            da_block_costs.l2_block_range,
+            &da_block_costs.l2_blocks,
             da_block_costs.blob_cost_wei,
         )?;
 
@@ -474,7 +474,7 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
-                    l2_block_range: 1..2,
+                    l2_blocks: (1..2).collect(),
                     blob_cost_wei: 9000,
                     blob_size_bytes: 3000,
                 }),

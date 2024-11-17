@@ -3,7 +3,10 @@ use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     L2ActivityTracker,
 };
-use std::num::NonZeroU64;
+use std::{
+    collections::BTreeMap,
+    num::NonZeroU64,
+};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct V1Metadata {
@@ -82,14 +85,18 @@ impl From<&V1AlgorithmConfig> for AlgorithmUpdaterV1 {
             value.decrease_range_size,
             value.block_activity_threshold.into(),
         );
-        let unrecorded_blocks = value.unrecorded_blocks.clone().into_iter().collect();
+        let unrecorded_blocks: BTreeMap<_, _> =
+            value.unrecorded_blocks.clone().into_iter().collect();
+        let unrecorded_blocks_bytes: u128 = unrecorded_blocks
+            .values()
+            .map(|size| u128::from(*size))
+            .sum();
         Self {
             new_scaled_exec_price: value.new_exec_gas_price,
             l2_block_height: 0,
             new_scaled_da_gas_price: value.min_da_gas_price,
             gas_price_factor: value.gas_price_factor,
             total_da_rewards_excess: 0,
-            da_recorded_block_height: 0,
             latest_known_total_da_cost_excess: 0,
             projected_total_da_cost: 0,
             last_profit: 0,
@@ -106,6 +113,7 @@ impl From<&V1AlgorithmConfig> for AlgorithmUpdaterV1 {
             da_p_component: value.da_p_component,
             da_d_component: value.da_d_component,
             unrecorded_blocks,
+            unrecorded_blocks_bytes,
         }
     }
 }

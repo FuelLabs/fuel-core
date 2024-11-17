@@ -363,7 +363,6 @@ fn update_da_record_data__updates_unrecorded_blocks() {
 fn update_da_record_data__da_block_lowers_da_gas_price() {
     // given
     let da_cost_per_byte = 40;
-    let da_recorded_block_height = 10;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
     let unrecorded_blocks = vec![BlockBytes {
@@ -381,7 +380,6 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
         .with_da_cost_per_byte(da_cost_per_byte as u128)
         .with_da_p_component(da_p_component)
         .with_last_profit(10, 0)
-        .with_da_recorded_block_height(da_recorded_block_height)
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost as u128)
         .with_known_total_cost(original_known_total_cost as u128)
@@ -398,13 +396,13 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
             });
     let min = recorded_heights.iter().min().unwrap();
     let max = recorded_heights.iter().max().unwrap();
-    let recorded_range = *min..(max + 1);
+    let recorded_range: Vec<u32> = (*min..(max + 1)).collect();
 
     let old_da_gas_price = updater.new_scaled_da_gas_price;
 
     // when
     updater
-        .update_da_record_data(recorded_range, recorded_cost as u128)
+        .update_da_record_data(&recorded_range, recorded_cost as u128)
         .unwrap();
 
     // then
@@ -418,7 +416,6 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
 fn update_da_record_data__da_block_increases_da_gas_price() {
     // given
     let da_cost_per_byte = 40;
-    let da_recorded_block_height = 10;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
     let unrecorded_blocks = vec![BlockBytes {
@@ -436,7 +433,6 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
         .with_da_cost_per_byte(da_cost_per_byte as u128)
         .with_da_p_component(da_p_component)
         .with_last_profit(-10, 0)
-        .with_da_recorded_block_height(da_recorded_block_height)
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost as u128)
         .with_known_total_cost(original_known_total_cost as u128)
@@ -453,13 +449,13 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
             });
     let min = recorded_heights.iter().min().unwrap();
     let max = recorded_heights.iter().max().unwrap();
-    let recorded_range = *min..(max + 1);
+    let recorded_range: Vec<u32> = (*min..(max + 1)).collect();
 
     let old_da_gas_price = updater.new_scaled_da_gas_price;
 
     // when
     updater
-        .update_da_record_data(recorded_range, recorded_cost as u128)
+        .update_da_record_data(&recorded_range, recorded_cost as u128)
         .unwrap();
 
     // then
@@ -473,7 +469,6 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
 fn update_da_record_data__da_block_will_not_change_da_gas_price() {
     // given
     let da_cost_per_byte = 40;
-    let da_recorded_block_height = 10;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
     let unrecorded_blocks = vec![BlockBytes {
@@ -491,7 +486,6 @@ fn update_da_record_data__da_block_will_not_change_da_gas_price() {
         .with_da_cost_per_byte(da_cost_per_byte as u128)
         .with_da_p_component(da_p_component)
         .with_last_profit(0, 0)
-        .with_da_recorded_block_height(da_recorded_block_height)
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost as u128)
         .with_known_total_cost(original_known_total_cost as u128)
@@ -508,13 +502,13 @@ fn update_da_record_data__da_block_will_not_change_da_gas_price() {
             });
     let min = recorded_heights.iter().min().unwrap();
     let max = recorded_heights.iter().max().unwrap();
-    let recorded_range = *min..(max + 1);
+    let recorded_range: Vec<u32> = (*min..(max + 1)).collect();
 
     let old_da_gas_price = updater.new_scaled_da_gas_price;
 
     // when
     updater
-        .update_da_record_data(recorded_range, recorded_cost as u128)
+        .update_da_record_data(&recorded_range, recorded_cost as u128)
         .unwrap();
 
     // then
