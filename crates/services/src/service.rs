@@ -490,7 +490,7 @@ mod tests {
             fn run<'_self, '_state, 'a>(
                 &'_self mut self,
                 state: &'_state mut StateWatcher
-            ) -> BoxFuture<'a, TaskRunResult>
+            ) -> BoxFuture<'a, TaskNextAction>
             where
                 '_self: 'a,
                 '_state: 'a,
