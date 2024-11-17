@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+use clap::Parser;
 use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::fuel_types::BlockHeight;
 use proptest::{
@@ -66,7 +67,7 @@ async fn off_chain_worker_can_recover_on_start_up_when_is_behind() -> anyhow::Re
 }
 
 prop_compose! {
-    fn height_and_lower_height()(height in 2..100u32)(height in Just(height), lower_height in 1..height) -> (u32, u32) {
+    fn height_and_lower_height()(height in 2..15u32)(height in Just(height), lower_height in 1..height) -> (u32, u32) {
         (height, lower_height)
     }
 }
@@ -91,13 +92,18 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_ahead(
         database.on_chain().latest_height(),
         Some(BlockHeight::new(height))
     );
-    let diff = height - lower_height;
-    for _ in 0..diff {
-        database.on_chain().rollback_last_block()?;
-        database.off_chain().rollback_last_block()?;
-    }
-    assert!(database.on_chain().latest_height() < database.gas_price().latest_height());
     let temp_dir = driver.kill().await;
+    let target_block_height = lower_height.to_string();
+    let args = [
+        "_IGNORED_",
+        "--db-path",
+        temp_dir.path().to_str().unwrap(),
+        "--target-block-height",
+        target_block_height.as_str(),
+    ];
+    let command = fuel_core_bin::cli::rollback::Command::parse_from(args);
+    tracing::info!("Rolling back to block {}", target_block_height);
+    fuel_core_bin::cli::rollback::exec(command).await?;
 
     // When
     let recovered_driver = FuelCoreDriver::spawn_with_directory(

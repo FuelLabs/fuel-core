@@ -23,6 +23,7 @@ use fuel_core_types::{
     },
     services::executor::TransactionExecutionResult,
 };
+use futures::StreamExt;
 use libtest_mimic::Failed;
 use std::{
     path::Path,
@@ -199,10 +200,12 @@ async fn _dry_runs(
         });
     }
 
+    let stream = futures::stream::iter(queries.into_iter())
+        .buffered(10)
+        .collect::<Vec<_>>();
+
     // All queries should be resolved for 90 seconds.
-    let queries =
-        tokio::time::timeout(Duration::from_secs(90), futures::future::join_all(queries))
-            .await?;
+    let queries = tokio::time::timeout(Duration::from_secs(90), stream).await?;
 
     let chain_info = ctx.alice.client.chain_info().await?;
     for query in queries {

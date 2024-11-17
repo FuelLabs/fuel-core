@@ -157,6 +157,7 @@ mod coin {
             )
             .await
             .unwrap();
+        tracing::info!("coins_per_asset: {:?}", coins_per_asset);
         assert_eq!(coins_per_asset.len(), 2);
         assert_eq!(coins_per_asset[0].len(), 1);
         assert!(coins_per_asset[0].amount() >= 1);

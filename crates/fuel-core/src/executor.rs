@@ -7,8 +7,8 @@ mod tests {
     use fuel_core::database::Database;
     use fuel_core_executor::{
         executor::{
+            max_tx_count,
             OnceTransactionsSource,
-            MAX_TX_COUNT,
         },
         ports::{
             MaybeCheckedTransaction,
@@ -3032,7 +3032,7 @@ mod tests {
         let mut consensus_parameters = ConsensusParameters::default();
 
         // Given
-        let transactions_in_tx_source = (MAX_TX_COUNT as usize) + 10;
+        let transactions_in_tx_source = (max_tx_count() as usize) + 10;
         consensus_parameters.set_block_gas_limit(u64::MAX);
         let config = Config {
             consensus_parameters,
@@ -3056,7 +3056,7 @@ mod tests {
         // Then
         assert_eq!(
             result.block.transactions().len(),
-            (MAX_TX_COUNT as usize + 1)
+            (max_tx_count() as usize + 1)
         );
     }
 
@@ -3069,7 +3069,7 @@ mod tests {
         let mut consensus_parameters = ConsensusParameters::default();
 
         // Given
-        let transactions_in_tx_source = (MAX_TX_COUNT as usize) + 10;
+        let transactions_in_tx_source = (max_tx_count() as usize) + 10;
         consensus_parameters.set_block_gas_limit(u64::MAX);
         let config = Config {
             consensus_parameters,
@@ -3101,7 +3101,7 @@ mod tests {
         // Then
         assert_eq!(
             result.block.transactions().len(),
-            (MAX_TX_COUNT as usize + 1)
+            (max_tx_count() as usize + 1)
         );
     }
 

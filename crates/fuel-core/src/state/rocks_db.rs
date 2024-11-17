@@ -57,7 +57,10 @@ use std::{
         Path,
         PathBuf,
     },
-    sync::Arc,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 use tempfile::TempDir;
 
@@ -95,6 +98,7 @@ impl Drop for DropResources {
 pub struct RocksDb<Description> {
     read_options: ReadOptions,
     db: Arc<DB>,
+    create_family: Arc<Mutex<BTreeMap<String, Options>>>,
     snapshot: Option<rocksdb::SnapshotWithThreadMode<'static, DB>>,
     metrics: Arc<DatabaseMetrics>,
     // used for RAII
@@ -270,7 +274,6 @@ where
         block_opts.set_block_size(16 * 1024);
 
         let mut opts = Options::default();
-        opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
         // TODO: Make it customizable https://github.com/FuelLabs/fuel-core/issues/1666
         opts.set_max_total_wal_size(64 * 1024 * 1024);
@@ -302,6 +305,10 @@ where
             } else {
                 cf_descriptors_to_create.insert(column_name, opts);
             }
+        }
+
+        if cf_descriptors_to_open.is_empty() {
+            opts.create_if_missing(true);
         }
 
         let unknown_columns_to_open: BTreeMap<_, _> = existing_column_families
@@ -341,22 +348,19 @@ where
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
 
-        // Setup cfs
-        for (name, opt) in cf_descriptors_to_create {
-            db.create_cf(name, &opt)
-                .map_err(|e| DatabaseError::Other(e.into()))?;
-        }
-
         let db = Arc::new(db);
+        let create_family = Arc::new(Mutex::new(cf_descriptors_to_create));
 
         let rocks_db = RocksDb {
             read_options: Self::generate_read_options(&None),
             snapshot: None,
             db,
             metrics,
+            create_family,
             _drop: Default::default(),
             _marker: Default::default(),
         };
+
         Ok(rocks_db)
     }
 
@@ -383,6 +387,7 @@ where
         &self,
     ) -> RocksDb<TargetDescription> {
         let db = self.db.clone();
+        let create_family = self.create_family.clone();
         let metrics = self.metrics.clone();
         let _drop = self._drop.clone();
 
@@ -402,6 +407,7 @@ where
             read_options: Self::generate_read_options(&snapshot),
             snapshot,
             db,
+            create_family,
             metrics,
             _drop,
             _marker: Default::default(),
@@ -413,9 +419,31 @@ where
     }
 
     fn cf_u32(&self, column: u32) -> Arc<BoundColumnFamily> {
-        self.db
-            .cf_handle(&Self::col_name(column))
-            .expect("invalid column state")
+        let family = self.db.cf_handle(&Self::col_name(column));
+
+        match family {
+            None => {
+                let mut lock = self
+                    .create_family
+                    .lock()
+                    .expect("The create family lock should be available");
+
+                let name = Self::col_name(column);
+                let family = lock.remove(&name).expect("invalid column state");
+
+                self.db
+                    .create_cf(&name, &family)
+                    .expect("Couldn't create column family");
+
+                let family = self
+                    .db
+                    .cf_handle(&Self::col_name(column))
+                    .expect("invalid column state");
+
+                family
+            }
+            Some(family) => family,
+        }
     }
 
     fn col_name(column: u32) -> String {
