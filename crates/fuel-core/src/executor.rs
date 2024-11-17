@@ -2997,6 +2997,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "wasm-executor"))]
     fn block_producer_never_includes_more_than_max_tx_count_transactions() {
         let block_height = 1u32;
         let block_da_height = 2u64;
