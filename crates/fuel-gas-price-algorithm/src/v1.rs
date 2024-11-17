@@ -308,6 +308,7 @@ impl AlgorithmUpdaterV1 {
         if !heights.is_empty() {
             self.da_block_update(heights, recording_cost)?;
             self.recalculate_projected_cost();
+            self.update_da_gas_price();
         }
         Ok(())
     }
