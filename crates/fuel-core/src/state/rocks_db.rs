@@ -429,16 +429,18 @@ where
                     .expect("The create family lock should be available");
 
                 let name = Self::col_name(column);
-                let family = lock.remove(&name).expect("invalid column state");
+                let Some(family) = lock.remove(&name) else {
+                    return self
+                        .db
+                        .cf_handle(&Self::col_name(column))
+                        .expect("No column family found");
+                };
 
                 self.db
                     .create_cf(&name, &family)
                     .expect("Couldn't create column family");
 
-                let family = self
-                    .db
-                    .cf_handle(&Self::col_name(column))
-                    .expect("invalid column state");
+                let family = self.db.cf_handle(&name).expect("invalid column state");
 
                 family
             }
