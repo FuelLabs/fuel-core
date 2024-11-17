@@ -27,7 +27,7 @@ use fuel_core_services::{
     ServiceRunner,
     SharedMutex,
     StateWatcher,
-    TaskRunResult,
+    TaskNextAction,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;
@@ -119,10 +119,10 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    async fn run(&mut self, _: &mut StateWatcher) -> TaskRunResult {
+    async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
         match self.sync_heights.sync().await {
-            None => TaskRunResult::Stop,
-            Some(_) => TaskRunResult::Continue,
+            None => TaskNextAction::Stop,
+            Some(_) => TaskNextAction::Continue,
         }
     }
 
@@ -178,7 +178,7 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         self.0.import(watcher).await.into()
     }
 

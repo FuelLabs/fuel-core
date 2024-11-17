@@ -30,7 +30,7 @@ use fuel_core_services::{
     RunnableService,
     RunnableTask,
     StateWatcher,
-    TaskRunResult,
+    TaskNextAction,
 };
 use fuel_gas_price_algorithm::{
     v0::AlgorithmUpdaterV0,
@@ -232,20 +232,20 @@ where
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
                 tracing::debug!("Stopping gas price service");
-                TaskRunResult::Stop
+                TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
                 let res = self.process_l2_block_res(l2_block_res).await;
-                TaskRunResult::continue_if_ok(res)
+                TaskNextAction::always_continue(res)
             }
             da_block_costs = self.da_source_channel.recv() => {
                 let res = self.process_da_block_costs_res(da_block_costs).await;
-                TaskRunResult::continue_if_ok(res)
+                TaskNextAction::always_continue(res)
             }
         }
     }

@@ -11,7 +11,7 @@ use fuel_core_services::{
     RunnableService,
     RunnableTask,
     StateWatcher,
-    TaskRunResult,
+    TaskNextAction,
 };
 use fuel_core_types::{
     blockchain::header::BlockHeader,
@@ -138,7 +138,7 @@ impl RunnableService for SyncTask {
 
 #[async_trait::async_trait]
 impl RunnableTask for SyncTask {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         let tick: BoxFuture<tokio::time::Instant> = if let Some(timer) = &mut self.timer {
             Box::pin(timer.tick())
         } else {
@@ -148,7 +148,7 @@ impl RunnableTask for SyncTask {
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
-                TaskRunResult::Stop
+                TaskNextAction::Stop
             }
             Some(latest_peer_count) = self.peer_connections_stream.next() => {
                 let sufficient_peers = latest_peer_count >= self.min_connected_reserved_peers;
@@ -170,7 +170,7 @@ impl RunnableTask for SyncTask {
                     }
                     _ => {},
                 }
-                TaskRunResult::Continue
+                TaskNextAction::Continue
             }
             Some(block_info) = self.block_stream.next() => {
                 let new_block_height = block_info.block_header.height();
@@ -204,7 +204,7 @@ impl RunnableTask for SyncTask {
                     }
                     _ => {}
                 }
-                TaskRunResult::Continue
+                TaskNextAction::Continue
             }
             _ = tick => {
                 if let InnerSyncState::SufficientPeers(block_header) = &self.inner_state {
@@ -215,7 +215,7 @@ impl RunnableTask for SyncTask {
                     };
                     self.update_sync_state(SyncState::Synced(Arc::new(block_header)));
                 }
-                TaskRunResult::Continue
+                TaskNextAction::Continue
             }
         }
     }

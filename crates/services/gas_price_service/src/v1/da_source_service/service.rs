@@ -3,7 +3,7 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
-    TaskRunResult,
+    TaskNextAction,
 };
 use std::time::Duration;
 use tokio::{
@@ -107,15 +107,15 @@ where
 {
     /// This function polls the source according to a polling interval
     /// described by the DaBlockCostsService
-    async fn run(&mut self, state_watcher: &mut StateWatcher) -> TaskRunResult {
+    async fn run(&mut self, state_watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {
-                TaskRunResult::Stop
+                TaskNextAction::Stop
             }
             _ = self.poll_interval.tick() => {
                 let da_block_costs_res = self.process_block_costs().await;
-                TaskRunResult::continue_if_ok(da_block_costs_res)
+                TaskNextAction::always_continue(da_block_costs_res)
             }
         }
     }

@@ -36,7 +36,7 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
-    TaskRunResult,
+    TaskNextAction,
 };
 use fuel_core_storage::{
     Error as StorageError,
@@ -552,12 +552,12 @@ where
     TxPool: ports::worker::TxPool,
     D: ports::worker::OffChainDatabase,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                TaskRunResult::Stop
+                TaskNextAction::Stop
             }
 
             result = self.block_importer.next() => {
@@ -569,15 +569,15 @@ where
                     if let Err(e) = result {
                         tracing::error!("Error processing block: {:?}", e);
                         if self.continue_on_error {
-                            TaskRunResult::Continue
+                            TaskNextAction::Continue
                         } else {
-                            TaskRunResult::Stop
+                            TaskNextAction::Stop
                         }
                     } else {
-                        TaskRunResult::Continue
+                        TaskNextAction::Continue
                     }
                 } else {
-                    TaskRunResult::Stop
+                    TaskNextAction::Stop
                 }
             }
         }

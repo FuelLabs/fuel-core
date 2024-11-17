@@ -38,7 +38,7 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
     SyncProcessor,
-    TaskRunResult,
+    TaskNextAction,
     TraceErr,
 };
 use fuel_core_storage::transactional::AtomicView;
@@ -849,21 +849,21 @@ where
     B: Broadcast + 'static,
     T: TxPool + 'static,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tracing::debug!("P2P task is running");
 
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                TaskRunResult::Stop
+                TaskNextAction::Stop
             },
             latest_block_height = self.next_block_height.next() => {
                 if let Some(latest_block_height) = latest_block_height {
                     let _ = self.p2p_service.update_block_height(latest_block_height);
-                    TaskRunResult::Continue
+                    TaskNextAction::Continue
                 } else {
-                    TaskRunResult::Stop
+                    TaskNextAction::Stop
                 }
             },
             next_service_request = self.request_receiver.recv() => {
@@ -882,7 +882,7 @@ where
                         let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
                         let Some(peer) = self.p2p_service.get_peer_id_with_height(&height) else {
                             let _ = channel.send(Err(TaskError::NoPeerFound));
-                            return TaskRunResult::Continue
+                            return TaskNextAction::Continue
                         };
                         let channel = ResponseSender::SealedHeaders(channel);
                         let request_msg = RequestMessage::SealedHeaders(block_height_range.clone());
@@ -892,7 +892,7 @@ where
                         let height = BlockHeight::from(block_height_range.end.saturating_sub(1));
                         let Some(peer) = self.p2p_service.get_peer_id_with_height(&height) else {
                             let _ = channel.send(Err(TaskError::NoPeerFound));
-                            return TaskRunResult::Continue
+                            return TaskNextAction::Continue
                         };
                         let channel = ResponseSender::Transactions(channel);
                         let request_msg = RequestMessage::Transactions(block_height_range.clone());
@@ -943,10 +943,10 @@ where
                     }
                     None => {
                         tracing::error!("The P2P `Task` should be holder of the `Sender`");
-                        return TaskRunResult::Stop
+                        return TaskNextAction::Stop
                     }
                 }
-                    TaskRunResult::Continue
+                    TaskNextAction::Continue
             }
             p2p_event = self.p2p_service.next_event() => {
                 match p2p_event {
@@ -982,7 +982,7 @@ where
                     },
                     _ => (),
                 }
-                TaskRunResult::Continue
+                TaskNextAction::Continue
             },
             _  = tokio::time::sleep_until(self.next_check_time) => {
                 let res = self.peer_heartbeat_reputation_checks();
@@ -993,7 +993,7 @@ where
                     }
                 }
                 self.next_check_time += self.heartbeat_check_interval;
-                TaskRunResult::Continue
+                TaskNextAction::Continue
             }
         }
     }

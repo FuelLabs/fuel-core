@@ -28,7 +28,7 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
-    TaskRunResult,
+    TaskNextAction,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -219,7 +219,7 @@ where
     P: Middleware<Error = ProviderError> + 'static,
     D: RelayerDb + 'static,
 {
-    async fn run(&mut self, _: &mut StateWatcher) -> TaskRunResult {
+    async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
         let now = tokio::time::Instant::now();
 
         let result = run::run(self).await;
@@ -239,12 +239,12 @@ where
         if let Err(err) = result {
             if !self.retry_on_error {
                 tracing::error!("Exiting due to Error in relayer task: {:?}", err);
-                TaskRunResult::Stop
+                TaskNextAction::Stop
             } else {
-                TaskRunResult::ErrorContinue(err)
+                TaskNextAction::ErrorContinue(err)
             }
         } else {
-            TaskRunResult::Continue
+            TaskNextAction::Continue
         }
     }
 

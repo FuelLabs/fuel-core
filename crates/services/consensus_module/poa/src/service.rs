@@ -42,7 +42,7 @@ use fuel_core_services::{
     Service as OtherService,
     ServiceRunner,
     StateWatcher,
-    TaskRunResult,
+    TaskNextAction,
 };
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
@@ -519,7 +519,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskRunResult {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         let mut sync_state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
         if *sync_state.borrow_and_update() == SyncState::NotSynced {
@@ -539,13 +539,13 @@ where
         let next_height = self.next_height();
         let maybe_block = match self.predefined_blocks.get_block(&next_height) {
             Ok(option) => option,
-            Err(err) => return TaskRunResult::ErrorContinue(err),
+            Err(err) => return TaskNextAction::ErrorContinue(err),
         };
         if let Some(block) = maybe_block {
             let res = self.produce_predefined_block(&block).await;
             return match res {
-                Ok(()) => TaskRunResult::Continue,
-                Err(err) => TaskRunResult::ErrorContinue(err),
+                Ok(()) => TaskNextAction::Continue,
+                Err(err) => TaskNextAction::ErrorContinue(err),
             }
         }
 
@@ -558,7 +558,7 @@ where
                     .ok_or(anyhow!("Time exceeds system limits"))
                 {
                     Ok(time) => time,
-                    Err(err) => return TaskRunResult::ErrorContinue(err),
+                    Err(err) => return TaskNextAction::ErrorContinue(err),
                 };
                 Box::pin(sleep_until(next_block_time))
             }
@@ -567,7 +567,7 @@ where
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
-                TaskRunResult::Stop
+                TaskNextAction::Stop
             }
             request = self.request_receiver.recv() => {
                 if let Some(request) = request {
@@ -577,15 +577,15 @@ where
                             let _ = response.send(result);
                         }
                     }
-                    TaskRunResult::Continue
+                    TaskNextAction::Continue
                 } else {
                     tracing::error!("The PoA task should be the holder of the `Sender`");
-                    TaskRunResult::Stop
+                    TaskNextAction::Stop
                 }
             }
             _ = next_block_production => {
                 match self.on_timer().await.context("While processing timer event") {
-                    Ok(()) => TaskRunResult::Continue,
+                    Ok(()) => TaskNextAction::Continue,
                     Err(err) => {
                         // Wait some time in case of error to avoid spamming retry block production
                         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -595,7 +595,7 @@ where
             }
             _ = self.new_txs_watcher.changed() => {
                 let res = self.on_txpool_event().await.context("While processing txpool event");
-                TaskRunResult::continue_if_ok(res)
+                TaskNextAction::always_continue(res)
             }
         }
     }
