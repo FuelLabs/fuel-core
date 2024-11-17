@@ -245,7 +245,7 @@ where
             }
             da_block_costs = self.da_source_channel.recv() => {
                 let res = self.process_da_block_costs_res(da_block_costs).await;
-                TaskRunResult::Continue
+                TaskRunResult::continue_if_ok(res)
             }
         }
     }

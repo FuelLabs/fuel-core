@@ -914,13 +914,10 @@ where
                         self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel).expect("We always have a peer here, so send has a target");
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
-                        // report_message(&mut self.p2p_service, message, acceptance);
-                        match self.p2p_service.report_message(message, acceptance) {
-                            Ok(_) => {},
-                            Err(err) => {
-                                return err.into()
-                            }
-                        };
+                        let res = self.p2p_service.report_message(message, acceptance);
+                        if let Err(err) = res {
+                            return err.into()
+                        }
                     }
                     Some(TaskRequest::RespondWithPeerReport { peer_id, score, reporting_service }) => {
                         let _ = self.p2p_service.report_peer(peer_id, score, reporting_service);
