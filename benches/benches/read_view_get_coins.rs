@@ -111,6 +111,7 @@ impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
             let off_chain_db = self.db.off_chain().clone();
             let mut utxo_ids = utxo_ids.to_vec();
             utxo_ids.shuffle(&mut self.rng);
+            utxo_ids = utxo_ids[0..self.params.num_utxos_to_query].to_vec();
 
             let handle = tokio::spawn(async move {
                 let read_database =
@@ -146,6 +147,7 @@ impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
 
 struct Parameters {
     num_queries: usize,
+    num_utxos_to_query: usize,
     num_blocks: usize,
     utxo_count_per_block: usize,
 }
@@ -153,8 +155,9 @@ struct Parameters {
 impl Parameters {
     fn hard_coded() -> Self {
         Self {
-            num_queries: 100,
-            num_blocks: 100,
+            num_queries: 1000,
+            num_utxos_to_query: 10000,
+            num_blocks: 1000,
             utxo_count_per_block: 1000,
         }
     }
