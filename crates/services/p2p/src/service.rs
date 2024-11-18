@@ -846,7 +846,7 @@ where
             heartbeat_max_time_since_last,
             next_check_time,
             heartbeat_peer_reputation_config,
-            cached_view: Arc::new(CachedView::new(1_000, metrics)),
+            cached_view: Arc::new(CachedView::new(614 * 10, metrics)),
         };
         Ok(task)
     }
