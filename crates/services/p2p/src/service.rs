@@ -402,6 +402,7 @@ impl Broadcast for SharedState {
 /// Uninitialized task for the p2p that can be upgraded later into [`Task`].
 pub struct UninitializedTask<V, B, T> {
     chain_id: ChainId,
+    last_height: BlockHeight,
     view_provider: V,
     next_block_height: BoxStream<BlockHeight>,
     /// Receive internal Task Requests
@@ -443,8 +444,10 @@ pub struct HeartbeatPeerReputationConfig {
 }
 
 impl<V, T> UninitializedTask<V, SharedState, T> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new<B: BlockHeightImporter>(
         chain_id: ChainId,
+        last_height: BlockHeight,
         config: Config<NotInitialized>,
         shared_state: SharedState,
         request_receiver: Receiver<TaskRequest>,
@@ -456,6 +459,7 @@ impl<V, T> UninitializedTask<V, SharedState, T> {
 
         Self {
             chain_id,
+            last_height,
             view_provider,
             tx_pool,
             next_block_height,
@@ -763,6 +767,7 @@ where
     ) -> anyhow::Result<Self::Task> {
         let Self {
             chain_id,
+            last_height,
             view_provider,
             next_block_height,
             request_receiver,
@@ -800,6 +805,7 @@ where
             PostcardCodec::new(max_block_size),
         )
         .await?;
+        p2p_service.update_block_height(last_height);
         p2p_service.start().await?;
 
         let next_check_time =
@@ -1311,8 +1317,10 @@ pub fn build_shared_state(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn new_service<V, B, T>(
     chain_id: ChainId,
+    last_height: BlockHeight,
     p2p_config: Config<NotInitialized>,
     shared_state: SharedState,
     request_receiver: Receiver<TaskRequest>,
@@ -1328,6 +1336,7 @@ where
 {
     let task = UninitializedTask::new(
         chain_id,
+        last_height,
         p2p_config,
         shared_state,
         request_receiver,
@@ -1457,6 +1466,7 @@ pub mod tests {
         let (shared_state, request_receiver) = build_shared_state(p2p_config.clone());
         let service = new_service(
             ChainId::default(),
+            0.into(),
             p2p_config,
             shared_state,
             request_receiver,

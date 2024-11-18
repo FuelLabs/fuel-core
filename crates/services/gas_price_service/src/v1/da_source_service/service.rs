@@ -24,6 +24,7 @@ impl SharedState {
     fn new(sender: Sender<DaBlockCosts>) -> Self {
         Self(sender)
     }
+
     pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<DaBlockCosts> {
         self.0.subscribe()
     }
@@ -40,7 +41,7 @@ where
     shared_state: SharedState,
 }
 
-const DA_BLOCK_COSTS_CHANNEL_SIZE: usize = 10;
+const DA_BLOCK_COSTS_CHANNEL_SIZE: usize = 16 * 1024;
 const POLLING_INTERVAL_MS: u64 = 10_000;
 
 impl<Source> DaSourceService<Source>
