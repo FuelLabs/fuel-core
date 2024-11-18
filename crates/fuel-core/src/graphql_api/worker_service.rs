@@ -291,7 +291,13 @@ trait CoinsToSpendIndexationUpdater<T>: CoinsToSpendIndexable {
         let key = self.key();
         let storage = tx.storage::<Self::Storage>();
         storage.insert(&key, &Self::value());
-        error!("Coin registered in coins to spend index!");
+        debug!(
+            utxo_id=?self.utxo_id(),
+            "coins to spend indexation updated");
+        error!(
+            "Coin registered in coins to spend index!, utxo_id: {:?}",
+            self.utxo_id()
+        );
     }
 }
 

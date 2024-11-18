@@ -41,6 +41,7 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 use tokio_stream::StreamExt;
+use tracing::error;
 
 pub struct Coin(pub(crate) CoinModel);
 
@@ -220,6 +221,8 @@ impl CoinQuery {
             ExcludeInput,
         >,
     ) -> async_graphql::Result<Vec<Vec<CoinType>>> {
+        error!("schema/coins - coins_to_spend");
+
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
@@ -233,55 +236,84 @@ impl CoinQuery {
         //  https://github.com/FuelLabs/fuel-core/issues/2343
         query_per_asset.truncate(max_input as usize);
 
-        let owner: fuel_tx::Address = owner.0;
-        let query_per_asset = query_per_asset
-            .into_iter()
-            .map(|e| {
-                AssetSpendTarget::new(
-                    e.asset_id.0,
-                    e.amount.0,
-                    e.max
-                        .and_then(|max| u16::try_from(max.0).ok())
-                        .unwrap_or(max_input)
-                        .min(max_input),
-                )
-            })
-            .collect_vec();
-        let excluded_ids: Option<Vec<_>> = excluded_ids.map(|exclude| {
-            let utxos = exclude
-                .utxos
+        // TODO[RC]: Use the value stored in metadata.
+        let INDEXATION_AVAILABLE: bool = true;
+
+        let indexation_available = INDEXATION_AVAILABLE;
+        error!("INDEXATION_AVAILABLE: {:?}", indexation_available);
+        if indexation_available {
+            let query = ctx.read_view();
+            let query = query?;
+
+            let owner: fuel_tx::Address = owner.0;
+            error!("OWNER: {:?}", owner);
+            for asset in query_per_asset {
+                let asset_id = asset.asset_id.0;
+                let max = asset
+                    .max
+                    .and_then(|max| u16::try_from(max.0).ok())
+                    .unwrap_or(max_input)
+                    .min(max_input);
+                error!("\tASSET: {:?}", asset_id);
+
+                let coins = query
+                    .as_ref()
+                    .coins_to_spend(&owner, &asset_id, max.into())
+                    .unwrap();
+                return Ok(coins);
+            }
+            return Ok(vec![vec![]]);
+        } else {
+            let owner: fuel_tx::Address = owner.0;
+            let query_per_asset = query_per_asset
                 .into_iter()
-                .map(|utxo| coins::CoinId::Utxo(utxo.into()));
-            let messages = exclude
-                .messages
-                .into_iter()
-                .map(|message| coins::CoinId::Message(message.into()));
-            utxos.chain(messages).collect()
-        });
-
-        let base_asset_id = params.base_asset_id();
-        let spend_query =
-            SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
-
-        let query = ctx.read_view()?;
-
-        let coins = random_improve(query.as_ref(), &spend_query)
-            .await?
-            .into_iter()
-            .map(|coins| {
-                coins
+                .map(|e| {
+                    AssetSpendTarget::new(
+                        e.asset_id.0,
+                        e.amount.0,
+                        e.max
+                            .and_then(|max| u16::try_from(max.0).ok())
+                            .unwrap_or(max_input)
+                            .min(max_input),
+                    )
+                })
+                .collect_vec();
+            let excluded_ids: Option<Vec<_>> = excluded_ids.map(|exclude| {
+                let utxos = exclude
+                    .utxos
                     .into_iter()
-                    .map(|coin| match coin {
-                        coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
-                        coins::CoinType::MessageCoin(coin) => {
-                            CoinType::MessageCoin(coin.into())
-                        }
-                    })
-                    .collect_vec()
-            })
-            .collect();
+                    .map(|utxo| coins::CoinId::Utxo(utxo.into()));
+                let messages = exclude
+                    .messages
+                    .into_iter()
+                    .map(|message| coins::CoinId::Message(message.into()));
+                utxos.chain(messages).collect()
+            });
 
-        Ok(coins)
+            let base_asset_id = params.base_asset_id();
+            let spend_query =
+                SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
+
+            let query = ctx.read_view()?;
+
+            let coins = random_improve(query.as_ref(), &spend_query)
+                .await?
+                .into_iter()
+                .map(|coins| {
+                    coins
+                        .into_iter()
+                        .map(|coin| match coin {
+                            coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
+                            coins::CoinType::MessageCoin(coin) => {
+                                CoinType::MessageCoin(coin.into())
+                            }
+                        })
+                        .collect_vec()
+                })
+                .collect();
+
+            Ok(coins)
+        }
     }
 }
 

@@ -5,8 +5,10 @@ use std::{
 };
 
 use crate::{
+    coins_query::CoinsQueryError,
     fuel_core_graphql_api::database::ReadView,
     graphql_api::storage::balances::TotalBalanceAmount,
+    schema::coins::CoinType,
 };
 use asset_query::{
     AssetQuery,

@@ -17,6 +17,9 @@ use fuel_core_types::{
         UtxoId,
     },
 };
+use tracing::error;
+
+use super::balances::ItemAmount;
 
 // TODO: Reuse `fuel_vm::storage::double_key` macro.
 pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
@@ -36,10 +39,39 @@ pub struct CoinsToSpendIndexKey(
     pub [u8; { Address::LEN + AssetId::LEN + u64::BITS as usize / 8 + TxId::LEN + 2 }],
 );
 
+impl CoinsToSpendIndexKey {
+    pub fn from_slice(slice: &[u8]) -> Result<Self, core::array::TryFromSliceError> {
+        Ok(Self(slice.try_into()?))
+    }
+
+    // TODO[RC]: Test this
+    pub fn utxo_id(&self) -> UtxoId {
+        let mut offset = 0;
+        offset += Address::LEN;
+        offset += AssetId::LEN;
+        offset += ItemAmount::BITS as usize / 8;
+
+        let txid_start = 0 + offset;
+        let txid_end = txid_start + TxId::LEN;
+
+        let output_index_start = txid_end;
+
+        let tx_id: [u8; TxId::LEN] = self.0[txid_start..txid_end]
+            .try_into()
+            .expect("TODO[RC]: Fix this");
+        let output_index = u16::from_be_bytes(
+            self.0[output_index_start..]
+                .try_into()
+                .expect("TODO[RC]: Fix this"),
+        );
+        UtxoId::new(TxId::from(tx_id), output_index)
+    }
+}
+
 impl TryFrom<&[u8]> for CoinsToSpendIndexKey {
     type Error = core::array::TryFromSliceError;
     fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
-        todo!()
+        CoinsToSpendIndexKey::from_slice(slice)
     }
 }
 

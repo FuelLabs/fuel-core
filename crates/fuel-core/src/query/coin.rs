@@ -1,6 +1,14 @@
-use crate::fuel_core_graphql_api::database::ReadView;
+use crate::{
+    coins_query::CoinsQueryError,
+    fuel_core_graphql_api::database::ReadView,
+    graphql_api::storage::coins::CoinsToSpendIndex,
+    schema::coins::CoinType,
+};
 use fuel_core_storage::{
-    iter::IterDirection,
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
     tables::Coins,
     Error as StorageError,
@@ -9,7 +17,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     entities::coins::coin::Coin,
-    fuel_tx::UtxoId,
+    fuel_tx::{
+        AssetId,
+        UtxoId,
+    },
     fuel_types::Address,
 };
 use futures::{
@@ -17,6 +28,7 @@ use futures::{
     StreamExt,
     TryStreamExt,
 };
+use tracing::error;
 
 impl ReadView {
     pub fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
@@ -62,5 +74,18 @@ impl ReadView {
                 Ok(Some(futures::stream::iter(chunk)))
             })
             .try_flatten()
+    }
+
+    pub fn coins_to_spend(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+        max: u16,
+    ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
+        error!("query/coins - coins_to_spend");
+
+        let coin = self.off_chain.coins_to_spend(owner, asset_id, max);
+
+        Ok(vec![vec![]])
     }
 }

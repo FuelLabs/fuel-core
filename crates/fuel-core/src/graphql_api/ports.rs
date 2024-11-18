@@ -67,6 +67,8 @@ use std::{
     sync::Arc,
 };
 
+use crate::schema::coins::CoinType;
+
 use super::storage::balances::TotalBalanceAmount;
 
 pub trait OffChainDatabase: Send + Sync {
@@ -83,6 +85,7 @@ pub trait OffChainDatabase: Send + Sync {
         base_asset_id: &AssetId,
     ) -> StorageResult<TotalBalanceAmount>;
 
+    // TODO[RC]: BoxedIter?
     fn balances(
         &self,
         owner: &Address,
@@ -109,6 +112,13 @@ pub trait OffChainDatabase: Send + Sync {
         start: Option<TxPointer>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
+
+    fn coins_to_spend(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+        max: u16,
+    ) -> StorageResult<Vec<Vec<CoinType>>>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 

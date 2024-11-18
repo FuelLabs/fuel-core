@@ -28,12 +28,14 @@ use crate::{
             MessageBalances,
             TotalBalanceAmount,
         },
+        coins::CoinsToSpendIndex,
         old::{
             OldFuelBlockConsensus,
             OldFuelBlocks,
             OldTransactions,
         },
     },
+    schema::coins::CoinType,
 };
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
@@ -79,7 +81,10 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-use tracing::debug;
+use tracing::{
+    debug,
+    error,
+};
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -267,6 +272,36 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         }
 
         Ok(balances)
+    }
+
+    fn coins_to_spend(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+        max: u16,
+    ) -> StorageResult<Vec<Vec<CoinType>>> {
+        error!("graphql_api - coins_to_spend");
+
+        let mut key_prefix = [0u8; Address::LEN + AssetId::LEN];
+
+        let mut offset = 0;
+        key_prefix[offset..offset + Address::LEN].copy_from_slice(owner.as_ref());
+        offset += Address::LEN;
+        key_prefix[offset..offset + AssetId::LEN].copy_from_slice(asset_id.as_ref());
+        offset += AssetId::LEN;
+
+        // TODO[RC]: Do not collect, return iter.
+        error!("Starting to iterate");
+        for coin_key in
+            self.iter_all_by_prefix_keys::<CoinsToSpendIndex, _>(Some(key_prefix))
+        {
+            let coin = coin_key?;
+
+            let utxo_id = coin.utxo_id();
+            error!("coin: {:?}", &utxo_id);
+        }
+        error!("Finished iteration");
+        Ok(vec![vec![]])
     }
 }
 
