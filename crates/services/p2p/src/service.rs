@@ -82,7 +82,10 @@ use libp2p::{
 use std::{
     fmt::Debug,
     future::Future,
-    ops::Range,
+    ops::{
+        Deref,
+        Range,
+    },
     sync::Arc,
 };
 use tokio::{
@@ -415,9 +418,6 @@ pub struct Task<P, V, B, T> {
     heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
     // cached view
     cached_view: Arc<CachedView>,
-    // milliseconds wait time between cache reset
-    cache_reset_interval: Duration,
-    next_cache_reset_time: Instant,
 }
 
 #[derive(Default, Clone)]
@@ -623,6 +623,11 @@ where
                 cached_view
                     .get_transactions(view, range)
                     .map_err(anyhow::Error::from)
+                    .map(|txs| {
+                        txs.map(|txs| {
+                            txs.into_iter().map(|tx| tx.deref().clone()).collect()
+                        })
+                    })
             },
             |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
                 response,
@@ -645,6 +650,14 @@ where
                 cached_view
                     .get_sealed_headers(view, range)
                     .map_err(anyhow::Error::from)
+                    .map(|headers| {
+                        headers.map(|headers| {
+                            headers
+                                .into_iter()
+                                .map(|header| header.deref().clone())
+                                .collect()
+                        })
+                    })
             },
             |response, request_id| TaskRequest::DatabaseHeaderLookUp {
                 response,
@@ -830,11 +843,6 @@ where
             AsyncProcessor::new("P2P_TxPoolLookUpProcessor", tx_pool_threads, 32)?;
         let request_sender = broadcast.request_sender.clone();
 
-        let cache_reset_interval = Duration::from_millis(10_000);
-        let next_cache_reset_time = Instant::now()
-            .checked_add(cache_reset_interval)
-            .expect("The cache reset interval should be small enough to do frequently");
-
         let task = Task {
             chain_id,
             response_timeout,
@@ -854,9 +862,7 @@ where
             heartbeat_max_time_since_last,
             next_check_time,
             heartbeat_peer_reputation_config,
-            cached_view: Arc::new(CachedView::new(metrics)),
-            cache_reset_interval,
-            next_cache_reset_time,
+            cached_view: Arc::new(CachedView::new(1_000, metrics)),
         };
         Ok(task)
     }
@@ -881,12 +887,6 @@ where
 
             _ = watcher.while_started() => {
                 should_continue = false;
-            },
-            _ = tokio::time::sleep_until(self.next_cache_reset_time) => {
-                should_continue = true;
-                tracing::debug!("Resetting req/res protocol cache");
-                self.cached_view.clear();
-                self.next_cache_reset_time += self.cache_reset_interval;
             },
             latest_block_height = self.next_block_height.next() => {
                 if let Some(latest_block_height) = latest_block_height {
@@ -1038,7 +1038,7 @@ pub struct SharedState {
     reserved_peers_broadcast: broadcast::Sender<usize>,
     /// Used for communicating with the `Task`.
     request_sender: mpsc::Sender<TaskRequest>,
-    /// Sender of p2p blopck height data
+    /// Sender of p2p block height data
     block_height_broadcast: broadcast::Sender<BlockHeightHeartbeatData>,
     /// Max txs per request
     max_txs_per_request: usize,
@@ -1640,9 +1640,7 @@ pub mod tests {
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
-            cached_view: Arc::new(CachedView::new(false)),
-            cache_reset_interval: Duration::from_secs(10),
-            next_cache_reset_time: Instant::now(),
+            cached_view: Arc::new(CachedView::new(100, false)),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
@@ -1735,9 +1733,7 @@ pub mod tests {
             heartbeat_max_time_since_last,
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
-            cached_view: Arc::new(CachedView::new(false)),
-            cache_reset_interval: Duration::from_secs(10),
-            next_cache_reset_time: Instant::now(),
+            cached_view: Arc::new(CachedView::new(100, false)),
         };
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
         let mut watcher = StateWatcher::from(watch_receiver);
@@ -1816,9 +1812,7 @@ pub mod tests {
             heartbeat_max_time_since_last: Default::default(),
             next_check_time: Instant::now(),
             heartbeat_peer_reputation_config: Default::default(),
-            cached_view: Arc::new(CachedView::new(false)),
-            cache_reset_interval: Duration::from_secs(10),
-            next_cache_reset_time: Instant::now(),
+            cached_view: Arc::new(CachedView::new(100, false)),
         };
         let mut watcher = StateWatcher::started();
         // End of initialization
@@ -1832,59 +1826,5 @@ pub mod tests {
                 .try_recv()
                 .expect("Should process the block height even under p2p pressure");
         }
-    }
-
-    #[tokio::test]
-    async fn cached_view__is_reset_after_interval_passed() {
-        // given
-        let p2p_service = FakeP2PService {
-            peer_info: vec![],
-            next_event_stream: Box::pin(futures::stream::pending()),
-        };
-        let (request_sender, request_receiver) = mpsc::channel(100);
-
-        let (report_sender, _) = mpsc::channel(100);
-        let broadcast = FakeBroadcast {
-            peer_reports: report_sender,
-        };
-
-        let cache_reset_interval = Duration::from_millis(100);
-        let next_cache_reset_time = Instant::now();
-        let mut task = Task {
-            chain_id: Default::default(),
-            response_timeout: Default::default(),
-            p2p_service,
-            view_provider: FakeDB,
-            tx_pool: FakeTxPool,
-            next_block_height: FakeBlockImporter.next_block_height(),
-            request_receiver,
-            request_sender,
-            db_heavy_task_processor: SyncProcessor::new("Test", 1, 1).unwrap(),
-            tx_pool_heavy_task_processor: AsyncProcessor::new("Test", 1, 1).unwrap(),
-            broadcast,
-            max_headers_per_request: 0,
-            max_txs_per_request: 100,
-            heartbeat_check_interval: Duration::from_secs(10),
-            heartbeat_max_avg_interval: Default::default(),
-            heartbeat_max_time_since_last: Default::default(),
-            next_check_time: Instant::now(),
-            heartbeat_peer_reputation_config: Default::default(),
-            cached_view: Arc::new(CachedView::new(false)),
-            cache_reset_interval,
-            next_cache_reset_time,
-        };
-        let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
-        let mut watcher = StateWatcher::from(watch_receiver);
-
-        // when
-        task.run(&mut watcher).await.unwrap();
-
-        // then
-        // we raise the sleep factor to ensure that the cache is reset
-        tokio::time::sleep(cache_reset_interval * 2).await;
-        watch_sender.send(State::Stopped).unwrap();
-
-        // if this was changed, we can be sure that the cache was reset
-        assert_ne!(task.next_cache_reset_time, next_cache_reset_time);
     }
 }

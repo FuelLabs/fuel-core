@@ -9,27 +9,80 @@ use fuel_core_types::{
     blockchain::SealedBlockHeader,
     services::p2p::Transactions,
 };
-use std::ops::Range;
+use std::{
+    collections::VecDeque,
+    hash::Hash,
+    ops::Range,
+    sync::{
+        Arc,
+        Mutex,
+    },
+};
+
 type BlockHeight = u32;
 
+struct LruCache<K, V> {
+    cache: DashMap<K, Arc<V>>,
+    order: Mutex<VecDeque<K>>,
+    capacity: usize,
+}
+
+impl<K, V> LruCache<K, V>
+where
+    K: Eq + Hash + Clone,
+{
+    fn new(capacity: usize) -> Self {
+        Self {
+            cache: DashMap::new(),
+            order: Mutex::new(VecDeque::new()),
+            capacity,
+        }
+    }
+
+    fn insert(&self, key: K, value: V) {
+        let mut order = self.order.lock().expect("Poisoned lock");
+
+        if self.cache.len() >= self.capacity {
+            if let Some(least_used) = order.pop_front() {
+                self.cache.remove(&least_used);
+            }
+        }
+
+        self.cache.insert(key.clone(), Arc::new(value));
+
+        // Update the access order.
+        order.retain(|k| k != &key);
+        order.push_back(key);
+    }
+
+    fn get(&self, key: &K) -> Option<Arc<V>> {
+        let mut order = self.order.lock().expect("Poisoned lock");
+
+        if let Some(value) = self.cache.get(key) {
+            // Update the access order.
+            order.retain(|k| k != key);
+            order.push_back(key.clone());
+
+            Some(Arc::clone(&value))
+        } else {
+            None
+        }
+    }
+}
+
 pub(super) struct CachedView {
-    sealed_block_headers: DashMap<BlockHeight, SealedBlockHeader>,
-    transactions_on_blocks: DashMap<BlockHeight, Transactions>,
+    sealed_block_headers: LruCache<BlockHeight, SealedBlockHeader>,
+    transactions_on_blocks: LruCache<BlockHeight, Transactions>,
     metrics: bool,
 }
 
 impl CachedView {
-    pub fn new(metrics: bool) -> Self {
+    pub fn new(capacity: usize, metrics: bool) -> Self {
         Self {
-            sealed_block_headers: DashMap::new(),
-            transactions_on_blocks: DashMap::new(),
+            sealed_block_headers: LruCache::new(capacity),
+            transactions_on_blocks: LruCache::new(capacity),
             metrics,
         }
-    }
-
-    pub(super) fn clear(&self) {
-        self.sealed_block_headers.clear();
-        self.transactions_on_blocks.clear();
     }
 
     fn update_metrics<U>(&self, update_fn: U)
@@ -43,11 +96,11 @@ impl CachedView {
 
     fn get_from_cache_or_db<V, T, F>(
         &self,
-        cache: &DashMap<u32, T>,
+        cache: &LruCache<u32, T>,
         view: &V,
         range: Range<u32>,
         fetch_fn: F,
-    ) -> StorageResult<Option<Vec<T>>>
+    ) -> StorageResult<Option<Vec<Arc<T>>>>
     where
         V: P2pDb,
         T: Clone,
@@ -58,7 +111,6 @@ impl CachedView {
 
         for height in range.clone() {
             if let Some(item) = cache.get(&height) {
-                // TODO(2436): replace with cheap Arc clone
                 items.push(item.clone());
             } else {
                 missing_start = Some(height);
@@ -77,8 +129,7 @@ impl CachedView {
         if let Some(fetched_items) = fetch_fn(view, missing_range.clone())? {
             for (height, item) in missing_range.zip(fetched_items.iter()) {
                 cache.insert(height, item.clone());
-                // TODO(2436): replace with cheap Arc clone
-                items.push(item.clone());
+                items.push(item.clone().into());
             }
 
             return Ok(Some(items));
@@ -91,7 +142,7 @@ impl CachedView {
         &self,
         view: &V,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Option<Vec<SealedBlockHeader>>>
+    ) -> StorageResult<Option<Vec<Arc<SealedBlockHeader>>>>
     where
         V: P2pDb,
     {
@@ -107,7 +158,7 @@ impl CachedView {
         &self,
         view: &V,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Option<Vec<Transactions>>>
+    ) -> StorageResult<Option<Vec<Arc<Transactions>>>>
     where
         V: P2pDb,
     {
@@ -181,10 +232,11 @@ mod tests {
             sender: sender.clone(),
             values: true,
         };
-        let cached_view = CachedView::new(false);
+        let cached_view = CachedView::new(10, false);
 
         let block_height_range = 0..100;
         let sealed_headers = default_sealed_headers(block_height_range.clone());
+        let sealed_headers_heap = sealed_headers.iter().cloned().map(Arc::new).collect();
         for (block_height, header) in
             block_height_range.clone().zip(sealed_headers.iter())
         {
@@ -196,7 +248,7 @@ mod tests {
         let result = cached_view
             .get_sealed_headers(&db, block_height_range.clone())
             .unwrap();
-        assert_eq!(result, Some(sealed_headers));
+        assert_eq!(result, Some(sealed_headers_heap));
     }
 
     #[tokio::test]
@@ -207,19 +259,20 @@ mod tests {
             sender: sender.clone(),
             values: true,
         };
-        let cached_view = CachedView::new(false);
+        let cached_view = CachedView::new(10, false);
 
         // when
         let notified = sender.notified();
         let block_height_range = 0..100;
         let sealed_headers = default_sealed_headers(block_height_range.clone());
+        let sealed_headers_heap = sealed_headers.iter().cloned().map(Arc::new).collect();
         let result = cached_view
             .get_sealed_headers(&db, block_height_range.clone())
             .unwrap();
 
         // then
         notified.await;
-        assert_eq!(result, Some(sealed_headers));
+        assert_eq!(result, Some(sealed_headers_heap));
     }
 
     #[tokio::test]
@@ -230,7 +283,7 @@ mod tests {
             sender: sender.clone(),
             values: false,
         };
-        let cached_view = CachedView::new(false);
+        let cached_view = CachedView::new(10, false);
 
         // when
         let notified = sender.notified();
@@ -251,7 +304,7 @@ mod tests {
             sender: sender.clone(),
             values: true,
         };
-        let cached_view = CachedView::new(false);
+        let cached_view = CachedView::new(10, false);
 
         let block_height_range = 0..100;
         let transactions = default_transactions(block_height_range.clone());
@@ -281,7 +334,7 @@ mod tests {
             sender: sender.clone(),
             values: true,
         };
-        let cached_view = CachedView::new(false);
+        let cached_view = CachedView::new(10, false);
 
         // when
         let notified = sender.notified();
@@ -306,7 +359,7 @@ mod tests {
             sender: sender.clone(),
             values: false,
         };
-        let cached_view = CachedView::new(false);
+        let cached_view = CachedView::new(10, false);
 
         // when
         let notified = sender.notified();
@@ -318,5 +371,62 @@ mod tests {
         // then
         notified.await;
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn cached_view__when_lru_is_full_it_makes_call_to_db() {
+        // given
+        let cache_capacity = 10;
+        let sender = Arc::new(Notify::new());
+        let db = FakeDb {
+            sender: sender.clone(),
+            values: true,
+        };
+        let cached_view = CachedView::new(cache_capacity, false);
+
+        // when
+        let block_height_range = 0..u32::try_from(cache_capacity).unwrap() + 1;
+        let _ = cached_view
+            .get_transactions(&db, block_height_range.clone())
+            .unwrap();
+
+        let notified = sender.notified();
+        let result = cached_view
+            .get_transactions(&db, block_height_range.clone())
+            .unwrap();
+
+        // then
+        notified.await;
+        assert!(result.is_some());
+    }
+
+    #[tokio::test]
+    async fn cached_view__when_lru_is_partially_full_it_does_not_make_call_to_db() {
+        // given
+        let cache_capacity = 100;
+        let sender = Arc::new(Notify::new());
+        let db = FakeDb {
+            sender: sender.clone(),
+            values: true,
+        };
+        let cached_view = CachedView::new(cache_capacity, false);
+
+        // when
+        let block_height_range = 0..10;
+        let _ = cached_view
+            .get_transactions(&db, block_height_range.clone())
+            .unwrap();
+
+        let notified = sender.notified();
+        let _ = cached_view
+            .get_transactions(&db, block_height_range.clone())
+            .unwrap();
+
+        // then
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), notified)
+                .await
+                .is_err()
+        )
     }
 }
