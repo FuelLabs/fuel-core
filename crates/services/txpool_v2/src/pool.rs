@@ -46,6 +46,9 @@ use crate::{
     },
 };
 
+#[cfg(test)]
+use std::collections::HashSet;
+
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
 /// and allowing the selection of transactions for inclusion in a block.
 pub struct Pool<S, SI, CM, SA> {
@@ -560,6 +563,22 @@ where
                 .on_removed_transaction(storage_entry);
         }
         self.register_transaction_counts();
+    }
+
+    #[cfg(test)]
+    pub fn assert_integrity(&self, mut expected_txs: HashSet<TxId>) {
+        for tx in &self.tx_id_to_storage_id {
+            if !expected_txs.remove(tx.0) {
+                panic!(
+                    "Transaction with id {:?} is not in the expected transactions",
+                    tx.0
+                );
+            }
+        }
+        assert!(
+            expected_txs.is_empty(),
+            "Some transactions are not found in the pool"
+        );
     }
 }
 

@@ -42,7 +42,6 @@ fn _worst_case__correctly_calculates_value(
         let change_amount = expected.saturating_mul(percentage).saturating_div(100);
         expected = expected.saturating_add(change_amount);
     }
-    dbg!(actual, expected);
     assert!(actual >= expected);
 }
 
