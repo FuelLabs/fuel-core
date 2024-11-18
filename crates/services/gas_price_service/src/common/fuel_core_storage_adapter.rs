@@ -17,6 +17,10 @@ use crate::{
     ports::MetadataStorage,
 };
 use fuel_core_storage::{
+    codec::{
+        postcard::Postcard,
+        Encode,
+    },
     kv_store::KeyValueInspect,
     structured_storage::StructuredStorage,
     transactional::{
@@ -101,6 +105,8 @@ pub fn get_block_info(
         height: (*block.header().height()).into(),
         gas_used: used_gas,
         block_gas_capacity: block_gas_limit,
+        block_bytes: Postcard::encode(block).len() as u64,
+        block_fees: fee,
     };
     Ok(info)
 }
