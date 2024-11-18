@@ -72,7 +72,6 @@ fn _worst_case__correctly_calculates_value(
 
     let expected = expected_exec_price.saturating_add(expected_da_gas_price);
 
-    dbg!(actual, expected);
     assert!(actual >= expected);
 }
 
