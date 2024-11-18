@@ -321,7 +321,6 @@ async fn complex_queries__100_block_headers__works() {
     let url = format!("http://{}/v1/graphql", node.bound_address);
 
     let result = send_graph_ql_query(&url, query).await;
-    dbg!(&result);
     assert!(result.contains("transactions"));
 }
 
