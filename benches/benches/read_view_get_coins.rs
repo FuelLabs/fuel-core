@@ -94,9 +94,6 @@ impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
             transaction.commit().unwrap();
         }
 
-        // Shuffle so random reads aren't sequential
-        utxo_ids.shuffle(&mut self.rng);
-
         Ok(utxo_ids)
     }
 
@@ -109,9 +106,11 @@ impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
         for _ in 0..self.params.num_queries {
             let on_chain_db = self.db.on_chain().clone();
             let off_chain_db = self.db.off_chain().clone();
-            let mut utxo_ids = utxo_ids.to_vec();
-            utxo_ids.shuffle(&mut self.rng);
-            utxo_ids = utxo_ids[0..self.params.num_utxos_to_query].to_vec();
+
+            let utxo_ids = utxo_ids
+                .choose_multiple(&mut self.rng, self.params.num_utxos_to_query)
+                .cloned()
+                .collect();
 
             let handle = tokio::spawn(async move {
                 let read_database =
@@ -156,9 +155,9 @@ impl Parameters {
     fn hard_coded() -> Self {
         Self {
             num_queries: 1000,
-            num_utxos_to_query: 10000,
+            num_utxos_to_query: 10_000,
             num_blocks: 1000,
-            utxo_count_per_block: 1000,
+            utxo_count_per_block: 10_000,
         }
     }
 }
