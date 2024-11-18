@@ -13,7 +13,6 @@ description = "Fuel client networking"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-dashmap = "6.1.0"
 fuel-core-chain-config = { workspace = true }
 fuel-core-metrics = { workspace = true } # TODO make this a feature
 fuel-core-services = { workspace = true, features = ["sync-processor"] }
@@ -42,6 +41,7 @@ libp2p = { version = "0.53.2", default-features = false, features = [
 libp2p-mplex = "0.41.0"
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
+quick_cache = "0.6.9"
 quick-protobuf = "0.8.1"
 quick-protobuf-codec = "0.3.0"
 rand = { workspace = true }

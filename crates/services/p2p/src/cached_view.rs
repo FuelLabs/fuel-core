@@ -1,5 +1,4 @@
 use crate::ports::P2pDb;
-use dashmap::DashMap;
 use fuel_core_metrics::p2p_metrics::{
     increment_p2p_req_res_cache_hits,
     increment_p2p_req_res_cache_misses,
@@ -9,78 +8,25 @@ use fuel_core_types::{
     blockchain::SealedBlockHeader,
     services::p2p::Transactions,
 };
+use quick_cache::sync::Cache;
 use std::{
-    collections::VecDeque,
-    hash::Hash,
     ops::Range,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::Arc,
 };
 
 type BlockHeight = u32;
 
-struct LruCache<K, V> {
-    cache: DashMap<K, Arc<V>>,
-    order: Mutex<VecDeque<K>>,
-    capacity: usize,
-}
-
-impl<K, V> LruCache<K, V>
-where
-    K: Eq + Hash + Clone,
-{
-    fn new(capacity: usize) -> Self {
-        Self {
-            cache: DashMap::new(),
-            order: Mutex::new(VecDeque::new()),
-            capacity,
-        }
-    }
-
-    fn insert(&self, key: K, value: V) {
-        let mut order = self.order.lock().expect("Poisoned lock");
-
-        if self.cache.len() >= self.capacity {
-            if let Some(least_used) = order.pop_front() {
-                self.cache.remove(&least_used);
-            }
-        }
-
-        self.cache.insert(key.clone(), Arc::new(value));
-
-        // Update the access order.
-        order.retain(|k| k != &key);
-        order.push_back(key);
-    }
-
-    fn get(&self, key: &K) -> Option<Arc<V>> {
-        let mut order = self.order.lock().expect("Poisoned lock");
-
-        if let Some(value) = self.cache.get(key) {
-            // Update the access order.
-            order.retain(|k| k != key);
-            order.push_back(key.clone());
-
-            Some(Arc::clone(&value))
-        } else {
-            None
-        }
-    }
-}
-
 pub(super) struct CachedView {
-    sealed_block_headers: LruCache<BlockHeight, SealedBlockHeader>,
-    transactions_on_blocks: LruCache<BlockHeight, Transactions>,
+    sealed_block_headers: Cache<BlockHeight, SealedBlockHeader>,
+    transactions_on_blocks: Cache<BlockHeight, Transactions>,
     metrics: bool,
 }
 
 impl CachedView {
     pub fn new(capacity: usize, metrics: bool) -> Self {
         Self {
-            sealed_block_headers: LruCache::new(capacity),
-            transactions_on_blocks: LruCache::new(capacity),
+            sealed_block_headers: Cache::new(capacity),
+            transactions_on_blocks: Cache::new(capacity),
             metrics,
         }
     }
@@ -96,7 +42,7 @@ impl CachedView {
 
     fn get_from_cache_or_db<V, T, F>(
         &self,
-        cache: &LruCache<u32, T>,
+        cache: &Cache<u32, T>,
         view: &V,
         range: Range<u32>,
         fetch_fn: F,
@@ -111,7 +57,7 @@ impl CachedView {
 
         for height in range.clone() {
             if let Some(item) = cache.get(&height) {
-                items.push(item.clone());
+                items.push(item.clone().into());
             } else {
                 missing_start = Some(height);
                 break;
