@@ -24,6 +24,7 @@ use fuel_core_types::{
 };
 use rand::{
     rngs::StdRng,
+    seq::SliceRandom,
     SeedableRng,
 };
 
@@ -93,6 +94,9 @@ impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
             transaction.commit().unwrap();
         }
 
+        // Shuffle so random reads aren't sequential
+        utxo_ids.shuffle(&mut self.rng);
+
         Ok(utxo_ids)
     }
 
@@ -105,7 +109,8 @@ impl<Rng: rand::RngCore + rand::CryptoRng + Send> Harness<Rng> {
         for _ in 0..self.params.num_queries {
             let on_chain_db = self.db.on_chain().clone();
             let off_chain_db = self.db.off_chain().clone();
-            let utxo_ids = utxo_ids.to_vec();
+            let mut utxo_ids = utxo_ids.to_vec();
+            utxo_ids.shuffle(&mut self.rng);
 
             let handle = tokio::spawn(async move {
                 let read_database =
