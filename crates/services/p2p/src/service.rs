@@ -450,7 +450,12 @@ impl<V, T> UninitializedTask<V, SharedState, T> {
     }
 }
 
-impl<P: TaskP2PService, V: AtomicView, B: Broadcast, T> Task<P, V, B, T> {
+impl<P, V, B, T> Task<P, V, B, T>
+where
+    P: TaskP2PService,
+    V: AtomicView,
+    B: Broadcast,
+{
     fn peer_heartbeat_reputation_checks(&self) -> anyhow::Result<()> {
         for (peer_id, peer_info) in self.p2p_service.get_all_peer_info() {
             if peer_info.heartbeat_data.duration_since_last_heartbeat()
