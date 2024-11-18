@@ -118,7 +118,8 @@ pub trait OffChainDatabase: Send + Sync {
         owner: &Address,
         asset_id: &AssetId,
         max: u16,
-    ) -> StorageResult<Vec<Vec<CoinType>>>;
+        // TODO[RC]: Also support message ids here - these are different than UtxoId
+    ) -> StorageResult<Vec<UtxoId>>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 

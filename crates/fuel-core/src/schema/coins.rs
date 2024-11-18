@@ -259,8 +259,15 @@ impl CoinQuery {
                 let coins = query
                     .as_ref()
                     .coins_to_spend(&owner, &asset_id, max.into())
-                    .unwrap();
-                return Ok(coins);
+                    .expect("TODO[RC]: Fix me")
+                    .iter()
+                    .map(|types_coin| match types_coin {
+                        coins::CoinType::Coin(coin) => CoinType::Coin((*coin).into()),
+                        _ => panic!("MessageCoin is not supported"),
+                    })
+                    .collect();
+
+                return Ok(vec![coins]);
             }
             return Ok(vec![vec![]]);
         } else {

@@ -2,7 +2,6 @@ use crate::{
     coins_query::CoinsQueryError,
     fuel_core_graphql_api::database::ReadView,
     graphql_api::storage::coins::CoinsToSpendIndex,
-    schema::coins::CoinType,
 };
 use fuel_core_storage::{
     iter::{
@@ -16,7 +15,10 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    entities::coins::coin::Coin,
+    entities::coins::{
+        coin::Coin,
+        CoinType,
+    },
     fuel_tx::{
         AssetId,
         UtxoId,
@@ -81,11 +83,22 @@ impl ReadView {
         owner: &Address,
         asset_id: &AssetId,
         max: u16,
-    ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
+    ) -> Result<Vec<CoinType>, CoinsQueryError> {
         error!("query/coins - coins_to_spend");
 
-        let coin = self.off_chain.coins_to_spend(owner, asset_id, max);
+        let coin_ids = self
+            .off_chain
+            .coins_to_spend(owner, asset_id, max)
+            .expect("TODO[RC]: Fix this");
+        error!("got the following coin_ids: {:?}", coin_ids);
 
-        Ok(vec![vec![]])
+        let mut all_coins = Vec::new();
+        for coin_id in coin_ids {
+            let c = self.coin(coin_id).expect("TODO[RC]: Fix this");
+            // TODO[RC]: Support messages also
+            all_coins.push(CoinType::Coin(c));
+        }
+
+        Ok(all_coins)
     }
 }

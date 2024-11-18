@@ -279,7 +279,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         owner: &Address,
         asset_id: &AssetId,
         max: u16,
-    ) -> StorageResult<Vec<Vec<CoinType>>> {
+    ) -> StorageResult<Vec<UtxoId>> {
         error!("graphql_api - coins_to_spend");
 
         let mut key_prefix = [0u8; Address::LEN + AssetId::LEN];
@@ -292,16 +292,18 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 
         // TODO[RC]: Do not collect, return iter.
         error!("Starting to iterate");
+        let mut all_utxo_ids = Vec::new();
         for coin_key in
             self.iter_all_by_prefix_keys::<CoinsToSpendIndex, _>(Some(key_prefix))
         {
             let coin = coin_key?;
 
             let utxo_id = coin.utxo_id();
+            all_utxo_ids.push(utxo_id);
             error!("coin: {:?}", &utxo_id);
         }
         error!("Finished iteration");
-        Ok(vec![vec![]])
+        Ok(all_utxo_ids)
     }
 }
 
