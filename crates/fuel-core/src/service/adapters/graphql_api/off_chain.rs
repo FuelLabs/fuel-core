@@ -298,6 +298,8 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         {
             let coin = coin_key?;
 
+            error!("coin: {:?}", hex::encode(&coin));
+
             let utxo_id = coin.utxo_id();
             all_utxo_ids.push(utxo_id);
             error!("coin: {:?}", &utxo_id);

@@ -295,8 +295,9 @@ trait CoinsToSpendIndexationUpdater<T>: CoinsToSpendIndexable {
             utxo_id=?self.utxo_id(),
             "coins to spend indexation updated");
         error!(
-            "Coin registered in coins to spend index!, utxo_id: {:?}",
-            self.utxo_id()
+            "Coin registered in coins to spend index!, utxo_id: {:?}, amount={}",
+            self.utxo_id(),
+            self.amount(),
         );
     }
 }

@@ -247,6 +247,7 @@ impl CoinQuery {
 
             let owner: fuel_tx::Address = owner.0;
             error!("OWNER: {:?}", owner);
+            let mut coins_per_asset = Vec::new();
             for asset in query_per_asset {
                 let asset_id = asset.asset_id.0;
                 let max = asset
@@ -267,9 +268,9 @@ impl CoinQuery {
                     })
                     .collect();
 
-                return Ok(vec![coins]);
+                coins_per_asset.push(coins);
             }
-            return Ok(vec![vec![]]);
+            return Ok(coins_per_asset);
         } else {
             let owner: fuel_tx::Address = owner.0;
             let query_per_asset = query_per_asset
