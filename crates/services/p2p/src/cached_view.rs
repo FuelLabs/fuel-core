@@ -57,7 +57,7 @@ impl CachedView {
 
         for height in range.clone() {
             if let Some(item) = cache.get(&height) {
-                items.push(item.clone().into());
+                items.push(item.into());
             } else {
                 missing_start = Some(height);
                 break;
