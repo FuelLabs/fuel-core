@@ -82,10 +82,7 @@ use libp2p::{
 use std::{
     fmt::Debug,
     future::Future,
-    ops::{
-        Deref,
-        Range,
-    },
+    ops::Range,
     sync::Arc,
 };
 use tokio::{
@@ -623,11 +620,6 @@ where
                 cached_view
                     .get_transactions(view, range)
                     .map_err(anyhow::Error::from)
-                    .map(|txs| {
-                        txs.map(|txs| {
-                            txs.into_iter().map(|tx| tx.deref().clone()).collect()
-                        })
-                    })
             },
             |response, request_id| TaskRequest::DatabaseTransactionsLookUp {
                 response,
@@ -650,14 +642,6 @@ where
                 cached_view
                     .get_sealed_headers(view, range)
                     .map_err(anyhow::Error::from)
-                    .map(|headers| {
-                        headers.map(|headers| {
-                            headers
-                                .into_iter()
-                                .map(|header| header.deref().clone())
-                                .collect()
-                        })
-                    })
             },
             |response, request_id| TaskRequest::DatabaseHeaderLookUp {
                 response,

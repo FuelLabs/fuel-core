@@ -41,9 +41,9 @@ libp2p = { version = "0.53.2", default-features = false, features = [
 libp2p-mplex = "0.41.0"
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
-quick_cache = "0.6.9"
 quick-protobuf = "0.8.1"
 quick-protobuf-codec = "0.3.0"
+quick_cache = "0.6.9"
 rand = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

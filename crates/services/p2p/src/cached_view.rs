@@ -9,10 +9,7 @@ use fuel_core_types::{
     services::p2p::Transactions,
 };
 use quick_cache::sync::Cache;
-use std::{
-    ops::Range,
-    sync::Arc,
-};
+use std::ops::Range;
 
 type BlockHeight = u32;
 
@@ -46,7 +43,7 @@ impl CachedView {
         view: &V,
         range: Range<u32>,
         fetch_fn: F,
-    ) -> StorageResult<Option<Vec<Arc<T>>>>
+    ) -> StorageResult<Option<Vec<T>>>
     where
         V: P2pDb,
         T: Clone,
@@ -57,7 +54,7 @@ impl CachedView {
 
         for height in range.clone() {
             if let Some(item) = cache.get(&height) {
-                items.push(item.into());
+                items.push(item);
             } else {
                 missing_start = Some(height);
                 break;
@@ -73,9 +70,9 @@ impl CachedView {
 
         self.update_metrics(increment_p2p_req_res_cache_misses);
         if let Some(fetched_items) = fetch_fn(view, missing_range.clone())? {
-            for (height, item) in missing_range.zip(fetched_items.iter()) {
+            for (height, item) in missing_range.zip(fetched_items.into_iter()) {
                 cache.insert(height, item.clone());
-                items.push(item.clone().into());
+                items.push(item);
             }
 
             return Ok(Some(items));
@@ -88,7 +85,7 @@ impl CachedView {
         &self,
         view: &V,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Option<Vec<Arc<SealedBlockHeader>>>>
+    ) -> StorageResult<Option<Vec<SealedBlockHeader>>>
     where
         V: P2pDb,
     {
@@ -104,7 +101,7 @@ impl CachedView {
         &self,
         view: &V,
         block_height_range: Range<u32>,
-    ) -> StorageResult<Option<Vec<Arc<Transactions>>>>
+    ) -> StorageResult<Option<Vec<Transactions>>>
     where
         V: P2pDb,
     {
@@ -182,7 +179,6 @@ mod tests {
 
         let block_height_range = 0..100;
         let sealed_headers = default_sealed_headers(block_height_range.clone());
-        let sealed_headers_heap = sealed_headers.iter().cloned().map(Arc::new).collect();
         for (block_height, header) in
             block_height_range.clone().zip(sealed_headers.iter())
         {
@@ -194,7 +190,7 @@ mod tests {
         let result = cached_view
             .get_sealed_headers(&db, block_height_range.clone())
             .unwrap();
-        assert_eq!(result, Some(sealed_headers_heap));
+        assert_eq!(result, Some(sealed_headers));
     }
 
     #[tokio::test]
@@ -211,14 +207,13 @@ mod tests {
         let notified = sender.notified();
         let block_height_range = 0..100;
         let sealed_headers = default_sealed_headers(block_height_range.clone());
-        let sealed_headers_heap = sealed_headers.iter().cloned().map(Arc::new).collect();
         let result = cached_view
             .get_sealed_headers(&db, block_height_range.clone())
             .unwrap();
 
         // then
         notified.await;
-        assert_eq!(result, Some(sealed_headers_heap));
+        assert_eq!(result, Some(sealed_headers));
     }
 
     #[tokio::test]
