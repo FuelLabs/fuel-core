@@ -23,8 +23,9 @@ use crate::{
     },
     graphql_api::storage::{
         balances::{
-            BalancesKey,
+            CoinBalancesKey,
             CoinBalances,
+            MessageBalance,
             MessageBalances,
             TotalBalanceAmount,
         },
@@ -211,22 +212,25 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     ) -> StorageResult<TotalBalanceAmount> {
         let coins = self
             .storage_as_ref::<CoinBalances>()
-            .get(&BalancesKey::new(owner, asset_id))?
+            .get(&CoinBalancesKey::new(owner, asset_id))?
             .unwrap_or_default()
             .into_owned() as TotalBalanceAmount;
 
         if base_asset_id == asset_id {
-            let messages = self
+            let MessageBalance {
+                retryable: _, // TODO[RC]: Handle this
+                non_retryable,
+            } = self
                 .storage_as_ref::<MessageBalances>()
                 .get(owner)?
                 .unwrap_or_default()
-                .into_owned() as TotalBalanceAmount;
+                .into_owned();
 
-            let total = coins.checked_add(messages).ok_or(anyhow::anyhow!(
-                "Total balance overflow: coins: {coins}, messages: {messages}"
+            let total = coins.checked_add(non_retryable).ok_or(anyhow::anyhow!(
+                "Total balance overflow: coins: {coins}, messages: {non_retryable}"
             ))?;
 
-            debug!(%coins, %messages, total, "total balance");
+            debug!(%coins, %non_retryable, total, "total balance");
             Ok(total)
         } else {
             debug!(%coins, "total balance");
@@ -254,12 +258,16 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         }
 
         if let Some(messages) = self.storage_as_ref::<MessageBalances>().get(owner)? {
+            let MessageBalance {
+                retryable: _,
+                non_retryable,
+            } = *messages;
             balances
                 .entry(*base_asset_id)
                 .and_modify(|current| {
-                    *current += *messages;
+                    *current += non_retryable;
                 })
-                .or_insert(*messages);
+                .or_insert(non_retryable);
         }
 
         Ok(balances)

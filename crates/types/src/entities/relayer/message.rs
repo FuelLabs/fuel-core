@@ -135,6 +135,11 @@ impl Message {
         }
     }
 
+    /// Returns true if the message has retryable amount.
+    pub fn has_retryable_amount(&self) -> bool {
+        !self.data().is_empty()
+    }
+
     /// Set the message data
     #[cfg(any(test, feature = "test-helpers"))]
     pub fn set_data(&mut self, data: Vec<u8>) {

@@ -2,8 +2,9 @@ use super::{
     da_compression::da_compress_block,
     storage::{
         balances::{
-            BalancesKey,
+            CoinBalancesKey,
             ItemAmount,
+            MessageBalance,
             TotalBalanceAmount,
         },
         old::{
@@ -206,88 +207,127 @@ where
     }
 }
 
-trait DatabaseItemWithAmount {
-    type Storage: Mappable;
+// TODO[RC]: A lot of duplication below, consider refactoring.
+fn increase_message_balance<T>(
+    block_st_transaction: &mut T,
+    message: &Message,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    let key = message.recipient();
+    let storage = block_st_transaction.storage::<MessageBalances>();
+    let MessageBalance {
+        mut retryable,
+        mut non_retryable,
+    } = *storage.get(&key)?.unwrap_or_default();
 
-    fn key(&self) -> <Self::Storage as Mappable>::Key;
-    fn amount(&self) -> ItemAmount;
+    if message.has_retryable_amount() {
+        retryable += message.amount() as u128;
+    } else {
+        non_retryable += message.amount() as u128;
+    }
+
+    let new_balance = MessageBalance {
+        retryable,
+        non_retryable,
+    };
+
+    let storage = block_st_transaction.storage::<MessageBalances>();
+    Ok(storage.insert(&key, &new_balance)?)
 }
 
-impl DatabaseItemWithAmount for &Coin {
-    type Storage = CoinBalances;
+fn decrease_message_balance<T>(
+    block_st_transaction: &mut T,
+    message: &Message,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    let key = message.recipient();
+    let storage = block_st_transaction.storage::<MessageBalances>();
+    let MessageBalance {
+        mut retryable,
+        mut non_retryable,
+    } = *storage.get(&key)?.unwrap_or_default();
 
-    fn key(&self) -> <Self::Storage as Mappable>::Key {
-        BalancesKey::new(&self.owner, &self.asset_id)
-    }
-
-    fn amount(&self) -> ItemAmount {
-        self.amount
-    }
-}
-
-impl DatabaseItemWithAmount for &Message {
-    type Storage = MessageBalances;
-
-    fn key(&self) -> <Self::Storage as Mappable>::Key {
-        *self.recipient()
-    }
-
-    fn amount(&self) -> ItemAmount {
-        (**self).amount()
-    }
-}
-
-trait BalanceIndexationUpdater: DatabaseItemWithAmount {
-    type TotalBalance: From<<Self::Storage as Mappable>::OwnedValue> + core::fmt::Display;
-
-    fn update_balances<T, UpdaterFn>(
-        &self,
-        tx: &mut T,
-        updater: UpdaterFn,
-    ) -> StorageResult<()>
-    where
-        <Self::Storage as Mappable>::Key: Sized + core::fmt::Display,
-        <Self::Storage as Mappable>::OwnedValue: Default + core::fmt::Display,
-        UpdaterFn: Fn(Self::TotalBalance, ItemAmount) -> Option<Self::TotalBalance>,
-        T: OffChainDatabaseTransaction + StorageMutate<Self::Storage>,
-        <Self::Storage as Mappable>::Value:
-            From<<Self as BalanceIndexationUpdater>::TotalBalance>,
-        fuel_core_storage::Error: From<<T as StorageInspect<Self::Storage>>::Error>,
-    {
-        let key = self.key();
-        let amount = self.amount();
-        let storage = tx.storage::<Self::Storage>();
-        let current_balance = storage.get(&key)?.unwrap_or_default();
-        let prev_balance = current_balance.clone();
-        match updater(current_balance.as_ref().clone().into(), amount) {
-            Some(new_balance) => {
-                debug!(
-                    %key,
-                    %amount,
-                    %prev_balance,
-                    %new_balance,
-                    "changing balance");
-
-                let storage = tx.storage::<Self::Storage>();
-                Ok(storage.insert(&key, &new_balance.into())?)
+    if message.has_retryable_amount() {
+        let maybe_new_amount = retryable.checked_sub(message.amount() as u128);
+        match maybe_new_amount {
+            Some(new_amount) => {
+                let storage = block_st_transaction.storage::<MessageBalances>();
+                let new_balance = MessageBalance {
+                    retryable: new_amount,
+                    non_retryable,
+                };
+                return Ok(storage.insert(&key, &new_balance)?);
             }
             None => {
-                error!(
-                    %key,
-                    %amount,
-                    %prev_balance,
-                    "unable to change balance due to overflow");
-                Err(anyhow::anyhow!("unable to change balance due to overflow").into())
+                error!(%retryable, amount=%message.amount(), "Retryable balance would go below 0");
+                return Ok(())
+            }
+        }
+    } else {
+        let maybe_new_amount = non_retryable.checked_sub(message.amount() as u128);
+        match maybe_new_amount {
+            Some(new_amount) => {
+                let storage = block_st_transaction.storage::<MessageBalances>();
+                let new_balance = MessageBalance {
+                    retryable: new_amount,
+                    non_retryable,
+                };
+                return Ok(storage.insert(&key, &new_balance)?);
+            }
+            None => {
+                error!(%retryable, amount=%message.amount(), "Non-retryable balance would go below 0");
+                return Ok(())
             }
         }
     }
 }
 
-impl BalanceIndexationUpdater for &Coin {
-    type TotalBalance = TotalBalanceAmount;
+fn increase_coin_balance<T>(
+    block_st_transaction: &mut T,
+    coin: &Coin,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    let key = CoinBalancesKey::new(&coin.owner, &coin.asset_id);
+    let storage = block_st_transaction.storage::<CoinBalances>();
+    let mut amount = *storage.get(&key)?.unwrap_or_default();
+    amount += coin.amount as u128;
+
+    let storage = block_st_transaction.storage::<CoinBalances>();
+    Ok(storage.insert(&key, &amount)?)
 }
-impl BalanceIndexationUpdater for &Message {
-    type TotalBalance = TotalBalanceAmount;
+
+fn decrease_coin_balance<T>(
+    block_st_transaction: &mut T,
+    coin: &Coin,
+) -> StorageResult<()>
+where
+    T: OffChainDatabaseTransaction,
+{
+    let key = CoinBalancesKey::new(&coin.owner, &coin.asset_id);
+    let storage = block_st_transaction.storage::<CoinBalances>();
+    let mut current_amount = *storage.get(&key)?.unwrap_or_default();
+
+    let maybe_new_amount = current_amount.checked_sub(coin.amount as u128);
+    match maybe_new_amount {
+        Some(new_amount) => {
+            let storage = block_st_transaction.storage::<CoinBalances>();
+            Ok(storage.insert(&key, &new_amount)?)
+        }
+        None => {
+            error!(
+                owner=%coin.owner,
+                asset_id=%coin.asset_id,
+                %current_amount,
+                coin_amount=%coin.amount, "Coin balance would go below 0");
+            Ok(())
+        }
+    }
 }
 
 fn process_balances_update<T>(
@@ -301,24 +341,21 @@ where
     if !balances_enabled {
         return Ok(());
     }
+
     match event {
-        Event::MessageImported(message) => message
-            .update_balances(block_st_transaction, |balance, amount| {
-                balance.checked_add(amount as TotalBalanceAmount)
-            }),
-        Event::MessageConsumed(message) => message
-            .update_balances(block_st_transaction, |balance, amount| {
-                balance.checked_sub(amount as TotalBalanceAmount)
-            }),
-        Event::CoinCreated(coin) => coin
-            .update_balances(block_st_transaction, |balance, amount| {
-                balance.checked_add(amount as TotalBalanceAmount)
-            }),
-        Event::CoinConsumed(coin) => coin
-            .update_balances(block_st_transaction, |balance, amount| {
-                balance.checked_sub(amount as TotalBalanceAmount)
-            }),
-        Event::ForcedTransactionFailed { .. } => Ok(()),
+        Event::MessageImported(message) => {
+            increase_message_balance(block_st_transaction, message)
+        }
+        Event::MessageConsumed(message) => {
+            decrease_message_balance(block_st_transaction, message)
+        }
+        Event::CoinCreated(coin) => increase_coin_balance(block_st_transaction, coin),
+        Event::CoinConsumed(coin) => decrease_coin_balance(block_st_transaction, coin),
+        Event::ForcedTransactionFailed {
+            id,
+            block_height,
+            failure,
+        } => Ok(()),
     }
 }
 
