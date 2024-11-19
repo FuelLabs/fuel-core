@@ -2,7 +2,7 @@
 source: crates/client/src/client/schema/block.rs
 expression: operation.query
 ---
-query($after: String, $before: String, $first: Int, $last: Int) {
+query BlocksQuery($after: String, $before: String, $first: Int, $last: Int) {
   blocks(after: $after, before: $before, first: $first, last: $last) {
     edges {
       cursor

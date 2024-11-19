@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `ConsensusParameters` graphql queries
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `Block` graphql queries
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `TransactionType` type in `fuel-client`
 - [2321](https://github.com/FuelLabs/fuel-core/pull/2321): New metrics for the TxPool:
     - The size of transactions in the txpool (`txpool_tx_size`)
     - The time spent by a transaction in the txpool in seconds (`txpool_tx_time_in_txpool_seconds`)
@@ -38,6 +41,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 #### Breaking
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2258): Updated the `messageProof` GraphQL schema to return a non-nullable `MessageProof`.
 
+#### Breaking
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Transaction graphql endpoints use `TransactionType` instead of `fuel_tx::Transaction`.
+
 ## [Version 0.40.0]
 
 ### Added
@@ -58,6 +64,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 #### Breaking
 - [2310](https://github.com/FuelLabs/fuel-core/pull/2310): The `metrics` command-line parameter has been replaced with `disable-metrics`. Metrics are now enabled by default, with the option to disable them entirely or on a per-module basis.
 - [2341](https://github.com/FuelLabs/fuel-core/pull/2341): The maximum number of processed coins from the `coins_to_spend` query is limited to `max_inputs`.
+
+### Fixed
+
+- [2352](https://github.com/FuelLabs/fuel-core/pull/2352): Cache p2p responses to serve without roundtrip to db.
 
 ## [Version 0.39.0]
 
