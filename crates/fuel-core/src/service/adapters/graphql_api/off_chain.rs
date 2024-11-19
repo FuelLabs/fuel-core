@@ -244,26 +244,22 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             let key = balance_key?;
             let asset_id = key.asset_id();
 
-            let messages = if base_asset_id == asset_id {
-                self.storage_as_ref::<MessageBalances>()
-                    .get(owner)?
-                    .unwrap_or_default()
-                    .into_owned() as TotalBalanceAmount
-            } else {
-                0
-            };
-
             let coins = self
                 .storage_as_ref::<CoinBalances>()
                 .get(&key)?
                 .unwrap_or_default()
                 .into_owned() as TotalBalanceAmount;
 
-            let total = coins.checked_add(messages).ok_or(anyhow::anyhow!(
-                "Total balance overflow: coins: {coins}, messages: {messages}"
-            ))?;
-            debug!(%owner, %asset_id, %total, "balance entry");
-            balances.insert(*asset_id, total);
+            balances.insert(asset_id.clone(), coins);
+        }
+
+        if let Some(messages) = self.storage_as_ref::<MessageBalances>().get(owner)? {
+            balances
+                .entry(*base_asset_id)
+                .and_modify(|current| {
+                    *current += *messages;
+                })
+                .or_insert(*messages);
         }
 
         Ok(balances)
