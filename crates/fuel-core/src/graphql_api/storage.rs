@@ -4,38 +4,25 @@ use crate::{
         coins::OwnedCoins,
         messages::OwnedMessageIds,
         transactions::{
-            OwnedTransactionIndexKey,
-            OwnedTransactions,
-            TransactionStatuses,
+            OwnedTransactionIndexKey, OwnedTransactions, TransactionStatuses,
         },
     },
     graphql_api::ports::worker::OffChainDatabaseTransaction,
 };
 use fuel_core_storage::{
-    kv_store::{
-        KeyValueInspect,
-        StorageColumn,
-    },
-    transactional::{
-        Modifiable,
-        StorageTransaction,
-    },
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsMut,
-    StorageAsRef,
+    kv_store::{KeyValueInspect, StorageColumn},
+    transactional::{Modifiable, StorageTransaction},
+    Error as StorageError, Result as StorageResult, StorageAsMut, StorageAsRef,
     StorageMutate,
 };
 use fuel_core_types::{
-    fuel_tx::{
-        Address,
-        Bytes32,
-    },
+    fuel_tx::{Address, Bytes32},
     fuel_types::BlockHeight,
     services::txpool::TransactionStatus,
 };
 use statistic::StatisticTable;
 
+pub mod assets;
 pub mod blocks;
 pub mod coins;
 pub mod contracts;
@@ -113,6 +100,8 @@ pub enum Column {
     DaCompressionTemporalRegistryScriptCode = 21,
     /// See [`DaCompressionTemporalRegistryPredicateCode`](da_compression::DaCompressionTemporalRegistryPredicateCode)
     DaCompressionTemporalRegistryPredicateCode = 22,
+    /// See [`AssetsInfo`](assets::AssetsInfo)
+    AssetsInfo = 23,
 }
 
 impl Column {
