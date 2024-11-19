@@ -524,10 +524,13 @@ where
                 version: Description::version(),
                 height: new_height,
             },
-            DatabaseMetadata::V2 { .. } => DatabaseMetadata::V2 {
+            DatabaseMetadata::V2 {
+                indexation_availability,
+                ..
+            } => DatabaseMetadata::V2 {
                 version: Description::version(),
                 height: new_height,
-                indexation_availability: IndexationKind::all().collect(),
+                indexation_availability: indexation_availability.clone(),
             },
         },
         None => DatabaseMetadata::V2 {
@@ -554,12 +557,6 @@ mod tests {
         database_description::DatabaseDescription,
         Database,
     };
-    use fuel_core_storage::{
-        kv_store::StorageColumn,
-        tables::FuelBlocks,
-        StorageAsMut,
-    };
-    use strum::EnumCount;
 
     fn column_keys_not_exceed_count<Description>()
     where
@@ -1118,7 +1115,10 @@ mod tests {
     }
 
     mod metadata {
-        use std::borrow::Cow;
+        use std::{
+            borrow::Cow,
+            collections::HashSet,
+        };
 
         use fuel_core_storage::kv_store::StorageColumn;
         use strum::EnumCount;
@@ -1210,10 +1210,12 @@ mod tests {
 
         #[test]
         fn update_metadata_preserves_v2() {
+            let available_indexation = HashSet::new();
+
             let current_metadata: DatabaseMetadata<HeightMock> = DatabaseMetadata::V2 {
                 version: MOCK_VERSION,
                 height: HeightMock(1),
-                indexation_availability: IndexationKind::all().collect(),
+                indexation_availability: available_indexation.clone(),
             };
             let new_metadata = update_metadata::<DatabaseDescriptionMock>(
                 Some(Cow::Borrowed(&current_metadata)),
@@ -1229,7 +1231,7 @@ mod tests {
                 } => {
                     assert_eq!(version, current_metadata.version());
                     assert_eq!(height, HeightMock(2));
-                    assert_eq!(indexation_availability, IndexationKind::all().collect());
+                    assert_eq!(indexation_availability, available_indexation);
                 }
             }
         }
