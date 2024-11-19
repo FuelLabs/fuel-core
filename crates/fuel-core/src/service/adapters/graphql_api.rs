@@ -33,7 +33,7 @@ use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     blockchain::{
         header::ConsensusParametersVersion,
-        primitives::BlockHeightQuery,
+        primitives::BlockAt,
     },
     entities::relayer::message::MerkleProof,
     fuel_tx::{
@@ -221,7 +221,7 @@ impl worker::BlockImporter for GraphQLBlockImporter {
 
     fn block_event_at_height(
         &self,
-        height: BlockHeightQuery,
+        height: BlockAt,
     ) -> anyhow::Result<SharedImportResult> {
         self.import_result_provider_adapter.result_at_height(height)
     }

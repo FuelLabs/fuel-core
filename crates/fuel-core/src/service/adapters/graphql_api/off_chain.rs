@@ -47,7 +47,7 @@ use fuel_core_types::{
         block::CompressedBlock,
         consensus::Consensus,
         primitives::{
-            BlockHeightQuery,
+            BlockAt,
             BlockId,
         },
     },
@@ -153,7 +153,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 
     fn old_blocks(
         &self,
-        height: BlockHeightQuery,
+        height: BlockAt,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>> {
         let height: Option<BlockHeight> = height.into();

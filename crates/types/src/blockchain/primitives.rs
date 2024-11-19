@@ -3,29 +3,13 @@
 use crate::{
     fuel_crypto,
     fuel_crypto::SecretKey,
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_types::{BlockHeight, Bytes32},
 };
 use core::array::TryFromSliceError;
 use derive_more::{
-    Add,
-    AsRef,
-    Deref,
-    Display,
-    From,
-    FromStr,
-    Into,
-    LowerHex,
-    Rem,
-    Sub,
-    UpperHex,
+    Add, AsRef, Deref, Display, From, FromStr, Into, LowerHex, Rem, Sub, UpperHex,
 };
-use secrecy::{
-    CloneableSecret,
-    DebugSecret,
-};
+use secrecy::{CloneableSecret, DebugSecret};
 use zeroize::Zeroize;
 
 #[cfg(feature = "alloc")]
@@ -185,27 +169,27 @@ impl TryFrom<&'_ [u8]> for BlockId {
 
 /// Represents either the Genesis Block or a block at a specific height
 #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub enum BlockHeightQuery {
+pub enum BlockAt {
     /// Block at a specific height
     Specific(BlockHeight),
     /// Genesis block
     Genesis,
 }
 
-impl From<BlockHeightQuery> for Option<BlockHeight> {
-    fn from(value: BlockHeightQuery) -> Self {
+impl From<BlockAt> for Option<BlockHeight> {
+    fn from(value: BlockAt) -> Self {
         match value {
-            BlockHeightQuery::Specific(block_height) => Some(block_height),
-            BlockHeightQuery::Genesis => None,
+            BlockAt::Specific(block_height) => Some(block_height),
+            BlockAt::Genesis => None,
         }
     }
 }
 
-impl From<Option<BlockHeight>> for BlockHeightQuery {
+impl From<Option<BlockHeight>> for BlockAt {
     fn from(value: Option<BlockHeight>) -> Self {
         match value {
-            Some(block_height) => BlockHeightQuery::Specific(block_height),
-            None => BlockHeightQuery::Genesis,
+            Some(block_height) => BlockAt::Specific(block_height),
+            None => BlockAt::Genesis,
         }
     }
 }

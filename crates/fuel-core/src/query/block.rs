@@ -7,7 +7,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        primitives::BlockHeightQuery,
+        primitives::BlockAt,
     },
     fuel_types::BlockHeight,
 };
@@ -24,7 +24,7 @@ impl ReadView {
 
     pub fn compressed_blocks(
         &self,
-        height: BlockHeightQuery,
+        height: BlockAt,
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<CompressedBlock>> + '_ {
         futures::stream::iter(self.blocks(height, direction)).yield_each(self.batch_size)
