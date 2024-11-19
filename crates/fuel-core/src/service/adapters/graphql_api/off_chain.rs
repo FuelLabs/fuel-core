@@ -265,7 +265,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             balances
                 .entry(*base_asset_id)
                 .and_modify(|current| {
-                    current.saturating_add(non_retryable);
+                    *current = current.saturating_add(non_retryable);
                 })
                 .or_insert(non_retryable);
         }

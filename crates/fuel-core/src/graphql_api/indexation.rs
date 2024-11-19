@@ -70,17 +70,16 @@ where
 {
     let key = message.recipient();
     let storage = block_st_transaction.storage::<MessageBalances>();
+    let current_balance = storage.get(&key)?.unwrap_or_default();
     let MessageBalance {
         mut retryable,
         mut non_retryable,
-    } = *storage.get(&key)?.unwrap_or_default();
-
+    } = *current_balance;
     if message.has_retryable_amount() {
-        retryable.saturating_add(message.amount() as u128);
+        retryable = retryable.saturating_add(message.amount() as u128);
     } else {
-        non_retryable.saturating_add(message.amount() as u128);
+        non_retryable = non_retryable.saturating_add(message.amount() as u128);
     }
-
     let new_balance = MessageBalance {
         retryable,
         non_retryable,
@@ -130,15 +129,15 @@ where
             Some(new_amount) => {
                 let storage = block_st_transaction.storage::<MessageBalances>();
                 let new_balance = MessageBalance {
-                    retryable: new_amount,
-                    non_retryable,
+                    retryable,
+                    non_retryable: new_amount,
                 };
                 return Ok(storage.insert(&key, &new_balance)?);
             }
             None => {
                 return Err(IndexationError::MessageBalanceWouldUnderflow {
                     owner: message.recipient().clone(),
-                    current_amount: retryable,
+                    current_amount: non_retryable,
                     requested_deduction: message.amount() as u128,
                     retryable: false,
                 });
@@ -156,11 +155,11 @@ where
 {
     let key = CoinBalancesKey::new(&coin.owner, &coin.asset_id);
     let storage = block_st_transaction.storage::<CoinBalances>();
-    let mut amount = *storage.get(&key)?.unwrap_or_default();
-    amount.saturating_add(coin.amount as u128);
+    let current_amount = *storage.get(&key)?.unwrap_or_default();
+    let new_amount = current_amount.saturating_add(coin.amount as u128);
 
     let storage = block_st_transaction.storage::<CoinBalances>();
-    Ok(storage.insert(&key, &amount)?)
+    Ok(storage.insert(&key, &new_amount)?)
 }
 
 fn decrease_coin_balance<T>(

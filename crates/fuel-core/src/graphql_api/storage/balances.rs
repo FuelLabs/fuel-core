@@ -57,7 +57,7 @@ impl TableWithBlueprint for CoinBalances {
     }
 }
 
-#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct MessageBalance {
     pub retryable: TotalBalanceAmount,
     pub non_retryable: TotalBalanceAmount,
