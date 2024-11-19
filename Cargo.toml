@@ -92,7 +92,7 @@ fuel-vm-private = { version = "0.58.2", package = "fuel-vm", default-features = 
 # Common dependencies
 anyhow = "1.0"
 async-trait = "0.1"
-cynic = { version = "2.2.1", features = ["http-reqwest"] }
+cynic = { version = "3.1.0", features = ["http-reqwest"] }
 clap = "4.4"
 derivative = { version = "2" }
 derive_more = { version = "0.99" }
@@ -119,7 +119,7 @@ serde_with = { version = "3.4", default-features = false }
 strum = { version = "0.25" }
 strum_macros = "0.25"
 # enable cookie store to support L7 sticky sessions
-reqwest = { version = "0.11.16", default-features = false, features = [
+reqwest = { version = "0.12.0", default-features = false, features = [
   "rustls-tls",
   "cookies",
 ] }
