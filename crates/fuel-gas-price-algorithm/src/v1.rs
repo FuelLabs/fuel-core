@@ -517,6 +517,8 @@ impl AlgorithmUpdaterV1 {
         recording_cost: u128,
     ) -> Result<(), Error> {
         let maybe_recorded_bytes = self.drain_l2_block_bytes_for_heights(heights);
+        // If we weren't able to get the bytes for all the heights, we can't update the cost per byte in a logical way.
+        // We will just accept the predicted cost as the real cost and move on with the algorithm
         if let Some(recorded_bytes) = maybe_recorded_bytes {
             let new_cost_per_byte: u128 = recording_cost
                 .checked_div(recorded_bytes)
@@ -533,6 +535,8 @@ impl AlgorithmUpdaterV1 {
         Ok(())
     }
 
+    // Get the bytes for all specified heights, or get none of them.
+    // Always remove the blocks from the unrecorded blocks so they don't build up indefinitely
     fn drain_l2_block_bytes_for_heights(&mut self, heights: &[u32]) -> Option<u128> {
         let mut should_ignore_batch = false;
         let mut total: u128 = 0;
