@@ -135,7 +135,7 @@ impl DaBlockCostsSource for FakeDABlockCost {
     }
 }
 
-fn arbitrary_config() -> V1AlgorithmConfig {
+fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
     V1AlgorithmConfig {
         new_exec_gas_price: 100,
         min_exec_gas_price: 0,
@@ -210,7 +210,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
     };
     let metadata_storage = FakeMetadata::empty();
 
-    let config = arbitrary_config();
+    let config = zero_threshold_arbitrary_config();
     let height = 0;
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
@@ -238,50 +238,49 @@ async fn next_gas_price__affected_by_new_l2_block() {
     assert_ne!(initial, new);
 }
 
-// #[tokio::test]
-// async fn next__new_l2_block_saves_old_metadata() {
-//     // given
-//     let l2_block = BlockInfo::Block {
-//         height: 1,
-//         gas_used: 60,
-//         block_gas_capacity: 100,
-//         block_bytes: 100,
-//         block_fees: 100,
-//     };
-//     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
-//     let l2_block_source = FakeL2BlockSource {
-//         l2_block: l2_block_receiver,
-//     };
-//     let metadata_inner = Arc::new(std::sync::Mutex::new(None));
-//     let metadata_storage = FakeMetadata {
-//         inner: metadata_inner.clone(),
-//     };
-//
-//     let config = arbitrary_config();
-//     let height = 0;
-//     let (algo_updater, shared_algo) =
-//         initialize_algorithm(&config, height, &metadata_storage).unwrap();
-//
-//     let mut service = GasPriceServiceV1::new(
-//         l2_block_source,
-//         metadata_storage,
-//         shared_algo,
-//         algo_updater,
-//     );
-//
-//     // when
-//     let read_algo = service.next_block_algorithm();
-//     let mut watcher = StateWatcher::default();
-//     let start = read_algo.next_gas_price();
-//
-//     service.run(&mut watcher).await.unwrap();
-//     l2_block_sender.send(l2_block).await.unwrap();
-//     service.shutdown().await.unwrap();
-//
-//     // then
-//     let new = read_algo.next_gas_price();
-//     assert_ne!(start, new);
-// }
+#[tokio::test]
+async fn run__new_l2_block_saves_old_metadata() {
+    // given
+    let l2_block = BlockInfo::Block {
+        height: 1,
+        gas_used: 60,
+        block_gas_capacity: 100,
+        block_bytes: 100,
+        block_fees: 100,
+    };
+    let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
+    let l2_block_source = FakeL2BlockSource {
+        l2_block: l2_block_receiver,
+    };
+    let metadata_inner = Arc::new(std::sync::Mutex::new(None));
+    let metadata_storage = FakeMetadata {
+        inner: metadata_inner.clone(),
+    };
+
+    let config = zero_threshold_arbitrary_config();
+    let height = 0;
+    let (algo_updater, shared_algo) =
+        initialize_algorithm(&config, height, &metadata_storage).unwrap();
+    let da_source = FakeDABlockCost;
+    let da_source_service = DaSourceService::new(da_source, None);
+    let mut service = GasPriceServiceV1::new(
+        l2_block_source,
+        metadata_storage,
+        shared_algo,
+        algo_updater,
+        da_source_service,
+    );
+    let mut watcher = StateWatcher::default();
+
+    // when
+    service.run(&mut watcher).await.unwrap();
+    l2_block_sender.send(l2_block).await.unwrap();
+    service.shutdown().await.unwrap();
+
+    // then
+    let metadata_is_some = metadata_inner.lock().unwrap().is_some();
+    assert!(metadata_is_some)
+}
 
 #[derive(Clone)]
 struct FakeSettings;
@@ -353,73 +352,80 @@ fn empty_block_stream() -> BoxStream<SharedImportResult> {
     tokio_stream::iter(blocks).into_boxed()
 }
 
-// #[tokio::test]
-// async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overrides() {
-//     // given
-//     let original_metadata = arbitrary_metadata();
-//     let original = UpdaterMetadata::V1(original_metadata.clone());
-//     let metadata_inner = Arc::new(std::sync::Mutex::new(Some(original.clone())));
-//     let metadata_storage = FakeMetadata {
-//         inner: metadata_inner,
-//     };
-//
-//     let different_config = different_arb_config();
-//     assert_ne!(
-//         different_config.starting_gas_price,
-//         original_metadata.new_exec_price
-//     );
-//     let different_l2_block = 1231;
-//     assert_ne!(different_l2_block, original_metadata.l2_block_height);
-//     let settings = FakeSettings;
-//     let block_stream = empty_block_stream();
-//     let gas_price_db = FakeGasPriceDb;
-//     let on_chain_db = FakeOnChainDb::new(different_l2_block);
-//
-//     // when
-//     let service = UninitializedTask::new(
-//         different_config,
-//         0.into(),
-//         settings,
-//         block_stream,
-//         gas_price_db,
-//         metadata_storage,
-//         on_chain_db,
-//     )
-//     .unwrap();
-//
-//     // then
-//     let V1Metadata {
-//         new_exec_price,
-//         l2_block_height,
-//     } = original_metadata;
-//     let UninitializedTask { algo_updater, .. } = service;
-//     assert_eq!(algo_updater.new_exec_price, new_exec_price);
-//     assert_eq!(algo_updater.l2_block_height, l2_block_height);
-// }
+#[tokio::test]
+async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overrides() {
+    // given
+    let original_metadata = arbitrary_metadata();
+    let original = UpdaterMetadata::V1(original_metadata.clone());
+    let metadata_inner = Arc::new(std::sync::Mutex::new(Some(original.clone())));
+    let metadata_storage = FakeMetadata {
+        inner: metadata_inner,
+    };
 
-// #[tokio::test]
-// async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
-//     // given
-//     let config = arbitrary_config();
-//     let different_l2_block = 1231;
-//     let metadata_storage = ErroringMetadata;
-//     let settings = FakeSettings;
-//     let block_stream = empty_block_stream();
-//     let gas_price_db = FakeGasPriceDb;
-//     let on_chain_db = FakeOnChainDb::new(different_l2_block);
-//
-//     // when
-//     let res = UninitializedTask::new(
-//         config,
-//         0.into(),
-//         settings,
-//         block_stream,
-//         gas_price_db,
-//         metadata_storage,
-//         on_chain_db,
-//     );
-//
-//     // then
-//     let is_err = res.is_err();
-//     assert!(is_err);
-// }
+    let different_config = different_arb_config();
+    let descaleed_exec_price =
+        original_metadata.new_scaled_exec_price / original_metadata.gas_price_factor;
+    assert_ne!(different_config.new_exec_gas_price, descaleed_exec_price);
+    let different_l2_block = 1231;
+    assert_ne!(different_l2_block, original_metadata.l2_block_height);
+    let settings = FakeSettings;
+    let block_stream = empty_block_stream();
+    let gas_price_db = FakeGasPriceDb;
+    let on_chain_db = FakeOnChainDb::new(different_l2_block);
+    let da_cost_source = FakeDABlockCost;
+
+    // when
+    let service = UninitializedTask::new(
+        different_config,
+        0.into(),
+        settings,
+        block_stream,
+        gas_price_db,
+        metadata_storage,
+        da_cost_source,
+        on_chain_db,
+    )
+    .unwrap();
+
+    // then
+    let V1Metadata {
+        new_scaled_exec_price: original_new_scaled_exec_price,
+        l2_block_height,
+        ..
+    } = original_metadata;
+    let UninitializedTask { algo_updater, .. } = service;
+    assert_eq!(
+        algo_updater.new_scaled_exec_price,
+        original_new_scaled_exec_price
+    );
+    assert_eq!(algo_updater.l2_block_height, l2_block_height);
+}
+
+#[tokio::test]
+async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
+    // given
+    let config = zero_threshold_arbitrary_config();
+    let different_l2_block = 1231;
+    let metadata_storage = ErroringMetadata;
+    let settings = FakeSettings;
+    let block_stream = empty_block_stream();
+    let gas_price_db = FakeGasPriceDb;
+    let on_chain_db = FakeOnChainDb::new(different_l2_block);
+    let da_cost_source = FakeDABlockCost;
+
+    // when
+    let res = UninitializedTask::new(
+        config,
+        0.into(),
+        settings,
+        block_stream,
+        gas_price_db,
+        metadata_storage,
+        da_cost_source,
+        on_chain_db,
+    );
+
+    // then
+    let is_err = res.is_err();
+    assert!(is_err);
+}
