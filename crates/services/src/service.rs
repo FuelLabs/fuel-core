@@ -120,12 +120,6 @@ impl From<Result<bool, anyhow::Error>> for TaskNextAction {
     }
 }
 
-impl From<anyhow::Error> for TaskNextAction {
-    fn from(e: anyhow::Error) -> Self {
-        TaskNextAction::ErrorContinue(e)
-    }
-}
-
 /// The trait is implemented by the service task and contains a single iteration of the infinity
 /// loop.
 #[async_trait::async_trait]

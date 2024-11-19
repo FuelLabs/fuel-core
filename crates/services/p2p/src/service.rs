@@ -879,8 +879,6 @@ where
     T: TxPool + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        tracing::debug!("P2P task is running");
-
         tokio::select! {
             biased;
 
@@ -945,7 +943,7 @@ where
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
                         let res = self.p2p_service.report_message(message, acceptance);
                         if let Err(err) = res {
-                            return err.into()
+                            return TaskNextAction::ErrorContinue(err)
                         }
                     }
                     Some(TaskRequest::RespondWithPeerReport { peer_id, score, reporting_service }) => {
@@ -1001,7 +999,7 @@ where
                     Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
                         let res = self.process_request(request_message, request_id);
                         if let Err(err) = res {
-                            return err.into()
+                            return TaskNextAction::ErrorContinue(err)
                         }
                     },
                     Some(FuelP2PEvent::NewSubscription { peer_id, tag }) => {
@@ -1723,7 +1721,7 @@ pub mod tests {
         )
         .await
         .unwrap();
-      
+
         // then
         watch_sender.send(State::Stopped).unwrap();
 
@@ -1838,7 +1836,7 @@ pub mod tests {
         watcher: &mut StateWatcher,
     ) -> (FuelPeerId, AppScore, String) {
         loop {
-            task.run(watcher).await.unwrap();
+            task.run(watcher).await;
             if let Ok((peer_id, recv_report, service)) = report_receiver.try_recv() {
                 return (peer_id, recv_report, service);
             }

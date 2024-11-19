@@ -567,9 +567,8 @@ where
                     // In the case of an error, shut down the service to avoid a huge
                     // de-synchronization between on-chain and off-chain databases.
                     if let Err(e) = result {
-                        tracing::error!("Error processing block: {:?}", e);
                         if self.continue_on_error {
-                            TaskNextAction::Continue
+                            TaskNextAction::ErrorContinue(e)
                         } else {
                             TaskNextAction::Stop
                         }

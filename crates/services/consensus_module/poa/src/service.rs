@@ -589,7 +589,7 @@ where
                     Err(err) => {
                         // Wait some time in case of error to avoid spamming retry block production
                         tokio::time::sleep(Duration::from_secs(1)).await;
-                        err.into()
+                        TaskNextAction::ErrorContinue(err)
                     }
                 }
             }
