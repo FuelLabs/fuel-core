@@ -1117,124 +1117,139 @@ mod tests {
         test(db);
     }
 
-    #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
-    struct HeightMock(u64);
-    impl DatabaseHeight for HeightMock {
-        fn as_u64(&self) -> u64 {
-            1
-        }
+    mod metadata {
+        use std::borrow::Cow;
 
-        fn advance_height(&self) -> Option<Self> {
-            None
-        }
+        use fuel_core_storage::kv_store::StorageColumn;
+        use strum::EnumCount;
 
-        fn rollback_height(&self) -> Option<Self> {
-            None
-        }
-    }
-
-    const MOCK_VERSION: u32 = 0;
-
-    #[derive(EnumCount, enum_iterator::Sequence, Debug, Clone, Copy)]
-    enum ColumnMock {
-        Column1,
-    }
-
-    impl StorageColumn for ColumnMock {
-        fn name(&self) -> String {
-            "column".to_string()
-        }
-
-        fn id(&self) -> u32 {
-            42
-        }
-    }
-
-    #[derive(Debug, Clone, Copy)]
-    struct DatabaseDescriptionMock;
-    impl DatabaseDescription for DatabaseDescriptionMock {
-        type Column = ColumnMock;
-
-        type Height = HeightMock;
-
-        fn version() -> u32 {
-            MOCK_VERSION
-        }
-
-        fn name() -> String {
-            "mock".to_string()
-        }
-
-        fn metadata_column() -> Self::Column {
-            Self::Column::Column1
-        }
-
-        fn prefix(_: &Self::Column) -> Option<usize> {
-            None
-        }
-    }
-
-    #[test]
-    fn update_metadata_preserves_v1() {
-        let current_metadata: DatabaseMetadata<HeightMock> = DatabaseMetadata::V1 {
-            version: MOCK_VERSION,
-            height: HeightMock(1),
+        use super::{
+            database_description::DatabaseDescription,
+            update_metadata,
+            DatabaseHeight,
+            DatabaseMetadata,
+            IndexationKind,
         };
-        let new_metadata = update_metadata::<DatabaseDescriptionMock>(
-            Some(Cow::Borrowed(&current_metadata)),
-            HeightMock(2),
-        );
 
-        match new_metadata {
-            DatabaseMetadata::V1 { version, height } => {
-                assert_eq!(version, current_metadata.version());
-                assert_eq!(height, HeightMock(2));
+        #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+        struct HeightMock(u64);
+        impl DatabaseHeight for HeightMock {
+            fn as_u64(&self) -> u64 {
+                1
             }
-            DatabaseMetadata::V2 { .. } => panic!("should be V1"),
-        }
-    }
 
-    #[test]
-    fn update_metadata_preserves_v2() {
-        let current_metadata: DatabaseMetadata<HeightMock> = DatabaseMetadata::V2 {
-            version: MOCK_VERSION,
-            height: HeightMock(1),
-            indexation_availability: IndexationKind::all().collect(),
-        };
-        let new_metadata = update_metadata::<DatabaseDescriptionMock>(
-            Some(Cow::Borrowed(&current_metadata)),
-            HeightMock(2),
-        );
+            fn advance_height(&self) -> Option<Self> {
+                None
+            }
 
-        match new_metadata {
-            DatabaseMetadata::V1 { .. } => panic!("should be V2"),
-            DatabaseMetadata::V2 {
-                version,
-                height,
-                indexation_availability,
-            } => {
-                assert_eq!(version, current_metadata.version());
-                assert_eq!(height, HeightMock(2));
-                assert_eq!(indexation_availability, IndexationKind::all().collect());
+            fn rollback_height(&self) -> Option<Self> {
+                None
             }
         }
-    }
 
-    #[test]
-    fn update_metadata_none_becomes_v2() {
-        let new_metadata =
-            update_metadata::<DatabaseDescriptionMock>(None, HeightMock(2));
+        const MOCK_VERSION: u32 = 0;
 
-        match new_metadata {
-            DatabaseMetadata::V1 { .. } => panic!("should be V2"),
-            DatabaseMetadata::V2 {
-                version,
-                height,
-                indexation_availability,
-            } => {
-                assert_eq!(version, MOCK_VERSION);
-                assert_eq!(height, HeightMock(2));
-                assert_eq!(indexation_availability, IndexationKind::all().collect());
+        #[derive(EnumCount, enum_iterator::Sequence, Debug, Clone, Copy)]
+        enum ColumnMock {
+            Column1,
+        }
+
+        impl StorageColumn for ColumnMock {
+            fn name(&self) -> String {
+                "column".to_string()
+            }
+
+            fn id(&self) -> u32 {
+                42
+            }
+        }
+
+        #[derive(Debug, Clone, Copy)]
+        struct DatabaseDescriptionMock;
+        impl DatabaseDescription for DatabaseDescriptionMock {
+            type Column = ColumnMock;
+
+            type Height = HeightMock;
+
+            fn version() -> u32 {
+                MOCK_VERSION
+            }
+
+            fn name() -> String {
+                "mock".to_string()
+            }
+
+            fn metadata_column() -> Self::Column {
+                Self::Column::Column1
+            }
+
+            fn prefix(_: &Self::Column) -> Option<usize> {
+                None
+            }
+        }
+
+        #[test]
+        fn update_metadata_preserves_v1() {
+            let current_metadata: DatabaseMetadata<HeightMock> = DatabaseMetadata::V1 {
+                version: MOCK_VERSION,
+                height: HeightMock(1),
+            };
+            let new_metadata = update_metadata::<DatabaseDescriptionMock>(
+                Some(Cow::Borrowed(&current_metadata)),
+                HeightMock(2),
+            );
+
+            match new_metadata {
+                DatabaseMetadata::V1 { version, height } => {
+                    assert_eq!(version, current_metadata.version());
+                    assert_eq!(height, HeightMock(2));
+                }
+                DatabaseMetadata::V2 { .. } => panic!("should be V1"),
+            }
+        }
+
+        #[test]
+        fn update_metadata_preserves_v2() {
+            let current_metadata: DatabaseMetadata<HeightMock> = DatabaseMetadata::V2 {
+                version: MOCK_VERSION,
+                height: HeightMock(1),
+                indexation_availability: IndexationKind::all().collect(),
+            };
+            let new_metadata = update_metadata::<DatabaseDescriptionMock>(
+                Some(Cow::Borrowed(&current_metadata)),
+                HeightMock(2),
+            );
+
+            match new_metadata {
+                DatabaseMetadata::V1 { .. } => panic!("should be V2"),
+                DatabaseMetadata::V2 {
+                    version,
+                    height,
+                    indexation_availability,
+                } => {
+                    assert_eq!(version, current_metadata.version());
+                    assert_eq!(height, HeightMock(2));
+                    assert_eq!(indexation_availability, IndexationKind::all().collect());
+                }
+            }
+        }
+
+        #[test]
+        fn update_metadata_none_becomes_v2() {
+            let new_metadata =
+                update_metadata::<DatabaseDescriptionMock>(None, HeightMock(2));
+
+            match new_metadata {
+                DatabaseMetadata::V1 { .. } => panic!("should be V2"),
+                DatabaseMetadata::V2 {
+                    version,
+                    height,
+                    indexation_availability,
+                } => {
+                    assert_eq!(version, MOCK_VERSION);
+                    assert_eq!(height, HeightMock(2));
+                    assert_eq!(indexation_availability, IndexationKind::all().collect());
+                }
             }
         }
     }
