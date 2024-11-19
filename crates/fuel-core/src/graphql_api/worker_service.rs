@@ -81,6 +81,8 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
+        Address,
+        AssetId,
         Contract,
         Input,
         Output,
@@ -207,11 +209,43 @@ where
     }
 }
 
+#[derive(derive_more::From, derive_more::Display)]
+enum IndexationError {
+    #[display(
+        fmt = "Coin balance would underflow for owner: {}, asset_id: {}, current_amount: {}, requested_deduction: {}",
+        owner,
+        asset_id,
+        current_amount,
+        requested_deduction
+    )]
+    CoinBalanceWouldUnderflow {
+        owner: Address,
+        asset_id: AssetId,
+        current_amount: u128,
+        requested_deduction: u128,
+    },
+    #[display(
+        fmt = "Message balance would underflow for owner: {}, current_amount: {}, requested_deduction: {}, retryable: {}",
+        owner,
+        current_amount,
+        requested_deduction,
+        retryable
+    )]
+    MessageBalanceWouldUnderflow {
+        owner: Address,
+        current_amount: u128,
+        requested_deduction: u128,
+        retryable: bool,
+    },
+    #[from]
+    StorageError(StorageError),
+}
+
 // TODO[RC]: A lot of duplication below, consider refactoring.
 fn increase_message_balance<T>(
     block_st_transaction: &mut T,
     message: &Message,
-) -> StorageResult<()>
+) -> Result<(), IndexationError>
 where
     T: OffChainDatabaseTransaction,
 {
@@ -240,7 +274,7 @@ where
 fn decrease_message_balance<T>(
     block_st_transaction: &mut T,
     message: &Message,
-) -> StorageResult<()>
+) -> Result<(), IndexationError>
 where
     T: OffChainDatabaseTransaction,
 {
@@ -263,8 +297,12 @@ where
                 return Ok(storage.insert(&key, &new_balance)?);
             }
             None => {
-                error!(%retryable, amount=%message.amount(), "Retryable balance would go below 0");
-                return Ok(())
+                return Err(IndexationError::MessageBalanceWouldUnderflow {
+                    owner: message.recipient().clone(),
+                    current_amount: retryable,
+                    requested_deduction: message.amount() as u128,
+                    retryable: true,
+                });
             }
         }
     } else {
@@ -279,8 +317,12 @@ where
                 return Ok(storage.insert(&key, &new_balance)?);
             }
             None => {
-                error!(%retryable, amount=%message.amount(), "Non-retryable balance would go below 0");
-                return Ok(())
+                return Err(IndexationError::MessageBalanceWouldUnderflow {
+                    owner: message.recipient().clone(),
+                    current_amount: retryable,
+                    requested_deduction: message.amount() as u128,
+                    retryable: false,
+                });
             }
         }
     }
@@ -289,7 +331,7 @@ where
 fn increase_coin_balance<T>(
     block_st_transaction: &mut T,
     coin: &Coin,
-) -> StorageResult<()>
+) -> Result<(), IndexationError>
 where
     T: OffChainDatabaseTransaction,
 {
@@ -305,7 +347,7 @@ where
 fn decrease_coin_balance<T>(
     block_st_transaction: &mut T,
     coin: &Coin,
-) -> StorageResult<()>
+) -> Result<(), IndexationError>
 where
     T: OffChainDatabaseTransaction,
 {
@@ -319,14 +361,12 @@ where
             let storage = block_st_transaction.storage::<CoinBalances>();
             Ok(storage.insert(&key, &new_amount)?)
         }
-        None => {
-            error!(
-                owner=%coin.owner,
-                asset_id=%coin.asset_id,
-                %current_amount,
-                coin_amount=%coin.amount, "Coin balance would go below 0");
-            Ok(())
-        }
+        None => Err(IndexationError::CoinBalanceWouldUnderflow {
+            owner: coin.owner.clone(),
+            asset_id: coin.asset_id.clone(),
+            current_amount,
+            requested_deduction: coin.amount as u128,
+        }),
     }
 }
 
@@ -334,7 +374,7 @@ fn process_balances_update<T>(
     event: &Event,
     block_st_transaction: &mut T,
     balances_enabled: bool,
-) -> StorageResult<()>
+) -> Result<(), IndexationError>
 where
     T: OffChainDatabaseTransaction,
 {
@@ -370,12 +410,22 @@ where
     T: OffChainDatabaseTransaction,
 {
     for event in events {
-        if let Err(err) =
-            process_balances_update(event.deref(), block_st_transaction, balances_enabled)
-        {
-            // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
-            tracing::error!(%err, "Processing balances")
+        match process_balances_update(
+            event.deref(),
+            block_st_transaction,
+            balances_enabled,
+        ) {
+            Ok(()) => (),
+            Err(IndexationError::StorageError(err)) => {
+                return Err(err.into());
+            }
+            Err(err @ IndexationError::CoinBalanceWouldUnderflow { .. })
+            | Err(err @ IndexationError::MessageBalanceWouldUnderflow { .. }) => {
+                // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
+                error!("Balances underflow detected: {}", err);
+            }
         }
+
         match event.deref() {
             Event::MessageImported(message) => {
                 block_st_transaction
