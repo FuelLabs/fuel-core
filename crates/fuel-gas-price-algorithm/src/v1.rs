@@ -516,36 +516,46 @@ impl AlgorithmUpdaterV1 {
         heights: &[u32],
         recording_cost: u128,
     ) -> Result<(), Error> {
-        let recorded_bytes = self.drain_l2_block_bytes_for_heights(heights)?;
-        let new_cost_per_byte: u128 = recording_cost.checked_div(recorded_bytes).ok_or(
-            Error::CouldNotCalculateCostPerByte {
-                bytes: recorded_bytes,
-                cost: recording_cost,
-            },
-        )?;
-        let new_da_block_cost = self
-            .latest_known_total_da_cost_excess
-            .saturating_add(recording_cost);
-        self.latest_known_total_da_cost_excess = new_da_block_cost;
-        self.latest_da_cost_per_byte = new_cost_per_byte;
+        let maybe_recorded_bytes = self.drain_l2_block_bytes_for_heights(heights);
+        if let Some(recorded_bytes) = maybe_recorded_bytes {
+            let new_cost_per_byte: u128 = recording_cost
+                .checked_div(recorded_bytes)
+                .ok_or(Error::CouldNotCalculateCostPerByte {
+                    bytes: recorded_bytes,
+                    cost: recording_cost,
+                })?;
+            let new_da_block_cost = self
+                .latest_known_total_da_cost_excess
+                .saturating_add(recording_cost);
+            self.latest_known_total_da_cost_excess = new_da_block_cost;
+            self.latest_da_cost_per_byte = new_cost_per_byte;
+        }
         Ok(())
     }
 
-    fn drain_l2_block_bytes_for_heights(
-        &mut self,
-        heights: &[u32],
-    ) -> Result<u128, Error> {
+    fn drain_l2_block_bytes_for_heights(&mut self, heights: &[u32]) -> Option<u128> {
+        let mut should_ignore_batch = false;
         let mut total: u128 = 0;
         for expected_height in heights {
-            let bytes = self.unrecorded_blocks.remove(expected_height).ok_or(
-                Error::L2BlockExpectedNotFound {
-                    height: *expected_height,
-                },
-            )?;
-            total = total.saturating_add(bytes as u128);
+            let maybe_bytes = self.unrecorded_blocks.remove(expected_height);
+            if let Some(bytes) = maybe_bytes {
+                total = total.saturating_add(bytes as u128);
+            } else {
+                tracing::error!(
+                    "L2 block expected but not found in unrecorded blocks: {}. Ignoring batch of heights: {:?}",
+                    expected_height,
+                    heights,
+                );
+                should_ignore_batch = true;
+            }
         }
-        self.unrecorded_blocks_bytes = self.unrecorded_blocks_bytes.saturating_sub(total);
-        Ok(total)
+        if should_ignore_batch {
+            None
+        } else {
+            self.unrecorded_blocks_bytes =
+                self.unrecorded_blocks_bytes.saturating_sub(total);
+            Some(total)
+        }
     }
 
     fn recalculate_projected_cost(&mut self) {
