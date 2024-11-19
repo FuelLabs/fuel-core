@@ -62,14 +62,11 @@ use fuel_core_types::{
         SharedImportResult,
     },
 };
+use fuel_gas_price_algorithm::v1::AlgorithmUpdaterV1;
 use std::{
-    num::{
-        NonZero,
-        NonZeroU64,
-    },
+    num::NonZeroU64,
     ops::Deref,
     sync::Arc,
-    time::Duration,
 };
 use tokio::sync::mpsc::Receiver;
 
@@ -126,12 +123,28 @@ impl MetadataStorage for ErroringMetadata {
     }
 }
 
-struct FakeDABlockCost;
+struct FakeDABlockCost {
+    da_block_costs: Receiver<DaBlockCosts>,
+}
+
+impl FakeDABlockCost {
+    fn never_returns() -> Self {
+        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+        Self {
+            da_block_costs: receiver,
+        }
+    }
+
+    fn new(da_block_costs: Receiver<DaBlockCosts>) -> Self {
+        Self { da_block_costs }
+    }
+}
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for FakeDABlockCost {
     async fn request_da_block_cost(&mut self) -> anyhow::Result<DaBlockCosts> {
-        todo!()
+        let costs = self.da_block_costs.recv().await.unwrap();
+        Ok(costs)
     }
 }
 
@@ -190,12 +203,6 @@ fn different_arb_config() -> V1AlgorithmConfig {
 
 #[tokio::test]
 async fn next_gas_price__affected_by_new_l2_block() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .try_init();
-
-    tracing::debug!("test test test test");
-
     // given
     let l2_block = BlockInfo::Block {
         height: 1,
@@ -214,7 +221,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let height = 0;
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
-    let da_source = FakeDABlockCost;
+    let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
@@ -261,7 +268,7 @@ async fn run__new_l2_block_saves_old_metadata() {
     let height = 0;
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
-    let da_source = FakeDABlockCost;
+    let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
@@ -372,7 +379,7 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let block_stream = empty_block_stream();
     let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
-    let da_cost_source = FakeDABlockCost;
+    let da_cost_source = FakeDABlockCost::never_returns();
 
     // when
     let service = UninitializedTask::new(
@@ -388,17 +395,60 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     .unwrap();
 
     // then
+    let UninitializedTask { algo_updater, .. } = service;
+    algo_updater_matches_values_from_old_metadata(algo_updater, original_metadata);
+}
+
+fn algo_updater_matches_values_from_old_metadata(
+    algo_updater: AlgorithmUpdaterV1,
+    original_metadata: V1Metadata,
+) {
     let V1Metadata {
         new_scaled_exec_price: original_new_scaled_exec_price,
-        l2_block_height,
-        ..
+        l2_block_height: original_l2_block_height,
+        new_scaled_da_gas_price: original_new_scaled_da_gas_price,
+        gas_price_factor: original_gas_price_factor,
+        total_da_rewards_excess: original_total_da_rewards_excess,
+        latest_known_total_da_cost_excess: original_latest_known_total_da_cost_excess,
+        last_profit: original_last_profit,
+        second_to_last_profit: original_second_to_last_profit,
+        latest_da_cost_per_byte: original_latest_da_cost_per_byte,
+        unrecorded_blocks: original_unrecorded_blocks,
     } = original_metadata;
-    let UninitializedTask { algo_updater, .. } = service;
     assert_eq!(
         algo_updater.new_scaled_exec_price,
         original_new_scaled_exec_price
     );
-    assert_eq!(algo_updater.l2_block_height, l2_block_height);
+    assert_eq!(algo_updater.l2_block_height, original_l2_block_height);
+    assert_eq!(
+        algo_updater.new_scaled_da_gas_price,
+        original_new_scaled_da_gas_price
+    );
+    assert_eq!(algo_updater.gas_price_factor, original_gas_price_factor);
+    assert_eq!(
+        algo_updater.total_da_rewards_excess,
+        original_total_da_rewards_excess
+    );
+    assert_eq!(
+        algo_updater.latest_known_total_da_cost_excess,
+        original_latest_known_total_da_cost_excess
+    );
+    assert_eq!(algo_updater.last_profit, original_last_profit);
+    assert_eq!(
+        algo_updater.second_to_last_profit,
+        original_second_to_last_profit
+    );
+    assert_eq!(
+        algo_updater.latest_da_cost_per_byte,
+        original_latest_da_cost_per_byte
+    );
+    assert_eq!(
+        algo_updater
+            .unrecorded_blocks
+            .into_iter()
+            .collect::<Vec<_>>(),
+        original_unrecorded_blocks.into_iter().collect::<Vec<_>>()
+    );
 }
 
 #[tokio::test]
@@ -411,7 +461,7 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     let block_stream = empty_block_stream();
     let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
-    let da_cost_source = FakeDABlockCost;
+    let da_cost_source = FakeDABlockCost::never_returns();
 
     // when
     let res = UninitializedTask::new(

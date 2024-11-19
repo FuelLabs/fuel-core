@@ -27,7 +27,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = "0.3.18"
 
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
