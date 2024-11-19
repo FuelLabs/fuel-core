@@ -169,7 +169,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
 
     let read_algo = service.next_block_algorithm();
     let initial = read_algo.next_gas_price();
-    let mut watcher = StateWatcher::default();
+    let mut watcher = StateWatcher::started();
 
     // when
     service.run(&mut watcher).await.unwrap();
