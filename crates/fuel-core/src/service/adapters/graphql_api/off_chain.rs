@@ -23,8 +23,8 @@ use crate::{
     },
     graphql_api::storage::{
         balances::{
-            CoinBalancesKey,
             CoinBalances,
+            CoinBalancesKey,
             MessageBalance,
             MessageBalances,
             TotalBalanceAmount,
@@ -265,7 +265,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             balances
                 .entry(*base_asset_id)
                 .and_modify(|current| {
-                    *current += non_retryable;
+                    current.saturating_add(non_retryable);
                 })
                 .or_insert(non_retryable);
         }
