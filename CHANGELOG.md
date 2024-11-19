@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `ConsensusParameters` graphql queries
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `Block` graphql queries
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `TransactionType` type in `fuel-client`
 - [2321](https://github.com/FuelLabs/fuel-core/pull/2321): New metrics for the TxPool:
     - The size of transactions in the txpool (`txpool_tx_size`)
     - The time spent by a transaction in the txpool in seconds (`txpool_tx_time_in_txpool_seconds`)
@@ -36,6 +39,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 #### Breaking
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2258): Updated the `messageProof` GraphQL schema to return a non-nullable `MessageProof`.
+
+#### Breaking
+- [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Transaction graphql endpoints use `TransactionType` instead of `fuel_tx::Transaction`.
 
 ## [Version 0.40.0]
 

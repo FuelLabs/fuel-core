@@ -355,6 +355,7 @@ mod full_block {
         schema::{
             block::{
                 BlockByHeightArgs,
+                BlockByHeightArgsFields,
                 Consensus,
                 Header,
             },
