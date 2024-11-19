@@ -502,7 +502,6 @@ async fn interval_trigger_even_if_queued_tx_events() {
     let block_creation_waiter = block_creation_notifier.clone();
     tokio::task::spawn(async move {
         ctx.block_import.recv().await.unwrap();
-        dbg!("First block produced");
         block_creation_notifier.notify_waiters();
     });
     block_creation_waiter.notified().await;
