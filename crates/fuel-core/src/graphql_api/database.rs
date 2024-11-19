@@ -189,10 +189,7 @@ impl ReadView {
                 (true, IterDirection::Reverse) => self
                     .on_chain
                     .blocks(height, direction)
-                    .chain(
-                        self.off_chain
-                            .old_blocks(BlockAt::Genesis, direction),
-                    )
+                    .chain(self.off_chain.old_blocks(BlockAt::Genesis, direction))
                     .into_boxed(),
                 (false, IterDirection::Forward) => self
                     .off_chain
@@ -213,10 +210,7 @@ impl ReadView {
                 IterDirection::Reverse => self
                     .on_chain
                     .blocks(BlockAt::Genesis, direction)
-                    .chain(
-                        self.off_chain
-                            .old_blocks(BlockAt::Genesis, direction),
-                    )
+                    .chain(self.off_chain.old_blocks(BlockAt::Genesis, direction))
                     .into_boxed(),
             }
         }
