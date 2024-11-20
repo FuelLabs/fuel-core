@@ -3,18 +3,10 @@ use self::indexation::IndexationError;
 use super::{
     da_compression::da_compress_block,
     indexation,
-    storage::{
-        balances::{
-            CoinBalancesKey,
-            ItemAmount,
-            MessageBalance,
-            TotalBalanceAmount,
-        },
-        old::{
-            OldFuelBlockConsensus,
-            OldFuelBlocks,
-            OldTransactions,
-        },
+    storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
     },
 };
 use crate::{
@@ -24,10 +16,6 @@ use crate::{
             worker::OffChainDatabaseTransaction,
         },
         storage::{
-            balances::{
-                CoinBalances,
-                MessageBalances,
-            },
             blocks::FuelBlockIdsToHeights,
             coins::{
                 owner_coin_id_key,
@@ -54,11 +42,8 @@ use fuel_core_services::{
 };
 use fuel_core_storage::{
     Error as StorageError,
-    Mappable,
     Result as StorageResult,
     StorageAsMut,
-    StorageInspect,
-    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::{
@@ -68,11 +53,7 @@ use fuel_core_types::{
         },
         consensus::Consensus,
     },
-    entities::{
-        coins::coin::Coin,
-        relayer::transaction::RelayedTransactionStatus,
-        Message,
-    },
+    entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
         field::{
             Inputs,
@@ -84,8 +65,6 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
-        Address,
-        AssetId,
         Contract,
         Input,
         Output,
@@ -119,7 +98,6 @@ use std::{
     ops::Deref,
 };
 use tracing::{
-    debug,
     error,
     info,
 };

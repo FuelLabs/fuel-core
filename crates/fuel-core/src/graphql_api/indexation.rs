@@ -1,10 +1,6 @@
 use fuel_core_storage::{
     Error as StorageError,
-    Mappable,
-    Result as StorageResult,
     StorageAsMut,
-    StorageInspect,
-    StorageMutate,
 };
 use fuel_core_types::{
     entities::{
@@ -69,7 +65,7 @@ where
 {
     let key = message.recipient();
     let storage = block_st_transaction.storage::<MessageBalances>();
-    let current_balance = storage.get(&key)?.unwrap_or_default();
+    let current_balance = storage.get(key)?.unwrap_or_default();
     let MessageBalance {
         mut retryable,
         mut non_retryable,
@@ -85,7 +81,7 @@ where
     };
 
     let storage = block_st_transaction.storage::<MessageBalances>();
-    Ok(storage.insert(&key, &new_balance)?)
+    Ok(storage.insert(key, &new_balance)?)
 }
 
 fn decrease_message_balance<T>(
@@ -98,9 +94,9 @@ where
     let key = message.recipient();
     let storage = block_st_transaction.storage::<MessageBalances>();
     let MessageBalance {
-        mut retryable,
-        mut non_retryable,
-    } = *storage.get(&key)?.unwrap_or_default();
+        retryable,
+        non_retryable,
+    } = *storage.get(key)?.unwrap_or_default();
     let current_balance = if message.has_retryable_amount() {
         retryable
     } else {
@@ -110,7 +106,7 @@ where
     current_balance
         .checked_sub(message.amount() as u128)
         .ok_or_else(|| IndexationError::MessageBalanceWouldUnderflow {
-            owner: message.recipient().clone(),
+            owner: *message.recipient(),
             current_amount: current_balance,
             requested_deduction: message.amount() as u128,
             retryable: message.has_retryable_amount(),
@@ -128,7 +124,7 @@ where
                     non_retryable: new_amount,
                 }
             };
-            storage.insert(&key, &new_balance).map_err(Into::into)
+            storage.insert(key, &new_balance).map_err(Into::into)
         })
 }
 
@@ -157,13 +153,13 @@ where
 {
     let key = CoinBalancesKey::new(&coin.owner, &coin.asset_id);
     let storage = block_st_transaction.storage::<CoinBalances>();
-    let mut current_amount = *storage.get(&key)?.unwrap_or_default();
+    let current_amount = *storage.get(&key)?.unwrap_or_default();
 
     current_amount
         .checked_sub(coin.amount as u128)
         .ok_or_else(|| IndexationError::CoinBalanceWouldUnderflow {
-            owner: coin.owner.clone(),
-            asset_id: coin.asset_id.clone(),
+            owner: coin.owner,
+            asset_id: coin.asset_id,
             current_amount,
             requested_deduction: coin.amount as u128,
         })
@@ -196,20 +192,12 @@ where
         }
         Event::CoinCreated(coin) => increase_coin_balance(block_st_transaction, coin),
         Event::CoinConsumed(coin) => decrease_coin_balance(block_st_transaction, coin),
-        Event::ForcedTransactionFailed {
-            id,
-            block_height,
-            failure,
-        } => Ok(()),
+        Event::ForcedTransactionFailed { .. } => Ok(()),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_chain_config::{
-        CoinConfig,
-        CoinConfigGenerator,
-    };
     use fuel_core_storage::{
         transactional::WriteTransaction,
         StorageAsMut,
@@ -297,9 +285,9 @@ mod tests {
     fn make_coin(owner: &Address, asset_id: &AssetId, amount: u64) -> Coin {
         Coin {
             utxo_id: Default::default(),
-            owner: owner.clone(),
+            owner: *owner,
             amount,
-            asset_id: asset_id.clone(),
+            asset_id: *asset_id,
             tx_pointer: Default::default(),
         }
     }
@@ -307,7 +295,7 @@ mod tests {
     fn make_retryable_message(owner: &Address, amount: u64) -> Message {
         Message::V1(MessageV1 {
             sender: Default::default(),
-            recipient: owner.clone(),
+            recipient: *owner,
             nonce: Default::default(),
             amount,
             data: vec![1],
@@ -608,8 +596,7 @@ mod tests {
 
         // Make the initial balance huge
         let key = CoinBalancesKey::new(&owner, &asset_id);
-        let balance = tx
-            .storage::<CoinBalances>()
+        tx.storage::<CoinBalances>()
             .insert(&key, &u128::MAX)
             .expect("should correctly query db");
 
@@ -645,8 +632,7 @@ mod tests {
         let owner = Address::from([1; 32]);
 
         // Make the initial balance huge
-        let balance = tx
-            .storage::<MessageBalances>()
+        tx.storage::<MessageBalances>()
             .insert(&owner, &MAX_BALANCES)
             .expect("should correctly query db");
 
@@ -698,14 +684,14 @@ mod tests {
 
         let expected_errors = vec![
             IndexationError::CoinBalanceWouldUnderflow {
-                owner: owner.clone(),
-                asset_id: asset_id_1.clone(),
+                owner,
+                asset_id: asset_id_1,
                 current_amount: 100,
                 requested_deduction: 10000,
             },
             IndexationError::CoinBalanceWouldUnderflow {
-                owner: owner.clone(),
-                asset_id: asset_id_2.clone(),
+                owner,
+                asset_id: asset_id_2,
                 current_amount: 0,
                 requested_deduction: 20000,
             },

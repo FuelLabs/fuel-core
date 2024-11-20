@@ -254,7 +254,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                 .unwrap_or_default()
                 .into_owned() as TotalBalanceAmount;
 
-            balances.insert(asset_id.clone(), coins);
+            balances.insert(*asset_id, coins);
         }
 
         if let Some(messages) = self.storage_as_ref::<MessageBalances>().get(owner)? {
