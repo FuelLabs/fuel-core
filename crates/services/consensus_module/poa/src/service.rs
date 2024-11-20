@@ -42,6 +42,7 @@ use fuel_core_services::{
     Service as OtherService,
     ServiceRunner,
     StateWatcher,
+    TaskNextAction,
 };
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
@@ -518,16 +519,14 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        let should_continue;
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         let mut sync_state = self.sync_task_handle.shared.clone();
         // make sure we're synced first
         if *sync_state.borrow_and_update() == SyncState::NotSynced {
             tokio::select! {
                 biased;
                 result = watcher.while_started() => {
-                    should_continue = result?.started();
-                    return Ok(should_continue);
+                    return result.map(|state| state.started()).into()
                 }
                 _ = sync_state.changed() => {}
             }
@@ -538,26 +537,37 @@ where
         }
 
         let next_height = self.next_height();
-        let maybe_block = self.predefined_blocks.get_block(&next_height)?;
+        let maybe_block = match self.predefined_blocks.get_block(&next_height) {
+            Ok(option) => option,
+            Err(err) => return TaskNextAction::ErrorContinue(err),
+        };
         if let Some(block) = maybe_block {
-            self.produce_predefined_block(&block).await?;
-            should_continue = true;
-            return Ok(should_continue)
+            let res = self.produce_predefined_block(&block).await;
+            return match res {
+                Ok(()) => TaskNextAction::Continue,
+                Err(err) => TaskNextAction::ErrorContinue(err),
+            }
         }
 
         let next_block_production: BoxFuture<()> = match self.trigger {
             Trigger::Never | Trigger::Instant => Box::pin(core::future::pending()),
-            Trigger::Interval { block_time } => Box::pin(sleep_until(
-                self.last_block_created
+            Trigger::Interval { block_time } => {
+                let next_block_time = match self
+                    .last_block_created
                     .checked_add(block_time)
-                    .ok_or(anyhow!("Time exceeds system limits"))?,
-            )),
+                    .ok_or(anyhow!("Time exceeds system limits"))
+                {
+                    Ok(time) => time,
+                    Err(err) => return TaskNextAction::ErrorContinue(err),
+                };
+                Box::pin(sleep_until(next_block_time))
+            }
         };
 
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
-                should_continue = false;
+                TaskNextAction::Stop
             }
             request = self.request_receiver.recv() => {
                 if let Some(request) = request {
@@ -567,29 +577,27 @@ where
                             let _ = response.send(result);
                         }
                     }
-                    should_continue = true;
+                    TaskNextAction::Continue
                 } else {
                     tracing::error!("The PoA task should be the holder of the `Sender`");
-                    should_continue = false;
+                    TaskNextAction::Stop
                 }
             }
             _ = next_block_production => {
                 match self.on_timer().await.context("While processing timer event") {
-                    Ok(()) => should_continue = true,
+                    Ok(()) => TaskNextAction::Continue,
                     Err(err) => {
                         // Wait some time in case of error to avoid spamming retry block production
                         tokio::time::sleep(Duration::from_secs(1)).await;
-                        return Err(err);
+                        TaskNextAction::ErrorContinue(err)
                     }
-                };
+                }
             }
             _ = self.new_txs_watcher.changed() => {
-                self.on_txpool_event().await.context("While processing txpool event")?;
-                should_continue = true;
+                let res = self.on_txpool_event().await.context("While processing txpool event");
+                TaskNextAction::always_continue(res)
             }
         }
-
-        Ok(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
