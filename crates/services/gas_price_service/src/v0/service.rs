@@ -141,6 +141,7 @@ where
     Metadata: MetadataStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
+        tracing::debug!("Starting gas price service");
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
@@ -148,6 +149,7 @@ where
                 TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
+                tracing::debug!("Received L2 block");
                 let res = self.process_l2_block_res(l2_block_res).await;
                 TaskNextAction::always_continue(res)
             }

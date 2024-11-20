@@ -167,14 +167,16 @@ async fn next_gas_price__affected_by_new_l2_block() {
         algo_updater,
     );
 
+    tracing::debug!("service created");
+
     let read_algo = service.next_block_algorithm();
     let initial = read_algo.next_gas_price();
     let mut watcher = StateWatcher::started();
+    tokio::spawn(async move { service.run(&mut watcher).await });
 
     // when
-    service.run(&mut watcher).await;
     l2_block_sender.send(l2_block).await.unwrap();
-    service.shutdown().await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     // then
     let new = read_algo.next_gas_price();
@@ -212,14 +214,14 @@ async fn next__new_l2_block_saves_old_metadata() {
         algo_updater,
     );
 
-    // when
     let read_algo = service.next_block_algorithm();
-    let mut watcher = StateWatcher::default();
     let start = read_algo.next_gas_price();
+    let mut watcher = StateWatcher::started();
+    tokio::spawn(async move { service.run(&mut watcher).await });
 
-    service.run(&mut watcher).await;
+    // when
     l2_block_sender.send(l2_block).await.unwrap();
-    service.shutdown().await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     // then
     let new = read_algo.next_gas_price();
