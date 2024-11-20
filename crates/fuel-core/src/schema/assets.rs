@@ -12,17 +12,7 @@ use crate::{
 };
 
 #[derive(Default)]
-pub struct AssetInfoQuery {}
-
-#[derive(Default)]
-pub struct AssetExistsQuery {}
-
-#[derive(Clone, Debug)]
-pub struct AssetInfoDetails {
-    pub contract_id: HexString,
-    pub sub_id: HexString,
-    pub total_supply: U64,
-}
+pub struct AssetInfoQuery;
 
 #[Object]
 impl AssetInfoQuery {
@@ -38,10 +28,7 @@ impl AssetInfoQuery {
             .map(|details| Some(details.into()))
             .map_err(async_graphql::Error::from)
     }
-}
 
-#[Object]
-impl AssetExistsQuery {
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn asset_id(
         &self,
@@ -60,6 +47,13 @@ impl AssetExistsQuery {
             })
             .into_api_result()
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct AssetInfoDetails {
+    pub contract_id: HexString,
+    pub sub_id: HexString,
+    pub total_supply: U64,
 }
 
 impl From<AssetDetails> for AssetInfoDetails {

@@ -1122,9 +1122,9 @@ impl FuelClient {
         asset_id: &AssetId,
     ) -> io::Result<Option<AssetInfoDetails>> {
         let query = schema::assets::AssetInfoQuery::build(AssetInfoArg {
-            asset_id: (*asset_id).into(),
+            id: (*asset_id).into(),
         });
-        let asset_info = self.query(query).await?.asset_info.map(Into::into);
+        let asset_info = self.query(query).await?.asset_details.map(Into::into);
         Ok(asset_info)
     }
 }

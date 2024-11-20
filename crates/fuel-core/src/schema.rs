@@ -32,6 +32,7 @@ pub mod relayed_tx;
 
 #[derive(MergedObject, Default)]
 pub struct Query(
+    assets::AssetInfoQuery,
     dap::DapQuery,
     balance::BalanceQuery,
     blob::BlobQuery,
