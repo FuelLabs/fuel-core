@@ -1,7 +1,6 @@
-use super::transactions::OwnedTransactionIndexKey;
 use fuel_core_storage::{
     blueprint::plain::Plain,
-    codec::{manual::Manual, raw::Raw},
+    codec::{postcard::Postcard, raw::Raw},
     structured_storage::TableWithBlueprint,
     Mappable,
 };
@@ -13,7 +12,7 @@ use fuel_core_types::{
 /// Contract info
 pub struct AssetsInfo;
 
-type AssetDetails = (ContractId, Bytes32, u128); // (contract_id, sub_id, total_amount)
+pub type AssetDetails = (ContractId, Bytes32, u64); // (contract_id, sub_id, total_amount)
 
 impl Mappable for AssetsInfo {
     type Key = AssetId;
@@ -23,7 +22,7 @@ impl Mappable for AssetsInfo {
 }
 
 impl TableWithBlueprint for AssetsInfo {
-    type Blueprint = Plain<Manual<OwnedTransactionIndexKey>, Raw>;
+    type Blueprint = Plain<Raw, Postcard>;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -34,7 +33,6 @@ impl TableWithBlueprint for AssetsInfo {
 #[cfg(test)]
 mod test {
     use super::*;
-    use fuel_core_types::fuel_tx::Salt;
 
     fuel_core_storage::basic_storage_tests!(
         AssetsInfo,

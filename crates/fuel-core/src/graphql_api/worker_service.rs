@@ -29,7 +29,6 @@ use fuel_core_types::{
         consensus::Consensus,
     },
     entities::relayer::transaction::RelayedTransactionStatus,
-    fuel_crypto::coins_bip32::prelude::k256::sha2::{self, Digest},
     fuel_tx::{
         field::{Inputs, Outputs, Salt, StorageSlots},
         input::coin::{CoinPredicate, CoinSigned},

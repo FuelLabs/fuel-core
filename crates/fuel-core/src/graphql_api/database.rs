@@ -1,72 +1,35 @@
 use crate::fuel_core_graphql_api::{
     database::arc_wrapper::ArcWrapper,
-    ports::{
-        OffChainDatabase,
-        OnChainDatabase,
-    },
+    ports::{OffChainDatabase, OnChainDatabase},
 };
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-    },
+    iter::{BoxedIter, IntoBoxedIter, IterDirection},
     not_found,
     tables::Transactions,
     transactional::AtomicView,
-    Error as StorageError,
-    IsNotFound,
-    Mappable,
-    PredicateStorageRequirements,
-    Result as StorageResult,
-    StorageInspect,
-    StorageRead,
-    StorageSize,
+    Error as StorageError, IsNotFound, Mappable, PredicateStorageRequirements,
+    Result as StorageResult, StorageInspect, StorageRead, StorageSize,
 };
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::{BlockId, DaBlockHeight},
     },
     entities::relayer::{
-        message::{
-            MerkleProof,
-            Message,
-        },
+        message::{MerkleProof, Message},
         transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
-        Address,
-        AssetId,
-        Bytes32,
-        ContractId,
-        Salt,
-        Transaction,
-        TxId,
-        TxPointer,
-        UtxoId,
+        Address, AssetId, Bytes32, ContractId, Salt, Transaction, TxId, TxPointer, UtxoId,
     },
-    fuel_types::{
-        BlobId,
-        BlockHeight,
-        Nonce,
-    },
+    fuel_types::{BlobId, BlockHeight, Nonce},
     fuel_vm::BlobData,
-    services::{
-        graphql_api::ContractBalance,
-        txpool::TransactionStatus,
-    },
+    services::{graphql_api::ContractBalance, txpool::TransactionStatus},
 };
 use futures::Stream;
-use std::{
-    borrow::Cow,
-    sync::Arc,
-};
+use std::{borrow::Cow, sync::Arc};
 
 mod arc_wrapper;
 

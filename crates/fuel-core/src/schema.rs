@@ -1,35 +1,16 @@
-use crate::fuel_core_graphql_api::{
-    api_service::ReadDatabase,
-    database::ReadView,
-};
+use crate::fuel_core_graphql_api::{api_service::ReadDatabase, database::ReadView};
 use anyhow::anyhow;
 use async_graphql::{
-    connection::{
-        query,
-        Connection,
-        CursorType,
-        Edge,
-        EmptyFields,
-    },
+    connection::{query, Connection, CursorType, Edge, EmptyFields},
     parser::types::OperationType,
-    Context,
-    MergedObject,
-    MergedSubscription,
-    OutputType,
-    Schema,
-    SchemaBuilder,
+    Context, MergedObject, MergedSubscription, OutputType, Schema, SchemaBuilder,
 };
-use fuel_core_storage::{
-    iter::IterDirection,
-    Result as StorageResult,
-};
-use futures::{
-    Stream,
-    TryStreamExt,
-};
+use fuel_core_storage::{iter::IterDirection, Result as StorageResult};
+use futures::{Stream, TryStreamExt};
 use std::borrow::Cow;
 use tokio_stream::StreamExt;
 
+pub mod assets;
 pub mod balance;
 pub mod blob;
 pub mod block;
@@ -142,7 +123,7 @@ where
             } else if let Some(last) = last {
                 (last, IterDirection::Reverse)
             } else {
-                return Err(anyhow!("Either `first` or `last` should be provided"))
+                return Err(anyhow!("Either `first` or `last` should be provided"));
             };
 
             let start;
@@ -170,7 +151,7 @@ where
                         // Skip until start + 1
                         if key == start {
                             has_previous_page = true;
-                            return true
+                            return true;
                         }
                     }
                 }
@@ -184,7 +165,7 @@ where
                         // take until we've reached the end
                         if key == end {
                             has_next_page = true;
-                            return false
+                            return false;
                         }
                     }
                     count = count.saturating_sub(1);

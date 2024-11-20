@@ -1,3 +1,4 @@
+mod assets;
 mod balance;
 mod blob;
 mod block;
