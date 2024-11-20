@@ -36,6 +36,7 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
+    TaskNextAction,
 };
 use fuel_core_storage::{
     Error as StorageError,
@@ -551,13 +552,12 @@ where
     TxPool: ports::worker::TxPool,
     D: ports::worker::OffChainDatabase,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        let should_continue;
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                should_continue = false;
+                TaskNextAction::Stop
             }
 
             result = self.block_importer.next() => {
@@ -567,17 +567,19 @@ where
                     // In the case of an error, shut down the service to avoid a huge
                     // de-synchronization between on-chain and off-chain databases.
                     if let Err(e) = result {
-                        tracing::error!("Error processing block: {:?}", e);
-                        should_continue = self.continue_on_error;
+                        if self.continue_on_error {
+                            TaskNextAction::ErrorContinue(e)
+                        } else {
+                            TaskNextAction::Stop
+                        }
                     } else {
-                        should_continue = true
+                        TaskNextAction::Continue
                     }
                 } else {
-                    should_continue = false
+                    TaskNextAction::Stop
                 }
             }
         }
-        Ok(should_continue)
     }
 
     async fn shutdown(mut self) -> anyhow::Result<()> {
