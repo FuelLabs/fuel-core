@@ -165,6 +165,7 @@ where
             if latest_block_height > metadata_height {
                 sync_gas_price_db_with_on_chain_storage(
                     &self.settings,
+                    &self.config,
                     &mut self.metadata_storage,
                     &self.on_chain_db,
                     metadata_height,
@@ -246,6 +247,7 @@ fn sync_gas_price_db_with_on_chain_storage<
     SettingsProvider,
 >(
     settings: &SettingsProvider,
+    config: &V1AlgorithmConfig,
     metadata_storage: &mut Metadata,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
@@ -263,13 +265,13 @@ where
             "Expected metadata to exist for height: {metadata_height}"
         ))?;
 
-    let mut algo_updater = if let UpdaterMetadata::V1(metadata) = metadata {
-        // let algorithm_updater = v1_algorithm_from_metadata(metadata, settings);
-        // Ok(algorithm_updater)
-        todo!()
-    } else {
-        Err(anyhow::anyhow!("Expected V1 metadata"))
-    }?;
+    let metadata = match metadata {
+        UpdaterMetadata::V1(metadata) => metadata,
+        UpdaterMetadata::V0(metadata) => {
+            V1Metadata::construct_from_v0_metadata(metadata, config)?
+        }
+    };
+    let mut algo_updater = v1_algorithm_from_metadata(metadata, config);
 
     sync_v1_metadata(
         settings,
