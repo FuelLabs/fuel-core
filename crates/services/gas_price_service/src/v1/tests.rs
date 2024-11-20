@@ -30,11 +30,11 @@ use crate::{
             V1AlgorithmConfig,
             V1Metadata,
         },
-        service::GasPriceServiceV1,
-        uninitialized_task::{
+        service::{
             initialize_algorithm,
-            UninitializedTask,
+            GasPriceServiceV1,
         },
+        uninitialized_task::UninitializedTask,
     },
 };
 use anyhow::anyhow;

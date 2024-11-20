@@ -33,7 +33,10 @@ use crate::{
             V1AlgorithmConfig,
             V1Metadata,
         },
-        service::GasPriceServiceV1,
+        service::{
+            initialize_algorithm,
+            GasPriceServiceV1,
+        },
     },
 };
 use anyhow::Error;
@@ -197,7 +200,7 @@ where
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
 {
-    const NAME: &'static str = "GasPriceServiceV0";
+    const NAME: &'static str = "GasPriceServiceV1";
     type SharedData = SharedV1Algorithm;
     type Task = GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, Metadata, DA>;
     type TaskParams = ();
@@ -213,31 +216,6 @@ where
     ) -> anyhow::Result<Self::Task> {
         UninitializedTask::init(self)
     }
-}
-
-pub fn initialize_algorithm<Metadata>(
-    config: &V1AlgorithmConfig,
-    latest_block_height: u32,
-    metadata_storage: &Metadata,
-) -> GasPriceResult<(AlgorithmUpdaterV1, SharedV1Algorithm)>
-where
-    Metadata: MetadataStorage,
-{
-    let algorithm_updater;
-    if let Some(updater_metadata) = metadata_storage
-        .get_metadata(&latest_block_height.into())
-        .map_err(|err| GasPriceError::CouldNotInitUpdater(anyhow::anyhow!(err)))?
-    {
-        let previous_metadata: V1Metadata = updater_metadata.try_into()?;
-        algorithm_updater = v1_algorithm_from_metadata(previous_metadata, config);
-    } else {
-        algorithm_updater = config.into();
-    }
-
-    let shared_algo =
-        SharedGasPriceAlgo::new_with_algorithm(algorithm_updater.algorithm());
-
-    Ok((algorithm_updater, shared_algo))
 }
 
 fn sync_gas_price_db_with_on_chain_storage<
