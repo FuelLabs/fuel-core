@@ -60,7 +60,6 @@ pub enum IndexationError {
     StorageError(StorageError),
 }
 
-// TODO[RC]: A lot of duplication below, consider refactoring.
 fn increase_message_balance<T>(
     block_st_transaction: &mut T,
     message: &Message,
@@ -102,48 +101,35 @@ where
         mut retryable,
         mut non_retryable,
     } = *storage.get(&key)?.unwrap_or_default();
+    let current_balance = if message.has_retryable_amount() {
+        retryable
+    } else {
+        non_retryable
+    };
 
-    if message.has_retryable_amount() {
-        let maybe_new_amount = retryable.checked_sub(message.amount() as u128);
-        match maybe_new_amount {
-            Some(new_amount) => {
-                let storage = block_st_transaction.storage::<MessageBalances>();
-                let new_balance = MessageBalance {
+    current_balance
+        .checked_sub(message.amount() as u128)
+        .ok_or_else(|| IndexationError::MessageBalanceWouldUnderflow {
+            owner: message.recipient().clone(),
+            current_amount: current_balance,
+            requested_deduction: message.amount() as u128,
+            retryable: message.has_retryable_amount(),
+        })
+        .and_then(|new_amount| {
+            let storage = block_st_transaction.storage::<MessageBalances>();
+            let new_balance = if message.has_retryable_amount() {
+                MessageBalance {
                     retryable: new_amount,
                     non_retryable,
-                };
-                return Ok(storage.insert(&key, &new_balance)?);
-            }
-            None => {
-                return Err(IndexationError::MessageBalanceWouldUnderflow {
-                    owner: message.recipient().clone(),
-                    current_amount: retryable,
-                    requested_deduction: message.amount() as u128,
-                    retryable: true,
-                });
-            }
-        }
-    } else {
-        let maybe_new_amount = non_retryable.checked_sub(message.amount() as u128);
-        match maybe_new_amount {
-            Some(new_amount) => {
-                let storage = block_st_transaction.storage::<MessageBalances>();
-                let new_balance = MessageBalance {
+                }
+            } else {
+                MessageBalance {
                     retryable,
                     non_retryable: new_amount,
-                };
-                return Ok(storage.insert(&key, &new_balance)?);
-            }
-            None => {
-                return Err(IndexationError::MessageBalanceWouldUnderflow {
-                    owner: message.recipient().clone(),
-                    current_amount: non_retryable,
-                    requested_deduction: message.amount() as u128,
-                    retryable: false,
-                });
-            }
-        }
-    }
+                }
+            };
+            storage.insert(&key, &new_balance).map_err(Into::into)
+        })
 }
 
 fn increase_coin_balance<T>(
@@ -173,19 +159,20 @@ where
     let storage = block_st_transaction.storage::<CoinBalances>();
     let mut current_amount = *storage.get(&key)?.unwrap_or_default();
 
-    let maybe_new_amount = current_amount.checked_sub(coin.amount as u128);
-    match maybe_new_amount {
-        Some(new_amount) => {
-            let storage = block_st_transaction.storage::<CoinBalances>();
-            Ok(storage.insert(&key, &new_amount)?)
-        }
-        None => Err(IndexationError::CoinBalanceWouldUnderflow {
+    current_amount
+        .checked_sub(coin.amount as u128)
+        .ok_or_else(|| IndexationError::CoinBalanceWouldUnderflow {
             owner: coin.owner.clone(),
             asset_id: coin.asset_id.clone(),
             current_amount,
             requested_deduction: coin.amount as u128,
-        }),
-    }
+        })
+        .and_then(|new_amount| {
+            block_st_transaction
+                .storage::<CoinBalances>()
+                .insert(&key, &new_amount)
+                .map_err(Into::into)
+        })
 }
 
 pub(crate) fn process_balances_update<T>(
