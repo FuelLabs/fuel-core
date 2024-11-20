@@ -1,15 +1,16 @@
+use std::{
+    cmp::max,
+    collections::BTreeMap,
+    num::NonZeroU64,
+    ops::Div,
+};
+
 use crate::{
     utils::cumulative_percentage_change,
     v1::BytesForHeights::{
         Complete,
         Incomplete,
     },
-};
-use std::{
-    cmp::max,
-    collections::BTreeMap,
-    num::NonZeroU64,
-    ops::Div,
 };
 
 #[cfg(test)]

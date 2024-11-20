@@ -1,7 +1,9 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::{
+            block_bytes,
             get_block_info,
+            mint_values,
             GasPriceSettings,
             GasPriceSettingsProvider,
         },
@@ -46,6 +48,7 @@ use fuel_core_storage::{
     transactional::AtomicView,
 };
 use fuel_core_types::{
+    fuel_tx::field::MintAmount,
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
@@ -143,6 +146,7 @@ where
         );
 
         // TODO: Add to config
+        // https://github.com/FuelLabs/fuel-core/issues/2140
         let poll_interval = None;
         let da_service = DaSourceService::new(self.da_source, poll_interval);
 
@@ -315,15 +319,14 @@ where
                 BlockInfo::Block { gas_used, .. } => gas_used,
             };
 
-        // TODO: Set these using the block values
-        let block_bytes = 0;
-        let fee_wei = 0;
+        let block_bytes = block_bytes(&block);
+        let (fee_wei, _) = mint_values(&block)?;
         updater.update_l2_block_data(
             height,
             block_gas_used,
             block_gas_capacity,
             block_bytes,
-            fee_wei,
+            fee_wei.into(),
         )?;
         let metadata: UpdaterMetadata = updater.clone().into();
         metadata_storage.set_metadata(&metadata)?;
