@@ -4,17 +4,22 @@ use crate::v1::tests::{
 };
 
 #[test]
-fn update_da_record_data__ignores_batch_if_receives_a_block_missing_from_unrecorded_blocks(
+fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_include_known_blocks_with_previous_cost(
 ) {
     // given
     let recorded_heights: Vec<u32> = (1u32..3).collect();
-    let recorded_cost = 200;
+    let recorded_cost = 1_000_000;
+    let block_bytes = 1000;
     let unrecorded_blocks = vec![BlockBytes {
         height: 1,
-        block_bytes: 1000,
+        block_bytes,
     }];
+    let cost_per_byte = 333;
+    let known_total_cost = 10_000;
     let mut updater = UpdaterBuilder::new()
         .with_unrecorded_blocks(unrecorded_blocks)
+        .with_da_cost_per_byte(cost_per_byte)
+        .with_known_total_cost(known_total_cost)
         .build();
     let old = updater.algorithm();
 
@@ -26,6 +31,42 @@ fn update_da_record_data__ignores_batch_if_receives_a_block_missing_from_unrecor
     // then
     let new = updater.algorithm();
     assert_eq!(new, old);
+    let expected = known_total_cost + block_bytes as u128 * cost_per_byte;
+    let actual = updater.latest_known_total_da_cost_excess;
+    assert_eq!(expected, actual);
+}
+
+#[test]
+fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_never_increase_cost_more_than_recorded_cost(
+) {
+    // given
+    let recorded_heights: Vec<u32> = (1u32..3).collect();
+    let recorded_cost = 200;
+    let block_bytes = 1000;
+    let unrecorded_blocks = vec![BlockBytes {
+        height: 1,
+        block_bytes,
+    }];
+    let cost_per_byte = 333;
+    let known_total_cost = 10_000;
+    let mut updater = UpdaterBuilder::new()
+        .with_unrecorded_blocks(unrecorded_blocks)
+        .with_da_cost_per_byte(cost_per_byte)
+        .with_known_total_cost(known_total_cost)
+        .build();
+    let old = updater.algorithm();
+
+    // when
+    updater
+        .update_da_record_data(&recorded_heights, recorded_cost)
+        .unwrap();
+
+    // then
+    let new = updater.algorithm();
+    assert_eq!(new, old);
+    let expected = known_total_cost + recorded_cost;
+    let actual = updater.latest_known_total_da_cost_excess;
+    assert_eq!(expected, actual);
 }
 
 #[test]

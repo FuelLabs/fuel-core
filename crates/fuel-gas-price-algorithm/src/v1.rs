@@ -550,12 +550,12 @@ impl AlgorithmUpdaterV1 {
             // We can safely say that the cost didn't exceed the `recording_cost`, so we will take the
             // minimum of the two costs
             Incomplete(bytes) => {
-                let new_guess_recording_cost =
-                    bytes.saturating_mul(self.latest_da_cost_per_byte);
+                let new_guess_recording_cost = bytes
+                    .saturating_mul(self.latest_da_cost_per_byte)
+                    .min(recording_cost);
                 let new_da_block_cost = self
                     .latest_known_total_da_cost_excess
-                    .saturating_add(new_guess_recording_cost)
-                    .min(recording_cost);
+                    .saturating_add(new_guess_recording_cost);
                 self.latest_known_total_da_cost_excess = new_da_block_cost;
             }
         };
