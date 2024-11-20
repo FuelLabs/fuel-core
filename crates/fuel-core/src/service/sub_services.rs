@@ -219,6 +219,7 @@ pub fn init_sub_services(
         |(p2p_config, (shared_state, request_receiver))| {
             fuel_core_p2p::service::new_service(
                 chain_id,
+                last_height,
                 p2p_config,
                 shared_state,
                 request_receiver,
