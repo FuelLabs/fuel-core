@@ -10,6 +10,7 @@ use fuel_core_services::{
     ServiceRunner,
     SharedMutex,
     StateWatcher,
+    TaskNextAction,
 };
 use fuel_core_storage::{
     not_found,
@@ -111,13 +112,12 @@ impl SharedState {
 
 #[async_trait::async_trait]
 impl RunnableTask for Task {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        let should_continue;
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                should_continue = false;
+                TaskNextAction::Stop
             }
 
             Some(event) = self.blocks_events.next() => {
@@ -135,16 +135,13 @@ impl RunnableTask for Task {
                         }
                         Err(err) => {
                             tracing::error!("Failed to cache consensus parameters: {:?}", err);
-                            should_continue = false;
-                            return Ok(should_continue)
+                            return TaskNextAction::Stop
                         }
                     }
                 }
-                should_continue = true;
+                TaskNextAction::Continue
             }
         }
-
-        Ok(should_continue)
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -358,7 +355,7 @@ mod tests {
         // When
         let result_with_new_version = result_with_new_version(new_version);
         let _ = block_sender.send(result_with_new_version);
-        task.run(&mut StateWatcher::started()).await.unwrap();
+        task.run(&mut StateWatcher::started()).await;
 
         // Then
         assert_eq!(
