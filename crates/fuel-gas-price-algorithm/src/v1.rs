@@ -1,4 +1,10 @@
-use crate::utils::cumulative_percentage_change;
+use crate::{
+    utils::cumulative_percentage_change,
+    v1::BytesForHeights::{
+        Complete,
+        Incomplete,
+    },
+};
 use std::{
     cmp::max,
     collections::BTreeMap,
@@ -299,6 +305,13 @@ impl core::ops::Deref for ClampedPercentage {
     }
 }
 
+enum BytesForHeights {
+    // Was able to find all the heights
+    Complete(u128),
+    // Was not able to find all the heights
+    Incomplete(u128),
+}
+
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,
@@ -516,31 +529,42 @@ impl AlgorithmUpdaterV1 {
         heights: &[u32],
         recording_cost: u128,
     ) -> Result<(), Error> {
-        let maybe_recorded_bytes = self.drain_l2_block_bytes_for_heights(heights);
-        // If we weren't able to get the bytes for all the heights, we can't update the cost per byte in a logical way.
-        // We will just accept the predicted cost as the real cost and move on with the algorithm
-        if let Some(recorded_bytes) = maybe_recorded_bytes {
-            let new_cost_per_byte: u128 = recording_cost
-                .checked_div(recorded_bytes)
-                .ok_or(Error::CouldNotCalculateCostPerByte {
-                    bytes: recorded_bytes,
-                    cost: recording_cost,
-                })?;
-            let new_da_block_cost = self
-                .latest_known_total_da_cost_excess
-                .saturating_add(recording_cost);
-            self.latest_known_total_da_cost_excess = new_da_block_cost;
-            self.latest_da_cost_per_byte = new_cost_per_byte;
-        } else {
-            tracing::error!("Ignoring batch of heights: {:?}", heights);
-        }
+        let bytes_for_heights = self.drain_l2_block_bytes_for_heights(heights);
+        match bytes_for_heights {
+            Complete(bytes) => {
+                let new_cost_per_byte: u128 = recording_cost.checked_div(bytes).ok_or(
+                    Error::CouldNotCalculateCostPerByte {
+                        bytes,
+                        cost: recording_cost,
+                    },
+                )?;
+                let new_da_block_cost = self
+                    .latest_known_total_da_cost_excess
+                    .saturating_add(recording_cost);
+                self.latest_known_total_da_cost_excess = new_da_block_cost;
+                self.latest_da_cost_per_byte = new_cost_per_byte;
+            }
+            // If we weren't able to get the bytes for all the heights, we can't update the cost per byte in a logical way.
+            // We will just accept the predicted cost as the real cost and move on with the algorithm
+            // We can safely say that the cost didn't exceed the `recording_cost`, so we will take the
+            // minimum of the two costs
+            Incomplete(bytes) => {
+                let new_guess_recording_cost =
+                    bytes.saturating_mul(self.latest_da_cost_per_byte);
+                let new_da_block_cost = self
+                    .latest_known_total_da_cost_excess
+                    .saturating_add(new_guess_recording_cost)
+                    .min(recording_cost);
+                self.latest_known_total_da_cost_excess = new_da_block_cost;
+            }
+        };
         Ok(())
     }
 
     // Get the bytes for all specified heights, or get none of them.
     // Always remove the blocks from the unrecorded blocks so they don't build up indefinitely
-    fn drain_l2_block_bytes_for_heights(&mut self, heights: &[u32]) -> Option<u128> {
-        let mut should_ignore_batch = false;
+    fn drain_l2_block_bytes_for_heights(&mut self, heights: &[u32]) -> BytesForHeights {
+        let mut missed_some_heights = false;
         let mut total: u128 = 0;
         for expected_height in heights {
             let maybe_bytes = self.unrecorded_blocks.remove(expected_height);
@@ -551,15 +575,14 @@ impl AlgorithmUpdaterV1 {
                     "L2 block expected but not found in unrecorded blocks: {}",
                     expected_height,
                 );
-                should_ignore_batch = true;
+                missed_some_heights = true;
             }
         }
-        if should_ignore_batch {
-            None
+        self.unrecorded_blocks_bytes = self.unrecorded_blocks_bytes.saturating_sub(total);
+        if missed_some_heights {
+            Incomplete(total)
         } else {
-            self.unrecorded_blocks_bytes =
-                self.unrecorded_blocks_bytes.saturating_sub(total);
-            Some(total)
+            Complete(total)
         }
     }
 
