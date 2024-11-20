@@ -1,37 +1,75 @@
 use crate::{
     database::{
-        database_description::off_chain::OffChain, Database, OffChainIterableKeyValueView,
+        database_description::off_chain::OffChain,
+        Database,
+        OffChainIterableKeyValueView,
     },
     fuel_core_graphql_api::{
-        ports::{worker, OffChainDatabase},
+        ports::{
+            worker,
+            OffChainDatabase,
+        },
         storage::{
-            contracts::ContractsInfo, da_compression::DaCompressedBlocks,
+            contracts::ContractsInfo,
+            da_compression::DaCompressedBlocks,
             relayed_transactions::RelayedTransactionStatuses,
             transactions::OwnedTransactionIndexCursor,
         },
     },
     graphql_api::storage::{
-        assets::{AssetDetails, AssetsInfo},
-        old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
+        assets::{
+            AssetDetails,
+            AssetsInfo,
+        },
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
     },
 };
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     codec::Encode,
-    iter::{BoxedIter, IntoBoxedIter, IterDirection, IteratorOverTable},
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+        IteratorOverTable,
+    },
     kv_store::KeyValueInspect,
     not_found,
     structured_storage::TableWithBlueprint,
-    transactional::{IntoTransaction, StorageTransaction},
-    Error as StorageError, Result as StorageResult, StorageAsRef,
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsRef,
 };
 use fuel_core_types::{
-    blockchain::{block::CompressedBlock, consensus::Consensus, primitives::BlockId},
+    blockchain::{
+        block::CompressedBlock,
+        consensus::Consensus,
+        primitives::BlockId,
+    },
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
-        Address, AssetId, Bytes32, ContractId, Salt, Transaction, TxId, TxPointer, UtxoId,
+        Address,
+        AssetId,
+        Bytes32,
+        ContractId,
+        Salt,
+        Transaction,
+        TxId,
+        TxPointer,
+        UtxoId,
     },
-    fuel_types::{BlockHeight, Nonce},
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
     services::txpool::TransactionStatus,
 };
 

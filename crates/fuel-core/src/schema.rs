@@ -1,12 +1,32 @@
-use crate::fuel_core_graphql_api::{api_service::ReadDatabase, database::ReadView};
+use crate::fuel_core_graphql_api::{
+    api_service::ReadDatabase,
+    database::ReadView,
+};
 use anyhow::anyhow;
 use async_graphql::{
-    connection::{query, Connection, CursorType, Edge, EmptyFields},
+    connection::{
+        query,
+        Connection,
+        CursorType,
+        Edge,
+        EmptyFields,
+    },
     parser::types::OperationType,
-    Context, MergedObject, MergedSubscription, OutputType, Schema, SchemaBuilder,
+    Context,
+    MergedObject,
+    MergedSubscription,
+    OutputType,
+    Schema,
+    SchemaBuilder,
 };
-use fuel_core_storage::{iter::IterDirection, Result as StorageResult};
-use futures::{Stream, TryStreamExt};
+use fuel_core_storage::{
+    iter::IterDirection,
+    Result as StorageResult,
+};
+use futures::{
+    Stream,
+    TryStreamExt,
+};
 use std::borrow::Cow;
 use tokio_stream::StreamExt;
 

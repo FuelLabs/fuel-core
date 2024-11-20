@@ -1,4 +1,9 @@
-use crate::client::schema::{schema, AssetId, HexString, U64};
+use crate::client::schema::{
+    schema,
+    AssetId,
+    HexString,
+    U64,
+};
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct AssetInfoArg {

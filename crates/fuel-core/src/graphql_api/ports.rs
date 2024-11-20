@@ -1,12 +1,23 @@
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    iter::{BoxedIter, IterDirection},
-    tables::{
-        BlobData, Coins, ContractsAssets, ContractsRawCode, Messages,
-        StateTransitionBytecodeVersions, UploadedBytecodes,
+    iter::{
+        BoxedIter,
+        IterDirection,
     },
-    Error as StorageError, Result as StorageResult, StorageInspect, StorageRead,
+    tables::{
+        BlobData,
+        Coins,
+        ContractsAssets,
+        ContractsRawCode,
+        Messages,
+        StateTransitionBytecodeVersions,
+        UploadedBytecodes,
+    },
+    Error as StorageError,
+    Result as StorageResult,
+    StorageInspect,
+    StorageRead,
 };
 use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
@@ -14,18 +25,40 @@ use fuel_core_types::{
         block::CompressedBlock,
         consensus::Consensus,
         header::ConsensusParametersVersion,
-        primitives::{BlockId, DaBlockHeight},
+        primitives::{
+            BlockId,
+            DaBlockHeight,
+        },
     },
     entities::relayer::{
-        message::{MerkleProof, Message},
+        message::{
+            MerkleProof,
+            Message,
+        },
         transaction::RelayedTransactionStatus,
     },
-    fuel_tx::{Bytes32, ConsensusParameters, Salt, Transaction, TxId, TxPointer, UtxoId},
-    fuel_types::{Address, AssetId, BlockHeight, ContractId, Nonce},
+    fuel_tx::{
+        Bytes32,
+        ConsensusParameters,
+        Salt,
+        Transaction,
+        TxId,
+        TxPointer,
+        UtxoId,
+    },
+    fuel_types::{
+        Address,
+        AssetId,
+        BlockHeight,
+        ContractId,
+        Nonce,
+    },
     fuel_vm::interpreter::Memory,
     services::{
-        executor::TransactionExecutionStatus, graphql_api::ContractBalance,
-        p2p::PeerInfo, txpool::TransactionStatus,
+        executor::TransactionExecutionStatus,
+        graphql_api::ContractBalance,
+        p2p::PeerInfo,
+        txpool::TransactionStatus,
     },
     tai64::Tai64,
 };
@@ -240,23 +273,38 @@ pub mod worker {
         fuel_core_graphql_api::storage::{
             coins::OwnedCoins,
             contracts::ContractsInfo,
-            messages::{OwnedMessageIds, SpentMessages},
+            messages::{
+                OwnedMessageIds,
+                SpentMessages,
+            },
         },
         graphql_api::storage::{
             assets::AssetsInfo,
             da_compression::*,
-            old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
             relayed_transactions::RelayedTransactionStatuses,
         },
     };
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
-        Error as StorageError, Result as StorageResult, StorageMutate,
+        Error as StorageError,
+        Result as StorageResult,
+        StorageMutate,
     };
     use fuel_core_types::{
-        fuel_tx::{Address, Bytes32},
+        fuel_tx::{
+            Address,
+            Bytes32,
+        },
         fuel_types::BlockHeight,
-        services::{block_importer::SharedImportResult, txpool::TransactionStatus},
+        services::{
+            block_importer::SharedImportResult,
+            txpool::TransactionStatus,
+        },
     };
 
     pub trait OnChainDatabase: Send + Sync {

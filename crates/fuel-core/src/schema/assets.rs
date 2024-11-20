@@ -1,12 +1,21 @@
-use async_graphql::{Context, Object};
+use async_graphql::{
+    Context,
+    Object,
+};
 use fuel_core_storage::not_found;
 
 use crate::{
     fuel_core_graphql_api::query_costs,
-    graphql_api::storage::assets::AssetDetails,
-    graphql_api::IntoApiResult,
+    graphql_api::{
+        storage::assets::AssetDetails,
+        IntoApiResult,
+    },
     schema::{
-        scalars::{AssetId, HexString, U64},
+        scalars::{
+            AssetId,
+            HexString,
+            U64,
+        },
         ReadViewProvider,
     },
 };

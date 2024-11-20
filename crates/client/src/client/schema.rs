@@ -4,17 +4,26 @@ pub mod schema {
     cynic::use_schema!("./assets/schema.sdl");
 }
 
-use fuel_core_types::{fuel_tx, fuel_types::canonical};
+use fuel_core_types::{
+    fuel_tx,
+    fuel_types::canonical,
+};
 use hex::FromHexError;
 use std::{
     array::TryFromSliceError,
-    fmt::{self, Debug},
+    fmt::{
+        self,
+        Debug,
+    },
     io::ErrorKind,
     num::TryFromIntError,
 };
 use thiserror::Error;
 
-use crate::client::pagination::{PageDirection, PaginationRequest};
+use crate::client::pagination::{
+    PageDirection,
+    PaginationRequest,
+};
 pub use primitives::*;
 
 pub mod assets;

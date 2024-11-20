@@ -2,47 +2,103 @@ use super::{
     da_compression::da_compress_block,
     storage::{
         assets::AssetsInfo,
-        old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
     },
 };
 use crate::{
     fuel_core_graphql_api::{
-        ports::{self, worker::OffChainDatabaseTransaction},
+        ports::{
+            self,
+            worker::OffChainDatabaseTransaction,
+        },
         storage::{
             blocks::FuelBlockIdsToHeights,
-            coins::{owner_coin_id_key, OwnedCoins},
+            coins::{
+                owner_coin_id_key,
+                OwnedCoins,
+            },
             contracts::ContractsInfo,
-            messages::{OwnedMessageIds, OwnedMessageKey, SpentMessages},
+            messages::{
+                OwnedMessageIds,
+                OwnedMessageKey,
+                SpentMessages,
+            },
         },
     },
     graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
-    stream::BoxStream, EmptyShared, RunnableService, RunnableTask, ServiceRunner,
+    stream::BoxStream,
+    EmptyShared,
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
     StateWatcher,
 };
-use fuel_core_storage::{Error as StorageError, Result as StorageResult, StorageAsMut};
+use fuel_core_storage::{
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsMut,
+};
 use fuel_core_types::{
     blockchain::{
-        block::{Block, CompressedBlock},
+        block::{
+            Block,
+            CompressedBlock,
+        },
         consensus::Consensus,
     },
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
-        field::{Inputs, Outputs, Salt, StorageSlots},
-        input::coin::{CoinPredicate, CoinSigned},
-        AssetId, Contract, Input, Output, Receipt, Transaction, TxId, UniqueIdentifier,
+        field::{
+            Inputs,
+            Outputs,
+            Salt,
+            StorageSlots,
+        },
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
+        AssetId,
+        Contract,
+        Input,
+        Output,
+        Receipt,
+        Transaction,
+        TxId,
+        UniqueIdentifier,
     },
-    fuel_types::{BlockHeight, Bytes32, ChainId},
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+        ChainId,
+    },
     services::{
-        block_importer::{ImportResult, SharedImportResult},
-        executor::{Event, TransactionExecutionStatus},
+        block_importer::{
+            ImportResult,
+            SharedImportResult,
+        },
+        executor::{
+            Event,
+            TransactionExecutionStatus,
+        },
         txpool::from_executor_to_status,
     },
 };
-use futures::{FutureExt, StreamExt};
-use std::{borrow::Cow, ops::Deref};
+use futures::{
+    FutureExt,
+    StreamExt,
+};
+use std::{
+    borrow::Cow,
+    ops::Deref,
+};
 
 #[cfg(test)]
 mod tests;
