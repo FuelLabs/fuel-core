@@ -172,7 +172,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let mut watcher = StateWatcher::started();
 
     // when
-    service.run(&mut watcher).await.unwrap();
+    service.run(&mut watcher).await;
     l2_block_sender.send(l2_block).await.unwrap();
     service.shutdown().await.unwrap();
 
@@ -217,7 +217,7 @@ async fn next__new_l2_block_saves_old_metadata() {
     let mut watcher = StateWatcher::default();
     let start = read_algo.next_gas_price();
 
-    service.run(&mut watcher).await.unwrap();
+    service.run(&mut watcher).await;
     l2_block_sender.send(l2_block).await.unwrap();
     service.shutdown().await.unwrap();
 

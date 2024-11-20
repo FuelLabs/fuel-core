@@ -1,13 +1,10 @@
-use crate::v1::{
-    tests::{
-        BlockBytes,
-        UpdaterBuilder,
-    },
-    Error,
+use crate::v1::tests::{
+    BlockBytes,
+    UpdaterBuilder,
 };
 
 #[test]
-fn update_da_record_data__throws_error_if_receives_a_block_missing_from_unrecorded_blocks(
+fn update_da_record_data__ignores_batch_if_receives_a_block_missing_from_unrecorded_blocks(
 ) {
     // given
     let recorded_heights: Vec<u32> = (1u32..3).collect();
@@ -19,15 +16,16 @@ fn update_da_record_data__throws_error_if_receives_a_block_missing_from_unrecord
     let mut updater = UpdaterBuilder::new()
         .with_unrecorded_blocks(unrecorded_blocks)
         .build();
+    let old = updater.algorithm();
 
     // when
-    let actual_error = updater
+    updater
         .update_da_record_data(&recorded_heights, recorded_cost)
-        .unwrap_err();
+        .unwrap();
 
     // then
-    let expected_error = Error::L2BlockExpectedNotFound { height: 2 };
-    assert_eq!(actual_error, expected_error);
+    let new = updater.algorithm();
+    assert_eq!(new, old);
 }
 
 #[test]
