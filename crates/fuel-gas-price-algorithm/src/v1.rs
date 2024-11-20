@@ -531,6 +531,8 @@ impl AlgorithmUpdaterV1 {
                 .saturating_add(recording_cost);
             self.latest_known_total_da_cost_excess = new_da_block_cost;
             self.latest_da_cost_per_byte = new_cost_per_byte;
+        } else {
+            tracing::error!("Ignoring batch of heights: {:?}", heights);
         }
         Ok(())
     }
@@ -546,9 +548,8 @@ impl AlgorithmUpdaterV1 {
                 total = total.saturating_add(bytes as u128);
             } else {
                 tracing::error!(
-                    "L2 block expected but not found in unrecorded blocks: {}. Ignoring batch of heights: {:?}",
+                    "L2 block expected but not found in unrecorded blocks: {}",
                     expected_height,
-                    heights,
                 );
                 should_ignore_batch = true;
             }
