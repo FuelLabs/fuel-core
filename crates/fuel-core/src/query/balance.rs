@@ -61,14 +61,7 @@ impl ReadView {
             .coins()
             .map(|res| res.map(|coins| coins.amount()))
             .try_fold(0u128, |balance, amount| async move {
-                Ok(balance.checked_add(amount as u128).unwrap_or_else(|| {
-                    // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
-                    error!(
-                        %asset_id,
-                        prev_balance=%balance,
-                        "unable to change balance due to overflow");
-                    u128::MAX
-                }))
+                Ok(balance.saturating_add(amount as TotalBalanceAmount))
             })
             .await? as TotalBalanceAmount
         };
