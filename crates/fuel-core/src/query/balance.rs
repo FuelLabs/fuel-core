@@ -118,16 +118,8 @@ impl ReadView {
                     let amount: &mut TotalBalanceAmount = amounts_per_asset
                         .entry(*coin.asset_id(base_asset_id))
                         .or_default();
-                    let new_amount = amount
-                        .checked_add(coin.amount() as TotalBalanceAmount)
-                        .unwrap_or_else(|| {
-                            // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
-                            error!(
-                                asset_id=%coin.asset_id(base_asset_id),
-                                prev_balance=%amount,
-                                "unable to change balance due to overflow");
-                            u128::MAX
-                        });
+                    let new_amount =
+                        amount.saturating_add(coin.amount() as TotalBalanceAmount);
                     *amount = new_amount;
                     Ok(amounts_per_asset)
                 },
