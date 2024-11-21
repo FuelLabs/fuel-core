@@ -145,4 +145,4 @@ tempfile = "3.4"
 tikv-jemallocator = "0.5"
 
 [patch.crates-io]
-fuel-vm = { git = "https://github.com/fuelLabs/fuel-vm" }
+fuel-vm = { git = "https://github.com/fuelLabs/fuel-vm", branch = "add_expiration_policy" }
