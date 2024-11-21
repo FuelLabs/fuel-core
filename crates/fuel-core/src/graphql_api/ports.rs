@@ -67,8 +67,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::schema::coins::CoinType;
-
 use super::storage::balances::TotalBalanceAmount;
 
 pub trait OffChainDatabase: Send + Sync {

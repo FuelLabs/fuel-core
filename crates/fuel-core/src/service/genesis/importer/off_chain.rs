@@ -43,6 +43,10 @@ use super::{
     Handler,
 };
 
+// We always want to enable balances and coins to spend indexation if we're starting at genesis.
+const BALANCES_INDEXATION_ENABLED: bool = true;
+const COINS_TO_SPEND_INDEXATION_ENABLED: bool = true;
+
 impl ImportTable for Handler<TransactionStatuses, TransactionStatuses> {
     type TableInSnapshot = TransactionStatuses;
     type TableBeingWritten = TransactionStatuses;
@@ -107,10 +111,6 @@ impl ImportTable for Handler<OwnedMessageIds, Messages> {
         group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
-        // We always want to enable balances indexation if we're starting at genesis.
-        const BALANCES_INDEXATION_ENABLED: bool = true;
-        const COINS_TO_SPEND_INDEXATION_ENABLED: bool = true;
-
         let events = group
             .into_iter()
             .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
@@ -134,10 +134,6 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
         group: Vec<TableEntry<Self::TableInSnapshot>>,
         tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
-        // We always want to enable balances indexation if we're starting at genesis.
-        const BALANCES_INDEXATION_ENABLED: bool = true;
-        const COINS_TO_SPEND_INDEXATION_ENABLED: bool = true;
-
         let events = group.into_iter().map(|TableEntry { value, key }| {
             Cow::Owned(Event::CoinCreated(value.uncompress(key)))
         });

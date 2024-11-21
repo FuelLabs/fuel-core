@@ -23,8 +23,9 @@ use crate::{
     },
     graphql_api::storage::{
         balances::{
-            BalancesKey,
             CoinBalances,
+            CoinBalancesKey,
+            MessageBalance,
             MessageBalances,
             TotalBalanceAmount,
         },
@@ -35,7 +36,6 @@ use crate::{
             OldTransactions,
         },
     },
-    schema::coins::CoinType,
 };
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
@@ -80,10 +80,6 @@ use fuel_core_types::{
         Nonce,
     },
     services::txpool::TransactionStatus,
-};
-use tracing::{
-    debug,
-    error,
 };
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
@@ -216,25 +212,25 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     ) -> StorageResult<TotalBalanceAmount> {
         let coins = self
             .storage_as_ref::<CoinBalances>()
-            .get(&BalancesKey::new(owner, asset_id))?
+            .get(&CoinBalancesKey::new(owner, asset_id))?
             .unwrap_or_default()
             .into_owned() as TotalBalanceAmount;
 
         if base_asset_id == asset_id {
-            let messages = self
+            let MessageBalance {
+                retryable: _, // TODO[RC]: Handle this
+                non_retryable,
+            } = self
                 .storage_as_ref::<MessageBalances>()
                 .get(owner)?
                 .unwrap_or_default()
-                .into_owned() as TotalBalanceAmount;
+                .into_owned();
 
-            let total = coins.checked_add(messages).ok_or(anyhow::anyhow!(
-                "Total balance overflow: coins: {coins}, messages: {messages}"
+            let total = coins.checked_add(non_retryable).ok_or(anyhow::anyhow!(
+                "Total balance overflow: coins: {coins}, messages: {non_retryable}"
             ))?;
-
-            debug!(%coins, %messages, total, "total balance");
             Ok(total)
         } else {
-            debug!(%coins, "total balance");
             Ok(coins)
         }
     }
@@ -249,26 +245,26 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             let key = balance_key?;
             let asset_id = key.asset_id();
 
-            let messages = if base_asset_id == asset_id {
-                self.storage_as_ref::<MessageBalances>()
-                    .get(owner)?
-                    .unwrap_or_default()
-                    .into_owned() as TotalBalanceAmount
-            } else {
-                0
-            };
-
             let coins = self
                 .storage_as_ref::<CoinBalances>()
                 .get(&key)?
                 .unwrap_or_default()
                 .into_owned() as TotalBalanceAmount;
 
-            let total = coins.checked_add(messages).ok_or(anyhow::anyhow!(
-                "Total balance overflow: coins: {coins}, messages: {messages}"
-            ))?;
-            debug!(%owner, %asset_id, %total, "balance entry");
-            balances.insert(*asset_id, total);
+            balances.insert(*asset_id, coins);
+        }
+
+        if let Some(messages) = self.storage_as_ref::<MessageBalances>().get(owner)? {
+            let MessageBalance {
+                retryable: _,
+                non_retryable,
+            } = *messages;
+            balances
+                .entry(*base_asset_id)
+                .and_modify(|current| {
+                    *current = current.saturating_add(non_retryable);
+                })
+                .or_insert(non_retryable);
         }
 
         Ok(balances)
@@ -280,7 +276,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         asset_id: &AssetId,
         max: u16,
     ) -> StorageResult<Vec<UtxoId>> {
-        error!("graphql_api - coins_to_spend");
+        tracing::error!("XXX - graphql_api - coins_to_spend");
 
         let mut key_prefix = [0u8; Address::LEN + AssetId::LEN];
 
@@ -291,20 +287,20 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         offset += AssetId::LEN;
 
         // TODO[RC]: Do not collect, return iter.
-        error!("Starting to iterate");
+        tracing::error!("XXX - Starting to iterate");
         let mut all_utxo_ids = Vec::new();
         for coin_key in
             self.iter_all_by_prefix_keys::<CoinsToSpendIndex, _>(Some(key_prefix))
         {
             let coin = coin_key?;
 
-            error!("coin: {:?}", hex::encode(&coin));
+            tracing::error!("XXX - coin: {:?}", hex::encode(&coin));
 
             let utxo_id = coin.utxo_id();
             all_utxo_ids.push(utxo_id);
-            error!("coin: {:?}", &utxo_id);
+            tracing::error!("XXX - coin: {:?}", &utxo_id);
         }
-        error!("Finished iteration");
+        tracing::error!("XXX - Finished iteration");
         Ok(all_utxo_ids)
     }
 }

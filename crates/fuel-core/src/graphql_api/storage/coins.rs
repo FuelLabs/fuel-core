@@ -8,16 +8,12 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     Mappable,
 };
-use fuel_core_types::{
-    entities::coins::coin::Coin,
-    fuel_tx::{
-        Address,
-        AssetId,
-        TxId,
-        UtxoId,
-    },
+use fuel_core_types::fuel_tx::{
+    Address,
+    AssetId,
+    TxId,
+    UtxoId,
 };
-use tracing::error;
 
 use super::balances::ItemAmount;
 
@@ -36,7 +32,7 @@ pub struct CoinsToSpendIndex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CoinsToSpendIndexKey(
-    pub [u8; { Address::LEN + AssetId::LEN + u64::BITS as usize / 8 + TxId::LEN + 2 }],
+    pub [u8; Address::LEN + AssetId::LEN + u64::BITS as usize / 8 + TxId::LEN + 2],
 );
 
 impl CoinsToSpendIndexKey {

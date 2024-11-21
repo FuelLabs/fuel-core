@@ -7,7 +7,11 @@ use crate::{
             off_chain::OffChain,
             on_chain::OnChain,
             relayer::Relayer,
+            DatabaseDescription,
+            DatabaseMetadata,
+            IndexationKind,
         },
+        metadata::MetadataTable,
         Database,
         GenesisDatabase,
         Result as DatabaseResult,
@@ -28,7 +32,12 @@ use fuel_core_storage::tables::{
     ContractsState,
     Messages,
 };
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    transactional::ReadTransaction,
+    Result as StorageResult,
+    StorageAsMut,
+};
+use fuel_core_txpool::ports::AtomicView;
 use fuel_core_types::fuel_types::BlockHeight;
 use std::path::PathBuf;
 
@@ -151,6 +160,40 @@ impl CombinedDatabase {
         self.on_chain.check_version()?;
         self.off_chain.check_version()?;
         self.relayer.check_version()?;
+        Ok(())
+    }
+
+    pub fn initialize(&self) -> StorageResult<()> {
+        self.initialize_indexation()?;
+        Ok(())
+    }
+
+    fn initialize_indexation(&self) -> StorageResult<()> {
+        // When genesis is missing write to the database that balances cache should be used.
+        let on_chain_view = self.on_chain().latest_view()?;
+        if on_chain_view.get_genesis().is_err() {
+            let all_indexations = IndexationKind::all().collect();
+            tracing::info!(
+                "No genesis, initializing metadata with all supported indexations: {:?}",
+                all_indexations
+            );
+            let off_chain_view = self.off_chain().latest_view()?;
+            let mut database_tx = off_chain_view.read_transaction();
+            database_tx
+                .storage_as_mut::<MetadataTable<OffChain>>()
+                .insert(
+                    &(),
+                    &DatabaseMetadata::V2 {
+                        version: <OffChain as DatabaseDescription>::version(),
+                        height: Default::default(),
+                        indexation_availability: all_indexations,
+                    },
+                )?;
+            self.off_chain()
+                .data
+                .commit_changes(None, database_tx.into_changes())?;
+        };
+
         Ok(())
     }
 

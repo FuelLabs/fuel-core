@@ -1,20 +1,12 @@
+use self::indexation::IndexationError;
+
 use super::{
     da_compression::da_compress_block,
-    storage::{
-        balances::{
-            BalancesKey,
-            ItemAmount,
-            TotalBalanceAmount,
-        },
-        coins::{
-            CoinsToSpendIndex,
-            CoinsToSpendIndexKey,
-        },
-        old::{
-            OldFuelBlockConsensus,
-            OldFuelBlocks,
-            OldTransactions,
-        },
+    indexation,
+    storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
     },
 };
 use crate::{
@@ -24,10 +16,6 @@ use crate::{
             worker::OffChainDatabaseTransaction,
         },
         storage::{
-            balances::{
-                CoinBalances,
-                MessageBalances,
-            },
             blocks::FuelBlockIdsToHeights,
             coins::{
                 owner_coin_id_key,
@@ -53,13 +41,9 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
-    codec::primitive::utxo_id_to_bytes,
     Error as StorageError,
-    Mappable,
     Result as StorageResult,
     StorageAsMut,
-    StorageInspect,
-    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::{
@@ -69,11 +53,7 @@ use fuel_core_types::{
         },
         consensus::Consensus,
     },
-    entities::{
-        coins::coin::Coin,
-        relayer::transaction::RelayedTransactionStatus,
-        Message,
-    },
+    entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
         field::{
             Inputs,
@@ -85,15 +65,12 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
-        Address,
-        AssetId,
         Contract,
         Input,
         Output,
         Transaction,
         TxId,
         UniqueIdentifier,
-        UtxoId,
     },
     fuel_types::{
         BlockHeight,
@@ -119,12 +96,6 @@ use futures::{
 use std::{
     borrow::Cow,
     ops::Deref,
-};
-use tracing::{
-    debug,
-    error,
-    info,
-    trace,
 };
 
 #[cfg(test)]
@@ -217,240 +188,6 @@ where
     }
 }
 
-trait CoinsToSpendIndexable {
-    type Storage: Mappable;
-
-    fn owner(&self) -> &Address;
-    fn asset_id(&self) -> &AssetId;
-    fn amount(&self) -> ItemAmount;
-    fn utxo_id(&self) -> &UtxoId;
-    fn key(&self) -> <Self::Storage as Mappable>::Key;
-}
-
-impl CoinsToSpendIndexable for Coin {
-    type Storage = CoinsToSpendIndex;
-
-    fn owner(&self) -> &Address {
-        &self.owner
-    }
-
-    fn asset_id(&self) -> &AssetId {
-        &self.asset_id
-    }
-
-    fn amount(&self) -> ItemAmount {
-        self.amount
-    }
-
-    fn utxo_id(&self) -> &UtxoId {
-        &self.utxo_id
-    }
-
-    fn key(&self) -> <Self::Storage as Mappable>::Key
-    where
-        <<Self as CoinsToSpendIndexable>::Storage as Mappable>::Key: Sized,
-    {
-        // TODO[RC]: Test this
-        let mut key = [0u8; Address::LEN
-            + AssetId::LEN
-            + ItemAmount::BITS as usize / 8
-            + TxId::LEN
-            + 2];
-
-        let owner_bytes = self.owner().as_ref();
-        let asset_bytes = self.asset_id().as_ref();
-        let amount_bytes = self.amount().to_be_bytes();
-        let utxo_id_bytes = utxo_id_to_bytes(&self.utxo_id());
-
-        // Copy slices into the fixed-size array
-        let mut offset = 0;
-        key[offset..offset + Address::LEN].copy_from_slice(owner_bytes);
-        offset += Address::LEN;
-
-        key[offset..offset + AssetId::LEN].copy_from_slice(asset_bytes);
-        offset += AssetId::LEN;
-
-        key[offset..offset + u64::BITS as usize / 8].copy_from_slice(&amount_bytes);
-        offset += ItemAmount::BITS as usize / 8;
-
-        key[offset..offset + TxId::LEN + 2].copy_from_slice(&utxo_id_bytes);
-
-        CoinsToSpendIndexKey(key)
-    }
-}
-
-trait CoinsToSpendIndexationUpdater<T>: CoinsToSpendIndexable {
-    fn value() -> <Self::Storage as Mappable>::Value;
-
-    fn register(&self, tx: &mut T)
-    where
-        T: OffChainDatabaseTransaction + StorageMutate<Self::Storage>,
-        <Self::Storage as Mappable>::Key: Sized,
-        <<Self as CoinsToSpendIndexable>::Storage as Mappable>::Value: Sized,
-    {
-        let key = self.key();
-        let storage = tx.storage::<Self::Storage>();
-        storage.insert(&key, &Self::value());
-        debug!(
-            utxo_id=?self.utxo_id(),
-            "coins to spend indexation updated");
-        error!(
-            "Coin registered in coins to spend index!, utxo_id: {:?}, amount={}",
-            self.utxo_id(),
-            self.amount(),
-        );
-    }
-}
-
-impl<T> CoinsToSpendIndexationUpdater<T> for Coin {
-    fn value() -> <Self::Storage as Mappable>::Value {
-        ()
-    }
-}
-
-trait DatabaseItemWithAmount {
-    type Storage: Mappable;
-
-    fn key(&self) -> <Self::Storage as Mappable>::Key;
-    fn amount(&self) -> ItemAmount;
-}
-
-impl DatabaseItemWithAmount for &Coin {
-    type Storage = CoinBalances;
-
-    fn key(&self) -> <Self::Storage as Mappable>::Key {
-        BalancesKey::new(&self.owner, &self.asset_id)
-    }
-
-    fn amount(&self) -> ItemAmount {
-        self.amount
-    }
-}
-
-impl DatabaseItemWithAmount for &Message {
-    type Storage = MessageBalances;
-
-    fn key(&self) -> <Self::Storage as Mappable>::Key {
-        *self.recipient()
-    }
-
-    fn amount(&self) -> ItemAmount {
-        (**self).amount()
-    }
-}
-
-trait BalanceIndexationUpdater: DatabaseItemWithAmount {
-    type TotalBalance: From<<Self::Storage as Mappable>::OwnedValue> + core::fmt::Display;
-
-    fn update_balances<T, UpdaterFn>(
-        &self,
-        tx: &mut T,
-        updater: UpdaterFn,
-    ) -> StorageResult<()>
-    where
-        <Self::Storage as Mappable>::Key: Sized + core::fmt::Display,
-        <Self::Storage as Mappable>::OwnedValue: Default + core::fmt::Display,
-        UpdaterFn: Fn(Self::TotalBalance, ItemAmount) -> Option<Self::TotalBalance>,
-        T: OffChainDatabaseTransaction + StorageMutate<Self::Storage>,
-        <Self::Storage as Mappable>::Value:
-            From<<Self as BalanceIndexationUpdater>::TotalBalance>,
-        fuel_core_storage::Error: From<<T as StorageInspect<Self::Storage>>::Error>,
-    {
-        let key = self.key();
-        let amount = self.amount();
-        let storage = tx.storage::<Self::Storage>();
-        let current_balance = storage.get(&key)?.unwrap_or_default();
-        let prev_balance = current_balance.clone();
-        match updater(current_balance.as_ref().clone().into(), amount) {
-            Some(new_balance) => {
-                debug!(
-                    %key,
-                    %amount,
-                    %prev_balance,
-                    %new_balance,
-                    "changing balance");
-
-                let storage = tx.storage::<Self::Storage>();
-                Ok(storage.insert(&key, &new_balance.into())?)
-            }
-            None => {
-                error!(
-                    %key,
-                    %amount,
-                    %prev_balance,
-                    "unable to change balance due to overflow");
-                Err(anyhow::anyhow!("unable to change balance due to overflow").into())
-            }
-        }
-    }
-}
-
-impl BalanceIndexationUpdater for &Coin {
-    type TotalBalance = TotalBalanceAmount;
-}
-impl BalanceIndexationUpdater for &Message {
-    type TotalBalance = TotalBalanceAmount;
-}
-
-fn update_balances_indexation<T>(
-    event: &Event,
-    block_st_transaction: &mut T,
-    balances_indexation_enabled: bool,
-) -> StorageResult<()>
-where
-    T: OffChainDatabaseTransaction,
-{
-    if !balances_indexation_enabled {
-        return Ok(());
-    }
-    match event {
-        Event::MessageImported(message) => message
-            .update_balances(block_st_transaction, |balance, amount| {
-                balance.checked_add(amount as TotalBalanceAmount)
-            }),
-        Event::MessageConsumed(message) => message
-            .update_balances(block_st_transaction, |balance, amount| {
-                balance.checked_sub(amount as TotalBalanceAmount)
-            }),
-        Event::CoinCreated(coin) => coin
-            .update_balances(block_st_transaction, |balance, amount| {
-                balance.checked_add(amount as TotalBalanceAmount)
-            }),
-        Event::CoinConsumed(coin) => coin
-            .update_balances(block_st_transaction, |balance, amount| {
-                balance.checked_sub(amount as TotalBalanceAmount)
-            }),
-        Event::ForcedTransactionFailed { .. } => Ok(()),
-    }
-}
-
-fn update_coins_to_spend_indexation<T>(
-    event: &Event,
-    block_st_transaction: &mut T,
-    coins_to_spend_indexation_enabled: bool,
-) -> StorageResult<()>
-where
-    T: OffChainDatabaseTransaction,
-{
-    if !coins_to_spend_indexation_enabled {
-        return Ok(());
-    }
-
-    match event {
-        Event::MessageImported(message) => (),
-        Event::MessageConsumed(message) => (),
-        Event::CoinCreated(coin) => coin.register(block_st_transaction),
-        Event::CoinConsumed(coin) => (),
-        Event::ForcedTransactionFailed {
-            id,
-            block_height,
-            failure,
-        } => (),
-    }
-
-    Ok(())
-}
-
 /// Process the executor events and update the indexes for the messages and coins.
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
@@ -525,24 +262,35 @@ fn update_indexation<T>(
     block_st_transaction: &mut T,
     balances_indexation_enabled: bool,
     coins_to_spend_indexation_enabled: bool,
-) where
+) -> Result<(), IndexationError>
+where
     T: OffChainDatabaseTransaction,
 {
-    if let Err(err) = update_balances_indexation(
+    match indexation::process_balances_update(
         event.deref(),
         block_st_transaction,
         balances_indexation_enabled,
     ) {
-        // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
-        tracing::error!(%err, "Processing balances indexation")
+        Ok(()) => (),
+        Err(IndexationError::StorageError(err)) => {
+            return Err(err.into());
+        }
+        Err(err @ IndexationError::CoinBalanceWouldUnderflow { .. })
+        | Err(err @ IndexationError::MessageBalanceWouldUnderflow { .. }) => {
+            // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
+            tracing::error!("Balances underflow detected: {}", err);
+        }
     }
-    if let Err(err) = update_coins_to_spend_indexation(
-        event.deref(),
-        block_st_transaction,
-        coins_to_spend_indexation_enabled,
-    ) {
-        tracing::error!(%err, "Processing coins to spend indexation")
-    }
+
+    // match indexation::update_coins_to_spend_indexation(
+    // event.deref(),
+    // block_st_transaction,
+    // coins_to_spend_indexation_enabled,
+    // ) {
+    // tracing::error!(%err, "Processing coins to spend indexation");
+    // }
+
+    Ok(())
 }
 
 /// Associate all transactions within a block to their respective UTXO owners
@@ -781,9 +529,10 @@ where
         let coins_to_spend_indexation_enabled = self
             .off_chain_database
             .coins_to_spend_indexation_enabled()?;
-        info!(
+        tracing::info!(
             balances_indexation_enabled,
-            coins_to_spend_indexation_enabled, "Indexation availability status"
+            coins_to_spend_indexation_enabled,
+            "Indexation availability status"
         );
 
         let InitializeTask {

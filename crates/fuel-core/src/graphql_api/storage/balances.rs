@@ -23,16 +23,16 @@ use rand::{
 pub type ItemAmount = u64;
 pub type TotalBalanceAmount = u128;
 
-double_key!(BalancesKey, Address, address, AssetId, asset_id);
-impl Distribution<BalancesKey> for Standard {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> BalancesKey {
-        let mut bytes = [0u8; BalancesKey::LEN];
+double_key!(CoinBalancesKey, Address, address, AssetId, asset_id);
+impl Distribution<CoinBalancesKey> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> CoinBalancesKey {
+        let mut bytes = [0u8; CoinBalancesKey::LEN];
         rng.fill_bytes(bytes.as_mut());
-        BalancesKey::from_array(bytes)
+        CoinBalancesKey::from_array(bytes)
     }
 }
 
-impl core::fmt::Display for BalancesKey {
+impl core::fmt::Display for CoinBalancesKey {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "address={} asset_id={}", self.address(), self.asset_id())
     }
@@ -42,7 +42,7 @@ impl core::fmt::Display for BalancesKey {
 pub struct CoinBalances;
 
 impl Mappable for CoinBalances {
-    type Key = BalancesKey;
+    type Key = CoinBalancesKey;
     type OwnedKey = Self::Key;
     type Value = TotalBalanceAmount;
     type OwnedValue = Self::Value;
@@ -57,13 +57,19 @@ impl TableWithBlueprint for CoinBalances {
     }
 }
 
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct MessageBalance {
+    pub retryable: TotalBalanceAmount,
+    pub non_retryable: TotalBalanceAmount,
+}
+
 /// This table stores the balances of messages per owner.
 pub struct MessageBalances;
 
 impl Mappable for MessageBalances {
     type Key = Address;
     type OwnedKey = Self::Key;
-    type Value = TotalBalanceAmount;
+    type Value = MessageBalance;
     type OwnedValue = Self::Value;
 }
 

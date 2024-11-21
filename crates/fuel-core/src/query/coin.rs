@@ -1,13 +1,9 @@
 use crate::{
     coins_query::CoinsQueryError,
     fuel_core_graphql_api::database::ReadView,
-    graphql_api::storage::coins::CoinsToSpendIndex,
 };
 use fuel_core_storage::{
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
+    iter::IterDirection,
     not_found,
     tables::Coins,
     Error as StorageError,
