@@ -52,7 +52,6 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     fuel_tx::{
-        field::Expiration,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -422,14 +421,6 @@ where
 
         let insert_transaction_thread_pool_op = move || {
             let current_height = *current_height.read();
-            let expiration = match *transaction {
-                Transaction::Script(ref tx) => tx.expiration(),
-                Transaction::Create(ref tx) => tx.expiration(),
-                Transaction::Upgrade(ref tx) => tx.expiration(),
-                Transaction::Upload(ref tx) => tx.expiration(),
-                Transaction::Blob(ref tx) => tx.expiration(),
-                Transaction::Mint(_) => u32::MAX.into(),
-            };
 
             // TODO: This should be removed if the checked transactions
             //  can work with Arc in it
@@ -464,6 +455,7 @@ where
             };
 
             let tx = Arc::new(checked_tx);
+            let expiration = tx.expiration();
 
             let result = {
                 let mut pool = pool.write();
