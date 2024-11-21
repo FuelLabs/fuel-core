@@ -52,6 +52,7 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     fuel_tx::{
+        field::Expiration,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -328,11 +329,17 @@ where
         let mut removed_txs = vec![];
         {
             let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
-            let expired_txs = height_expiration_txs.remove(&new_height);
-            if let Some(expired_txs) = expired_txs {
-                let mut tx_pool = self.pool.write();
-                removed_txs
-                    .extend(tx_pool.remove_transaction_and_dependents(expired_txs));
+            let range_to_remove = height_expiration_txs
+                .range(..=new_height)
+                .map(|(k, _)| *k)
+                .collect::<Vec<_>>();
+            for height in range_to_remove {
+                let expired_txs = height_expiration_txs.remove(&height);
+                if let Some(expired_txs) = expired_txs {
+                    let mut tx_pool = self.pool.write();
+                    removed_txs
+                        .extend(tx_pool.remove_transaction_and_dependents(expired_txs));
+                }
             }
         }
         for tx in removed_txs {
@@ -415,6 +422,14 @@ where
 
         let insert_transaction_thread_pool_op = move || {
             let current_height = *current_height.read();
+            let expiration = match *transaction {
+                Transaction::Script(ref tx) => tx.expiration(),
+                Transaction::Create(ref tx) => tx.expiration(),
+                Transaction::Upgrade(ref tx) => tx.expiration(),
+                Transaction::Upload(ref tx) => tx.expiration(),
+                Transaction::Blob(ref tx) => tx.expiration(),
+                Transaction::Mint(_) => u32::MAX.into(),
+            };
 
             // TODO: This should be removed if the checked transactions
             //  can work with Arc in it
@@ -467,10 +482,9 @@ where
                         .write()
                         .push_front((submitted_time, tx_id));
 
-                    {
+                    if expiration < u32::MAX.into() {
                         let mut lock = height_expiration_txs.write();
-                        // TODO: Update with real value
-                        let block_height_expiration = lock.entry(0.into()).or_default();
+                        let block_height_expiration = lock.entry(expiration).or_default();
                         block_height_expiration.push(tx_id);
                     }
 

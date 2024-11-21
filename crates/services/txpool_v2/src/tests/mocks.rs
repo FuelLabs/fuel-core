@@ -67,6 +67,8 @@ use std::{
         Mutex,
     },
 };
+use tokio::sync::mpsc::Receiver;
+use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Default)]
 pub struct Data {
@@ -333,6 +335,14 @@ impl MockImporter {
             });
             Box::pin(stream)
         });
+        importer
+    }
+
+    pub fn with_block_provider(block_provider: Receiver<SharedImportResult>) -> Self {
+        let mut importer = MockImporter::default();
+        importer
+            .expect_block_events()
+            .return_once(move || Box::pin(ReceiverStream::new(block_provider)));
         importer
     }
 }
