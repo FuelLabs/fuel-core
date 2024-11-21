@@ -18,6 +18,6 @@ impl ReadView {
             .off_chain
             .asset_info(&id)?
             .ok_or(not_found!(AssetDetails))?;
-        Ok(asset.into())
+        Ok(asset)
     }
 }
