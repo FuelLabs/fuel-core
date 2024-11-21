@@ -97,10 +97,6 @@ use std::{
     borrow::Cow,
     ops::Deref,
 };
-use tracing::{
-    error,
-    info,
-};
 
 #[cfg(test)]
 mod tests;
@@ -213,7 +209,7 @@ where
             Err(err @ IndexationError::CoinBalanceWouldUnderflow { .. })
             | Err(err @ IndexationError::MessageBalanceWouldUnderflow { .. }) => {
                 // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
-                error!("Balances underflow detected: {}", err);
+                tracing::error!("Balances underflow detected: {}", err);
             }
         }
 
@@ -500,7 +496,7 @@ where
         }
 
         let balances_enabled = self.off_chain_database.balances_enabled()?;
-        info!("Balances cache available: {}", balances_enabled);
+        tracing::info!("Balances cache available: {}", balances_enabled);
 
         let InitializeTask {
             chain_id,

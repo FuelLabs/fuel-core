@@ -52,7 +52,6 @@ use std::{
     net::SocketAddr,
     sync::Arc,
 };
-use tracing::info;
 
 pub use config::{
     Config,
@@ -226,7 +225,7 @@ impl FuelService {
         let on_chain_view = database.on_chain().latest_view()?;
         if on_chain_view.get_genesis().is_err() {
             let all_indexations = IndexationKind::all().collect();
-            info!(
+            tracing::info!(
                 "No genesis, initializing metadata with all supported indexations: {:?}",
                 all_indexations
             );

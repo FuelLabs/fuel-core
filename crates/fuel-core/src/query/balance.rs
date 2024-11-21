@@ -32,10 +32,6 @@ use futures::{
     StreamExt,
     TryStreamExt,
 };
-use tracing::{
-    debug,
-    error,
-};
 
 pub mod asset_query;
 
@@ -47,10 +43,8 @@ impl ReadView {
         base_asset_id: AssetId,
     ) -> StorageResult<AddressBalance> {
         let amount = if self.balances_enabled {
-            debug!(%owner, %asset_id, "Querying balance with balances cache");
             self.off_chain.balance(&owner, &asset_id, &base_asset_id)?
         } else {
-            debug!(%owner, %asset_id, "Querying balance without balances cache");
             AssetQuery::new(
                 &owner,
                 &AssetSpendTarget::new(asset_id, u64::MAX, u16::MAX),
@@ -100,7 +94,6 @@ impl ReadView {
         base_asset_id: &'a AssetId,
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        debug!(%owner, "Querying balances without balances cache");
         let query = AssetsQuery::new(owner, None, None, self, base_asset_id);
         let stream = query.coins();
 
@@ -153,7 +146,6 @@ impl ReadView {
         base_asset_id: &AssetId,
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        debug!(%owner, "Querying balances using balances cache");
         match self.off_chain.balances(owner, base_asset_id) {
             Ok(balances) => {
                 let iter = if direction == IterDirection::Reverse {

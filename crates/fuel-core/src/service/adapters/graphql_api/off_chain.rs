@@ -80,7 +80,6 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-use tracing::debug;
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -229,11 +228,8 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             let total = coins.checked_add(non_retryable).ok_or(anyhow::anyhow!(
                 "Total balance overflow: coins: {coins}, messages: {non_retryable}"
             ))?;
-
-            debug!(%coins, %non_retryable, total, "total balance");
             Ok(total)
         } else {
-            debug!(%coins, "total balance");
             Ok(coins)
         }
     }
