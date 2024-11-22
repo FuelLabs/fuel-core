@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::borrow::Cow;
 
 use crate::{
     database::{
@@ -238,35 +238,72 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         &self,
         owner: &Address,
         base_asset_id: &AssetId,
-    ) -> StorageResult<BTreeMap<AssetId, TotalBalanceAmount>> {
-        let mut balances = BTreeMap::new();
-        for balance_key in self.iter_all_by_prefix_keys::<CoinBalances, _>(Some(owner)) {
-            let key = balance_key?;
-            let asset_id = key.asset_id();
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<(AssetId, TotalBalanceAmount)>> {
+        let base_asset_id = base_asset_id.clone();
+        let (maybe_messages_balance, errors_1) = self
+            .storage_as_ref::<MessageBalances>()
+            .get(owner)
+            .map_or_else(
+                |err| (None, std::iter::once(Err(err)).into_boxed()),
+                |value| {
+                    (
+                        value.map(|value| value.non_retryable),
+                        std::iter::empty().into_boxed(),
+                    )
+                },
+            );
 
-            let coins = self
-                .storage_as_ref::<CoinBalances>()
-                .get(&key)?
-                .unwrap_or_default()
-                .into_owned() as TotalBalanceAmount;
+        let (maybe_base_coin_balance, errors_2) = self
+            .storage_as_ref::<CoinBalances>()
+            .get(&CoinBalancesKey::new(owner, &base_asset_id))
+            .map_or_else(
+                |err| (None, std::iter::once(Err(err)).into_boxed()),
+                |value| (value.map(Cow::into_owned), std::iter::empty().into_boxed()),
+            );
 
-            balances.insert(*asset_id, coins);
-        }
-
-        if let Some(messages) = self.storage_as_ref::<MessageBalances>().get(owner)? {
-            let MessageBalance {
-                retryable: _,
-                non_retryable,
-            } = *messages;
-            balances
-                .entry(*base_asset_id)
-                .and_modify(|current| {
-                    *current = current.saturating_add(non_retryable);
+        let prefix_non_base_asset = owner;
+        let coins_non_base_asset_iter = self
+            .iter_all_filtered_keys::<CoinBalances, _>(
+                Some(prefix_non_base_asset),
+                None,
+                Some(direction),
+            )
+            .filter_map(move |result| match result {
+                Ok(key) if *key.asset_id() != base_asset_id => Some(Ok(key)),
+                Ok(_) => None,
+                Err(err) => Some(Err(err)),
+            })
+            .map(move |result| {
+                result.and_then(|key| {
+                    let asset_id = key.asset_id();
+                    let coin_balance =
+                        self.storage_as_ref::<CoinBalances>()
+                            .get(&key)?
+                            .unwrap_or_default()
+                            .into_owned() as TotalBalanceAmount;
+                    Ok((*asset_id, coin_balance))
                 })
-                .or_insert(non_retryable);
-        }
+            })
+            .into_boxed();
 
-        Ok(balances)
+        errors_1
+            .chain(errors_2)
+            .chain(match (maybe_messages_balance, maybe_base_coin_balance) {
+                (None, None) => std::iter::empty().into_boxed(),
+                (None, Some(base_coin_balance)) => {
+                    std::iter::once(Ok((base_asset_id, base_coin_balance))).into_boxed()
+                }
+                (Some(messages_balance), None) => {
+                    std::iter::once(Ok((base_asset_id, messages_balance))).into_boxed()
+                }
+                (Some(messages_balance), Some(base_coin_balance)) => std::iter::once(Ok(
+                    (base_asset_id, messages_balance + base_coin_balance),
+                ))
+                .into_boxed(),
+            })
+            .chain(coins_non_base_asset_iter)
+            .into_boxed()
     }
 }
 

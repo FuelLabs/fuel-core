@@ -62,10 +62,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::{
-    collections::BTreeMap,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use super::storage::balances::TotalBalanceAmount;
 
@@ -87,7 +84,8 @@ pub trait OffChainDatabase: Send + Sync {
         &self,
         owner: &Address,
         base_asset_id: &AssetId,
-    ) -> StorageResult<BTreeMap<AssetId, TotalBalanceAmount>>;
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<(AssetId, TotalBalanceAmount)>>;
 
     fn owned_coins_ids(
         &self,
