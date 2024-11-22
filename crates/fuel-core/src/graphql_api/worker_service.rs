@@ -1,4 +1,4 @@
-use self::indexation::IndexationError;
+use self::indexation::balances::IndexationError;
 
 use super::{
     da_compression::da_compress_block,
@@ -266,7 +266,7 @@ fn update_indexation<T>(
 where
     T: OffChainDatabaseTransaction,
 {
-    match indexation::process_balances_update(
+    match indexation::balances::process_balances_update(
         event.deref(),
         block_st_transaction,
         balances_indexation_enabled,
