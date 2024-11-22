@@ -43,6 +43,7 @@ use fuel_core_gas_price_service::v0::uninitialized_task::{
     AlgorithmV0,
 };
 use fuel_core_poa::Trigger;
+use fuel_core_shared_sequencer::ports::Signer;
 use fuel_core_storage::{
     self,
     structured_storage::StructuredStorage,
@@ -249,7 +250,7 @@ pub fn init_sub_services(
     let shared_sequencer = {
         let config = config.shared_sequencer.clone();
 
-        if production_enabled {
+        if signer.is_available() {
             let cosmos_public_address = config.sender_account_id(signer.as_ref())?;
 
             tracing::info!(
