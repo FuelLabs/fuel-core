@@ -31,7 +31,7 @@ cargo make check --all-features --locked &&
 cargo make check --locked &&
 OVERRIDE_CHAIN_CONFIGS=true cargo test --test integration_tests local_node &&
 cargo nextest run --workspace &&
-FUEL_ALWAYS_USE_WASM=true cargo nextest run --all-features --workspace &&
+cargo nextest run --all-features --workspace &&
 cargo nextest run -p fuel-core --no-default-features &&
 cargo nextest run -p fuel-core-client --no-default-features &&
 cargo nextest run -p fuel-core-chain-config --no-default-features &&

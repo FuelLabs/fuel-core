@@ -5,7 +5,6 @@ use crate::{
         BlockProducerAdapter,
         P2PAdapter,
         PoAAdapter,
-        SharedSequencerAdapter,
         TxPoolAdapter,
     },
 };
@@ -15,7 +14,6 @@ use fuel_core_poa::{
         BlockImporter,
         P2pPort,
         PredefinedBlocks,
-        SharedSequencerPort,
         TransactionPool,
         TransactionsSource,
     },
@@ -27,10 +25,7 @@ use fuel_core_poa::{
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
-    blockchain::{
-        block::Block,
-        SealedBlock,
-    },
+    blockchain::block::Block,
     fuel_tx::Bytes32,
     fuel_types::BlockHeight,
     services::{
@@ -51,9 +46,6 @@ use tokio_stream::{
     wrappers::BroadcastStream,
     StreamExt,
 };
-
-#[cfg(feature = "shared-sequencer")]
-use fuel_core_shared_sequencer_client::ports::Signer;
 
 impl PoAAdapter {
     pub fn new(shared_state: Option<SharedState>) -> Self {
@@ -169,26 +161,6 @@ impl P2pPort for P2PAdapter {
     }
 }
 
-#[async_trait::async_trait]
-impl SharedSequencerPort for SharedSequencerAdapter {
-    #[cfg(feature = "shared-sequencer")]
-    async fn send<S: Signer>(
-        &mut self,
-        signing_key: &S,
-        block: SealedBlock,
-    ) -> anyhow::Result<()> {
-        self.client.lock().await.send(signing_key, block).await
-    }
-
-    #[cfg(not(feature = "shared-sequencer"))]
-    async fn send<S>(
-        &mut self,
-        _signing_key: &S,
-        _block: SealedBlock,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-}
 pub struct InDirectoryPredefinedBlocks {
     path_to_directory: Option<PathBuf>,
 }

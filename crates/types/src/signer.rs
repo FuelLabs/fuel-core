@@ -2,7 +2,10 @@
 
 use crate::{
     blockchain::primitives::SecretKeyWrapper,
-    fuel_crypto::PublicKey,
+    fuel_crypto::{
+        Message,
+        PublicKey,
+    },
     fuel_tx::{
         Address,
         Input,
@@ -23,9 +26,6 @@ use aws_sdk_kms::{
     },
 };
 use core::ops::Deref;
-#[cfg(feature = "aws-kms")]
-use fuel_core_types::fuel_crypto::Message;
-use fuel_vm_private::prelude::Message;
 
 /// How the block is signed
 #[derive(Clone, Debug)]
@@ -37,8 +37,11 @@ pub enum SignMode {
     /// Sign using AWS KMS
     #[cfg(feature = "aws-kms")]
     Kms {
+        /// The key ID in AWS KMS.
         key_id: String,
+        /// The AWS KMS client.
         client: aws_sdk_kms::Client,
+        /// The cached public key bytes.
         cached_public_key_bytes: Vec<u8>,
     },
 }
@@ -50,12 +53,12 @@ impl SignMode {
     }
 
     /// Sign a prehashed message
-    pub async fn sign_message(&self, message: &Message) -> anyhow::Result<Signature> {
+    pub async fn sign_message(&self, message: Message) -> anyhow::Result<Signature> {
         let signature = match self {
             SignMode::Unavailable => return Err(anyhow!("no PoA signing key configured")),
             SignMode::Key(key) => {
                 let signing_key = key.expose_secret().deref();
-                Signature::sign(signing_key, message)
+                Signature::sign(signing_key, &message)
             }
             #[cfg(feature = "aws-kms")]
             SignMode::Kms {
@@ -69,7 +72,7 @@ impl SignMode {
 
     /// Sign a blob of data
     pub async fn sign(&self, data: &[u8]) -> anyhow::Result<Signature> {
-        self.sign_message(&Message::new(data)).await
+        self.sign_message(Message::new(data)).await
     }
 
     /// Returns the public key of the block producer, if any
@@ -90,6 +93,31 @@ impl SignMode {
                 let k256_public_key =
                     k256::PublicKey::from_public_key_der(cached_public_key_bytes)?;
                 Ok(Some(PublicKey::from(k256_public_key)))
+            }
+        }
+    }
+
+    /// Returns the verifying key of the block producer, if any
+    pub fn verifying_key(&self) -> anyhow::Result<Option<k256::ecdsa::VerifyingKey>> {
+        match self {
+            SignMode::Unavailable => Ok(None),
+            SignMode::Key(secret_key) => {
+                let secret: k256::SecretKey = secret_key.expose_secret().as_ref().into();
+                let public_key = secret.public_key();
+
+                Ok(Some(public_key.into()))
+            }
+
+            #[cfg(feature = "aws-kms")]
+            SignMode::Kms {
+                cached_public_key_bytes,
+                ..
+            } => {
+                use k256::pkcs8::DecodePublicKey;
+
+                let k256_public_key =
+                    k256::PublicKey::from_public_key_der(cached_public_key_bytes)?;
+                Ok(Some(k256_public_key.into()))
             }
         }
     }
@@ -124,7 +152,7 @@ async fn sign_with_kms(
         .message(Blob::new(*message))
         .send()
         .await
-        .inspect_err(|err| tracing::error!("Failed to sign with AWS KMS: {err:?}"))?;
+        .map_err(|err| anyhow::anyhow!("Failed to sign with AWS KMS: {err:?}"))?;
     let signature_der = reply
         .signature
         .ok_or_else(|| anyhow!("no signature returned from AWS KMS"))?
@@ -174,7 +202,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use fuel_core_types::fuel_crypto::SecretKey;
+    use crate::fuel_crypto::SecretKey;
     use rand::{
         rngs::StdRng,
         SeedableRng,

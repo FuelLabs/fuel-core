@@ -29,7 +29,7 @@ fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
 fuel-core-compression = { workspace = true }
 fuel-core-metrics = { workspace = true }
-fuel-core-shared-sequencer-client = { workspace = true, optional = true }
+fuel-core-shared-sequencer = { workspace = true, optional = true }
 fuel-core-types = { workspace = true, features = ["std"] }
 hex = { workspace = true }
 humantime = "2.1"
@@ -64,7 +64,7 @@ default = ["env", "relayer", "rocksdb"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-types/aws-kms"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
-shared-sequencer = ["dep:fuel-core-shared-sequencer-client"]
+shared-sequencer = ["dep:fuel-core-shared-sequencer"]
 relayer = ["fuel-core/relayer", "dep:url"]
 parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb"]
@@ -75,6 +75,7 @@ production = [
   "relayer",
   "rocksdb-production",
   "p2p",
+  "shared-sequencer",
   "parquet",
   "aws-kms",
 ]

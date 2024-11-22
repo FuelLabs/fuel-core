@@ -172,6 +172,12 @@ impl From<[u8; 32]> for BlockId {
     }
 }
 
+impl AsRef<SecretKey> for SecretKeyWrapper {
+    fn as_ref(&self) -> &SecretKey {
+        &self.0
+    }
+}
+
 impl TryFrom<&'_ [u8]> for BlockId {
     type Error = TryFromSliceError;
 

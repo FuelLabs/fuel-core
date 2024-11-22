@@ -14,22 +14,20 @@ use cosmrs::{
         SignDoc,
         SignerInfo,
     },
-    AccountId,
     Coin,
 };
 use error::{
     CosmosError,
     PostBlobError,
 };
-use fuel_core_types::blockchain::SealedBlock;
-use ports::Signer;
-use tendermint_rpc::Client as _;
-
+use fuel_sequencer_proto::protos::fuelsequencer::sequencing::v1::MsgPostBlob;
 use http_api::{
     AccountMetadata,
     TopicInfo,
 };
+use ports::Signer;
 use prost::Message;
+use tendermint_rpc::Client as _;
 
 // Re-exports
 pub use prost::bytes::Bytes;
@@ -38,13 +36,16 @@ mod config;
 mod error;
 mod http_api;
 pub mod ports;
+pub mod service;
+
 pub use config::Config;
-use fuel_sequencer_proto::proto::fuelsequencer::sequencing::v1::MsgPostBlob;
+use fuel_core_types::blockchain::primitives::BlockId;
 
 /// Shared sequencer client
 pub struct Client {
     config: config::Config,
 }
+
 impl Client {
     /// Create a new shared sequencer client from config.
     pub fn new(config: config::Config) -> Self {
@@ -69,16 +70,17 @@ impl Client {
     }
 
     /// Retrieve account metadata by its ID
-    pub async fn get_account_meta(
+    pub async fn get_account_meta<S: Signer>(
         &self,
-        id: AccountId,
+        signer: &S,
     ) -> anyhow::Result<AccountMetadata> {
-        http_api::get_account(&self.config.blockchain_api, id).await
+        let sender_account_id = self.config.sender_account_id(signer)?;
+        http_api::get_account(&self.config.blockchain_api, sender_account_id).await
     }
 
-    /// Retrieve the topic info by its ID, if it exists
-    pub async fn get_topic(&self, id: [u8; 32]) -> anyhow::Result<Option<TopicInfo>> {
-        http_api::get_topic(&self.config.blockchain_api, id).await
+    /// Retrieve the topic info, if it exists
+    pub async fn get_topic(&self) -> anyhow::Result<Option<TopicInfo>> {
+        http_api::get_topic(&self.config.blockchain_api, self.config.topic).await
     }
 
     /// Post a sealed block to the sequencer chain using some
@@ -87,32 +89,34 @@ impl Client {
     pub async fn send<S: Signer>(
         &self,
         signer: &S,
-        block: SealedBlock,
+        account: AccountMetadata,
+        order: u64,
+        block_id: BlockId,
     ) -> anyhow::Result<()> {
         let latest_height = self.latest_block_height().await?;
-        let prev_order = self
-            .get_topic(self.config.topic)
-            .await?
-            .map(|f| f.order)
-            .unwrap_or_default();
 
         self.send_raw(
-            latest_height.saturating_add(100), // TODO: determine how much this has to be
-            100_000,                           // TODO: determine how much this has to be
+            // TODO: determine how much this has to be
+            latest_height.saturating_add(100),
+            // TODO: determine how much this has to be
+            100_000,
             signer,
-            prev_order.wrapping_add(1),
+            account,
+            order,
             self.config.topic,
-            Bytes::from(postcard::to_stdvec(&block)?),
+            Bytes::from(block_id.as_slice().to_vec()),
         )
         .await
     }
 
     /// Post a blob of raw data to the sequencer chain
+    #[allow(clippy::too_many_arguments)]
     pub async fn send_raw<S: Signer>(
         &self,
         timeout_height: u32,
         gas_limit: u64,
         signer: &S,
+        account: AccountMetadata,
         order: u64,
         topic: [u8; 32],
         data: Bytes,
@@ -123,12 +127,6 @@ impl Client {
         };
 
         let fee = Fee::from_amount_and_gas(amount, gas_limit);
-
-        let sender_public_key = signer.public_key();
-        let sender_account_id = sender_public_key
-            .account_id(&self.config.account_prefix)
-            .map_err(CosmosError)?;
-        let account = self.get_account_meta(sender_account_id).await?;
 
         let payload = self
             .make_payload(timeout_height, fee, signer, account, order, topic, data)
@@ -152,10 +150,7 @@ impl Client {
         topic: [u8; 32],
         data: Bytes,
     ) -> anyhow::Result<Vec<u8>> {
-        let sender_public_key = signer.public_key();
-        let sender_account_id = sender_public_key
-            .account_id(&self.config.account_prefix)
-            .map_err(|err| anyhow!("{err:?}"))?;
+        let sender_account_id = self.config.sender_account_id(signer)?;
 
         let chain_id = self.config.chain_id.parse()?;
 
@@ -171,14 +166,13 @@ impl Client {
         };
         let tx_body = tx::Body::new(vec![any_msg], "", timeout_height);
 
+        let sender_public_key = signer.public_key();
         let signer_info =
             SignerInfo::single_direct(Some(sender_public_key), account.sequence);
         let auth_info = signer_info.auth_info(fee);
         let sign_doc =
             SignDoc::new(&tx_body, &auth_info, &chain_id, account.account_number)
                 .map_err(|err| anyhow!("{err:?}"))?;
-
-        // let tx_signed = sign_doc.sign(&sender_private_key)?;
 
         let sign_doc_bytes = sign_doc
             .clone()

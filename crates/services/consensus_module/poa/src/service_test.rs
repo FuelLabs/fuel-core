@@ -11,12 +11,10 @@ use crate::{
         MockBlockImporter,
         MockBlockProducer,
         MockP2pPort,
-        MockSharedSequencerPort,
         MockTransactionPool,
         TransactionsSource,
     },
     service::MainTask,
-    signer::SignMode,
     Config,
     Service,
     Trigger,
@@ -32,7 +30,10 @@ use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::Consensus,
+        consensus::{
+            poa::PoAConsensus,
+            Consensus,
+        },
         header::{
             BlockHeader,
             PartialBlockHeader,
@@ -52,6 +53,7 @@ use fuel_core_types::{
         ExecutionResult,
         UncommittedResult,
     },
+    signer::SignMode,
     tai64::{
         Tai64,
         Tai64N,
@@ -93,7 +95,6 @@ struct TestContextBuilder {
     txpool: Option<MockTransactionPool>,
     importer: Option<MockBlockImporter>,
     producer: Option<MockBlockProducer>,
-    shared_sequencer: Option<MockSharedSequencerPort>,
     start_time: Option<Tai64N>,
 }
 
@@ -114,7 +115,6 @@ impl TestContextBuilder {
             txpool: None,
             importer: None,
             producer: None,
-            shared_sequencer: None,
             start_time: None,
         }
     }
@@ -136,14 +136,6 @@ impl TestContextBuilder {
 
     fn with_producer(&mut self, producer: MockBlockProducer) -> &mut Self {
         self.producer = Some(producer);
-        self
-    }
-
-    fn with_shared_sequencer(
-        &mut self,
-        shared_sequencer: MockSharedSequencerPort,
-    ) -> &mut Self {
-        self.shared_sequencer = Some(shared_sequencer);
         self
     }
 
@@ -182,12 +174,6 @@ impl TestContextBuilder {
 
         let p2p_port = generate_p2p_port();
 
-        let shared_sequencer = self.shared_sequencer.unwrap_or_else(|| {
-            let mut shared_sequencer = MockSharedSequencerPort::default();
-            shared_sequencer.expect_send().returning(|_, _| Ok(()));
-            shared_sequencer
-        });
-
         let predefined_blocks = HashMap::new().into();
 
         let time = self.start_time.map(TestTime::new).unwrap_or_default();
@@ -201,8 +187,7 @@ impl TestContextBuilder {
             producer,
             importer,
             p2p_port,
-            shared_sequencer,
-            FakeBlockSigner { succeeds: true },
+            FakeBlockSigner { succeeds: true }.into(),
             predefined_blocks,
             watch,
         );
@@ -219,9 +204,12 @@ struct FakeBlockSigner {
 impl BlockSigner for FakeBlockSigner {
     async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
         if self.succeeds {
-            SignMode::Key(Secret::new(default_consensus_dev_key().into()))
-                .seal_block(block)
-                .await
+            let signature =
+                SignMode::Key(Secret::new(default_consensus_dev_key().into()))
+                    .sign(block.id().as_slice())
+                    .await?;
+
+            Ok(Consensus::PoA(PoAConsensus { signature }))
         } else {
             Err(anyhow::anyhow!("failed to sign block"))
         }
@@ -237,7 +225,6 @@ struct TestContext {
         MockTransactionPool,
         MockBlockProducer,
         MockBlockImporter,
-        MockSharedSequencerPort,
         FakeBlockSigner,
         InMemoryPredefinedBlocks,
         test_time::Watch,
@@ -342,9 +329,6 @@ async fn remove_skipped_transactions() {
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
 
-    let mut shared_sequencer_port = MockSharedSequencerPort::default();
-    shared_sequencer_port.expect_send().returning(|_, _| Ok(()));
-
     let mut txpool = MockTransactionPool::no_tx_updates();
     // Test created for only for this check.
     txpool
@@ -390,8 +374,7 @@ async fn remove_skipped_transactions() {
         block_producer,
         block_importer,
         p2p_port,
-        shared_sequencer_port,
-        FakeBlockSigner { succeeds: true },
+        FakeBlockSigner { succeeds: true }.into(),
         predefined_blocks,
         time.watch(),
     );
@@ -510,7 +493,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         block_producer,
         block_importer,
         generate_p2p_port(),
-        FakeBlockSigner { succeeds: true },
+        FakeBlockSigner { succeeds: true }.into(),
         InMemoryPredefinedBlocks::new(blocks_map),
         time.watch(),
     );
@@ -574,7 +557,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         block_producer,
         block_importer,
         generate_p2p_port(),
-        FakeBlockSigner { succeeds: true },
+        FakeBlockSigner { succeeds: true }.into(),
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
         time.watch(),
     );

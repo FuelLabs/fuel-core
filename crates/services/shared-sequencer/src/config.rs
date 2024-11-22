@@ -1,6 +1,12 @@
+use crate::ports::Signer;
+use anyhow::anyhow;
+use cosmrs::AccountId;
+
 /// Configuration for the shared sequencer client
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Whether the sequencer is enabled.
+    pub enabled: bool,
     /// Address of the sequencer chain tendermint API
     /// (e.g. "http://127.0.0.1:26657")
     pub tendermint_api: String,
@@ -24,6 +30,7 @@ impl Config {
     /// Default configuration for locally running shared sequencer node
     pub fn local_node() -> Self {
         Self {
+            enabled: false,
             tendermint_api: "http://127.0.0.1:26657".to_owned(),
             blockchain_api: "http://127.0.0.1:1317".to_owned(),
             coin_denom: "utest".to_owned(),
@@ -31,5 +38,15 @@ impl Config {
             chain_id: "fuelsequencer-1".to_owned(),
             topic: [0u8; 32],
         }
+    }
+
+    /// Returns the Cosmos account ID of the sender.
+    pub fn sender_account_id<S: Signer>(&self, signer: &S) -> anyhow::Result<AccountId> {
+        let sender_public_key = signer.public_key();
+        let sender_account_id = sender_public_key
+            .account_id(&self.account_prefix)
+            .map_err(|err| anyhow!("{err:?}"))?;
+
+        Ok(sender_account_id)
     }
 }

@@ -56,9 +56,10 @@ pub struct Args {
 }
 
 #[cfg(feature = "shared-sequencer")]
-impl From<Args> for fuel_core_shared_sequencer_client::Config {
-    fn from(val: Args) -> fuel_core_shared_sequencer_client::Config {
-        fuel_core_shared_sequencer_client::Config {
+impl From<Args> for fuel_core_shared_sequencer::Config {
+    fn from(val: Args) -> fuel_core_shared_sequencer::Config {
+        fuel_core_shared_sequencer::Config {
+            enabled: val.enable,
             tendermint_api: val.tendermint_api,
             blockchain_api: val.blockchain_api,
             coin_denom: val.coin_denom,

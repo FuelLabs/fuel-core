@@ -72,7 +72,7 @@ pub struct Config {
     #[cfg(feature = "p2p")]
     pub sync: fuel_core_sync::Config,
     #[cfg(feature = "shared-sequencer")]
-    pub shared_sequencer: fuel_core_shared_sequencer_client::Config,
+    pub shared_sequencer: fuel_core_shared_sequencer::Config,
     pub consensus_signer: SignMode,
     pub name: String,
     pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
@@ -187,7 +187,7 @@ impl Config {
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
             #[cfg(feature = "shared-sequencer")]
-            shared_sequencer: fuel_core_shared_sequencer_client::Config::local_node(),
+            shared_sequencer: fuel_core_shared_sequencer::Config::local_node(),
             consensus_signer: SignMode::Key(fuel_core_types::secrecy::Secret::new(
                 fuel_core_chain_config::default_consensus_dev_key().into(),
             )),

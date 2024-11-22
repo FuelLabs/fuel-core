@@ -2,7 +2,6 @@ use anyhow::{
     anyhow,
     Context,
 };
-use fuel_core_shared_sequencer_client::ports::Signer;
 use std::{
     sync::Arc,
     time::Duration,
@@ -26,7 +25,6 @@ use crate::{
         GetTime,
         P2pPort,
         PredefinedBlocks,
-        SharedSequencerPort,
         TransactionPool,
         TransactionsSource,
     },
@@ -71,7 +69,7 @@ use fuel_core_types::{
 };
 use serde::Serialize;
 
-pub type Service<T, B, I, S, PB, C, SS> = ServiceRunner<MainTask<T, B, I, S, PB, C, SS>>;
+pub type Service<T, B, I, S, PB, C> = ServiceRunner<MainTask<T, B, I, S, PB, C>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -125,13 +123,12 @@ pub(crate) enum RequestType {
     Manual,
     Trigger,
 }
-pub struct MainTask<T, B, I, S, PB, C, SS> {
-    signer: S,
+pub struct MainTask<T, B, I, S, PB, C> {
+    signer: Arc<S>,
     block_producer: B,
     block_importer: I,
     txpool: T,
     new_txs_watcher: tokio::sync::watch::Receiver<()>,
-    shared_sequencer: SS,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
     last_height: BlockHeight,
@@ -144,13 +141,12 @@ pub struct MainTask<T, B, I, S, PB, C, SS> {
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
-impl<T, B, I, S, PB, C, SS> MainTask<T, B, I, S, PB, C, SS>
+impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,
     I: BlockImporter,
     PB: PredefinedBlocks,
     C: GetTime,
-    SS: SharedSequencerPort,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort>(
@@ -160,8 +156,7 @@ where
         block_producer: B,
         block_importer: I,
         p2p_port: P,
-        shared_sequencer: SS,
-        signer: S,
+        signer: Arc<S>,
         predefined_blocks: PB,
         clock: C,
     ) -> Self {
@@ -197,7 +192,6 @@ where
             block_importer,
             new_txs_watcher,
             request_receiver,
-            shared_sequencer,
             shared_state: SharedState { request_sender },
             last_height,
             last_timestamp,
@@ -252,13 +246,12 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C, SS> MainTask<T, B, I, S, PB, C, SS>
+impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
-    SS: SharedSequencerPort,
-    S: BlockSigner + Signer,
+    S: BlockSigner,
     PB: PredefinedBlocks,
     C: GetTime,
 {
@@ -324,7 +317,7 @@ where
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
         // verify signing key is set
-        if !<_ as BlockSigner>::is_available(&self.signer) {
+        if !self.signer.is_available() {
             return Err(anyhow!("unable to produce blocks without a consensus key"))
         }
 
@@ -365,10 +358,6 @@ where
             entity: block,
             consensus: seal,
         };
-        // Send to the shared sequencer
-        self.shared_sequencer
-            .send(&self.signer, block.clone())
-            .await?;
 
         // Import the sealed block
         self.block_importer
@@ -392,7 +381,7 @@ where
     ) -> anyhow::Result<()> {
         tracing::info!("Producing predefined block");
         let last_block_created = Instant::now();
-        if !<_ as BlockSigner>::is_available(&self.signer) {
+        if !self.signer.is_available() {
             return Err(anyhow!("unable to produce blocks without a signer"))
         }
 
@@ -482,14 +471,14 @@ struct PredefinedBlockWithSkippedTransactions {
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, S, PB, C, SS> RunnableService for MainTask<T, B, I, S, PB, C, SS>
+impl<T, B, I, S, PB, C> RunnableService for MainTask<T, B, I, S, PB, C>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I, S, PB, C, SS>;
+    type Task = MainTask<T, B, I, S, PB, C>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -518,15 +507,14 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, S, PB, C, SS> RunnableTask for MainTask<T, B, I, S, PB, C, SS>
+impl<T, B, I, S, PB, C> RunnableTask for MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
-    S: BlockSigner + Signer,
+    S: BlockSigner,
     PB: PredefinedBlocks,
     C: GetTime,
-    SS: SharedSequencerPort,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         let mut sync_state = self.sync_task_handle.shared.clone();
@@ -617,26 +605,24 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn new_service<T, B, I, P, S, PB, C, SS>(
+pub fn new_service<T, B, I, P, S, PB, C>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
     block_producer: B,
     block_importer: I,
     p2p_port: P,
-    shared_sequencer: SS,
-    block_signer: S,
+    block_signer: Arc<S>,
     predefined_blocks: PB,
     clock: C,
-) -> Service<T, B, I, S, PB, C, SS>
+) -> Service<T, B, I, S, PB, C>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,
-    S: BlockSigner + Signer + 'static,
+    S: BlockSigner + 'static,
     PB: PredefinedBlocks + 'static,
     P: P2pPort,
-    SS: SharedSequencerPort,
     C: GetTime,
 {
     Service::new(MainTask::new(
@@ -646,7 +632,6 @@ where
         block_producer,
         block_importer,
         p2p_port,
-        shared_sequencer,
         block_signer,
         predefined_blocks,
         clock,

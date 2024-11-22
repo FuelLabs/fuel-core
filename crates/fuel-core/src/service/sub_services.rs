@@ -4,7 +4,6 @@ use super::{
     adapters::{
         FuelBlockSigner,
         P2PAdapter,
-        SharedSequencerAdapter,
     },
     genesis::create_genesis_block,
 };
@@ -59,7 +58,6 @@ pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
     BlockProducerAdapter,
     BlockImporterAdapter,
-    SharedSequencerAdapter,
     SignMode,
     InDirectoryPredefinedBlocks,
     SystemTime,
@@ -178,11 +176,6 @@ pub fn init_sub_services(
 
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
-    #[cfg(feature = "shared-sequencer")]
-    let shared_sequencer = SharedSequencerAdapter::new(config.shared_sequencer.clone());
-
-    #[cfg(not(feature = "shared-sequencer"))]
-    let shared_sequencer = SharedSequencerAdapter {};
 
     let genesis_block_height = *genesis_block.header().height();
     let settings = consensus_parameters_provider.clone();
@@ -250,9 +243,33 @@ pub fn init_sub_services(
         tracing::info!("Enabled manual block production because of `debug` flag");
     }
 
+    let signer = Arc::new(FuelBlockSigner::new(config.consensus_signer.clone()));
+
+    #[cfg(feature = "shared-sequencer")]
+    let shared_sequencer = {
+        let config = config.shared_sequencer.clone();
+
+        if production_enabled {
+            let cosmos_public_address = config.sender_account_id(signer.as_ref())?;
+
+            tracing::info!(
+                "Shared sequencer uses account ID: {}",
+                cosmos_public_address
+            );
+        }
+
+        config.enabled.then(|| {
+            fuel_core_shared_sequencer::service::new_service(
+                importer_adapter.clone(),
+                config,
+                signer.clone(),
+            )
+        })
+    };
+
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
-    let poa = (production_enabled).then(|| {
+    let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
             &last_block_header,
             poa_config,
@@ -260,8 +277,7 @@ pub fn init_sub_services(
             producer_adapter.clone(),
             importer_adapter.clone(),
             p2p_adapter.clone(),
-            shared_sequencer.clone(),
-            FuelBlockSigner::new(config.consensus_signer.clone()),
+            signer,
             predefined_blocks,
             SystemTime,
         )
@@ -357,6 +373,12 @@ pub fn init_sub_services(
         if let Some(network) = network.take() {
             services.push(Box::new(network));
             services.push(Box::new(sync));
+        }
+    }
+    #[cfg(feature = "shared-sequencer")]
+    {
+        if let Some(shared_sequencer) = shared_sequencer {
+            services.push(Box::new(shared_sequencer));
         }
     }
 

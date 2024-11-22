@@ -95,14 +95,8 @@ async fn can_manually_produce_block(
             ))
         });
 
-    let mut shared_sequencer = MockSharedSequencerPort::default();
-    shared_sequencer
-        .expect_send()
-        .returning(|_a: &Secret<SecretKeyWrapper>, _b: SealedBlock| Ok(()));
-
     ctx_builder.with_importer(importer);
     ctx_builder.with_producer(producer);
-    ctx_builder.with_shared_sequencer(shared_sequencer);
     let ctx = ctx_builder.build().await;
 
     ctx.service

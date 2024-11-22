@@ -27,7 +27,7 @@ mod api_types {
     }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct AccountMetadata {
     pub account_number: u64,
     pub sequence: u64,
