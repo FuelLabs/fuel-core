@@ -148,7 +148,7 @@ impl ReadView {
         stream::iter(self.off_chain.balances(owner, base_asset_id, direction))
             .map(move |result| {
                 result.map(|(asset_id, amount)| AddressBalance {
-                    owner: owner.clone(),
+                    owner: *owner,
                     asset_id,
                     amount,
                 })
