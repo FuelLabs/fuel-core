@@ -25,7 +25,7 @@ fn register_new_coin_to_spend<T>(
 where
     T: OffChainDatabaseTransaction,
 {
-    let key = CoinsToSpendIndexKey::new(coin);
+    let key = CoinsToSpendIndexKey::from_coin(coin);
     let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
     Ok(storage.insert(&key, &())?)
 }
