@@ -314,6 +314,8 @@ async fn first_5_balances() {
     assert!(!balances.is_empty());
     assert_eq!(balances.len(), 5);
 
+    dbg!(&balances);
+
     // Base asset is 3 coins and 2 messages = 50 + 100 + 150 + 60 + 90
     assert_eq!(balances[0].asset_id, asset_ids[0]);
     assert_eq!(balances[0].amount, 450);
