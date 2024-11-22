@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::borrow::Cow;
 
 use crate::{
     database::{
@@ -35,7 +35,9 @@ use crate::{
             OldFuelBlocks,
             OldTransactions,
         },
+        Column,
     },
+    state::IterableKeyValueView,
 };
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
@@ -56,6 +58,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
+    StorageRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -239,35 +242,45 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         &self,
         owner: &Address,
         base_asset_id: &AssetId,
-    ) -> StorageResult<BTreeMap<AssetId, TotalBalanceAmount>> {
-        let mut balances = BTreeMap::new();
-        for balance_key in self.iter_all_by_prefix_keys::<CoinBalances, _>(Some(owner)) {
-            let key = balance_key?;
-            let asset_id = key.asset_id();
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<(AssetId, TotalBalanceAmount)>> {
+        let base_asset_id = *base_asset_id;
+        let base_asset_balance = base_asset_balance(
+            self.storage_as_ref::<MessageBalances>(),
+            self.storage_as_ref::<CoinBalances>(),
+            owner,
+            &base_asset_id,
+        );
 
-            let coins = self
-                .storage_as_ref::<CoinBalances>()
-                .get(&key)?
-                .unwrap_or_default()
-                .into_owned() as TotalBalanceAmount;
-
-            balances.insert(*asset_id, coins);
-        }
-
-        if let Some(messages) = self.storage_as_ref::<MessageBalances>().get(owner)? {
-            let MessageBalance {
-                retryable: _,
-                non_retryable,
-            } = *messages;
-            balances
-                .entry(*base_asset_id)
-                .and_modify(|current| {
-                    *current = current.saturating_add(non_retryable);
+        let non_base_asset_balance = self
+            .iter_all_filtered_keys::<CoinBalances, _>(Some(owner), None, Some(direction))
+            .filter_map(move |result| match result {
+                Ok(key) if *key.asset_id() != base_asset_id => Some(Ok(key)),
+                Ok(_) => None,
+                Err(err) => Some(Err(err)),
+            })
+            .map(move |result| {
+                result.and_then(|key| {
+                    let asset_id = key.asset_id();
+                    let coin_balance =
+                        self.storage_as_ref::<CoinBalances>()
+                            .get(&key)?
+                            .unwrap_or_default()
+                            .into_owned() as TotalBalanceAmount;
+                    Ok((*asset_id, coin_balance))
                 })
-                .or_insert(non_retryable);
-        }
+            })
+            .into_boxed();
 
-        Ok(balances)
+        if direction == IterDirection::Forward {
+            base_asset_balance
+                .chain(non_base_asset_balance)
+                .into_boxed()
+        } else {
+            non_base_asset_balance
+                .chain(base_asset_balance)
+                .into_boxed()
+        }
     }
 
     fn coins_to_spend(
@@ -303,6 +316,96 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         tracing::error!("XXX - Finished iteration");
         Ok(all_utxo_ids)
     }
+}
+
+struct AssetBalanceWithRetrievalErrors<'a> {
+    balance: Option<u128>,
+    errors: BoxedIter<'a, Result<(AssetId, u128), StorageError>>,
+}
+
+impl<'a> AssetBalanceWithRetrievalErrors<'a> {
+    fn new(
+        balance: Option<u128>,
+        errors: BoxedIter<'a, Result<(AssetId, u128), StorageError>>,
+    ) -> Self {
+        Self { balance, errors }
+    }
+}
+
+fn non_retryable_message_balance<'a>(
+    storage: StorageRef<'a, IterableKeyValueView<Column>, MessageBalances>,
+    owner: &Address,
+) -> AssetBalanceWithRetrievalErrors<'a> {
+    storage.get(owner).map_or_else(
+        |err| {
+            AssetBalanceWithRetrievalErrors::new(
+                None,
+                std::iter::once(Err(err)).into_boxed(),
+            )
+        },
+        |value| {
+            AssetBalanceWithRetrievalErrors::new(
+                value.map(|value| value.non_retryable),
+                std::iter::empty().into_boxed(),
+            )
+        },
+    )
+}
+
+fn base_asset_coin_balance<'a, 'b>(
+    storage: StorageRef<'a, IterableKeyValueView<Column>, CoinBalances>,
+    owner: &'b Address,
+    base_asset_id: &'b AssetId,
+) -> AssetBalanceWithRetrievalErrors<'a> {
+    storage
+        .get(&CoinBalancesKey::new(owner, base_asset_id))
+        .map_or_else(
+            |err| {
+                AssetBalanceWithRetrievalErrors::new(
+                    None,
+                    std::iter::once(Err(err)).into_boxed(),
+                )
+            },
+            |value| {
+                AssetBalanceWithRetrievalErrors::new(
+                    value.map(Cow::into_owned),
+                    std::iter::empty().into_boxed(),
+                )
+            },
+        )
+}
+
+fn base_asset_balance<'a, 'b>(
+    messages_storage: StorageRef<'a, IterableKeyValueView<Column>, MessageBalances>,
+    coins_storage: StorageRef<'a, IterableKeyValueView<Column>, CoinBalances>,
+    owner: &'b Address,
+    base_asset_id: &'b AssetId,
+) -> BoxedIter<'a, Result<(AssetId, TotalBalanceAmount), StorageError>> {
+    let AssetBalanceWithRetrievalErrors {
+        balance: messages_balance,
+        errors: message_errors,
+    } = non_retryable_message_balance(messages_storage, owner);
+
+    let AssetBalanceWithRetrievalErrors {
+        balance: base_coin_balance,
+        errors: coin_errors,
+    } = base_asset_coin_balance(coins_storage, owner, base_asset_id);
+
+    let base_asset_id = *base_asset_id;
+    let balance = match (messages_balance, base_coin_balance) {
+        (None, None) => None,
+        (None, Some(balance)) | (Some(balance), None) => Some(balance),
+        (Some(msg_balance), Some(coin_balance)) => {
+            Some(msg_balance.saturating_add(coin_balance))
+        }
+    }
+    .into_iter()
+    .map(move |balance| Ok((base_asset_id, balance)));
+
+    message_errors
+        .chain(coin_errors)
+        .chain(balance)
+        .into_boxed()
 }
 
 impl worker::OffChainDatabase for Database<OffChain> {

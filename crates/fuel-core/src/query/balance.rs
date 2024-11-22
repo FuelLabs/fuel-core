@@ -1,7 +1,6 @@
 use std::{
     cmp::Ordering,
     collections::HashMap,
-    future,
 };
 
 use crate::{
@@ -146,24 +145,14 @@ impl ReadView {
         base_asset_id: &AssetId,
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        match self.off_chain.balances(owner, base_asset_id) {
-            Ok(balances) => {
-                let iter = if direction == IterDirection::Reverse {
-                    itertools::Either::Left(balances.into_iter().rev())
-                } else {
-                    itertools::Either::Right(balances.into_iter())
-                };
-                stream::iter(iter.map(|(asset_id, amount)| AddressBalance {
+        stream::iter(self.off_chain.balances(owner, base_asset_id, direction))
+            .map(move |result| {
+                result.map(|(asset_id, amount)| AddressBalance {
                     owner: *owner,
-                    amount,
                     asset_id,
-                }))
-                .map(Ok)
-                .into_stream()
-                .yield_each(self.batch_size)
-                .left_stream()
-            }
-            Err(err) => stream::once(future::ready(Err(err))).right_stream(),
-        }
+                    amount,
+                })
+            })
+            .yield_each(self.batch_size)
     }
 }
