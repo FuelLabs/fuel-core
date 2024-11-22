@@ -220,7 +220,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 
         if base_asset_id == asset_id {
             let MessageBalance {
-                retryable: _, // TODO[RC]: Handle this
+                retryable: _, // TODO: https://github.com/FuelLabs/fuel-core/issues/2448
                 non_retryable,
             } = self
                 .storage_as_ref::<MessageBalances>()
