@@ -24,37 +24,7 @@ use crate::graphql_api::{
     },
 };
 
-#[derive(derive_more::From, derive_more::Display, Debug)]
-pub enum IndexationError {
-    #[display(
-        fmt = "Coin balance would underflow for owner: {}, asset_id: {}, current_amount: {}, requested_deduction: {}",
-        owner,
-        asset_id,
-        current_amount,
-        requested_deduction
-    )]
-    CoinBalanceWouldUnderflow {
-        owner: Address,
-        asset_id: AssetId,
-        current_amount: u128,
-        requested_deduction: u128,
-    },
-    #[display(
-        fmt = "Message balance would underflow for owner: {}, current_amount: {}, requested_deduction: {}, retryable: {}",
-        owner,
-        current_amount,
-        requested_deduction,
-        retryable
-    )]
-    MessageBalanceWouldUnderflow {
-        owner: Address,
-        current_amount: u128,
-        requested_deduction: u128,
-        retryable: bool,
-    },
-    #[from]
-    StorageError(StorageError),
-}
+use super::IndexationError;
 
 fn increase_message_balance<T>(
     block_st_transaction: &mut T,
@@ -171,15 +141,15 @@ where
         })
 }
 
-pub(crate) fn process_balances_update<T>(
+pub(crate) fn update<T>(
     event: &Event,
     block_st_transaction: &mut T,
-    balances_indexation_enabled: bool,
+    enabled: bool,
 ) -> Result<(), IndexationError>
 where
     T: OffChainDatabaseTransaction,
 {
-    if !balances_indexation_enabled {
+    if !enabled {
         return Ok(());
     }
 
@@ -221,7 +191,7 @@ mod tests {
             Database,
         },
         graphql_api::{
-            indexation::balances::process_balances_update,
+            indexation::balances::update,
             ports::worker::OffChainDatabaseTransaction,
             storage::balances::{
                 CoinBalances,
@@ -368,7 +338,7 @@ mod tests {
         ];
 
         events.iter().for_each(|event| {
-            process_balances_update(event, &mut tx, BALANCES_ARE_DISABLED)
+            update(event, &mut tx, BALANCES_ARE_DISABLED)
                 .expect("should process balance");
         });
 
@@ -425,8 +395,7 @@ mod tests {
         ];
 
         events.iter().for_each(|event| {
-            process_balances_update(event, &mut tx, BALANCES_ARE_ENABLED)
-                .expect("should process balance");
+            update(event, &mut tx, BALANCES_ARE_ENABLED).expect("should process balance");
         });
 
         assert_coin_balance(&mut tx, owner_1, asset_id_1, 100);
@@ -443,8 +412,7 @@ mod tests {
         ];
 
         events.iter().for_each(|event| {
-            process_balances_update(event, &mut tx, BALANCES_ARE_ENABLED)
-                .expect("should process balance");
+            update(event, &mut tx, BALANCES_ARE_ENABLED).expect("should process balance");
         });
 
         assert_coin_balance(&mut tx, owner_1, asset_id_1, 101);
@@ -461,8 +429,7 @@ mod tests {
         ];
 
         events.iter().for_each(|event| {
-            process_balances_update(event, &mut tx, BALANCES_ARE_ENABLED)
-                .expect("should process balance");
+            update(event, &mut tx, BALANCES_ARE_ENABLED).expect("should process balance");
         });
 
         assert_coin_balance(&mut tx, owner_1, asset_id_1, 1);
@@ -494,8 +461,7 @@ mod tests {
         ];
 
         events.iter().for_each(|event| {
-            process_balances_update(event, &mut tx, BALANCES_ARE_ENABLED)
-                .expect("should process balance");
+            update(event, &mut tx, BALANCES_ARE_ENABLED).expect("should process balance");
         });
 
         assert_message_balance(
@@ -525,8 +491,7 @@ mod tests {
         ];
 
         events.iter().for_each(|event| {
-            process_balances_update(event, &mut tx, BALANCES_ARE_ENABLED)
-                .expect("should process balance");
+            update(event, &mut tx, BALANCES_ARE_ENABLED).expect("should process balance");
         });
 
         assert_message_balance(
@@ -556,8 +521,7 @@ mod tests {
         ];
 
         events.iter().for_each(|event| {
-            process_balances_update(event, &mut tx, BALANCES_ARE_ENABLED)
-                .expect("should process balance");
+            update(event, &mut tx, BALANCES_ARE_ENABLED).expect("should process balance");
         });
 
         assert_message_balance(
@@ -606,8 +570,7 @@ mod tests {
             vec![Event::CoinCreated(make_coin(&owner, &asset_id, 1))];
 
         events.iter().for_each(|event| {
-            process_balances_update(event, &mut tx, BALANCES_ARE_ENABLED)
-                .expect("should process balance");
+            update(event, &mut tx, BALANCES_ARE_ENABLED).expect("should process balance");
         });
 
         assert_coin_balance(&mut tx, owner, asset_id, u128::MAX);
@@ -644,8 +607,7 @@ mod tests {
         ];
 
         events.iter().for_each(|event| {
-            process_balances_update(event, &mut tx, BALANCES_ARE_ENABLED)
-                .expect("should process balance");
+            update(event, &mut tx, BALANCES_ARE_ENABLED).expect("should process balance");
         });
 
         assert_message_balance(&mut tx, owner, MAX_BALANCES);
@@ -671,8 +633,7 @@ mod tests {
             vec![Event::CoinCreated(make_coin(&owner, &asset_id_1, 100))];
 
         events.iter().for_each(|event| {
-            process_balances_update(event, &mut tx, BALANCES_ARE_ENABLED)
-                .expect("should process balance");
+            update(event, &mut tx, BALANCES_ARE_ENABLED).expect("should process balance");
         });
 
         // Consume more coins than available
@@ -698,9 +659,7 @@ mod tests {
 
         let actual_errors: Vec<_> = events
             .iter()
-            .map(|event| {
-                process_balances_update(event, &mut tx, BALANCES_ARE_ENABLED).unwrap_err()
-            })
+            .map(|event| update(event, &mut tx, BALANCES_ARE_ENABLED).unwrap_err())
             .collect();
 
         assert_eq!(expected_errors, actual_errors);

@@ -289,32 +289,33 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         asset_id: &AssetId,
         max: u16,
     ) -> StorageResult<Vec<UtxoId>> {
-        tracing::error!("XXX - graphql_api - coins_to_spend");
-
-        let mut key_prefix = [0u8; Address::LEN + AssetId::LEN];
-
-        let mut offset = 0;
-        key_prefix[offset..offset + Address::LEN].copy_from_slice(owner.as_ref());
-        offset += Address::LEN;
-        key_prefix[offset..offset + AssetId::LEN].copy_from_slice(asset_id.as_ref());
-        offset += AssetId::LEN;
-
+        // tracing::error!("XXX - graphql_api - coins_to_spend");
+        //
+        // let mut key_prefix = [0u8; Address::LEN + AssetId::LEN];
+        //
+        // let mut offset = 0;
+        // key_prefix[offset..offset + Address::LEN].copy_from_slice(owner.as_ref());
+        // offset += Address::LEN;
+        // key_prefix[offset..offset + AssetId::LEN].copy_from_slice(asset_id.as_ref());
+        // offset += AssetId::LEN;
+        //
         // TODO[RC]: Do not collect, return iter.
-        tracing::error!("XXX - Starting to iterate");
-        let mut all_utxo_ids = Vec::new();
-        for coin_key in
-            self.iter_all_by_prefix_keys::<CoinsToSpendIndex, _>(Some(key_prefix))
-        {
-            let coin = coin_key?;
-
-            tracing::error!("XXX - coin: {:?}", hex::encode(&coin));
-
-            let utxo_id = coin.utxo_id();
-            all_utxo_ids.push(utxo_id);
-            tracing::error!("XXX - coin: {:?}", &utxo_id);
-        }
-        tracing::error!("XXX - Finished iteration");
-        Ok(all_utxo_ids)
+        // tracing::error!("XXX - Starting to iterate");
+        // let mut all_utxo_ids = Vec::new();
+        // for coin_key in
+        // self.iter_all_by_prefix_keys::<CoinsToSpendIndex, _>(Some(key_prefix))
+        // {
+        // let coin = coin_key?;
+        //
+        // tracing::error!("XXX - coin: {:?}", hex::encode(&coin));
+        //
+        // let utxo_id = coin.utxo_id();
+        // all_utxo_ids.push(utxo_id);
+        // tracing::error!("XXX - coin: {:?}", &utxo_id);
+        // }
+        // tracing::error!("XXX - Finished iteration");
+        // Ok(all_utxo_ids)
+        todo!()
     }
 }
 

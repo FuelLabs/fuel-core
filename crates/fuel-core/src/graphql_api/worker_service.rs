@@ -1,4 +1,4 @@
-use self::indexation::balances::IndexationError;
+use self::indexation::IndexationError;
 
 use super::{
     da_compression::da_compress_block,
@@ -266,7 +266,7 @@ fn update_indexation<T>(
 where
     T: OffChainDatabaseTransaction,
 {
-    match indexation::balances::process_balances_update(
+    match indexation::balances::update(
         event.deref(),
         block_st_transaction,
         balances_indexation_enabled,
@@ -282,13 +282,17 @@ where
         }
     }
 
-    // match indexation::update_coins_to_spend_indexation(
-    // event.deref(),
-    // block_st_transaction,
-    // coins_to_spend_indexation_enabled,
-    // ) {
-    // tracing::error!(%err, "Processing coins to spend indexation");
-    // }
+    match indexation::coins_to_spend::update(
+        event.deref(),
+        block_st_transaction,
+        coins_to_spend_indexation_enabled,
+    ) {
+        Ok(()) => (),
+        Err(IndexationError::StorageError(err)) => {
+            return Err(err.into());
+        }
+        _ => todo!(), // TODO[RC]: Handle specific errors
+    }
 
     Ok(())
 }
