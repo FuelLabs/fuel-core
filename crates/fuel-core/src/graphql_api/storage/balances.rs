@@ -81,3 +81,20 @@ impl TableWithBlueprint for MessageBalances {
         Self::Column::MessageBalances
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fuel_core_storage::basic_storage_tests!(
+        CoinBalances,
+        <CoinBalances as Mappable>::Key::default(),
+        <CoinBalances as Mappable>::Value::default()
+    );
+
+    fuel_core_storage::basic_storage_tests!(
+        MessageBalances,
+        <MessageBalances as Mappable>::Key::default(),
+        <MessageBalances as Mappable>::Value::default()
+    );
+}
