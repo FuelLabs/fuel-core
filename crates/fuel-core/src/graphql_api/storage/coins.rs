@@ -8,11 +8,14 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     Mappable,
 };
-use fuel_core_types::fuel_tx::{
-    Address,
-    AssetId,
-    TxId,
-    UtxoId,
+use fuel_core_types::{
+    entities::coins::coin::Coin,
+    fuel_tx::{
+        Address,
+        AssetId,
+        TxId,
+        UtxoId,
+    },
 };
 
 use super::balances::ItemAmount;
@@ -31,11 +34,36 @@ pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
 pub struct CoinsToSpendIndex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CoinsToSpendIndexKey(
-    pub [u8; Address::LEN + AssetId::LEN + u64::BITS as usize / 8 + TxId::LEN + 2],
-);
+pub struct CoinsToSpendIndexKey([u8; CoinsToSpendIndexKey::LEN]);
+
+impl Default for CoinsToSpendIndexKey {
+    fn default() -> Self {
+        Self([0u8; CoinsToSpendIndexKey::LEN])
+    }
+}
 
 impl CoinsToSpendIndexKey {
+    const LEN: usize =
+        Address::LEN + AssetId::LEN + u64::BITS as usize / 8 + TxId::LEN + 2;
+
+    pub fn new(coin: &Coin) -> Self {
+        let address_bytes = coin.owner.as_ref();
+        let asset_id_bytes = coin.asset_id.as_ref();
+        let amount_bytes = coin.amount.to_be_bytes();
+        let utxo_id_bytes = utxo_id_to_bytes(&coin.utxo_id);
+
+        let mut arr = [0; CoinsToSpendIndexKey::LEN];
+        let mut offset = 0;
+        arr[offset..offset + Address::LEN].copy_from_slice(address_bytes);
+        offset += Address::LEN;
+        arr[offset..offset + AssetId::LEN].copy_from_slice(asset_id_bytes);
+        offset += AssetId::LEN;
+        arr[offset..offset + u64::BITS as usize / 8].copy_from_slice(&amount_bytes);
+        offset += u64::BITS as usize / 8;
+        arr[offset..].copy_from_slice(&utxo_id_bytes);
+        Self(arr)
+    }
+
     pub fn from_slice(slice: &[u8]) -> Result<Self, core::array::TryFromSliceError> {
         Ok(Self(slice.try_into()?))
     }
@@ -118,6 +146,16 @@ impl TableWithBlueprint for OwnedCoins {
 mod test {
     use super::*;
 
+    impl rand::distributions::Distribution<CoinsToSpendIndexKey>
+        for rand::distributions::Standard
+    {
+        fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> CoinsToSpendIndexKey {
+            let mut bytes = [0u8; CoinsToSpendIndexKey::LEN];
+            rng.fill_bytes(bytes.as_mut());
+            CoinsToSpendIndexKey(bytes)
+        }
+    }
+
     fn generate_key(rng: &mut impl rand::Rng) -> <OwnedCoins as Mappable>::Key {
         let mut bytes = [0u8; 66];
         rng.fill(bytes.as_mut());
@@ -130,5 +168,11 @@ mod test {
         <OwnedCoins as Mappable>::Value::default(),
         <OwnedCoins as Mappable>::Value::default(),
         generate_key
+    );
+
+    fuel_core_storage::basic_storage_tests!(
+        CoinsToSpendIndex,
+        <CoinsToSpendIndex as Mappable>::Key::default(),
+        <CoinsToSpendIndex as Mappable>::Value::default()
     );
 }
