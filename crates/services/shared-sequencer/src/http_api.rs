@@ -65,7 +65,7 @@ pub struct TopicInfo {
 pub async fn get_topic(api_url: &str, id: [u8; 32]) -> anyhow::Result<Option<TopicInfo>> {
     let id_b64 = BASE64_STANDARD.encode(id);
     let r = reqwest::get(format!(
-        "{api_url}/fuel-infrastructure/fuel-sequencer/sequencing/v1/topic/{id_b64}"
+        "{api_url}/fuelsequencer/sequencing/v1/topic/{id_b64}"
     ))
     .await?;
     if r.status() == 404 {
@@ -77,7 +77,7 @@ pub async fn get_topic(api_url: &str, id: [u8; 32]) -> anyhow::Result<Option<Top
         .topic
         .owner
         .parse()
-        .map_err(|_| anyhow::anyhow!("Invalid order"))?;
+        .map_err(|_| anyhow::anyhow!("Invalid owner"))?;
     let order = resp
         .topic
         .order

@@ -178,12 +178,16 @@ impl Client {
             .clone()
             .into_bytes()
             .map_err(|err| anyhow!("{err:?}"))?;
-        let signature = &signer.sign(&sign_doc_bytes).await?;
+        let signature = signer.sign(&sign_doc_bytes).await?;
+
+        // Convert the signature to non-normalized form
+        let mut signature_bytes = *signature;
+        signature_bytes[32] &= 0x7f;
 
         Ok(cosmos_sdk_proto::cosmos::tx::v1beta1::TxRaw {
             body_bytes: sign_doc.body_bytes,
             auth_info_bytes: sign_doc.auth_info_bytes,
-            signatures: vec![signature.to_vec()],
+            signatures: vec![signature_bytes.to_vec()],
         }
         .to_bytes()?)
     }

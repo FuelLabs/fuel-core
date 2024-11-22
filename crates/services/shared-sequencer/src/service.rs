@@ -78,6 +78,8 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        // If the account is not funded, this code will fail
+        // because we can't sign the transaction without account metadata.
         let account_metadata = self
             .shared_sequencer_client
             .get_account_meta(self.signer.as_ref())

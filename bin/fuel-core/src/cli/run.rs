@@ -406,8 +406,9 @@ impl Command {
                 // if consensus key is not configured, fallback to dev consensus key
                 let key = default_consensus_dev_key();
                 warn!(
-                    "Fuel Core is using an insecure test key for consensus. Public key: {}",
-                    key.public_key()
+                    "Fuel Core is using an insecure test key for consensus. Public key: {}, SecretKey: {}",
+                    key.public_key(),
+                    key
                 );
                 consensus_signer = SignMode::Key(Secret::new(key.into()));
             }
