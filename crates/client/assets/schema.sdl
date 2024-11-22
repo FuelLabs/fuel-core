@@ -862,12 +862,6 @@ type Query {
 		"""
 		id: AssetId!
 	): AssetInfoDetails
-	assetId(
-		"""
-		ID of the Asset
-		"""
-		id: AssetId!
-	): Boolean
 	"""
 	Read register value by index.
 	"""

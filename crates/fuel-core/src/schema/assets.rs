@@ -2,14 +2,10 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_storage::not_found;
 
 use crate::{
     fuel_core_graphql_api::query_costs,
-    graphql_api::{
-        storage::assets::AssetDetails,
-        IntoApiResult,
-    },
+    graphql_api::storage::assets::AssetDetails,
     schema::{
         scalars::{
             AssetId,
@@ -36,25 +32,6 @@ impl AssetInfoQuery {
             .get_asset_details(id.into())
             .map(|details| Some(details.into()))
             .map_err(async_graphql::Error::from)
-    }
-
-    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
-    async fn asset_id(
-        &self,
-        ctx: &Context<'_>,
-        #[graphql(desc = "ID of the Asset")] id: AssetId,
-    ) -> async_graphql::Result<Option<bool>> {
-        let query = ctx.read_view()?;
-        query
-            .get_asset_exists(id.into())
-            .and_then(|asset_exists| {
-                if asset_exists {
-                    Ok(true)
-                } else {
-                    Err(not_found!(AssetId))
-                }
-            })
-            .into_api_result()
     }
 }
 
