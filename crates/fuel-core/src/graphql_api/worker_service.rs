@@ -369,8 +369,23 @@ where
                     contract_id,
                     val,
                     ..
+                } => {
+                    let asset_id = AssetId::from(**contract_id);
+                    let current_count = db
+                        .storage::<AssetsInfo>()
+                        .get(&asset_id)?
+                        .map(|info| {
+                            info.2
+                                .checked_add(*val)
+                                .ok_or(anyhow::anyhow!("Asset count overflow"))
+                        })
+                        .transpose()?
+                        .unwrap_or(*val);
+
+                    db.storage::<AssetsInfo>()
+                        .insert(&asset_id, &(*contract_id, **sub_id, current_count))?;
                 }
-                | Receipt::Burn {
+                Receipt::Burn {
                     sub_id,
                     contract_id,
                     val,
@@ -382,7 +397,7 @@ where
                         .get(&asset_id)?
                         .map(|info| {
                             info.2
-                                .checked_add(*val)
+                                .checked_sub(*val)
                                 .ok_or(anyhow::anyhow!("Asset count overflow"))
                         })
                         .transpose()?
