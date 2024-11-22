@@ -103,9 +103,7 @@ impl ReadView {
                     let amount: &mut TotalBalanceAmount = amounts_per_asset
                         .entry(*coin.asset_id(base_asset_id))
                         .or_default();
-                    let new_amount =
-                        amount.saturating_add(coin.amount() as TotalBalanceAmount);
-                    *amount = new_amount;
+                    *amount = amount.saturating_add(coin.amount() as TotalBalanceAmount);
                     Ok(amounts_per_asset)
                 },
             )
