@@ -1,4 +1,4 @@
-//! This module handles bridge communications between the fuel node and the data availability layer.
+//! Defines the logic how to interact with the shared sequencer.
 
 use crate::{
     http_api::AccountMetadata,
@@ -54,12 +54,18 @@ impl<S> NonInitializedTask<S> {
         config: Config,
         blocks_events: BoxStream<SharedImportResult>,
         signer: Arc<S>,
-    ) -> Self {
-        Self {
+    ) -> anyhow::Result<Self> {
+        if config.enabled && config.endpoints.is_none() {
+            return Err(anyhow::anyhow!(
+                "Shared sequencer is enabled but no endpoints are set"
+            ));
+        }
+
+        Ok(Self {
             config,
             blocks_events,
             signer,
-        }
+        })
     }
 }
 
@@ -243,11 +249,15 @@ pub fn new_service<B, S>(
     block_provider: B,
     config: Config,
     signer: Arc<S>,
-) -> ServiceRunner<NonInitializedTask<S>>
+) -> anyhow::Result<ServiceRunner<NonInitializedTask<S>>>
 where
     B: BlocksProvider,
     S: Signer,
 {
     let blocks_events = block_provider.subscribe();
-    ServiceRunner::new(NonInitializedTask::new(config, blocks_events, signer))
+    Ok(ServiceRunner::new(NonInitializedTask::new(
+        config,
+        blocks_events,
+        signer,
+    )?))
 }

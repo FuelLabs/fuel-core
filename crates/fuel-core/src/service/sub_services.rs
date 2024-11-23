@@ -253,7 +253,7 @@ pub fn init_sub_services(
             importer_adapter.clone(),
             config,
             signer.clone(),
-        )
+        )?
     };
 
     let predefined_blocks =

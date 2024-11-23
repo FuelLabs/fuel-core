@@ -75,7 +75,9 @@ impl Client {
         if let Some(index) = minimum_gas_price.find('.') {
             minimum_gas_price.truncate(index);
         }
-        let gas_price = minimum_gas_price.parse()?;
+        let gas_price: u128 = minimum_gas_price.parse()?;
+        // Ceil the gas price to the next integer.
+        let gas_price = gas_price.saturating_add(1);
 
         Ok(Self {
             topic,

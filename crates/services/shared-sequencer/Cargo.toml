@@ -1,7 +1,7 @@
 [package]
 authors = { workspace = true }
 categories = ["cryptography::cryptocurrencies"]
-description = "The client responsible for communication with the shared sequencer."
+description = "The service responsible for communication with the shared sequencer."
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = ["blockchain", "cryptocurrencies", "fuel-client", "fuel-core"]

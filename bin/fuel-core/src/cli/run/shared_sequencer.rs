@@ -46,12 +46,6 @@ impl TryFrom<Args> for fuel_core_shared_sequencer::Config {
             }
         };
 
-        if endpoints.is_none() && val.enable {
-            return Err(anyhow::anyhow!(
-                "Shared sequencer is enabled but no endpoints are set"
-            ));
-        }
-
         Ok(fuel_core_shared_sequencer::Config {
             enabled: val.enable,
             block_posting_frequency: val.block_posting_frequency.into(),
