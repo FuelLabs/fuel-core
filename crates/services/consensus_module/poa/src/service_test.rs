@@ -206,10 +206,10 @@ impl BlockSigner for FakeBlockSigner {
         if self.succeeds {
             let signature =
                 SignMode::Key(Secret::new(default_consensus_dev_key().into()))
-                    .sign(block.id().as_slice())
+                    .sign_message(block.id().into_message())
                     .await?;
 
-            Ok(Consensus::PoA(PoAConsensus { signature }))
+            Ok(Consensus::PoA(PoAConsensus::new(signature)))
         } else {
             Err(anyhow::anyhow!("failed to sign block"))
         }

@@ -18,7 +18,6 @@ use fuel_core_types::{
             Consensus,
         },
     },
-    fuel_crypto::Signature,
     fuel_tx::Transaction,
     services::{
         block_importer::SharedImportResult,
@@ -232,7 +231,7 @@ impl BlockSigner for FuelBlockSigner {
     async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
         let block_hash = block.id();
         let message = block_hash.into_message();
-        let signature = self.mode.sign(message.as_ref()).await?;
+        let signature = self.mode.sign_message(message).await?;
         Ok(Consensus::PoA(PoAConsensus::new(signature)))
     }
 
@@ -244,7 +243,10 @@ impl BlockSigner for FuelBlockSigner {
 #[cfg(feature = "shared-sequencer")]
 #[async_trait::async_trait]
 impl fuel_core_shared_sequencer::ports::Signer for FuelBlockSigner {
-    async fn sign(&self, data: &[u8]) -> anyhow::Result<Signature> {
+    async fn sign(
+        &self,
+        data: &[u8],
+    ) -> anyhow::Result<fuel_core_types::fuel_crypto::Signature> {
         Ok(self.mode.sign(data).await?)
     }
 

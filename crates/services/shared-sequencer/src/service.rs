@@ -20,14 +20,19 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_types::services::block_importer::SharedImportResult;
+use fuel_core_types::services::{
+    block_importer::SharedImportResult,
+    shared_sequencer::{
+        SSBlob,
+        SSBlobs,
+    },
+};
 use futures::StreamExt;
 use std::sync::Arc;
 
 /// Non-initialized shared sequencer task.
 pub struct NonInitializedTask<S> {
-    /// The client that communicates with shared sequencer.
-    shared_sequencer_client: Client,
+    config: Config,
     signer: Arc<S>,
     blocks_events: BoxStream<SharedImportResult>,
 }
@@ -38,8 +43,8 @@ pub struct Task<S> {
     shared_sequencer_client: Client,
     signer: Arc<S>,
     account_metadata: Option<AccountMetadata>,
-    prev_order: u64,
-    blocks_events: BoxStream<SharedImportResult>,
+    prev_order: Option<u64>,
+    blobs: Arc<tokio::sync::Mutex<SSBlobs>>,
 }
 
 impl<S> NonInitializedTask<S> {
@@ -49,9 +54,8 @@ impl<S> NonInitializedTask<S> {
         blocks_events: BoxStream<SharedImportResult>,
         signer: Arc<S>,
     ) -> Self {
-        let shared_sequencer_client = Client::new(config);
         Self {
-            shared_sequencer_client,
+            config,
             blocks_events,
             signer,
         }
@@ -78,38 +82,54 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        // If the account is not funded, this code will fail
-        // because we can't sign the transaction without account metadata.
-        let account_metadata = self
-            .shared_sequencer_client
-            .get_account_meta(self.signer.as_ref())
-            .await?;
-        let account_metadata = Some(account_metadata);
+        let shared_sequencer_client = Client::new(self.config).await?;
 
-        let prev_order = self
-            .shared_sequencer_client
-            .get_topic()
-            .await?
-            .map(|f| f.order)
-            .unwrap_or_default();
+        if self.signer.is_available() {
+            let cosmos_public_address =
+                shared_sequencer_client.sender_account_id(self.signer.as_ref())?;
+
+            tracing::info!(
+                "Shared sequencer uses account ID: {}",
+                cosmos_public_address
+            );
+        }
+
+        let prev_order = shared_sequencer_client.get_topic().await?.map(|f| f.order);
+
+        let blobs = Arc::new(tokio::sync::Mutex::new(SSBlobs::new()));
+        let mut block_events = self.blocks_events;
+
+        tokio::task::spawn({
+            let blobs = blobs.clone();
+            async move {
+                while let Some(block) = block_events.next().await {
+                    let blob = SSBlob {
+                        block_height: *block.sealed_block.entity.header().height(),
+                        block_id: block.sealed_block.entity.id(),
+                    };
+                    blobs.lock().await.push(blob);
+                }
+            }
+        });
 
         Ok(Task {
-            shared_sequencer_client: self.shared_sequencer_client,
+            shared_sequencer_client,
             signer: self.signer,
-            account_metadata,
+            account_metadata: None,
             prev_order,
-            blocks_events: self.blocks_events,
+            blobs,
         })
     }
 }
 
-#[async_trait]
-impl<S> RunnableTask for Task<S>
+impl<S> Task<S>
 where
-    S: Signer + 'static,
+    S: Signer,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
+    async fn blobs(&mut self) -> anyhow::Result<Option<SSBlobs>> {
         if self.account_metadata.is_none() {
+            // If the account is not funded, this code will fail
+            // because we can't sign the transaction without account metadata.
             let account_metadata = self
                 .shared_sequencer_client
                 .get_account_meta(self.signer.as_ref())
@@ -121,9 +141,37 @@ where
                 }
                 Err(err) => {
                     tokio::time::sleep(Duration::from_secs(1)).await;
-                    return TaskNextAction::ErrorContinue(err);
+                    return Err(err);
                 }
             }
+        }
+
+        tokio::time::sleep(self.shared_sequencer_client.config.block_posting_frequency)
+            .await;
+
+        let blobs = {
+            let mut lock = self.blobs.lock().await;
+            core::mem::take(&mut *lock)
+        };
+
+        if blobs.is_empty() {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            Ok(None)
+        } else {
+            Ok(Some(blobs))
+        }
+    }
+}
+
+#[async_trait]
+impl<S> RunnableTask for Task<S>
+where
+    S: Signer + 'static,
+{
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
+        if !self.shared_sequencer_client.config.enabled {
+            let _ = watcher.while_started().await;
+            return TaskNextAction::Stop;
         }
 
         tokio::select! {
@@ -132,21 +180,28 @@ where
                 TaskNextAction::Stop
             },
 
-            block = self.blocks_events.next() => {
-                if let Some(block) = block {
-                    let block_id = {
-                        let block: SharedImportResult = block;
-                        block.sealed_block.entity.id()
-                    };
-                    let mut account = self.account_metadata.take().expect("Account metadata is not set; qed");
-                    let next_order = self.prev_order.wrapping_add(1);
+            blobs = self.blobs() => {
+                let blobs = match blobs {
+                    Ok(blobs) => blobs,
+                    Err(err) => return TaskNextAction::ErrorContinue(err),
+                };
 
-                    let result = self.shared_sequencer_client.send(self.signer.as_ref(), account, next_order, block_id).await;
+                if let Some(blobs) = blobs {
+                    let mut account = self.account_metadata.take().expect("Account metadata is not set; qed");
+                    let next_order = if let Some(prev_order) = self.prev_order {
+                        prev_order.wrapping_add(1)
+                    } else {
+                        0
+                    };
+
+                    let blobs_bytes = postcard::to_allocvec(&blobs).expect("Failed to serialize SSBlob");
+                    let result = self.shared_sequencer_client.send(self.signer.as_ref(), account, next_order, blobs_bytes).await;
 
                     match result {
                         Ok(_) => {
+                            tracing::info!("Posted block to shared sequencer {blobs:?}");
                             account.sequence = account.sequence.saturating_add(1);
-                            self.prev_order = next_order;
+                            self.prev_order = Some(next_order);
                             self.account_metadata = Some(account);
                             TaskNextAction::Continue
                         }
@@ -155,7 +210,7 @@ where
                         }
                     }
                 } else {
-                    TaskNextAction::Stop
+                    TaskNextAction::Continue
                 }
             },
         }

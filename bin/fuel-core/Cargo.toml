@@ -64,7 +64,10 @@ default = ["env", "relayer", "rocksdb"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-types/aws-kms"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
-shared-sequencer = ["dep:fuel-core-shared-sequencer", "fuel-core/shared-sequencer"]
+shared-sequencer = [
+  "dep:fuel-core-shared-sequencer",
+  "fuel-core/shared-sequencer",
+]
 relayer = ["fuel-core/relayer", "dep:url"]
 parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb"]

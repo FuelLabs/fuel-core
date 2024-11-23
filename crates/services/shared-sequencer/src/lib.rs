@@ -7,6 +7,7 @@
 
 use anyhow::anyhow;
 use cosmrs::{
+    tendermint::chain::Id,
     tx::{
         self,
         Fee,
@@ -14,7 +15,9 @@ use cosmrs::{
         SignDoc,
         SignerInfo,
     },
+    AccountId,
     Coin,
+    Denom,
 };
 use error::{
     CosmosError,
@@ -39,22 +42,60 @@ pub mod ports;
 pub mod service;
 
 pub use config::Config;
-use fuel_core_types::blockchain::primitives::BlockId;
 
 /// Shared sequencer client
 pub struct Client {
     config: config::Config,
+    chain_id: Id,
+    gas_price: u128,
+    coin_denom: Denom,
+    account_prefix: String,
 }
 
 impl Client {
     /// Create a new shared sequencer client from config.
-    pub fn new(config: config::Config) -> Self {
-        Self { config }
+    pub async fn new(config: config::Config) -> anyhow::Result<Self> {
+        let coin_denom = http_api::coin_denom(&config.blockchain_rest_api)
+            .await?
+            .parse()
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        let account_prefix =
+            http_api::get_account_prefix(&config.blockchain_rest_api).await?;
+        let chain_id = http_api::chain_id(&config.blockchain_rest_api)
+            .await?
+            .parse()
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        let ss_config = http_api::config(&config.blockchain_rest_api).await?;
+
+        let mut minimum_gas_price = ss_config.minimum_gas_price;
+
+        if let Some(index) = minimum_gas_price.find('.') {
+            minimum_gas_price.truncate(index);
+        }
+        let gas_price = minimum_gas_price.parse()?;
+
+        Ok(Self {
+            config,
+            account_prefix,
+            coin_denom,
+            chain_id,
+            gas_price,
+        })
+    }
+
+    /// Returns the Cosmos account ID of the sender.
+    pub fn sender_account_id<S: Signer>(&self, signer: &S) -> anyhow::Result<AccountId> {
+        let sender_public_key = signer.public_key();
+        let sender_account_id = sender_public_key
+            .account_id(&self.account_prefix)
+            .map_err(|err| anyhow!("{err:?}"))?;
+
+        Ok(sender_account_id)
     }
 
     fn tendermint(&self) -> anyhow::Result<tendermint_rpc::HttpClient> {
         Ok(tendermint_rpc::HttpClient::new(
-            &*self.config.tendermint_api,
+            &*self.config.tendermint_rpc_api,
         )?)
     }
 
@@ -74,13 +115,13 @@ impl Client {
         &self,
         signer: &S,
     ) -> anyhow::Result<AccountMetadata> {
-        let sender_account_id = self.config.sender_account_id(signer)?;
-        http_api::get_account(&self.config.blockchain_api, sender_account_id).await
+        let sender_account_id = self.sender_account_id(signer)?;
+        http_api::get_account(&self.config.blockchain_rest_api, sender_account_id).await
     }
 
     /// Retrieve the topic info, if it exists
     pub async fn get_topic(&self) -> anyhow::Result<Option<TopicInfo>> {
-        http_api::get_topic(&self.config.blockchain_api, self.config.topic).await
+        http_api::get_topic(&self.config.blockchain_rest_api, self.config.topic).await
     }
 
     /// Post a sealed block to the sequencer chain using some
@@ -91,20 +132,17 @@ impl Client {
         signer: &S,
         account: AccountMetadata,
         order: u64,
-        block_id: BlockId,
+        blob: Vec<u8>,
     ) -> anyhow::Result<()> {
         let latest_height = self.latest_block_height().await?;
 
         self.send_raw(
-            // TODO: determine how much this has to be
             latest_height.saturating_add(100),
-            // TODO: determine how much this has to be
-            100_000,
             signer,
             account,
             order,
             self.config.topic,
-            Bytes::from(block_id.as_slice().to_vec()),
+            Bytes::from(blob),
         )
         .await
     }
@@ -114,20 +152,45 @@ impl Client {
     pub async fn send_raw<S: Signer>(
         &self,
         timeout_height: u32,
-        gas_limit: u64,
         signer: &S,
         account: AccountMetadata,
         order: u64,
         topic: [u8; 32],
         data: Bytes,
     ) -> anyhow::Result<()> {
-        let amount = Coin {
-            amount: gas_limit as u128,
-            denom: self.config.coin_denom.parse().map_err(CosmosError)?,
+        let dummy_amount = Coin {
+            amount: 0,
+            denom: self.coin_denom.clone(),
         };
 
-        let fee = Fee::from_amount_and_gas(amount, gas_limit);
+        let dummy_fee = Fee::from_amount_and_gas(dummy_amount, 0u64);
 
+        let dummy_payload = self
+            .make_payload(
+                timeout_height,
+                dummy_fee,
+                signer,
+                account,
+                order,
+                topic,
+                data.clone(),
+            )
+            .await?;
+
+        let used_gas = http_api::estimate_transaction(
+            &self.config.blockchain_rest_api,
+            dummy_payload,
+        )
+        .await?;
+
+        let used_gas = used_gas.saturating_mul(2); // Add some buffer
+
+        let amount = Coin {
+            amount: self.gas_price.saturating_mul(used_gas as u128),
+            denom: self.coin_denom.clone(),
+        };
+
+        let fee = Fee::from_amount_and_gas(amount, used_gas);
         let payload = self
             .make_payload(timeout_height, fee, signer, account, order, topic, data)
             .await?;
@@ -150,9 +213,7 @@ impl Client {
         topic: [u8; 32],
         data: Bytes,
     ) -> anyhow::Result<Vec<u8>> {
-        let sender_account_id = self.config.sender_account_id(signer)?;
-
-        let chain_id = self.config.chain_id.parse()?;
+        let sender_account_id = self.sender_account_id(signer)?;
 
         let msg = MsgPostBlob {
             from: sender_account_id.to_string(),
@@ -171,7 +232,7 @@ impl Client {
             SignerInfo::single_direct(Some(sender_public_key), account.sequence);
         let auth_info = signer_info.auth_info(fee);
         let sign_doc =
-            SignDoc::new(&tx_body, &auth_info, &chain_id, account.account_number)
+            SignDoc::new(&tx_body, &auth_info, &self.chain_id, account.account_number)
                 .map_err(|err| anyhow!("{err:?}"))?;
 
         let sign_doc_bytes = sign_doc

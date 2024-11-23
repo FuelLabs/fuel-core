@@ -3845,12 +3845,14 @@ dependencies = [
  "fuel-core-types 0.40.0",
  "fuel-sequencer-proto",
  "futures",
+ "postcard",
  "prost 0.12.6",
  "reqwest 0.12.9",
  "serde",
  "serde_json",
  "tendermint-rpc",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

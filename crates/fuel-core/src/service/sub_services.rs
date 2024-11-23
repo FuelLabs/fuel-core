@@ -43,7 +43,6 @@ use fuel_core_gas_price_service::v0::uninitialized_task::{
     AlgorithmV0,
 };
 use fuel_core_poa::Trigger;
-use fuel_core_shared_sequencer::ports::Signer;
 use fuel_core_storage::{
     self,
     structured_storage::StructuredStorage,
@@ -250,22 +249,11 @@ pub fn init_sub_services(
     let shared_sequencer = {
         let config = config.shared_sequencer.clone();
 
-        if signer.is_available() {
-            let cosmos_public_address = config.sender_account_id(signer.as_ref())?;
-
-            tracing::info!(
-                "Shared sequencer uses account ID: {}",
-                cosmos_public_address
-            );
-        }
-
-        config.enabled.then(|| {
-            fuel_core_shared_sequencer::service::new_service(
-                importer_adapter.clone(),
-                config,
-                signer.clone(),
-            )
-        })
+        fuel_core_shared_sequencer::service::new_service(
+            importer_adapter.clone(),
+            config,
+            signer.clone(),
+        )
     };
 
     let predefined_blocks =
@@ -377,11 +365,7 @@ pub fn init_sub_services(
         }
     }
     #[cfg(feature = "shared-sequencer")]
-    {
-        if let Some(shared_sequencer) = shared_sequencer {
-            services.push(Box::new(shared_sequencer));
-        }
-    }
+    services.push(Box::new(shared_sequencer));
 
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
