@@ -613,7 +613,7 @@ impl Command {
             #[cfg(feature = "p2p")]
             sync: sync_args.into(),
             #[cfg(feature = "shared-sequencer")]
-            shared_sequencer: shared_sequencer_args.into(),
+            shared_sequencer: shared_sequencer_args.try_into()?,
             consensus_signer,
             name,
             relayer_consensus_config: verifier,

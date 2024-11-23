@@ -17,7 +17,7 @@ base64 = "0.22"
 cosmos-sdk-proto = { version = "0.26", features = ["grpc"] }
 cosmrs = "0.21"
 fuel-core-services = { workspace = true }
-fuel-core-types = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std", "serde"] }
 fuel-sequencer-proto = { version = "0.1.0" }
 futures = { workspace = true }
 postcard = { workspace = true }

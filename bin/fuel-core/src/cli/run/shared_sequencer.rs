@@ -10,39 +10,53 @@ pub struct Args {
     block_posting_frequency: humantime::Duration,
     /// The RPC address of the sequencer chain tendermint API
     /// (e.g. "http://127.0.0.1:26657")
-    #[clap(
-        long = "ss-tendermint-api",
-        env = "SHARED_SEQUENCER_TENDERMINT_API",
-        default_value = "http://127.0.0.1:26657"
-    )]
-    tendermint_api: String,
+    #[clap(long = "ss-tendermint-api", env)]
+    tendermint_api: Option<String>,
     /// The REST address of the sequencer chain blockchain/rest API
     /// (e.g. "http://127.0.0.1:1317")
-    #[clap(
-        long = "ss-blockchain-api",
-        env = "SHARED_SEQUENCER_BLOCKCHAIN_API",
-        default_value = "http://127.0.0.1:1317"
-    )]
-    blockchain_api: String,
+    #[clap(long = "ss-blockchain-api", env)]
+    blockchain_api: Option<String>,
     /// Topic to post blocks to
     /// (e.g. "1111111111111111111111111111111111111111111111111111111111111111")
     #[clap(
         long = "ss-topic",
-        env = "SHARED_SEQUENCER_TOPIC",
+        env,
         default_value = "0000000000000000000000000000000000000000000000000000000000000000"
     )]
     topic: Bytes32,
 }
 
 #[cfg(feature = "shared-sequencer")]
-impl From<Args> for fuel_core_shared_sequencer::Config {
-    fn from(val: Args) -> fuel_core_shared_sequencer::Config {
-        fuel_core_shared_sequencer::Config {
+impl TryFrom<Args> for fuel_core_shared_sequencer::Config {
+    type Error = anyhow::Error;
+
+    fn try_from(val: Args) -> anyhow::Result<fuel_core_shared_sequencer::Config> {
+        let endpoints = match (val.tendermint_api, val.blockchain_api) {
+            (Some(tendermint_api), Some(blockchain_api)) => {
+                Some(fuel_core_shared_sequencer::Endpoints {
+                    tendermint_rpc_api: tendermint_api,
+                    blockchain_rest_api: blockchain_api,
+                })
+            }
+            (None, None) => None,
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Both tendermint and blockchain API must be set or unset"
+                ))
+            }
+        };
+
+        if endpoints.is_none() && val.enable {
+            return Err(anyhow::anyhow!(
+                "Shared sequencer is enabled but no endpoints are set"
+            ));
+        }
+
+        Ok(fuel_core_shared_sequencer::Config {
             enabled: val.enable,
             block_posting_frequency: val.block_posting_frequency.into(),
-            tendermint_rpc_api: val.tendermint_api,
-            blockchain_rest_api: val.blockchain_api,
+            endpoints,
             topic: *val.topic,
-        }
+        })
     }
 }

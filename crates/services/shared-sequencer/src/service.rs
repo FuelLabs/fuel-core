@@ -40,7 +40,8 @@ pub struct NonInitializedTask<S> {
 /// Initialized shared sequencer task.
 pub struct Task<S> {
     /// The client that communicates with shared sequencer.
-    shared_sequencer_client: Client,
+    shared_sequencer_client: Option<Client>,
+    config: Config,
     signer: Arc<S>,
     account_metadata: Option<AccountMetadata>,
     prev_order: Option<u64>,
@@ -82,41 +83,48 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let shared_sequencer_client = Client::new(self.config).await?;
+        let shared_sequencer_client = if let Some(endpoints) = &self.config.endpoints {
+            let ss = Client::new(endpoints.clone(), self.config.topic).await?;
 
-        if self.signer.is_available() {
-            let cosmos_public_address =
-                shared_sequencer_client.sender_account_id(self.signer.as_ref())?;
+            if self.signer.is_available() {
+                let cosmos_public_address = ss.sender_account_id(self.signer.as_ref())?;
 
-            tracing::info!(
-                "Shared sequencer uses account ID: {}",
-                cosmos_public_address
-            );
-        }
+                tracing::info!(
+                    "Shared sequencer uses account ID: {}",
+                    cosmos_public_address
+                );
+            }
 
-        let prev_order = shared_sequencer_client.get_topic().await?.map(|f| f.order);
+            Some(ss)
+        } else {
+            None
+        };
 
         let blobs = Arc::new(tokio::sync::Mutex::new(SSBlobs::new()));
-        let mut block_events = self.blocks_events;
 
-        tokio::task::spawn({
-            let blobs = blobs.clone();
-            async move {
-                while let Some(block) = block_events.next().await {
-                    let blob = SSBlob {
-                        block_height: *block.sealed_block.entity.header().height(),
-                        block_id: block.sealed_block.entity.id(),
-                    };
-                    blobs.lock().await.push(blob);
+        if self.config.enabled {
+            let mut block_events = self.blocks_events;
+
+            tokio::task::spawn({
+                let blobs = blobs.clone();
+                async move {
+                    while let Some(block) = block_events.next().await {
+                        let blob = SSBlob {
+                            block_height: *block.sealed_block.entity.header().height(),
+                            block_id: block.sealed_block.entity.id(),
+                        };
+                        blobs.lock().await.push(blob);
+                    }
                 }
-            }
-        });
+            });
+        }
 
         Ok(Task {
             shared_sequencer_client,
+            config: self.config,
             signer: self.signer,
             account_metadata: None,
-            prev_order,
+            prev_order: None,
             blobs,
         })
     }
@@ -127,13 +135,15 @@ where
     S: Signer,
 {
     async fn blobs(&mut self) -> anyhow::Result<Option<SSBlobs>> {
+        let ss = self
+            .shared_sequencer_client
+            .as_ref()
+            .expect("Shared sequencer client is not set; qed");
+
         if self.account_metadata.is_none() {
             // If the account is not funded, this code will fail
             // because we can't sign the transaction without account metadata.
-            let account_metadata = self
-                .shared_sequencer_client
-                .get_account_meta(self.signer.as_ref())
-                .await;
+            let account_metadata = ss.get_account_meta(self.signer.as_ref()).await;
 
             match account_metadata {
                 Ok(account_metadata) => {
@@ -146,8 +156,11 @@ where
             }
         }
 
-        tokio::time::sleep(self.shared_sequencer_client.config.block_posting_frequency)
-            .await;
+        if self.prev_order.is_none() {
+            self.prev_order = ss.get_topic().await?.map(|f| f.order);
+        }
+
+        tokio::time::sleep(self.config.block_posting_frequency).await;
 
         let blobs = {
             let mut lock = self.blobs.lock().await;
@@ -169,7 +182,7 @@ where
     S: Signer + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        if !self.shared_sequencer_client.config.enabled {
+        if !self.config.enabled {
             let _ = watcher.while_started().await;
             return TaskNextAction::Stop;
         }
@@ -194,8 +207,10 @@ where
                         0
                     };
 
+                    let ss =  self.shared_sequencer_client
+                        .as_ref().expect("Shared sequencer client is not set; qed");
                     let blobs_bytes = postcard::to_allocvec(&blobs).expect("Failed to serialize SSBlob");
-                    let result = self.shared_sequencer_client.send(self.signer.as_ref(), account, next_order, blobs_bytes).await;
+                    let result = ss.send(self.signer.as_ref(), account, next_order, blobs_bytes).await;
 
                     match result {
                         Ok(_) => {

@@ -33,6 +33,10 @@ use prost::Message;
 use tendermint_rpc::Client as _;
 
 // Re-exports
+pub use config::{
+    Config,
+    Endpoints,
+};
 pub use prost::bytes::Bytes;
 
 mod config;
@@ -41,11 +45,10 @@ mod http_api;
 pub mod ports;
 pub mod service;
 
-pub use config::Config;
-
 /// Shared sequencer client
 pub struct Client {
-    config: config::Config,
+    endpoints: Endpoints,
+    topic: [u8; 32],
     chain_id: Id,
     gas_price: u128,
     coin_denom: Denom,
@@ -54,18 +57,18 @@ pub struct Client {
 
 impl Client {
     /// Create a new shared sequencer client from config.
-    pub async fn new(config: config::Config) -> anyhow::Result<Self> {
-        let coin_denom = http_api::coin_denom(&config.blockchain_rest_api)
+    pub async fn new(endpoints: Endpoints, topic: [u8; 32]) -> anyhow::Result<Self> {
+        let coin_denom = http_api::coin_denom(&endpoints.blockchain_rest_api)
             .await?
             .parse()
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         let account_prefix =
-            http_api::get_account_prefix(&config.blockchain_rest_api).await?;
-        let chain_id = http_api::chain_id(&config.blockchain_rest_api)
+            http_api::get_account_prefix(&endpoints.blockchain_rest_api).await?;
+        let chain_id = http_api::chain_id(&endpoints.blockchain_rest_api)
             .await?
             .parse()
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        let ss_config = http_api::config(&config.blockchain_rest_api).await?;
+        let ss_config = http_api::config(&endpoints.blockchain_rest_api).await?;
 
         let mut minimum_gas_price = ss_config.minimum_gas_price;
 
@@ -75,7 +78,8 @@ impl Client {
         let gas_price = minimum_gas_price.parse()?;
 
         Ok(Self {
-            config,
+            topic,
+            endpoints,
             account_prefix,
             coin_denom,
             chain_id,
@@ -95,7 +99,7 @@ impl Client {
 
     fn tendermint(&self) -> anyhow::Result<tendermint_rpc::HttpClient> {
         Ok(tendermint_rpc::HttpClient::new(
-            &*self.config.tendermint_rpc_api,
+            &*self.endpoints.tendermint_rpc_api,
         )?)
     }
 
@@ -116,12 +120,13 @@ impl Client {
         signer: &S,
     ) -> anyhow::Result<AccountMetadata> {
         let sender_account_id = self.sender_account_id(signer)?;
-        http_api::get_account(&self.config.blockchain_rest_api, sender_account_id).await
+        http_api::get_account(&self.endpoints.blockchain_rest_api, sender_account_id)
+            .await
     }
 
     /// Retrieve the topic info, if it exists
     pub async fn get_topic(&self) -> anyhow::Result<Option<TopicInfo>> {
-        http_api::get_topic(&self.config.blockchain_rest_api, self.config.topic).await
+        http_api::get_topic(&self.endpoints.blockchain_rest_api, self.topic).await
     }
 
     /// Post a sealed block to the sequencer chain using some
@@ -141,7 +146,7 @@ impl Client {
             signer,
             account,
             order,
-            self.config.topic,
+            self.topic,
             Bytes::from(blob),
         )
         .await
@@ -178,7 +183,7 @@ impl Client {
             .await?;
 
         let used_gas = http_api::estimate_transaction(
-            &self.config.blockchain_rest_api,
+            &self.endpoints.blockchain_rest_api,
             dummy_payload,
         )
         .await?;
