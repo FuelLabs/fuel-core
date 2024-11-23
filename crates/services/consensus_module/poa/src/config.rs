@@ -1,7 +1,8 @@
-use fuel_core_types::fuel_types::ChainId;
+use fuel_core_types::{
+    fuel_types::ChainId,
+    signer::SignMode,
+};
 use tokio::time::Duration;
-
-use crate::signer::SignMode;
 
 #[derive(Debug, Clone)]
 pub struct Config {

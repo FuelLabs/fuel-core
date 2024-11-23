@@ -18,17 +18,23 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
+aws-sdk-kms = { workspace = true, optional = true }
 bs58 = { version = "0.5", optional = true }
 derivative = { version = "2" }
 derive_more = { version = "0.99" }
 fuel-vm-private = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
+k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }
 tai64 = { version = "4.1", features = ["serde"] }
 zeroize = "1.5"
+
+[dev-dependencies]
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
+tokio = { workspace = true, features = ["macros"] }
 
 [features]
 default = ["std"]
@@ -38,3 +44,4 @@ da-compression = ["fuel-vm-private/da-compression"]
 std = ["alloc", "fuel-vm-private/std", "bs58"]
 random = ["dep:rand", "fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers"]
+aws-kms = ["dep:aws-sdk-kms"]

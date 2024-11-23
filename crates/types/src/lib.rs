@@ -31,6 +31,7 @@ pub use tai64;
 pub mod blockchain;
 pub mod entities;
 pub mod services;
+pub mod signer;
 
 /// Re-export of some fuel-vm types
 pub mod fuel_vm {

@@ -13,7 +13,6 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_compression::VersionedCompressedBlock;
-use fuel_core_poa::signer::SignMode;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -26,6 +25,7 @@ use fuel_core_types::{
         TransactionBuilder,
     },
     secrecy::Secret,
+    signer::SignMode,
 };
 use rand::{
     rngs::StdRng,
