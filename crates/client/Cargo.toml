@@ -24,7 +24,10 @@ hyper-rustls = { version = "0.24", features = [
   "webpki-tokio",
 ], optional = true }
 itertools = { workspace = true }
-reqwest = { version = "0.11.16" }
+reqwest = { version = "0.11.16", default-features = false, features = [
+  "rustls-tls",
+  "cookies",
+] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 tai64 = { version = "4.0", features = ["serde"] }
