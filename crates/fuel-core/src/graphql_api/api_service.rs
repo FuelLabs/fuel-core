@@ -64,6 +64,7 @@ use fuel_core_services::{
     RunnableService,
     RunnableTask,
     StateWatcher,
+    TaskNextAction,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::fuel_types::BlockHeight;
@@ -196,11 +197,15 @@ impl RunnableService for GraphqlService {
 
 #[async_trait::async_trait]
 impl RunnableTask for Task {
-    async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
-        self.server.as_mut().await?;
-        // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
-        // error or stop signal.
-        Ok(false /* should_continue */)
+    async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
+        match self.server.as_mut().await {
+            Ok(()) => {
+                // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
+                // error or stop signal.
+                TaskNextAction::Stop
+            }
+            Err(err) => TaskNextAction::ErrorContinue(err.into()),
+        }
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
