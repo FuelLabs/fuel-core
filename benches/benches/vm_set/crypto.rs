@@ -1,3 +1,5 @@
+use crate::utils::aloc_bytearray;
+
 use super::run_group_ref;
 
 use criterion::{
@@ -155,25 +157,37 @@ pub fn run(c: &mut Criterion) {
     }
     bench_ed19.finish();
 
+    // ecop testing mul as it's the most expensive operation
+    let mut points_bytearray = Vec::new();
+    // X
+    points_bytearray.extend(
+        hex::decode("2bd3e6d0f3b142924f5ca7b49ce5b9d54c4703d7ae5648e61d02268b1a0a9fb7")
+            .unwrap(),
+    );
+    // Y
+    points_bytearray.extend(
+        hex::decode("21611ce0a6af85915e2f1d70300909ce2e49dfad4a4619c8390cae66cefdb204")
+            .unwrap(),
+    );
+    // Scalar
+    points_bytearray.extend(
+        hex::decode("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+            .unwrap(),
+    );
+    // 96 bytes = 1 point and 1 scalar
+    let prepare_points = aloc_bytearray::<96>(0x10, points_bytearray.try_into().unwrap());
+    run_group_ref(
+        &mut c.benchmark_group("ecop"),
+        "ecop",
+        VmBench::new(op::ecop(0x10, 0x00, 0x01, 0x10))
+            .with_prepare_script(prepare_points),
+    );
+
     // TODO: Update with real values
-    // ec add
-    run_group_ref(
-        &mut c.benchmark_group("ecadd"),
-        "eadd",
-        VmBench::new(op::eadd(1, 1, 1, 1)),
-    );
-
-    // ec mul
-    run_group_ref(
-        &mut c.benchmark_group("ecmul"),
-        "emul",
-        VmBench::new(op::emul(1, 1, 1, 1)),
-    );
-
     // ec pairing
-    run_group_ref(
-        &mut c.benchmark_group("ecpair"),
-        "epar",
-        VmBench::new(op::epar(1, 1, 1, 1)),
-    );
+    // run_group_ref(
+    //     &mut c.benchmark_group("ecpair"),
+    //     "epar",
+    //     VmBench::new(op::epar(1, 1, 1, 1)),
+    // );
 }

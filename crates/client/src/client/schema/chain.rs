@@ -284,8 +284,7 @@ pub struct GasCosts {
     pub wqmm: U64,
     pub xor: U64,
     pub xori: U64,
-    pub eadd: U64,
-    pub emul: U64,
+    pub ecop: U64,
 
     pub aloc_dependent_cost: DependentCost,
     pub bsiz: Option<DependentCost>,
@@ -332,7 +331,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
     fn try_from(value: GasCosts) -> Result<Self, Self::Error> {
         match value.version {
             GasCostsVersion::V1 => Ok(fuel_core_types::fuel_tx::GasCosts::new(
-                fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV4 {
+                fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV5 {
                     add: value.add.into(),
                     addi: value.addi.into(),
                     and: value.and.into(),
@@ -418,8 +417,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     wqmm: value.wqmm.into(),
                     xor: value.xor.into(),
                     xori: value.xori.into(),
-                    eadd: value.eadd.into(),
-                    emul: value.emul.into(),
+                    ecop: value.ecop.into(),
 
                     aloc: value.aloc_dependent_cost.into(),
                     bsiz: value.bsiz.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),

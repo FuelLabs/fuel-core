@@ -3166,7 +3166,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d12b6fb60cbb35e0111937affccbdf0f69bf4efe"
 dependencies = [
  "bitflags 2.6.0",
  "fuel-types 0.58.2",
@@ -3177,7 +3177,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d12b6fb60cbb35e0111937affccbdf0f69bf4efe"
 dependencies = [
  "fuel-derive 0.58.2",
  "fuel-types 0.58.2",
@@ -3267,6 +3267,7 @@ dependencies = [
  "fuel-core-sync",
  "fuel-core-types 0.40.0",
  "futures",
+ "hex",
  "itertools 0.12.1",
  "num_enum",
  "p256",
@@ -3891,7 +3892,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d12b6fb60cbb35e0111937affccbdf0f69bf4efe"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3923,7 +3924,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d12b6fb60cbb35e0111937affccbdf0f69bf4efe"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3959,7 +3960,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d12b6fb60cbb35e0111937affccbdf0f69bf4efe"
 dependencies = [
  "derive_more 0.99.18",
  "digest 0.10.7",
@@ -3979,7 +3980,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d12b6fb60cbb35e0111937affccbdf0f69bf4efe"
 
 [[package]]
 name = "fuel-tx"
@@ -4006,7 +4007,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d12b6fb60cbb35e0111937affccbdf0f69bf4efe"
 dependencies = [
  "bitflags 2.6.0",
  "derivative",
@@ -4039,7 +4040,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d12b6fb60cbb35e0111937affccbdf0f69bf4efe"
 dependencies = [
  "fuel-derive 0.58.2",
  "hex",
@@ -4081,7 +4082,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.58.2"
-source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d53e0605fab3725e925cdeddad2b4610ac95ac60"
+source = "git+https://github.com/fuelLabs/fuel-vm?branch=add_zk_opcodes#d12b6fb60cbb35e0111937affccbdf0f69bf4efe"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4109,6 +4110,7 @@ dependencies = [
  "sha3",
  "static_assertions",
  "strum 0.24.1",
+ "substrate-bn",
  "tai64",
 ]
 
@@ -4802,7 +4804,7 @@ dependencies = [
  "iana-time-zone-haiku",
  "js-sys",
  "wasm-bindgen",
- "windows-core 0.52.0",
+ "windows-core",
 ]
 
 [[package]]
@@ -5234,6 +5236,9 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+dependencies = [
+ "spin 0.9.8",
+]
 
 [[package]]
 name = "lazycell"
@@ -8638,6 +8643,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-bn"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b5bbfa79abbae15dd642ea8176a21a635ff3c00059961d1ea27ad04e5b441c"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "lazy_static",
+ "rand",
+ "rustc-hex",
+]
+
+[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9977,7 +9995,7 @@ version = "0.51.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca229916c5ee38c2f2bc1e9d8f04df975b4bd93f9955dc69fabb5d91270045c9"
 dependencies = [
- "windows-core 0.51.1",
+ "windows-core",
  "windows-targets 0.48.5",
 ]
 
@@ -9988,15 +10006,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1f8cf84f35d2db49a46868f947758c7a1138116f7fac3bc844f43ade1292e64"
 dependencies = [
  "windows-targets 0.48.5",
-]
-
-[[package]]
-name = "windows-core"
-version = "0.52.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ab640c8d7e35bf8ba19b884ba838ceb4fba93a4e8c65a9059d08afcfc683d9"
-dependencies = [
- "windows-targets 0.52.6",
 ]
 
 [[package]]
