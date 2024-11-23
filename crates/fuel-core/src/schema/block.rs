@@ -43,7 +43,6 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         header::BlockHeader,
-        primitives::BlockAt,
     },
     fuel_tx::TxId,
     fuel_types::{
@@ -303,7 +302,7 @@ impl BlockQuery {
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             Ok(blocks_query(
                 query.as_ref(),
-                start.map(Into::<BlockHeight>::into).into(),
+                start.map(Into::into),
                 direction,
             ))
         })
@@ -345,7 +344,7 @@ impl HeaderQuery {
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
             Ok(blocks_query(
                 query.as_ref(),
-                start.map(Into::<BlockHeight>::into).into(),
+                start.map(Into::into),
                 direction,
             ))
         })
@@ -355,7 +354,7 @@ impl HeaderQuery {
 
 fn blocks_query<T>(
     query: &ReadView,
-    height: BlockAt,
+    height: Option<BlockHeight>,
     direction: IterDirection,
 ) -> impl Stream<Item = StorageResult<(U32, T)>> + '_
 where

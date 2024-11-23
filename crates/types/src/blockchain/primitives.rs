@@ -3,10 +3,7 @@
 use crate::{
     fuel_crypto,
     fuel_crypto::SecretKey,
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_types::Bytes32,
 };
 use core::array::TryFromSliceError;
 use derive_more::{
@@ -180,32 +177,5 @@ impl TryFrom<&'_ [u8]> for BlockId {
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         Ok(Self::from(TryInto::<[u8; 32]>::try_into(bytes)?))
-    }
-}
-
-/// Represents either the Genesis Block or a block at a specific height
-#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub enum BlockAt {
-    /// Block at a specific height
-    Specific(BlockHeight),
-    /// Genesis block
-    Genesis,
-}
-
-impl From<BlockAt> for Option<BlockHeight> {
-    fn from(value: BlockAt) -> Self {
-        match value {
-            BlockAt::Specific(block_height) => Some(block_height),
-            BlockAt::Genesis => None,
-        }
-    }
-}
-
-impl From<Option<BlockHeight>> for BlockAt {
-    fn from(value: Option<BlockHeight>) -> Self {
-        match value {
-            Some(block_height) => BlockAt::Specific(block_height),
-            None => BlockAt::Genesis,
-        }
     }
 }

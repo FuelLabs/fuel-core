@@ -9,6 +9,7 @@ use crate::{
     database::OnChainIterableKeyValueView,
     fuel_core_graphql_api::ports::{
         worker,
+        worker::BlockAt,
         BlockProducerPort,
         ConsensusProvider,
         DatabaseMessageProof,
@@ -31,10 +32,7 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
-    blockchain::{
-        header::ConsensusParametersVersion,
-        primitives::BlockAt,
-    },
+    blockchain::header::ConsensusParametersVersion,
     entities::relayer::message::MerkleProof,
     fuel_tx::{
         Bytes32,

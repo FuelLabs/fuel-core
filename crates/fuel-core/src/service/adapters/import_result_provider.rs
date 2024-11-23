@@ -1,5 +1,6 @@
 use crate::{
     database::Database,
+    fuel_core_graphql_api::ports::worker::BlockAt,
     service::adapters::ExecutorAdapter,
 };
 use fuel_core_importer::ports::Validator;
@@ -7,15 +8,12 @@ use fuel_core_storage::{
     not_found,
     transactional::AtomicView,
 };
-use fuel_core_types::{
-    blockchain::primitives::BlockAt,
-    services::{
-        block_importer::{
-            ImportResult,
-            SharedImportResult,
-        },
-        executor::ValidationResult,
+use fuel_core_types::services::{
+    block_importer::{
+        ImportResult,
+        SharedImportResult,
     },
+    executor::ValidationResult,
 };
 use std::sync::Arc;
 

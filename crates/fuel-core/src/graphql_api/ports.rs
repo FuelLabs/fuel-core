@@ -26,7 +26,6 @@ use fuel_core_types::{
         consensus::Consensus,
         header::ConsensusParametersVersion,
         primitives::{
-            BlockAt,
             BlockId,
             DaBlockHeight,
         },
@@ -99,7 +98,7 @@ pub trait OffChainDatabase: Send + Sync {
 
     fn old_blocks(
         &self,
-        height: BlockAt,
+        height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
@@ -141,7 +140,7 @@ pub trait DatabaseBlocks {
 
     fn blocks(
         &self,
-        height: BlockAt,
+        height: Option<BlockHeight>,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<CompressedBlock>>;
 
@@ -283,6 +282,7 @@ pub mod worker {
             relayed_transactions::RelayedTransactionStatuses,
         },
     };
+    use derive_more::Display;
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
         Error as StorageError,
@@ -290,7 +290,6 @@ pub mod worker {
         StorageMutate,
     };
     use fuel_core_types::{
-        blockchain::primitives::BlockAt,
         fuel_tx::{
             Address,
             Bytes32,
@@ -317,6 +316,15 @@ pub mod worker {
 
         /// Creates a write database transaction.
         fn transaction(&mut self) -> Self::Transaction<'_>;
+    }
+
+    /// Represents either the Genesis Block or a block at a specific height
+    #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Hash, Ord, PartialOrd)]
+    pub enum BlockAt {
+        /// Block at a specific height
+        Specific(BlockHeight),
+        /// Genesis block
+        Genesis,
     }
 
     pub trait OffChainDatabaseTransaction:
