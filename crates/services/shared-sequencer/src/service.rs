@@ -157,7 +157,7 @@ where
                 }
                 Err(err) => {
                     // We don't want to spam the RPC endpoint with a lot of queries,
-                    // so wait for one second before sending hte next on.
+                    // so wait for one second before sending the next on.
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     return Err(err);
                 }
