@@ -139,6 +139,7 @@ impl<S> Task<S>
 where
     S: Signer,
 {
+    // This function is not cancel-safe because it calls `sleep` inside.
     async fn blobs(&mut self) -> anyhow::Result<Option<SSBlobs>> {
         let ss = self
             .shared_sequencer_client
@@ -155,6 +156,8 @@ where
                     self.account_metadata = Some(account_metadata);
                 }
                 Err(err) => {
+                    // We don't want to spam the RPC endpoint with a lot of queries,
+                    // so wait for one second before sending the next on.
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     return Err(err);
                 }
@@ -165,15 +168,13 @@ where
             self.prev_order = ss.get_topic().await?.map(|f| f.order);
         }
 
-        tokio::time::sleep(self.config.block_posting_frequency).await;
-
         let blobs = {
             let mut lock = self.blobs.lock().await;
             core::mem::take(&mut *lock)
         };
 
         if blobs.is_empty() {
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(self.config.block_posting_frequency).await;
             Ok(None)
         } else {
             Ok(Some(blobs))
@@ -201,6 +202,9 @@ where
                 Ok(STOP)
             },
 
+            // The `blobs` function calls sleep inside and if it not cancel safe.
+            // If someone add new logic into the `tokio::select`, please
+            // rework the `blobs` function to be cancel safe and use interval inside.
             blobs = self.blobs() => {
                 let blobs = blobs?;
 

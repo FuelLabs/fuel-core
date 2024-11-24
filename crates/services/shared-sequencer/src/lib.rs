@@ -19,10 +19,7 @@ use cosmrs::{
     Coin,
     Denom,
 };
-use error::{
-    CosmosError,
-    PostBlobError,
-};
+use error::PostBlobError;
 use fuel_sequencer_proto::protos::fuelsequencer::sequencing::v1::MsgPostBlob;
 use http_api::{
     AccountMetadata,
@@ -144,7 +141,10 @@ impl Client {
         let latest_height = self.latest_block_height().await?;
 
         self.send_raw(
-            latest_height.saturating_add(100),
+            // We don't want our transactions to be stay in the mempool for a long time,
+            // so we set the timeout height to be 64 blocks ahead of the latest block height.
+            // The 64 is an arbitrary number.
+            latest_height.saturating_add(64),
             signer,
             account,
             order,
@@ -165,11 +165,13 @@ impl Client {
         topic: [u8; 32],
         data: Bytes,
     ) -> anyhow::Result<()> {
+        // We want to estimate the transaction to know hat amount and fee to use.
+        // We use a dummy amount and fee to estimate the gas, and based on the result
+        // we calculate the actual amount and fee to use in real transaction.
         let dummy_amount = Coin {
             amount: 0,
             denom: self.coin_denom.clone(),
         };
-
         let dummy_fee = Fee::from_amount_and_gas(dummy_amount, 0u64);
 
         let dummy_payload = self
@@ -258,23 +260,5 @@ impl Client {
             signatures: vec![signature_bytes.to_vec()],
         }
         .to_bytes()?)
-    }
-
-    /// Return all blob messages in the given blob
-    pub async fn read_block_msgs(&self, height: u32) -> anyhow::Result<Vec<MsgPostBlob>> {
-        let mut result = Vec::new();
-
-        let block = self.tendermint()?.block(height).await?;
-
-        for item in block.block.data.iter().skip(1) {
-            let tx = cosmrs::Tx::from_bytes(item).map_err(CosmosError)?;
-            for msg in tx.body.messages.iter() {
-                if msg.type_url == "/fuelsequencer.sequencing.v1.MsgPostBlob" {
-                    let msg: MsgPostBlob = prost::Message::decode(msg.value.as_slice())?;
-                    result.push(msg);
-                }
-            }
-        }
-        Ok(result)
     }
 }

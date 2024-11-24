@@ -3,10 +3,10 @@ use std::time::Duration;
 /// Endpoints for the shared sequencer client.
 #[derive(Debug, Clone)]
 pub struct Endpoints {
-    /// The RPC address of the sequencer chain tendermint API
+    /// The RPC address of the sequencer chain
     /// (e.g. "http://127.0.0.1:26657")
     pub tendermint_rpc_api: String,
-    /// The REST address of the sequencer chain tendermint API
+    /// The REST address of the sequencer chain
     /// (e.g. "http://127.0.0.1:1317")
     pub blockchain_rest_api: String,
 }
