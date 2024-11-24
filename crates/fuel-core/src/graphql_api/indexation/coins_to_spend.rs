@@ -31,13 +31,20 @@ pub(crate) const MESSAGE_PADDING_BYTES: [u8; 2] = [0xFF, 0xFF];
 // to maintain the correct, lexicographical order of the keys.
 pub(crate) const ASSET_ID_FOR_MESSAGES: [u8; 32] = [0x00; 32];
 
+#[repr(u8)]
+#[derive(Clone)]
+pub(crate) enum IndexedCoinType {
+    Coin,
+    Message,
+}
+
 fn add_coin<T>(block_st_transaction: &mut T, coin: &Coin) -> Result<(), IndexationError>
 where
     T: OffChainDatabaseTransaction,
 {
     let key = CoinsToSpendIndexKey::from_coin(coin);
     let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
-    let maybe_old_value = storage.replace(&key, &())?;
+    let maybe_old_value = storage.replace(&key, &(IndexedCoinType::Coin as u8))?;
     if maybe_old_value.is_some() {
         return Err(IndexationError::CoinToSpendAlreadyIndexed {
             owner: coin.owner.clone(),
@@ -79,7 +86,7 @@ where
 {
     let key = CoinsToSpendIndexKey::from_message(message);
     let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
-    let maybe_old_value = storage.replace(&key, &())?;
+    let maybe_old_value = storage.replace(&key, &(IndexedCoinType::Message as u8))?;
     if maybe_old_value.is_some() {
         return Err(IndexationError::MessageToSpendAlreadyIndexed {
             owner: message.recipient().clone(),
@@ -129,4 +136,9 @@ where
         Event::CoinConsumed(coin) => remove_coin(block_st_transaction, coin),
         Event::ForcedTransactionFailed { .. } => Ok(()),
     }
+}
+
+#[cfg(test)]
+mod tests {
+    // TODO[RC]: Add tests
 }

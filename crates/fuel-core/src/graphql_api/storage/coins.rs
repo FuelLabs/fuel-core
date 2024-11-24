@@ -2,7 +2,10 @@ use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
-        primitive::utxo_id_to_bytes,
+        primitive::{
+            utxo_id_to_bytes,
+            Primitive,
+        },
         raw::Raw,
     },
     structured_storage::TableWithBlueprint,
@@ -23,6 +26,8 @@ use fuel_core_types::{
 };
 
 use crate::graphql_api::indexation;
+
+use self::indexation::coins_to_spend::IndexedCoinType;
 
 use super::balances::ItemAmount;
 
@@ -135,11 +140,11 @@ impl Mappable for CoinsToSpendIndex {
     type Key = Self::OwnedKey;
     type OwnedKey = CoinsToSpendIndexKey;
     type Value = Self::OwnedValue;
-    type OwnedValue = ();
+    type OwnedValue = u8;
 }
 
 impl TableWithBlueprint for CoinsToSpendIndex {
-    type Blueprint = Plain<Raw, Postcard>;
+    type Blueprint = Plain<Raw, Primitive<1>>;
     type Column = super::Column;
 
     fn column() -> Self::Column {
