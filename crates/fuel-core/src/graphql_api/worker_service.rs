@@ -276,7 +276,9 @@ where
             return Err(err.into());
         }
         Err(err @ IndexationError::CoinToSpendNotFound { .. })
-        | Err(err @ IndexationError::CoinToSpendAlreadyIndexed { .. }) => {
+        | Err(err @ IndexationError::CoinToSpendAlreadyIndexed { .. })
+        | Err(err @ IndexationError::MessageToSpendNotFound { .. })
+        | Err(err @ IndexationError::MessageToSpendAlreadyIndexed { .. }) => {
             // TODO[RC]: Indexing errors to be correctly handled. See: TODO
             tracing::error!("Coins to spend index error: {}", err);
         }

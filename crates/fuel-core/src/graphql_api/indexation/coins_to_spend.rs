@@ -4,7 +4,10 @@ use fuel_core_storage::{
 };
 
 use fuel_core_types::{
-    entities::coins::coin::Coin,
+    entities::{
+        coins::coin::Coin,
+        Message,
+    },
     services::executor::Event,
 };
 
@@ -67,26 +70,45 @@ where
     Ok(())
 }
 
-// fn add_message<T>(
-// block_st_transaction: &mut T,
-// message: &Message,
-// ) -> Result<(), IndexationError>
-// where
-// T: OffChainDatabaseTransaction,
-// {
-// let key = CoinsToSpendIndexKey::from_message(message);
-// let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
-// let maybe_old_value = storage.replace(&key, &())?;
-// if maybe_old_value.is_some() {
-// return Err(IndexationError::CoinToSpendAlreadyIndexed {
-// owner: coin.owner.clone(),
-// asset_id: coin.asset_id.clone(),
-// amount: coin.amount,
-// utxo_id: coin.utxo_id.clone(),
-// });
-// }
-// Ok(())
-// }
+fn add_message<T>(
+    block_st_transaction: &mut T,
+    message: &Message,
+) -> Result<(), IndexationError>
+where
+    T: OffChainDatabaseTransaction,
+{
+    let key = CoinsToSpendIndexKey::from_message(message);
+    let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
+    let maybe_old_value = storage.replace(&key, &())?;
+    if maybe_old_value.is_some() {
+        return Err(IndexationError::MessageToSpendAlreadyIndexed {
+            owner: message.recipient().clone(),
+            amount: message.amount(),
+            nonce: message.nonce().clone(),
+        });
+    }
+    Ok(())
+}
+
+fn remove_message<T>(
+    block_st_transaction: &mut T,
+    message: &Message,
+) -> Result<(), IndexationError>
+where
+    T: OffChainDatabaseTransaction,
+{
+    let key = CoinsToSpendIndexKey::from_message(message);
+    let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
+    let maybe_old_value = storage.take(&key)?;
+    if maybe_old_value.is_none() {
+        return Err(IndexationError::MessageToSpendNotFound {
+            owner: message.recipient().clone(),
+            amount: message.amount(),
+            nonce: message.nonce().clone(),
+        });
+    }
+    Ok(())
+}
 
 pub(crate) fn update<T>(
     event: &Event,
@@ -101,12 +123,10 @@ where
     }
 
     match event {
-        Event::MessageImported(message) => todo!(), /* add_message(block_st_transaction, message), */
-        Event::MessageConsumed(message) => todo!(),
+        Event::MessageImported(message) => add_message(block_st_transaction, message),
+        Event::MessageConsumed(message) => remove_message(block_st_transaction, message),
         Event::CoinCreated(coin) => add_coin(block_st_transaction, coin),
         Event::CoinConsumed(coin) => remove_coin(block_st_transaction, coin),
-        Event::ForcedTransactionFailed { .. } => todo!(),
-    };
-
-    Ok(())
+        Event::ForcedTransactionFailed { .. } => Ok(()),
+    }
 }

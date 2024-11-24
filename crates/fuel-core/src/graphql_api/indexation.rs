@@ -1,8 +1,11 @@
 use fuel_core_storage::Error as StorageError;
-use fuel_core_types::fuel_tx::{
-    Address,
-    AssetId,
-    UtxoId,
+use fuel_core_types::{
+    fuel_tx::{
+        Address,
+        AssetId,
+        UtxoId,
+    },
+    fuel_types::Nonce,
 };
 
 pub(crate) mod balances;
@@ -61,6 +64,28 @@ pub enum IndexationError {
         asset_id: AssetId,
         amount: u64,
         utxo_id: UtxoId,
+    },
+    #[display(
+        fmt = "Message not found in coins to spend index for owner: {}, amount: {}, nonce: {}",
+        owner,
+        amount,
+        nonce
+    )]
+    MessageToSpendNotFound {
+        owner: Address,
+        amount: u64,
+        nonce: Nonce,
+    },
+    #[display(
+        fmt = "Message already in the coins to spend index for owner: {}, amount: {}, nonce: {}",
+        owner,
+        amount,
+        nonce
+    )]
+    MessageToSpendAlreadyIndexed {
+        owner: Address,
+        amount: u64,
+        nonce: Nonce,
     },
     #[from]
     StorageError(StorageError),
