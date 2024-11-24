@@ -275,6 +275,10 @@ where
         Err(IndexationError::StorageError(err)) => {
             return Err(err.into());
         }
+        Err(err @ IndexationError::CoinToSpendNotFound { .. }) => {
+            // TODO[RC]: Indexing errors to be correctly handled. See: TODO
+            tracing::error!("Coins to spend index error: {}", err);
+        }
         Err(err @ IndexationError::CoinBalanceWouldUnderflow { .. })
         | Err(err @ IndexationError::MessageBalanceWouldUnderflow { .. }) => {
             // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
