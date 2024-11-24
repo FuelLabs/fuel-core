@@ -24,7 +24,7 @@ use crate::graphql_api::{
     },
 };
 
-use super::IndexationError;
+use super::error::IndexationError;
 
 fn increase_message_balance<T>(
     block_st_transaction: &mut T,
@@ -191,7 +191,10 @@ mod tests {
             Database,
         },
         graphql_api::{
-            indexation::balances::update,
+            indexation::{
+                balances::update,
+                error::IndexationError,
+            },
             ports::worker::OffChainDatabaseTransaction,
             storage::balances::{
                 CoinBalances,
@@ -201,55 +204,6 @@ mod tests {
             },
         },
     };
-
-    use super::IndexationError;
-
-    impl PartialEq for IndexationError {
-        fn eq(&self, other: &Self) -> bool {
-            match (self, other) {
-                (
-                    Self::CoinBalanceWouldUnderflow {
-                        owner: l_owner,
-                        asset_id: l_asset_id,
-                        current_amount: l_current_amount,
-                        requested_deduction: l_requested_deduction,
-                    },
-                    Self::CoinBalanceWouldUnderflow {
-                        owner: r_owner,
-                        asset_id: r_asset_id,
-                        current_amount: r_current_amount,
-                        requested_deduction: r_requested_deduction,
-                    },
-                ) => {
-                    l_owner == r_owner
-                        && l_asset_id == r_asset_id
-                        && l_current_amount == r_current_amount
-                        && l_requested_deduction == r_requested_deduction
-                }
-                (
-                    Self::MessageBalanceWouldUnderflow {
-                        owner: l_owner,
-                        current_amount: l_current_amount,
-                        requested_deduction: l_requested_deduction,
-                        retryable: l_retryable,
-                    },
-                    Self::MessageBalanceWouldUnderflow {
-                        owner: r_owner,
-                        current_amount: r_current_amount,
-                        requested_deduction: r_requested_deduction,
-                        retryable: r_retryable,
-                    },
-                ) => {
-                    l_owner == r_owner
-                        && l_current_amount == r_current_amount
-                        && l_requested_deduction == r_requested_deduction
-                        && l_retryable == r_retryable
-                }
-                (Self::StorageError(l0), Self::StorageError(r0)) => l0 == r0,
-                _ => false,
-            }
-        }
-    }
 
     fn make_coin(owner: &Address, asset_id: &AssetId, amount: u64) -> Coin {
         Coin {

@@ -19,7 +19,7 @@ use crate::graphql_api::{
     },
 };
 
-use super::IndexationError;
+use super::error::IndexationError;
 
 // For key disambiguation purposes, the coins use UtxoId as a key suffix (34 bytes).
 // Messages do not have UtxoId, hence we use Nonce for differentiation.

@@ -1,4 +1,4 @@
-use self::indexation::IndexationError;
+use self::indexation::error::IndexationError;
 
 use super::{
     da_compression::da_compress_block,
