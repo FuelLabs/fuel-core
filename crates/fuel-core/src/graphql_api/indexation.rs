@@ -49,6 +49,19 @@ pub enum IndexationError {
         amount: u64,
         utxo_id: UtxoId,
     },
+    #[display(
+        fmt = "Coin already in the coins to spend index for owner: {}, asset_id: {}, amount: {}, utxo_id: {}",
+        owner,
+        asset_id,
+        amount,
+        utxo_id
+    )]
+    CoinToSpendAlreadyIndexed {
+        owner: Address,
+        asset_id: AssetId,
+        amount: u64,
+        utxo_id: UtxoId,
+    },
     #[from]
     StorageError(StorageError),
 }

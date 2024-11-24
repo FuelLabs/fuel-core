@@ -9,14 +9,20 @@ use fuel_core_storage::{
     Mappable,
 };
 use fuel_core_types::{
-    entities::coins::coin::Coin,
+    entities::{
+        coins::coin::Coin,
+        Message,
+    },
     fuel_tx::{
         Address,
         AssetId,
         TxId,
         UtxoId,
     },
+    fuel_types::Nonce,
 };
+
+use crate::graphql_api::indexation;
 
 use super::balances::ItemAmount;
 
@@ -61,6 +67,26 @@ impl CoinsToSpendIndexKey {
         arr[offset..offset + u64::BITS as usize / 8].copy_from_slice(&amount_bytes);
         offset += u64::BITS as usize / 8;
         arr[offset..].copy_from_slice(&utxo_id_bytes);
+        Self(arr)
+    }
+
+    pub fn from_message(message: &Message) -> Self {
+        let address_bytes = message.recipient().as_ref();
+        let asset_id_bytes = indexation::coins_to_spend::ASSET_ID_FOR_MESSAGES;
+        let amount_bytes = message.amount().to_be_bytes();
+        let nonce_bytes = message.nonce().as_slice();
+
+        let mut arr = [0; CoinsToSpendIndexKey::LEN];
+        let mut offset = 0;
+        arr[offset..offset + Address::LEN].copy_from_slice(address_bytes);
+        offset += Address::LEN;
+        arr[offset..offset + AssetId::LEN].copy_from_slice(&asset_id_bytes);
+        offset += AssetId::LEN;
+        arr[offset..offset + u64::BITS as usize / 8].copy_from_slice(&amount_bytes);
+        offset += u64::BITS as usize / 8;
+        arr[offset..offset + Nonce::LEN].copy_from_slice(&nonce_bytes);
+        offset += Nonce::LEN;
+        arr[offset..].copy_from_slice(&indexation::coins_to_spend::MESSAGE_PADDING_BYTES);
         Self(arr)
     }
 
@@ -144,6 +170,12 @@ impl TableWithBlueprint for OwnedCoins {
 
 #[cfg(test)]
 mod test {
+    use fuel_core_types::{
+        entities::relayer::message::MessageV1,
+        fuel_tx::MessageId,
+        fuel_types::Nonce,
+    };
+
     use super::*;
 
     impl rand::distributions::Distribution<CoinsToSpendIndexKey>
@@ -177,7 +209,7 @@ mod test {
     );
 
     #[test]
-    fn test_coins_to_spend_index_key() {
+    fn key_from_coin() {
         let owner = Address::new([
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C,
             0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
@@ -227,6 +259,55 @@ mod test {
                 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B,
                 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
                 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0xFE, 0xFF,
+            ]
+        );
+    }
+
+    #[test]
+    fn key_from_message() {
+        let owner = Address::new([
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C,
+            0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+            0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+        ]);
+
+        let amount = [0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47];
+        assert_eq!(amount.len(), u64::BITS as usize / 8);
+
+        let nonce = Nonce::new([
+            0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C,
+            0x5D, 0x5E, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69,
+            0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
+        ]);
+
+        let trailing_bytes = indexation::coins_to_spend::MESSAGE_PADDING_BYTES;
+
+        let message = Message::V1(MessageV1 {
+            recipient: owner,
+            amount: u64::from_be_bytes(amount),
+            nonce,
+            sender: Default::default(),
+            data: Default::default(), // TODO[RC]: Take care about non- vs retryable.
+            da_height: Default::default(),
+        });
+
+        let key = CoinsToSpendIndexKey::from_message(&message);
+
+        let key_bytes: [u8; CoinsToSpendIndexKey::LEN] =
+            key.as_ref().try_into().expect("should have correct length");
+
+        assert_eq!(
+            key_bytes,
+            [
+                0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+                0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+                0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
+                0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B,
+                0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
+                0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0xFF, 0xFF,
             ]
         );
     }
