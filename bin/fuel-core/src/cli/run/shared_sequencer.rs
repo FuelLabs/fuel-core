@@ -2,10 +2,10 @@ use fuel_core_types::fuel_types::Bytes32;
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct Args {
-    /// If set to true, new blocks will be posted to the shared sequencer chain
+    /// If set to true, new blocks will be posted to the shared sequencer chain.
     #[clap(long = "enable-ss", action)]
     enable: bool,
-    /// If set to true, new blocks will be posted to the shared sequencer chain
+    /// The frequency at which to post blocks to the shared sequencer.
     #[clap(long = "ss-block-posting-frequency", env, default_value = "12s")]
     block_posting_frequency: humantime::Duration,
     /// The RPC address of the sequencer chain tendermint API
