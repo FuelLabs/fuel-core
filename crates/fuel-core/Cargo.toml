@@ -20,6 +20,7 @@ async-graphql-value = "7.0.11"
 async-trait = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
+cosmrs = { version = "0.21", optional = true }
 derive_more = { version = "0.99" }
 enum-iterator = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
@@ -35,6 +36,7 @@ fuel-core-poa = { workspace = true }
 fuel-core-producer = { workspace = true }
 fuel-core-relayer = { workspace = true, optional = true }
 fuel-core-services = { workspace = true }
+fuel-core-shared-sequencer = { workspace = true, optional = true }
 fuel-core-storage = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
 fuel-core-txpool = { workspace = true }
@@ -93,6 +95,7 @@ smt = [
 ]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
+shared-sequencer = ["dep:fuel-core-shared-sequencer", "dep:cosmrs"]
 rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus", "dep:postcard"]
 test-helpers = [
   "fuel-core-database/test-helpers",
@@ -102,6 +105,7 @@ test-helpers = [
   "fuel-core-compression/test-helpers",
   "fuel-core-txpool/test-helpers",
   "fuel-core-services/test-helpers",
+  "fuel-core-shared-sequencer?/test-helpers",
   "fuel-core-importer/test-helpers",
 ]
 # features to enable in production, but increase build times

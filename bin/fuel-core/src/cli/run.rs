@@ -55,8 +55,10 @@ use fuel_core_metrics::config::{
     DisableConfig,
     Module,
 };
-use fuel_core_poa::signer::SignMode;
-use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
+use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
+    signer::SignMode,
+};
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
@@ -85,6 +87,9 @@ use super::DEFAULT_DATABASE_CACHE_SIZE;
 
 #[cfg(feature = "p2p")]
 mod p2p;
+
+#[cfg(feature = "shared-sequencer")]
+mod shared_sequencer;
 
 mod consensus;
 mod graphql;
@@ -240,6 +245,10 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
+    #[cfg_attr(feature = "shared-sequencer", clap(flatten))]
+    #[cfg(feature = "shared-sequencer")]
+    pub shared_sequencer_args: shared_sequencer::Args,
+
     #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), env)]
     pub disabled_metrics: Vec<Module>,
 
@@ -298,6 +307,8 @@ impl Command {
             p2p_args,
             #[cfg(feature = "p2p")]
             sync_args,
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer_args,
             disabled_metrics: metrics,
             max_da_lag,
             max_wait_time,
@@ -377,8 +388,9 @@ impl Command {
                 // if consensus key is not configured, fallback to dev consensus key
                 let key = default_consensus_dev_key();
                 warn!(
-                    "Fuel Core is using an insecure test key for consensus. Public key: {}",
-                    key.public_key()
+                    "Fuel Core is using an insecure test key for consensus. Public key: {}, SecretKey: {}",
+                    key.public_key(),
+                    key
                 );
                 consensus_signer = SignMode::Key(Secret::new(key.into()));
             }
@@ -579,6 +591,8 @@ impl Command {
             p2p: p2p_cfg,
             #[cfg(feature = "p2p")]
             sync: sync_args.into(),
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer: shared_sequencer_args.try_into()?,
             consensus_signer,
             name,
             relayer_consensus_config: verifier,
