@@ -46,6 +46,10 @@ pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
 
 /// The storage table for the index of coins to spend.
 
+// In the implementation of getters we use the explicit panic with the message (`expect`)
+// when the key is malformed (incorrect length). This is a bit of a code smell, but it's
+// consistent with how the `double_key!` macro works. We should consider refactoring this
+// in the future.
 pub struct CoinsToSpendIndex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -115,6 +119,26 @@ impl CoinsToSpendIndexKey {
 
     pub fn from_slice(slice: &[u8]) -> Result<Self, core::array::TryFromSliceError> {
         Ok(Self(slice.try_into()?))
+    }
+
+    pub fn owner(&self) -> Address {
+        let address_start = 0;
+        let address_end = address_start + Address::LEN;
+        let address: [u8; Address::LEN] = self.0[address_start..address_end]
+            .try_into()
+            .expect("should have correct bytes");
+        Address::new(address)
+    }
+
+    pub fn asset_id(&self) -> AssetId {
+        let offset = Address::LEN;
+
+        let asset_id_start = offset;
+        let asset_id_end = asset_id_start + AssetId::LEN;
+        let asset_id: [u8; AssetId::LEN] = self.0[asset_id_start..asset_id_end]
+            .try_into()
+            .expect("should have correct bytes");
+        AssetId::new(asset_id)
     }
 
     // TODO[RC]: Test this
@@ -286,6 +310,9 @@ mod test {
                 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0xFE, 0xFF,
             ]
         );
+
+        assert_eq!(key.owner(), owner);
+        assert_eq!(key.asset_id(), asset_id);
     }
 
     #[test]
@@ -337,6 +364,8 @@ mod test {
                 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0xFF, 0xFF,
             ]
         );
+
+        assert_eq!(key.owner(), owner);
     }
 
     #[test]
@@ -388,5 +417,7 @@ mod test {
                 0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0xFF, 0xFF,
             ]
         );
+
+        assert_eq!(key.owner(), owner);
     }
 }
