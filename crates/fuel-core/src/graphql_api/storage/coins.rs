@@ -372,6 +372,7 @@ mod test {
         );
 
         assert_eq!(key.owner(), owner);
+        assert_eq!(key.asset_id(), base_asset_id);
     }
 
     #[test]
@@ -431,5 +432,6 @@ mod test {
         );
 
         assert_eq!(key.owner(), owner);
+        assert_eq!(key.asset_id(), base_asset_id);
     }
 }
