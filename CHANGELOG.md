@@ -40,9 +40,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 #### Breaking
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2258): Updated the `messageProof` GraphQL schema to return a non-nullable `MessageProof`.
-
-#### Breaking
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Transaction graphql endpoints use `TransactionType` instead of `fuel_tx::Transaction`.
+- [2446](https://github.com/FuelLabs/fuel-core/pull/2446): Use graphiql instead of graphql-playground due to known vulnerability and stale development.
 
 ## [Version 0.40.0]
 
