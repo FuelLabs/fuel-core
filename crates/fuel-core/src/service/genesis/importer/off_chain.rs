@@ -119,6 +119,7 @@ impl ImportTable for Handler<OwnedMessageIds, Messages> {
             tx,
             BALANCES_INDEXATION_ENABLED,
             COINS_TO_SPEND_INDEXATION_ENABLED,
+            &self.base_asset_id,
         )?;
         Ok(())
     }
@@ -142,6 +143,7 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
             tx,
             BALANCES_INDEXATION_ENABLED,
             COINS_TO_SPEND_INDEXATION_ENABLED,
+            &self.base_asset_id,
         )?;
         Ok(())
     }

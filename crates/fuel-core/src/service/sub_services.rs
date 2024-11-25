@@ -280,6 +280,11 @@ pub fn init_sub_services(
 
     let graphql_block_importer =
         GraphQLBlockImporter::new(importer_adapter.clone(), import_result_provider);
+    let base_asset_id = config
+        .snapshot_reader
+        .chain_config()
+        .consensus_parameters
+        .base_asset_id();
     let graphql_worker = fuel_core_graphql_api::worker_service::new_service(
         tx_pool_adapter.clone(),
         graphql_block_importer,
@@ -288,6 +293,7 @@ pub fn init_sub_services(
         chain_id,
         config.da_compression.clone(),
         config.continue_on_error,
+        *base_asset_id,
     );
 
     let graphql_config = GraphQLConfig {
