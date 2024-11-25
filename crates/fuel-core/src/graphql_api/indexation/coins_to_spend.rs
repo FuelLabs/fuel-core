@@ -21,6 +21,12 @@ use crate::graphql_api::{
 
 use super::error::IndexationError;
 
+// Indicates that a message is retryable.
+pub(crate) const RETRYABLE_BYTE: [u8; 1] = [0x00];
+
+// Indicates that a message is non-retryable (also, all coins use this byte).
+pub(crate) const NON_RETRYABLE_BYTE: [u8; 1] = [0x01];
+
 // For key disambiguation purposes, the coins use UtxoId as a key suffix (34 bytes).
 // Messages do not have UtxoId, hence we use Nonce for differentiation.
 // Nonce is 32 bytes, so we need to pad it with 2 bytes to make it 34 bytes.
