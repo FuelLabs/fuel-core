@@ -202,7 +202,7 @@ where
                 Ok(STOP)
             },
 
-            // The `blobs` function calls sleep inside and if it not cancel safe.
+            // The `blobs` function is not cancel safe, as it calls sleep inside.
             // If someone add new logic into the `tokio::select`, please
             // rework the `blobs` function to be cancel safe and use interval inside.
             blobs = self.blobs() => {
