@@ -141,6 +141,38 @@ impl CoinsToSpendIndexKey {
         AssetId::new(asset_id)
     }
 
+    pub fn retryable_flag(&self) -> u8 {
+        let mut offset = Address::LEN + AssetId::LEN;
+        self.0[offset]
+    }
+
+    // TODO[RC]: Use `ItemAmount` consistently
+    pub fn amount(&self) -> ItemAmount {
+        let mut offset = Address::LEN + AssetId::LEN + u8::BITS as usize / 8;
+        let amount_start = offset;
+        let amount_end = amount_start + u64::BITS as usize / 8;
+        let amount = u64::from_be_bytes(
+            self.0[amount_start..amount_end]
+                .try_into()
+                .expect("should have correct bytes"),
+        );
+        amount
+    }
+
+    pub fn foreign_key_bytes(
+        &self,
+    ) -> &[u8; CoinsToSpendIndexKey::LEN
+            - Address::LEN
+            - AssetId::LEN
+            - u8::BITS as usize / 8
+            - u64::BITS as usize / 8] {
+        let mut offset =
+            Address::LEN + AssetId::LEN + u8::BITS as usize / 8 + u64::BITS as usize / 8;
+        self.0[offset..]
+            .try_into()
+            .expect("should have correct bytes")
+    }
+
     // TODO[RC]: Test this
     pub fn utxo_id(&self) -> UtxoId {
         let mut offset = 0;
@@ -255,6 +287,20 @@ mod test {
         <CoinsToSpendIndex as Mappable>::Value::default()
     );
 
+    fn merge_foreign_key_bytes<A, B, const N: usize>(a: A, b: B) -> [u8; N]
+    where
+        A: AsRef<[u8]>,
+        B: AsRef<[u8]>,
+    {
+        a.as_ref()
+            .into_iter()
+            .copied()
+            .chain(b.as_ref().into_iter().copied())
+            .collect::<Vec<_>>()
+            .try_into()
+            .expect("should have correct length")
+    }
+
     #[test]
     fn key_from_coin() {
         let owner = Address::new([
@@ -313,6 +359,12 @@ mod test {
 
         assert_eq!(key.owner(), owner);
         assert_eq!(key.asset_id(), asset_id);
+        assert_eq!(key.retryable_flag(), retryable_flag[0]);
+        assert_eq!(key.amount(), u64::from_be_bytes(amount));
+        assert_eq!(
+            key.foreign_key_bytes(),
+            &merge_foreign_key_bytes(tx_id, output_index)
+        );
     }
 
     #[test]
@@ -373,6 +425,12 @@ mod test {
 
         assert_eq!(key.owner(), owner);
         assert_eq!(key.asset_id(), base_asset_id);
+        assert_eq!(key.retryable_flag(), retryable_flag[0]);
+        assert_eq!(key.amount(), u64::from_be_bytes(amount));
+        assert_eq!(
+            key.foreign_key_bytes(),
+            &merge_foreign_key_bytes(nonce, trailing_bytes)
+        );
     }
 
     #[test]
@@ -433,5 +491,11 @@ mod test {
 
         assert_eq!(key.owner(), owner);
         assert_eq!(key.asset_id(), base_asset_id);
+        assert_eq!(key.retryable_flag(), retryable_flag[0]);
+        assert_eq!(key.amount(), u64::from_be_bytes(amount));
+        assert_eq!(
+            key.foreign_key_bytes(),
+            &merge_foreign_key_bytes(nonce, trailing_bytes)
+        );
     }
 }
