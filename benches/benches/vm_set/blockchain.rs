@@ -132,12 +132,16 @@ impl BenchDb {
 
     fn add_blocks(&mut self, nb_blocks: u32) {
         for i in 1..=nb_blocks {
-            let block = fuel_core::service::genesis::create_genesis_block(&Config::local_node());
+            let block =
+                fuel_core::service::genesis::create_genesis_block(&Config::local_node());
             let config = Config::local_node();
             let chain_config = config.snapshot_reader.chain_config();
             self.db
                 .storage::<FuelBlocks>()
-                .insert(&i.into(), &block.compress(&chain_config.consensus_parameters.chain_id()))
+                .insert(
+                    &i.into(),
+                    &block.compress(&chain_config.consensus_parameters.chain_id()),
+                )
                 .unwrap();
         }
         self.latest_block = nb_blocks;
@@ -531,23 +535,24 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::bhei(0x10)),
     );
 
-    let mut db = BenchDb::new(&VmBench::CONTRACT).expect("Unable to fill contract storage");
+    let mut db =
+        BenchDb::new(&VmBench::CONTRACT).expect("Unable to fill contract storage");
     db.add_blocks(10000);
 
     run_group_ref(
         &mut c.benchmark_group("bhsh"),
         "bhsh",
         VmBench::new(op::bhsh(RegId::HP, 0x11))
-        .prepend_prepare_script(vec![
-            // Store number of bytes we want to alloc for the future result
-            op::movi(0x10, 0x20),
-            // Allocate space for the future result
-            op::aloc(0x10),
-            // Add block height to 0x11
-            op::movi(0x11, 0xc9)
-        ])
-        .with_height(0xca.into())
-        .with_db(db.to_vm_database())
+            .prepend_prepare_script(vec![
+                // Store number of bytes we want to alloc for the future result
+                op::movi(0x10, 0x20),
+                // Allocate space for the future result
+                op::aloc(0x10),
+                // Add block height to 0x11
+                op::movi(0x11, 0xc9),
+            ])
+            .with_height(0xca.into())
+            .with_db(db.to_vm_database()),
     );
 
     run_group_ref(
