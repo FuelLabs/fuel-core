@@ -91,7 +91,7 @@ pub mod primitives {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TransactionResponse {
-    pub transaction: Transaction,
+    pub transaction: TransactionType,
     pub status: TransactionStatus,
 }
 
@@ -249,8 +249,9 @@ impl TryFrom<OpaqueTransactionWithStatus> for TransactionResponse {
 
     fn try_from(value: OpaqueTransactionWithStatus) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
-        let tx: Transaction = Transaction::from_bytes(bytes.as_slice())
-            .map_err(ConversionError::TransactionFromBytesError)?;
+        let tx: TransactionType = Transaction::from_bytes(bytes.as_slice())
+            .map(Into::into)
+            .unwrap_or(TransactionType::Unknown);
         let status = value
             .status
             .ok_or_else(|| ConversionError::MissingField("status".to_string()))?
@@ -288,5 +289,31 @@ impl TryFrom<SchemaRelayedTransactionStatus> for RelayedTransactionStatus {
                 ));
             }
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[allow(clippy::large_enum_variant)]
+pub enum TransactionType {
+    Known(Transaction),
+    Unknown,
+}
+
+impl From<Transaction> for TransactionType {
+    fn from(value: Transaction) -> Self {
+        Self::Known(value)
+    }
+}
+
+impl TryFrom<TransactionType> for Transaction {
+    type Error = ConversionError;
+
+    fn try_from(value: TransactionType) -> Result<Self, ConversionError> {
+        match value {
+            TransactionType::Known(tx) => Ok(tx),
+            TransactionType::Unknown => {
+                Err(ConversionError::UnknownVariant("Transaction"))
+            }
+        }
     }
 }

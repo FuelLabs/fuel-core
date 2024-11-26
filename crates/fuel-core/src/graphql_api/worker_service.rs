@@ -10,7 +10,10 @@ use crate::{
     fuel_core_graphql_api::{
         ports::{
             self,
-            worker::OffChainDatabaseTransaction,
+            worker::{
+                BlockAt,
+                OffChainDatabaseTransaction,
+            },
         },
         storage::{
             blocks::FuelBlockIdsToHeights,
@@ -36,6 +39,7 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
+    TaskNextAction,
 };
 use fuel_core_storage::{
     Error as StorageError,
@@ -536,6 +540,11 @@ where
         let next_block_height =
             off_chain_height.map(|height| BlockHeight::new(height.saturating_add(1)));
 
+        let next_block_height = match next_block_height {
+            Some(block_height) => BlockAt::Specific(block_height),
+            None => BlockAt::Genesis,
+        };
+
         let import_result =
             import_result_provider.block_event_at_height(next_block_height)?;
 
@@ -551,13 +560,12 @@ where
     TxPool: ports::worker::TxPool,
     D: ports::worker::OffChainDatabase,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        let should_continue;
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                should_continue = false;
+                TaskNextAction::Stop
             }
 
             result = self.block_importer.next() => {
@@ -567,17 +575,19 @@ where
                     // In the case of an error, shut down the service to avoid a huge
                     // de-synchronization between on-chain and off-chain databases.
                     if let Err(e) = result {
-                        tracing::error!("Error processing block: {:?}", e);
-                        should_continue = self.continue_on_error;
+                        if self.continue_on_error {
+                            TaskNextAction::ErrorContinue(e)
+                        } else {
+                            TaskNextAction::Stop
+                        }
                     } else {
-                        should_continue = true
+                        TaskNextAction::Continue
                     }
                 } else {
-                    should_continue = false
+                    TaskNextAction::Stop
                 }
             }
         }
-        Ok(should_continue)
     }
 
     async fn shutdown(mut self) -> anyhow::Result<()> {
