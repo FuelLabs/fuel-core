@@ -150,5 +150,108 @@ where
 
 #[cfg(test)]
 mod tests {
-    // TODO[RC]: Add tests
+    use fuel_core_storage::{
+        transactional::WriteTransaction,
+        StorageAsMut,
+    };
+    use fuel_core_types::{
+        fuel_tx::{
+            Address,
+            AssetId,
+        },
+        services::executor::Event,
+    };
+
+    use crate::{
+        database::{
+            database_description::off_chain::OffChain,
+            Database,
+        },
+        graphql_api::{
+            indexation::{
+                coins_to_spend::update,
+                test_utils::{
+                    make_coin,
+                    make_nonretryable_message,
+                    make_retryable_message,
+                },
+            },
+            storage::coins::{
+                CoinsToSpendIndex,
+                CoinsToSpendIndexKey,
+            },
+        },
+    };
+
+    #[test]
+    fn coins_to_spend_indexation_enabled_flag_is_respected() {
+        use tempfile::TempDir;
+        let tmp_dir = TempDir::new().unwrap();
+        let mut db: Database<OffChain> =
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                .unwrap();
+        let mut tx = db.write_transaction();
+
+        const COINS_TO_SPEND_INDEX_IS_DISABLED: bool = false;
+
+        let owner_1 = Address::from([1; 32]);
+        let owner_2 = Address::from([2; 32]);
+
+        let asset_id_1 = AssetId::from([11; 32]);
+        let asset_id_2 = AssetId::from([12; 32]);
+
+        let coin_1 = make_coin(&owner_1, &asset_id_1, 100);
+        let coin_2 = make_coin(&owner_1, &asset_id_2, 200);
+        let message_1 = make_retryable_message(&owner_1, 300);
+        let message_2 = make_nonretryable_message(&owner_2, 400);
+
+        let base_asset_id = AssetId::from([0; 32]);
+
+        // Initial set of coins
+        // TODO[RC]: No .clone() required for coins? Double check the types used, maybe we want `MessageCoin` for messages?
+        let events: Vec<Event> = vec![
+            Event::CoinCreated(coin_1),
+            Event::CoinConsumed(coin_2),
+            Event::MessageImported(message_1.clone()),
+            Event::MessageConsumed(message_2.clone()),
+        ];
+
+        events.iter().for_each(|event| {
+            update(
+                event,
+                &mut tx,
+                COINS_TO_SPEND_INDEX_IS_DISABLED,
+                &base_asset_id,
+            )
+            .expect("should process balance");
+        });
+
+        let key = CoinsToSpendIndexKey::from_coin(&coin_1);
+        let coin = tx
+            .storage::<CoinsToSpendIndex>()
+            .get(&key)
+            .expect("should correctly query db");
+        assert!(coin.is_none());
+
+        let key = CoinsToSpendIndexKey::from_coin(&coin_2);
+        let coin = tx
+            .storage::<CoinsToSpendIndex>()
+            .get(&key)
+            .expect("should correctly query db");
+        assert!(coin.is_none());
+
+        let key = CoinsToSpendIndexKey::from_message(&message_1, &base_asset_id);
+        let message = tx
+            .storage::<CoinsToSpendIndex>()
+            .get(&key)
+            .expect("should correctly query db");
+        assert!(message.is_none());
+
+        let key = CoinsToSpendIndexKey::from_message(&message_2, &base_asset_id);
+        let message = tx
+            .storage::<CoinsToSpendIndex>()
+            .get(&key)
+            .expect("should correctly query db");
+        assert!(message.is_none());
+    }
 }

@@ -194,6 +194,11 @@ mod tests {
             indexation::{
                 balances::update,
                 error::IndexationError,
+                test_utils::{
+                    make_coin,
+                    make_nonretryable_message,
+                    make_retryable_message,
+                },
             },
             ports::worker::OffChainDatabaseTransaction,
             storage::balances::{
@@ -204,33 +209,6 @@ mod tests {
             },
         },
     };
-
-    fn make_coin(owner: &Address, asset_id: &AssetId, amount: u64) -> Coin {
-        Coin {
-            utxo_id: Default::default(),
-            owner: *owner,
-            amount,
-            asset_id: *asset_id,
-            tx_pointer: Default::default(),
-        }
-    }
-
-    fn make_retryable_message(owner: &Address, amount: u64) -> Message {
-        Message::V1(MessageV1 {
-            sender: Default::default(),
-            recipient: *owner,
-            nonce: Default::default(),
-            amount,
-            data: vec![1],
-            da_height: Default::default(),
-        })
-    }
-
-    fn make_nonretryable_message(owner: &Address, amount: u64) -> Message {
-        let mut message = make_retryable_message(owner, amount);
-        message.set_data(vec![]);
-        message
-    }
 
     fn assert_coin_balance<T>(
         tx: &mut T,
