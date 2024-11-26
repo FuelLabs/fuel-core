@@ -34,7 +34,6 @@ wasmtime = { version = "23.0.2", default-features = false, features = [
 anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
-ntest = "0.9.2"
 
 [build-dependencies]
 fuel-core-wasm-executor = { workspace = true, optional = true, default-features = false }

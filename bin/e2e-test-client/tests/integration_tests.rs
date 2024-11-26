@@ -4,15 +4,20 @@ use fuel_core::service::{
 };
 
 // Add methods on commands
+use fuel_core::service::config::Trigger;
 use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
 };
 use fuel_core_e2e_client::config::SuiteConfig;
-use fuel_core_types::fuel_tx::ContractId;
+use fuel_core_types::{
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
+    fuel_tx::ContractId,
+};
 use std::{
     fs,
     str::FromStr,
+    time::Duration,
 };
 use tempfile::TempDir; // Used for writing assertions // Run programs
 
@@ -127,6 +132,7 @@ fn dev_config() -> Config {
     }
     chain_config.state_transition_bytecode =
         fuel_core::upgradable_executor::WASM_BYTECODE.to_vec();
+    chain_config.genesis_state_transition_version = Some(LATEST_STATE_TRANSITION_VERSION);
     let reader = reader.with_chain_config(chain_config);
 
     let mut config = Config::local_node_with_reader(reader);
@@ -137,6 +143,9 @@ fn dev_config() -> Config {
         )
         .unwrap(),
     );
+    config.block_production = Trigger::Interval {
+        block_time: Duration::from_secs(1),
+    };
     config
 }
 

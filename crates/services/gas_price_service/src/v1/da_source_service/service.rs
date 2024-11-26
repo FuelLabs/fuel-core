@@ -3,6 +3,7 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
+    TaskNextAction,
 };
 use std::time::Duration;
 use tokio::{
@@ -15,7 +16,6 @@ use tokio::{
 
 use crate::v1::da_source_service::DaBlockCosts;
 pub use anyhow::Result;
-use fuel_core_services::stream::BoxFuture;
 
 #[derive(Clone)]
 pub struct SharedState(Sender<DaBlockCosts>);
@@ -24,6 +24,7 @@ impl SharedState {
     fn new(sender: Sender<DaBlockCosts>) -> Self {
         Self(sender)
     }
+
     pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<DaBlockCosts> {
         self.0.subscribe()
     }
@@ -40,7 +41,7 @@ where
     shared_state: SharedState,
 }
 
-const DA_BLOCK_COSTS_CHANNEL_SIZE: usize = 10;
+const DA_BLOCK_COSTS_CHANNEL_SIZE: usize = 16 * 1024;
 const POLLING_INTERVAL_MS: u64 = 10_000;
 
 impl<Source> DaSourceService<Source>
@@ -57,6 +58,12 @@ where
             ),
             source,
         }
+    }
+
+    async fn process_block_costs(&mut self) -> Result<()> {
+        let da_block_costs = self.source.request_da_block_cost().await?;
+        self.shared_state.0.send(da_block_costs)?;
+        Ok(())
     }
 }
 
@@ -101,21 +108,17 @@ where
 {
     /// This function polls the source according to a polling interval
     /// described by the DaBlockCostsService
-    async fn run(&mut self, state_watcher: &mut StateWatcher) -> Result<bool> {
-        let continue_running;
-
+    async fn run(&mut self, state_watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {
-                continue_running = false;
+                TaskNextAction::Stop
             }
             _ = self.poll_interval.tick() => {
-                let da_block_costs = self.source.request_da_block_cost().await?;
-                self.shared_state.0.send(da_block_costs)?;
-                continue_running = true;
+                let da_block_costs_res = self.process_block_costs().await;
+                TaskNextAction::always_continue(da_block_costs_res)
             }
         }
-        Ok(continue_running)
     }
 
     /// There are no shutdown hooks required by the sources  *yet*
