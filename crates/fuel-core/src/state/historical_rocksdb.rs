@@ -174,7 +174,6 @@ where
         // we need to apply all modifications up to `X + 1`.
         let rollback_height = height.as_u64().saturating_add(1);
 
-        // TODO: May fail incorrectly because of https://github.com/FuelLabs/fuel-core/issues/2095
         let Some(oldest_height) = self.oldest_changes_height()? else {
             return Err(DatabaseError::NoHistoryIsAvailable.into());
         };
@@ -311,8 +310,6 @@ where
     }
 
     #[cfg(test)]
-    // TODO: This method doesn't work properly because of
-    //  https://github.com/FuelLabs/fuel-core/issues/2095
     fn rollback_last_block(&self) -> StorageResult<u64> {
         let modifications_history_migration_in_progress = self.is_migration_in_progress();
 
@@ -323,7 +320,7 @@ where
 
         let latest_height = match (v2_latest_height, v1_latest_height) {
             (None, None) => Err(DatabaseError::ReachedEndOfHistory)?,
-            (Some(Ok(v1)), Some(Ok(v2))) => v1.min(v2),
+            (Some(Ok(v1)), Some(Ok(v2))) => v1.max(v2),
             (_, Some(v1_res)) => v1_res?,
             (Some(v2_res), _) => v2_res?,
         };
@@ -334,10 +331,6 @@ where
     }
 
     fn rollback_block_to(&self, height_to_rollback: u64) -> StorageResult<()> {
-        // Will clone an empty set of changes if the migration is not in progress, which should
-        // not impact performance. However, when a migration is in progress, this operation could
-        // be expensive if many changes have been accumulated.
-
         let mut storage_transaction = self.db.read_transaction();
 
         let last_changes = multiversion_take(
@@ -584,10 +577,6 @@ where
         height: Option<Description::Height>,
         changes: Changes,
     ) -> StorageResult<()> {
-        // cumulative_changes_lock_guard is defined to be Some only when the migration is in progress.
-        // If the migration is not in progress, the default set of changes will be used, and the overhead
-        // for handling caused by this function to handle the migration will be minimal.
-
         let mut storage_transaction =
             StorageTransaction::transaction(&self.db, ConflictPolicy::Overwrite, changes);
 
