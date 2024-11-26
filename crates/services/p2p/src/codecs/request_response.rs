@@ -30,9 +30,7 @@ pub struct RequestResponseMessageHandler<Codec> {
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
-    // TODO: https://github.com/FuelLabs/fuel-core/issues/2459.
-    // Make this a u64 instead of usize.
-    pub(crate) max_response_size: usize,
+    pub(crate) max_response_size: u64,
 }
 
 /// Since Postcard does not support async reads or writes out of the box

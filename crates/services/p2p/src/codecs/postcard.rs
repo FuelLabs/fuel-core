@@ -14,7 +14,7 @@ use std::{
 pub struct PostcardCodec;
 
 impl RequestResponseMessageHandler<PostcardCodec> {
-    pub fn new(max_block_size: usize) -> Self {
+    pub fn new(max_block_size: u64) -> Self {
         assert_ne!(
             max_block_size, 0,
             "RequestResponseMessageHandler does not support zero block size"
