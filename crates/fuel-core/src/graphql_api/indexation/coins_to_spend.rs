@@ -207,8 +207,15 @@ mod tests {
 
         let base_asset_id = AssetId::from([0; 32]);
 
+        // TODO[RC]: No .clone() required for coins? Double check the types used,
+        // maybe we want `MessageCoin` (which is Copy) for messages?
+        // 1) Currently we use the same types as embedded in the executor `Event`.
+        // 2) `MessageCoin` will refuse to construct itself from a `Message` if the data is empty
+        //      impl TryFrom<Message> for MessageCoin { ... if !data.is_empty() ... }
+        // Actually it shouldn't matter from the indexation perspective, as we just need
+        // to read data from the type and don't care about which data type we took it from.
+
         // Initial set of coins
-        // TODO[RC]: No .clone() required for coins? Double check the types used, maybe we want `MessageCoin` for messages?
         let events: Vec<Event> = vec![
             Event::CoinCreated(coin_1),
             Event::CoinConsumed(coin_2),
