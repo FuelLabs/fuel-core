@@ -181,6 +181,7 @@ mod tests {
                     update,
                     RETRYABLE_BYTE,
                 },
+                error::IndexationError,
                 test_utils::{
                     make_coin,
                     make_nonretryable_message,
@@ -517,7 +518,120 @@ mod tests {
         assert_index_entries(&mut db, expected_index_entries);
     }
 
-    // TODO[RC]: Check for insertion and deletion errors
+    #[test]
+    fn double_insertion_causes_error() {
+        use tempfile::TempDir;
+        let tmp_dir = TempDir::new().unwrap();
+        let mut db: Database<OffChain> =
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                .unwrap();
+        let mut tx = db.write_transaction();
+
+        const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
+        let base_asset_id = AssetId::from([0; 32]);
+        let owner = Address::from([1; 32]);
+        let asset_id = AssetId::from([11; 32]);
+
+        let coin = make_coin(&owner, &asset_id, 100);
+        let mut coin_event = Event::CoinCreated(coin);
+
+        assert!(update(
+            &coin_event,
+            &mut tx,
+            COINS_TO_SPEND_INDEX_IS_ENABLED,
+            &base_asset_id,
+        )
+        .is_ok());
+        assert_eq!(
+            update(
+                &coin_event,
+                &mut tx,
+                COINS_TO_SPEND_INDEX_IS_ENABLED,
+                &base_asset_id,
+            )
+            .unwrap_err(),
+            IndexationError::CoinToSpendAlreadyIndexed {
+                owner: owner.clone(),
+                asset_id: asset_id.clone(),
+                amount: 100,
+                utxo_id: coin.utxo_id.clone(),
+            }
+        );
+
+        let message = make_nonretryable_message(&owner, 400);
+        let message_event = Event::MessageImported(message.clone());
+        assert!(update(
+            &message_event,
+            &mut tx,
+            COINS_TO_SPEND_INDEX_IS_ENABLED,
+            &base_asset_id,
+        )
+        .is_ok());
+        assert_eq!(
+            update(
+                &message_event,
+                &mut tx,
+                COINS_TO_SPEND_INDEX_IS_ENABLED,
+                &base_asset_id,
+            )
+            .unwrap_err(),
+            IndexationError::MessageToSpendAlreadyIndexed {
+                owner: owner.clone(),
+                amount: 400,
+                nonce: *message.nonce(),
+            }
+        );
+    }
+
+    #[test]
+    fn removal_of_missing_index_entry_causes_error() {
+        use tempfile::TempDir;
+        let tmp_dir = TempDir::new().unwrap();
+        let mut db: Database<OffChain> =
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                .unwrap();
+        let mut tx = db.write_transaction();
+
+        const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
+        let base_asset_id = AssetId::from([0; 32]);
+        let owner = Address::from([1; 32]);
+        let asset_id = AssetId::from([11; 32]);
+
+        let coin = make_coin(&owner, &asset_id, 100);
+        let mut coin_event = Event::CoinConsumed(coin);
+        assert_eq!(
+            update(
+                &coin_event,
+                &mut tx,
+                COINS_TO_SPEND_INDEX_IS_ENABLED,
+                &base_asset_id,
+            )
+            .unwrap_err(),
+            IndexationError::CoinToSpendNotFound {
+                owner: owner.clone(),
+                asset_id: asset_id.clone(),
+                amount: 100,
+                utxo_id: coin.utxo_id.clone(),
+            }
+        );
+
+        let message = make_nonretryable_message(&owner, 400);
+        let message_event = Event::MessageConsumed(message.clone());
+        assert_eq!(
+            update(
+                &message_event,
+                &mut tx,
+                COINS_TO_SPEND_INDEX_IS_ENABLED,
+                &base_asset_id,
+            )
+            .unwrap_err(),
+            IndexationError::MessageToSpendNotFound {
+                owner: owner.clone(),
+                amount: 400,
+                nonce: *message.nonce(),
+            }
+        );
+    }
 
     proptest! {
         #[test]
