@@ -613,6 +613,20 @@ mod tests {
         );
     }
 
+    #[test]
+    fn can_differentiate_between_coin_with_base_asset_id_and_message() {
+        let base_asset_id = AssetId::from([0; 32]);
+        let owner = Address::from([1; 32]);
+
+        let coin = make_coin(&owner, &base_asset_id, 100);
+        let message = make_nonretryable_message(&owner, 100);
+
+        let coin_key = CoinsToSpendIndexKey::from_coin(&coin);
+        let message_key = CoinsToSpendIndexKey::from_message(&message, &base_asset_id);
+
+        assert_ne!(coin_key, message_key);
+    }
+
     proptest! {
         #[test]
         fn test_coin_index_is_sorted(
