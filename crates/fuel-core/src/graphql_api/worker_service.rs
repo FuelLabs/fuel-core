@@ -205,13 +205,22 @@ where
     T: OffChainDatabaseTransaction,
 {
     for event in events {
-        update_indexation(
+        match update_indexation(
             &event,
             block_st_transaction,
             balances_indexation_enabled,
             coins_to_spend_indexation_enabled,
             base_asset_id,
-        );
+        ) {
+            Ok(()) => (),
+            Err(IndexationError::StorageError(err)) => {
+                return Err(err.into());
+            }
+            Err(err) => {
+                // TODO[RC]: Indexing errors to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
+                tracing::error!("Indexation error: {}", err);
+            }
+        };
         match event.deref() {
             Event::MessageImported(message) => {
                 block_st_transaction
@@ -264,7 +273,7 @@ where
 }
 
 fn update_indexation<T>(
-    event: &Cow<Event>,
+    event: &Event,
     block_st_transaction: &mut T,
     balances_indexation_enabled: bool,
     coins_to_spend_indexation_enabled: bool,
@@ -273,41 +282,18 @@ fn update_indexation<T>(
 where
     T: OffChainDatabaseTransaction,
 {
-    match indexation::balances::update(
-        event.deref(),
+    indexation::balances::update(
+        event,
         block_st_transaction,
         balances_indexation_enabled,
-    ) {
-        Ok(()) => (),
-        Err(IndexationError::StorageError(err)) => {
-            return Err(err.into());
-        }
-        Err(err @ IndexationError::CoinToSpendNotFound { .. })
-        | Err(err @ IndexationError::CoinToSpendAlreadyIndexed { .. })
-        | Err(err @ IndexationError::MessageToSpendNotFound { .. })
-        | Err(err @ IndexationError::MessageToSpendAlreadyIndexed { .. }) => {
-            // TODO[RC]: Indexing errors to be correctly handled. See: TODO
-            tracing::error!("Coins to spend index error: {}", err);
-        }
-        Err(err @ IndexationError::CoinBalanceWouldUnderflow { .. })
-        | Err(err @ IndexationError::MessageBalanceWouldUnderflow { .. }) => {
-            // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
-            tracing::error!("Balances underflow detected: {}", err);
-        }
-    }
+    )?;
 
-    match indexation::coins_to_spend::update(
-        event.deref(),
+    indexation::coins_to_spend::update(
+        event,
         block_st_transaction,
         coins_to_spend_indexation_enabled,
         base_asset_id,
-    ) {
-        Ok(()) => (),
-        Err(IndexationError::StorageError(err)) => {
-            return Err(err.into());
-        }
-        _ => todo!(), // TODO[RC]: Handle specific errors
-    }
+    )?;
 
     Ok(())
 }
@@ -680,6 +666,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
     tx_pool: TxPool,
     block_importer: BlockImporter,

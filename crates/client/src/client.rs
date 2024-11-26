@@ -129,10 +129,7 @@ use std::{
     },
 };
 use tai64::Tai64;
-use tracing::{
-    self as _,
-    error,
-};
+use tracing as _;
 use types::{
     TransactionResponse,
     TransactionStatus,
@@ -1004,8 +1001,6 @@ impl FuelClient {
         // (Utxos, Messages Nonce)
         excluded_ids: Option<(Vec<UtxoId>, Vec<Nonce>)>,
     ) -> io::Result<Vec<Vec<types::CoinType>>> {
-        error!("client - coins_to_spend");
-
         let owner: schema::Address = (*owner).into();
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()

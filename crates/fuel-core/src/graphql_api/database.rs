@@ -91,6 +91,8 @@ pub struct ReadDatabase {
     /// The flag that indicates whether the Balances indexation is enabled.
     balances_indexation_enabled: bool,
     /// The flag that indicates whether the CoinsToSpend indexation is enabled.
+    #[allow(dead_code)]
+    // TODO[RC]: The actual usage of the coins to spend index will be delivered in a follow-up PR.
     coins_to_spend_indexation_enabled: bool,
 }
 

@@ -1,7 +1,4 @@
-use fuel_core_storage::{
-    Error as StorageError,
-    StorageAsMut,
-};
+use fuel_core_storage::StorageAsMut;
 
 use fuel_core_types::{
     entities::{
@@ -50,10 +47,10 @@ where
     let maybe_old_value = storage.replace(&key, &(IndexedCoinType::Coin as u8))?;
     if maybe_old_value.is_some() {
         return Err(IndexationError::CoinToSpendAlreadyIndexed {
-            owner: coin.owner.clone(),
-            asset_id: coin.asset_id.clone(),
+            owner: coin.owner,
+            asset_id: coin.asset_id,
             amount: coin.amount,
-            utxo_id: coin.utxo_id.clone(),
+            utxo_id: coin.utxo_id,
         });
     }
     Ok(())
@@ -71,10 +68,10 @@ where
     let maybe_old_value = storage.take(&key)?;
     if maybe_old_value.is_none() {
         return Err(IndexationError::CoinToSpendNotFound {
-            owner: coin.owner.clone(),
-            asset_id: coin.asset_id.clone(),
+            owner: coin.owner,
+            asset_id: coin.asset_id,
             amount: coin.amount,
-            utxo_id: coin.utxo_id.clone(),
+            utxo_id: coin.utxo_id,
         });
     }
     Ok(())
@@ -93,9 +90,9 @@ where
     let maybe_old_value = storage.replace(&key, &(IndexedCoinType::Message as u8))?;
     if maybe_old_value.is_some() {
         return Err(IndexationError::MessageToSpendAlreadyIndexed {
-            owner: message.recipient().clone(),
+            owner: *message.recipient(),
             amount: message.amount(),
-            nonce: message.nonce().clone(),
+            nonce: *message.nonce(),
         });
     }
     Ok(())
@@ -114,9 +111,9 @@ where
     let maybe_old_value = storage.take(&key)?;
     if maybe_old_value.is_none() {
         return Err(IndexationError::MessageToSpendNotFound {
-            owner: message.recipient().clone(),
+            owner: *message.recipient(),
             amount: message.amount(),
-            nonce: message.nonce().clone(),
+            nonce: *message.nonce(),
         });
     }
     Ok(())
@@ -188,15 +185,10 @@ mod tests {
                     make_retryable_message,
                 },
             },
-            ports::worker::OffChainDatabaseTransaction,
             storage::coins::{
                 CoinsToSpendIndex,
                 CoinsToSpendIndexKey,
             },
-        },
-        state::{
-            generic_database::GenericDatabase,
-            iterable_key_value_view::IterableKeyValueViewWrapper,
         },
     };
 
@@ -245,7 +237,7 @@ mod tests {
         let message_1 = make_retryable_message(&owner_1, 300);
         let message_2 = make_nonretryable_message(&owner_2, 400);
 
-        // TODO[RC]: No .clone() required for coins? Double check the types used,
+        // TODO[RC]: No  required for coins? Double check the types used,
         // maybe we want `MessageCoin` (which is Copy) for messages?
         // 1) Currently we use the same types as embedded in the executor `Event`.
         // 2) `MessageCoin` will refuse to construct itself from a `Message` if the data is empty
@@ -364,36 +356,21 @@ mod tests {
 
         // Mind the sorted amounts
         let expected_index_entries = &[
-            (owner_1.clone(), asset_id_1.clone(), NON_RETRYABLE_BYTE, 100),
-            (owner_1.clone(), asset_id_1.clone(), NON_RETRYABLE_BYTE, 150),
-            (owner_1.clone(), asset_id_1.clone(), NON_RETRYABLE_BYTE, 200),
-            (owner_1.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 10),
-            (owner_1.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 11),
-            (owner_1.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 12),
-            (
-                owner_2.clone(),
-                asset_id_1.clone(),
-                NON_RETRYABLE_BYTE,
-                1000,
-            ),
-            (
-                owner_2.clone(),
-                asset_id_1.clone(),
-                NON_RETRYABLE_BYTE,
-                1500,
-            ),
-            (
-                owner_2.clone(),
-                asset_id_1.clone(),
-                NON_RETRYABLE_BYTE,
-                2000,
-            ),
-            (owner_2.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 700),
-            (owner_2.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 800),
-            (owner_2.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 900),
+            (owner_1, asset_id_1, NON_RETRYABLE_BYTE, 100),
+            (owner_1, asset_id_1, NON_RETRYABLE_BYTE, 150),
+            (owner_1, asset_id_1, NON_RETRYABLE_BYTE, 200),
+            (owner_1, asset_id_2, NON_RETRYABLE_BYTE, 10),
+            (owner_1, asset_id_2, NON_RETRYABLE_BYTE, 11),
+            (owner_1, asset_id_2, NON_RETRYABLE_BYTE, 12),
+            (owner_2, asset_id_1, NON_RETRYABLE_BYTE, 1000),
+            (owner_2, asset_id_1, NON_RETRYABLE_BYTE, 1500),
+            (owner_2, asset_id_1, NON_RETRYABLE_BYTE, 2000),
+            (owner_2, asset_id_2, NON_RETRYABLE_BYTE, 700),
+            (owner_2, asset_id_2, NON_RETRYABLE_BYTE, 800),
+            (owner_2, asset_id_2, NON_RETRYABLE_BYTE, 900),
         ];
 
-        assert_index_entries(&mut db, expected_index_entries);
+        assert_index_entries(&db, expected_index_entries);
     }
 
     #[test]
@@ -447,15 +424,15 @@ mod tests {
 
         // Mind the sorted amounts
         let expected_index_entries = &[
-            (owner_1.clone(), base_asset_id, NON_RETRYABLE_BYTE, 100),
-            (owner_1.clone(), base_asset_id, NON_RETRYABLE_BYTE, 200),
-            (owner_2.clone(), base_asset_id, NON_RETRYABLE_BYTE, 700),
-            (owner_2.clone(), base_asset_id, NON_RETRYABLE_BYTE, 800),
-            (owner_2.clone(), base_asset_id, NON_RETRYABLE_BYTE, 1000),
-            (owner_2.clone(), base_asset_id, NON_RETRYABLE_BYTE, 2000),
+            (owner_1, base_asset_id, NON_RETRYABLE_BYTE, 100),
+            (owner_1, base_asset_id, NON_RETRYABLE_BYTE, 200),
+            (owner_2, base_asset_id, NON_RETRYABLE_BYTE, 700),
+            (owner_2, base_asset_id, NON_RETRYABLE_BYTE, 800),
+            (owner_2, base_asset_id, NON_RETRYABLE_BYTE, 1000),
+            (owner_2, base_asset_id, NON_RETRYABLE_BYTE, 2000),
         ];
 
-        assert_index_entries(&mut db, expected_index_entries);
+        assert_index_entries(&db, expected_index_entries);
     }
 
     #[test]
@@ -505,17 +482,17 @@ mod tests {
 
         // Mind the amounts are always correctly sorted
         let expected_index_entries = &[
-            (owner.clone(), base_asset_id, RETRYABLE_BYTE, 300),
-            (owner.clone(), base_asset_id, RETRYABLE_BYTE, 301),
-            (owner.clone(), base_asset_id, NON_RETRYABLE_BYTE, 200),
-            (owner.clone(), base_asset_id, NON_RETRYABLE_BYTE, 201),
-            (owner.clone(), base_asset_id, NON_RETRYABLE_BYTE, 400),
-            (owner.clone(), base_asset_id, NON_RETRYABLE_BYTE, 401),
-            (owner.clone(), asset_id, NON_RETRYABLE_BYTE, 100),
-            (owner.clone(), asset_id, NON_RETRYABLE_BYTE, 101),
+            (owner, base_asset_id, RETRYABLE_BYTE, 300),
+            (owner, base_asset_id, RETRYABLE_BYTE, 301),
+            (owner, base_asset_id, NON_RETRYABLE_BYTE, 200),
+            (owner, base_asset_id, NON_RETRYABLE_BYTE, 201),
+            (owner, base_asset_id, NON_RETRYABLE_BYTE, 400),
+            (owner, base_asset_id, NON_RETRYABLE_BYTE, 401),
+            (owner, asset_id, NON_RETRYABLE_BYTE, 100),
+            (owner, asset_id, NON_RETRYABLE_BYTE, 101),
         ];
 
-        assert_index_entries(&mut db, expected_index_entries);
+        assert_index_entries(&db, expected_index_entries);
     }
 
     #[test]
@@ -533,7 +510,7 @@ mod tests {
         let asset_id = AssetId::from([11; 32]);
 
         let coin = make_coin(&owner, &asset_id, 100);
-        let mut coin_event = Event::CoinCreated(coin);
+        let coin_event = Event::CoinCreated(coin);
 
         assert!(update(
             &coin_event,
@@ -551,10 +528,10 @@ mod tests {
             )
             .unwrap_err(),
             IndexationError::CoinToSpendAlreadyIndexed {
-                owner: owner.clone(),
-                asset_id: asset_id.clone(),
+                owner,
+                asset_id,
                 amount: 100,
-                utxo_id: coin.utxo_id.clone(),
+                utxo_id: coin.utxo_id,
             }
         );
 
@@ -576,7 +553,7 @@ mod tests {
             )
             .unwrap_err(),
             IndexationError::MessageToSpendAlreadyIndexed {
-                owner: owner.clone(),
+                owner,
                 amount: 400,
                 nonce: *message.nonce(),
             }
@@ -598,7 +575,7 @@ mod tests {
         let asset_id = AssetId::from([11; 32]);
 
         let coin = make_coin(&owner, &asset_id, 100);
-        let mut coin_event = Event::CoinConsumed(coin);
+        let coin_event = Event::CoinConsumed(coin);
         assert_eq!(
             update(
                 &coin_event,
@@ -608,10 +585,10 @@ mod tests {
             )
             .unwrap_err(),
             IndexationError::CoinToSpendNotFound {
-                owner: owner.clone(),
-                asset_id: asset_id.clone(),
+                owner,
+                asset_id,
                 amount: 100,
-                utxo_id: coin.utxo_id.clone(),
+                utxo_id: coin.utxo_id,
             }
         );
 
@@ -626,7 +603,7 @@ mod tests {
             )
             .unwrap_err(),
             IndexationError::MessageToSpendNotFound {
-                owner: owner.clone(),
+                owner,
                 amount: 400,
                 nonce: *message.nonce(),
             }

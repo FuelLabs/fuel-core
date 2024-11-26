@@ -1,15 +1,8 @@
-use fuel_core_storage::{
-    Error as StorageError,
-    StorageAsMut,
-};
+use fuel_core_storage::StorageAsMut;
 use fuel_core_types::{
     entities::{
         coins::coin::Coin,
         Message,
-    },
-    fuel_tx::{
-        Address,
-        AssetId,
     },
     services::executor::Event,
 };
@@ -173,11 +166,6 @@ mod tests {
         StorageAsMut,
     };
     use fuel_core_types::{
-        entities::{
-            coins::coin::Coin,
-            relayer::message::MessageV1,
-            Message,
-        },
         fuel_tx::{
             Address,
             AssetId,

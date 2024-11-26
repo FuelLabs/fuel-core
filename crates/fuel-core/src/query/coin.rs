@@ -26,7 +26,6 @@ use futures::{
     StreamExt,
     TryStreamExt,
 };
-use tracing::error;
 
 impl ReadView {
     pub fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
@@ -80,21 +79,9 @@ impl ReadView {
         asset_id: &AssetId,
         max: u16,
     ) -> Result<Vec<CoinType>, CoinsQueryError> {
-        error!("query/coins - coins_to_spend");
+        let _coin_ids = self.off_chain.coins_to_spend(owner, asset_id, max);
 
-        let coin_ids = self
-            .off_chain
-            .coins_to_spend(owner, asset_id, max)
-            .expect("TODO[RC]: Fix this");
-        error!("got the following coin_ids: {:?}", coin_ids);
-
-        let mut all_coins = Vec::new();
-        for coin_id in coin_ids {
-            let c = self.coin(coin_id).expect("TODO[RC]: Fix this");
-            // TODO[RC]: Support messages also
-            all_coins.push(CoinType::Coin(c));
-        }
-
-        Ok(all_coins)
+        // TODO[RC]: The actual usage of the coins to spend index will be delivered in a follow-up PR.
+        todo!();
     }
 }

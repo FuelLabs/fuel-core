@@ -80,7 +80,6 @@ pub trait OffChainDatabase: Send + Sync {
         base_asset_id: &AssetId,
     ) -> StorageResult<TotalBalanceAmount>;
 
-    // TODO[RC]: BoxedIter?
     fn balances(
         &self,
         owner: &Address,
@@ -114,7 +113,7 @@ pub trait OffChainDatabase: Send + Sync {
         owner: &Address,
         asset_id: &AssetId,
         max: u16,
-        // TODO[RC]: Also support message ids here - these are different than UtxoId
+        // TODO[RC]: Also support message ids here - these are different than UtxoId. This will be taken care of in a follow-up PR.
     ) -> StorageResult<Vec<UtxoId>>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;

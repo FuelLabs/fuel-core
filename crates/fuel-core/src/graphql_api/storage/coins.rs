@@ -28,12 +28,9 @@ use fuel_core_types::{
 use crate::graphql_api::indexation;
 
 use self::indexation::coins_to_spend::{
-    IndexedCoinType,
     NON_RETRYABLE_BYTE,
     RETRYABLE_BYTE,
 };
-
-use super::balances::ItemAmount;
 
 // TODO: Reuse `fuel_vm::storage::double_key` macro.
 pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
@@ -82,6 +79,7 @@ impl CoinsToSpendIndexKey {
         + TxId::LEN
         + 2;
 
+    #[allow(clippy::arithmetic_side_effects)]
     pub fn from_coin(coin: &Coin) -> Self {
         let address_bytes = coin.owner.as_ref();
         let asset_id_bytes = coin.asset_id.as_ref();
@@ -102,6 +100,7 @@ impl CoinsToSpendIndexKey {
         Self(arr)
     }
 
+    #[allow(clippy::arithmetic_side_effects)]
     pub fn from_message(message: &Message, base_asset_id: &AssetId) -> Self {
         let address_bytes = message.recipient().as_ref();
         let asset_id_bytes = base_asset_id.as_ref();
@@ -112,7 +111,7 @@ impl CoinsToSpendIndexKey {
         let mut offset = 0;
         arr[offset..offset + Address::LEN].copy_from_slice(address_bytes);
         offset += Address::LEN;
-        arr[offset..offset + AssetId::LEN].copy_from_slice(&asset_id_bytes);
+        arr[offset..offset + AssetId::LEN].copy_from_slice(asset_id_bytes);
         offset += AssetId::LEN;
         arr[offset..offset + u8::BITS as usize / 8].copy_from_slice(
             if message.has_retryable_amount() {
@@ -124,7 +123,7 @@ impl CoinsToSpendIndexKey {
         offset += u8::BITS as usize / 8;
         arr[offset..offset + u64::BITS as usize / 8].copy_from_slice(&amount_bytes);
         offset += u64::BITS as usize / 8;
-        arr[offset..offset + Nonce::LEN].copy_from_slice(&nonce_bytes);
+        arr[offset..offset + Nonce::LEN].copy_from_slice(nonce_bytes);
         offset += Nonce::LEN;
         arr[offset..].copy_from_slice(&indexation::coins_to_spend::MESSAGE_PADDING_BYTES);
         Self(arr)
@@ -155,23 +154,23 @@ impl CoinsToSpendIndexKey {
     }
 
     pub fn retryable_flag(&self) -> u8 {
-        let mut offset = Address::LEN + AssetId::LEN;
+        let offset = Address::LEN + AssetId::LEN;
         self.0[offset]
     }
 
-    // TODO[RC]: Use `ItemAmount` consistently
-    pub fn amount(&self) -> ItemAmount {
-        let mut offset = Address::LEN + AssetId::LEN + u8::BITS as usize / 8;
+    #[allow(clippy::arithmetic_side_effects)]
+    pub fn amount(&self) -> u64 {
+        let offset = Address::LEN + AssetId::LEN + u8::BITS as usize / 8;
         let amount_start = offset;
         let amount_end = amount_start + u64::BITS as usize / 8;
-        let amount = u64::from_be_bytes(
+        u64::from_be_bytes(
             self.0[amount_start..amount_end]
                 .try_into()
                 .expect("should have correct bytes"),
-        );
-        amount
+        )
     }
 
+    #[allow(clippy::arithmetic_side_effects)]
     pub fn foreign_key_bytes(
         &self,
     ) -> &[u8; CoinsToSpendIndexKey::LEN
@@ -179,7 +178,7 @@ impl CoinsToSpendIndexKey {
             - AssetId::LEN
             - u8::BITS as usize / 8
             - u64::BITS as usize / 8] {
-        let mut offset =
+        let offset =
             Address::LEN + AssetId::LEN + u8::BITS as usize / 8 + u64::BITS as usize / 8;
         self.0[offset..]
             .try_into()
@@ -241,7 +240,6 @@ impl TableWithBlueprint for OwnedCoins {
 mod test {
     use fuel_core_types::{
         entities::relayer::message::MessageV1,
-        fuel_tx::MessageId,
         fuel_types::Nonce,
     };
 
@@ -283,9 +281,9 @@ mod test {
         B: AsRef<[u8]>,
     {
         a.as_ref()
-            .into_iter()
+            .iter()
             .copied()
-            .chain(b.as_ref().into_iter().copied())
+            .chain(b.as_ref().iter().copied())
             .collect::<Vec<_>>()
             .try_into()
             .expect("should have correct length")
