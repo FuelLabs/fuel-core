@@ -151,6 +151,7 @@ where
 #[cfg(test)]
 mod tests {
     use fuel_core_storage::{
+        iter::IterDirection,
         transactional::WriteTransaction,
         StorageAsMut,
     };
@@ -161,6 +162,13 @@ mod tests {
         },
         services::executor::Event,
     };
+    use rand::seq::SliceRandom;
+
+    use itertools::Itertools;
+    use proptest::{
+        collection::vec,
+        prelude::*,
+    };
 
     use crate::{
         database::{
@@ -169,19 +177,49 @@ mod tests {
         },
         graphql_api::{
             indexation::{
-                coins_to_spend::update,
+                coins_to_spend::{
+                    update,
+                    RETRYABLE_BYTE,
+                },
                 test_utils::{
                     make_coin,
                     make_nonretryable_message,
                     make_retryable_message,
                 },
             },
+            ports::worker::OffChainDatabaseTransaction,
             storage::coins::{
                 CoinsToSpendIndex,
                 CoinsToSpendIndexKey,
             },
         },
+        state::{
+            generic_database::GenericDatabase,
+            iterable_key_value_view::IterableKeyValueViewWrapper,
+        },
     };
+
+    use super::NON_RETRYABLE_BYTE;
+
+    fn assert_index_entries(
+        db: &Database<OffChain>,
+        expected_entries: &[(Address, AssetId, [u8; 1], u64)],
+    ) {
+        let actual_entries: Vec<_> = db
+            .entries::<CoinsToSpendIndex>(None, IterDirection::Forward)
+            .map(|entry| entry.expect("should read entries"))
+            .map(|entry| {
+                (
+                    entry.key.owner(),
+                    entry.key.asset_id(),
+                    [entry.key.retryable_flag()],
+                    entry.key.amount(),
+                )
+            })
+            .collect();
+
+        assert_eq!(expected_entries, actual_entries.as_slice());
+    }
 
     #[test]
     fn coins_to_spend_indexation_enabled_flag_is_respected() {
@@ -193,6 +231,7 @@ mod tests {
         let mut tx = db.write_transaction();
 
         const COINS_TO_SPEND_INDEX_IS_DISABLED: bool = false;
+        let base_asset_id = AssetId::from([0; 32]);
 
         let owner_1 = Address::from([1; 32]);
         let owner_2 = Address::from([2; 32]);
@@ -204,8 +243,6 @@ mod tests {
         let coin_2 = make_coin(&owner_1, &asset_id_2, 200);
         let message_1 = make_retryable_message(&owner_1, 300);
         let message_2 = make_nonretryable_message(&owner_2, 400);
-
-        let base_asset_id = AssetId::from([0; 32]);
 
         // TODO[RC]: No .clone() required for coins? Double check the types used,
         // maybe we want `MessageCoin` (which is Copy) for messages?
@@ -260,5 +297,268 @@ mod tests {
             .get(&key)
             .expect("should correctly query db");
         assert!(message.is_none());
+    }
+
+    #[test]
+    fn coin_owner_and_asset_id_is_respected() {
+        use tempfile::TempDir;
+        let tmp_dir = TempDir::new().unwrap();
+        let mut db: Database<OffChain> =
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                .unwrap();
+        let mut tx = db.write_transaction();
+
+        const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
+        let base_asset_id = AssetId::from([0; 32]);
+
+        let owner_1 = Address::from([1; 32]);
+        let owner_2 = Address::from([2; 32]);
+
+        let asset_id_1 = AssetId::from([11; 32]);
+        let asset_id_2 = AssetId::from([12; 32]);
+
+        // Initial set of coins of the same asset id - mind the random order of amounts
+        let mut events: Vec<Event> = vec![
+            Event::CoinCreated(make_coin(&owner_1, &asset_id_1, 100)),
+            Event::CoinCreated(make_coin(&owner_1, &asset_id_1, 300)),
+            Event::CoinCreated(make_coin(&owner_1, &asset_id_1, 200)),
+        ];
+
+        // Add more coins, some of them for the new asset id - mind the random order of amounts
+        events.extend([
+            Event::CoinCreated(make_coin(&owner_1, &asset_id_2, 10)),
+            Event::CoinCreated(make_coin(&owner_1, &asset_id_2, 12)),
+            Event::CoinCreated(make_coin(&owner_1, &asset_id_2, 11)),
+            Event::CoinCreated(make_coin(&owner_1, &asset_id_1, 150)),
+        ]);
+
+        // Add another owner into the mix
+        events.extend([
+            Event::CoinCreated(make_coin(&owner_2, &asset_id_1, 1000)),
+            Event::CoinCreated(make_coin(&owner_2, &asset_id_1, 2000)),
+            Event::CoinCreated(make_coin(&owner_2, &asset_id_1, 200000)),
+            Event::CoinCreated(make_coin(&owner_2, &asset_id_1, 1500)),
+            Event::CoinCreated(make_coin(&owner_2, &asset_id_2, 900)),
+            Event::CoinCreated(make_coin(&owner_2, &asset_id_2, 800)),
+            Event::CoinCreated(make_coin(&owner_2, &asset_id_2, 700)),
+        ]);
+
+        // Consume some coins
+        events.extend([
+            Event::CoinConsumed(make_coin(&owner_1, &asset_id_1, 300)),
+            Event::CoinConsumed(make_coin(&owner_2, &asset_id_1, 200000)),
+        ]);
+
+        // Process all events
+        events.iter().for_each(|event| {
+            update(
+                event,
+                &mut tx,
+                COINS_TO_SPEND_INDEX_IS_ENABLED,
+                &base_asset_id,
+            )
+            .expect("should process coins to spend");
+        });
+        tx.commit().expect("should commit transaction");
+
+        // Mind the sorted amounts
+        let expected_index_entries = &[
+            (owner_1.clone(), asset_id_1.clone(), NON_RETRYABLE_BYTE, 100),
+            (owner_1.clone(), asset_id_1.clone(), NON_RETRYABLE_BYTE, 150),
+            (owner_1.clone(), asset_id_1.clone(), NON_RETRYABLE_BYTE, 200),
+            (owner_1.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 10),
+            (owner_1.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 11),
+            (owner_1.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 12),
+            (
+                owner_2.clone(),
+                asset_id_1.clone(),
+                NON_RETRYABLE_BYTE,
+                1000,
+            ),
+            (
+                owner_2.clone(),
+                asset_id_1.clone(),
+                NON_RETRYABLE_BYTE,
+                1500,
+            ),
+            (
+                owner_2.clone(),
+                asset_id_1.clone(),
+                NON_RETRYABLE_BYTE,
+                2000,
+            ),
+            (owner_2.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 700),
+            (owner_2.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 800),
+            (owner_2.clone(), asset_id_2.clone(), NON_RETRYABLE_BYTE, 900),
+        ];
+
+        assert_index_entries(&mut db, expected_index_entries);
+    }
+
+    #[test]
+    fn message_owner_is_respected() {
+        use tempfile::TempDir;
+        let tmp_dir = TempDir::new().unwrap();
+        let mut db: Database<OffChain> =
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                .unwrap();
+        let mut tx = db.write_transaction();
+
+        const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
+        let base_asset_id = AssetId::from([0; 32]);
+
+        let owner_1 = Address::from([1; 32]);
+        let owner_2 = Address::from([2; 32]);
+
+        // Initial set of coins of the same asset id - mind the random order of amounts
+        let mut events: Vec<Event> = vec![
+            Event::MessageImported(make_nonretryable_message(&owner_1, 100)),
+            Event::MessageImported(make_nonretryable_message(&owner_1, 300)),
+            Event::MessageImported(make_nonretryable_message(&owner_1, 200)),
+        ];
+
+        // Add another owner into the mix
+        events.extend([
+            Event::MessageImported(make_nonretryable_message(&owner_2, 1000)),
+            Event::MessageImported(make_nonretryable_message(&owner_2, 2000)),
+            Event::MessageImported(make_nonretryable_message(&owner_2, 200000)),
+            Event::MessageImported(make_nonretryable_message(&owner_2, 800)),
+            Event::MessageImported(make_nonretryable_message(&owner_2, 700)),
+        ]);
+
+        // Consume some coins
+        events.extend([
+            Event::MessageConsumed(make_nonretryable_message(&owner_1, 300)),
+            Event::MessageConsumed(make_nonretryable_message(&owner_2, 200000)),
+        ]);
+
+        // Process all events
+        events.iter().for_each(|event| {
+            update(
+                event,
+                &mut tx,
+                COINS_TO_SPEND_INDEX_IS_ENABLED,
+                &base_asset_id,
+            )
+            .expect("should process coins to spend");
+        });
+        tx.commit().expect("should commit transaction");
+
+        // Mind the sorted amounts
+        let expected_index_entries = &[
+            (owner_1.clone(), base_asset_id, NON_RETRYABLE_BYTE, 100),
+            (owner_1.clone(), base_asset_id, NON_RETRYABLE_BYTE, 200),
+            (owner_2.clone(), base_asset_id, NON_RETRYABLE_BYTE, 700),
+            (owner_2.clone(), base_asset_id, NON_RETRYABLE_BYTE, 800),
+            (owner_2.clone(), base_asset_id, NON_RETRYABLE_BYTE, 1000),
+            (owner_2.clone(), base_asset_id, NON_RETRYABLE_BYTE, 2000),
+        ];
+
+        assert_index_entries(&mut db, expected_index_entries);
+    }
+
+    #[test]
+    fn coins_with_retryable_and_non_retryable_messages_are_not_mixed() {
+        use tempfile::TempDir;
+        let tmp_dir = TempDir::new().unwrap();
+        let mut db: Database<OffChain> =
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                .unwrap();
+        let mut tx = db.write_transaction();
+
+        const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
+        let base_asset_id = AssetId::from([0; 32]);
+        let owner = Address::from([1; 32]);
+        let asset_id = AssetId::from([11; 32]);
+
+        let mut events = [
+            Event::CoinCreated(make_coin(&owner, &asset_id, 101)),
+            Event::CoinCreated(make_coin(&owner, &asset_id, 100)),
+            Event::CoinCreated(make_coin(&owner, &base_asset_id, 200000)),
+            Event::CoinCreated(make_coin(&owner, &base_asset_id, 201)),
+            Event::CoinCreated(make_coin(&owner, &base_asset_id, 200)),
+            Event::MessageImported(make_retryable_message(&owner, 301)),
+            Event::MessageImported(make_retryable_message(&owner, 200000)),
+            Event::MessageImported(make_retryable_message(&owner, 300)),
+            Event::MessageImported(make_nonretryable_message(&owner, 401)),
+            Event::MessageImported(make_nonretryable_message(&owner, 200000)),
+            Event::MessageImported(make_nonretryable_message(&owner, 400)),
+            // Delete the "big" coins
+            Event::CoinConsumed(make_coin(&owner, &base_asset_id, 200000)),
+            Event::MessageConsumed(make_retryable_message(&owner, 200000)),
+            Event::MessageConsumed(make_nonretryable_message(&owner, 200000)),
+        ];
+        events.shuffle(&mut rand::thread_rng());
+
+        // Process all events
+        events.iter().for_each(|event| {
+            update(
+                event,
+                &mut tx,
+                COINS_TO_SPEND_INDEX_IS_ENABLED,
+                &base_asset_id,
+            )
+            .expect("should process coins to spend");
+        });
+        tx.commit().expect("should commit transaction");
+
+        // Mind the amounts are always correctly sorted
+        let expected_index_entries = &[
+            (owner.clone(), base_asset_id, RETRYABLE_BYTE, 300),
+            (owner.clone(), base_asset_id, RETRYABLE_BYTE, 301),
+            (owner.clone(), base_asset_id, NON_RETRYABLE_BYTE, 200),
+            (owner.clone(), base_asset_id, NON_RETRYABLE_BYTE, 201),
+            (owner.clone(), base_asset_id, NON_RETRYABLE_BYTE, 400),
+            (owner.clone(), base_asset_id, NON_RETRYABLE_BYTE, 401),
+            (owner.clone(), asset_id, NON_RETRYABLE_BYTE, 100),
+            (owner.clone(), asset_id, NON_RETRYABLE_BYTE, 101),
+        ];
+
+        assert_index_entries(&mut db, expected_index_entries);
+    }
+
+    // TODO[RC]: Check for insertion and deletion errors
+
+    proptest! {
+        #[test]
+        fn test_coin_index_is_sorted(
+            amounts in vec(any::<u64>(), 1..100),
+        ) {
+            use tempfile::TempDir;
+            let tmp_dir = TempDir::new().unwrap();
+            let mut db: Database<OffChain> =
+                Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                    .unwrap();
+            let mut tx = db.write_transaction();
+            let base_asset_id = AssetId::from([0; 32]);
+            const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
+
+            let events: Vec<_> = amounts.iter()
+                .map(|&amount| Event::CoinCreated(make_coin(&Address::from([1; 32]), &AssetId::from([11; 32]), amount)))
+                .collect();
+
+                events.iter().for_each(|event| {
+                    update(
+                        event,
+                        &mut tx,
+                        COINS_TO_SPEND_INDEX_IS_ENABLED,
+                        &base_asset_id,
+                    )
+                    .expect("should process coins to spend");
+                });
+                tx.commit().expect("should commit transaction");
+
+                let actual_amounts: Vec<_> = db
+                    .entries::<CoinsToSpendIndex>(None, IterDirection::Forward)
+                    .map(|entry| entry.expect("should read entries"))
+                    .map(|entry|
+                            entry.key.amount(),
+                    )
+                    .collect();
+
+                let sorted_amounts = amounts.iter().copied().sorted().collect::<Vec<_>>();
+
+                prop_assert_eq!(sorted_amounts, actual_amounts);
+        }
     }
 }

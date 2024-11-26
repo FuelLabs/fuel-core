@@ -61,6 +61,19 @@ impl Default for CoinsToSpendIndexKey {
     }
 }
 
+impl core::fmt::Display for CoinsToSpendIndexKey {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "owner={}, asset_id={}, retryable_flag={}, amount={}",
+            self.owner(),
+            self.asset_id(),
+            self.retryable_flag(),
+            self.amount()
+        )
+    }
+}
+
 impl CoinsToSpendIndexKey {
     const LEN: usize = Address::LEN
         + AssetId::LEN
