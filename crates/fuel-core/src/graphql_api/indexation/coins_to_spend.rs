@@ -237,7 +237,7 @@ mod tests {
         let message_1 = make_retryable_message(&owner_1, 300);
         let message_2 = make_nonretryable_message(&owner_2, 400);
 
-        // TODO[RC]: No  required for coins? Double check the types used,
+        // TODO[RC]: No clone() required for coins? Double check the types used,
         // maybe we want `MessageCoin` (which is Copy) for messages?
         // 1) Currently we use the same types as embedded in the executor `Event`.
         // 2) `MessageCoin` will refuse to construct itself from a `Message` if the data is empty
