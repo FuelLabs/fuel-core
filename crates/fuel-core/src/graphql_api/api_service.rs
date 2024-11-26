@@ -26,10 +26,7 @@ use crate::{
     },
 };
 use async_graphql::{
-    http::{
-        playground_source,
-        GraphQLPlaygroundConfig,
-    },
+    http::GraphiQLSource,
     Request,
     Response,
 };
@@ -278,16 +275,22 @@ where
         .extension(ViewExtension::new())
         .finish();
 
+    let graphql_endpoint = "/v1/graphql";
+    let graphql_subscription_endpoint = "/v1/graphql-sub";
+
+    let graphql_playground =
+        || render_graphql_playground(graphql_endpoint, graphql_subscription_endpoint);
+
     let router = Router::new()
         .route("/v1/playground", get(graphql_playground))
         .route(
-            "/v1/graphql",
+            graphql_endpoint,
             post(graphql_handler)
                 .layer(ConcurrencyLimitLayer::new(concurrency_limit))
                 .options(ok),
         )
         .route(
-            "/v1/graphql-sub",
+            graphql_subscription_endpoint,
             post(graphql_subscription_handler).options(ok),
         )
         .route("/v1/metrics", get(metrics))
@@ -325,10 +328,17 @@ where
     ))
 }
 
-async fn graphql_playground() -> impl IntoResponse {
-    Html(playground_source(GraphQLPlaygroundConfig::new(
-        "/v1/graphql",
-    )))
+async fn render_graphql_playground(
+    endpoint: &str,
+    subscription_endpoint: &str,
+) -> impl IntoResponse {
+    Html(
+        GraphiQLSource::build()
+            .endpoint(endpoint)
+            .subscription_endpoint(subscription_endpoint)
+            .title("Fuel Graphql Playground")
+            .finish(),
+    )
 }
 
 async fn health() -> Json<serde_json::Value> {
