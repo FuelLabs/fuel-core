@@ -21,6 +21,12 @@ use super::{
     SelectionAlgorithm,
 };
 
+#[cfg(test)]
+use fuel_core_types::services::txpool::ArcPoolTx;
+
+#[cfg(test)]
+use std::collections::HashMap;
+
 pub trait RatioTipGasSelectionAlgorithmStorage {
     type StorageIndex: Debug;
 
@@ -115,6 +121,27 @@ where
     fn on_removed_transaction_inner(&mut self, key: Key) {
         self.executable_transactions_sorted_tip_gas_ratio
             .remove(&Reverse(key));
+    }
+
+    #[cfg(test)]
+    pub(crate) fn assert_integrity(&self, expected_txs: &[ArcPoolTx]) {
+        let mut expected_txs: HashMap<TxId, ArcPoolTx> = expected_txs
+            .iter()
+            .map(|tx| (tx.id(), tx.clone()))
+            .collect();
+        for key in self.executable_transactions_sorted_tip_gas_ratio.keys() {
+            expected_txs.remove(&key.0.tx_id).unwrap_or_else(|| {
+                panic!(
+                    "Transaction with id {:?} is not in the expected transactions.",
+                    key.0.tx_id
+                )
+            });
+        }
+        assert!(
+            expected_txs.is_empty(),
+            "Some transactions are missing from the selection algorithm: {:?}",
+            expected_txs.keys().collect::<Vec<_>>()
+        );
     }
 }
 

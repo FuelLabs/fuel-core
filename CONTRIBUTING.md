@@ -153,6 +153,10 @@ Multiple issues should use full syntax for each issue and separate by a comma, l
 close #123, ref #456
 ```
 
+### Long tests issues
+
+If your test if taking more than 5 minutes on the CI, you need to edit the `.config/nextest.toml` file to allow your test to have a bigger timeout. See [nextest documentation](https://nexte.st/docs/configuration/?h=config) for format
+
 ### Releasing
 
 Each release should have its own new version of the `fuel_core_upgradable_executor::Executor` regardless of minor or major release. The version of the executor should grow without gaps.
