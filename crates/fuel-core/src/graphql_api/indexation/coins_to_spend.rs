@@ -449,7 +449,7 @@ mod tests {
         let owner = Address::from([1; 32]);
         let asset_id = AssetId::from([11; 32]);
 
-        let mut events = [
+        let mut events = vec![
             Event::CoinCreated(make_coin(&owner, &asset_id, 101)),
             Event::CoinCreated(make_coin(&owner, &asset_id, 100)),
             Event::CoinCreated(make_coin(&owner, &base_asset_id, 200000)),
@@ -461,12 +461,15 @@ mod tests {
             Event::MessageImported(make_nonretryable_message(&owner, 401)),
             Event::MessageImported(make_nonretryable_message(&owner, 200000)),
             Event::MessageImported(make_nonretryable_message(&owner, 400)),
-            // Delete the "big" coins
+        ];
+        events.shuffle(&mut rand::thread_rng());
+
+        // Delete the "big" coins
+        events.extend([
             Event::CoinConsumed(make_coin(&owner, &base_asset_id, 200000)),
             Event::MessageConsumed(make_retryable_message(&owner, 200000)),
             Event::MessageConsumed(make_nonretryable_message(&owner, 200000)),
-        ];
-        events.shuffle(&mut rand::thread_rng());
+        ]);
 
         // Process all events
         events.iter().for_each(|event| {
