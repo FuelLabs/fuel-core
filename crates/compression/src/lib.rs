@@ -16,6 +16,7 @@ pub use registry::RegistryKeyspace;
 use fuel_core_types::{
     blockchain::header::PartialBlockHeader,
     fuel_tx::CompressedTransaction,
+    fuel_types::BlockHeight,
 };
 use registry::RegistrationsPerTable;
 
@@ -39,6 +40,15 @@ pub enum VersionedCompressedBlock {
 impl Default for VersionedCompressedBlock {
     fn default() -> Self {
         Self::V0(Default::default())
+    }
+}
+
+impl VersionedCompressedBlock {
+    /// Returns the height of the compressed block.
+    pub fn height(&self) -> &BlockHeight {
+        match self {
+            VersionedCompressedBlock::V0(block) => block.header.height(),
+        }
     }
 }
 

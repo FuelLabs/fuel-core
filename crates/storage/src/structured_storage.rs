@@ -105,7 +105,7 @@ impl<S> StructuredStorage<S> {
     }
 
     /// Returns the inner storage.
-    pub fn into_inner(self) -> S {
+    pub fn into_storage(self) -> S {
         self.inner
     }
 }
