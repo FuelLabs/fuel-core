@@ -78,18 +78,12 @@ impl Cache {
         let mut current_chunk = CachedDataBatch::None(0..0);
 
         for (height, data) in cache_iter {
-            if height == current_height {
-                current_chunk =
-                    self.handle_current_chunk(current_chunk, data, height, &mut chunks);
-                current_chunk = self.check_chunk_limit(
-                    current_chunk,
-                    max_chunk_size,
-                    &mut chunks,
-                    current_height,
-                );
-            } else {
-                self.push_current_chunk(&mut chunks, current_chunk);
-                self.push_missing_chunks(
+            if height != current_height {
+                if !current_chunk.is_range_empty() {
+                    chunks.push(current_chunk);
+                }
+                current_chunk = CachedDataBatch::None(0..0);
+                Self::push_missing_chunks(
                     &mut chunks,
                     current_height,
                     height,
@@ -97,14 +91,25 @@ impl Cache {
                     chunk_size_u32,
                     end,
                 );
-                current_chunk = self.prepare_next_chunk(data, height);
+                current_height = height;
             }
+            current_chunk =
+                Self::handle_current_chunk(current_chunk, data, height, &mut chunks);
+            current_chunk = Self::check_chunk_limit(
+                current_chunk,
+                max_chunk_size,
+                &mut chunks,
+                current_height,
+            );
+
             current_height = height.saturating_add(1);
         }
 
-        self.push_current_chunk(&mut chunks, current_chunk);
+        if !current_chunk.is_range_empty() {
+            chunks.push(current_chunk);
+        }
         if current_height <= end {
-            self.push_missing_chunks(
+            Self::push_missing_chunks(
                 &mut chunks,
                 current_height,
                 end,
@@ -122,7 +127,6 @@ impl Cache {
     }
 
     fn handle_current_chunk(
-        &self,
         current_chunk: CachedDataBatch,
         data: CachedData,
         height: u32,
@@ -144,16 +148,19 @@ impl Cache {
                 ))
             }
             (CachedDataBatch::Headers(mut batch), CachedData::Header(data)) => {
-                batch.range = batch.range.start..height.saturating_add(1);
+                debug_assert_eq!(batch.range.end, height);
+                batch.range = batch.range.start..batch.range.end.saturating_add(1);
                 batch.results.push(data);
                 CachedDataBatch::Headers(batch)
             }
             (CachedDataBatch::Blocks(mut batch), CachedData::Block(data)) => {
-                batch.range = batch.range.start..height.saturating_add(1);
+                debug_assert_eq!(batch.range.end, height);
+                batch.range = batch.range.start..batch.range.end.saturating_add(1);
                 batch.results.push(data);
                 CachedDataBatch::Blocks(batch)
             }
             (CachedDataBatch::Headers(headers_batch), CachedData::Block(block)) => {
+                debug_assert_eq!(headers_batch.range.end, height);
                 chunks.push(CachedDataBatch::Headers(headers_batch));
                 CachedDataBatch::Blocks(Batch::new(
                     None,
@@ -162,6 +169,7 @@ impl Cache {
                 ))
             }
             (CachedDataBatch::Blocks(blocks_batch), CachedData::Header(header)) => {
+                debug_assert_eq!(blocks_batch.range.end, height);
                 chunks.push(CachedDataBatch::Blocks(blocks_batch));
                 CachedDataBatch::Headers(Batch::new(
                     None,
@@ -173,7 +181,6 @@ impl Cache {
     }
 
     fn check_chunk_limit(
-        &self,
         current_chunk: CachedDataBatch,
         max_chunk_size: usize,
         chunks: &mut Vec<CachedDataBatch>,
@@ -200,18 +207,7 @@ impl Cache {
         }
     }
 
-    fn push_current_chunk(
-        &self,
-        chunks: &mut Vec<CachedDataBatch>,
-        current_chunk: CachedDataBatch,
-    ) {
-        if !current_chunk.is_range_empty() {
-            chunks.push(current_chunk);
-        }
-    }
-
     fn push_missing_chunks(
-        &self,
         chunks: &mut Vec<CachedDataBatch>,
         current_height: u32,
         height: u32,
@@ -227,21 +223,6 @@ impl Cache {
                     CachedDataBatch::None(chunk_start..block_end)
                 });
         chunks.extend(missing_chunks);
-    }
-
-    fn prepare_next_chunk(&self, data: CachedData, height: u32) -> CachedDataBatch {
-        match data {
-            CachedData::Header(data) => CachedDataBatch::Headers(Batch::new(
-                None,
-                height..height.saturating_add(1),
-                vec![data],
-            )),
-            CachedData::Block(data) => CachedDataBatch::Blocks(Batch::new(
-                None,
-                height..height.saturating_add(1),
-                vec![data],
-            )),
-        }
     }
 
     pub fn remove_element(&mut self, height: &u32) {

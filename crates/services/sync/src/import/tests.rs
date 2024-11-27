@@ -249,18 +249,19 @@ async fn import__signature_fails_on_header_5_only() {
 
 #[tokio::test]
 async fn import__keep_data_asked_in_fail_ask_header_cases() {
+    // Test is going from block 4 (3 already committed) to 6
     let params = Config {
         block_stream_buffer_size: 10,
         header_batch_size: 1,
     };
 
     let mut consensus_port = MockConsensusPort::default();
-    // No reask
+    // No reask on verification on all of the blocks
     consensus_port
         .expect_check_sealed_header()
         .times(3)
         .returning(|_| Ok(true));
-    // No reask
+    // No reask on da height on all of the blocks
     consensus_port
         .expect_await_da_height()
         .times(3)
@@ -279,6 +280,7 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
                 Err(anyhow::anyhow!("Some network error"))
             })
         });
+    // Success for 5 and 6 that is in parallel with 4
     p2p.expect_get_sealed_block_headers()
         .times(2)
         .in_sequence(&mut seq)
@@ -303,7 +305,7 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
                 Ok(headers)
             })
         });
-    // No reask
+    // No reask on getting full block step for 4, 5 and 6 blocks
     p2p.expect_get_transactions_from_peer()
         .times(3)
         .returning(|block_ids| {
@@ -340,7 +342,7 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
     *state.lock() = State::new(3, 6);
 
     // When
-    // Should re-ask to P2P only block 4 and for now it reask for all blocks
+    // Should re-ask to P2P only block 4.
     let res = import.import(&mut watcher).await.is_ok();
     assert!(res);
     assert_eq!(&State::new(6, None), state.lock().deref());
@@ -348,22 +350,26 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
 
 #[tokio::test]
 async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
+    // Test is going from block 4 (3 already committed) to 6
     let params = Config {
         block_stream_buffer_size: 10,
         header_batch_size: 1,
     };
 
     let mut consensus_port = MockConsensusPort::default();
+    // No reask on verification on all of the blocks
     consensus_port
         .expect_check_sealed_header()
         .times(3)
         .returning(|_| Ok(true));
+    // No reask on da height on all of the blocks
     consensus_port
         .expect_await_da_height()
         .times(4)
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
+    // Everything goes well on the headers part for all blocks
     p2p.expect_get_sealed_block_headers()
         .times(3)
         .returning(|range| {
@@ -387,6 +393,7 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
             })
         });
 
+    // Success for 5 and 6 that is in parallel with 4
     p2p.expect_get_transactions_from_peer()
         .times(2)
         .in_sequence(&mut seq)
@@ -439,7 +446,7 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
     // Reset the state for a next call
     *state.lock() = State::new(3, 6);
     // When
-    // Should re-ask to P2P only block 4 and for now it reask for all blocks
+    // Should re-ask to P2P only block 4.
     let res = import.import(&mut watcher).await.is_ok();
     assert!(res);
     assert_eq!(&State::new(6, None), state.lock().deref());

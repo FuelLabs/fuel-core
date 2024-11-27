@@ -486,7 +486,8 @@ fn get_block_stream<
                             }
                         }
                         BlockHeaderData::Cached(CachedDataBatch::None(_)) => {
-                            unreachable!()
+                            tracing::error!("Cached data batch should never be created outside of the caching algorithm.");
+                            Batch::new(None, 0..1, vec![])
                         }
                     }
                 }
