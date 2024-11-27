@@ -3683,6 +3683,7 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-types 0.40.0",
  "futures",
+ "itertools 0.12.1",
  "mockall",
  "rand",
  "test-case",

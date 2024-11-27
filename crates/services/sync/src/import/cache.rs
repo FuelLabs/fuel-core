@@ -14,6 +14,8 @@ use fuel_core_types::blockchain::{
     SealedBlockHeader,
 };
 
+use itertools::Itertools;
+
 use super::Batch;
 
 /// The cache that stores the fetched headers and blocks.
@@ -78,10 +80,10 @@ impl Cache {
         let mut current_chunk = CachedDataBatch::None(0..0);
 
         for (height, data) in cache_iter {
+            // We have a range missing in our cache.
+            // Push the existing chunk and push chunks of missing data
             if height != current_height {
-                if !current_chunk.is_range_empty() {
-                    chunks.push(current_chunk);
-                }
+                Self::push_current_chunk(&mut chunks, current_chunk, max_chunk_size);
                 current_chunk = CachedDataBatch::None(0..0);
                 Self::push_missing_chunks(
                     &mut chunks,
@@ -93,21 +95,18 @@ impl Cache {
                 );
                 current_height = height;
             }
-            current_chunk =
-                Self::handle_current_chunk(current_chunk, data, height, &mut chunks);
-            current_chunk = Self::check_chunk_limit(
+            // Either accumulate in the same chunk or transition if the data is not the same as the current chunk
+            current_chunk = Self::handle_current_chunk(
                 current_chunk,
-                max_chunk_size,
+                data,
+                height,
                 &mut chunks,
-                current_height,
+                max_chunk_size,
             );
-
             current_height = height.saturating_add(1);
         }
 
-        if !current_chunk.is_range_empty() {
-            chunks.push(current_chunk);
-        }
+        Self::push_current_chunk(&mut chunks, current_chunk, max_chunk_size);
         if current_height <= end {
             Self::push_missing_chunks(
                 &mut chunks,
@@ -121,6 +120,52 @@ impl Cache {
         futures::stream::iter(chunks)
     }
 
+    // Split the chunk in chunks of `max_chunk_size` and push them in `chunks` vector.
+    fn push_current_chunk(
+        chunks: &mut Vec<CachedDataBatch>,
+        chunk: CachedDataBatch,
+        max_chunk_size: usize,
+    ) {
+        if chunk.is_range_empty() {
+            return;
+        }
+        // Adds a vec of chunks that respect `max_chunk_size`
+        match chunk {
+            CachedDataBatch::Blocks(blocks) => chunks.extend(
+                blocks
+                    .range
+                    .zip(blocks.results)
+                    .chunks(max_chunk_size)
+                    .into_iter()
+                    .map(|chunk| {
+                        let (range, blocks): (Vec<u32>, Vec<SealedBlock>) = chunk.unzip();
+                        CachedDataBatch::Blocks(Batch::new(
+                            None,
+                            range[0]..range[range.len() - 1].saturating_add(1),
+                            blocks,
+                        ))
+                    }),
+            ),
+            CachedDataBatch::Headers(headers) => chunks.extend(
+                headers
+                    .range
+                    .zip(headers.results)
+                    .chunks(max_chunk_size)
+                    .into_iter()
+                    .map(|chunk| {
+                        let (range, headers): (Vec<u32>, Vec<SealedBlockHeader>) =
+                            chunk.unzip();
+                        CachedDataBatch::Headers(Batch::new(
+                            None,
+                            range[0]..range[range.len() - 1].saturating_add(1),
+                            headers,
+                        ))
+                    }),
+            ),
+            CachedDataBatch::None(range) => chunks.push(CachedDataBatch::None(range)),
+        }
+    }
+
     fn collect_cache_data(&self, range: RangeInclusive<u32>) -> Vec<(u32, CachedData)> {
         let lock = self.0.lock();
         lock.range(range).map(|(k, v)| (*k, v.clone())).collect()
@@ -131,6 +176,7 @@ impl Cache {
         data: CachedData,
         height: u32,
         chunks: &mut Vec<CachedDataBatch>,
+        max_chunk_size: usize,
     ) -> CachedDataBatch {
         match (current_chunk, data) {
             (CachedDataBatch::None(_), CachedData::Header(data)) => {
@@ -161,7 +207,11 @@ impl Cache {
             }
             (CachedDataBatch::Headers(headers_batch), CachedData::Block(block)) => {
                 debug_assert_eq!(headers_batch.range.end, height);
-                chunks.push(CachedDataBatch::Headers(headers_batch));
+                Self::push_current_chunk(
+                    chunks,
+                    CachedDataBatch::Headers(headers_batch),
+                    max_chunk_size,
+                );
                 CachedDataBatch::Blocks(Batch::new(
                     None,
                     height..height.saturating_add(1),
@@ -170,40 +220,17 @@ impl Cache {
             }
             (CachedDataBatch::Blocks(blocks_batch), CachedData::Header(header)) => {
                 debug_assert_eq!(blocks_batch.range.end, height);
-                chunks.push(CachedDataBatch::Blocks(blocks_batch));
+                Self::push_current_chunk(
+                    chunks,
+                    CachedDataBatch::Blocks(blocks_batch),
+                    max_chunk_size,
+                );
                 CachedDataBatch::Headers(Batch::new(
                     None,
                     height..height.saturating_add(1),
                     vec![header],
                 ))
             }
-        }
-    }
-
-    fn check_chunk_limit(
-        current_chunk: CachedDataBatch,
-        max_chunk_size: usize,
-        chunks: &mut Vec<CachedDataBatch>,
-        current_height: u32,
-    ) -> CachedDataBatch {
-        match current_chunk {
-            CachedDataBatch::Headers(batch) => {
-                if batch.results.len() >= max_chunk_size {
-                    chunks.push(CachedDataBatch::Headers(batch));
-                    CachedDataBatch::None(current_height..current_height)
-                } else {
-                    CachedDataBatch::Headers(batch)
-                }
-            }
-            CachedDataBatch::Blocks(batch) => {
-                if batch.results.len() >= max_chunk_size {
-                    chunks.push(CachedDataBatch::Blocks(batch));
-                    CachedDataBatch::None(current_height..current_height)
-                } else {
-                    CachedDataBatch::Blocks(batch)
-                }
-            }
-            CachedDataBatch::None(range) => CachedDataBatch::None(range),
         }
     }
 

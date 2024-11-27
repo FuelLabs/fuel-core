@@ -362,7 +362,7 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
         .expect_check_sealed_header()
         .times(3)
         .returning(|_| Ok(true));
-    // No reask on da height on all of the blocks
+    // One reask on the da_height after reask of the transactions for block 4
     consensus_port
         .expect_await_da_height()
         .times(4)
@@ -424,6 +424,97 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
 
     let p2p = Arc::new(p2p);
     let executor: Arc<MockBlockImporterPort> = Arc::new(DefaultMocks::times([3]));
+    let consensus = Arc::new(consensus_port);
+    let notify = Arc::new(Notify::new());
+    let state: SharedMutex<State> = State::new(3, 6).into();
+
+    let mut import = Import {
+        state: state.clone(),
+        notify: notify.clone(),
+        params,
+        p2p,
+        executor,
+        consensus,
+        cache: Cache::new(),
+    };
+    let (_tx, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
+    let mut watcher = shutdown.into();
+    notify.notify_one();
+    let res = import.import(&mut watcher).await.is_ok();
+    assert!(!res);
+    assert_eq!(&State::new(3, None), state.lock().deref());
+    // Reset the state for a next call
+    *state.lock() = State::new(3, 6);
+    // When
+    // Should re-ask to P2P only block 4.
+    let res = import.import(&mut watcher).await.is_ok();
+    assert!(res);
+    assert_eq!(&State::new(6, None), state.lock().deref());
+}
+
+#[tokio::test]
+async fn import__keep_data_asked_in_fail_execution() {
+    // Test is going from block 4 (3 already committed) to 6
+    let params = Config {
+        block_stream_buffer_size: 10,
+        header_batch_size: 1,
+    };
+
+    let mut consensus_port = MockConsensusPort::default();
+    // No reask on verification on all of the blocks
+    consensus_port
+        .expect_check_sealed_header()
+        .times(3)
+        .returning(|_| Ok(true));
+    // No reask on da height on all of the blocks
+    consensus_port
+        .expect_await_da_height()
+        .times(3)
+        .returning(|_| Ok(()));
+
+    let mut p2p = MockPeerToPeerPort::default();
+    // Everything goes well on the headers part for all blocks
+    p2p.expect_get_sealed_block_headers()
+        .times(3)
+        .returning(|range| {
+            Box::pin(async move {
+                let peer = random_peer();
+                let headers = Some(range.map(empty_header).collect());
+                let headers = peer.bind(headers);
+                Ok(headers)
+            })
+        });
+
+    // Everything goes well on the transactions retrieval
+    p2p.expect_get_transactions_from_peer()
+        .times(3)
+        .returning(|block_ids| {
+            Box::pin(async move {
+                let data = block_ids.data;
+                let v = data.into_iter().map(|_| Transactions::default()).collect();
+                Ok(Some(v))
+            })
+        });
+    p2p.expect_report_peer().returning(|_, _| Ok(()));
+
+    let p2p = Arc::new(p2p);
+
+    // Given
+    let mut executor: MockBlockImporterPort = MockBlockImporterPort::new();
+    let mut seq = Sequence::new();
+    // Fails execute on the 4 one
+    executor
+        .expect_execute_and_commit()
+        .times(1)
+        .in_sequence(&mut seq)
+        .returning(|_| anyhow::bail!("Bad execution"));
+    // Success execute the 3 after
+    executor
+        .expect_execute_and_commit()
+        .times(3)
+        .in_sequence(&mut seq)
+        .returning(|_| Ok(()));
+    let executor = Arc::new(executor);
     let consensus = Arc::new(consensus_port);
     let notify = Arc::new(Notify::new());
     let state: SharedMutex<State> = State::new(3, 6).into();
