@@ -360,8 +360,6 @@ where
             consensus: seal,
         };
 
-        block.entity.header().time();
-
         // Import the sealed block
         self.block_importer
             .commit_result(Uncommitted::new(
