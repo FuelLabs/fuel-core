@@ -141,7 +141,7 @@ where
     Metadata: MetadataStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        tracing::debug!("Starting gas price service");
+        tracing::trace!("Starting gas price service");
         tokio::select! {
             biased;
             _ = watcher.while_started() => {

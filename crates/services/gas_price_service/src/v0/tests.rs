@@ -214,8 +214,6 @@ async fn next__new_l2_block_saves_old_metadata() {
         algo_updater,
     );
 
-    let read_algo = service.next_block_algorithm();
-    let start = read_algo.next_gas_price();
     let mut watcher = StateWatcher::started();
     tokio::spawn(async move { service.run(&mut watcher).await });
 
@@ -224,8 +222,8 @@ async fn next__new_l2_block_saves_old_metadata() {
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
     // then
-    let new = read_algo.next_gas_price();
-    assert_ne!(start, new);
+    let metadata_has_been_updated = metadata_inner.lock().unwrap().is_some();
+    assert!(metadata_has_been_updated);
 }
 
 #[derive(Clone)]
