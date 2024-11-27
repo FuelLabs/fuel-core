@@ -31,7 +31,7 @@ pub struct GraphQLArgs {
     pub graphql_max_complexity: usize,
 
     /// The max recursive depth of GraphQL queries.
-    #[clap(long = "graphql-max-recursive-depth", default_value = "16", env)]
+    #[clap(long = "graphql-max-recursive-depth", default_value = "24", env)]
     pub graphql_max_recursive_depth: usize,
 
     /// The max resolver recursive depth of GraphQL queries.

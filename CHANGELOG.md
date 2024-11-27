@@ -26,8 +26,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2361](https://github.com/FuelLabs/fuel-core/pull/2361): Add caches to the sync service to not reask for data it already fetched from the network.
 - [2327](https://github.com/FuelLabs/fuel-core/pull/2327): Add more services tests and more checks of the pool. Also add an high level documentation for users of the pool and contributors.
 - [2416](https://github.com/FuelLabs/fuel-core/issues/2416): Define the `GasPriceServiceV1` task.
+- [2033](https://github.com/FuelLabs/fuel-core/pull/2033): Remove `Option<BlockHeight>` in favor of `BlockHeightQuery` where applicable.
 
 ### Fixed
+- [2365](https://github.com/FuelLabs/fuel-core/pull/2365): Fixed the error during dry run in the case of race condition.
 - [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.
 - [2369](https://github.com/FuelLabs/fuel-core/pull/2369): The `transaction_insertion_time_in_thread_pool_milliseconds` metric is properly collected.
 - [2413](https://github.com/FuelLabs/fuel-core/issues/2413): block production immediately errors if unable to lock the mutex.
@@ -40,9 +42,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 #### Breaking
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2258): Updated the `messageProof` GraphQL schema to return a non-nullable `MessageProof`.
-
-#### Breaking
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Transaction graphql endpoints use `TransactionType` instead of `fuel_tx::Transaction`.
+- [2446](https://github.com/FuelLabs/fuel-core/pull/2446): Use graphiql instead of graphql-playground due to known vulnerability and stale development.
 
 ## [Version 0.40.0]
 
