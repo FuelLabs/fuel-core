@@ -32,6 +32,7 @@ use futures::{
 };
 use std::{
     future::Future,
+    num::NonZeroUsize,
     ops::{
         Range,
         RangeInclusive,
@@ -233,7 +234,8 @@ where
             async move {
                 let block_stream = get_block_stream(
                     range.clone(),
-                    params,
+                    NonZeroUsize::new(params.header_batch_size)
+                        .expect("Header batch size must be non-zero"),
                     p2p,
                     consensus,
                     cache.clone(),
@@ -389,13 +391,13 @@ fn get_block_stream<
     C: ConsensusPort + Send + Sync + 'static,
 >(
     range: RangeInclusive<u32>,
-    params: Config,
+    header_batch_size: NonZeroUsize,
     p2p: Arc<P>,
     consensus: Arc<C>,
     cache: Cache,
 ) -> impl Stream<Item = impl Future<Output = SealedBlockBatch>> {
     cache
-        .get_chunks(range.clone(), params.header_batch_size)
+        .get_chunks(range.clone(), header_batch_size)
         .map({
             let p2p = p2p.clone();
             move |cached_data_batch| {

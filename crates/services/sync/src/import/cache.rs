@@ -2,6 +2,7 @@
 
 use std::{
     collections::BTreeMap,
+    num::NonZeroUsize,
     ops::{
         Range,
         RangeInclusive,
@@ -68,10 +69,10 @@ impl Cache {
     pub fn get_chunks(
         &self,
         range: RangeInclusive<u32>,
-        max_chunk_size: usize,
+        max_chunk_size: NonZeroUsize,
     ) -> futures::stream::Iter<std::vec::IntoIter<CachedDataBatch>> {
         let end = (*range.end()).saturating_add(1);
-        let chunk_size_u32 = u32::try_from(max_chunk_size)
+        let chunk_size_u32 = u32::try_from(max_chunk_size.get())
             .expect("The size of the chunk can't exceed `u32`");
 
         let cache_iter = self.collect_cache_data(range.clone());
@@ -124,7 +125,7 @@ impl Cache {
     fn push_current_chunk(
         chunks: &mut Vec<CachedDataBatch>,
         chunk: CachedDataBatch,
-        max_chunk_size: usize,
+        max_chunk_size: NonZeroUsize,
     ) {
         if chunk.is_range_empty() {
             return;
@@ -135,31 +136,47 @@ impl Cache {
                 blocks
                     .range
                     .zip(blocks.results)
-                    .chunks(max_chunk_size)
+                    .chunks(max_chunk_size.into())
                     .into_iter()
-                    .map(|chunk| {
+                    .filter_map(|chunk| {
                         let (range, blocks): (Vec<u32>, Vec<SealedBlock>) = chunk.unzip();
-                        CachedDataBatch::Blocks(Batch::new(
+                        let Some(start_range) = range.get(0) else {
+                            return None;
+                        };
+                        let Some(mut end_range) =
+                            range.get(range.len().saturating_sub(1))
+                        else {
+                            return None;
+                        };
+                        Some(CachedDataBatch::Blocks(Batch::new(
                             None,
-                            range[0]..range[range.len() - 1].saturating_add(1),
+                            *start_range..end_range.saturating_add(1),
                             blocks,
-                        ))
+                        )))
                     }),
             ),
             CachedDataBatch::Headers(headers) => chunks.extend(
                 headers
                     .range
                     .zip(headers.results)
-                    .chunks(max_chunk_size)
+                    .chunks(max_chunk_size.into())
                     .into_iter()
-                    .map(|chunk| {
+                    .filter_map(|chunk| {
                         let (range, headers): (Vec<u32>, Vec<SealedBlockHeader>) =
                             chunk.unzip();
-                        CachedDataBatch::Headers(Batch::new(
+                        let Some(start_range) = range.get(0) else {
+                            return None;
+                        };
+                        let Some(mut end_range) =
+                            range.get(range.len().saturating_sub(1))
+                        else {
+                            return None;
+                        };
+                        Some(CachedDataBatch::Headers(Batch::new(
                             None,
-                            range[0]..range[range.len() - 1].saturating_add(1),
+                            *start_range..end_range.saturating_add(1),
                             headers,
-                        ))
+                        )))
                     }),
             ),
             CachedDataBatch::None(range) => chunks.push(CachedDataBatch::None(range)),
@@ -176,7 +193,7 @@ impl Cache {
         data: CachedData,
         height: u32,
         chunks: &mut Vec<CachedDataBatch>,
-        max_chunk_size: usize,
+        max_chunk_size: NonZeroUsize,
     ) -> CachedDataBatch {
         match (current_chunk, data) {
             (CachedDataBatch::None(_), CachedData::Header(data)) => {
@@ -194,12 +211,14 @@ impl Cache {
                 ))
             }
             (CachedDataBatch::Headers(mut batch), CachedData::Header(data)) => {
+                tracing::warn!("Header data range in cache is not continuous.");
                 debug_assert_eq!(batch.range.end, height);
                 batch.range = batch.range.start..batch.range.end.saturating_add(1);
                 batch.results.push(data);
                 CachedDataBatch::Headers(batch)
             }
             (CachedDataBatch::Blocks(mut batch), CachedData::Block(data)) => {
+                tracing::warn!("Block data range in cache is not continuous.");
                 debug_assert_eq!(batch.range.end, height);
                 batch.range = batch.range.start..batch.range.end.saturating_add(1);
                 batch.results.push(data);
@@ -238,17 +257,16 @@ impl Cache {
         chunks: &mut Vec<CachedDataBatch>,
         current_height: u32,
         height: u32,
-        max_chunk_size: usize,
+        max_chunk_size: NonZeroUsize,
         chunk_size_u32: u32,
         end: u32,
     ) {
-        let missing_chunks =
-            (current_height..height)
-                .step_by(max_chunk_size)
-                .map(move |chunk_start| {
-                    let block_end = chunk_start.saturating_add(chunk_size_u32).min(end);
-                    CachedDataBatch::None(chunk_start..block_end)
-                });
+        let missing_chunks = (current_height..height).step_by(max_chunk_size.into()).map(
+            move |chunk_start| {
+                let block_end = chunk_start.saturating_add(chunk_size_u32).min(end);
+                CachedDataBatch::None(chunk_start..block_end)
+            },
+        );
         chunks.extend(missing_chunks);
     }
 
@@ -278,9 +296,12 @@ mod tests {
         tai64::Tai64,
     };
     use futures::StreamExt;
-    use std::ops::{
-        Range,
-        RangeInclusive,
+    use std::{
+        num::NonZeroUsize,
+        ops::{
+            Range,
+            RangeInclusive,
+        },
     };
     use test_case::test_case;
 
@@ -534,7 +555,7 @@ mod tests {
             blocks.to_vec(),
         ));
         cache
-            .get_chunks(asked_range, max_chunk_size)
+            .get_chunks(asked_range, NonZeroUsize::try_from(max_chunk_size).unwrap())
             .collect()
             .await
     }

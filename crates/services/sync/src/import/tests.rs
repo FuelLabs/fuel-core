@@ -274,7 +274,8 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
     p2p.expect_get_sealed_block_headers()
         .times(1)
         .in_sequence(&mut seq)
-        .returning(|_| {
+        .returning(|range| {
+            assert_eq!(range, 4..4);
             Box::pin(async move {
                 tokio::time::sleep(Duration::from_millis(300)).await;
                 Err(anyhow::anyhow!("Some network error"))
@@ -298,6 +299,7 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
         .times(1)
         .in_sequence(&mut seq)
         .returning(|range| {
+            assert_eq!(range, 4..4);
             Box::pin(async move {
                 let peer = random_peer();
                 let headers = Some(range.map(empty_header).collect());
@@ -386,7 +388,8 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
     p2p.expect_get_transactions_from_peer()
         .times(1)
         .in_sequence(&mut seq)
-        .returning(|_| {
+        .returning(|range| {
+            assert_eq!(range.data, 4..4);
             Box::pin(async move {
                 tokio::time::sleep(Duration::from_millis(300)).await;
                 Err(anyhow::anyhow!("Some network error"))
@@ -410,6 +413,7 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
         .times(1)
         .in_sequence(&mut seq)
         .returning(|block_ids| {
+            assert_eq!(block_ids, 4..4);
             Box::pin(async move {
                 let data = block_ids;
                 let v = data.into_iter().map(|_| Transactions::default()).collect();
@@ -461,21 +465,21 @@ async fn import__keep_data_asked_in_fail_execution() {
     };
 
     let mut consensus_port = MockConsensusPort::default();
-    // No reask on verification on all of the blocks
+    // Data is re-ask for the block 4 because his execution failed
     consensus_port
         .expect_check_sealed_header()
-        .times(3)
+        .times(4)
         .returning(|_| Ok(true));
-    // No reask on da height on all of the blocks
+    // Data is re-ask for the block 4 because his execution failed
     consensus_port
         .expect_await_da_height()
-        .times(3)
+        .times(4)
         .returning(|_| Ok(()));
 
     let mut p2p = MockPeerToPeerPort::default();
-    // Everything goes well on the headers part for all blocks
+    // Data is re-ask for the block 4 because his execution failed
     p2p.expect_get_sealed_block_headers()
-        .times(3)
+        .times(4)
         .returning(|range| {
             Box::pin(async move {
                 let peer = random_peer();
@@ -485,9 +489,9 @@ async fn import__keep_data_asked_in_fail_execution() {
             })
         });
 
-    // Everything goes well on the transactions retrieval
+    // Data is re-ask for the block 4 because his execution failed
     p2p.expect_get_transactions_from_peer()
-        .times(3)
+        .times(4)
         .returning(|block_ids| {
             Box::pin(async move {
                 let data = block_ids.data;
@@ -507,7 +511,10 @@ async fn import__keep_data_asked_in_fail_execution() {
         .expect_execute_and_commit()
         .times(1)
         .in_sequence(&mut seq)
-        .returning(|_| anyhow::bail!("Bad execution"));
+        .returning(|block| {
+            assert_eq!(block.entity.header().height(), &BlockHeight::new(4));
+            anyhow::bail!("Bad execution")
+        });
     // Success execute the 3 after
     executor
         .expect_execute_and_commit()
