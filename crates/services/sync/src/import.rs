@@ -32,7 +32,7 @@ use futures::{
 };
 use std::{
     future::Future,
-    num::NonZeroUsize,
+    num::NonZeroU32,
     ops::{
         Range,
         RangeInclusive,
@@ -221,6 +221,10 @@ where
             cache,
             ..
         } = &self;
+        let batch_size = u32::try_from(params.header_batch_size)
+            .expect("Header batch size must be less u32::MAX");
+        let batch_size =
+            NonZeroU32::new(batch_size).expect("Header batch size must be non-zero");
 
         let (batch_sender, batch_receiver) = mpsc::channel(1);
 
@@ -234,8 +238,7 @@ where
             async move {
                 let block_stream = get_block_stream(
                     range.clone(),
-                    NonZeroUsize::new(params.header_batch_size)
-                        .expect("Header batch size must be non-zero"),
+                    batch_size,
                     p2p,
                     consensus,
                     cache.clone(),
@@ -391,7 +394,7 @@ fn get_block_stream<
     C: ConsensusPort + Send + Sync + 'static,
 >(
     range: RangeInclusive<u32>,
-    header_batch_size: NonZeroUsize,
+    header_batch_size: NonZeroU32,
     p2p: Arc<P>,
     consensus: Arc<C>,
     cache: Cache,

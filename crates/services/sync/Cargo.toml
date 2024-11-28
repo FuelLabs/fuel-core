@@ -15,7 +15,6 @@ async-trait = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
-itertools = { workspace = true, features = ["use_alloc"] }
 mockall = { workspace = true, optional = true }
 rand = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
