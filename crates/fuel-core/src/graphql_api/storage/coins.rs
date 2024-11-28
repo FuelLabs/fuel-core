@@ -49,6 +49,22 @@ pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
 // in the future.
 pub struct CoinsToSpendIndex;
 
+impl Mappable for CoinsToSpendIndex {
+    type Key = Self::OwnedKey;
+    type OwnedKey = CoinsToSpendIndexKey;
+    type Value = Self::OwnedValue;
+    type OwnedValue = u8;
+}
+
+impl TableWithBlueprint for CoinsToSpendIndex {
+    type Blueprint = Plain<Raw, Primitive<1>>;
+    type Column = super::Column;
+
+    fn column() -> Self::Column {
+        Self::Column::CoinsToSpend
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CoinsToSpendIndexKey([u8; CoinsToSpendIndexKey::LEN]);
 
@@ -196,22 +212,6 @@ impl TryFrom<&[u8]> for CoinsToSpendIndexKey {
 impl AsRef<[u8]> for CoinsToSpendIndexKey {
     fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
-    }
-}
-
-impl Mappable for CoinsToSpendIndex {
-    type Key = Self::OwnedKey;
-    type OwnedKey = CoinsToSpendIndexKey;
-    type Value = Self::OwnedValue;
-    type OwnedValue = u8;
-}
-
-impl TableWithBlueprint for CoinsToSpendIndex {
-    type Blueprint = Plain<Raw, Primitive<1>>;
-    type Column = super::Column;
-
-    fn column() -> Self::Column {
-        Self::Column::CoinsToSpend
     }
 }
 

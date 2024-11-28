@@ -21,20 +21,27 @@ use crate::{
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::storage::{
-        balances::{
-            CoinBalances,
-            CoinBalancesKey,
-            MessageBalance,
-            MessageBalances,
-            TotalBalanceAmount,
+    graphql_api::{
+        indexation::coins_to_spend::NON_RETRYABLE_BYTE,
+        storage::{
+            balances::{
+                CoinBalances,
+                CoinBalancesKey,
+                MessageBalance,
+                MessageBalances,
+                TotalBalanceAmount,
+            },
+            coins::{
+                CoinsToSpendIndex,
+                CoinsToSpendIndexKey,
+            },
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
+            Column,
         },
-        old::{
-            OldFuelBlockConsensus,
-            OldFuelBlocks,
-            OldTransactions,
-        },
-        Column,
     },
     state::IterableKeyValueView,
 };
@@ -86,6 +93,7 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
+use rand::Rng;
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -287,14 +295,140 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 
     fn coins_to_spend(
         &self,
-        _owner: &Address,
-        _asset_id: &AssetId,
-        _target_amount: u64,
-        _max_coins: u32,
+        owner: &Address,
+        asset_id: &AssetId,
+        target_amount: u64,
+        max_coins: u32,
     ) -> StorageResult<Vec<CoinType>> {
-        tracing::error!("XXX - currently reading coins to spend from the offchain index");
+        let _prefix: Vec<_> = owner
+            .as_ref()
+            .iter()
+            .copied()
+            .chain(asset_id.as_ref().iter().copied())
+            .chain(NON_RETRYABLE_BYTE)
+            .collect();
+
+        let big_first_iter = self.iter_all_filtered_keys::<CoinsToSpendIndex, _>(
+            Some(&owner),
+            None,
+            Some(IterDirection::Reverse),
+        );
+
+        let dust_first_iter = self.iter_all_filtered_keys::<CoinsToSpendIndex, _>(
+            Some(&owner),
+            None,
+            Some(IterDirection::Forward),
+        );
+
+        let selected_iter =
+            select_1(big_first_iter, dust_first_iter, target_amount, max_coins);
+
+        let selected: Vec<_> = selected_iter
+            .map(|x| x.unwrap())
+            .map(|x| x.amount())
+            .collect();
+
+        dbg!(&selected);
+
         Ok(vec![])
     }
+}
+
+fn select_1<'a>(
+    coins_iter: BoxedIter<Result<CoinsToSpendIndexKey, StorageError>>,
+    coins_iter_back: BoxedIter<Result<CoinsToSpendIndexKey, StorageError>>,
+    total: u64,
+    max: u32,
+) -> BoxedIter<'a, Result<CoinsToSpendIndexKey, StorageError>> {
+    // TODO[RC]: Validate query parameters.
+    if total == 0 && max == 0 {
+        return std::iter::empty().into_boxed();
+    }
+
+    let (selected_big_coins_total, selected_big_coins) =
+        big_coins(coins_iter, total, max);
+    dbg!(&selected_big_coins_total);
+    dbg!(&total);
+    if selected_big_coins_total < total {
+        dbg!(1);
+        return std::iter::empty().into_boxed();
+    }
+    dbg!(2);
+    let Some(last_selected_big_coin) = selected_big_coins.last() else {
+        // Should never happen.
+        dbg!(3);
+        return std::iter::empty().into_boxed();
+    };
+
+    let max_dust_count = max_dust_count(max, &selected_big_coins);
+    dbg!(&max_dust_count);
+    let (dust_coins_total, dust_coins) =
+        dust_coins(coins_iter_back, last_selected_big_coin, max_dust_count);
+
+    let retained_big_coins_iter =
+        skip_big_coins_up_to_amount(selected_big_coins, dust_coins_total);
+    (retained_big_coins_iter.chain(dust_coins)).into_boxed()
+}
+
+fn big_coins<'a>(
+    coins_iter: BoxedIter<Result<CoinsToSpendIndexKey, StorageError>>,
+    total: u64,
+    max: u32,
+) -> (u64, Vec<Result<CoinsToSpendIndexKey, StorageError>>) {
+    let mut big_coins_total = 0;
+    let big_coins: Vec<_> = coins_iter
+        .take(max as usize)
+        .take_while(|item| {
+            (big_coins_total >= total)
+                .then_some(false)
+                .unwrap_or_else(|| {
+                    big_coins_total =
+                        big_coins_total.saturating_add(item.as_ref().unwrap().amount());
+                    true
+                })
+        })
+        .collect();
+    (big_coins_total, big_coins)
+}
+
+fn max_dust_count(
+    max: u32,
+    big_coins: &Vec<Result<CoinsToSpendIndexKey, StorageError>>,
+) -> u32 {
+    let mut rng = rand::thread_rng();
+    rng.gen_range(0..=max.saturating_sub(big_coins.len() as u32))
+}
+
+fn dust_coins<'a>(
+    coins_iter_back: BoxedIter<Result<CoinsToSpendIndexKey, StorageError>>,
+    last_big_coin: &'a Result<CoinsToSpendIndexKey, StorageError>,
+    max_dust_count: u32,
+) -> (u64, Vec<Result<CoinsToSpendIndexKey, StorageError>>) {
+    let mut dust_coins_total = 0;
+    let dust_coins: Vec<_> = coins_iter_back
+        .take(max_dust_count as usize)
+        .take_while(move |item| item != last_big_coin)
+        .map(|item| {
+            dust_coins_total += item.as_ref().unwrap().amount() as u64;
+            item
+        })
+        .collect();
+    (dust_coins_total, dust_coins)
+}
+
+fn skip_big_coins_up_to_amount<'a>(
+    big_coins: impl IntoIterator<Item = Result<CoinsToSpendIndexKey, StorageError>>,
+    mut dust_coins_total: u64,
+) -> impl Iterator<Item = Result<CoinsToSpendIndexKey, StorageError>> {
+    big_coins.into_iter().skip_while(move |item| {
+        dust_coins_total
+            .checked_sub(item.as_ref().unwrap().amount())
+            .and_then(|new_value| {
+                dust_coins_total = new_value;
+                Some(true)
+            })
+            .unwrap_or_default()
+    })
 }
 
 struct AssetBalanceWithRetrievalErrors<'a> {
