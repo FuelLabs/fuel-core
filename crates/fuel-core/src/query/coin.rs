@@ -1,6 +1,7 @@
 use crate::{
     coins_query::CoinsQueryError,
     fuel_core_graphql_api::database::ReadView,
+    graphql_api::indexation::coins_to_spend::IndexedCoinType,
 };
 use fuel_core_storage::{
     iter::IterDirection,
@@ -79,7 +80,7 @@ impl ReadView {
         asset_id: &AssetId,
         target_amount: u64,
         max_coins: u32,
-    ) -> Result<Vec<CoinType>, CoinsQueryError> {
+    ) -> Result<Vec<(Vec<u8>, IndexedCoinType)>, CoinsQueryError> {
         Ok(self
             .off_chain
             .coins_to_spend(owner, asset_id, target_amount, max_coins)?)

@@ -7,7 +7,10 @@ use crate::{
         query_costs,
         IntoApiResult,
     },
-    graphql_api::api_service::ConsensusProvider,
+    graphql_api::{
+        api_service::ConsensusProvider,
+        indexation,
+    },
     query::asset_query::AssetSpendTarget,
     schema::{
         scalars::{
@@ -30,14 +33,15 @@ use async_graphql::{
     Context,
 };
 use fuel_core_types::{
-    entities::{
-        coins,
-        coins::{
-            coin::Coin as CoinModel,
-            message_coin::MessageCoin as MessageCoinModel,
-        },
+    entities::coins::{
+        self,
+        coin::Coin as CoinModel,
+        message_coin::MessageCoin as MessageCoinModel,
     },
-    fuel_tx,
+    fuel_tx::{
+        self,
+        TxId,
+    },
 };
 use itertools::Itertools;
 use tokio_stream::StreamExt;
@@ -242,10 +246,7 @@ impl CoinQuery {
                 let asset_id = asset.asset_id.0;
                 let total_amount = asset.amount.0;
                 let max_coins: u32 = asset.max.map_or(max_input as u32, Into::into);
-                tracing::error!(
-                    "XXX - owner: {:?}, asset_id: {:?}, total_amount: {:?}, max_coins: {:?}",
-                    owner, asset_id, total_amount, max_coins
-                );
+                // TODO[RC]: Support excluded IDs filtering.
                 let coins = read_view.off_chain.coins_to_spend(
                     &owner,
                     &asset_id,
@@ -255,10 +256,39 @@ impl CoinQuery {
                 all_coins.push(
                     coins
                         .into_iter()
-                        .map(|coin| match coin {
-                            coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
-                            coins::CoinType::MessageCoin(coin) => {
-                                CoinType::MessageCoin(coin.into())
+                        .map(|(key, t)| match t {
+                            indexation::coins_to_spend::IndexedCoinType::Coin => {
+                                dbg!(&key);
+
+                                let tx_id = TxId::try_from(&key[0..32])
+                                    .expect("The slice has size 32");
+                                let output_index = u16::from_be_bytes(
+                                    key[32..].try_into().expect("The slice has size 2"),
+                                );
+                                let utxo_id = fuel_tx::UtxoId::new(tx_id, output_index);
+                                read_view
+                                    .coin(utxo_id.into())
+                                    .map(|coin| CoinType::Coin(coin.into()))
+                                    .unwrap()
+                            }
+                            indexation::coins_to_spend::IndexedCoinType::Message => {
+                                let nonce = fuel_core_types::fuel_types::Nonce::try_from(
+                                    &key[0..32],
+                                )
+                                .expect("The slice has size 32");
+                                read_view
+                                    .message(&nonce.into())
+                                    .map(|message| {
+                                        let message_coin = MessageCoinModel {
+                                            sender: *message.sender(),
+                                            recipient: *message.recipient(),
+                                            nonce: *message.nonce(),
+                                            amount: message.amount(),
+                                            da_height: message.da_height(),
+                                        };
+                                        CoinType::MessageCoin(message_coin.into())
+                                    })
+                                    .unwrap()
                             }
                         })
                         .collect(),

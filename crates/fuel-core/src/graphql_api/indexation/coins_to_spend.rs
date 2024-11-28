@@ -38,6 +38,18 @@ pub(crate) enum IndexedCoinType {
     Message,
 }
 
+impl TryFrom<u8> for IndexedCoinType {
+    type Error = IndexationError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(IndexedCoinType::Coin),
+            1 => Ok(IndexedCoinType::Message),
+            _ => todo!(), // Err(IndexationError::InvalidIndexedCoinType(value)),
+        }
+    }
+}
+
 fn add_coin<T>(block_st_transaction: &mut T, coin: &Coin) -> Result<(), IndexationError>
 where
     T: OffChainDatabaseTransaction,

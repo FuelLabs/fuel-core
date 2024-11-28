@@ -22,7 +22,10 @@ use crate::{
         },
     },
     graphql_api::{
-        indexation::coins_to_spend::NON_RETRYABLE_BYTE,
+        indexation::coins_to_spend::{
+            IndexedCoinType,
+            NON_RETRYABLE_BYTE,
+        },
         storage::{
             balances::{
                 CoinBalances,
@@ -299,7 +302,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         asset_id: &AssetId,
         target_amount: u64,
         max_coins: u32,
-    ) -> StorageResult<Vec<CoinType>> {
+    ) -> StorageResult<Vec<(Vec<u8>, IndexedCoinType)>> {
         let prefix: Vec<_> = owner
             .as_ref()
             .iter()
@@ -308,13 +311,13 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             .chain(NON_RETRYABLE_BYTE)
             .collect();
 
-        let big_first_iter = self.iter_all_filtered_keys::<CoinsToSpendIndex, _>(
+        let big_first_iter = self.iter_all_filtered::<CoinsToSpendIndex, _>(
             Some(&prefix),
             None,
             Some(IterDirection::Reverse),
         );
 
-        let dust_first_iter = self.iter_all_filtered_keys::<CoinsToSpendIndex, _>(
+        let dust_first_iter = self.iter_all_filtered::<CoinsToSpendIndex, _>(
             Some(&prefix),
             None,
             Some(IterDirection::Forward),
@@ -323,23 +326,23 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         let selected_iter =
             select_1(big_first_iter, dust_first_iter, target_amount, max_coins);
 
-        let selected: Vec<_> = selected_iter
+        Ok(selected_iter
             .map(|x| x.unwrap())
-            .map(|x| x.amount())
-            .collect();
-
-        dbg!(&selected);
-
-        Ok(vec![])
+            .map(|(key, value)| {
+                let foreign_key = key.foreign_key_bytes().to_vec();
+                let coin_type = IndexedCoinType::try_from(value).unwrap();
+                (foreign_key, coin_type)
+            })
+            .collect())
     }
 }
 
 fn select_1<'a>(
-    coins_iter: BoxedIter<Result<CoinsToSpendIndexKey, StorageError>>,
-    coins_iter_back: BoxedIter<Result<CoinsToSpendIndexKey, StorageError>>,
+    coins_iter: BoxedIter<Result<(CoinsToSpendIndexKey, u8), StorageError>>,
+    coins_iter_back: BoxedIter<Result<(CoinsToSpendIndexKey, u8), StorageError>>,
     total: u64,
     max: u32,
-) -> BoxedIter<'a, Result<CoinsToSpendIndexKey, StorageError>> {
+) -> BoxedIter<'a, Result<(CoinsToSpendIndexKey, u8), StorageError>> {
     // TODO[RC]: Validate query parameters.
     if total == 0 && max == 0 {
         return std::iter::empty().into_boxed();
@@ -360,7 +363,7 @@ fn select_1<'a>(
         return std::iter::empty().into_boxed();
     };
 
-    let max_dust_count = max_dust_count(max, &selected_big_coins);
+    let max_dust_count = max_dust_count(max, selected_big_coins.len());
     dbg!(&max_dust_count);
     let (dust_coins_total, dust_coins) =
         dust_coins(coins_iter_back, last_selected_big_coin, max_dust_count);
@@ -371,10 +374,10 @@ fn select_1<'a>(
 }
 
 fn big_coins<'a>(
-    coins_iter: BoxedIter<Result<CoinsToSpendIndexKey, StorageError>>,
+    coins_iter: BoxedIter<Result<(CoinsToSpendIndexKey, u8), StorageError>>,
     total: u64,
     max: u32,
-) -> (u64, Vec<Result<CoinsToSpendIndexKey, StorageError>>) {
+) -> (u64, Vec<Result<(CoinsToSpendIndexKey, u8), StorageError>>) {
     let mut big_coins_total = 0;
     let big_coins: Vec<_> = coins_iter
         .take(max as usize)
@@ -383,7 +386,7 @@ fn big_coins<'a>(
                 .then_some(false)
                 .unwrap_or_else(|| {
                     big_coins_total =
-                        big_coins_total.saturating_add(item.as_ref().unwrap().amount());
+                        big_coins_total.saturating_add(item.as_ref().unwrap().0.amount());
                     true
                 })
         })
@@ -391,25 +394,22 @@ fn big_coins<'a>(
     (big_coins_total, big_coins)
 }
 
-fn max_dust_count(
-    max: u32,
-    big_coins: &Vec<Result<CoinsToSpendIndexKey, StorageError>>,
-) -> u32 {
+fn max_dust_count(max: u32, big_coins_len: usize) -> u32 {
     let mut rng = rand::thread_rng();
-    rng.gen_range(0..=max.saturating_sub(big_coins.len() as u32))
+    rng.gen_range(0..=max.saturating_sub(big_coins_len as u32))
 }
 
 fn dust_coins<'a>(
-    coins_iter_back: BoxedIter<Result<CoinsToSpendIndexKey, StorageError>>,
-    last_big_coin: &'a Result<CoinsToSpendIndexKey, StorageError>,
+    coins_iter_back: BoxedIter<Result<(CoinsToSpendIndexKey, u8), StorageError>>,
+    last_big_coin: &'a Result<(CoinsToSpendIndexKey, u8), StorageError>,
     max_dust_count: u32,
-) -> (u64, Vec<Result<CoinsToSpendIndexKey, StorageError>>) {
+) -> (u64, Vec<Result<(CoinsToSpendIndexKey, u8), StorageError>>) {
     let mut dust_coins_total = 0;
     let dust_coins: Vec<_> = coins_iter_back
         .take(max_dust_count as usize)
         .take_while(move |item| item != last_big_coin)
         .map(|item| {
-            dust_coins_total += item.as_ref().unwrap().amount() as u64;
+            dust_coins_total += item.as_ref().unwrap().0.amount() as u64;
             item
         })
         .collect();
@@ -417,12 +417,12 @@ fn dust_coins<'a>(
 }
 
 fn skip_big_coins_up_to_amount<'a>(
-    big_coins: impl IntoIterator<Item = Result<CoinsToSpendIndexKey, StorageError>>,
+    big_coins: impl IntoIterator<Item = Result<(CoinsToSpendIndexKey, u8), StorageError>>,
     mut dust_coins_total: u64,
-) -> impl Iterator<Item = Result<CoinsToSpendIndexKey, StorageError>> {
+) -> impl Iterator<Item = Result<(CoinsToSpendIndexKey, u8), StorageError>> {
     big_coins.into_iter().skip_while(move |item| {
         dust_coins_total
-            .checked_sub(item.as_ref().unwrap().amount())
+            .checked_sub(item.as_ref().unwrap().0.amount())
             .and_then(|new_value| {
                 dust_coins_total = new_value;
                 Some(true)
