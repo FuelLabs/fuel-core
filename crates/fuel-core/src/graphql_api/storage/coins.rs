@@ -110,6 +110,7 @@ impl CoinsToSpendIndexKey {
         offset += AssetId::LEN;
         arr[offset..offset + u8::BITS as usize / 8].copy_from_slice(&NON_RETRYABLE_BYTE);
         offset += u8::BITS as usize / 8;
+        // TODO[RC]: Use indexation::coins_to_spend::ForeginKey here (?)
         arr[offset..offset + u64::BITS as usize / 8].copy_from_slice(&amount_bytes);
         offset += u64::BITS as usize / 8;
         arr[offset..].copy_from_slice(&utxo_id_bytes);

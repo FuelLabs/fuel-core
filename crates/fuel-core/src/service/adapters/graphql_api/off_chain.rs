@@ -22,9 +22,12 @@ use crate::{
         },
     },
     graphql_api::{
-        indexation::coins_to_spend::{
-            IndexedCoinType,
-            NON_RETRYABLE_BYTE,
+        indexation::{
+            self,
+            coins_to_spend::{
+                IndexedCoinType,
+                NON_RETRYABLE_BYTE,
+            },
         },
         storage::{
             balances::{
@@ -306,7 +309,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         asset_id: &AssetId,
         target_amount: u64,
         max_coins: u32,
-        excluded_ids: (&[UtxoId], &[Nonce]),
+        excluded_ids: &indexation::coins_to_spend::ExcludedIds,
     ) -> StorageResult<Vec<(Vec<u8>, IndexedCoinType)>> {
         let prefix: Vec<_> = owner
             .as_ref()
@@ -352,7 +355,7 @@ fn select_1<'a>(
     coins_iter_back: BoxedIter<Result<(CoinsToSpendIndexKey, u8), StorageError>>,
     total: u64,
     max: u32,
-    excluded_ids: (&[UtxoId], &[Nonce]),
+    excluded_ids: &indexation::coins_to_spend::ExcludedIds,
 ) -> BoxedIter<'a, Result<(CoinsToSpendIndexKey, u8), StorageError>> {
     // TODO[RC]: Validate query parameters.
     if total == 0 && max == 0 {
@@ -408,7 +411,7 @@ fn big_coins<'a>(
     coins_iter: BoxedIter<Result<(CoinsToSpendIndexKey, u8), StorageError>>,
     total: u64,
     max: u32,
-    excluded_ids: (&[UtxoId], &[Nonce]),
+    excluded_ids: &indexation::coins_to_spend::ExcludedIds,
 ) -> (u64, Vec<Result<(CoinsToSpendIndexKey, u8), StorageError>>) {
     let mut big_coins_total = 0;
     let big_coins: Vec<_> = coins_iter
@@ -429,28 +432,14 @@ fn big_coins<'a>(
 
 fn is_excluded(
     item: &Result<(CoinsToSpendIndexKey, u8), StorageError>,
-    excluded_ids: (&[UtxoId], &[Nonce]),
+    excluded_ids: &indexation::coins_to_spend::ExcludedIds,
 ) -> bool {
     let (key, value) = item.as_ref().unwrap();
     let coin_type = IndexedCoinType::try_from(*value).unwrap();
-    let foreign_key = key.foreign_key_bytes();
+    let foreign_key = indexation::coins_to_spend::ForeignKey(*key.foreign_key_bytes());
     match coin_type {
-        IndexedCoinType::Coin => {
-            let (excluded, _) = excluded_ids;
-            let tx_id =
-                TxId::try_from(&foreign_key[0..32]).expect("The slice has size 32");
-            let output_index = u16::from_be_bytes(
-                foreign_key[32..].try_into().expect("The slice has size 2"),
-            );
-            let utxo_id = UtxoId::new(tx_id, output_index);
-            !excluded.contains(&utxo_id)
-        }
-        IndexedCoinType::Message => {
-            let (_, excluded) = excluded_ids;
-            let nonce =
-                Nonce::try_from(&foreign_key[0..32]).expect("The slice has size 32");
-            !excluded.contains(&nonce)
-        }
+        IndexedCoinType::Coin => !excluded_ids.coins().contains(&foreign_key),
+        IndexedCoinType::Message => !excluded_ids.messages().contains(&foreign_key),
     }
 }
 
@@ -463,7 +452,7 @@ fn dust_coins<'a>(
     coins_iter_back: BoxedIter<Result<(CoinsToSpendIndexKey, u8), StorageError>>,
     last_big_coin: &'a Result<(CoinsToSpendIndexKey, u8), StorageError>,
     max_dust_count: u32,
-    excluded_ids: (&[UtxoId], &[Nonce]),
+    excluded_ids: &indexation::coins_to_spend::ExcludedIds,
 ) -> (u64, Vec<Result<(CoinsToSpendIndexKey, u8), StorageError>>) {
     let mut dust_coins_total = 0;
     let dust_coins: Vec<_> = coins_iter_back

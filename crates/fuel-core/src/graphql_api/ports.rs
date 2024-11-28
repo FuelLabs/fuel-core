@@ -71,7 +71,10 @@ use fuel_core_types::{
 use std::sync::Arc;
 
 use super::{
-    indexation::coins_to_spend::IndexedCoinType,
+    indexation::{
+        self,
+        coins_to_spend::IndexedCoinType,
+    },
     storage::balances::TotalBalanceAmount,
 };
 
@@ -123,7 +126,7 @@ pub trait OffChainDatabase: Send + Sync {
         asset_id: &AssetId,
         target_amount: u64,
         max_coins: u32,
-        excluded_ids: (&[UtxoId], &[Nonce]),
+        excluded_ids: &indexation::coins_to_spend::ExcludedIds,
     ) -> StorageResult<Vec<(Vec<u8>, IndexedCoinType)>>; // TODO[RC]: Named return type
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;

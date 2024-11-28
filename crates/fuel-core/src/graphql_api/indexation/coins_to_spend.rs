@@ -1,11 +1,18 @@
-use fuel_core_storage::StorageAsMut;
+use fuel_core_storage::{
+    codec::primitive::utxo_id_to_bytes,
+    StorageAsMut,
+};
 
 use fuel_core_types::{
     entities::{
         coins::coin::Coin,
         Message,
     },
-    fuel_tx::AssetId,
+    fuel_tx::{
+        AssetId,
+        UtxoId,
+    },
+    fuel_types::Nonce,
     services::executor::Event,
 };
 
@@ -30,6 +37,41 @@ pub(crate) const NON_RETRYABLE_BYTE: [u8; 1] = [0x01];
 // Nonce is 32 bytes, so we need to pad it with 2 bytes to make it 34 bytes.
 // We need equal length keys to maintain the correct, lexicographical order of the keys.
 pub(crate) const MESSAGE_PADDING_BYTES: [u8; 2] = [0xFF, 0xFF];
+
+#[derive(PartialEq)]
+pub(crate) struct ForeignKey(pub [u8; 34]); // UtxoId::LEN?
+
+impl ForeignKey {
+    pub(crate) fn from_utxo_id(utxo_id: &UtxoId) -> Self {
+        Self(utxo_id_to_bytes(&utxo_id))
+    }
+
+    pub(crate) fn from_nonce(nonce: &Nonce) -> Self {
+        let mut arr = [0; 34]; // UtxoId::LEN? TODO[RC]: Also check other places
+        arr[0..32].copy_from_slice(nonce.as_ref());
+        arr[32..].copy_from_slice(&MESSAGE_PADDING_BYTES);
+        Self(arr)
+    }
+}
+
+pub(crate) struct ExcludedIds {
+    coins: Vec<ForeignKey>,
+    messages: Vec<ForeignKey>,
+}
+
+impl ExcludedIds {
+    pub(crate) fn new(coins: Vec<ForeignKey>, messages: Vec<ForeignKey>) -> Self {
+        Self { coins, messages }
+    }
+
+    pub(crate) fn coins(&self) -> &[ForeignKey] {
+        &self.coins
+    }
+
+    pub(crate) fn messages(&self) -> &[ForeignKey] {
+        &self.messages
+    }
+}
 
 #[repr(u8)]
 #[derive(Clone)]

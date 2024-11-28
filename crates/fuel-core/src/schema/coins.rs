@@ -32,6 +32,7 @@ use async_graphql::{
     },
     Context,
 };
+use fuel_core_storage::codec::primitive::utxo_id_to_bytes;
 use fuel_core_types::{
     entities::coins::{
         self,
@@ -248,10 +249,31 @@ impl CoinQuery {
                 || (vec![], vec![]),
                 |exclude| {
                     (
-                        exclude.utxos.into_iter().map(Into::into).collect(),
-                        exclude.messages.into_iter().map(Into::into).collect(),
+                        exclude
+                            .utxos
+                            .into_iter()
+                            .map(|utxo_id| {
+                                indexation::coins_to_spend::ForeignKey::from_utxo_id(
+                                    &utxo_id.0,
+                                )
+                            })
+                            .collect(),
+                        exclude
+                            .messages
+                            .into_iter()
+                            .map(|nonce| {
+                                indexation::coins_to_spend::ForeignKey::from_nonce(
+                                    &nonce.0,
+                                )
+                            })
+                            .collect(),
                     )
                 },
+            );
+
+            let excluded = indexation::coins_to_spend::ExcludedIds::new(
+                excluded_utxoids,
+                excluded_nonces,
             );
 
             for asset in query_per_asset {
@@ -264,7 +286,7 @@ impl CoinQuery {
                     &asset_id,
                     total_amount,
                     max_coins,
-                    (&excluded_utxoids, &excluded_nonces),
+                    &excluded,
                 )?;
 
                 all_coins.push(
