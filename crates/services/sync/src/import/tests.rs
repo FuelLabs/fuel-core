@@ -275,7 +275,7 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
         .times(1)
         .in_sequence(&mut seq)
         .returning(|range| {
-            assert_eq!(range, 4..4);
+            assert_eq!(range, 4..5);
             Box::pin(async move {
                 tokio::time::sleep(Duration::from_millis(300)).await;
                 Err(anyhow::anyhow!("Some network error"))
@@ -299,7 +299,7 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
         .times(1)
         .in_sequence(&mut seq)
         .returning(|range| {
-            assert_eq!(range, 4..4);
+            assert_eq!(range, 4..5);
             Box::pin(async move {
                 let peer = random_peer();
                 let headers = Some(range.map(empty_header).collect());
@@ -389,7 +389,7 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
         .times(1)
         .in_sequence(&mut seq)
         .returning(|range| {
-            assert_eq!(range.data, 4..4);
+            assert_eq!(range.data, 4..5);
             Box::pin(async move {
                 tokio::time::sleep(Duration::from_millis(300)).await;
                 Err(anyhow::anyhow!("Some network error"))
@@ -413,7 +413,7 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
         .times(1)
         .in_sequence(&mut seq)
         .returning(|block_ids| {
-            assert_eq!(block_ids, 4..4);
+            assert_eq!(block_ids, 4..5);
             Box::pin(async move {
                 let data = block_ids;
                 let v = data.into_iter().map(|_| Transactions::default()).collect();

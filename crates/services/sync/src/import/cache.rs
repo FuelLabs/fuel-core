@@ -140,14 +140,8 @@ impl Cache {
                     .into_iter()
                     .filter_map(|chunk| {
                         let (range, blocks): (Vec<u32>, Vec<SealedBlock>) = chunk.unzip();
-                        let Some(start_range) = range.get(0) else {
-                            return None;
-                        };
-                        let Some(mut end_range) =
-                            range.get(range.len().saturating_sub(1))
-                        else {
-                            return None;
-                        };
+                        let start_range = range.first()?;
+                        let mut end_range = range.get(range.len().saturating_sub(1))?;
                         Some(CachedDataBatch::Blocks(Batch::new(
                             None,
                             *start_range..end_range.saturating_add(1),
@@ -164,14 +158,8 @@ impl Cache {
                     .filter_map(|chunk| {
                         let (range, headers): (Vec<u32>, Vec<SealedBlockHeader>) =
                             chunk.unzip();
-                        let Some(start_range) = range.get(0) else {
-                            return None;
-                        };
-                        let Some(mut end_range) =
-                            range.get(range.len().saturating_sub(1))
-                        else {
-                            return None;
-                        };
+                        let start_range = range.first()?;
+                        let mut end_range = range.get(range.len().saturating_sub(1))?;
                         Some(CachedDataBatch::Headers(Batch::new(
                             None,
                             *start_range..end_range.saturating_add(1),
