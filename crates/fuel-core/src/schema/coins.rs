@@ -233,13 +233,38 @@ impl CoinQuery {
         //  https://github.com/FuelLabs/fuel-core/issues/2343
         query_per_asset.truncate(max_input as usize);
 
-        // TODO[RC]: The actual usage of the coins to spend index will be delivered in a follow-up PR.
-        const INDEXATION_AVAILABLE: bool = false;
-
-        let indexation_available = INDEXATION_AVAILABLE;
+        let read_view = ctx.read_view()?;
+        let indexation_available = read_view.coins_to_spend_indexation_enabled;
         if indexation_available {
-            // TODO[RC]: The actual usage of the coins to spend index will be delivered in a follow-up PR.
-            todo!();
+            let owner: fuel_tx::Address = owner.0;
+            let mut all_coins = Vec::with_capacity(query_per_asset.len());
+            for asset in query_per_asset {
+                let asset_id = asset.asset_id.0;
+                let total_amount = asset.amount.0;
+                let max_coins: u32 = asset.max.map_or(max_input as u32, Into::into);
+                tracing::error!(
+                    "XXX - owner: {:?}, asset_id: {:?}, total_amount: {:?}, max_coins: {:?}",
+                    owner, asset_id, total_amount, max_coins
+                );
+                let coins = read_view.off_chain.coins_to_spend(
+                    &owner,
+                    &asset_id,
+                    total_amount,
+                    max_coins,
+                )?;
+                all_coins.push(
+                    coins
+                        .into_iter()
+                        .map(|coin| match coin {
+                            coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
+                            coins::CoinType::MessageCoin(coin) => {
+                                CoinType::MessageCoin(coin.into())
+                            }
+                        })
+                        .collect(),
+                );
+            }
+            Ok(all_coins)
         } else {
             let owner: fuel_tx::Address = owner.0;
             let query_per_asset = query_per_asset
@@ -271,9 +296,7 @@ impl CoinQuery {
             let spend_query =
                 SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
 
-            let query = ctx.read_view()?;
-
-            let coins = random_improve(query.as_ref(), &spend_query)
+            let coins = random_improve(read_view.as_ref(), &spend_query)
                 .await?
                 .into_iter()
                 .map(|coins| {

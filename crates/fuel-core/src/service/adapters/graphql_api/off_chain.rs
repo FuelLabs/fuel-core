@@ -65,7 +65,10 @@ use fuel_core_types::{
         consensus::Consensus,
         primitives::BlockId,
     },
-    entities::relayer::transaction::RelayedTransactionStatus,
+    entities::{
+        coins::CoinType,
+        relayer::transaction::RelayedTransactionStatus,
+    },
     fuel_tx::{
         Address,
         AssetId,
@@ -286,10 +289,11 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         &self,
         _owner: &Address,
         _asset_id: &AssetId,
-        _max: u16,
-    ) -> StorageResult<Vec<UtxoId>> {
-        // TODO[RC]: The actual usage of the coins to spend index will be delivered in a follow-up PR.
-        todo!();
+        _target_amount: u64,
+        _max_coins: u32,
+    ) -> StorageResult<Vec<CoinType>> {
+        tracing::error!("XXX - currently reading coins to spend from the offchain index");
+        Ok(vec![])
     }
 }
 

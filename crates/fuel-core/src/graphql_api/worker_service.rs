@@ -221,7 +221,7 @@ where
                 return Err(err.into());
             }
             Err(err) => {
-                // TODO[RC]: Indexing errors to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
+                // TODO[RC]: Indexation errors to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
                 tracing::error!("Indexation error: {}", err);
             }
         };

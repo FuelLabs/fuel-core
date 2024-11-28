@@ -30,12 +30,15 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::relayer::{
-        message::{
-            MerkleProof,
-            Message,
+    entities::{
+        coins::CoinType,
+        relayer::{
+            message::{
+                MerkleProof,
+                Message,
+            },
+            transaction::RelayedTransactionStatus,
         },
-        transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
         Bytes32,
@@ -112,9 +115,9 @@ pub trait OffChainDatabase: Send + Sync {
         &self,
         owner: &Address,
         asset_id: &AssetId,
-        max: u16,
-        // TODO[RC]: Also support message ids here - these are different than UtxoId. This will be taken care of in a follow-up PR.
-    ) -> StorageResult<Vec<UtxoId>>;
+        target_amount: u64,
+        max_coins: u32,
+    ) -> StorageResult<Vec<CoinType>>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 

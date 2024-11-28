@@ -91,8 +91,6 @@ pub struct ReadDatabase {
     /// The flag that indicates whether the Balances indexation is enabled.
     balances_indexation_enabled: bool,
     /// The flag that indicates whether the CoinsToSpend indexation is enabled.
-    #[allow(dead_code)]
-    // TODO[RC]: The actual usage of the coins to spend index will be delivered in a follow-up PR.
     coins_to_spend_indexation_enabled: bool,
 }
 
@@ -135,6 +133,7 @@ impl ReadDatabase {
             on_chain: self.on_chain.latest_view()?,
             off_chain: self.off_chain.latest_view()?,
             balances_indexation_enabled: self.balances_indexation_enabled,
+            coins_to_spend_indexation_enabled: self.coins_to_spend_indexation_enabled,
         })
     }
 
@@ -151,6 +150,7 @@ pub struct ReadView {
     pub(crate) on_chain: OnChainView,
     pub(crate) off_chain: OffChainView,
     pub(crate) balances_indexation_enabled: bool,
+    pub(crate) coins_to_spend_indexation_enabled: bool,
 }
 
 impl ReadView {

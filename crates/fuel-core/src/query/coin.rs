@@ -77,11 +77,11 @@ impl ReadView {
         &self,
         owner: &Address,
         asset_id: &AssetId,
-        max: u16,
+        target_amount: u64,
+        max_coins: u32,
     ) -> Result<Vec<CoinType>, CoinsQueryError> {
-        let _coin_ids = self.off_chain.coins_to_spend(owner, asset_id, max);
-
-        // TODO[RC]: The actual usage of the coins to spend index will be delivered in a follow-up PR.
-        todo!();
+        Ok(self
+            .off_chain
+            .coins_to_spend(owner, asset_id, target_amount, max_coins)?)
     }
 }
