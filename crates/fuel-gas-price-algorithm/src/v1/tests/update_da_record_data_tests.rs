@@ -237,10 +237,10 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
         .sum();
     let projected_total_cost: u128 = original_known_total_cost + guessed_cost;
     let mut updater = UpdaterBuilder::new()
-        .with_da_cost_per_byte(da_cost_per_byte as u128)
+        .with_da_cost_per_byte(da_cost_per_byte)
         .with_l2_block_height(l2_block_height)
-        .with_projected_total_cost(projected_total_cost as u128)
-        .with_known_total_cost(original_known_total_cost as u128)
+        .with_projected_total_cost(projected_total_cost)
+        .with_known_total_cost(original_known_total_cost)
         .with_unrecorded_blocks(unrecorded_blocks)
         .build();
 
