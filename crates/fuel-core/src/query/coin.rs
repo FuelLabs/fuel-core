@@ -14,13 +14,17 @@ use fuel_core_storage::{
 use fuel_core_types::{
     entities::coins::{
         coin::Coin,
+        CoinId,
         CoinType,
     },
     fuel_tx::{
         AssetId,
         UtxoId,
     },
-    fuel_types::Address,
+    fuel_types::{
+        Address,
+        Nonce,
+    },
 };
 use futures::{
     Stream,
@@ -80,9 +84,14 @@ impl ReadView {
         asset_id: &AssetId,
         target_amount: u64,
         max_coins: u32,
+        excluded_ids: (&[UtxoId], &[Nonce]),
     ) -> Result<Vec<(Vec<u8>, IndexedCoinType)>, CoinsQueryError> {
-        Ok(self
-            .off_chain
-            .coins_to_spend(owner, asset_id, target_amount, max_coins)?)
+        Ok(self.off_chain.coins_to_spend(
+            owner,
+            asset_id,
+            target_amount,
+            max_coins,
+            excluded_ids,
+        )?)
     }
 }

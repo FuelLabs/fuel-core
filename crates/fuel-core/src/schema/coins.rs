@@ -242,24 +242,36 @@ impl CoinQuery {
         if indexation_available {
             let owner: fuel_tx::Address = owner.0;
             let mut all_coins = Vec::with_capacity(query_per_asset.len());
+
+            // TODO[RC]: Unify with the "non-indexation" version.
+            let (excluded_utxoids, excluded_nonces) = excluded_ids.map_or_else(
+                || (vec![], vec![]),
+                |exclude| {
+                    (
+                        exclude.utxos.into_iter().map(Into::into).collect(),
+                        exclude.messages.into_iter().map(Into::into).collect(),
+                    )
+                },
+            );
+
             for asset in query_per_asset {
                 let asset_id = asset.asset_id.0;
                 let total_amount = asset.amount.0;
                 let max_coins: u32 = asset.max.map_or(max_input as u32, Into::into);
-                // TODO[RC]: Support excluded IDs filtering.
+
                 let coins = read_view.off_chain.coins_to_spend(
                     &owner,
                     &asset_id,
                     total_amount,
                     max_coins,
+                    (&excluded_utxoids, &excluded_nonces),
                 )?;
+
                 all_coins.push(
                     coins
                         .into_iter()
                         .map(|(key, t)| match t {
                             indexation::coins_to_spend::IndexedCoinType::Coin => {
-                                dbg!(&key);
-
                                 let tx_id = TxId::try_from(&key[0..32])
                                     .expect("The slice has size 32");
                                 let output_index = u16::from_be_bytes(

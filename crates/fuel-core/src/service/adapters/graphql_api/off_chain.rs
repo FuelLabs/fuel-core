@@ -76,7 +76,10 @@ use fuel_core_types::{
         primitives::BlockId,
     },
     entities::{
-        coins::CoinType,
+        coins::{
+            CoinId,
+            CoinType,
+        },
         relayer::transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
@@ -96,6 +99,7 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
+use itertools::Itertools;
 use rand::Rng;
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
@@ -302,6 +306,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         asset_id: &AssetId,
         target_amount: u64,
         max_coins: u32,
+        excluded_ids: (&[UtxoId], &[Nonce]),
     ) -> StorageResult<Vec<(Vec<u8>, IndexedCoinType)>> {
         let prefix: Vec<_> = owner
             .as_ref()
@@ -323,8 +328,13 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             Some(IterDirection::Forward),
         );
 
-        let selected_iter =
-            select_1(big_first_iter, dust_first_iter, target_amount, max_coins);
+        let selected_iter = select_1(
+            big_first_iter,
+            dust_first_iter,
+            target_amount,
+            max_coins,
+            excluded_ids,
+        );
 
         Ok(selected_iter
             .map(|x| x.unwrap())
@@ -342,6 +352,7 @@ fn select_1<'a>(
     coins_iter_back: BoxedIter<Result<(CoinsToSpendIndexKey, u8), StorageError>>,
     total: u64,
     max: u32,
+    excluded_ids: (&[UtxoId], &[Nonce]),
 ) -> BoxedIter<'a, Result<(CoinsToSpendIndexKey, u8), StorageError>> {
     // TODO[RC]: Validate query parameters.
     if total == 0 && max == 0 {
@@ -349,37 +360,77 @@ fn select_1<'a>(
     }
 
     let (selected_big_coins_total, selected_big_coins) =
-        big_coins(coins_iter, total, max);
-    dbg!(&selected_big_coins_total);
-    dbg!(&total);
+        big_coins(coins_iter, total, max, excluded_ids);
+
+    let big_coins_amounts = selected_big_coins
+        .iter()
+        .map(|item| item.as_ref().unwrap().0.amount() as u64)
+        .join(", ");
+    println!(
+        "Selected big coins ({selected_big_coins_total}): {}",
+        big_coins_amounts
+    );
+
     if selected_big_coins_total < total {
-        dbg!(1);
         return std::iter::empty().into_boxed();
     }
-    dbg!(2);
     let Some(last_selected_big_coin) = selected_big_coins.last() else {
         // Should never happen.
-        dbg!(3);
         return std::iter::empty().into_boxed();
     };
 
     let max_dust_count = max_dust_count(max, selected_big_coins.len());
     dbg!(&max_dust_count);
-    let (dust_coins_total, dust_coins) =
+    let (dust_coins_total, selected_dust_coins) =
         dust_coins(coins_iter_back, last_selected_big_coin, max_dust_count);
+    let dust_coins_amounts = selected_dust_coins
+        .iter()
+        .map(|item| item.as_ref().unwrap().0.amount() as u64)
+        .join(", ");
+    println!(
+        "Selected dust coins ({dust_coins_total}): {}",
+        dust_coins_amounts
+    );
+
+    dbg!(&selected_big_coins_total);
 
     let retained_big_coins_iter =
         skip_big_coins_up_to_amount(selected_big_coins, dust_coins_total);
-    (retained_big_coins_iter.chain(dust_coins)).into_boxed()
+
+    (retained_big_coins_iter.chain(selected_dust_coins)).into_boxed()
 }
 
 fn big_coins<'a>(
     coins_iter: BoxedIter<Result<(CoinsToSpendIndexKey, u8), StorageError>>,
     total: u64,
     max: u32,
+    excluded_ids: (&[UtxoId], &[Nonce]),
 ) -> (u64, Vec<Result<(CoinsToSpendIndexKey, u8), StorageError>>) {
     let mut big_coins_total = 0;
     let big_coins: Vec<_> = coins_iter
+        .filter(|item| {
+            let (key, value) = item.as_ref().unwrap();
+            let coin_type = IndexedCoinType::try_from(*value).unwrap();
+            let foreign_key = key.foreign_key_bytes();
+            match coin_type {
+                IndexedCoinType::Coin => {
+                    let (excluded, _) = excluded_ids;
+                    let tx_id = TxId::try_from(&foreign_key[0..32])
+                        .expect("The slice has size 32");
+                    let output_index = u16::from_be_bytes(
+                        foreign_key[32..].try_into().expect("The slice has size 2"),
+                    );
+                    let utxo_id = UtxoId::new(tx_id, output_index);
+                    !excluded.contains(&utxo_id)
+                }
+                IndexedCoinType::Message => {
+                    let (_, excluded) = excluded_ids;
+                    let nonce = Nonce::try_from(&foreign_key[0..32])
+                        .expect("The slice has size 32");
+                    !excluded.contains(&nonce)
+                }
+            }
+        })
         .take(max as usize)
         .take_while(|item| {
             (big_coins_total >= total)

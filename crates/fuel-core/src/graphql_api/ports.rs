@@ -31,7 +31,10 @@ use fuel_core_types::{
         },
     },
     entities::{
-        coins::CoinType,
+        coins::{
+            CoinId,
+            CoinType,
+        },
         relayer::{
             message::{
                 MerkleProof,
@@ -120,6 +123,7 @@ pub trait OffChainDatabase: Send + Sync {
         asset_id: &AssetId,
         target_amount: u64,
         max_coins: u32,
+        excluded_ids: (&[UtxoId], &[Nonce]),
     ) -> StorageResult<Vec<(Vec<u8>, IndexedCoinType)>>; // TODO[RC]: Named return type
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
