@@ -178,6 +178,7 @@ where
     ) -> anyhow::Result<()> {
         self.algorithm_updater.update_da_record_data(
             &da_block_costs.l2_blocks,
+            da_block_costs.blob_size_bytes,
             da_block_costs.blob_cost_wei,
         )?;
 

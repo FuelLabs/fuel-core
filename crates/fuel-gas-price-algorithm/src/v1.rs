@@ -303,11 +303,11 @@ impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,
         heights: &[u32],
-        recorded_bytes: u128,
+        recorded_bytes: u32,
         recording_cost: u128,
     ) -> Result<(), Error> {
         if !heights.is_empty() {
-            self.da_block_update(heights, recorded_bytes, recording_cost)?;
+            self.da_block_update(heights, recorded_bytes as u128, recording_cost)?;
             self.recalculate_projected_cost();
             self.update_da_gas_price();
         }

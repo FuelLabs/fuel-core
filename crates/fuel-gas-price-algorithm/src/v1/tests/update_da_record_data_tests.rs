@@ -303,12 +303,12 @@ fn update_da_record_data__updates_known_total_cost_if_blocks_are_out_of_order() 
 
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost)
+        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost as u128)
         .unwrap();
 
     // then
     let expected = updater.latest_known_total_da_cost_excess
-        + (block_bytes as u128 * new_cost_per_byte);
+        + (block_bytes as u128 * new_cost_per_byte as u128);
     let actual = updater.projected_total_da_cost;
     assert_eq!(actual, expected);
 }
@@ -350,12 +350,12 @@ fn update_da_record_data__updates_projected_total_cost_if_blocks_are_out_of_orde
 
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost)
+        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost as u128)
         .unwrap();
 
     // then
     let expected = updater.latest_known_total_da_cost_excess
-        + (block_bytes as u128 * new_cost_per_byte);
+        + (block_bytes as u128 * new_cost_per_byte as u128);
     let actual = updater.projected_total_da_cost;
     assert_eq!(actual, expected);
 }
