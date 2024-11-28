@@ -300,7 +300,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         target_amount: u64,
         max_coins: u32,
     ) -> StorageResult<Vec<CoinType>> {
-        let _prefix: Vec<_> = owner
+        let prefix: Vec<_> = owner
             .as_ref()
             .iter()
             .copied()
@@ -309,13 +309,13 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             .collect();
 
         let big_first_iter = self.iter_all_filtered_keys::<CoinsToSpendIndex, _>(
-            Some(&owner),
+            Some(&prefix),
             None,
             Some(IterDirection::Reverse),
         );
 
         let dust_first_iter = self.iter_all_filtered_keys::<CoinsToSpendIndex, _>(
-            Some(&owner),
+            Some(&prefix),
             None,
             Some(IterDirection::Forward),
         );
