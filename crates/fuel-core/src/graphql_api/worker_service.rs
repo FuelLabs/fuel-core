@@ -13,7 +13,10 @@ use crate::{
     fuel_core_graphql_api::{
         ports::{
             self,
-            worker::OffChainDatabaseTransaction,
+            worker::{
+                BlockAt,
+                OffChainDatabaseTransaction,
+            },
         },
         storage::{
             blocks::FuelBlockIdsToHeights,
@@ -562,6 +565,11 @@ where
 
         let next_block_height =
             off_chain_height.map(|height| BlockHeight::new(height.saturating_add(1)));
+
+        let next_block_height = match next_block_height {
+            Some(block_height) => BlockAt::Specific(block_height),
+            None => BlockAt::Genesis,
+        };
 
         let import_result =
             import_result_provider.block_event_at_height(next_block_height)?;

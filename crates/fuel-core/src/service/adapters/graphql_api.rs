@@ -9,6 +9,7 @@ use crate::{
     database::OnChainIterableKeyValueView,
     fuel_core_graphql_api::ports::{
         worker,
+        worker::BlockAt,
         BlockProducerPort,
         ConsensusProvider,
         DatabaseMessageProof,
@@ -218,7 +219,7 @@ impl worker::BlockImporter for GraphQLBlockImporter {
 
     fn block_event_at_height(
         &self,
-        height: Option<BlockHeight>,
+        height: BlockAt,
     ) -> anyhow::Result<SharedImportResult> {
         self.import_result_provider_adapter.result_at_height(height)
     }

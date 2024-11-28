@@ -302,6 +302,7 @@ pub mod worker {
             relayed_transactions::RelayedTransactionStatuses,
         },
     };
+    use derive_more::Display;
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
         Error as StorageError,
@@ -338,6 +339,15 @@ pub mod worker {
 
         /// Checks if Balances cache functionality is available.
         fn balances_enabled(&self) -> StorageResult<bool>;
+    }
+
+    /// Represents either the Genesis Block or a block at a specific height
+    #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Hash, Ord, PartialOrd)]
+    pub enum BlockAt {
+        /// Block at a specific height
+        Specific(BlockHeight),
+        /// Genesis block
+        Genesis,
     }
 
     pub trait OffChainDatabaseTransaction:
@@ -394,7 +404,7 @@ pub mod worker {
         /// Return the import result at the given height.
         fn block_event_at_height(
             &self,
-            height: Option<BlockHeight>,
+            height: BlockAt,
         ) -> anyhow::Result<SharedImportResult>;
     }
 
