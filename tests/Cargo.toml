@@ -84,5 +84,3 @@ tracing = { workspace = true }
 default = ["fuel-core/default"]
 only-p2p = ["fuel-core-p2p"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]
-relayer = ["fuel-core/relayer"]
-p2p = ["fuel-core/p2p"]
