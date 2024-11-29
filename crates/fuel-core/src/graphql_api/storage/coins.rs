@@ -110,7 +110,7 @@ impl CoinsToSpendIndexKey {
     pub fn from_message(message: &Message, base_asset_id: &AssetId) -> Self {
         let address_bytes = message.recipient().as_ref();
         let asset_id_bytes = base_asset_id.as_ref();
-        let retryable_flag_bytes = if message.has_retryable_amount() {
+        let retryable_flag_bytes = if message.is_retryable_message() {
             RETRYABLE_BYTE
         } else {
             NON_RETRYABLE_BYTE

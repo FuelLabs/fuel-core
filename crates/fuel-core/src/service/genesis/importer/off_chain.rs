@@ -43,9 +43,40 @@ use super::{
     Handler,
 };
 
-// We always want to enable balances and coins to spend indexation if we're starting at genesis.
-const BALANCES_INDEXATION_ENABLED: bool = true;
-const COINS_TO_SPEND_INDEXATION_ENABLED: bool = true;
+fn balances_indexation_enabled() -> bool {
+    use std::sync::OnceLock;
+
+    static BALANCES_INDEXATION_ENABLED: OnceLock<bool> = OnceLock::new();
+
+    *BALANCES_INDEXATION_ENABLED.get_or_init(|| {
+        // During re-genesis process the metadata never exist.
+        let metadata = None;
+        let indexation_availability =
+            crate::database::database_description::indexation_availability::<OffChain>(
+                metadata,
+            );
+        indexation_availability
+            .contains(&crate::database::database_description::IndexationKind::Balances)
+    })
+}
+
+fn coins_to_spend_indexation_enabled() -> bool {
+    use std::sync::OnceLock;
+
+    static COINS_TO_SPEND_INDEXATION_ENABLED: OnceLock<bool> = OnceLock::new();
+
+    *COINS_TO_SPEND_INDEXATION_ENABLED.get_or_init(|| {
+        // During re-genesis process the metadata never exist.
+        let metadata = None;
+        let indexation_availability =
+            crate::database::database_description::indexation_availability::<OffChain>(
+                metadata,
+            );
+        indexation_availability.contains(
+            &crate::database::database_description::IndexationKind::CoinsToSpend,
+        )
+    })
+}
 
 impl ImportTable for Handler<TransactionStatuses, TransactionStatuses> {
     type TableInSnapshot = TransactionStatuses;
@@ -117,8 +148,8 @@ impl ImportTable for Handler<OwnedMessageIds, Messages> {
         worker_service::process_executor_events(
             events,
             tx,
-            BALANCES_INDEXATION_ENABLED,
-            COINS_TO_SPEND_INDEXATION_ENABLED,
+            balances_indexation_enabled(),
+            coins_to_spend_indexation_enabled(),
             &self.base_asset_id,
         )?;
         Ok(())
@@ -141,8 +172,8 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
         worker_service::process_executor_events(
             events,
             tx,
-            BALANCES_INDEXATION_ENABLED,
-            COINS_TO_SPEND_INDEXATION_ENABLED,
+            balances_indexation_enabled(),
+            coins_to_spend_indexation_enabled(),
             &self.base_asset_id,
         )?;
         Ok(())

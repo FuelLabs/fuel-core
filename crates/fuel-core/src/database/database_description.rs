@@ -133,3 +133,22 @@ impl<Height> DatabaseMetadata<Height> {
         }
     }
 }
+
+/// Gets the indexation availability from the metadata.
+pub fn indexation_availability<D>(
+    metadata: Option<DatabaseMetadata<D::Height>>,
+) -> HashSet<IndexationKind>
+where
+    D: DatabaseDescription,
+{
+    match metadata {
+        Some(DatabaseMetadata::V1 { .. }) => HashSet::new(),
+        Some(DatabaseMetadata::V2 {
+            indexation_availability,
+            ..
+        }) => indexation_availability.clone(),
+        // If the metadata doesn't exist, it is a new database,
+        // and we should set all indexation kinds to available.
+        None => IndexationKind::all().collect(),
+    }
+}
