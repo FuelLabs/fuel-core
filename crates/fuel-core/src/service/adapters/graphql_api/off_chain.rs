@@ -456,7 +456,7 @@ fn max_dust_count(max: u32, big_coins_len: u32) -> u32 {
 
 fn dust_coins(
     coins_iter_back: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
-    last_big_coin: &Result<CoinsToSpendIndexEntry, StorageError>,
+    last_big_coin: &Result<CoinsToSpendIndexEntry, StorageError>, /* TODO[RC]: No Result here */
     max_dust_count: u32,
     excluded_ids: &ExcludeInputBytes,
 ) -> (u64, Vec<Result<CoinsToSpendIndexEntry, StorageError>>) {

@@ -252,7 +252,11 @@ mod coin {
         );
     }
 
-    async fn query_limit_coins(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
+    async fn _query_limit_coins(
+        owner: Address,
+        asset_id_a: AssetId,
+        asset_id_b: AssetId,
+    ) {
         let context = setup(owner, asset_id_a, asset_id_b).await;
 
         // not enough inputs
@@ -459,7 +463,7 @@ mod message_coin {
         );
     }
 
-    async fn query_limit_coins(owner: Address) {
+    async fn _query_limit_coins(owner: Address) {
         let (base_asset_id, context) = setup(owner).await;
 
         // not enough inputs
@@ -666,7 +670,7 @@ mod all_coins {
         );
     }
 
-    async fn query_limit_coins(owner: Address, asset_id_b: AssetId) {
+    async fn _query_limit_coins(owner: Address, asset_id_b: AssetId) {
         let (asset_id_a, context) = setup(owner, asset_id_b).await;
 
         // not enough inputs
