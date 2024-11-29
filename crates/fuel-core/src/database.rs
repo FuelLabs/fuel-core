@@ -24,7 +24,6 @@ use crate::{
         KeyValueView,
     },
 };
-use database_description::IndexationKind;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
 use fuel_core_services::SharedMutex;
@@ -68,7 +67,10 @@ pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
-use crate::database::database_description::gas_price::GasPriceDatabase;
+use crate::database::database_description::{
+    gas_price::GasPriceDatabase,
+    indexation_availability,
+};
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
@@ -536,7 +538,7 @@ where
         None => DatabaseMetadata::V2 {
             version: Description::version(),
             height: new_height,
-            indexation_availability: IndexationKind::all().collect(),
+            indexation_availability: indexation_availability::<Description>(None),
         },
     };
     updated_metadata
@@ -1115,12 +1117,12 @@ mod tests {
     }
 
     mod metadata {
+        use crate::database::database_description::IndexationKind;
+        use fuel_core_storage::kv_store::StorageColumn;
         use std::{
             borrow::Cow,
             collections::HashSet,
         };
-
-        use fuel_core_storage::kv_store::StorageColumn;
         use strum::EnumCount;
 
         use super::{
@@ -1128,7 +1130,6 @@ mod tests {
             update_metadata,
             DatabaseHeight,
             DatabaseMetadata,
-            IndexationKind,
         };
 
         #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
