@@ -591,9 +591,10 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
 {
     // given
     let starting_block = 0;
+    let first_block_bytes = 1200;
     let preexisting_block = BlockBytes {
         height: 0,
-        block_bytes: 1000,
+        block_bytes: first_block_bytes,
     };
 
     let mut updater = UpdaterBuilder::new()
@@ -604,27 +605,33 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
     let height = 1;
     let used = 50;
     let capacity = 100.try_into().unwrap();
-    let block_bytes = 1000;
+    let new_block_bytes = 1000;
     let new_gas_price = 100;
 
     // when
     updater
-        .update_l2_block_data(height, used, capacity, block_bytes, new_gas_price)
+        .update_l2_block_data(height, used, capacity, new_block_bytes, new_gas_price)
         .unwrap();
 
     //  then
     let block_bytes = BlockBytes {
         height,
-        block_bytes,
+        block_bytes: new_block_bytes,
     };
     let contains_block_bytes =
         updater.unrecorded_blocks.contains_key(&block_bytes.height);
     assert!(contains_block_bytes);
 
+    // and
     let contains_preexisting_block_bytes = updater
         .unrecorded_blocks
         .contains_key(&preexisting_block.height);
     assert!(contains_preexisting_block_bytes);
+
+    // and
+    let expected = first_block_bytes + new_block_bytes;
+    let actual = updater.unrecorded_blocks_bytes;
+    assert_eq!(expected as u128, actual);
 }
 
 fn capped_l2_activity_tracker() -> L2ActivityTracker {
