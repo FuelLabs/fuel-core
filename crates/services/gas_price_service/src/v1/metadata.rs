@@ -3,7 +3,10 @@ use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     L2ActivityTracker,
 };
-use std::num::NonZeroU64;
+use std::{
+    collections::BTreeMap,
+    num::NonZeroU64,
+};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct V1Metadata {
@@ -19,13 +22,8 @@ pub struct V1Metadata {
     pub gas_price_factor: NonZeroU64,
     /// The cumulative reward from the DA portion of the gas price
     pub total_da_rewards_excess: u128,
-    /// The height of the last L2 block recorded on the DA chain
-    pub da_recorded_block_height: u32,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
     pub latest_known_total_da_cost_excess: u128,
-    /// The predicted cost of recording L2 blocks on the DA chain as of the last L2 block
-    /// (This value is added on top of the `latest_known_total_da_cost` if the L2 height is higher)
-    pub projected_total_da_cost: u128,
     /// The last profit
     pub last_profit: i128,
     /// The profit before last
@@ -52,11 +50,7 @@ impl V1Metadata {
                 .saturating_mul(config.gas_price_factor.get()),
             gas_price_factor: config.gas_price_factor,
             total_da_rewards_excess: 0,
-            // TODO: Set to `None` after:
-            //   https://github.com/FuelLabs/fuel-core/issues/2397
-            da_recorded_block_height: 0,
             latest_known_total_da_cost_excess: 0,
-            projected_total_da_cost: 0,
             last_profit: 0,
             second_to_last_profit: 0,
             latest_da_cost_per_byte: 0,
@@ -91,14 +85,18 @@ impl From<&V1AlgorithmConfig> for AlgorithmUpdaterV1 {
             value.decrease_range_size,
             value.block_activity_threshold.into(),
         );
-        let unrecorded_blocks = value.unrecorded_blocks.clone().into_iter().collect();
+        let unrecorded_blocks: BTreeMap<_, _> =
+            value.unrecorded_blocks.clone().into_iter().collect();
+        let unrecorded_blocks_bytes: u128 = unrecorded_blocks
+            .values()
+            .map(|size| u128::from(*size))
+            .sum();
         Self {
             new_scaled_exec_price: value.new_exec_gas_price,
             l2_block_height: 0,
             new_scaled_da_gas_price: value.min_da_gas_price,
             gas_price_factor: value.gas_price_factor,
             total_da_rewards_excess: 0,
-            da_recorded_block_height: 0,
             latest_known_total_da_cost_excess: 0,
             projected_total_da_cost: 0,
             last_profit: 0,
@@ -115,6 +113,7 @@ impl From<&V1AlgorithmConfig> for AlgorithmUpdaterV1 {
             da_p_component: value.da_p_component,
             da_d_component: value.da_d_component,
             unrecorded_blocks,
+            unrecorded_blocks_bytes,
         }
     }
 }
@@ -127,9 +126,7 @@ impl From<AlgorithmUpdaterV1> for V1Metadata {
             new_scaled_da_gas_price: updater.new_scaled_da_gas_price,
             gas_price_factor: updater.gas_price_factor,
             total_da_rewards_excess: updater.total_da_rewards_excess,
-            da_recorded_block_height: updater.da_recorded_block_height,
             latest_known_total_da_cost_excess: updater.latest_known_total_da_cost_excess,
-            projected_total_da_cost: updater.projected_total_da_cost,
             last_profit: updater.last_profit,
             second_to_last_profit: updater.second_to_last_profit,
             latest_da_cost_per_byte: updater.latest_da_cost_per_byte,
@@ -148,20 +145,25 @@ pub fn v1_algorithm_from_metadata(
         config.decrease_range_size,
         config.block_activity_threshold.into(),
     );
-    let unrecorded_blocks = metadata
+    let unrecorded_blocks_bytes: u128 = metadata
         .unrecorded_blocks
-        .into_iter()
-        .chain(config.unrecorded_blocks.clone())
-        .collect();
+        .iter()
+        .map(|(_, size)| u128::from(*size))
+        .sum();
+    let projected_portion =
+        unrecorded_blocks_bytes.saturating_mul(metadata.latest_da_cost_per_byte);
+    let projected_total_da_cost = metadata
+        .latest_known_total_da_cost_excess
+        .saturating_add(projected_portion);
+    let unrecorded_blocks = metadata.unrecorded_blocks.into_iter().collect();
     AlgorithmUpdaterV1 {
         new_scaled_exec_price: metadata.new_scaled_exec_price,
         l2_block_height: metadata.l2_block_height,
         new_scaled_da_gas_price: metadata.new_scaled_da_gas_price,
         gas_price_factor: metadata.gas_price_factor,
         total_da_rewards_excess: metadata.total_da_rewards_excess,
-        da_recorded_block_height: metadata.da_recorded_block_height,
         latest_known_total_da_cost_excess: metadata.latest_known_total_da_cost_excess,
-        projected_total_da_cost: metadata.projected_total_da_cost,
+        projected_total_da_cost,
         last_profit: metadata.last_profit,
         second_to_last_profit: metadata.second_to_last_profit,
         latest_da_cost_per_byte: metadata.latest_da_cost_per_byte,
@@ -176,5 +178,6 @@ pub fn v1_algorithm_from_metadata(
         da_p_component: config.da_p_component,
         da_d_component: config.da_d_component,
         unrecorded_blocks,
+        unrecorded_blocks_bytes,
     }
 }

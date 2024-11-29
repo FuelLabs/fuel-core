@@ -91,13 +91,13 @@ pub fn insert_compressed_block(
     let compressed_block = block.compress(&ChainId::default());
     let height_key = height_key(height);
 
-    let raw_compressed_block = postcard::to_allocvec(&compressed_block)?.to_vec();
+    let raw_compressed_block = postcard::to_allocvec(&compressed_block)?;
     let raw_transactions: Vec<(Bytes32, Vec<u8>)> = block
         .transactions()
         .iter()
         .map(|tx| -> DbLookupBenchResult<(Bytes32, Vec<u8>)> {
             let tx_id = tx.id(&ChainId::default());
-            let raw_tx = postcard::to_allocvec(tx)?.to_vec();
+            let raw_tx = postcard::to_allocvec(tx)?;
             Ok((tx_id, raw_tx))
         })
         .try_collect()?;
@@ -106,14 +106,14 @@ pub fn insert_compressed_block(
     database.put(
         height_key.as_slice(),
         BenchDbColumn::FuelBlocks,
-        Value::new(raw_compressed_block),
+        Value::from(raw_compressed_block),
     )?;
     // 2. insert into Transactions table
     for (tx_id, tx) in raw_transactions {
         database.put(
             tx_id.as_slice(),
             BenchDbColumn::Transactions,
-            Value::new(tx),
+            Value::from(tx),
         )?;
     }
 
@@ -130,13 +130,13 @@ pub fn insert_full_block(
     let block = insert_compressed_block(database, height, tx_count)?;
 
     let height_key = height_key(height);
-    let raw_full_block = postcard::to_allocvec(&block)?.to_vec();
+    let raw_full_block = postcard::to_allocvec(&block)?;
 
     database
         .put(
             height_key.as_slice(),
             BenchDbColumn::FullFuelBlocks,
-            Value::new(raw_full_block),
+            Value::from(raw_full_block),
         )
         .map_err(|err| anyhow!(err))?;
 
