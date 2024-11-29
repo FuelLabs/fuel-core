@@ -100,53 +100,46 @@ impl core::fmt::Display for CoinsToSpendIndexKey {
 }
 
 impl CoinsToSpendIndexKey {
-    #[allow(clippy::arithmetic_side_effects)]
     pub fn from_coin(coin: &Coin) -> Self {
         let address_bytes = coin.owner.as_ref();
         let asset_id_bytes = coin.asset_id.as_ref();
+        let retryable_flag_bytes = NON_RETRYABLE_BYTE;
         let amount_bytes = coin.amount.to_be_bytes();
         let utxo_id_bytes = utxo_id_to_bytes(&coin.utxo_id);
 
-        let mut arr = [0; COIN_TO_SPEND_COIN_KEY_LEN];
-        let mut offset = 0;
-        arr[offset..offset + Address::LEN].copy_from_slice(address_bytes);
-        offset += Address::LEN;
-        arr[offset..offset + AssetId::LEN].copy_from_slice(asset_id_bytes);
-        offset += AssetId::LEN;
-        arr[offset..offset + u8::BITS as usize / 8].copy_from_slice(&NON_RETRYABLE_BYTE);
-        offset += u8::BITS as usize / 8;
-        // TODO[RC]: Use indexation::coins_to_spend::ForeginKey here (?)
-        arr[offset..offset + u64::BITS as usize / 8].copy_from_slice(&amount_bytes);
-        offset += u64::BITS as usize / 8;
-        arr[offset..].copy_from_slice(&utxo_id_bytes);
-        Self(arr.to_vec())
+        Self(
+            address_bytes
+                .iter()
+                .chain(asset_id_bytes)
+                .chain(retryable_flag_bytes.iter())
+                .chain(amount_bytes.iter())
+                .chain(utxo_id_bytes.iter())
+                .copied()
+                .collect(),
+        )
     }
 
-    #[allow(clippy::arithmetic_side_effects)]
     pub fn from_message(message: &Message, base_asset_id: &AssetId) -> Self {
         let address_bytes = message.recipient().as_ref();
         let asset_id_bytes = base_asset_id.as_ref();
+        let retryable_flag_bytes = if message.has_retryable_amount() {
+            RETRYABLE_BYTE
+        } else {
+            NON_RETRYABLE_BYTE
+        };
         let amount_bytes = message.amount().to_be_bytes();
         let nonce_bytes = message.nonce().as_slice();
 
-        let mut arr = [0; COIN_TO_SPEND_MESSAGE_KEY_LEN];
-        let mut offset = 0;
-        arr[offset..offset + Address::LEN].copy_from_slice(address_bytes);
-        offset += Address::LEN;
-        arr[offset..offset + AssetId::LEN].copy_from_slice(asset_id_bytes);
-        offset += AssetId::LEN;
-        arr[offset..offset + u8::BITS as usize / 8].copy_from_slice(
-            if message.has_retryable_amount() {
-                &RETRYABLE_BYTE
-            } else {
-                &NON_RETRYABLE_BYTE
-            },
-        );
-        offset += u8::BITS as usize / 8;
-        arr[offset..offset + u64::BITS as usize / 8].copy_from_slice(&amount_bytes);
-        offset += u64::BITS as usize / 8;
-        arr[offset..offset + Nonce::LEN].copy_from_slice(nonce_bytes);
-        Self(arr.to_vec())
+        Self(
+            address_bytes
+                .iter()
+                .chain(asset_id_bytes)
+                .chain(retryable_flag_bytes.iter())
+                .chain(amount_bytes.iter())
+                .chain(nonce_bytes)
+                .copied()
+                .collect(),
+        )
     }
 
     pub fn from_slice(slice: &[u8]) -> Result<Self, core::array::TryFromSliceError> {
