@@ -87,10 +87,10 @@ mod tests {
 
         // when
         storage.insert(height, bytes).unwrap();
-        let actual = storage.remove(&height.into()).unwrap();
+        let actual = storage.remove(&height).unwrap();
 
         // then
-        let expected = Some(bytes.into());
+        let expected = Some(bytes);
         assert_eq!(expected, actual);
     }
 
