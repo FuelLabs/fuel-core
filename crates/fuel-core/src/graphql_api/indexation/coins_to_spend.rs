@@ -1,18 +1,11 @@
-use fuel_core_storage::{
-    codec::primitive::utxo_id_to_bytes,
-    StorageAsMut,
-};
+use fuel_core_storage::StorageAsMut;
 
 use fuel_core_types::{
     entities::{
         coins::coin::Coin,
         Message,
     },
-    fuel_tx::{
-        AssetId,
-        UtxoId,
-    },
-    fuel_types::Nonce,
+    fuel_tx::AssetId,
     services::executor::Event,
 };
 
@@ -21,8 +14,6 @@ use crate::graphql_api::{
     storage::coins::{
         CoinsToSpendIndex,
         CoinsToSpendIndexKey,
-        COIN_FOREIGN_KEY_LEN,
-        MESSAGE_FOREIGN_KEY_LEN,
     },
 };
 
@@ -34,49 +25,9 @@ pub(crate) const RETRYABLE_BYTE: [u8; 1] = [0x00];
 // Indicates that a message is non-retryable (also, all coins use this byte).
 pub(crate) const NON_RETRYABLE_BYTE: [u8; 1] = [0x01];
 
-// The part of the `CoinsToSpendIndexKey` which is used to identify the coin or message in the
-// OnChain database. We could consider using `CoinId`, but we do not need to re-create
-// neither the `UtxoId` nor `Nonce` from the raw bytes.
-#[derive(PartialEq)]
-pub(crate) enum CoinIdBytes {
-    Coin([u8; COIN_FOREIGN_KEY_LEN]),
-    Message([u8; MESSAGE_FOREIGN_KEY_LEN]),
-}
-
-impl CoinIdBytes {
-    pub(crate) fn from_utxo_id(utxo_id: &UtxoId) -> Self {
-        Self::Coin(utxo_id_to_bytes(&utxo_id))
-    }
-
-    pub(crate) fn from_nonce(nonce: &Nonce) -> Self {
-        let mut arr = [0; MESSAGE_FOREIGN_KEY_LEN];
-        arr[0..32].copy_from_slice(nonce.as_ref());
-        Self::Message(arr)
-    }
-}
-
-pub(crate) struct ExcludedIds {
-    coins: Vec<CoinIdBytes>,
-    messages: Vec<CoinIdBytes>,
-}
-
-impl ExcludedIds {
-    pub(crate) fn new(coins: Vec<CoinIdBytes>, messages: Vec<CoinIdBytes>) -> Self {
-        Self { coins, messages }
-    }
-
-    pub(crate) fn coins(&self) -> &[CoinIdBytes] {
-        &self.coins
-    }
-
-    pub(crate) fn messages(&self) -> &[CoinIdBytes] {
-        &self.messages
-    }
-}
-
 #[repr(u8)]
 #[derive(Debug, Clone)]
-pub(crate) enum IndexedCoinType {
+pub enum IndexedCoinType {
     Coin,
     Message,
 }

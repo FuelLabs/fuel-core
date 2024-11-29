@@ -21,10 +21,7 @@ use fuel_core_types::{
 };
 use futures::TryStreamExt;
 use rand::prelude::*;
-use std::{
-    cmp::Reverse,
-    collections::HashSet,
-};
+use std::cmp::Reverse;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

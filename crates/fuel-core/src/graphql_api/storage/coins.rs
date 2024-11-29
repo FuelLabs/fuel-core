@@ -65,23 +65,11 @@ impl TableWithBlueprint for CoinsToSpendIndex {
     }
 }
 
-// Base part of the coins to spend index key.
-pub(crate) const COIN_TO_SPEND_BASE_KEY_LEN: usize =
-    Address::LEN + AssetId::LEN + u8::BITS as usize / 8 + u64::BITS as usize / 8;
-
 // For coins, the foreign key is the UtxoId (34 bytes).
 pub(crate) const COIN_FOREIGN_KEY_LEN: usize = TxId::LEN + 2;
 
 // For messages, the foreign key is the nonce (32 bytes).
 pub(crate) const MESSAGE_FOREIGN_KEY_LEN: usize = Nonce::LEN;
-
-// Total length of the coins to spend index key for coins.
-pub(crate) const COIN_TO_SPEND_COIN_KEY_LEN: usize =
-    COIN_TO_SPEND_BASE_KEY_LEN + COIN_FOREIGN_KEY_LEN;
-
-// Total length of the coins to spend index key for messages.
-pub(crate) const COIN_TO_SPEND_MESSAGE_KEY_LEN: usize =
-    COIN_TO_SPEND_BASE_KEY_LEN + MESSAGE_FOREIGN_KEY_LEN;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CoinsToSpendIndexKey(Vec<u8>);
@@ -142,8 +130,8 @@ impl CoinsToSpendIndexKey {
         )
     }
 
-    pub fn from_slice(slice: &[u8]) -> Result<Self, core::array::TryFromSliceError> {
-        Ok(Self(slice.try_into()?))
+    pub fn from_slice(slice: &[u8]) -> Self {
+        Self(slice.into())
     }
 
     pub fn owner(&self) -> Address {
@@ -187,15 +175,12 @@ impl CoinsToSpendIndexKey {
     pub fn foreign_key_bytes(&self) -> Vec<u8> {
         let offset =
             Address::LEN + AssetId::LEN + u8::BITS as usize / 8 + u64::BITS as usize / 8;
-        self.0[offset..]
-            .try_into()
-            .expect("should have correct bytes")
+        self.0[offset..].into()
     }
 }
 
-impl TryFrom<&[u8]> for CoinsToSpendIndexKey {
-    type Error = core::array::TryFromSliceError;
-    fn try_from(slice: &[u8]) -> Result<Self, Self::Error> {
+impl From<&[u8]> for CoinsToSpendIndexKey {
+    fn from(slice: &[u8]) -> Self {
         CoinsToSpendIndexKey::from_slice(slice)
     }
 }
@@ -252,6 +237,18 @@ mod test {
             CoinsToSpendIndexKey(bytes)
         }
     }
+
+    // Base part of the coins to spend index key.
+    const COIN_TO_SPEND_BASE_KEY_LEN: usize =
+        Address::LEN + AssetId::LEN + u8::BITS as usize / 8 + u64::BITS as usize / 8;
+
+    // Total length of the coins to spend index key for coins.
+    const COIN_TO_SPEND_COIN_KEY_LEN: usize =
+        COIN_TO_SPEND_BASE_KEY_LEN + COIN_FOREIGN_KEY_LEN;
+
+    // Total length of the coins to spend index key for messages.
+    const COIN_TO_SPEND_MESSAGE_KEY_LEN: usize =
+        COIN_TO_SPEND_BASE_KEY_LEN + MESSAGE_FOREIGN_KEY_LEN;
 
     fn generate_key(rng: &mut impl rand::Rng) -> <OwnedCoins as Mappable>::Key {
         let mut bytes = [0u8; 66];

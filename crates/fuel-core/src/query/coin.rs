@@ -1,11 +1,4 @@
-use crate::{
-    coins_query::CoinsQueryError,
-    fuel_core_graphql_api::database::ReadView,
-    graphql_api::indexation::{
-        self,
-        coins_to_spend::IndexedCoinType,
-    },
-};
+use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
     iter::IterDirection,
     not_found,
@@ -15,19 +8,9 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    entities::coins::{
-        coin::Coin,
-        CoinId,
-        CoinType,
-    },
-    fuel_tx::{
-        AssetId,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        Nonce,
-    },
+    entities::coins::coin::Coin,
+    fuel_tx::UtxoId,
+    fuel_types::Address,
 };
 use futures::{
     Stream,

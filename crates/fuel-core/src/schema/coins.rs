@@ -13,6 +13,10 @@ use crate::{
     graphql_api::{
         api_service::ConsensusProvider,
         indexation,
+        storage::coins::{
+            COIN_FOREIGN_KEY_LEN,
+            MESSAGE_FOREIGN_KEY_LEN,
+        },
     },
     query::asset_query::AssetSpendTarget,
     schema::{
@@ -46,6 +50,7 @@ use fuel_core_types::{
         self,
         TxId,
     },
+    fuel_types,
 };
 use itertools::Itertools;
 use tokio_stream::StreamExt;
@@ -149,6 +154,46 @@ pub struct ExcludeInput {
     utxos: Vec<UtxoId>,
     /// Messages to exclude from the selection.
     messages: Vec<Nonce>,
+}
+
+pub struct ExcludeInputBytes {
+    coins: Vec<CoinIdBytes>,
+    messages: Vec<CoinIdBytes>,
+}
+
+// The part of the `CoinsToSpendIndexKey` which is used to identify the coin or message in the
+// OnChain database. We could consider using `CoinId`, but we do not need to re-create
+// neither the `UtxoId` nor `Nonce` from the raw bytes.
+#[derive(PartialEq)]
+pub(crate) enum CoinIdBytes {
+    Coin([u8; COIN_FOREIGN_KEY_LEN]),
+    Message([u8; MESSAGE_FOREIGN_KEY_LEN]),
+}
+
+impl CoinIdBytes {
+    pub(crate) fn from_utxo_id(utxo_id: &fuel_tx::UtxoId) -> Self {
+        Self::Coin(utxo_id_to_bytes(utxo_id))
+    }
+
+    pub(crate) fn from_nonce(nonce: &fuel_types::Nonce) -> Self {
+        let mut arr = [0; MESSAGE_FOREIGN_KEY_LEN];
+        arr[0..32].copy_from_slice(nonce.as_ref());
+        Self::Message(arr)
+    }
+}
+
+impl ExcludeInputBytes {
+    pub(crate) fn new(coins: Vec<CoinIdBytes>, messages: Vec<CoinIdBytes>) -> Self {
+        Self { coins, messages }
+    }
+
+    pub(crate) fn coins(&self) -> &[CoinIdBytes] {
+        &self.coins
+    }
+
+    pub(crate) fn messages(&self) -> &[CoinIdBytes] {
+        &self.messages
+    }
 }
 
 #[derive(Default)]
@@ -263,29 +308,18 @@ impl CoinQuery {
                         exclude
                             .utxos
                             .into_iter()
-                            .map(|utxo_id| {
-                                indexation::coins_to_spend::CoinIdBytes::from_utxo_id(
-                                    &utxo_id.0,
-                                )
-                            })
+                            .map(|utxo_id| CoinIdBytes::from_utxo_id(&utxo_id.0))
                             .collect(),
                         exclude
                             .messages
                             .into_iter()
-                            .map(|nonce| {
-                                indexation::coins_to_spend::CoinIdBytes::from_nonce(
-                                    &nonce.0,
-                                )
-                            })
+                            .map(|nonce| CoinIdBytes::from_nonce(&nonce.0))
                             .collect(),
                     )
                 },
             );
 
-            let excluded = indexation::coins_to_spend::ExcludedIds::new(
-                excluded_utxoids,
-                excluded_nonces,
-            );
+            let excluded = ExcludeInputBytes::new(excluded_utxoids, excluded_nonces);
 
             for asset in query_per_asset {
                 let asset_id = asset.asset_id.0;
@@ -311,7 +345,7 @@ impl CoinQuery {
                             );
                             let utxo_id = fuel_tx::UtxoId::new(tx_id, output_index);
                             read_view
-                                .coin(utxo_id.into())
+                                .coin(utxo_id)
                                 .map(|coin| CoinType::Coin(coin.into()))
                                 .unwrap()
                         }
@@ -320,7 +354,7 @@ impl CoinQuery {
                                 fuel_core_types::fuel_types::Nonce::try_from(&key[0..32])
                                     .expect("The slice has size 32");
                             read_view
-                                .message(&nonce.into())
+                                .message(&nonce)
                                 .map(|message| {
                                     let message_coin = MessageCoinModel {
                                         sender: *message.sender(),
