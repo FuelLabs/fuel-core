@@ -118,8 +118,8 @@ pub fn updater_from_config<U>(
     }
 }
 
-impl<T> From<AlgorithmUpdaterV1<T>> for V1Metadata {
-    fn from(updater: AlgorithmUpdaterV1<T>) -> Self {
+impl<U> From<AlgorithmUpdaterV1<U>> for V1Metadata {
+    fn from(updater: AlgorithmUpdaterV1<U>) -> Self {
         Self {
             new_scaled_exec_price: updater.new_scaled_exec_price,
             l2_block_height: updater.l2_block_height,

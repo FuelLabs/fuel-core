@@ -30,8 +30,8 @@ impl From<AlgorithmUpdaterV0> for UpdaterMetadata {
     }
 }
 
-impl<T> From<AlgorithmUpdaterV1<T>> for UpdaterMetadata {
-    fn from(updater: AlgorithmUpdaterV1<T>) -> Self {
+impl<U> From<AlgorithmUpdaterV1<U>> for UpdaterMetadata {
+    fn from(updater: AlgorithmUpdaterV1<U>) -> Self {
         Self::V1(updater.into())
     }
 }
