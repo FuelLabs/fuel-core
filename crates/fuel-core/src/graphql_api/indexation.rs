@@ -65,12 +65,12 @@ where
 {
     let key = message.recipient();
     let storage = block_st_transaction.storage::<MessageBalances>();
-    let current_balance = storage.get(key)?.unwrap_or_default();
+    let current_balance = storage.get(key)?.unwrap_or_default().into_owned();
     let MessageBalance {
         mut retryable,
         mut non_retryable,
-    } = *current_balance;
-    if message.has_retryable_amount() {
+    } = current_balance;
+    if message.is_retryable_message() {
         retryable = retryable.saturating_add(message.amount() as u128);
     } else {
         non_retryable = non_retryable.saturating_add(message.amount() as u128);
@@ -80,8 +80,10 @@ where
         non_retryable,
     };
 
-    let storage = block_st_transaction.storage::<MessageBalances>();
-    Ok(storage.insert(key, &new_balance)?)
+    block_st_transaction
+        .storage::<MessageBalances>()
+        .insert(key, &new_balance)
+        .map_err(Into::into)
 }
 
 fn decrease_message_balance<T>(
@@ -96,36 +98,37 @@ where
     let MessageBalance {
         retryable,
         non_retryable,
-    } = *storage.get(key)?.unwrap_or_default();
-    let current_balance = if message.has_retryable_amount() {
+    } = storage.get(key)?.unwrap_or_default().into_owned();
+    let current_balance = if message.is_retryable_message() {
         retryable
     } else {
         non_retryable
     };
 
-    current_balance
+    let new_amount = current_balance
         .checked_sub(message.amount() as u128)
         .ok_or_else(|| IndexationError::MessageBalanceWouldUnderflow {
             owner: *message.recipient(),
             current_amount: current_balance,
             requested_deduction: message.amount() as u128,
-            retryable: message.has_retryable_amount(),
-        })
-        .and_then(|new_amount| {
-            let storage = block_st_transaction.storage::<MessageBalances>();
-            let new_balance = if message.has_retryable_amount() {
-                MessageBalance {
-                    retryable: new_amount,
-                    non_retryable,
-                }
-            } else {
-                MessageBalance {
-                    retryable,
-                    non_retryable: new_amount,
-                }
-            };
-            storage.insert(key, &new_balance).map_err(Into::into)
-        })
+            retryable: message.is_retryable_message(),
+        })?;
+
+    let new_balance = if message.is_retryable_message() {
+        MessageBalance {
+            retryable: new_amount,
+            non_retryable,
+        }
+    } else {
+        MessageBalance {
+            retryable,
+            non_retryable: new_amount,
+        }
+    };
+    block_st_transaction
+        .storage::<MessageBalances>()
+        .insert(key, &new_balance)
+        .map_err(Into::into)
 }
 
 fn increase_coin_balance<T>(
@@ -137,11 +140,13 @@ where
 {
     let key = CoinBalancesKey::new(&coin.owner, &coin.asset_id);
     let storage = block_st_transaction.storage::<CoinBalances>();
-    let current_amount = *storage.get(&key)?.unwrap_or_default();
+    let current_amount = storage.get(&key)?.unwrap_or_default().into_owned();
     let new_amount = current_amount.saturating_add(coin.amount as u128);
 
-    let storage = block_st_transaction.storage::<CoinBalances>();
-    Ok(storage.insert(&key, &new_amount)?)
+    block_st_transaction
+        .storage::<CoinBalances>()
+        .insert(&key, &new_amount)
+        .map_err(Into::into)
 }
 
 fn decrease_coin_balance<T>(
@@ -153,22 +158,22 @@ where
 {
     let key = CoinBalancesKey::new(&coin.owner, &coin.asset_id);
     let storage = block_st_transaction.storage::<CoinBalances>();
-    let current_amount = *storage.get(&key)?.unwrap_or_default();
+    let current_amount = storage.get(&key)?.unwrap_or_default().into_owned();
 
-    current_amount
-        .checked_sub(coin.amount as u128)
-        .ok_or_else(|| IndexationError::CoinBalanceWouldUnderflow {
-            owner: coin.owner,
-            asset_id: coin.asset_id,
-            current_amount,
-            requested_deduction: coin.amount as u128,
-        })
-        .and_then(|new_amount| {
-            block_st_transaction
-                .storage::<CoinBalances>()
-                .insert(&key, &new_amount)
-                .map_err(Into::into)
-        })
+    let new_amount =
+        current_amount
+            .checked_sub(coin.amount as u128)
+            .ok_or_else(|| IndexationError::CoinBalanceWouldUnderflow {
+                owner: coin.owner,
+                asset_id: coin.asset_id,
+                current_amount,
+                requested_deduction: coin.amount as u128,
+            })?;
+
+    block_st_transaction
+        .storage::<CoinBalances>()
+        .insert(&key, &new_amount)
+        .map_err(Into::into)
 }
 
 pub(crate) fn process_balances_update<T>(

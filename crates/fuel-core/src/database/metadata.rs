@@ -1,3 +1,7 @@
+use super::database_description::{
+    indexation_availability,
+    IndexationKind,
+};
 use crate::database::{
     database_description::{
         DatabaseDescription,
@@ -16,8 +20,6 @@ use fuel_core_storage::{
     StorageAsRef,
     StorageInspect,
 };
-
-use super::database_description::IndexationKind;
 
 /// The table that stores all metadata about the database.
 pub struct MetadataTable<Description>(core::marker::PhantomData<Description>);
@@ -78,10 +80,12 @@ where
     }
 
     pub fn indexation_available(&self, kind: IndexationKind) -> StorageResult<bool> {
-        let Some(metadata) = self.storage::<MetadataTable<Description>>().get(&())?
-        else {
-            return Ok(false)
-        };
-        Ok(metadata.indexation_available(kind))
+        let metadata = self
+            .storage::<MetadataTable<Description>>()
+            .get(&())?
+            .map(|metadata| metadata.into_owned());
+
+        let indexation_availability = indexation_availability::<Description>(metadata);
+        Ok(indexation_availability.contains(&kind))
     }
 }
