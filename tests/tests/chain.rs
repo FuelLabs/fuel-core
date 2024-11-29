@@ -170,11 +170,11 @@ async fn network_operates_with_non_zero_base_asset_id() {
         .expect("transaction should insert");
 
     // Then
-    let expected_fee = 1;
+    let expected_fee = 1_u128;
     assert!(matches!(result, TransactionStatus::Success { .. }));
     let balance = client
         .balance(&owner, Some(&new_base_asset_id))
         .await
         .expect("Should fetch the balance");
-    assert_eq!(balance, amount - expected_fee);
+    assert_eq!(balance, amount as u128 - expected_fee);
 }
