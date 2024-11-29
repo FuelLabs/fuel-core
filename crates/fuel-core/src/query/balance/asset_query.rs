@@ -175,7 +175,7 @@ impl<'a> AssetsQuery<'a> {
             .try_flatten()
             .filter(|result| {
                 if let Ok(message) = result {
-                    !message.has_retryable_amount()
+                    message.is_non_retryable_message()
                 } else {
                     true
                 }
