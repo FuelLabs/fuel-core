@@ -2,6 +2,7 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::{
+            storage::GasPriceColumn,
             GasPriceSettings,
             GasPriceSettingsProvider,
         },
@@ -35,7 +36,10 @@ use crate::{
             GasPriceServiceV1,
         },
         uninitialized_task::{
-            fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
+            fuel_storage_unrecorded_blocks::{
+                storage::UnrecordedBlocksColumn,
+                FuelStorageUnrecordedBlocks,
+            },
             UninitializedTask,
         },
     },
@@ -50,7 +54,12 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
-    transactional::AtomicView,
+    structured_storage::test::InMemoryStorage,
+    transactional::{
+        AtomicView,
+        IntoTransaction,
+        StorageTransaction,
+    },
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -205,6 +214,10 @@ fn different_arb_config() -> V1AlgorithmConfig {
     }
 }
 
+fn database() -> StorageTransaction<InMemoryStorage<UnrecordedBlocksColumn>> {
+    InMemoryStorage::default().into_transaction()
+}
+
 #[tokio::test]
 async fn next_gas_price__affected_by_new_l2_block() {
     // given
@@ -223,7 +236,8 @@ async fn next_gas_price__affected_by_new_l2_block() {
 
     let config = zero_threshold_arbitrary_config();
     let height = 0;
-    let unrecorded_blocks = FuelStorageUnrecordedBlocks;
+    let inner = database();
+    let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage, unrecorded_blocks)
             .unwrap();
@@ -272,7 +286,8 @@ async fn run__new_l2_block_saves_old_metadata() {
 
     let config = zero_threshold_arbitrary_config();
     let height = 0;
-    let unrecorded_blocks = FuelStorageUnrecordedBlocks;
+    let inner = database();
+    let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage, unrecorded_blocks)
             .unwrap();
@@ -388,7 +403,8 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
-    let unrecorded_blocks = FuelStorageUnrecordedBlocks;
+    let inner = database();
+    let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
 
     // when
     let service = UninitializedTask::new(
@@ -469,7 +485,8 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
-    let unrecorded_blocks = FuelStorageUnrecordedBlocks;
+    let inner = database();
+    let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
 
     // when
     let res = UninitializedTask::new(

@@ -37,7 +37,10 @@ use crate::{
             initialize_algorithm,
             GasPriceServiceV1,
         },
-        uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
+        uninitialized_task::fuel_storage_unrecorded_blocks::{
+            storage::UnrecordedBlocksColumn,
+            FuelStorageUnrecordedBlocks,
+        },
     },
 };
 use anyhow::Error;
@@ -48,7 +51,9 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
+    kv_store::KeyValueMutate,
     not_found,
+    structured_storage::test::InMemoryStorage,
     transactional::AtomicView,
 };
 use fuel_core_types::{
@@ -69,6 +74,7 @@ pub struct UninitializedTask<
     Metadata,
     DA,
     SettingsProvider,
+    UnrecordedBlockStorage,
 > {
     pub config: V1AlgorithmConfig,
     pub genesis_block_height: BlockHeight,
@@ -77,14 +83,31 @@ pub struct UninitializedTask<
     pub on_chain_db: L2DataStoreView,
     pub block_stream: BoxStream<SharedImportResult>,
     pub(crate) shared_algo: SharedV1Algorithm,
-    pub(crate) algo_updater: AlgorithmUpdaterV1<FuelStorageUnrecordedBlocks>,
+    pub(crate) algo_updater:
+        AlgorithmUpdaterV1<FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>>,
     pub(crate) metadata_storage: Metadata,
     pub(crate) da_source: DA,
-    pub(crate) unrecorded_blocks_handle: FuelStorageUnrecordedBlocks,
+    pub(crate) unrecorded_blocks_handle:
+        FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>,
 }
 
-impl<L2DataStore, L2DataStoreView, GasPriceStore, Metadata, DA, SettingsProvider>
-    UninitializedTask<L2DataStoreView, GasPriceStore, Metadata, DA, SettingsProvider>
+impl<
+        L2DataStore,
+        L2DataStoreView,
+        GasPriceStore,
+        Metadata,
+        DA,
+        SettingsProvider,
+        UnrecordedBlockStorage,
+    >
+    UninitializedTask<
+        L2DataStoreView,
+        GasPriceStore,
+        Metadata,
+        DA,
+        SettingsProvider,
+        UnrecordedBlockStorage,
+    >
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
@@ -92,6 +115,8 @@ where
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
+    UnrecordedBlockStorage:
+        KeyValueMutate<Column = UnrecordedBlocksColumn> + Send + Sync + Clone,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -103,7 +128,7 @@ where
         metadata_storage: Metadata,
         da_source: DA,
         on_chain_db: L2DataStoreView,
-        unrecorded_blocks: FuelStorageUnrecordedBlocks,
+        unrecorded_blocks: FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>,
     ) -> anyhow::Result<Self> {
         let latest_block_height: u32 = on_chain_db
             .latest_view()?
@@ -141,7 +166,7 @@ where
             FuelL2BlockSource<SettingsProvider>,
             Metadata,
             DA,
-            FuelStorageUnrecordedBlocks,
+            FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>,
         >,
     > {
         let mut first_run = false;
@@ -208,9 +233,23 @@ where
 }
 
 #[async_trait::async_trait]
-impl<L2DataStore, L2DataStoreView, GasPriceStore, Metadata, DA, SettingsProvider>
-    RunnableService
-    for UninitializedTask<L2DataStoreView, GasPriceStore, Metadata, DA, SettingsProvider>
+impl<
+        L2DataStore,
+        L2DataStoreView,
+        GasPriceStore,
+        Metadata,
+        DA,
+        SettingsProvider,
+        UnrecordedBlockStorage,
+    > RunnableService
+    for UninitializedTask<
+        L2DataStoreView,
+        GasPriceStore,
+        Metadata,
+        DA,
+        SettingsProvider,
+        UnrecordedBlockStorage,
+    >
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
@@ -218,6 +257,8 @@ where
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
+    UnrecordedBlockStorage:
+        KeyValueMutate<Column = UnrecordedBlocksColumn> + Send + Sync + Clone,
 {
     const NAME: &'static str = "GasPriceServiceV1";
     type SharedData = SharedV1Algorithm;
@@ -225,7 +266,7 @@ where
         FuelL2BlockSource<SettingsProvider>,
         Metadata,
         DA,
-        FuelStorageUnrecordedBlocks,
+        FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>,
     >;
     type TaskParams = ();
 
@@ -247,6 +288,7 @@ fn sync_gas_price_db_with_on_chain_storage<
     L2DataStoreView,
     Metadata,
     SettingsProvider,
+    UnrecordedBlockStorage,
 >(
     settings: &SettingsProvider,
     config: &V1AlgorithmConfig,
@@ -254,13 +296,15 @@ fn sync_gas_price_db_with_on_chain_storage<
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
-    unrecorded_blocks: FuelStorageUnrecordedBlocks,
+    unrecorded_blocks: FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>,
 ) -> anyhow::Result<()>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     Metadata: MetadataStorage,
     SettingsProvider: GasPriceSettingsProvider,
+    UnrecordedBlockStorage:
+        KeyValueMutate<Column = UnrecordedBlocksColumn> + Send + Sync + Clone,
 {
     let metadata = metadata_storage
         .get_metadata(&metadata_height.into())?
@@ -289,12 +333,18 @@ where
     Ok(())
 }
 
-fn sync_v1_metadata<L2DataStore, L2DataStoreView, Metadata, SettingsProvider>(
+fn sync_v1_metadata<
+    L2DataStore,
+    L2DataStoreView,
+    Metadata,
+    SettingsProvider,
+    UnrecordedBlockStorage,
+>(
     settings: &SettingsProvider,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
-    updater: &mut AlgorithmUpdaterV1<FuelStorageUnrecordedBlocks>,
+    updater: &mut AlgorithmUpdaterV1<FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>>,
     metadata_storage: &mut Metadata,
 ) -> anyhow::Result<()>
 where
@@ -302,6 +352,8 @@ where
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     Metadata: MetadataStorage,
     SettingsProvider: GasPriceSettingsProvider,
+    UnrecordedBlockStorage:
+        KeyValueMutate<Column = UnrecordedBlocksColumn> + Send + Sync + Clone,
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
@@ -350,6 +402,7 @@ pub fn new_gas_price_service_v1<
     Metadata,
     DA,
     SettingsProvider,
+    UnrecordedBlockStorage,
 >(
     config: GasPriceServiceConfig,
     genesis_block_height: BlockHeight,
@@ -359,9 +412,17 @@ pub fn new_gas_price_service_v1<
     metadata: Metadata,
     da_source: DA,
     on_chain_db: L2DataStoreView,
+    unrecorded_block_storage: UnrecordedBlockStorage,
 ) -> anyhow::Result<
     ServiceRunner<
-        UninitializedTask<L2DataStoreView, GasPriceStore, Metadata, DA, SettingsProvider>,
+        UninitializedTask<
+            L2DataStoreView,
+            GasPriceStore,
+            Metadata,
+            DA,
+            SettingsProvider,
+            UnrecordedBlockStorage,
+        >,
     >,
 >
 where
@@ -371,9 +432,11 @@ where
     SettingsProvider: GasPriceSettingsProvider,
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
+    UnrecordedBlockStorage:
+        KeyValueMutate<Column = UnrecordedBlocksColumn> + Send + Sync + Clone,
 {
     let v1_config = config.v1().ok_or(anyhow::anyhow!("Expected V1 config"))?;
-    let unrecorded_blocks = FuelStorageUnrecordedBlocks;
+    let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(unrecorded_block_storage);
     let gas_price_init = UninitializedTask::new(
         v1_config,
         genesis_block_height,

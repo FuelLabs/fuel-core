@@ -330,6 +330,7 @@ where
 mod tests {
     use crate::{
         common::{
+            fuel_core_storage_adapter::storage::GasPriceColumn,
             l2_block_source::L2BlockSource,
             updater_metadata::UpdaterMetadata,
             utils::{
@@ -349,12 +350,22 @@ mod tests {
                 initialize_algorithm,
                 GasPriceServiceV1,
             },
-            uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
+            uninitialized_task::fuel_storage_unrecorded_blocks::{
+                storage::UnrecordedBlocksColumn,
+                FuelStorageUnrecordedBlocks,
+            },
         },
     };
     use fuel_core_services::{
         RunnableTask,
         StateWatcher,
+    };
+    use fuel_core_storage::{
+        structured_storage::test::InMemoryStorage,
+        transactional::{
+            IntoTransaction,
+            StorageTransaction,
+        },
     };
     use fuel_core_types::fuel_types::BlockHeight;
     use std::{
@@ -403,6 +414,10 @@ mod tests {
         }
     }
 
+    fn database() -> StorageTransaction<InMemoryStorage<UnrecordedBlocksColumn>> {
+        InMemoryStorage::default().into_transaction()
+    }
+
     #[tokio::test]
     async fn run__updates_gas_price_with_l2_block_source() {
         // given
@@ -437,7 +452,8 @@ mod tests {
             decrease_range_size: 4,
             block_activity_threshold: 20,
         };
-        let unrecorded_blocks = FuelStorageUnrecordedBlocks;
+        let inner = database();
+        let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
         let (algo_updater, shared_algo) = initialize_algorithm(
             &config,
             l2_block_height,
@@ -509,7 +525,8 @@ mod tests {
             decrease_range_size: 4,
             block_activity_threshold: 20,
         };
-        let unrecorded_blocks = FuelStorageUnrecordedBlocks;
+        let inner = database();
+        let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
         let (algo_updater, shared_algo) = initialize_algorithm(
             &config,
             block_height,

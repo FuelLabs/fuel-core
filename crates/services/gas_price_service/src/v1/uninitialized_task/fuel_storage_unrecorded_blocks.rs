@@ -1,9 +1,28 @@
+use fuel_core_storage::kv_store::{
+    KeyValueInspect,
+    KeyValueMutate,
+};
 use fuel_gas_price_algorithm::v1::UnrecordedBlocks;
+use storage::UnrecordedBlocksColumn;
+
+pub mod storage;
 
 #[derive(Debug, Clone)]
-pub struct FuelStorageUnrecordedBlocks;
+pub struct FuelStorageUnrecordedBlocks<Storage> {
+    inner: Storage,
+}
 
-impl UnrecordedBlocks for FuelStorageUnrecordedBlocks {
+impl<Storage> FuelStorageUnrecordedBlocks<Storage> {
+    pub fn new(inner: Storage) -> Self {
+        Self { inner }
+    }
+}
+
+impl<Storage> UnrecordedBlocks for FuelStorageUnrecordedBlocks<Storage>
+where
+    Storage: KeyValueMutate<Column = UnrecordedBlocksColumn>,
+    Storage: Send + Sync,
+{
     fn insert(
         &mut self,
         height: fuel_gas_price_algorithm::v1::Height,
