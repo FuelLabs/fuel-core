@@ -114,7 +114,7 @@ impl CoinsToSpendIndexKey {
         arr[offset..offset + AssetId::LEN].copy_from_slice(asset_id_bytes);
         offset += AssetId::LEN;
         arr[offset..offset + u8::BITS as usize / 8].copy_from_slice(
-            if message.has_retryable_amount() {
+            if message.is_retryable_message() {
                 &RETRYABLE_BYTE
             } else {
                 &NON_RETRYABLE_BYTE
