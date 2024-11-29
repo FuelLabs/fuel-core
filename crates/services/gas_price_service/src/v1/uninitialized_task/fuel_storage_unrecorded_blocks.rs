@@ -61,3 +61,49 @@ where
         Ok(bytes)
     }
 }
+
+#[allow(non_snake_case)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_core_storage::{
+        structured_storage::test::InMemoryStorage,
+        transactional::{
+            IntoTransaction,
+            StorageTransaction,
+        },
+    };
+
+    fn database() -> StorageTransaction<InMemoryStorage<UnrecordedBlocksColumn>> {
+        InMemoryStorage::default().into_transaction()
+    }
+
+    #[test]
+    fn insert__remove__round_trip() {
+        // given
+        let mut storage = FuelStorageUnrecordedBlocks::new(database());
+        let height = 8;
+        let bytes = 100;
+
+        // when
+        storage.insert(height, bytes).unwrap();
+
+        // then
+        let expected = Some(bytes.into());
+        let actual = storage.remove(&height.into()).unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn remove__if_not_inserted_returns_none() {
+        // given
+        let mut storage = FuelStorageUnrecordedBlocks::new(database());
+        let height = 8;
+
+        // when
+        let maybe_value = storage.remove(&height).unwrap();
+
+        // then
+        assert!(maybe_value.is_none());
+    }
+}
