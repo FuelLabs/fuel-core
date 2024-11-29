@@ -51,10 +51,16 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
-    kv_store::KeyValueMutate,
+    kv_store::{
+        KeyValueInspect,
+        KeyValueMutate,
+    },
     not_found,
     structured_storage::test::InMemoryStorage,
-    transactional::AtomicView,
+    transactional::{
+        AtomicView,
+        Modifiable,
+    },
 };
 use fuel_core_types::{
     fuel_tx::field::MintAmount,
@@ -115,8 +121,11 @@ where
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage:
-        KeyValueMutate<Column = UnrecordedBlocksColumn> + Send + Sync + Clone,
+    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
+        + Modifiable
+        + Send
+        + Sync
+        + Clone,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -257,8 +266,11 @@ where
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage:
-        KeyValueMutate<Column = UnrecordedBlocksColumn> + Send + Sync + Clone,
+    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
+        + Modifiable
+        + Send
+        + Sync
+        + Clone,
 {
     const NAME: &'static str = "GasPriceServiceV1";
     type SharedData = SharedV1Algorithm;
@@ -303,8 +315,11 @@ where
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     Metadata: MetadataStorage,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage:
-        KeyValueMutate<Column = UnrecordedBlocksColumn> + Send + Sync + Clone,
+    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
+        + Modifiable
+        + Send
+        + Sync
+        + Clone,
 {
     let metadata = metadata_storage
         .get_metadata(&metadata_height.into())?
@@ -352,8 +367,11 @@ where
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     Metadata: MetadataStorage,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage:
-        KeyValueMutate<Column = UnrecordedBlocksColumn> + Send + Sync + Clone,
+    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
+        + Modifiable
+        + Send
+        + Sync
+        + Clone,
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
@@ -432,8 +450,11 @@ where
     SettingsProvider: GasPriceSettingsProvider,
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
-    UnrecordedBlockStorage:
-        KeyValueMutate<Column = UnrecordedBlocksColumn> + Send + Sync + Clone,
+    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
+        + Modifiable
+        + Send
+        + Sync
+        + Clone,
 {
     let v1_config = config.v1().ok_or(anyhow::anyhow!("Expected V1 config"))?;
     let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(unrecorded_block_storage);

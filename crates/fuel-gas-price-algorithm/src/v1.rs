@@ -19,6 +19,10 @@ pub enum Error {
     FailedTooIncludeL2BlockData(String),
     #[error("L2 block expected but not found in unrecorded blocks: {height}")]
     L2BlockExpectedNotFound { height: u32 },
+    #[error("Could not insert unrecorded block: {0}")]
+    CouldNotInsertUnrecordedBlock(String),
+    #[error("Could not remove unrecorded block: {0}")]
+    CouldNotRemoveUnrecordedBlock(String),
 }
 
 // TODO: separate exec gas price and DA gas price into newtypes for clarity
@@ -62,17 +66,19 @@ impl AlgorithmV1 {
 pub type Height = u32;
 pub type Bytes = u64;
 pub trait UnrecordedBlocks {
-    fn insert(&mut self, height: Height, bytes: Bytes);
-    fn remove(&mut self, height: &Height) -> Option<Bytes>;
+    fn insert(&mut self, height: Height, bytes: Bytes) -> Result<(), Error>;
+    fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, Error>;
 }
 
 impl UnrecordedBlocks for BTreeMap<Height, Bytes> {
-    fn insert(&mut self, height: Height, bytes: Bytes) {
+    fn insert(&mut self, height: Height, bytes: Bytes) -> Result<(), Error> {
         self.insert(height, bytes);
+        Ok(())
     }
 
-    fn remove(&mut self, height: &Height) -> Option<Bytes> {
-        self.remove(height)
+    fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, Error> {
+        let value = self.remove(height);
+        Ok(value)
     }
 }
 
@@ -366,7 +372,7 @@ impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
             self.update_da_gas_price();
 
             // metadata
-            self.unrecorded_blocks.insert(height, block_bytes);
+            self.unrecorded_blocks.insert(height, block_bytes)?;
             self.unrecorded_blocks_bytes = self
                 .unrecorded_blocks_bytes
                 .saturating_add(block_bytes as u128);
@@ -558,14 +564,20 @@ impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
     fn update_unrecorded_block_bytes(&mut self, heights: &[u32]) {
         let mut total: u128 = 0;
         for expected_height in heights {
-            let maybe_bytes = self.unrecorded_blocks.remove(expected_height);
-            if let Some(bytes) = maybe_bytes {
-                total = total.saturating_add(bytes as u128);
-            } else {
-                tracing::warn!(
-                    "L2 block expected but not found in unrecorded blocks: {}",
-                    expected_height,
-                );
+            let res = self.unrecorded_blocks.remove(expected_height);
+            match res {
+                Ok(Some(bytes)) => {
+                    total = total.saturating_add(bytes as u128);
+                }
+                Ok(None) => {
+                    tracing::warn!(
+                        "L2 block expected but not found in unrecorded blocks: {}",
+                        expected_height,
+                    );
+                }
+                Err(err) => {
+                    tracing::error!("Could not remove unrecorded block: {}", err);
+                }
             }
         }
         self.unrecorded_blocks_bytes = self.unrecorded_blocks_bytes.saturating_sub(total);
