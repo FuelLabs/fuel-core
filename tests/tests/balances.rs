@@ -133,6 +133,101 @@ async fn balance() {
 }
 
 #[tokio::test]
+async fn balance_messages_only() {
+    let owner = Address::default();
+    let asset_id = AssetId::BASE;
+
+    const RETRYABLE: &[u8] = &[1];
+    const NON_RETRYABLE: &[u8] = &[];
+
+    // setup config
+    let state_config = StateConfig {
+        contracts: vec![],
+        coins: vec![],
+        messages: vec![
+            (owner, 60, NON_RETRYABLE),
+            (owner, 200, RETRYABLE),
+            (owner, 90, NON_RETRYABLE),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(nonce, (owner, amount, data))| MessageConfig {
+            sender: owner,
+            recipient: owner,
+            nonce: (nonce as u64).into(),
+            amount,
+            data: data.to_vec(),
+            da_height: DaBlockHeight::from(0usize),
+        })
+        .collect(),
+        ..Default::default()
+    };
+    let config = Config::local_node_with_state_config(state_config);
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // run test
+    const NON_RETRYABLE_AMOUNT: u128 = 60 + 90;
+    let balance = client.balance(&owner, Some(&asset_id)).await.unwrap();
+    assert_eq!(balance, NON_RETRYABLE_AMOUNT);
+}
+
+#[tokio::test]
+async fn balances_messages_only() {
+    let owner = Address::default();
+
+    const RETRYABLE: &[u8] = &[1];
+    const NON_RETRYABLE: &[u8] = &[];
+
+    // setup config
+    let state_config = StateConfig {
+        contracts: vec![],
+        coins: vec![],
+        messages: vec![
+            (owner, 60, NON_RETRYABLE),
+            (owner, 200, RETRYABLE),
+            (owner, 90, NON_RETRYABLE),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(nonce, (owner, amount, data))| MessageConfig {
+            sender: owner,
+            recipient: owner,
+            nonce: (nonce as u64).into(),
+            amount,
+            data: data.to_vec(),
+            da_height: DaBlockHeight::from(0usize),
+        })
+        .collect(),
+        ..Default::default()
+    };
+    let config = Config::local_node_with_state_config(state_config);
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // run test
+    const NON_RETRYABLE_AMOUNT: u128 = 60 + 90;
+    let balances = client
+        .balances(
+            &owner,
+            PaginationRequest {
+                cursor: None,
+                results: 10,
+                direction: PageDirection::Forward,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(balances.results.len(), 1);
+    let messages_balance = balances.results[0].amount;
+    assert_eq!(messages_balance, NON_RETRYABLE_AMOUNT);
+}
+
+#[tokio::test]
 async fn first_5_balances() {
     let owner = Address::from([10u8; 32]);
     let asset_ids = (0..=5u8)

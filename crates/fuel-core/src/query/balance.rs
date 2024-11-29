@@ -1,4 +1,12 @@
-use crate::fuel_core_graphql_api::database::ReadView;
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+};
+
+use crate::{
+    fuel_core_graphql_api::database::ReadView,
+    graphql_api::storage::balances::TotalBalanceAmount,
+};
 use asset_query::{
     AssetQuery,
     AssetSpendTarget,
@@ -17,14 +25,11 @@ use fuel_core_types::{
     services::graphql_api::AddressBalance,
 };
 use futures::{
+    stream,
     FutureExt,
     Stream,
     StreamExt,
     TryStreamExt,
-};
-use std::{
-    cmp::Ordering,
-    collections::HashMap,
 };
 
 pub mod asset_query;
@@ -36,22 +41,23 @@ impl ReadView {
         asset_id: AssetId,
         base_asset_id: AssetId,
     ) -> StorageResult<AddressBalance> {
-        let amount = AssetQuery::new(
-            &owner,
-            &AssetSpendTarget::new(asset_id, u64::MAX, u16::MAX),
-            &base_asset_id,
-            None,
-            self,
-        )
-        .coins()
-        .map(|res| res.map(|coins| coins.amount()))
-        .try_fold(0u64, |balance, amount| {
-            async move {
-                // Increase the balance
-                Ok(balance.saturating_add(amount))
-            }
-        })
-        .await?;
+        let amount = if self.balances_enabled {
+            self.off_chain.balance(&owner, &asset_id, &base_asset_id)?
+        } else {
+            AssetQuery::new(
+                &owner,
+                &AssetSpendTarget::new(asset_id, u64::MAX, u16::MAX),
+                &base_asset_id,
+                None,
+                self,
+            )
+            .coins()
+            .map(|res| res.map(|coins| coins.amount()))
+            .try_fold(0u128, |balance, amount| async move {
+                Ok(balance.saturating_add(amount as TotalBalanceAmount))
+            })
+            .await? as TotalBalanceAmount
+        };
 
         Ok(AddressBalance {
             owner,
@@ -66,6 +72,27 @@ impl ReadView {
         direction: IterDirection,
         base_asset_id: &'a AssetId,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
+        if self.balances_enabled {
+            futures::future::Either::Left(self.balances_with_cache(
+                owner,
+                base_asset_id,
+                direction,
+            ))
+        } else {
+            futures::future::Either::Right(self.balances_without_cache(
+                owner,
+                base_asset_id,
+                direction,
+            ))
+        }
+    }
+
+    fn balances_without_cache<'a>(
+        &'a self,
+        owner: &'a Address,
+        base_asset_id: &'a AssetId,
+        direction: IterDirection,
+    ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
         let query = AssetsQuery::new(owner, None, None, self, base_asset_id);
         let stream = query.coins();
 
@@ -73,10 +100,10 @@ impl ReadView {
             .try_fold(
                 HashMap::new(),
                 move |mut amounts_per_asset, coin| async move {
-                    let amount: &mut u64 = amounts_per_asset
+                    let amount: &mut TotalBalanceAmount = amounts_per_asset
                         .entry(*coin.asset_id(base_asset_id))
                         .or_default();
-                    *amount = amount.saturating_add(coin.amount());
+                    *amount = amount.saturating_add(coin.amount() as TotalBalanceAmount);
                     Ok(amounts_per_asset)
                 },
             )
@@ -107,6 +134,23 @@ impl ReadView {
             })
             .map_ok(|stream| stream.map(Ok))
             .try_flatten()
+            .yield_each(self.batch_size)
+    }
+
+    fn balances_with_cache<'a>(
+        &'a self,
+        owner: &'a Address,
+        base_asset_id: &AssetId,
+        direction: IterDirection,
+    ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
+        stream::iter(self.off_chain.balances(owner, base_asset_id, direction))
+            .map(move |result| {
+                result.map(|(asset_id, amount)| AddressBalance {
+                    owner: *owner,
+                    asset_id,
+                    amount,
+                })
+            })
             .yield_each(self.batch_size)
     }
 }

@@ -11,6 +11,7 @@ use std::{
 pub mod api_service;
 pub mod da_compression;
 pub mod database;
+pub(crate) mod indexation;
 pub(crate) mod metrics_extension;
 pub mod ports;
 pub mod storage;
@@ -79,6 +80,9 @@ impl Default for Costs {
 }
 
 pub const DEFAULT_QUERY_COSTS: Costs = Costs {
+    // TODO: The cost of the `balance` and `balances` query should depend on the
+    //  `OffChainDatabase::balances_enabled` value. If additional indexation is enabled,
+    //  the cost should be cheaper.
     balance_query: 40001,
     coins_to_spend: 40001,
     get_peers: 40001,
