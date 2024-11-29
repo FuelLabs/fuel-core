@@ -1252,7 +1252,7 @@ mod tests {
     fn iter_store__reverse_iterator__no_target_prefix() {
         // Given
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(Vec::new());
+        let value = Value::from([]);
         let key_1 = [1, 1];
         let key_2 = [2, 2];
         let key_3 = [9, 3];
@@ -1281,7 +1281,7 @@ mod tests {
     fn iter_store__reverse_iterator__target_prefix_at_the_middle() {
         // Given
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(Vec::new());
+        let value = Value::from([]);
         let key_1 = [1, 1];
         let key_2 = [2, 2];
         let key_3 = [2, 3];
@@ -1310,7 +1310,7 @@ mod tests {
     fn iter_store__reverse_iterator__target_prefix_at_the_end() {
         // Given
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(Vec::new());
+        let value = Value::from([]);
         let key_1 = [1, 1];
         let key_2 = [2, 2];
         let key_3 = [2, 3];
@@ -1337,7 +1337,7 @@ mod tests {
     fn iter_store__reverse_iterator__target_prefix_at_the_end__overflow() {
         // Given
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(Vec::new());
+        let value = Value::from([]);
         let key_1 = [1, 1];
         let key_2 = [255, 254];
         let key_3 = [255, 255];
