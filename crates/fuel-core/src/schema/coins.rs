@@ -253,7 +253,7 @@ impl CoinQuery {
                             .utxos
                             .into_iter()
                             .map(|utxo_id| {
-                                indexation::coins_to_spend::ForeignKey::from_utxo_id(
+                                indexation::coins_to_spend::CoinIdBytes::from_utxo_id(
                                     &utxo_id.0,
                                 )
                             })
@@ -262,7 +262,7 @@ impl CoinQuery {
                             .messages
                             .into_iter()
                             .map(|nonce| {
-                                indexation::coins_to_spend::ForeignKey::from_nonce(
+                                indexation::coins_to_spend::CoinIdBytes::from_nonce(
                                     &nonce.0,
                                 )
                             })

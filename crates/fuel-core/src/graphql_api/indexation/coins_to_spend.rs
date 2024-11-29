@@ -21,6 +21,8 @@ use crate::graphql_api::{
     storage::coins::{
         CoinsToSpendIndex,
         CoinsToSpendIndexKey,
+        COIN_FOREIGN_KEY_LEN,
+        MESSAGE_FOREIGN_KEY_LEN,
     },
 };
 
@@ -32,43 +34,42 @@ pub(crate) const RETRYABLE_BYTE: [u8; 1] = [0x00];
 // Indicates that a message is non-retryable (also, all coins use this byte).
 pub(crate) const NON_RETRYABLE_BYTE: [u8; 1] = [0x01];
 
-// For key disambiguation purposes, the coins use UtxoId as a key suffix (34 bytes).
-// Messages do not have UtxoId, hence we use Nonce for differentiation.
-// Nonce is 32 bytes, so we need to pad it with 2 bytes to make it 34 bytes.
-// We need equal length keys to maintain the correct, lexicographical order of the keys.
-pub(crate) const MESSAGE_PADDING_BYTES: [u8; 2] = [0xFF, 0xFF];
-
+// The part of the `CoinsToSpendIndexKey` which is used to identify the coin or message in the
+// OnChain database. We could consider using `CoinId`, but we do not need to re-create
+// neither the `UtxoId` nor `Nonce` from the raw bytes.
 #[derive(PartialEq)]
-pub(crate) struct ForeignKey(pub [u8; 34]); // UtxoId::LEN?
+pub(crate) enum CoinIdBytes {
+    Coin([u8; COIN_FOREIGN_KEY_LEN]),
+    Message([u8; MESSAGE_FOREIGN_KEY_LEN]),
+}
 
-impl ForeignKey {
+impl CoinIdBytes {
     pub(crate) fn from_utxo_id(utxo_id: &UtxoId) -> Self {
-        Self(utxo_id_to_bytes(&utxo_id))
+        Self::Coin(utxo_id_to_bytes(&utxo_id))
     }
 
     pub(crate) fn from_nonce(nonce: &Nonce) -> Self {
-        let mut arr = [0; 34]; // UtxoId::LEN? TODO[RC]: Also check other places
+        let mut arr = [0; MESSAGE_FOREIGN_KEY_LEN];
         arr[0..32].copy_from_slice(nonce.as_ref());
-        arr[32..].copy_from_slice(&MESSAGE_PADDING_BYTES);
-        Self(arr)
+        Self::Message(arr)
     }
 }
 
 pub(crate) struct ExcludedIds {
-    coins: Vec<ForeignKey>,
-    messages: Vec<ForeignKey>,
+    coins: Vec<CoinIdBytes>,
+    messages: Vec<CoinIdBytes>,
 }
 
 impl ExcludedIds {
-    pub(crate) fn new(coins: Vec<ForeignKey>, messages: Vec<ForeignKey>) -> Self {
+    pub(crate) fn new(coins: Vec<CoinIdBytes>, messages: Vec<CoinIdBytes>) -> Self {
         Self { coins, messages }
     }
 
-    pub(crate) fn coins(&self) -> &[ForeignKey] {
+    pub(crate) fn coins(&self) -> &[CoinIdBytes] {
         &self.coins
     }
 
-    pub(crate) fn messages(&self) -> &[ForeignKey] {
+    pub(crate) fn messages(&self) -> &[CoinIdBytes] {
         &self.messages
     }
 }

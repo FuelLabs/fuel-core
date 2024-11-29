@@ -436,10 +436,19 @@ fn is_excluded(
 ) -> bool {
     let (key, value) = item.as_ref().unwrap();
     let coin_type = IndexedCoinType::try_from(*value).unwrap();
-    let foreign_key = indexation::coins_to_spend::ForeignKey(*key.foreign_key_bytes());
     match coin_type {
-        IndexedCoinType::Coin => !excluded_ids.coins().contains(&foreign_key),
-        IndexedCoinType::Message => !excluded_ids.messages().contains(&foreign_key),
+        IndexedCoinType::Coin => {
+            let foreign_key = indexation::coins_to_spend::CoinIdBytes::Coin(
+                key.foreign_key_bytes().try_into().unwrap(),
+            );
+            !excluded_ids.coins().contains(&foreign_key)
+        }
+        IndexedCoinType::Message => {
+            let foreign_key = indexation::coins_to_spend::CoinIdBytes::Message(
+                key.foreign_key_bytes().try_into().unwrap(),
+            );
+            !excluded_ids.messages().contains(&foreign_key)
+        }
     }
 }
 

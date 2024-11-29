@@ -65,14 +65,26 @@ impl TableWithBlueprint for CoinsToSpendIndex {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CoinsToSpendIndexKey([u8; CoinsToSpendIndexKey::LEN]);
+// Base part of the coins to spend index key.
+pub(crate) const COIN_TO_SPEND_BASE_KEY_LEN: usize =
+    Address::LEN + AssetId::LEN + u8::BITS as usize / 8 + u64::BITS as usize / 8;
 
-impl Default for CoinsToSpendIndexKey {
-    fn default() -> Self {
-        Self([0u8; CoinsToSpendIndexKey::LEN])
-    }
-}
+// For coins, the foreign key is the UtxoId (34 bytes).
+pub(crate) const COIN_FOREIGN_KEY_LEN: usize = TxId::LEN + 2;
+
+// For messages, the foreign key is the nonce (32 bytes).
+pub(crate) const MESSAGE_FOREIGN_KEY_LEN: usize = Nonce::LEN;
+
+// Total length of the coins to spend index key for coins.
+pub(crate) const COIN_TO_SPEND_COIN_KEY_LEN: usize =
+    COIN_TO_SPEND_BASE_KEY_LEN + COIN_FOREIGN_KEY_LEN;
+
+// Total length of the coins to spend index key for messages.
+pub(crate) const COIN_TO_SPEND_MESSAGE_KEY_LEN: usize =
+    COIN_TO_SPEND_BASE_KEY_LEN + MESSAGE_FOREIGN_KEY_LEN;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CoinsToSpendIndexKey(Vec<u8>);
 
 impl core::fmt::Display for CoinsToSpendIndexKey {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -88,13 +100,6 @@ impl core::fmt::Display for CoinsToSpendIndexKey {
 }
 
 impl CoinsToSpendIndexKey {
-    const LEN: usize = Address::LEN
-        + AssetId::LEN
-        + u8::BITS as usize / 8
-        + u64::BITS as usize / 8
-        + TxId::LEN
-        + 2;
-
     #[allow(clippy::arithmetic_side_effects)]
     pub fn from_coin(coin: &Coin) -> Self {
         let address_bytes = coin.owner.as_ref();
@@ -102,7 +107,7 @@ impl CoinsToSpendIndexKey {
         let amount_bytes = coin.amount.to_be_bytes();
         let utxo_id_bytes = utxo_id_to_bytes(&coin.utxo_id);
 
-        let mut arr = [0; CoinsToSpendIndexKey::LEN];
+        let mut arr = [0; COIN_TO_SPEND_COIN_KEY_LEN];
         let mut offset = 0;
         arr[offset..offset + Address::LEN].copy_from_slice(address_bytes);
         offset += Address::LEN;
@@ -114,7 +119,7 @@ impl CoinsToSpendIndexKey {
         arr[offset..offset + u64::BITS as usize / 8].copy_from_slice(&amount_bytes);
         offset += u64::BITS as usize / 8;
         arr[offset..].copy_from_slice(&utxo_id_bytes);
-        Self(arr)
+        Self(arr.to_vec())
     }
 
     #[allow(clippy::arithmetic_side_effects)]
@@ -124,7 +129,7 @@ impl CoinsToSpendIndexKey {
         let amount_bytes = message.amount().to_be_bytes();
         let nonce_bytes = message.nonce().as_slice();
 
-        let mut arr = [0; CoinsToSpendIndexKey::LEN];
+        let mut arr = [0; COIN_TO_SPEND_MESSAGE_KEY_LEN];
         let mut offset = 0;
         arr[offset..offset + Address::LEN].copy_from_slice(address_bytes);
         offset += Address::LEN;
@@ -141,9 +146,7 @@ impl CoinsToSpendIndexKey {
         arr[offset..offset + u64::BITS as usize / 8].copy_from_slice(&amount_bytes);
         offset += u64::BITS as usize / 8;
         arr[offset..offset + Nonce::LEN].copy_from_slice(nonce_bytes);
-        offset += Nonce::LEN;
-        arr[offset..].copy_from_slice(&indexation::coins_to_spend::MESSAGE_PADDING_BYTES);
-        Self(arr)
+        Self(arr.to_vec())
     }
 
     pub fn from_slice(slice: &[u8]) -> Result<Self, core::array::TryFromSliceError> {
@@ -188,13 +191,7 @@ impl CoinsToSpendIndexKey {
     }
 
     #[allow(clippy::arithmetic_side_effects)]
-    pub fn foreign_key_bytes(
-        &self,
-    ) -> &[u8; CoinsToSpendIndexKey::LEN
-            - Address::LEN
-            - AssetId::LEN
-            - u8::BITS as usize / 8
-            - u64::BITS as usize / 8] {
+    pub fn foreign_key_bytes(&self) -> Vec<u8> {
         let offset =
             Address::LEN + AssetId::LEN + u8::BITS as usize / 8 + u64::BITS as usize / 8;
         self.0[offset..]
@@ -250,8 +247,15 @@ mod test {
         for rand::distributions::Standard
     {
         fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> CoinsToSpendIndexKey {
-            let mut bytes = [0u8; CoinsToSpendIndexKey::LEN];
-            rng.fill_bytes(bytes.as_mut());
+            let bytes: Vec<_> = if rng.gen() {
+                (0..COIN_TO_SPEND_COIN_KEY_LEN)
+                    .map(|_| rng.gen::<u8>())
+                    .collect()
+            } else {
+                (0..COIN_TO_SPEND_MESSAGE_KEY_LEN)
+                    .map(|_| rng.gen::<u8>())
+                    .collect()
+            };
             CoinsToSpendIndexKey(bytes)
         }
     }
@@ -328,7 +332,7 @@ mod test {
 
         let key = CoinsToSpendIndexKey::from_coin(&coin);
 
-        let key_bytes: [u8; CoinsToSpendIndexKey::LEN] =
+        let key_bytes: [u8; COIN_TO_SPEND_COIN_KEY_LEN] =
             key.as_ref().try_into().expect("should have correct length");
 
         assert_eq!(
@@ -352,7 +356,7 @@ mod test {
         assert_eq!(key.amount(), u64::from_be_bytes(amount));
         assert_eq!(
             key.foreign_key_bytes(),
-            &merge_foreign_key_bytes(tx_id, output_index)
+            &merge_foreign_key_bytes::<_, _, COIN_FOREIGN_KEY_LEN>(tx_id, output_index)
         );
     }
 
@@ -381,8 +385,6 @@ mod test {
             0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
         ]);
 
-        let trailing_bytes = indexation::coins_to_spend::MESSAGE_PADDING_BYTES;
-
         let message = Message::V1(MessageV1 {
             recipient: owner,
             amount: u64::from_be_bytes(amount),
@@ -394,7 +396,7 @@ mod test {
 
         let key = CoinsToSpendIndexKey::from_message(&message, &base_asset_id);
 
-        let key_bytes: [u8; CoinsToSpendIndexKey::LEN] =
+        let key_bytes: [u8; COIN_TO_SPEND_MESSAGE_KEY_LEN] =
             key.as_ref().try_into().expect("should have correct length");
 
         assert_eq!(
@@ -408,7 +410,7 @@ mod test {
                 0x3C, 0x3D, 0x3E, 0x3F, 0x01, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46,
                 0x47, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A,
                 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
-                0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0xFF, 0xFF,
+                0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
             ]
         );
 
@@ -416,10 +418,7 @@ mod test {
         assert_eq!(key.asset_id(), base_asset_id);
         assert_eq!(key.retryable_flag(), retryable_flag[0]);
         assert_eq!(key.amount(), u64::from_be_bytes(amount));
-        assert_eq!(
-            key.foreign_key_bytes(),
-            &merge_foreign_key_bytes(nonce, trailing_bytes)
-        );
+        assert_eq!(key.foreign_key_bytes(), nonce.as_ref());
     }
 
     #[test]
@@ -447,8 +446,6 @@ mod test {
             0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
         ]);
 
-        let trailing_bytes = indexation::coins_to_spend::MESSAGE_PADDING_BYTES;
-
         let message = Message::V1(MessageV1 {
             recipient: owner,
             amount: u64::from_be_bytes(amount),
@@ -460,7 +457,7 @@ mod test {
 
         let key = CoinsToSpendIndexKey::from_message(&message, &base_asset_id);
 
-        let key_bytes: [u8; CoinsToSpendIndexKey::LEN] =
+        let key_bytes: [u8; COIN_TO_SPEND_MESSAGE_KEY_LEN] =
             key.as_ref().try_into().expect("should have correct length");
 
         assert_eq!(
@@ -474,7 +471,7 @@ mod test {
                 0x3C, 0x3D, 0x3E, 0x3F, 0x00, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46,
                 0x47, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A,
                 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66,
-                0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 0xFF, 0xFF,
+                0x67, 0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F
             ]
         );
 
@@ -482,9 +479,6 @@ mod test {
         assert_eq!(key.asset_id(), base_asset_id);
         assert_eq!(key.retryable_flag(), retryable_flag[0]);
         assert_eq!(key.amount(), u64::from_be_bytes(amount));
-        assert_eq!(
-            key.foreign_key_bytes(),
-            &merge_foreign_key_bytes(nonce, trailing_bytes)
-        );
+        assert_eq!(key.foreign_key_bytes(), nonce.as_ref());
     }
 }
