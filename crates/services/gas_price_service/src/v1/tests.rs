@@ -34,7 +34,10 @@ use crate::{
             initialize_algorithm,
             GasPriceServiceV1,
         },
-        uninitialized_task::UninitializedTask,
+        uninitialized_task::{
+            fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
+            UninitializedTask,
+        },
     },
 };
 use anyhow::anyhow;
@@ -62,7 +65,10 @@ use fuel_core_types::{
         SharedImportResult,
     },
 };
-use fuel_gas_price_algorithm::v1::AlgorithmUpdaterV1;
+use fuel_gas_price_algorithm::v1::{
+    AlgorithmUpdaterV1,
+    UnrecordedBlocks,
+};
 use std::{
     num::NonZeroU64,
     ops::Deref,
@@ -163,7 +169,6 @@ fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
         capped_range_size: 0,
         decrease_range_size: 0,
         block_activity_threshold: 0,
-        unrecorded_blocks: vec![],
     }
 }
 
@@ -178,7 +183,7 @@ fn arbitrary_metadata() -> V1Metadata {
         last_profit: 0,
         second_to_last_profit: 0,
         latest_da_cost_per_byte: 0,
-        unrecorded_blocks: vec![],
+        unrecorded_block_bytes: 0,
     }
 }
 
@@ -197,7 +202,6 @@ fn different_arb_config() -> V1AlgorithmConfig {
         capped_range_size: 0,
         decrease_range_size: 0,
         block_activity_threshold: 0,
-        unrecorded_blocks: vec![],
     }
 }
 
@@ -219,8 +223,10 @@ async fn next_gas_price__affected_by_new_l2_block() {
 
     let config = zero_threshold_arbitrary_config();
     let height = 0;
+    let unrecorded_blocks = FuelStorageUnrecordedBlocks;
     let (algo_updater, shared_algo) =
-        initialize_algorithm(&config, height, &metadata_storage).unwrap();
+        initialize_algorithm(&config, height, &metadata_storage, unrecorded_blocks)
+            .unwrap();
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
     let mut service = GasPriceServiceV1::new(
@@ -266,8 +272,10 @@ async fn run__new_l2_block_saves_old_metadata() {
 
     let config = zero_threshold_arbitrary_config();
     let height = 0;
+    let unrecorded_blocks = FuelStorageUnrecordedBlocks;
     let (algo_updater, shared_algo) =
-        initialize_algorithm(&config, height, &metadata_storage).unwrap();
+        initialize_algorithm(&config, height, &metadata_storage, unrecorded_blocks)
+            .unwrap();
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
     let mut service = GasPriceServiceV1::new(
@@ -380,6 +388,7 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
+    let unrecorded_blocks = FuelStorageUnrecordedBlocks;
 
     // when
     let service = UninitializedTask::new(
@@ -391,6 +400,7 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
         metadata_storage,
         da_cost_source,
         on_chain_db,
+        unrecorded_blocks,
     )
     .unwrap();
 
@@ -399,8 +409,8 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     algo_updater_matches_values_from_old_metadata(algo_updater, original_metadata);
 }
 
-fn algo_updater_matches_values_from_old_metadata(
-    algo_updater: AlgorithmUpdaterV1,
+fn algo_updater_matches_values_from_old_metadata<U: UnrecordedBlocks>(
+    mut algo_updater: AlgorithmUpdaterV1<U>,
     original_metadata: V1Metadata,
 ) {
     let V1Metadata {
@@ -413,7 +423,7 @@ fn algo_updater_matches_values_from_old_metadata(
         last_profit: original_last_profit,
         second_to_last_profit: original_second_to_last_profit,
         latest_da_cost_per_byte: original_latest_da_cost_per_byte,
-        unrecorded_blocks: original_unrecorded_blocks,
+        unrecorded_block_bytes: original_unrecorded_block_bytes,
     } = original_metadata;
     assert_eq!(
         algo_updater.new_scaled_exec_price,
@@ -443,11 +453,8 @@ fn algo_updater_matches_values_from_old_metadata(
         original_latest_da_cost_per_byte
     );
     assert_eq!(
-        algo_updater
-            .unrecorded_blocks
-            .into_iter()
-            .collect::<Vec<_>>(),
-        original_unrecorded_blocks.into_iter().collect::<Vec<_>>()
+        algo_updater.unrecorded_blocks_bytes,
+        original_unrecorded_block_bytes
     );
 }
 
@@ -462,6 +469,7 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
+    let unrecorded_blocks = FuelStorageUnrecordedBlocks;
 
     // when
     let res = UninitializedTask::new(
@@ -473,6 +481,7 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
         metadata_storage,
         da_cost_source,
         on_chain_db,
+        unrecorded_blocks,
     );
 
     // then

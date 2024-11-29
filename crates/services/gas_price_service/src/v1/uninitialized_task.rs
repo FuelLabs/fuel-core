@@ -37,6 +37,7 @@ use crate::{
             initialize_algorithm,
             GasPriceServiceV1,
         },
+        uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
     },
 };
 use anyhow::Error;
@@ -55,7 +56,12 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
-use fuel_gas_price_algorithm::v1::AlgorithmUpdaterV1;
+use fuel_gas_price_algorithm::v1::{
+    AlgorithmUpdaterV1,
+    UnrecordedBlocks,
+};
+
+pub mod fuel_storage_unrecorded_blocks;
 
 pub struct UninitializedTask<
     L2DataStoreView,
@@ -71,9 +77,10 @@ pub struct UninitializedTask<
     pub on_chain_db: L2DataStoreView,
     pub block_stream: BoxStream<SharedImportResult>,
     pub(crate) shared_algo: SharedV1Algorithm,
-    pub(crate) algo_updater: AlgorithmUpdaterV1,
+    pub(crate) algo_updater: AlgorithmUpdaterV1<FuelStorageUnrecordedBlocks>,
     pub(crate) metadata_storage: Metadata,
     pub(crate) da_source: DA,
+    pub(crate) unrecorded_blocks_handle: FuelStorageUnrecordedBlocks,
 }
 
 impl<L2DataStore, L2DataStoreView, GasPriceStore, Metadata, DA, SettingsProvider>
@@ -96,6 +103,7 @@ where
         metadata_storage: Metadata,
         da_source: DA,
         on_chain_db: L2DataStoreView,
+        unrecorded_blocks: FuelStorageUnrecordedBlocks,
     ) -> anyhow::Result<Self> {
         let latest_block_height: u32 = on_chain_db
             .latest_view()?
@@ -103,8 +111,12 @@ where
             .unwrap_or(genesis_block_height)
             .into();
 
-        let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, latest_block_height, &metadata_storage)?;
+        let (algo_updater, shared_algo) = initialize_algorithm(
+            &config,
+            latest_block_height,
+            &metadata_storage,
+            unrecorded_blocks.clone(),
+        )?;
 
         let task = Self {
             config,
@@ -117,6 +129,7 @@ where
             shared_algo,
             metadata_storage,
             da_source,
+            unrecorded_blocks_handle: unrecorded_blocks,
         };
         Ok(task)
     }
@@ -124,7 +137,12 @@ where
     pub fn init(
         mut self,
     ) -> anyhow::Result<
-        GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, Metadata, DA>,
+        GasPriceServiceV1<
+            FuelL2BlockSource<SettingsProvider>,
+            Metadata,
+            DA,
+            FuelStorageUnrecordedBlocks,
+        >,
     > {
         let mut first_run = false;
         let latest_block_height: u32 = self
@@ -173,6 +191,7 @@ where
                     &self.on_chain_db,
                     metadata_height,
                     latest_block_height,
+                    self.unrecorded_blocks_handle,
                 )?;
             }
 
@@ -202,7 +221,12 @@ where
 {
     const NAME: &'static str = "GasPriceServiceV1";
     type SharedData = SharedV1Algorithm;
-    type Task = GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, Metadata, DA>;
+    type Task = GasPriceServiceV1<
+        FuelL2BlockSource<SettingsProvider>,
+        Metadata,
+        DA,
+        FuelStorageUnrecordedBlocks,
+    >;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -230,6 +254,7 @@ fn sync_gas_price_db_with_on_chain_storage<
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
+    unrecorded_blocks: FuelStorageUnrecordedBlocks,
 ) -> anyhow::Result<()>
 where
     L2DataStore: L2Data,
@@ -249,7 +274,8 @@ where
             V1Metadata::construct_from_v0_metadata(metadata, config)?
         }
     };
-    let mut algo_updater = v1_algorithm_from_metadata(metadata, config);
+    let mut algo_updater =
+        v1_algorithm_from_metadata(metadata, config, unrecorded_blocks);
 
     sync_v1_metadata(
         settings,
@@ -268,7 +294,7 @@ fn sync_v1_metadata<L2DataStore, L2DataStoreView, Metadata, SettingsProvider>(
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
-    updater: &mut AlgorithmUpdaterV1,
+    updater: &mut AlgorithmUpdaterV1<FuelStorageUnrecordedBlocks>,
     metadata_storage: &mut Metadata,
 ) -> anyhow::Result<()>
 where
@@ -347,6 +373,7 @@ where
     DA: DaBlockCostsSource,
 {
     let v1_config = config.v1().ok_or(anyhow::anyhow!("Expected V1 config"))?;
+    let unrecorded_blocks = FuelStorageUnrecordedBlocks;
     let gas_price_init = UninitializedTask::new(
         v1_config,
         genesis_block_height,
@@ -356,6 +383,7 @@ where
         metadata,
         da_source,
         on_chain_db,
+        unrecorded_blocks,
     )?;
     Ok(ServiceRunner::new(gas_price_init))
 }

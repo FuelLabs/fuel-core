@@ -59,6 +59,23 @@ impl AlgorithmV1 {
     }
 }
 
+pub type Height = u32;
+pub type Bytes = u64;
+pub trait UnrecordedBlocks {
+    fn insert(&mut self, height: Height, bytes: Bytes);
+    fn remove(&mut self, height: &Height) -> Option<Bytes>;
+}
+
+impl UnrecordedBlocks for BTreeMap<Height, Bytes> {
+    fn insert(&mut self, height: Height, bytes: Bytes) {
+        self.insert(height, bytes);
+    }
+
+    fn remove(&mut self, height: &Height) -> Option<Bytes> {
+        self.remove(height)
+    }
+}
+
 /// The state of the algorithm used to update the gas price algorithm for each block
 ///
 /// Because there will always be a delay between blocks submitted to the L2 chain and the blocks
@@ -96,10 +113,8 @@ impl AlgorithmV1 {
 /// The DA portion also uses a moving average of the profits over the last `avg_window` blocks
 /// instead of the actual profit. Setting the `avg_window` to 1 will effectively disable the
 /// moving average.
-type Height = u32;
-type Bytes = u64;
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
-pub struct AlgorithmUpdaterV1 {
+pub struct AlgorithmUpdaterV1<U> {
     // Execution
     /// The gas price (scaled by the `gas_price_factor`) to cover the execution of the next block
     pub new_scaled_exec_price: u64,
@@ -144,7 +159,7 @@ pub struct AlgorithmUpdaterV1 {
     /// Activity of L2
     pub l2_activity: L2ActivityTracker,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
-    pub unrecorded_blocks: BTreeMap<Height, Bytes>,
+    pub unrecorded_blocks: U,
     /// Total unrecorded block bytes
     pub unrecorded_blocks_bytes: u128,
 }
@@ -299,7 +314,7 @@ impl core::ops::Deref for ClampedPercentage {
     }
 }
 
-impl AlgorithmUpdaterV1 {
+impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
     pub fn update_da_record_data(
         &mut self,
         heights: &[u32],

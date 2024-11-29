@@ -3,7 +3,10 @@ use crate::{
         gas_price_algorithm::SharedGasPriceAlgo,
         l2_block_source::L2BlockSource,
         updater_metadata::UpdaterMetadata,
-        utils::BlockInfo,
+        utils::{
+            BlockInfo,
+            Result as GasPriceResult,
+        },
     },
     ports::MetadataStorage,
     v0::metadata::V0Metadata,
@@ -18,10 +21,12 @@ use crate::{
             DaBlockCosts,
         },
         metadata::{
+            updater_from_config,
             v1_algorithm_from_metadata,
             V1AlgorithmConfig,
             V1Metadata,
         },
+        uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
     },
 };
 use anyhow::anyhow;
@@ -37,6 +42,7 @@ use fuel_gas_price_algorithm::{
     v1::{
         AlgorithmUpdaterV1,
         AlgorithmV1,
+        UnrecordedBlocks,
     },
 };
 use futures::FutureExt;
@@ -46,12 +52,11 @@ use tokio::sync::broadcast::{
     Receiver,
 };
 
-use crate::common::utils::Result as GasPriceResult;
-
 /// The service that updates the gas price algorithm.
-pub struct GasPriceServiceV1<L2, Metadata, DA>
+pub struct GasPriceServiceV1<L2, Metadata, DA, U>
 where
     DA: DaBlockCostsSource,
+    U: Clone,
 {
     /// The algorithm that can be used in the next block
     shared_algo: SharedV1Algorithm,
@@ -60,18 +65,19 @@ where
     /// The metadata storage
     metadata_storage: Metadata,
     /// The algorithm updater
-    algorithm_updater: AlgorithmUpdaterV1,
+    algorithm_updater: AlgorithmUpdaterV1<U>,
     /// the da source adapter handle
     da_source_adapter_handle: DaSourceService<DA>,
     /// The da source channel
     da_source_channel: Receiver<DaBlockCosts>,
 }
 
-impl<L2, Metadata, DA> GasPriceServiceV1<L2, Metadata, DA>
+impl<L2, Metadata, DA, U> GasPriceServiceV1<L2, Metadata, DA, U>
 where
     L2: L2BlockSource,
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
+    U: UnrecordedBlocks + Clone,
 {
     async fn process_l2_block_res(
         &mut self,
@@ -99,16 +105,17 @@ where
     }
 }
 
-impl<L2, Metadata, DA> GasPriceServiceV1<L2, Metadata, DA>
+impl<L2, Metadata, DA, U> GasPriceServiceV1<L2, Metadata, DA, U>
 where
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
+    U: UnrecordedBlocks + Clone,
 {
     pub fn new(
         l2_block_source: L2,
         metadata_storage: Metadata,
         shared_algo: SharedV1Algorithm,
-        algorithm_updater: AlgorithmUpdaterV1,
+        algorithm_updater: AlgorithmUpdaterV1<U>,
         da_source_adapter_handle: DaSourceService<DA>,
     ) -> Self {
         let da_source_channel =
@@ -123,7 +130,7 @@ where
         }
     }
 
-    pub fn algorithm_updater(&self) -> &AlgorithmUpdaterV1 {
+    pub fn algorithm_updater(&self) -> &AlgorithmUpdaterV1<U> {
         &self.algorithm_updater
     }
 
@@ -227,11 +234,12 @@ where
 }
 
 #[async_trait]
-impl<L2, Metadata, DA> RunnableTask for GasPriceServiceV1<L2, Metadata, DA>
+impl<L2, Metadata, DA, U> RunnableTask for GasPriceServiceV1<L2, Metadata, DA, U>
 where
     L2: L2BlockSource,
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
+    U: UnrecordedBlocks + Clone + Send + Sync,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -289,26 +297,26 @@ fn convert_to_v1_metadata(
     }
 }
 
-pub fn initialize_algorithm<Metadata>(
+pub fn initialize_algorithm<Metadata, U>(
     config: &V1AlgorithmConfig,
     latest_block_height: u32,
     metadata_storage: &Metadata,
-) -> crate::common::utils::Result<(AlgorithmUpdaterV1, SharedV1Algorithm)>
+    unrecorded_blocks: U,
+) -> crate::common::utils::Result<(AlgorithmUpdaterV1<U>, SharedV1Algorithm)>
 where
     Metadata: MetadataStorage,
+    U: UnrecordedBlocks + Clone,
 {
-    let algorithm_updater;
-    if let Some(updater_metadata) = metadata_storage
+    let algorithm_updater = if let Some(updater_metadata) = metadata_storage
         .get_metadata(&latest_block_height.into())
         .map_err(|err| {
             crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(err))
-        })?
-    {
+        })? {
         let v1_metadata = convert_to_v1_metadata(updater_metadata, config)?;
-        algorithm_updater = v1_algorithm_from_metadata(v1_metadata, config);
+        v1_algorithm_from_metadata(v1_metadata, config, unrecorded_blocks)
     } else {
-        algorithm_updater = AlgorithmUpdaterV1::from(config);
-    }
+        updater_from_config(config, unrecorded_blocks)
+    };
 
     let shared_algo =
         SharedGasPriceAlgo::new_with_algorithm(algorithm_updater.algorithm());
@@ -341,6 +349,7 @@ mod tests {
                 initialize_algorithm,
                 GasPriceServiceV1,
             },
+            uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
         },
     };
     use fuel_core_services::{
@@ -427,10 +436,15 @@ mod tests {
             capped_range_size: 100,
             decrease_range_size: 4,
             block_activity_threshold: 20,
-            unrecorded_blocks: vec![],
         };
-        let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();
+        let unrecorded_blocks = FuelStorageUnrecordedBlocks;
+        let (algo_updater, shared_algo) = initialize_algorithm(
+            &config,
+            l2_block_height,
+            &metadata_storage,
+            unrecorded_blocks,
+        )
+        .unwrap();
 
         let notifier = Arc::new(tokio::sync::Notify::new());
         let dummy_da_source = DaSourceService::new(
@@ -494,10 +508,15 @@ mod tests {
             capped_range_size: 100,
             decrease_range_size: 4,
             block_activity_threshold: 20,
-            unrecorded_blocks: vec![(1, 100)],
         };
-        let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, block_height, &metadata_storage).unwrap();
+        let unrecorded_blocks = FuelStorageUnrecordedBlocks;
+        let (algo_updater, shared_algo) = initialize_algorithm(
+            &config,
+            block_height,
+            &metadata_storage,
+            unrecorded_blocks,
+        )
+        .unwrap();
 
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_source = DaSourceService::new(

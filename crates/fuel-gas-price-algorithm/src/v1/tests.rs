@@ -4,8 +4,11 @@
 
 use crate::v1::{
     AlgorithmUpdaterV1,
+    Bytes,
+    Height,
     L2ActivityTracker,
 };
+use std::collections::BTreeMap;
 
 #[cfg(test)]
 mod algorithm_v1_tests;
@@ -162,7 +165,7 @@ impl UpdaterBuilder {
         self
     }
 
-    fn build(self) -> AlgorithmUpdaterV1 {
+    fn build(self) -> AlgorithmUpdaterV1<BTreeMap<Height, Bytes>> {
         AlgorithmUpdaterV1 {
             min_exec_gas_price: self.min_exec_gas_price,
             new_scaled_exec_price: self.starting_exec_gas_price,
