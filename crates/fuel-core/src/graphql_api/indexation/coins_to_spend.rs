@@ -75,7 +75,7 @@ impl ExcludedIds {
 }
 
 #[repr(u8)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub(crate) enum IndexedCoinType {
     Coin,
     Message,

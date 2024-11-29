@@ -66,14 +66,6 @@ impl SpendQuery {
         exclude_vec: Option<Vec<CoinId>>,
         base_asset_id: AssetId,
     ) -> Result<Self, CoinsQueryError> {
-        let mut duplicate_checker = HashSet::with_capacity(query_per_asset.len());
-
-        for query in query_per_asset {
-            if !duplicate_checker.insert(query.id) {
-                return Err(CoinsQueryError::DuplicateAssets(query.id));
-            }
-        }
-
         let exclude = exclude_vec.map_or_else(Default::default, Exclude::new);
 
         Ok(Self {

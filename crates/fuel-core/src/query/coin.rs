@@ -80,21 +80,4 @@ impl ReadView {
             })
             .try_flatten()
     }
-
-    pub fn coins_to_spend(
-        &self,
-        owner: &Address,
-        asset_id: &AssetId,
-        target_amount: u64,
-        max_coins: u32,
-        excluded_ids: &indexation::coins_to_spend::ExcludedIds,
-    ) -> Result<Vec<(Vec<u8>, IndexedCoinType)>, CoinsQueryError> {
-        Ok(self.off_chain.coins_to_spend(
-            owner,
-            asset_id,
-            target_amount,
-            max_coins,
-            excluded_ids,
-        )?)
-    }
 }
