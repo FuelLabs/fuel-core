@@ -145,7 +145,7 @@ where
                         );
                     }
                     (Some(old_value), WriteOperation::Insert(new_value)) => {
-                        if old_value.as_slice() != new_value.as_slice() {
+                        if *old_value != **new_value {
                             entry.insert(
                                 key.clone(),
                                 WriteOperation::Insert(old_value.into()),
