@@ -706,7 +706,7 @@ impl ExtractItem for KeyAndValue {
     {
         raw_iterator
             .item()
-            .map(|(key, value)| (key.to_vec(), Arc::new(value.to_vec())))
+            .map(|(key, value)| (key.to_vec(), Value::from(value)))
     }
 
     fn size(item: &Self::Item) -> u64 {
@@ -754,7 +754,7 @@ where
             self.metrics.bytes_read.inc_by(value.len() as u64);
         }
 
-        Ok(value.map(Arc::new))
+        Ok(value.map(Arc::from))
     }
 
     fn read(
@@ -949,7 +949,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Value::from([1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected)
@@ -960,10 +960,10 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Value::from([1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         let prev = db
-            .replace(&key, Column::Metadata, Arc::new(vec![2, 4, 6]))
+            .replace(&key, Column::Metadata, Arc::new([2, 4, 6]))
             .unwrap();
 
         assert_eq!(prev, Some(expected));
@@ -974,7 +974,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Value::from([1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
@@ -987,7 +987,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Arc::new([1, 2, 3]);
         db.put(&key, Column::Metadata, expected).unwrap();
         assert!(db.exists(&key, Column::Metadata).unwrap());
     }
@@ -995,7 +995,7 @@ mod tests {
     #[test]
     fn commit_changes_inserts() {
         let key = vec![0xA, 0xB, 0xC];
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = Value::from([1, 2, 3]);
 
         let (db, _tmp) = create_db();
         let ops = vec![(
@@ -1013,7 +1013,7 @@ mod tests {
     #[test]
     fn commit_changes_removes() {
         let key = vec![0xA, 0xB, 0xC];
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = Arc::new([1, 2, 3]);
 
         let (mut db, _tmp) = create_db();
         db.put(&key, Column::Metadata, value).unwrap();
@@ -1032,7 +1032,7 @@ mod tests {
         let key = vec![0x00];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![]);
+        let expected = Value::from([]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -1056,7 +1056,7 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Value::from([1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -1080,7 +1080,7 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![]);
+        let expected = Value::from([]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -1159,7 +1159,7 @@ mod tests {
     #[test]
     fn snapshot_allows_get_entry_after_it_was_removed() {
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = Value::from([1, 2, 3]);
 
         // Given
         let key_1 = [1; 32];
@@ -1180,12 +1180,12 @@ mod tests {
     #[test]
     fn snapshot_allows_correct_iteration_even_after_all_elements_where_removed() {
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = Value::from([1, 2, 3]);
 
         // Given
-        let key_1 = [1; 32];
-        let key_2 = [2; 32];
-        let key_3 = [3; 32];
+        let key_1 = vec![1; 32];
+        let key_2 = vec![2; 32];
+        let key_3 = vec![3; 32];
         db.put(&key_1, Column::Metadata, value.clone()).unwrap();
         db.put(&key_2, Column::Metadata, value.clone()).unwrap();
         db.put(&key_3, Column::Metadata, value.clone()).unwrap();
@@ -1208,9 +1208,9 @@ mod tests {
         assert_eq!(
             snapshot_iter,
             vec![
-                Ok((key_1.to_vec(), value.clone())),
-                Ok((key_2.to_vec(), value.clone())),
-                Ok((key_3.to_vec(), value))
+                Ok((key_1, value.clone())),
+                Ok((key_2, value.clone())),
+                Ok((key_3, value))
             ]
         );
     }
@@ -1252,7 +1252,7 @@ mod tests {
     fn iter_store__reverse_iterator__no_target_prefix() {
         // Given
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(Vec::new());
+        let value = Value::from([]);
         let key_1 = [1, 1];
         let key_2 = [2, 2];
         let key_3 = [9, 3];
@@ -1281,7 +1281,7 @@ mod tests {
     fn iter_store__reverse_iterator__target_prefix_at_the_middle() {
         // Given
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(Vec::new());
+        let value = Value::from([]);
         let key_1 = [1, 1];
         let key_2 = [2, 2];
         let key_3 = [2, 3];
@@ -1310,7 +1310,7 @@ mod tests {
     fn iter_store__reverse_iterator__target_prefix_at_the_end() {
         // Given
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(Vec::new());
+        let value = Value::from([]);
         let key_1 = [1, 1];
         let key_2 = [2, 2];
         let key_3 = [2, 3];
@@ -1337,7 +1337,7 @@ mod tests {
     fn iter_store__reverse_iterator__target_prefix_at_the_end__overflow() {
         // Given
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(Vec::new());
+        let value = Value::from([]);
         let key_1 = [1, 1];
         let key_2 = [255, 254];
         let key_3 = [255, 255];

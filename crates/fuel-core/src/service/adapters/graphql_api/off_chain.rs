@@ -82,7 +82,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 
         self.get(encoder.as_ref(), column)?
             .ok_or_else(|| not_found!(DaCompressedBlocks))
-            .map(|value| value.as_ref().clone())
+            .map(|value| value.to_vec())
     }
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
