@@ -22,10 +22,9 @@ impl TryFrom<Message> for MessageCoin {
         let recipient = *message.recipient();
         let nonce = *message.nonce();
         let amount = message.amount();
-        let data = message.data();
         let da_height = message.da_height();
 
-        if !data.is_empty() {
+        if message.is_retryable_message() {
             return Err(anyhow::anyhow!(
                 "The data is not empty, impossible to convert into the `MessageCoin`"
             ))

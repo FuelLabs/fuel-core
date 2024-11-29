@@ -649,27 +649,33 @@ mod dry_run {
     }
 
     #[tokio::test]
-    async fn dry_run__errors_early_if_height_is_lower_than_chain_tip() {
-        // Given
-        let last_block_height = BlockHeight::new(42);
-
+    async fn dry_run__success_when_height_is_the_same_as_chain_height() {
         let executor = MockExecutorWithCapture::default();
-        let ctx = TestContextBuilder::new()
-            .with_prev_height(last_block_height)
-            .build_with_executor(executor.clone());
+        let ctx = TestContext::default_from_executor(executor);
+        let producer = ctx.producer();
+
+        const SAME_HEIGHT: u32 = 1;
+
+        // Given
+        let block = producer
+            .produce_and_execute_block_txpool(SAME_HEIGHT.into(), Tai64::now())
+            .await
+            .unwrap();
+        producer.view_provider.blocks.lock().unwrap().insert(
+            SAME_HEIGHT.into(),
+            block.result().block.clone().compress(&Default::default()),
+        );
 
         // When
-        let _ = ctx
-            .producer()
-            .dry_run(vec![], last_block_height.pred(), None, None, None)
-            .await
-            .expect_err("expected failure");
+        let result = producer
+            .dry_run(vec![], Some(SAME_HEIGHT.into()), None, None, None)
+            .await;
 
         // Then
-        assert!(executor.has_no_captured_block_timestamp());
+        assert!(result.is_ok(), "{:?}", result);
     }
 
-    impl MockExecutorWithCapture<Transaction> {
+    impl MockExecutorWithCapture {
         fn captured_block_timestamp(&self) -> Tai64 {
             *self
                 .captured
@@ -679,10 +685,6 @@ mod dry_run {
                 .expect("should have captured a block")
                 .header_to_produce
                 .time()
-        }
-
-        fn has_no_captured_block_timestamp(&self) -> bool {
-            self.captured.lock().unwrap().is_none()
         }
     }
 }
@@ -722,10 +724,10 @@ prop_compose! {
 }
 
 #[allow(clippy::arithmetic_side_effects)]
-fn ctx_for_block<Tx>(
+fn ctx_for_block(
     block: &Block,
-    executor: MockExecutorWithCapture<Tx>,
-) -> TestContext<MockExecutorWithCapture<Tx>> {
+    executor: MockExecutorWithCapture,
+) -> TestContext<MockExecutorWithCapture> {
     let prev_height = block.header().height().pred().unwrap();
     let prev_da_height = block.header().da_height.as_u64() - 1;
     TestContextBuilder::new()

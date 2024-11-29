@@ -1,5 +1,8 @@
+use self::indexation::IndexationError;
+
 use super::{
     da_compression::da_compress_block,
+    indexation,
     storage::old::{
         OldFuelBlockConsensus,
         OldFuelBlocks,
@@ -10,7 +13,10 @@ use crate::{
     fuel_core_graphql_api::{
         ports::{
             self,
-            worker::OffChainDatabaseTransaction,
+            worker::{
+                BlockAt,
+                OffChainDatabaseTransaction,
+            },
         },
         storage::{
             blocks::FuelBlockIdsToHeights,
@@ -126,6 +132,7 @@ pub struct Task<TxPool, D> {
     chain_id: ChainId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
+    balances_enabled: bool,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -158,6 +165,7 @@ where
         process_executor_events(
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
+            self.balances_enabled,
         )?;
 
         match self.da_compression_config {
@@ -186,12 +194,29 @@ where
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
     block_st_transaction: &mut T,
+    balances_enabled: bool,
 ) -> anyhow::Result<()>
 where
     Iter: Iterator<Item = Cow<'a, Event>>,
     T: OffChainDatabaseTransaction,
 {
     for event in events {
+        match indexation::process_balances_update(
+            event.deref(),
+            block_st_transaction,
+            balances_enabled,
+        ) {
+            Ok(()) => (),
+            Err(IndexationError::StorageError(err)) => {
+                return Err(err.into());
+            }
+            Err(err @ IndexationError::CoinBalanceWouldUnderflow { .. })
+            | Err(err @ IndexationError::MessageBalanceWouldUnderflow { .. }) => {
+                // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
+                tracing::error!("Balances underflow detected: {}", err);
+            }
+        }
+
         match event.deref() {
             Event::MessageImported(message) => {
                 block_st_transaction
@@ -474,6 +499,9 @@ where
             graphql_metrics().total_txs_count.set(total_tx_count as i64);
         }
 
+        let balances_enabled = self.off_chain_database.balances_enabled()?;
+        tracing::info!("Balances cache available: {}", balances_enabled);
+
         let InitializeTask {
             chain_id,
             da_compression_config,
@@ -492,6 +520,7 @@ where
             chain_id,
             da_compression_config,
             continue_on_error,
+            balances_enabled,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;
@@ -536,6 +565,11 @@ where
 
         let next_block_height =
             off_chain_height.map(|height| BlockHeight::new(height.saturating_add(1)));
+
+        let next_block_height = match next_block_height {
+            Some(block_height) => BlockAt::Specific(block_height),
+            None => BlockAt::Genesis,
+        };
 
         let import_result =
             import_result_provider.block_event_at_height(next_block_height)?;

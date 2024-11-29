@@ -4,7 +4,7 @@ use crate::client::{
         Address,
         AssetId,
         PageInfo,
-        U64,
+        U128,
     },
     PageDirection,
     PaginationRequest,
@@ -99,7 +99,7 @@ pub struct BalanceEdge {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Balance {
     pub owner: Address,
-    pub amount: U64,
+    pub amount: U128,
     pub asset_id: AssetId,
 }
 

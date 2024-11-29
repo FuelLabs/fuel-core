@@ -1,16 +1,9 @@
+use crate::utils::cumulative_percentage_change;
 use std::{
     cmp::max,
     collections::BTreeMap,
     num::NonZeroU64,
     ops::Div,
-};
-
-use crate::{
-    utils::cumulative_percentage_change,
-    v1::BytesForHeights::{
-        Complete,
-        Incomplete,
-    },
 };
 
 #[cfg(test)]
@@ -306,21 +299,15 @@ impl core::ops::Deref for ClampedPercentage {
     }
 }
 
-enum BytesForHeights {
-    // Was able to find all the heights
-    Complete(u128),
-    // Was not able to find all the heights
-    Incomplete(u128),
-}
-
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,
         heights: &[u32],
+        recorded_bytes: u32,
         recording_cost: u128,
     ) -> Result<(), Error> {
         if !heights.is_empty() {
-            self.da_block_update(heights, recording_cost)?;
+            self.da_block_update(heights, recorded_bytes as u128, recording_cost)?;
             self.recalculate_projected_cost();
             self.update_da_gas_price();
         }
@@ -528,63 +515,45 @@ impl AlgorithmUpdaterV1 {
     fn da_block_update(
         &mut self,
         heights: &[u32],
+        recorded_bytes: u128,
         recording_cost: u128,
     ) -> Result<(), Error> {
-        let bytes_for_heights = self.drain_l2_block_bytes_for_heights(heights);
-        match bytes_for_heights {
-            Complete(bytes) => {
-                let new_cost_per_byte: u128 = recording_cost.checked_div(bytes).ok_or(
-                    Error::CouldNotCalculateCostPerByte {
-                        bytes,
-                        cost: recording_cost,
-                    },
-                )?;
-                let new_da_block_cost = self
-                    .latest_known_total_da_cost_excess
-                    .saturating_add(recording_cost);
-                self.latest_known_total_da_cost_excess = new_da_block_cost;
-                self.latest_da_cost_per_byte = new_cost_per_byte;
-            }
-            // If we weren't able to get the bytes for all the heights, we can't update the cost per byte in a logical way.
-            // We will just accept the predicted cost as the real cost and move on with the algorithm
-            // We can safely say that the cost didn't exceed the `recording_cost`, so we will take the
-            // minimum of the two costs
-            Incomplete(bytes) => {
-                let new_guess_recording_cost = bytes
-                    .saturating_mul(self.latest_da_cost_per_byte)
-                    .min(recording_cost);
-                let new_da_block_cost = self
-                    .latest_known_total_da_cost_excess
-                    .saturating_add(new_guess_recording_cost);
-                self.latest_known_total_da_cost_excess = new_da_block_cost;
-            }
-        };
+        self.update_unrecorded_block_bytes(heights);
+
+        let new_da_block_cost = self
+            .latest_known_total_da_cost_excess
+            .saturating_add(recording_cost);
+        self.latest_known_total_da_cost_excess = new_da_block_cost;
+
+        let compressed_cost_per_bytes = recording_cost
+            .checked_div(recorded_bytes)
+            .ok_or(Error::CouldNotCalculateCostPerByte {
+                bytes: recorded_bytes,
+                cost: recording_cost,
+            })?;
+
+        // This is often "pessimistic" in the sense that we are charging for the compressed blocks
+        // and we will use it to calculate base on the uncompressed blocks
+        self.latest_da_cost_per_byte = compressed_cost_per_bytes;
         Ok(())
     }
 
     // Get the bytes for all specified heights, or get none of them.
     // Always remove the blocks from the unrecorded blocks so they don't build up indefinitely
-    fn drain_l2_block_bytes_for_heights(&mut self, heights: &[u32]) -> BytesForHeights {
-        let mut missed_some_heights = false;
+    fn update_unrecorded_block_bytes(&mut self, heights: &[u32]) {
         let mut total: u128 = 0;
         for expected_height in heights {
             let maybe_bytes = self.unrecorded_blocks.remove(expected_height);
             if let Some(bytes) = maybe_bytes {
                 total = total.saturating_add(bytes as u128);
             } else {
-                tracing::error!(
+                tracing::warn!(
                     "L2 block expected but not found in unrecorded blocks: {}",
                     expected_height,
                 );
-                missed_some_heights = true;
             }
         }
         self.unrecorded_blocks_bytes = self.unrecorded_blocks_bytes.saturating_sub(total);
-        if missed_some_heights {
-            Incomplete(total)
-        } else {
-            Complete(total)
-        }
     }
 
     fn recalculate_projected_cost(&mut self) {

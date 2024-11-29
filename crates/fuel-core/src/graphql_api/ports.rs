@@ -64,12 +64,28 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
+use super::storage::balances::TotalBalanceAmount;
+
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
 
     fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>>;
 
     fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
+
+    fn balance(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+        base_asset_id: &AssetId,
+    ) -> StorageResult<TotalBalanceAmount>;
+
+    fn balances(
+        &self,
+        owner: &Address,
+        base_asset_id: &AssetId,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, StorageResult<(AssetId, TotalBalanceAmount)>>;
 
     fn owned_coins_ids(
         &self,
@@ -273,6 +289,10 @@ pub mod worker {
             },
         },
         graphql_api::storage::{
+            balances::{
+                CoinBalances,
+                MessageBalances,
+            },
             da_compression::*,
             old::{
                 OldFuelBlockConsensus,
@@ -282,6 +302,7 @@ pub mod worker {
             relayed_transactions::RelayedTransactionStatuses,
         },
     };
+    use derive_more::Display;
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
         Error as StorageError,
@@ -315,6 +336,18 @@ pub mod worker {
 
         /// Creates a write database transaction.
         fn transaction(&mut self) -> Self::Transaction<'_>;
+
+        /// Checks if Balances cache functionality is available.
+        fn balances_enabled(&self) -> StorageResult<bool>;
+    }
+
+    /// Represents either the Genesis Block or a block at a specific height
+    #[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Hash, Ord, PartialOrd)]
+    pub enum BlockAt {
+        /// Block at a specific height
+        Specific(BlockHeight),
+        /// Genesis block
+        Genesis,
     }
 
     pub trait OffChainDatabaseTransaction:
@@ -327,6 +360,8 @@ pub mod worker {
         + StorageMutate<OldTransactions, Error = StorageError>
         + StorageMutate<SpentMessages, Error = StorageError>
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
+        + StorageMutate<CoinBalances, Error = StorageError>
+        + StorageMutate<MessageBalances, Error = StorageError>
         + StorageMutate<DaCompressedBlocks, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>
@@ -369,7 +404,7 @@ pub mod worker {
         /// Return the import result at the given height.
         fn block_event_at_height(
             &self,
-            height: Option<BlockHeight>,
+            height: BlockAt,
         ) -> anyhow::Result<SharedImportResult>;
     }
 

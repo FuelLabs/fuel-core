@@ -1,3 +1,7 @@
+use super::database_description::{
+    indexation_availability,
+    IndexationKind,
+};
 use crate::database::{
     database_description::{
         DatabaseDescription,
@@ -73,5 +77,15 @@ where
         let metadata = metadata.map(|metadata| *metadata.height());
 
         Ok(metadata)
+    }
+
+    pub fn indexation_available(&self, kind: IndexationKind) -> StorageResult<bool> {
+        let metadata = self
+            .storage::<MetadataTable<Description>>()
+            .get(&())?
+            .map(|metadata| metadata.into_owned());
+
+        let indexation_availability = indexation_availability::<Description>(metadata);
+        Ok(indexation_availability.contains(&kind))
     }
 }
