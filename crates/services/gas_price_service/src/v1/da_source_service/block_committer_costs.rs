@@ -151,7 +151,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     ) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
         let response = self
             .client
-            .get(&format!("{}/{}", self.url, number))
+            .get(format!("{}/{}", self.url, number))
             .send()
             .await?
             .json::<RawDaBlockCosts>()
@@ -165,7 +165,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
         let response = self
             .client
-            .get(&format!("{}/{}-{}", self.url, range.start, range.end))
+            .get(format!("{}/{}-{}", self.url, range.start, range.end))
             .send()
             .await?
             .json::<Vec<RawDaBlockCosts>>()
