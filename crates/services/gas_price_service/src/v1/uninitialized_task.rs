@@ -56,7 +56,6 @@ use fuel_core_storage::{
         KeyValueMutate,
     },
     not_found,
-    structured_storage::test::InMemoryStorage,
     transactional::{
         AtomicView,
         Modifiable,
