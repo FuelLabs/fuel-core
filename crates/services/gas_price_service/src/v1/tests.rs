@@ -36,10 +36,7 @@ use crate::{
             GasPriceServiceV1,
         },
         uninitialized_task::{
-            fuel_storage_unrecorded_blocks::{
-                storage::UnrecordedBlocksColumn,
-                FuelStorageUnrecordedBlocks,
-            },
+            fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
             UninitializedTask,
         },
     },
@@ -214,7 +211,7 @@ fn different_arb_config() -> V1AlgorithmConfig {
     }
 }
 
-fn database() -> StorageTransaction<InMemoryStorage<UnrecordedBlocksColumn>> {
+fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
     InMemoryStorage::default().into_transaction()
 }
 

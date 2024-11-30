@@ -4,6 +4,7 @@ use crate::{
             block_bytes,
             get_block_info,
             mint_values,
+            storage::GasPriceColumn,
             GasPriceSettings,
             GasPriceSettingsProvider,
         },
@@ -37,10 +38,7 @@ use crate::{
             initialize_algorithm,
             GasPriceServiceV1,
         },
-        uninitialized_task::fuel_storage_unrecorded_blocks::{
-            storage::UnrecordedBlocksColumn,
-            FuelStorageUnrecordedBlocks,
-        },
+        uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
     },
 };
 use anyhow::Error;
@@ -120,11 +118,8 @@ where
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
-        + Modifiable
-        + Send
-        + Sync
-        + Clone,
+    UnrecordedBlockStorage:
+        KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync + Clone,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -265,11 +260,8 @@ where
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
-        + Modifiable
-        + Send
-        + Sync
-        + Clone,
+    UnrecordedBlockStorage:
+        KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync + Clone,
 {
     const NAME: &'static str = "GasPriceServiceV1";
     type SharedData = SharedV1Algorithm;
@@ -314,11 +306,8 @@ where
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     Metadata: MetadataStorage,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
-        + Modifiable
-        + Send
-        + Sync
-        + Clone,
+    UnrecordedBlockStorage:
+        KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync + Clone,
 {
     let metadata = metadata_storage
         .get_metadata(&metadata_height.into())?
@@ -366,11 +355,8 @@ where
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     Metadata: MetadataStorage,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
-        + Modifiable
-        + Send
-        + Sync
-        + Clone,
+    UnrecordedBlockStorage:
+        KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync + Clone,
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
@@ -449,11 +435,8 @@ where
     SettingsProvider: GasPriceSettingsProvider,
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
-    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
-        + Modifiable
-        + Send
-        + Sync
-        + Clone,
+    UnrecordedBlockStorage:
+        KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync + Clone,
 {
     let v1_config = config.v1().ok_or(anyhow::anyhow!("Expected V1 config"))?;
     let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(unrecorded_block_storage);

@@ -1,4 +1,7 @@
-use crate::v1::uninitialized_task::fuel_storage_unrecorded_blocks::storage::UnrecordedBlocksTable;
+use crate::common::fuel_core_storage_adapter::storage::{
+    GasPriceColumn,
+    UnrecordedBlocksTable,
+};
 use fuel_core_storage::{
     kv_store::{
         KeyValueInspect,
@@ -16,9 +19,6 @@ use fuel_gas_price_algorithm::{
     v1,
     v1::UnrecordedBlocks,
 };
-use storage::UnrecordedBlocksColumn;
-
-pub mod storage;
 
 #[derive(Debug, Clone)]
 pub struct FuelStorageUnrecordedBlocks<Storage> {
@@ -33,7 +33,7 @@ impl<Storage> FuelStorageUnrecordedBlocks<Storage> {
 
 impl<Storage> UnrecordedBlocks for FuelStorageUnrecordedBlocks<Storage>
 where
-    Storage: KeyValueInspect<Column = UnrecordedBlocksColumn> + Modifiable,
+    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable,
     Storage: Send + Sync,
 {
     fn insert(&mut self, height: v1::Height, bytes: v1::Bytes) -> Result<(), v1::Error> {
@@ -74,7 +74,7 @@ mod tests {
         },
     };
 
-    fn database() -> StorageTransaction<InMemoryStorage<UnrecordedBlocksColumn>> {
+    fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
         InMemoryStorage::default().into_transaction()
     }
 

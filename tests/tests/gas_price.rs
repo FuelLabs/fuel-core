@@ -416,3 +416,6 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
     assert_eq!(l2_block_height, new_height);
     recovered_driver.kill().await;
 }
+
+#[test]
+fn produce_block__l1_committed_block_effects_gas_price() {}

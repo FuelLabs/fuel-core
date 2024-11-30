@@ -350,10 +350,7 @@ mod tests {
                 initialize_algorithm,
                 GasPriceServiceV1,
             },
-            uninitialized_task::fuel_storage_unrecorded_blocks::{
-                storage::UnrecordedBlocksColumn,
-                FuelStorageUnrecordedBlocks,
-            },
+            uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
         },
     };
     use fuel_core_services::{
@@ -414,7 +411,7 @@ mod tests {
         }
     }
 
-    fn database() -> StorageTransaction<InMemoryStorage<UnrecordedBlocksColumn>> {
+    fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
         InMemoryStorage::default().into_transaction()
     }
 
