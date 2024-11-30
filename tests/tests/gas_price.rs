@@ -417,5 +417,44 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
     recovered_driver.kill().await;
 }
 
-#[test]
-fn produce_block__l1_committed_block_effects_gas_price() {}
+mod dumb_server {
+    use rocket::{
+        get,
+        routes,
+    };
+    #[get("/")]
+    fn hello() -> String {
+        format!("Hello")
+    }
+
+    fn rocket() -> rocket::Rocket<rocket::Build> {
+        rocket::build().mount("/hello", routes![hello])
+    }
+    pub struct DumbHttpCommitterServer {
+        _handle: tokio::task::JoinHandle<()>,
+    }
+
+    impl DumbHttpCommitterServer {
+        pub async fn new() -> Self {
+            let _handle = tokio::spawn(async move {
+                rocket().launch().await.unwrap();
+            });
+            Self { _handle }
+        }
+    }
+}
+
+use dumb_server::DumbHttpCommitterServer;
+use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::{
+    BlockCommitterApi,
+    BlockCommitterHttpApi,
+};
+#[tokio::test]
+async fn produce_block__l1_committed_block_effects_gas_price() {
+    let _handle = DumbHttpCommitterServer::new();
+    let api = BlockCommitterHttpApi::new("/hello".to_string());
+    let res = api.get_latest_costs().await;
+    dbg!(&res);
+    let costs = res.unwrap();
+    dbg!(costs);
+}

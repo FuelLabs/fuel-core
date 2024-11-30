@@ -63,6 +63,7 @@ postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
+rocket = "0.5.1"
 rstest = "0.15"
 serde_json = { workspace = true }
 spki = "0.7.3"

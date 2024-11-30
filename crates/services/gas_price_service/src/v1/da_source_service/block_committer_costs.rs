@@ -15,7 +15,7 @@ use serde::{
 };
 
 #[async_trait::async_trait]
-trait BlockCommitterApi: Send + Sync {
+pub trait BlockCommitterApi: Send + Sync {
     /// Used on first run to get the latest costs and seqno
     async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>>;
     /// Used to get the costs for a specific seqno
