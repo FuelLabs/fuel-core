@@ -607,6 +607,7 @@ mod tests {
                 .next()
                 .unwrap()
                 .unwrap();
+
             assert_eq!(asset_id, AssetId::zeroed());
             assert_eq!(amount, expected_fee_amount_1 + expected_fee_amount_2);
         }

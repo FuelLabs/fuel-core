@@ -37,6 +37,7 @@ use fuel_core_types::{
 use statistic::StatisticTable;
 
 pub mod assets;
+pub mod balances;
 pub mod blocks;
 pub mod coins;
 pub mod contracts;
@@ -114,8 +115,12 @@ pub enum Column {
     DaCompressionTemporalRegistryScriptCode = 21,
     /// See [`DaCompressionTemporalRegistryPredicateCode`](da_compression::DaCompressionTemporalRegistryPredicateCode)
     DaCompressionTemporalRegistryPredicateCode = 22,
+    /// Coin balances per account and asset.
+    CoinBalances = 23,
+    /// Message balances per account.
+    MessageBalances = 24,
     /// See [`AssetsInfo`](assets::AssetsInfo)
-    AssetsInfo = 23,
+    AssetsInfo = 25,
 }
 
 impl Column {
