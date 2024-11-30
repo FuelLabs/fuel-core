@@ -396,16 +396,22 @@ where
                     ..
                 } => {
                     let asset_id = AssetId::from(**contract_id);
-                    let current_count = db
-                        .storage::<AssetsInfo>()
-                        .get(&asset_id)?
-                        .map(|info| {
-                            info.2
-                                .checked_add(*val)
-                                .ok_or(anyhow::anyhow!("Asset count overflow"))
-                        })
-                        .transpose()?
-                        .unwrap_or(*val);
+                    let current_count = match db.storage::<AssetsInfo>().get(&asset_id) {
+                        Ok(count) => count,
+                        Err(_) => {
+                            // If asset doesn't exist yet, create it with 0 count
+                            db.storage::<AssetsInfo>()
+                                .insert(&asset_id, &(*contract_id, **sub_id, 0))?;
+                            Some(Cow::Owned((*contract_id, **sub_id, 0)))
+                        }
+                    }
+                    .map(|info| {
+                        info.2
+                            .checked_add(*val)
+                            .ok_or(anyhow::anyhow!("Asset count overflow"))
+                    })
+                    .transpose()?
+                    .unwrap_or(*val);
 
                     db.storage::<AssetsInfo>()
                         .insert(&asset_id, &(*contract_id, **sub_id, current_count))?;
@@ -419,7 +425,11 @@ where
                     let asset_id = AssetId::from(**contract_id);
                     let current_count = db
                         .storage::<AssetsInfo>()
-                        .get(&asset_id)?
+                        .get(&asset_id)
+                        .unwrap_or_else(|_| {
+                            tracing::warn!("Asset {} is not currently indexed", asset_id);
+                            None
+                        })
                         .map(|info| {
                             info.2
                                 .checked_sub(*val)
