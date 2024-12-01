@@ -59,11 +59,11 @@ hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
 k256 = { version = "0.13.3", features = ["ecdsa-core"] }
+mockito = "1.6.1"
 postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
-rocket = "0.5.1"
 rstest = "0.15"
 serde_json = { workspace = true }
 spki = "0.7.3"
@@ -75,6 +75,7 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
   "test-util",
 ] }
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
 pretty_assertions = "1.4"

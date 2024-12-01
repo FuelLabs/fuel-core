@@ -29,6 +29,7 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
     fuel_asm::*,
     fuel_crypto::{
         coins_bip32::ecdsa::signature::rand_core::SeedableRng,
@@ -417,44 +418,48 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
     recovered_driver.kill().await;
 }
 
-mod dumb_server {
-    use rocket::{
-        get,
-        routes,
-    };
-    #[get("/")]
-    fn hello() -> String {
-        format!("Hello")
-    }
-
-    fn rocket() -> rocket::Rocket<rocket::Build> {
-        rocket::build().mount("/hello", routes![hello])
-    }
-    pub struct DumbHttpCommitterServer {
-        _handle: tokio::task::JoinHandle<()>,
-    }
-
-    impl DumbHttpCommitterServer {
-        pub async fn new() -> Self {
-            let _handle = tokio::spawn(async move {
-                rocket().launch().await.unwrap();
-            });
-            Self { _handle }
-        }
-    }
-}
-
-use dumb_server::DumbHttpCommitterServer;
 use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::{
     BlockCommitterApi,
     BlockCommitterHttpApi,
+    RawDaBlockCosts,
 };
-#[tokio::test]
-async fn produce_block__l1_committed_block_effects_gas_price() {
-    let _handle = DumbHttpCommitterServer::new();
-    let api = BlockCommitterHttpApi::new("/hello".to_string());
-    let res = api.get_latest_costs().await;
+
+#[test]
+fn produce_block__l1_committed_block_effects_gas_price() {
+    let mock = FakeServer::new();
+    let url = mock.url();
+    let api = BlockCommitterHttpApi::new(url);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let res = rt.block_on(api.get_latest_costs());
     dbg!(&res);
     let costs = res.unwrap();
     dbg!(costs);
+}
+
+struct FakeServer {
+    server: mockito::ServerGuard,
+}
+
+impl FakeServer {
+    fn new() -> Self {
+        let mut server = mockito::Server::new();
+        let costs = RawDaBlockCosts {
+            sequence_number: 1,
+            blocks_heights: vec![1, 2, 3],
+            da_block_height: DaBlockHeight(100),
+            total_cost: 100,
+            total_size_bytes: 100,
+        };
+        let body = serde_json::to_string(&costs).unwrap();
+        let _mock = server
+            .mock("GET", "/")
+            .with_status(201)
+            .with_body(body)
+            .create();
+        Self { server }
+    }
+
+    fn url(&self) -> String {
+        self.server.url()
+    }
 }

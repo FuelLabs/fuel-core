@@ -135,13 +135,8 @@ impl BlockCommitterHttpApi {
 #[async_trait::async_trait]
 impl BlockCommitterApi for BlockCommitterHttpApi {
     async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
-        let response = self
-            .client
-            .get(&self.url)
-            .send()
-            .await?
-            .json::<RawDaBlockCosts>()
-            .await?;
+        let val = self.client.get(&self.url).send().await?;
+        let response = val.json::<RawDaBlockCosts>().await?;
         Ok(Some(response))
     }
 
