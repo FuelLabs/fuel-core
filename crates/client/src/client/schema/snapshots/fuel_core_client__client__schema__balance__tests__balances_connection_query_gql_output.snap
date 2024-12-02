@@ -2,7 +2,7 @@
 source: crates/client/src/client/schema/balance.rs
 expression: operation.query
 ---
-query($filter: BalanceFilterInput!, $after: String, $before: String, $first: Int, $last: Int) {
+query BalancesQuery($filter: BalanceFilterInput!, $after: String, $before: String, $first: Int, $last: Int) {
   balances(filter: $filter, after: $after, before: $before, first: $first, last: $last) {
     edges {
       cursor
@@ -20,5 +20,3 @@ query($filter: BalanceFilterInput!, $after: String, $before: String, $first: Int
     }
   }
 }
-
-

@@ -41,7 +41,6 @@ use itertools::Itertools;
 use rstest::rstest;
 use std::ops::Deref;
 
-#[cfg(feature = "relayer")]
 mod relayer;
 
 fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {
@@ -485,7 +484,6 @@ async fn can_get_message_proof() {
             let result = client
                 .message_proof(&transaction_id, nonce, None, Some(last_height))
                 .await
-                .unwrap()
                 .unwrap();
 
             // 1. Generate the message id (message fields)

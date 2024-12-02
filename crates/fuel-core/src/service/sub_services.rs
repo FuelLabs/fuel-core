@@ -48,6 +48,7 @@ use fuel_core_poa::{
 };
 use fuel_core_storage::{
     self,
+    structured_storage::StructuredStorage,
     transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
@@ -181,6 +182,7 @@ pub fn init_sub_services(
     let genesis_block_height = *genesis_block.header().height();
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
+    let metadata = StructuredStorage::new(database.gas_price().clone());
 
     let gas_price_service_v0 = new_gas_price_service_v0(
         config.clone().into(),
@@ -188,6 +190,7 @@ pub fn init_sub_services(
         settings,
         block_stream,
         database.gas_price().clone(),
+        metadata,
         database.on_chain().clone(),
     )?;
 
@@ -211,6 +214,7 @@ pub fn init_sub_services(
         |(p2p_config, (shared_state, request_receiver))| {
             fuel_core_p2p::service::new_service(
                 chain_id,
+                last_height,
                 p2p_config,
                 shared_state,
                 request_receiver,

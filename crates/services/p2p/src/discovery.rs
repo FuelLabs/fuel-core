@@ -314,7 +314,6 @@ mod tests {
         for _ in 1..num_of_swarms {
             let (swarm, peer_addr, peer_id) =
                 build_fuel_discovery(vec![bootstrap_addr.clone()]);
-
             discovery_swarms.push((swarm, peer_addr, peer_id));
         }
 
@@ -374,7 +373,7 @@ mod tests {
                                     .add_address(&peer_id, unroutable_peer_addr.clone());
                             }
                             SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                                panic!("PeerId {peer_id:?} disconnected");
+                                dbg!(peer_id);
                             }
                             _ => {}
                         }

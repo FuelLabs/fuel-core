@@ -99,7 +99,7 @@ impl Wallet {
     }
 
     /// returns the balance associated with a wallet
-    pub async fn balance(&self, asset_id: Option<AssetId>) -> anyhow::Result<u64> {
+    pub async fn balance(&self, asset_id: Option<AssetId>) -> anyhow::Result<u128> {
         self.client
             .balance(&self.address, Some(&asset_id.unwrap_or_default()))
             .await

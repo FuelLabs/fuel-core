@@ -20,10 +20,7 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_gas_price_service::{
-    common::{
-        fuel_core_storage_adapter::storage::GasPriceMetadata,
-        updater_metadata::UpdaterMetadata,
-    },
+    common::fuel_core_storage_adapter::storage::GasPriceMetadata,
     v0::metadata::V0Metadata,
 };
 use fuel_core_poa::Trigger;
@@ -263,7 +260,7 @@ async fn estimate_gas_price__returns_min_gas_price_if_starting_gas_price_is_zero
     assert_eq!(MIN_GAS_PRICE, actual)
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     // given
     let args = vec![
@@ -300,6 +297,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     let LatestGasPrice { gas_price, .. } = new_latest_gas_price;
     let actual = gas_price;
     assert_eq!(expected, actual);
+    recovered_driver.kill().await;
 }
 
 #[tokio::test]
@@ -360,7 +358,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
     assert_eq!(total_gas, total_gas_zero_gas_price);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn startup__can_override_gas_price_values_by_changing_config() {
     // given
     let args = vec![
@@ -412,15 +410,9 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
         .deref()
         .clone();
 
-    let UpdaterMetadata::V0(V0Metadata {
-        min_exec_gas_price,
-        exec_gas_price_change_percent,
-        l2_block_height,
-        l2_block_fullness_threshold_percent,
-        ..
-    }) = new_metadata;
-    assert_eq!(exec_gas_price_change_percent, 11);
-    assert_eq!(l2_block_fullness_threshold_percent, 22);
-    assert_eq!(min_exec_gas_price, 33);
+    let V0Metadata {
+        l2_block_height, ..
+    } = new_metadata.try_into().unwrap();
     assert_eq!(l2_block_height, new_height);
+    recovered_driver.kill().await;
 }

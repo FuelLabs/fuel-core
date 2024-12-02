@@ -7,7 +7,7 @@ use crate::{
         scalars::{
             Address,
             AssetId,
-            U64,
+            U128,
         },
         ReadViewProvider,
     },
@@ -33,7 +33,7 @@ impl Balance {
         self.0.owner.into()
     }
 
-    async fn amount(&self) -> U64 {
+    async fn amount(&self) -> U128 {
         self.0.amount.into()
     }
 

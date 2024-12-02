@@ -87,7 +87,7 @@ impl Simulator {
         // Scales the gas price internally, value is arbitrary
         let gas_price_factor = 100;
         let always_normal_activity = L2ActivityTracker::new_always_normal();
-        let updater = AlgorithmUpdaterV1 {
+        AlgorithmUpdaterV1 {
             min_exec_gas_price: 10,
             min_da_gas_price: 10,
             // Change to adjust where the exec gas price starts on block 0
@@ -103,7 +103,6 @@ impl Simulator {
             // Increase to make the da price change faster
             max_da_gas_price_change_percent: 10,
             total_da_rewards_excess: 0,
-            da_recorded_block_height: 0,
             // Change to adjust the cost per byte of the DA on block 0
             latest_da_cost_per_byte: 0,
             projected_total_da_cost: 0,
@@ -114,11 +113,11 @@ impl Simulator {
             last_profit: 0,
             second_to_last_profit: 0,
             l2_activity: always_normal_activity,
-        };
-        updater
+            unrecorded_blocks_bytes: 0,
+        }
     }
 
-    fn execute_simulation<'a>(
+    fn execute_simulation(
         &self,
         capacity: u64,
         max_block_bytes: u64,
@@ -162,9 +161,8 @@ impl Simulator {
             // Update DA blocks on the occasion there is one
             if let Some((range, cost)) = da_block {
                 for height in range.to_owned() {
-                    updater
-                        .update_da_record_data(height..(height + 1), cost)
-                        .unwrap();
+                    let block_heights: Vec<u32> = (height..(height) + 1).collect();
+                    updater.update_da_record_data(&block_heights, cost).unwrap();
                     actual_costs.push(updater.latest_known_total_da_cost_excess)
                 }
             }
@@ -178,7 +176,7 @@ impl Simulator {
         let bytes_and_costs: Vec<_> = bytes
             .iter()
             .zip(self.da_cost_per_byte.iter())
-            .map(|(bytes, da_cost_per_byte)| (*bytes, (*bytes * da_cost_per_byte) as u64))
+            .map(|(bytes, da_cost_per_byte)| (*bytes, *bytes * da_cost_per_byte))
             .collect();
 
         let actual_profit: Vec<i128> = actual_costs
@@ -209,7 +207,7 @@ impl Simulator {
         &self,
         da_recording_rate: usize,
         da_finalization_rate: usize,
-        fullness_and_bytes: &Vec<(u64, u64)>,
+        fullness_and_bytes: &[(u64, u64)],
     ) -> Vec<Option<(Range<u32>, u128)>> {
         let l2_blocks_with_no_da_blocks =
             std::iter::repeat(None).take(da_finalization_rate);
