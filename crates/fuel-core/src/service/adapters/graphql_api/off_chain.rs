@@ -343,7 +343,8 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         );
 
         let mut coins = Vec::with_capacity(max_coins as usize);
-        for (foreign_key, coin_type) in selected_iter.map(|x| x.unwrap()) {
+        for selected_coin in selected_iter {
+            let (foreign_key, coin_type) = selected_coin?;
             let coin_type =
                 IndexedCoinType::try_from(coin_type).map_err(StorageError::from)?;
             let coin = match coin_type {
