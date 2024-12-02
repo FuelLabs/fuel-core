@@ -20,9 +20,12 @@ use crate::{
         },
     },
     graphql_api::{
-        indexation::coins_to_spend::{
-            IndexedCoinType,
-            NON_RETRYABLE_BYTE,
+        indexation::{
+            coins_to_spend::{
+                IndexedCoinType,
+                NON_RETRYABLE_BYTE,
+            },
+            error::IndexationError,
         },
         storage::{
             balances::{
@@ -380,12 +383,12 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 }
 
 fn coins_to_spend<'a>(
-    coins_iter: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
-    coins_iter_back: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
+    coins_iter: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
+    coins_iter_back: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
     total: u64,
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
-) -> BoxedIter<'a, Result<CoinsToSpendIndexEntry, StorageError>> {
+) -> BoxedIter<'a, StorageResult<CoinsToSpendIndexEntry>> {
     // TODO[RC]: Validate query parameters.
     if total == 0 && max == 0 {
         return std::iter::empty().into_boxed();
@@ -393,15 +396,6 @@ fn coins_to_spend<'a>(
 
     let (selected_big_coins_total, selected_big_coins) =
         big_coins(coins_iter, total, max, excluded_ids);
-
-    let big_coins_amounts = selected_big_coins
-        .iter()
-        .map(|item| item.as_ref().unwrap().0.amount())
-        .join(", ");
-    println!(
-        "Selected big coins ({selected_big_coins_total}): {}",
-        big_coins_amounts
-    );
 
     if selected_big_coins_total < total {
         return std::iter::empty().into_boxed();
@@ -411,27 +405,18 @@ fn coins_to_spend<'a>(
         return std::iter::empty().into_boxed();
     };
 
-    let selected_big_coins_len: u16 = selected_big_coins.len().try_into().unwrap();
+    let selected_big_coins_len: u16 = match selected_big_coins.len().try_into() {
+        Ok(len) => len,
+        Err(err) => return iter::once(Err(StorageError::Other(err.into()))).into_boxed(),
+    };
 
     let max_dust_count = max_dust_count(max, selected_big_coins_len);
-    dbg!(&max_dust_count);
     let (dust_coins_total, selected_dust_coins) = dust_coins(
         coins_iter_back,
         last_selected_big_coin,
         max_dust_count,
         excluded_ids,
     );
-    let dust_coins_amounts = selected_dust_coins
-        .iter()
-        .map(|item| item.as_ref().unwrap().0.amount())
-        .join(", ");
-    println!(
-        "Selected dust coins ({dust_coins_total}): {}",
-        dust_coins_amounts
-    );
-
-    dbg!(&selected_big_coins_total);
-
     let retained_big_coins_iter =
         skip_big_coins_up_to_amount(selected_big_coins, dust_coins_total);
 
@@ -439,46 +424,59 @@ fn coins_to_spend<'a>(
 }
 
 fn big_coins(
-    coins_iter: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
+    coins_iter: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
     total: u64,
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
-) -> (u64, Vec<Result<CoinsToSpendIndexEntry, StorageError>>) {
+) -> (u64, Vec<StorageResult<CoinsToSpendIndexEntry>>) {
     let mut big_coins_total = 0;
     let big_coins: Vec<_> = coins_iter
-        .filter(|item| is_excluded(item, excluded_ids))
+        .filter(|item| is_excluded(item, excluded_ids) == Ok(true))
         .take(max as usize)
-        .take_while(|item| {
-            (big_coins_total >= total)
-                .then_some(false)
-                .unwrap_or_else(|| {
-                    big_coins_total =
-                        big_coins_total.saturating_add(item.as_ref().unwrap().0.amount());
-                    true
-                })
+        .take_while(|item| match item {
+            Ok(item) => {
+                let amount = item.0.amount();
+                (big_coins_total >= total)
+                    .then_some(false)
+                    .unwrap_or_else(|| {
+                        big_coins_total = big_coins_total.saturating_add(amount);
+                        true
+                    })
+            }
+            Err(_) => true,
         })
         .collect();
     (big_coins_total, big_coins)
 }
 
 fn is_excluded(
-    item: &Result<CoinsToSpendIndexEntry, StorageError>,
+    item: &StorageResult<CoinsToSpendIndexEntry>,
     excluded_ids: &ExcludedKeysAsBytes,
-) -> bool {
-    let (key, value) = item.as_ref().unwrap();
-    let coin_type = IndexedCoinType::try_from(*value).unwrap();
-    match coin_type {
-        IndexedCoinType::Coin => {
-            let foreign_key =
-                CoinOrMessageIdBytes::Coin(key.foreign_key_bytes().try_into().unwrap());
-            !excluded_ids.coins().contains(&foreign_key)
+) -> StorageResult<bool> {
+    if let Ok((key, value)) = item {
+        let coin_type = IndexedCoinType::try_from(*value).map_err(StorageError::from)?;
+        match coin_type {
+            IndexedCoinType::Coin => {
+                let foreign_key = CoinOrMessageIdBytes::Coin(
+                    key.foreign_key_bytes()
+                        .as_slice()
+                        .try_into()
+                        .map_err(StorageError::from)?,
+                );
+                Ok(!excluded_ids.coins().contains(&foreign_key))
+            }
+            IndexedCoinType::Message => {
+                let foreign_key = CoinOrMessageIdBytes::Message(
+                    key.foreign_key_bytes()
+                        .as_slice()
+                        .try_into()
+                        .map_err(StorageError::from)?,
+                );
+                Ok(!excluded_ids.messages().contains(&foreign_key))
+            }
         }
-        IndexedCoinType::Message => {
-            let foreign_key = CoinOrMessageIdBytes::Message(
-                key.foreign_key_bytes().try_into().unwrap(),
-            );
-            !excluded_ids.messages().contains(&foreign_key)
-        }
+    } else {
+        Ok(false)
     }
 }
 
@@ -488,19 +486,21 @@ fn max_dust_count(max: u16, big_coins_len: u16) -> u16 {
 }
 
 fn dust_coins(
-    coins_iter_back: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
-    last_big_coin: &Result<CoinsToSpendIndexEntry, StorageError>, /* TODO[RC]: No Result here */
+    coins_iter_back: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
+    last_big_coin: &StorageResult<CoinsToSpendIndexEntry>,
     max_dust_count: u16,
     excluded_ids: &ExcludedKeysAsBytes,
-) -> (u64, Vec<Result<CoinsToSpendIndexEntry, StorageError>>) {
+) -> (u64, Vec<StorageResult<CoinsToSpendIndexEntry>>) {
     let mut dust_coins_total: u64 = 0;
     let dust_coins: Vec<_> = coins_iter_back
-        .filter(|item| is_excluded(item, excluded_ids))
+        .filter(|item| is_excluded(item, excluded_ids) == Ok(true))
         .take(max_dust_count as usize)
         .take_while(move |item| item != last_big_coin)
         .map(|item| {
-            dust_coins_total =
-                dust_coins_total.saturating_add(item.as_ref().unwrap().0.amount());
+            if let Ok(item) = &item {
+                let amount = item.0.amount();
+                dust_coins_total = dust_coins_total.saturating_add(amount);
+            }
             item
         })
         .collect();
@@ -508,17 +508,21 @@ fn dust_coins(
 }
 
 fn skip_big_coins_up_to_amount(
-    big_coins: impl IntoIterator<Item = Result<CoinsToSpendIndexEntry, StorageError>>,
+    big_coins: impl IntoIterator<Item = StorageResult<CoinsToSpendIndexEntry>>,
     mut dust_coins_total: u64,
-) -> impl Iterator<Item = Result<CoinsToSpendIndexEntry, StorageError>> {
-    big_coins.into_iter().skip_while(move |item| {
-        dust_coins_total
-            .checked_sub(item.as_ref().unwrap().0.amount())
-            .map(|new_value| {
-                dust_coins_total = new_value;
-                true
-            })
-            .unwrap_or_default()
+) -> impl Iterator<Item = StorageResult<CoinsToSpendIndexEntry>> {
+    big_coins.into_iter().skip_while(move |item| match item {
+        Ok(item) => {
+            let amount = item.0.amount();
+            dust_coins_total
+                .checked_sub(amount)
+                .map(|new_value| {
+                    dust_coins_total = new_value;
+                    true
+                })
+                .unwrap_or_default()
+        }
+        Err(_) => true,
     })
 }
 

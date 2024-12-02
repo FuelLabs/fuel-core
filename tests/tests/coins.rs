@@ -500,7 +500,6 @@ mod message_coin {
             .client
             .coins_to_spend(&owner, vec![(base_asset_id, 300, Some(MAX as u32))], None)
             .await;
-        dbg!(&coins_per_asset);
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
