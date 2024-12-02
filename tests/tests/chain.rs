@@ -141,7 +141,7 @@ async fn network_operates_with_non_zero_base_asset_id() {
     let node_config = Config {
         debug: true,
         utxo_validation: true,
-        starting_gas_price,
+        starting_exec_gas_price: starting_gas_price,
         ..Config::local_node_with_configs(chain_config, state_config)
     };
 

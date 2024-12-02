@@ -64,11 +64,20 @@ impl GasPriceData for Database<GasPriceDatabase> {
 
 impl From<Config> for GasPriceServiceConfig {
     fn from(value: Config) -> Self {
-        GasPriceServiceConfig::new_v0(
-            value.starting_gas_price,
-            value.min_gas_price,
-            value.gas_price_change_percent,
-            value.gas_price_threshold_percent,
+        GasPriceServiceConfig::new_v1(
+            value.starting_exec_gas_price,
+            value.min_exec_gas_price,
+            value.exec_gas_price_change_percent,
+            value.exec_gas_price_threshold_percent,
+            value.da_gas_price_factor,
+            value.min_da_gas_price,
+            value.max_da_gas_price_change_percent,
+            value.da_p_component,
+            value.da_d_component,
+            value.activity_normal_range_size,
+            value.activity_capped_range_size,
+            value.activity_decrease_range_size,
+            value.block_activity_threshold,
         )
     }
 }

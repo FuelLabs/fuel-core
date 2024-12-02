@@ -12,6 +12,7 @@ use fuel_core_types::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
+use std::num::NonZeroU64;
 
 pub trait L2Data: Send + Sync {
     fn latest_height(&self) -> StorageResult<BlockHeight>;
@@ -54,8 +55,36 @@ impl GasPriceServiceConfig {
         })
     }
 
-    pub fn new_v1(metadata: V1AlgorithmConfig) -> Self {
-        Self::V1(metadata)
+    pub fn new_v1(
+        new_exec_gas_price: u64,
+        min_exec_gas_price: u64,
+        exec_gas_price_change_percent: u16,
+        l2_block_fullness_threshold_percent: u8,
+        gas_price_factor: NonZeroU64,
+        min_da_gas_price: u64,
+        max_da_gas_price_change_percent: u16,
+        da_p_component: i64,
+        da_d_component: i64,
+        normal_range_size: u16,
+        capped_range_size: u16,
+        decrease_range_size: u16,
+        block_activity_threshold: u8,
+    ) -> Self {
+        Self::V1(V1AlgorithmConfig {
+            new_exec_gas_price,
+            min_exec_gas_price,
+            exec_gas_price_change_percent,
+            l2_block_fullness_threshold_percent,
+            gas_price_factor,
+            min_da_gas_price,
+            max_da_gas_price_change_percent,
+            da_p_component,
+            da_d_component,
+            normal_range_size,
+            capped_range_size,
+            decrease_range_size,
+            block_activity_threshold,
+        })
     }
 
     /// Extract V0AlgorithmConfig if it is of V0 version

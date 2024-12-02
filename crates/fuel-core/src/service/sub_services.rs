@@ -188,7 +188,7 @@ pub fn init_sub_services(
     let block_stream = importer_adapter.events_shared_result();
     let metadata = StructuredStorage::new(database.gas_price().clone());
 
-    let committer = BlockCommitterHttpApi::new("lolz".to_string());
+    let committer = BlockCommitterHttpApi::new(config.da_committer_url.clone());
     let da_source = BlockCommitterDaBlockCosts::new(committer, None);
     let on_chain_db = database.on_chain().clone();
 

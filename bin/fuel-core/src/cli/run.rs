@@ -190,12 +190,12 @@ pub struct Command {
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
     /// The starting gas price for the network
-    #[arg(long = "starting-gas-price", default_value = "0", env)]
-    pub starting_gas_price: u64,
+    #[arg(long = "starting-exec-gas-price", default_value = "0", env)]
+    pub starting_exec_gas_price: u64,
 
     /// The percentage change in gas price per block
     #[arg(long = "gas-price-change-percent", default_value = "0", env)]
-    pub gas_price_change_percent: u64,
+    pub gas_price_change_percent: u16,
 
     /// The minimum allowed gas price
     #[arg(long = "min-gas-price", default_value = "0", env)]
@@ -203,7 +203,15 @@ pub struct Command {
 
     /// The percentage threshold for gas price increase
     #[arg(long = "gas-price-threshold-percent", default_value = "50", env)]
-    pub gas_price_threshold_percent: u64,
+    pub gas_price_threshold_percent: u8,
+
+    // Minimum DA gas price
+    #[arg(long = "min-da-gas-price", default_value = "0", env)]
+    pub min_da_gas_price: u64,
+
+    /// The URL for the DA Block Committer info
+    #[arg(long = "da-committer-url", env)]
+    pub da_committer_url: Option<String>,
 
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
@@ -299,10 +307,12 @@ impl Command {
             debug,
             utxo_validation,
             native_executor_version,
-            starting_gas_price,
+            starting_exec_gas_price: starting_gas_price,
             gas_price_change_percent,
             min_gas_price,
             gas_price_threshold_percent,
+            min_da_gas_price,
+            da_committer_url,
             consensus_key,
             #[cfg(feature = "aws-kms")]
             consensus_aws_kms,
@@ -588,10 +598,10 @@ impl Command {
                 coinbase_recipient,
                 metrics: disabled_metrics.is_enabled(Module::Producer),
             },
-            starting_gas_price,
-            gas_price_change_percent,
-            min_gas_price,
-            gas_price_threshold_percent,
+            starting_exec_gas_price: starting_gas_price,
+            exec_gas_price_change_percent: gas_price_change_percent,
+            min_exec_gas_price: min_gas_price,
+            exec_gas_price_threshold_percent: gas_price_threshold_percent,
             block_importer,
             da_compression,
             #[cfg(feature = "relayer")]
@@ -606,6 +616,16 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
             memory_pool_size,
+            da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
+            min_da_gas_price,
+            max_da_gas_price_change_percent: 0,
+            da_p_component: 0,
+            da_d_component: 0,
+            activity_normal_range_size: 100,
+            activity_capped_range_size: 0,
+            activity_decrease_range_size: 0,
+            da_committer_url,
+            block_activity_threshold: 0,
         };
         Ok(config)
     }

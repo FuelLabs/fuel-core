@@ -1,10 +1,10 @@
+use clap::ValueEnum;
+use fuel_core_poa::signer::SignMode;
 use std::{
+    num::NonZeroU64,
     path::PathBuf,
     time::Duration,
 };
-
-use clap::ValueEnum;
-use fuel_core_poa::signer::SignMode;
 use strum_macros::{
     Display,
     EnumString,
@@ -57,10 +57,11 @@ pub struct Config {
     pub vm: VMConfig,
     pub txpool: TxPoolConfig,
     pub block_producer: fuel_core_producer::Config,
-    pub starting_gas_price: u64,
-    pub gas_price_change_percent: u64,
-    pub min_gas_price: u64,
-    pub gas_price_threshold_percent: u64,
+    pub starting_exec_gas_price: u64,
+    pub exec_gas_price_change_percent: u16,
+    pub min_exec_gas_price: u64,
+    pub exec_gas_price_threshold_percent: u8,
+    pub da_committer_url: Option<String>,
     pub da_compression: DaCompressionConfig,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -78,6 +79,15 @@ pub struct Config {
     pub time_until_synced: Duration,
     /// The size of the memory pool in number of `MemoryInstance`s.
     pub memory_pool_size: usize,
+    pub da_gas_price_factor: NonZeroU64,
+    pub min_da_gas_price: u64,
+    pub max_da_gas_price_change_percent: u16,
+    pub da_p_component: i64,
+    pub da_d_component: i64,
+    pub activity_normal_range_size: u16,
+    pub activity_capped_range_size: u16,
+    pub activity_decrease_range_size: u16,
+    pub block_activity_threshold: u8,
 }
 
 impl Config {
@@ -96,14 +106,17 @@ impl Config {
         chain_config: ChainConfig,
         state_config: StateConfig,
     ) -> Self {
-        Self::local_node_with_reader(SnapshotReader::new_in_memory(
-            chain_config,
-            state_config,
-        ))
+        Self::local_node_with_reader(
+            SnapshotReader::new_in_memory(chain_config, state_config),
+            None,
+        )
     }
 
     #[cfg(feature = "test-helpers")]
-    pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
+    pub fn local_node_with_reader(
+        snapshot_reader: SnapshotReader,
+        da_committer_url: Option<String>,
+    ) -> Self {
         let block_importer = fuel_core_importer::Config::new(false);
         let latest_block = snapshot_reader.last_block_config();
         // In tests, we always want to use the native executor as a default configuration.
@@ -171,10 +184,10 @@ impl Config {
                 ..Default::default()
             },
             da_compression: DaCompressionConfig::Disabled,
-            starting_gas_price,
-            gas_price_change_percent,
-            min_gas_price,
-            gas_price_threshold_percent,
+            starting_exec_gas_price: starting_gas_price,
+            exec_gas_price_change_percent: gas_price_change_percent,
+            min_exec_gas_price: min_gas_price,
+            exec_gas_price_threshold_percent: gas_price_threshold_percent,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: None,
@@ -190,6 +203,16 @@ impl Config {
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
             memory_pool_size: 4,
+            da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
+            min_da_gas_price: 0,
+            max_da_gas_price_change_percent: 0,
+            da_p_component: 0,
+            da_d_component: 0,
+            activity_normal_range_size: 0,
+            activity_capped_range_size: 0,
+            activity_decrease_range_size: 0,
+            da_committer_url,
+            block_activity_threshold: 0,
         }
     }
 

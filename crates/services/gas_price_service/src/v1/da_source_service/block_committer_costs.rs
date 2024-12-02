@@ -120,11 +120,11 @@ where
 
 pub struct BlockCommitterHttpApi {
     client: reqwest::Client,
-    url: String,
+    url: Option<String>,
 }
 
 impl BlockCommitterHttpApi {
-    pub fn new(url: String) -> Self {
+    pub fn new(url: Option<String>) -> Self {
         Self {
             client: reqwest::Client::new(),
             url,
@@ -135,37 +135,49 @@ impl BlockCommitterHttpApi {
 #[async_trait::async_trait]
 impl BlockCommitterApi for BlockCommitterHttpApi {
     async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
-        let val = self.client.get(&self.url).send().await?;
-        let response = val.json::<RawDaBlockCosts>().await?;
-        Ok(Some(response))
+        if let Some(url) = &self.url {
+            let val = self.client.get(url).send().await?;
+            let response = val.json::<RawDaBlockCosts>().await?;
+            Ok(Some(response))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn get_costs_by_seqno(
         &self,
         number: u32,
     ) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
-        let response = self
-            .client
-            .get(&format!("{}/{}", self.url, number))
-            .send()
-            .await?
-            .json::<RawDaBlockCosts>()
-            .await?;
-        Ok(Some(response))
+        if let Some(url) = &self.url {
+            let response = self
+                .client
+                .get(&format!("{}/{}", url, number))
+                .send()
+                .await?
+                .json::<RawDaBlockCosts>()
+                .await?;
+            Ok(Some(response))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn get_cost_bundles_by_range(
         &self,
         range: core::ops::Range<u32>,
     ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
-        let response = self
-            .client
-            .get(&format!("{}/{}-{}", self.url, range.start, range.end))
-            .send()
-            .await?
-            .json::<Vec<RawDaBlockCosts>>()
-            .await?;
-        Ok(response.into_iter().map(Some).collect())
+        if let Some(url) = &self.url {
+            let response = self
+                .client
+                .get(&format!("{}/{}-{}", url, range.start, range.end))
+                .send()
+                .await?
+                .json::<Vec<RawDaBlockCosts>>()
+                .await?;
+            Ok(response.into_iter().map(Some).collect())
+        } else {
+            Ok(vec![])
+        }
     }
 }
 
