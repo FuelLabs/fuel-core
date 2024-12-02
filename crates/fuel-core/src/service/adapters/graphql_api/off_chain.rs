@@ -427,7 +427,7 @@ fn big_coins(
 ) -> (u64, Vec<StorageResult<CoinsToSpendIndexEntry>>) {
     let mut big_coins_total = 0;
     let big_coins: Vec<_> = coins_iter
-        .filter(|item| is_excluded(item, excluded_ids) == Ok(true))
+        .filter(|item| matches!(is_excluded(item, excluded_ids), Ok(m) if m))
         .take(max as usize)
         .take_while(|item| match item {
             Ok(item) => {
@@ -439,7 +439,7 @@ fn big_coins(
                         true
                     })
             }
-            Err(_) => true,
+            Err(_) => false,
         })
         .collect();
     (big_coins_total, big_coins)
@@ -483,15 +483,18 @@ fn max_dust_count(max: u16, big_coins_len: u16) -> u16 {
 
 fn dust_coins(
     coins_iter_back: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
-    last_big_coin: &StorageResult<CoinsToSpendIndexEntry>,
+    last_big_coin: &StorageResult<CoinsToSpendIndexEntry>, /* TODO[RC]: Not result? If "last big coin" is error, we should not try to get dust coins. */
     max_dust_count: u16,
     excluded_ids: &ExcludedKeysAsBytes,
 ) -> (u64, Vec<StorageResult<CoinsToSpendIndexEntry>>) {
     let mut dust_coins_total: u64 = 0;
     let dust_coins: Vec<_> = coins_iter_back
-        .filter(|item| is_excluded(item, excluded_ids) == Ok(true))
+        .filter(|item| matches!(is_excluded(item, excluded_ids), Ok(m) if m))
         .take(max_dust_count as usize)
-        .take_while(move |item| item != last_big_coin)
+        .take_while(move |item| match (item, last_big_coin) {
+            (Ok(current), Ok(last_big)) => current != last_big,
+            _ => false,
+        })
         .map(|item| {
             if let Ok(item) = &item {
                 let amount = item.0.amount();
