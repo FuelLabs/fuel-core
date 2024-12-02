@@ -30,12 +30,15 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::relayer::{
-        message::{
-            MerkleProof,
-            Message,
+    entities::{
+        coins::CoinId,
+        relayer::{
+            message::{
+                MerkleProof,
+                Message,
+            },
+            transaction::RelayedTransactionStatus,
         },
-        transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
         Bytes32,
@@ -64,7 +67,10 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-use crate::schema::coins::ExcludeInputBytes;
+use crate::schema::coins::{
+    CoinOrMessageIdBytes,
+    ExcludedKeysAsBytes,
+};
 
 use super::{
     indexation::coins_to_spend::IndexedCoinType,
@@ -119,8 +125,8 @@ pub trait OffChainDatabase: Send + Sync {
         asset_id: &AssetId,
         target_amount: u64,
         max_coins: u16,
-        excluded_ids: &ExcludeInputBytes,
-    ) -> StorageResult<Vec<(Vec<u8>, IndexedCoinType)>>; // TODO[RC]: Named return type
+        excluded_ids: &ExcludedKeysAsBytes,
+    ) -> StorageResult<Vec<CoinId>>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 

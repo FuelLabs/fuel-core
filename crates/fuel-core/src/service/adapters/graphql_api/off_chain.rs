@@ -35,6 +35,8 @@ use crate::{
             coins::{
                 CoinsToSpendIndex,
                 CoinsToSpendIndexKey,
+                COIN_FOREIGN_KEY_LEN,
+                MESSAGE_FOREIGN_KEY_LEN,
             },
             old::{
                 OldFuelBlockConsensus,
@@ -44,8 +46,8 @@ use crate::{
         },
     },
     schema::coins::{
-        CoinIdBytes,
-        ExcludeInputBytes,
+        CoinOrMessageIdBytes,
+        ExcludedKeysAsBytes,
     },
 };
 use fuel_core_storage::{
@@ -74,7 +76,10 @@ use fuel_core_types::{
         consensus::Consensus,
         primitives::BlockId,
     },
-    entities::relayer::transaction::RelayedTransactionStatus,
+    entities::{
+        coins::CoinId,
+        relayer::transaction::RelayedTransactionStatus,
+    },
     fuel_tx::{
         Address,
         AssetId,
@@ -307,8 +312,8 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         asset_id: &AssetId,
         target_amount: u64,
         max_coins: u16,
-        excluded_ids: &ExcludeInputBytes,
-    ) -> StorageResult<Vec<(Vec<u8>, IndexedCoinType)>> {
+        excluded_ids: &ExcludedKeysAsBytes,
+    ) -> StorageResult<Vec<CoinId>> {
         let prefix: Vec<_> = owner
             .as_ref()
             .iter()
@@ -337,14 +342,39 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             excluded_ids,
         );
 
-        Ok(selected_iter
-            .map(|x| x.unwrap())
-            .map(|(key, value)| {
-                let foreign_key = key.foreign_key_bytes().to_vec();
-                let coin_type = IndexedCoinType::try_from(value).unwrap();
-                (foreign_key, coin_type)
-            })
-            .collect())
+        let mut coins = Vec::with_capacity(max_coins as usize);
+        for (foreign_key, coin_type) in selected_iter.map(|x| x.unwrap()) {
+            let coin_type =
+                IndexedCoinType::try_from(coin_type).map_err(StorageError::from)?;
+            let coin = match coin_type {
+                IndexedCoinType::Coin => {
+                    let bytes: [u8; COIN_FOREIGN_KEY_LEN] = foreign_key
+                        .foreign_key_bytes()
+                        .as_slice()
+                        .try_into()
+                        .map_err(StorageError::from)?;
+
+                    let (tx_id_bytes, output_index_bytes) = bytes.split_at(TxId::LEN);
+                    let tx_id =
+                        TxId::try_from(tx_id_bytes).map_err(StorageError::from)?;
+                    let output_index = u16::from_be_bytes(
+                        output_index_bytes.try_into().map_err(StorageError::from)?,
+                    );
+                    CoinId::Utxo(UtxoId::new(tx_id, output_index))
+                }
+                IndexedCoinType::Message => {
+                    let bytes: [u8; MESSAGE_FOREIGN_KEY_LEN] = foreign_key
+                        .foreign_key_bytes()
+                        .as_slice()
+                        .try_into()
+                        .map_err(StorageError::from)?;
+                    let nonce = Nonce::from(bytes);
+                    CoinId::Message(nonce)
+                }
+            };
+            coins.push(coin);
+        }
+        Ok(coins)
     }
 }
 
@@ -353,7 +383,7 @@ fn coins_to_spend<'a>(
     coins_iter_back: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
     total: u64,
     max: u16,
-    excluded_ids: &ExcludeInputBytes,
+    excluded_ids: &ExcludedKeysAsBytes,
 ) -> BoxedIter<'a, Result<CoinsToSpendIndexEntry, StorageError>> {
     // TODO[RC]: Validate query parameters.
     if total == 0 && max == 0 {
@@ -411,7 +441,7 @@ fn big_coins(
     coins_iter: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
     total: u64,
     max: u16,
-    excluded_ids: &ExcludeInputBytes,
+    excluded_ids: &ExcludedKeysAsBytes,
 ) -> (u64, Vec<Result<CoinsToSpendIndexEntry, StorageError>>) {
     let mut big_coins_total = 0;
     let big_coins: Vec<_> = coins_iter
@@ -432,19 +462,20 @@ fn big_coins(
 
 fn is_excluded(
     item: &Result<CoinsToSpendIndexEntry, StorageError>,
-    excluded_ids: &ExcludeInputBytes,
+    excluded_ids: &ExcludedKeysAsBytes,
 ) -> bool {
     let (key, value) = item.as_ref().unwrap();
     let coin_type = IndexedCoinType::try_from(*value).unwrap();
     match coin_type {
         IndexedCoinType::Coin => {
             let foreign_key =
-                CoinIdBytes::Coin(key.foreign_key_bytes().try_into().unwrap());
+                CoinOrMessageIdBytes::Coin(key.foreign_key_bytes().try_into().unwrap());
             !excluded_ids.coins().contains(&foreign_key)
         }
         IndexedCoinType::Message => {
-            let foreign_key =
-                CoinIdBytes::Message(key.foreign_key_bytes().try_into().unwrap());
+            let foreign_key = CoinOrMessageIdBytes::Message(
+                key.foreign_key_bytes().try_into().unwrap(),
+            );
             !excluded_ids.messages().contains(&foreign_key)
         }
     }
@@ -459,7 +490,7 @@ fn dust_coins(
     coins_iter_back: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
     last_big_coin: &Result<CoinsToSpendIndexEntry, StorageError>, /* TODO[RC]: No Result here */
     max_dust_count: u16,
-    excluded_ids: &ExcludeInputBytes,
+    excluded_ids: &ExcludedKeysAsBytes,
 ) -> (u64, Vec<Result<CoinsToSpendIndexEntry, StorageError>>) {
     let mut dust_coins_total: u64 = 0;
     let dust_coins: Vec<_> = coins_iter_back

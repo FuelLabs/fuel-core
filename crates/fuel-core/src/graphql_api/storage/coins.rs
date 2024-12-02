@@ -159,7 +159,6 @@ impl CoinsToSpendIndexKey {
         self.0[offset]
     }
 
-    #[allow(clippy::arithmetic_side_effects)]
     pub fn amount(&self) -> u64 {
         let offset = Address::LEN + AssetId::LEN + u8::BITS as usize / 8;
         let amount_start = offset;
@@ -171,7 +170,6 @@ impl CoinsToSpendIndexKey {
         )
     }
 
-    #[allow(clippy::arithmetic_side_effects)]
     pub fn foreign_key_bytes(&self) -> Vec<u8> {
         let offset =
             Address::LEN + AssetId::LEN + u8::BITS as usize / 8 + u64::BITS as usize / 8;

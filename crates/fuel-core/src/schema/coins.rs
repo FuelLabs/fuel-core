@@ -55,6 +55,8 @@ use fuel_core_types::{
 use itertools::Itertools;
 use tokio_stream::StreamExt;
 
+use self::indexation::coins_to_spend;
+
 pub struct Coin(pub(crate) CoinModel);
 
 #[async_graphql::Object]
@@ -156,21 +158,21 @@ pub struct ExcludeInput {
     messages: Vec<Nonce>,
 }
 
-pub struct ExcludeInputBytes {
-    coins: Vec<CoinIdBytes>,
-    messages: Vec<CoinIdBytes>,
+pub struct ExcludedKeysAsBytes {
+    coins: Vec<CoinOrMessageIdBytes>,
+    messages: Vec<CoinOrMessageIdBytes>,
 }
 
 // The part of the `CoinsToSpendIndexKey` which is used to identify the coin or message in the
 // OnChain database. We could consider using `CoinId`, but we do not need to re-create
 // neither the `UtxoId` nor `Nonce` from the raw bytes.
 #[derive(PartialEq)]
-pub(crate) enum CoinIdBytes {
+pub(crate) enum CoinOrMessageIdBytes {
     Coin([u8; COIN_FOREIGN_KEY_LEN]),
     Message([u8; MESSAGE_FOREIGN_KEY_LEN]),
 }
 
-impl CoinIdBytes {
+impl CoinOrMessageIdBytes {
     pub(crate) fn from_utxo_id(utxo_id: &fuel_tx::UtxoId) -> Self {
         Self::Coin(utxo_id_to_bytes(utxo_id))
     }
@@ -182,16 +184,19 @@ impl CoinIdBytes {
     }
 }
 
-impl ExcludeInputBytes {
-    pub(crate) fn new(coins: Vec<CoinIdBytes>, messages: Vec<CoinIdBytes>) -> Self {
+impl ExcludedKeysAsBytes {
+    pub(crate) fn new(
+        coins: Vec<CoinOrMessageIdBytes>,
+        messages: Vec<CoinOrMessageIdBytes>,
+    ) -> Self {
         Self { coins, messages }
     }
 
-    pub(crate) fn coins(&self) -> &[CoinIdBytes] {
+    pub(crate) fn coins(&self) -> &[CoinOrMessageIdBytes] {
         &self.coins
     }
 
-    pub(crate) fn messages(&self) -> &[CoinIdBytes] {
+    pub(crate) fn messages(&self) -> &[CoinOrMessageIdBytes] {
         &self.messages
     }
 }
@@ -307,18 +312,19 @@ impl CoinQuery {
                         exclude
                             .utxos
                             .into_iter()
-                            .map(|utxo_id| CoinIdBytes::from_utxo_id(&utxo_id.0))
+                            .map(|utxo_id| CoinOrMessageIdBytes::from_utxo_id(&utxo_id.0))
                             .collect(),
                         exclude
                             .messages
                             .into_iter()
-                            .map(|nonce| CoinIdBytes::from_nonce(&nonce.0))
+                            .map(|nonce| CoinOrMessageIdBytes::from_nonce(&nonce.0))
                             .collect(),
                     )
                 },
             );
 
-            let excluded = ExcludeInputBytes::new(excluded_utxoids, excluded_nonces);
+            let excluded =
+                ExcludedKeysAsBytes::new(excluded_utxoids, excluded_nonces);
 
             for asset in query_per_asset {
                 let asset_id = asset.asset_id.0;
@@ -329,43 +335,35 @@ impl CoinQuery {
                     .unwrap_or(max_input)
                     .min(max_input);
 
-                let coins_per_asset: Vec<_> = read_view
+                let mut coins_per_asset = vec![];
+                for coin_or_message_id in read_view
                     .off_chain
                     .coins_to_spend(&owner, &asset_id, total_amount, max, &excluded)?
                     .into_iter()
-                    .map(|(key, t)| match t {
-                        indexation::coins_to_spend::IndexedCoinType::Coin => {
-                            let tx_id = TxId::try_from(&key[0..32])
-                                .expect("The slice has size 32");
-                            let output_index = u16::from_be_bytes(
-                                key[32..].try_into().expect("The slice has size 2"),
-                            );
-                            let utxo_id = fuel_tx::UtxoId::new(tx_id, output_index);
-                            read_view
-                                .coin(utxo_id)
-                                .map(|coin| CoinType::Coin(coin.into()))
-                                .unwrap()
-                        }
-                        indexation::coins_to_spend::IndexedCoinType::Message => {
-                            let nonce =
-                                fuel_core_types::fuel_types::Nonce::try_from(&key[0..32])
-                                    .expect("The slice has size 32");
-                            read_view
-                                .message(&nonce)
-                                .map(|message| {
-                                    let message_coin = MessageCoinModel {
-                                        sender: *message.sender(),
-                                        recipient: *message.recipient(),
-                                        nonce: *message.nonce(),
-                                        amount: message.amount(),
-                                        da_height: message.da_height(),
-                                    };
-                                    CoinType::MessageCoin(message_coin.into())
-                                })
-                                .unwrap()
-                        }
-                    })
-                    .collect();
+                {
+                    let x = match coin_or_message_id {
+                        coins::CoinId::Utxo(utxo_id) => read_view
+                            .coin(utxo_id)
+                            .map(|coin| CoinType::Coin(coin.into()))
+                            .unwrap(),
+                        coins::CoinId::Message(nonce) => read_view
+                            .message(&nonce)
+                            .map(|message| {
+                                let message_coin = MessageCoinModel {
+                                    sender: *message.sender(),
+                                    recipient: *message.recipient(),
+                                    nonce: *message.nonce(),
+                                    amount: message.amount(),
+                                    da_height: message.da_height(),
+                                };
+                                CoinType::MessageCoin(message_coin.into())
+                            })
+                            .unwrap(),
+                    };
+
+                    coins_per_asset.push(x);
+                }
+
                 if coins_per_asset.is_empty() {
                     return Err(CoinsQueryError::InsufficientCoinsForTheMax {
                         asset_id,

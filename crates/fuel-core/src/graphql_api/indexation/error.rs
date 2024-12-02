@@ -89,6 +89,17 @@ pub enum IndexationError {
     StorageError(StorageError),
 }
 
+impl std::error::Error for IndexationError {}
+
+impl From<IndexationError> for StorageError {
+    fn from(error: IndexationError) -> Self {
+        match error {
+            IndexationError::StorageError(e) => e,
+            e => StorageError::Other(anyhow::anyhow!(e)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::IndexationError;
