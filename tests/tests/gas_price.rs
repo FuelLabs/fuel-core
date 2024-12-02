@@ -422,9 +422,13 @@ use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::R
 
 #[test]
 fn produce_block__l1_committed_block_effects_gas_price() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init();
+
     let rt = tokio::runtime::Runtime::new().unwrap();
     // set up chain with single unrecorded block
-    let args = vec![
+    let mut args = vec![
         "--debug",
         "--poa-instant",
         "true",
@@ -435,6 +439,7 @@ fn produce_block__l1_committed_block_effects_gas_price() {
         let driver = FuelCoreDriver::spawn(&args).await.unwrap();
         driver.client.produce_blocks(1, None).await.unwrap();
         let first_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
+        tokio::time::sleep(Duration::from_millis(100)).await;
         let temp_dir = driver.kill().await;
         (first_gas_price, temp_dir)
     });
@@ -445,20 +450,17 @@ fn produce_block__l1_committed_block_effects_gas_price() {
     let mock = FakeServer::new();
     let url = mock.url();
 
-    let args = vec![
-        "--debug",
-        "--poa-instant",
-        "true",
-        "--da-committer-url",
-        &url,
-        "--min-da-gas-price",
-        "100",
-    ];
+    // add the da committer url to the args
+    args.extend(&["--da-committer-url", &url]);
 
     rt.block_on(async {
-        let _driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
+        let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
             .await
             .unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        driver.client.produce_blocks(1, None).await.unwrap();
+        let new_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
+        assert_ne!(first_gas_price, new_gas_price);
     });
 }
 

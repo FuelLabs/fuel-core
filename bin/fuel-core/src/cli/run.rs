@@ -205,9 +205,21 @@ pub struct Command {
     #[arg(long = "gas-price-threshold-percent", default_value = "50", env)]
     pub gas_price_threshold_percent: u8,
 
-    // Minimum DA gas price
+    /// Minimum DA gas price
     #[arg(long = "min-da-gas-price", default_value = "0", env)]
     pub min_da_gas_price: u64,
+
+    /// P component of DA gas price calculation
+    #[arg(long = "da-p-component", default_value = "0", env)]
+    pub da_p_component: i64,
+
+    /// D component of DA gas price calculation
+    #[arg(long = "da-d-component", default_value = "0", env)]
+    pub da_d_component: i64,
+
+    /// Maximum DA gas price change percent
+    #[arg(long = "max-da-gas-price-change-percent", default_value = "0", env)]
+    pub max_da_gas_price_change_percent: u16,
 
     /// The URL for the DA Block Committer info
     #[arg(long = "da-committer-url", env)]
@@ -312,6 +324,9 @@ impl Command {
             min_gas_price,
             gas_price_threshold_percent,
             min_da_gas_price,
+            da_p_component,
+            da_d_component,
+            max_da_gas_price_change_percent,
             da_committer_url,
             consensus_key,
             #[cfg(feature = "aws-kms")]
@@ -618,9 +633,9 @@ impl Command {
             memory_pool_size,
             da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
             min_da_gas_price,
-            max_da_gas_price_change_percent: 0,
-            da_p_component: 0,
-            da_d_component: 0,
+            max_da_gas_price_change_percent,
+            da_p_component,
+            da_d_component,
             activity_normal_range_size: 100,
             activity_capped_range_size: 0,
             activity_decrease_range_size: 0,
