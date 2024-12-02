@@ -20,12 +20,9 @@ use crate::{
         },
     },
     graphql_api::{
-        indexation::{
-            coins_to_spend::{
-                IndexedCoinType,
-                NON_RETRYABLE_BYTE,
-            },
-            error::IndexationError,
+        indexation::coins_to_spend::{
+            IndexedCoinType,
+            NON_RETRYABLE_BYTE,
         },
         storage::{
             balances::{
@@ -100,7 +97,6 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-use itertools::Itertools;
 use rand::Rng;
 use std::iter;
 

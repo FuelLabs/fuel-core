@@ -439,7 +439,10 @@ mod tests {
                 &db.service_database(),
             )
             .await;
-            assert_matches!(coins, Err(CoinsQueryError::MaxCoinsReached));
+            assert_matches!(
+                coins,
+                Err(CoinsQueryError::InsufficientCoinsForTheMax { .. })
+            );
         }
 
         #[tokio::test]
@@ -608,7 +611,10 @@ mod tests {
                 &db.service_database(),
             )
             .await;
-            assert_matches!(coins, Err(CoinsQueryError::MaxCoinsReached));
+            assert_matches!(
+                coins,
+                Err(CoinsQueryError::InsufficientCoinsForTheMax { .. })
+            );
         }
 
         #[tokio::test]
@@ -785,6 +791,7 @@ mod tests {
                             Err(CoinsQueryError::InsufficientCoinsForTheMax {
                                 asset_id: _,
                                 collected_amount: 10,
+                                max: u16::MAX
                             })
                         )
                     }
@@ -918,7 +925,8 @@ mod tests {
             coin_result,
             Err(CoinsQueryError::InsufficientCoinsForTheMax {
                 asset_id: _base_asset_id,
-                collected_amount: 0
+                collected_amount: 0,
+                max: u16::MAX
             })
         )
     }
@@ -941,15 +949,6 @@ mod tests {
         => Ok(2)
         ; "Enough coins in the DB to reach target(u64::MAX) by 2 coins"
     )]
-    #[test_case::test_case(
-        TestCase {
-            db_amount: vec![u64::MAX, u64::MAX],
-            target_amount: u64::MAX,
-            max_coins: 0,
-        }
-        => Err(CoinsQueryError::MaxCoinsReached)
-        ; "Enough coins in the DB to reach target(u64::MAX) but limit is zero"
-    )]
     #[tokio::test]
     async fn corner_cases(case: TestCase) -> Result<usize, CoinsQueryError> {
         let mut rng = StdRng::seed_from_u64(0xF00DF00D);
@@ -959,6 +958,27 @@ mod tests {
         let message_result = test_case_run(case, CoinType::Message, base_asset_id).await;
         assert_eq!(coin_result, message_result);
         coin_result
+    }
+
+    #[tokio::test]
+    async fn enough_coins_in_the_db_to_reach_target_u64_max_but_limit_is_zero() {
+        let mut rng = StdRng::seed_from_u64(0xF00DF00D);
+
+        let case = TestCase {
+            db_amount: vec![u64::MAX, u64::MAX],
+            target_amount: u64::MAX,
+            max_coins: 0,
+        };
+
+        let base_asset_id = rng.gen();
+        let coin_result =
+            test_case_run(case.clone(), CoinType::Coin, base_asset_id).await;
+        let message_result = test_case_run(case, CoinType::Message, base_asset_id).await;
+        assert_eq!(coin_result, message_result);
+        assert!(matches!(
+            coin_result,
+            Err(CoinsQueryError::InsufficientCoinsForTheMax { .. })
+        ));
     }
 
     // TODO: Should use any mock database instead of the `fuel_core::CombinedDatabase`.

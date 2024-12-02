@@ -67,15 +67,9 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-use crate::schema::coins::{
-    CoinOrMessageIdBytes,
-    ExcludedKeysAsBytes,
-};
+use crate::schema::coins::ExcludedKeysAsBytes;
 
-use super::{
-    indexation::coins_to_spend::IndexedCoinType,
-    storage::balances::TotalBalanceAmount,
-};
+use super::storage::balances::TotalBalanceAmount;
 
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;

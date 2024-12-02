@@ -12,7 +12,6 @@ use crate::{
     },
     graphql_api::{
         api_service::ConsensusProvider,
-        indexation,
         storage::coins::{
             COIN_FOREIGN_KEY_LEN,
             MESSAGE_FOREIGN_KEY_LEN,
@@ -51,14 +50,11 @@ use fuel_core_types::{
     },
     fuel_tx::{
         self,
-        TxId,
     },
     fuel_types,
 };
 use itertools::Itertools;
 use tokio_stream::StreamExt;
-
-use self::indexation::coins_to_spend;
 
 pub struct Coin(pub(crate) CoinModel);
 
