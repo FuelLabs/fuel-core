@@ -5566,7 +5566,7 @@ dependencies = [
  "rand",
  "rw-stream-sink",
  "smallvec",
- "thiserror",
+ "thiserror 1.0.69",
  "tracing",
  "unsigned-varint 0.8.0",
  "void",
@@ -5898,7 +5898,7 @@ version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad964f312c59dcfcac840acd8c555de8403e295d39edf96f5240048b5fcaa314"
 dependencies = [
- "async-io 2.3.4",
+ "async-io 2.4.0",
  "futures",
  "futures-timer",
  "if-watch",
@@ -5975,7 +5975,7 @@ dependencies = [
  "either",
  "futures",
  "libp2p-core 0.42.0",
- "thiserror",
+ "thiserror 1.0.69",
  "tracing",
  "yamux 0.12.1",
  "yamux 0.13.4",
@@ -7581,19 +7581,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d6da84cc204722a989e01ba2f6e1e276e190f22263d0cb6ce8526fcdb0d2e1f"
 dependencies = [
  "byteorder",
-]
-
-[[package]]
-name = "quick-protobuf-codec"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8ededb1cd78531627244d51dd0c7139fbe736c7d57af0092a76f0ffb2f56e98"
-dependencies = [
- "asynchronous-codec 0.6.2",
- "bytes",
- "quick-protobuf",
- "thiserror 1.0.69",
- "unsigned-varint 0.7.2",
 ]
 
 [[package]]
