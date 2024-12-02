@@ -118,7 +118,7 @@ pub trait OffChainDatabase: Send + Sync {
         owner: &Address,
         asset_id: &AssetId,
         target_amount: u64,
-        max_coins: u32,
+        max_coins: u16,
         excluded_ids: &ExcludeInputBytes,
     ) -> StorageResult<Vec<(Vec<u8>, IndexedCoinType)>>; // TODO[RC]: Named return type
 

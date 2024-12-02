@@ -300,7 +300,6 @@ impl CoinQuery {
             let owner: fuel_tx::Address = owner.0;
             let mut all_coins = Vec::with_capacity(query_per_asset.len());
 
-            // TODO[RC]: Unify with the "non-indexation" version.
             let (excluded_utxoids, excluded_nonces) = excluded_ids.map_or_else(
                 || (vec![], vec![]),
                 |exclude| {
@@ -324,17 +323,15 @@ impl CoinQuery {
             for asset in query_per_asset {
                 let asset_id = asset.asset_id.0;
                 let total_amount = asset.amount.0;
-                let max_coins: u32 = asset.max.map_or(max_input as u32, Into::into);
+                let max = asset
+                    .max
+                    .and_then(|max| u16::try_from(max.0).ok())
+                    .unwrap_or(max_input)
+                    .min(max_input);
 
                 let coins_per_asset: Vec<_> = read_view
                     .off_chain
-                    .coins_to_spend(
-                        &owner,
-                        &asset_id,
-                        total_amount,
-                        max_coins,
-                        &excluded,
-                    )?
+                    .coins_to_spend(&owner, &asset_id, total_amount, max, &excluded)?
                     .into_iter()
                     .map(|(key, t)| match t {
                         indexation::coins_to_spend::IndexedCoinType::Coin => {
@@ -370,9 +367,10 @@ impl CoinQuery {
                     })
                     .collect();
                 if coins_per_asset.is_empty() {
-                    return Err(CoinsQueryError::InsufficientCoins {
+                    return Err(CoinsQueryError::InsufficientCoinsForTheMax {
                         asset_id,
                         collected_amount: total_amount,
+                        max,
                     }
                     .into())
                 }

@@ -306,7 +306,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         owner: &Address,
         asset_id: &AssetId,
         target_amount: u64,
-        max_coins: u32,
+        max_coins: u16,
         excluded_ids: &ExcludeInputBytes,
     ) -> StorageResult<Vec<(Vec<u8>, IndexedCoinType)>> {
         let prefix: Vec<_> = owner
@@ -352,7 +352,7 @@ fn coins_to_spend<'a>(
     coins_iter: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
     coins_iter_back: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
     total: u64,
-    max: u32,
+    max: u16,
     excluded_ids: &ExcludeInputBytes,
 ) -> BoxedIter<'a, Result<CoinsToSpendIndexEntry, StorageError>> {
     // TODO[RC]: Validate query parameters.
@@ -380,7 +380,7 @@ fn coins_to_spend<'a>(
         return std::iter::empty().into_boxed();
     };
 
-    let selected_big_coins_len: u32 = selected_big_coins.len().try_into().unwrap();
+    let selected_big_coins_len: u16 = selected_big_coins.len().try_into().unwrap();
 
     let max_dust_count = max_dust_count(max, selected_big_coins_len);
     dbg!(&max_dust_count);
@@ -410,7 +410,7 @@ fn coins_to_spend<'a>(
 fn big_coins(
     coins_iter: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
     total: u64,
-    max: u32,
+    max: u16,
     excluded_ids: &ExcludeInputBytes,
 ) -> (u64, Vec<Result<CoinsToSpendIndexEntry, StorageError>>) {
     let mut big_coins_total = 0;
@@ -450,7 +450,7 @@ fn is_excluded(
     }
 }
 
-fn max_dust_count(max: u32, big_coins_len: u32) -> u32 {
+fn max_dust_count(max: u16, big_coins_len: u16) -> u16 {
     let mut rng = rand::thread_rng();
     rng.gen_range(0..=max.saturating_sub(big_coins_len))
 }
@@ -458,7 +458,7 @@ fn max_dust_count(max: u32, big_coins_len: u32) -> u32 {
 fn dust_coins(
     coins_iter_back: BoxedIter<Result<CoinsToSpendIndexEntry, StorageError>>,
     last_big_coin: &Result<CoinsToSpendIndexEntry, StorageError>, /* TODO[RC]: No Result here */
-    max_dust_count: u32,
+    max_dust_count: u16,
     excluded_ids: &ExcludeInputBytes,
 ) -> (u64, Vec<Result<CoinsToSpendIndexEntry, StorageError>>) {
     let mut dust_coins_total: u64 = 0;

@@ -28,13 +28,12 @@ use thiserror::Error;
 pub enum CoinsQueryError {
     #[error("store error occurred: {0}")]
     StorageError(StorageError),
-    #[error("not enough coins to fit the target")]
-    InsufficientCoins {
+    #[error("target can't be met without exceeding the {max} coin limit.")]
+    InsufficientCoinsForTheMax {
         asset_id: AssetId,
         collected_amount: Word,
+        max: u16,
     },
-    #[error("max number of coins is reached while trying to fit the target")]
-    MaxCoinsReached,
     #[error("the query contains duplicate assets")]
     DuplicateAssets(AssetId),
 }
@@ -128,7 +127,11 @@ pub async fn largest_first(
 
         // Error if we can't fit more coins
         if coins.len() >= max as usize {
-            return Err(CoinsQueryError::MaxCoinsReached)
+            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                asset_id,
+                collected_amount,
+                max,
+            })
         }
 
         // Add to list
@@ -137,9 +140,10 @@ pub async fn largest_first(
     }
 
     if collected_amount < target {
-        return Err(CoinsQueryError::InsufficientCoins {
+        return Err(CoinsQueryError::InsufficientCoinsForTheMax {
             asset_id,
             collected_amount,
+            max,
         })
     }
 
@@ -417,9 +421,10 @@ mod tests {
                     _ => {
                         assert_matches!(
                             coins,
-                            Err(CoinsQueryError::InsufficientCoins {
+                            Err(CoinsQueryError::InsufficientCoinsForTheMax {
                                 asset_id: _,
                                 collected_amount: 15,
+                                max: u16::MAX
                             })
                         )
                     }
@@ -581,9 +586,10 @@ mod tests {
                     _ => {
                         assert_matches!(
                             coins,
-                            Err(CoinsQueryError::InsufficientCoins {
+                            Err(CoinsQueryError::InsufficientCoinsForTheMax {
                                 asset_id: _,
                                 collected_amount: 15,
+                                max: u16::MAX
                             })
                         )
                     }
@@ -776,7 +782,7 @@ mod tests {
                     _ => {
                         assert_matches!(
                             coins,
-                            Err(CoinsQueryError::InsufficientCoins {
+                            Err(CoinsQueryError::InsufficientCoinsForTheMax {
                                 asset_id: _,
                                 collected_amount: 10,
                             })
@@ -910,7 +916,7 @@ mod tests {
         assert_eq!(coin_result, message_result);
         assert_matches!(
             coin_result,
-            Err(CoinsQueryError::InsufficientCoins {
+            Err(CoinsQueryError::InsufficientCoinsForTheMax {
                 asset_id: _base_asset_id,
                 collected_amount: 0
             })
