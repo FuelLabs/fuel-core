@@ -44,7 +44,10 @@ use fuel_core_types::{
     entities::coins::{
         self,
         coin::Coin as CoinModel,
-        message_coin::MessageCoin as MessageCoinModel,
+        message_coin::{
+            self,
+            MessageCoin as MessageCoinModel,
+        },
     },
     fuel_tx::{
         self,
@@ -305,26 +308,29 @@ impl CoinQuery {
             let owner: fuel_tx::Address = owner.0;
             let mut all_coins = Vec::with_capacity(query_per_asset.len());
 
-            let (excluded_utxoids, excluded_nonces) = excluded_ids.map_or_else(
-                || (vec![], vec![]),
-                |exclude| {
-                    (
-                        exclude
-                            .utxos
-                            .into_iter()
-                            .map(|utxo_id| CoinOrMessageIdBytes::from_utxo_id(&utxo_id.0))
-                            .collect(),
-                        exclude
-                            .messages
-                            .into_iter()
-                            .map(|nonce| CoinOrMessageIdBytes::from_nonce(&nonce.0))
-                            .collect(),
-                    )
-                },
-            );
+            let (excluded_utxo_id_bytes, excluded_nonce_bytes) = excluded_ids
+                .map_or_else(
+                    || (vec![], vec![]),
+                    |exclude| {
+                        (
+                            exclude
+                                .utxos
+                                .into_iter()
+                                .map(|utxo_id| {
+                                    CoinOrMessageIdBytes::from_utxo_id(&utxo_id.0)
+                                })
+                                .collect(),
+                            exclude
+                                .messages
+                                .into_iter()
+                                .map(|nonce| CoinOrMessageIdBytes::from_nonce(&nonce.0))
+                                .collect(),
+                        )
+                    },
+                );
 
             let excluded =
-                ExcludedKeysAsBytes::new(excluded_utxoids, excluded_nonces);
+                ExcludedKeysAsBytes::new(excluded_utxo_id_bytes, excluded_nonce_bytes);
 
             for asset in query_per_asset {
                 let asset_id = asset.asset_id.0;
@@ -341,27 +347,19 @@ impl CoinQuery {
                     .coins_to_spend(&owner, &asset_id, total_amount, max, &excluded)?
                     .into_iter()
                 {
-                    let x = match coin_or_message_id {
+                    let coin_type = match coin_or_message_id {
                         coins::CoinId::Utxo(utxo_id) => read_view
                             .coin(utxo_id)
-                            .map(|coin| CoinType::Coin(coin.into()))
-                            .unwrap(),
-                        coins::CoinId::Message(nonce) => read_view
-                            .message(&nonce)
-                            .map(|message| {
-                                let message_coin = MessageCoinModel {
-                                    sender: *message.sender(),
-                                    recipient: *message.recipient(),
-                                    nonce: *message.nonce(),
-                                    amount: message.amount(),
-                                    da_height: message.da_height(),
-                                };
-                                CoinType::MessageCoin(message_coin.into())
-                            })
-                            .unwrap(),
+                            .map(|coin| CoinType::Coin(coin.into()))?,
+                        coins::CoinId::Message(nonce) => {
+                            let message = read_view.message(&nonce)?;
+                            let message_coin: message_coin::MessageCoin =
+                                message.try_into()?;
+                            CoinType::MessageCoin(message_coin.into())
+                        }
                     };
 
-                    coins_per_asset.push(x);
+                    coins_per_asset.push(coin_type);
                 }
 
                 if coins_per_asset.is_empty() {
