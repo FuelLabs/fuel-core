@@ -58,6 +58,7 @@ async fn asset_info_mint_burn() {
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
+    // Given
     // Register ids
     let reg_len: u8 = 0x10;
     let reg_mint_amount: u8 = 0x11;
@@ -140,6 +141,7 @@ async fn asset_info_mint_burn() {
     let status = client.submit_and_await_commit(&script).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
+    // When
     // Query asset info before burn
     let initial_supply = client
         .asset_info(&contract_id.asset_id(&Bytes32::zeroed()))
@@ -149,6 +151,7 @@ async fn asset_info_mint_burn() {
         .total_supply
         .0;
 
+    // Then
     // We should have the minted amount first
     assert_eq!(initial_supply, mint_amount);
 
@@ -187,6 +190,7 @@ async fn asset_info_mint_burn() {
     let status = client.submit_and_await_commit(&script).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
+    // When
     // Query asset info after burn
     let final_supply = client
         .asset_info(&contract_id.asset_id(&Bytes32::zeroed()))
@@ -196,6 +200,7 @@ async fn asset_info_mint_burn() {
         .total_supply
         .0;
 
+    // Then
     // We should have the minted amount first
     assert_eq!(final_supply, mint_amount - burn_amount);
 }
