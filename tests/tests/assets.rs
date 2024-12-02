@@ -1,79 +1,148 @@
-use fuel_core::{
-    chain_config::{
-        CoinConfig,
-        StateConfig,
-    },
-    database::Database,
-    service::{
-        Config,
-        FuelService,
-    },
-};
+use fuel_core::service::Config;
+use fuel_core_bin::FuelService;
 use fuel_core_client::client::{
-    types::{
-        primitives::AssetId,
-        TransactionStatus,
-    },
+    types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_types::fuel_tx::{
-    Input,
-    Output,
-    TransactionBuilder,
-    TxId,
+use fuel_core_types::{
+    fuel_asm::{
+        op,
+        GTFArgs,
+        Instruction,
+        RegId,
+        RegisterId,
+        Word,
+    },
+    fuel_tx::{
+        Bytes32,
+        ContractIdExt,
+        Input,
+        Output,
+        TransactionBuilder,
+        TxPointer,
+        UtxoId,
+        Witness,
+    },
+    fuel_types::{
+        canonical::Serialize,
+        Immediate12,
+    },
+    fuel_vm::{
+        Call,
+        Contract,
+        Salt,
+    },
 };
 
-async fn setup_service(configs: Vec<CoinConfig>) -> FuelService {
-    let state = StateConfig {
-        coins: configs,
-        ..Default::default()
-    };
-    let config = Config::local_node_with_state_config(state);
-
-    FuelService::from_database(Database::default(), config)
-        .await
-        .unwrap()
+/// Set a register `r` to a Word-sized number value using left-shifts
+pub fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
+    let r = u8::try_from(r).unwrap();
+    let mut ops = vec![op::movi(r, 0)];
+    for byte in v.to_be_bytes() {
+        ops.push(op::ori(r, r, byte as Immediate12));
+        ops.push(op::slli(r, r, 8));
+    }
+    ops.pop().unwrap(); // Remove last shift
+    ops
 }
 
 #[tokio::test]
-#[ignore] // TODO: Need to be able to mint assets for this test to work
-async fn asset_info() {
-    // setup test data in the node
-    let output_index = 5;
-    let tx_id = TxId::new([1u8; 32]);
-    let coin = CoinConfig {
-        output_index,
-        tx_id,
-        ..Default::default()
-    };
+async fn asset_info_mint_burn() {
+    // Constants
+    let mint_amount: u64 = 100;
+    let burn_amount: u64 = 50;
+    let gas_limit = 1_000_000;
 
     // setup server & client
-    let srv = setup_service(vec![coin]).await;
+    let config = Config::local_node();
+    let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    // run test
-    let asset_id = AssetId::new([1u8; 32]);
-    let mint_amount = 100;
-    let burn_amount = 50;
+    // Register ids
+    let reg_len: u8 = 0x10;
+    let reg_mint_amount: u8 = 0x11;
+    let reg_burn_amount: u8 = 0x12;
+    let reg_jump_cond: u8 = 0x13;
+    let mut ops = vec![
+        // Allocate space for sub asset id
+        op::movi(reg_len, 32),
+        op::aloc(reg_len),
+        // Put the sub id 0 in memory
+        op::sb(RegId::HP, 0, 0),
+    ];
+    // Set the mint amount in a register
+    ops.extend(set_full_word(reg_mint_amount.into(), mint_amount));
+    // Set the burn amount in a register
+    ops.extend(set_full_word(reg_burn_amount.into(), burn_amount));
+    ops.extend(vec![
+        // Read the register filled by the script data to either make a mint or burn
+        // If 0, mint, if 2, burn
+        op::jmpf(reg_jump_cond, 0),
+        op::mint(reg_mint_amount, RegId::HP),
+        op::ret(RegId::ONE),
+        op::burn(reg_burn_amount, RegId::HP),
+        op::ret(RegId::ONE),
+    ]);
+    // Contract code.
+    let bytecode: Witness = ops.into_iter().collect::<Vec<u8>>().into();
 
-    // Mint coins first
-    let mint_tx = TransactionBuilder::mint(
-        0u32.into(),
-        0,
-        Default::default(),
-        Default::default(),
-        mint_amount,
-        asset_id,
-        Default::default(),
+    // Setup the contract.
+    let salt = Salt::zeroed();
+    let contract = Contract::from(bytecode.as_ref());
+    let root = contract.root();
+    let state_root = Contract::initial_state_root(std::iter::empty());
+    let contract_id = contract.id(&salt, &root, &state_root);
+    let output = Output::contract_created(contract_id, state_root);
+
+    // Create the contract deploy transaction.
+    let contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
+        .add_fee_input()
+        .add_output(output)
+        .finalize_as_transaction();
+    // Deploy the contract.
+    matches!(
+        client.submit_and_await_commit(&contract_deploy).await,
+        Ok(TransactionStatus::Success { .. })
+    );
+
+    let script_ops = vec![
+        // Place 0 in the jump condition register to trigger the mint
+        op::movi(reg_jump_cond, 0),
+        // Call the contract that handle the asset and will mint
+        op::gtf_args(0x10, RegId::ZERO, GTFArgs::ScriptData),
+        op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
+        op::ret(RegId::ONE),
+    ];
+    let script_data: Vec<u8> = [Call::new(contract_id, 0, 0).to_bytes().as_slice()]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+    let script = TransactionBuilder::script(
+        script_ops.into_iter().collect::<Vec<u8>>().into(),
+        script_data,
     )
+    // Add contract as input of the transaction
+    .add_input(Input::contract(
+        UtxoId::new(Bytes32::zeroed(), 0),
+        Bytes32::zeroed(),
+        state_root,
+        TxPointer::default(),
+        contract_id,
+    ))
+    .script_gas_limit(gas_limit)
+    .add_fee_input()
+    // Add contract as output of the transaction
+    .add_output(Output::contract(0, Bytes32::zeroed(), Bytes32::zeroed()))
     .finalize_as_transaction();
 
-    let status = client.submit_and_await_commit(&mint_tx).await.unwrap();
+    // Submit and await commit of the mint transaction
+    let status = client.submit_and_await_commit(&script).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // Query asset info before burn
     let initial_supply = client
-        .asset_info(&asset_id)
+        .asset_info(&contract_id.asset_id(&Bytes32::zeroed()))
         .await
         .unwrap()
         .unwrap()
@@ -84,34 +153,49 @@ async fn asset_info() {
     assert_eq!(initial_supply, mint_amount);
 
     // Create and submit transaction that burns coins
-    let tx = TransactionBuilder::script(vec![], vec![])
-        .add_input(Input::coin_signed(
-            Default::default(),
-            Default::default(),
-            burn_amount,
-            asset_id,
-            Default::default(),
-            0,
-        ))
-        .add_output(Output::Change {
-            to: Default::default(),
-            amount: 0,
-            asset_id,
-        })
-        .finalize_as_transaction();
+    let script_ops = vec![
+        // Place 2 in the jump condition register to trigger the burn
+        op::movi(reg_jump_cond, 2),
+        // Call the contract that handle the asset and will burn
+        op::gtf_args(0x10, RegId::ZERO, GTFArgs::ScriptData),
+        op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
+        op::ret(RegId::ONE),
+    ];
+    let script_data: Vec<u8> = [Call::new(contract_id, 0, 0).to_bytes().as_slice()]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+    let script = TransactionBuilder::script(
+        script_ops.into_iter().collect::<Vec<u8>>().into(),
+        script_data,
+    )
+    // Add contract as input of the transaction
+    .add_input(Input::contract(
+        UtxoId::new(Bytes32::zeroed(), 0),
+        Bytes32::zeroed(),
+        state_root,
+        TxPointer::default(),
+        contract_id,
+    ))
+    .script_gas_limit(gas_limit)
+    .add_fee_input()
+    // Add contract as output of the transaction
+    .add_output(Output::contract(0, Bytes32::zeroed(), Bytes32::zeroed()))
+    .finalize_as_transaction();
 
-    let status = client.submit_and_await_commit(&tx).await.unwrap();
+    let status = client.submit_and_await_commit(&script).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // Query asset info after burn
     let final_supply = client
-        .asset_info(&asset_id)
+        .asset_info(&contract_id.asset_id(&Bytes32::zeroed()))
         .await
         .unwrap()
         .unwrap()
         .total_supply
         .0;
 
-    // Verify burn was recorded
-    assert_eq!(final_supply, initial_supply - burn_amount);
+    // We should have the minted amount first
+    assert_eq!(final_supply, mint_amount - burn_amount);
 }

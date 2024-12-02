@@ -72,8 +72,8 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
-        AssetId,
         Contract,
+        ContractIdExt,
         Input,
         Output,
         Receipt,
@@ -395,7 +395,7 @@ where
                     val,
                     ..
                 } => {
-                    let asset_id = AssetId::from(**contract_id);
+                    let asset_id = contract_id.asset_id(sub_id);
                     let current_count = match db.storage::<AssetsInfo>().get(&asset_id) {
                         Ok(count) => count,
                         Err(_) => {
@@ -422,7 +422,7 @@ where
                     val,
                     ..
                 } => {
-                    let asset_id = AssetId::from(**contract_id);
+                    let asset_id = contract_id.asset_id(sub_id);
                     let current_count = db
                         .storage::<AssetsInfo>()
                         .get(&asset_id)
