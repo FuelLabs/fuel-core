@@ -425,22 +425,47 @@ fn big_coins(
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
 ) -> StorageResult<(u64, Vec<CoinsToSpendIndexEntry>)> {
-    let mut big_coins_total_value = 0;
+    select_coins_until(coins_iter, max, excluded_ids, |_, total_so_far| {
+        total_so_far >= total
+    })
+}
+
+fn dust_coins(
+    coins_iter_back: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
+    last_big_coin: &CoinsToSpendIndexEntry,
+    max_dust_count: u16,
+    excluded_ids: &ExcludedKeysAsBytes,
+) -> StorageResult<(u64, Vec<CoinsToSpendIndexEntry>)> {
+    select_coins_until(coins_iter_back, max_dust_count, excluded_ids, |coin, _| {
+        coin == last_big_coin
+    })
+}
+
+fn select_coins_until<F>(
+    coins_iter: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
+    max: u16,
+    excluded_ids: &ExcludedKeysAsBytes,
+    predicate: F,
+) -> StorageResult<(u64, Vec<CoinsToSpendIndexEntry>)>
+where
+    F: Fn(&CoinsToSpendIndexEntry, u64) -> bool,
+{
+    let mut coins_total_value: u64 = 0;
     let mut count = 0;
-    let mut big_coins = Vec::with_capacity(max as usize);
+    let mut coins = Vec::with_capacity(max as usize);
     for coin in coins_iter {
         let coin = coin?;
         if !is_excluded(&coin, excluded_ids)? {
-            if big_coins_total_value >= total || count >= max {
+            if count >= max || predicate(&coin, coins_total_value) {
                 break;
             }
             count = count.saturating_add(1);
             let amount = coin.0.amount();
-            big_coins_total_value = big_coins_total_value.saturating_add(amount);
-            big_coins.push(coin);
+            coins_total_value = coins_total_value.saturating_add(amount);
+            coins.push(coin);
         }
     }
-    Ok((big_coins_total_value, big_coins))
+    Ok((coins_total_value, coins))
 }
 
 fn is_excluded(
@@ -473,31 +498,6 @@ fn is_excluded(
 fn max_dust_count(max: u16, big_coins_len: u16) -> u16 {
     let mut rng = rand::thread_rng();
     rng.gen_range(0..=max.saturating_sub(big_coins_len))
-}
-
-fn dust_coins(
-    coins_iter_back: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
-    last_big_coin: &CoinsToSpendIndexEntry,
-    max_dust_count: u16,
-    excluded_ids: &ExcludedKeysAsBytes,
-) -> StorageResult<(u64, Vec<CoinsToSpendIndexEntry>)> {
-    let mut dust_coins_total_value: u64 = 0;
-    let mut count = 0;
-    let mut dust_coins = Vec::with_capacity(max_dust_count as usize);
-    for coin in coins_iter_back {
-        let coin = coin?;
-        if !is_excluded(&coin, excluded_ids)? {
-            if &coin == last_big_coin || count >= max_dust_count {
-                break;
-            }
-            count = count.saturating_add(1);
-            let amount = coin.0.amount();
-            dust_coins_total_value = dust_coins_total_value.saturating_add(amount);
-            dust_coins.push(coin);
-        }
-    }
-
-    Ok((dust_coins_total_value, dust_coins))
 }
 
 fn skip_big_coins_up_to_amount(
@@ -533,5 +533,126 @@ impl worker::OffChainDatabase for Database<OffChain> {
 
     fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool> {
         self.indexation_available(IndexationKind::CoinsToSpend)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fuel_core_storage::{
+        codec::primitive::utxo_id_to_bytes,
+        iter::IntoBoxedIter,
+        Result as StorageResult,
+    };
+    use fuel_core_types::{
+        entities::coins::coin::Coin,
+        fuel_tx::{
+            TxId,
+            UtxoId,
+        },
+    };
+
+    use crate::{
+        graphql_api::{
+            indexation::coins_to_spend::IndexedCoinType,
+            storage::coins::CoinsToSpendIndexKey,
+        },
+        schema::coins::{
+            CoinOrMessageIdBytes,
+            ExcludedKeysAsBytes,
+        },
+        service::adapters::graphql_api::off_chain::CoinsToSpendIndexEntry,
+    };
+
+    use super::select_coins_until;
+
+    fn setup_test_coins(
+        coins: impl IntoIterator<Item = u8>,
+    ) -> Vec<Result<(CoinsToSpendIndexKey, u8), fuel_core_storage::Error>> {
+        let coins: Vec<StorageResult<_>> = coins
+            .into_iter()
+            .map(|i| {
+                let tx_id: TxId = [i; 32].into();
+                let output_index = i as u16;
+                let utxo_id = UtxoId::new(tx_id, output_index);
+
+                let coin = Coin {
+                    utxo_id,
+                    owner: Default::default(),
+                    amount: i as u64,
+                    asset_id: Default::default(),
+                    tx_pointer: Default::default(),
+                };
+
+                let entry = (
+                    CoinsToSpendIndexKey::from_coin(&coin),
+                    IndexedCoinType::Coin as u8,
+                );
+                Ok(entry)
+            })
+            .collect();
+        coins
+    }
+
+    #[test]
+    fn select_coins_until_respects_max() {
+        const MAX: u16 = 3;
+
+        let coins = setup_test_coins([1, 2, 3, 4, 5]);
+
+        let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
+
+        let result =
+            select_coins_until(coins.into_iter().into_boxed(), MAX, &excluded, |_, _| {
+                false
+            })
+            .expect("should select coins");
+
+        assert_eq!(result.0, 1 + 2 + 3); // Limit is set at 3 coins
+        assert_eq!(result.1.len(), 3);
+    }
+
+    #[test]
+    fn select_coins_until_respects_excluded_ids() {
+        const MAX: u16 = u16::MAX;
+
+        let coins = setup_test_coins([1, 2, 3, 4, 5]);
+
+        // Exclude coin with amount '2'.
+        let excluded_coin_bytes = {
+            let tx_id: TxId = [2; 32].into();
+            let output_index = 2;
+            let utxo_id = UtxoId::new(tx_id, output_index);
+            CoinOrMessageIdBytes::Coin(utxo_id_to_bytes(&utxo_id))
+        };
+        let excluded = ExcludedKeysAsBytes::new(vec![excluded_coin_bytes], vec![]);
+
+        let result =
+            select_coins_until(coins.into_iter().into_boxed(), MAX, &excluded, |_, _| {
+                false
+            })
+            .expect("should select coins");
+
+        assert_eq!(result.0, 1 + 3 + 4 + 5); // '2' is skipped.
+        assert_eq!(result.1.len(), 4);
+    }
+
+    #[test]
+    fn select_coins_until_respects_predicate() {
+        const MAX: u16 = u16::MAX;
+        const TOTAL: u64 = 7;
+
+        let coins = setup_test_coins([1, 2, 3, 4, 5]);
+
+        let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
+
+        let predicate: fn(&CoinsToSpendIndexEntry, u64) -> bool =
+            |_, total| total > TOTAL;
+
+        let result =
+            select_coins_until(coins.into_iter().into_boxed(), MAX, &excluded, predicate)
+                .expect("should select coins");
+
+        assert_eq!(result.0, 1 + 2 + 3 + 4); // Keep selecting until total is greater than 7.
+        assert_eq!(result.1.len(), 4);
     }
 }

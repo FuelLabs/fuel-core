@@ -130,6 +130,7 @@ impl CoinsToSpendIndexKey {
         )
     }
 
+    // TODO[RC]: Needed?
     pub fn from_slice(slice: &[u8]) -> Self {
         Self(slice.into())
     }
@@ -179,6 +180,7 @@ impl CoinsToSpendIndexKey {
     }
 }
 
+// TODO[RC]: Needed?
 impl From<&[u8]> for CoinsToSpendIndexKey {
     fn from(slice: &[u8]) -> Self {
         CoinsToSpendIndexKey::from_slice(slice)
