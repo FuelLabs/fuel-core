@@ -85,6 +85,8 @@ pub enum IndexationError {
         amount: u64,
         nonce: Nonce,
     },
+    #[display(fmt = "Invalid coin type encountered in the index: {}", coin_type)]
+    InvalidIndexedCoinType { coin_type: u8 },
     #[from]
     StorageError(StorageError),
 }

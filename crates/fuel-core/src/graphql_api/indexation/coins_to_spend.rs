@@ -39,7 +39,7 @@ impl TryFrom<u8> for IndexedCoinType {
         match value {
             0 => Ok(IndexedCoinType::Coin),
             1 => Ok(IndexedCoinType::Message),
-            _ => todo!(), /* TODO[RC]: Err(IndexationError::InvalidIndexedCoinType(value)), */
+            x => Err(IndexationError::InvalidIndexedCoinType { coin_type: x }),
         }
     }
 }

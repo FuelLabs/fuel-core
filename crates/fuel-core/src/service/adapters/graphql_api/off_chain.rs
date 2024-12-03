@@ -341,40 +341,46 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             excluded_ids,
         )?;
 
-        let mut coins = Vec::with_capacity(max_coins as usize);
-        for (foreign_key, coin_type) in selected_iter {
-            let coin_type =
-                IndexedCoinType::try_from(coin_type).map_err(StorageError::from)?;
-            let coin = match coin_type {
-                IndexedCoinType::Coin => {
-                    let bytes: [u8; COIN_FOREIGN_KEY_LEN] = foreign_key
-                        .foreign_key_bytes()
-                        .as_slice()
-                        .try_into()
-                        .map_err(StorageError::from)?;
-
-                    let (tx_id_bytes, output_index_bytes) = bytes.split_at(TxId::LEN);
-                    let tx_id =
-                        TxId::try_from(tx_id_bytes).map_err(StorageError::from)?;
-                    let output_index = u16::from_be_bytes(
-                        output_index_bytes.try_into().map_err(StorageError::from)?,
-                    );
-                    CoinId::Utxo(UtxoId::new(tx_id, output_index))
-                }
-                IndexedCoinType::Message => {
-                    let bytes: [u8; MESSAGE_FOREIGN_KEY_LEN] = foreign_key
-                        .foreign_key_bytes()
-                        .as_slice()
-                        .try_into()
-                        .map_err(StorageError::from)?;
-                    let nonce = Nonce::from(bytes);
-                    CoinId::Message(nonce)
-                }
-            };
-            coins.push(coin);
-        }
-        Ok(coins)
+        into_coin_id(selected_iter, max_coins as usize)
     }
+}
+
+fn into_coin_id(
+    selected_iter: Vec<(CoinsToSpendIndexKey, u8)>,
+    max_coins: usize,
+) -> Result<Vec<CoinId>, StorageError> {
+    let mut coins = Vec::with_capacity(max_coins);
+    for (foreign_key, coin_type) in selected_iter {
+        let coin_type =
+            IndexedCoinType::try_from(coin_type).map_err(StorageError::from)?;
+        let coin = match coin_type {
+            IndexedCoinType::Coin => {
+                let bytes: [u8; COIN_FOREIGN_KEY_LEN] = foreign_key
+                    .foreign_key_bytes()
+                    .as_slice()
+                    .try_into()
+                    .map_err(StorageError::from)?;
+
+                let (tx_id_bytes, output_index_bytes) = bytes.split_at(TxId::LEN);
+                let tx_id = TxId::try_from(tx_id_bytes).map_err(StorageError::from)?;
+                let output_index = u16::from_be_bytes(
+                    output_index_bytes.try_into().map_err(StorageError::from)?,
+                );
+                CoinId::Utxo(UtxoId::new(tx_id, output_index))
+            }
+            IndexedCoinType::Message => {
+                let bytes: [u8; MESSAGE_FOREIGN_KEY_LEN] = foreign_key
+                    .foreign_key_bytes()
+                    .as_slice()
+                    .try_into()
+                    .map_err(StorageError::from)?;
+                let nonce = Nonce::from(bytes);
+                CoinId::Message(nonce)
+            }
+        };
+        coins.push(coin);
+    }
+    Ok(coins)
 }
 
 fn select_coins_to_spend(
@@ -384,8 +390,6 @@ fn select_coins_to_spend(
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
 ) -> StorageResult<Vec<CoinsToSpendIndexEntry>> {
-    // TODO[RC]: This function to return StorageResult<Vec<CoinId>>
-    // TODO[RC]: Validate query parameters.
     if total == 0 && max == 0 {
         return Ok(vec![]);
     }
