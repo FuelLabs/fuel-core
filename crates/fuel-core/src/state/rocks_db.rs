@@ -541,12 +541,10 @@ where
             iter_mode,
         )
         .map(move |item| {
-            item.map(|item| {
+            item.inspect(|item| {
                 self.metrics.read_meter.inc();
                 column_metrics.map(|metric| metric.inc());
-                self.metrics.bytes_read.inc_by(T::size(&item));
-
-                item
+                self.metrics.bytes_read.inc_by(T::size(item));
             })
             .map_err(|e| DatabaseError::Other(e.into()).into())
         })
@@ -571,9 +569,8 @@ where
                 self.metrics.read_meter.inc();
                 column_metrics.map(|metric| metric.inc());
                 el.map(|value| {
-                    value.map(|vec| {
+                    value.inspect(|vec| {
                         self.metrics.bytes_read.inc_by(vec.len() as u64);
-                        vec
                     })
                 })
                 .map_err(|err| DatabaseError::Other(err.into()))
