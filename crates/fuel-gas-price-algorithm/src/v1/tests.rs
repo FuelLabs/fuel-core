@@ -171,7 +171,7 @@ impl UpdaterBuilder {
         self
     }
 
-    fn build(self) -> AlgorithmUpdaterV1<BTreeMap<Height, Bytes>> {
+    fn build(self) -> AlgorithmUpdaterV1 {
         AlgorithmUpdaterV1 {
             min_exec_gas_price: self.min_exec_gas_price,
             new_scaled_exec_price: self.starting_exec_gas_price,
@@ -198,7 +198,6 @@ impl UpdaterBuilder {
                 .expect("Should never be non-zero"),
             l2_activity: self.l2_activity,
             unrecorded_blocks_bytes: self.unrecorded_blocks_bytes as u128,
-            _unrecorded_blocks: Default::default(),
         }
     }
 }

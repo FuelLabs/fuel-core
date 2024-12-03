@@ -425,8 +425,8 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     algo_updater_matches_values_from_old_metadata(algo_updater, original_metadata);
 }
 
-fn algo_updater_matches_values_from_old_metadata<U: UnrecordedBlocks>(
-    mut algo_updater: AlgorithmUpdaterV1<U>,
+fn algo_updater_matches_values_from_old_metadata(
+    mut algo_updater: AlgorithmUpdaterV1,
     original_metadata: V1Metadata,
 ) {
     let V1Metadata {

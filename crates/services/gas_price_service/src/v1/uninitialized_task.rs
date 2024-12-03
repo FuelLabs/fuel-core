@@ -60,6 +60,7 @@ use fuel_core_storage::{
     transactional::{
         AtomicView,
         Modifiable,
+        StorageTransaction,
     },
 };
 use fuel_core_types::{
@@ -77,10 +78,9 @@ pub mod fuel_storage_unrecorded_blocks;
 pub struct UninitializedTask<
     L2DataStoreView,
     GasPriceStore,
-    Metadata,
     DA,
     SettingsProvider,
-    UnrecordedBlockStorage,
+    PersistedData,
 > {
     pub config: V1AlgorithmConfig,
     pub genesis_block_height: BlockHeight,
@@ -89,43 +89,29 @@ pub struct UninitializedTask<
     pub on_chain_db: L2DataStoreView,
     pub block_stream: BoxStream<SharedImportResult>,
     pub(crate) shared_algo: SharedV1Algorithm,
-    pub(crate) algo_updater:
-        AlgorithmUpdaterV1<FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>>,
-    pub(crate) metadata_storage: Metadata,
+    pub(crate) algo_updater: AlgorithmUpdaterV1,
     pub(crate) da_source: DA,
-    pub(crate) unrecorded_blocks_handle:
-        FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>,
+    pub persisted_data: PersistedData,
 }
 
 impl<
         L2DataStore,
         L2DataStoreView,
         GasPriceStore,
-        Metadata,
         DA,
         SettingsProvider,
-        UnrecordedBlockStorage,
+        PersistedData,
     >
-    UninitializedTask<
-        L2DataStoreView,
-        GasPriceStore,
-        Metadata,
-        DA,
-        SettingsProvider,
-        UnrecordedBlockStorage,
-    >
+    UninitializedTask<L2DataStoreView, GasPriceStore, DA, SettingsProvider, PersistedData>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     GasPriceStore: GasPriceData,
-    Metadata: MetadataStorage,
+    PersistedData: MetadataStorage,
+    PersistedData: TransactionableStorage<'static>,
+    PersistedData::Transaction: MetadataStorage + UnrecordedBlocks,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
-        + Modifiable
-        + Send
-        + Sync
-        + Clone,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -134,10 +120,9 @@ where
         settings: SettingsProvider,
         block_stream: BoxStream<SharedImportResult>,
         gas_price_db: GasPriceStore,
-        metadata_storage: Metadata,
         da_source: DA,
         on_chain_db: L2DataStoreView,
-        unrecorded_blocks: FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>,
+        persisted_data: PersistedData,
     ) -> anyhow::Result<Self> {
         let latest_block_height: u32 = on_chain_db
             .latest_view()?
@@ -145,12 +130,8 @@ where
             .unwrap_or(genesis_block_height)
             .into();
 
-        let (algo_updater, shared_algo) = initialize_algorithm(
-            &config,
-            latest_block_height,
-            &metadata_storage,
-            unrecorded_blocks.clone(),
-        )?;
+        let (algo_updater, shared_algo) =
+            initialize_algorithm(&config, latest_block_height, &persisted_data)?;
 
         let task = Self {
             config,
@@ -161,9 +142,8 @@ where
             block_stream,
             algo_updater,
             shared_algo,
-            metadata_storage,
             da_source,
-            unrecorded_blocks_handle: unrecorded_blocks,
+            persisted_data,
         };
         Ok(task)
     }
@@ -171,12 +151,7 @@ where
     pub fn init(
         mut self,
     ) -> anyhow::Result<
-        GasPriceServiceV1<
-            FuelL2BlockSource<SettingsProvider>,
-            Metadata,
-            DA,
-            FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>,
-        >,
+        GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, PersistedData>,
     > {
         let mut first_run = false;
         let latest_block_height: u32 = self
@@ -210,10 +185,10 @@ where
         {
             let service = GasPriceServiceV1::new(
                 l2_block_source,
-                self.metadata_storage,
                 self.shared_algo,
                 self.algo_updater,
                 da_service,
+                self.persisted_data,
             );
             Ok(service)
         } else {
@@ -221,20 +196,19 @@ where
                 sync_gas_price_db_with_on_chain_storage(
                     &self.settings,
                     &self.config,
-                    &mut self.metadata_storage,
                     &self.on_chain_db,
                     metadata_height,
                     latest_block_height,
-                    self.unrecorded_blocks_handle,
+                    &mut self.persisted_data,
                 )?;
             }
 
             let service = GasPriceServiceV1::new(
                 l2_block_source,
-                self.metadata_storage,
                 self.shared_algo,
                 self.algo_updater,
                 da_service,
+                self.persisted_data,
             );
             Ok(service)
         }
@@ -246,40 +220,30 @@ impl<
         L2DataStore,
         L2DataStoreView,
         GasPriceStore,
-        Metadata,
         DA,
         SettingsProvider,
-        UnrecordedBlockStorage,
+        PersistedData,
     > RunnableService
     for UninitializedTask<
         L2DataStoreView,
         GasPriceStore,
-        Metadata,
         DA,
         SettingsProvider,
-        UnrecordedBlockStorage,
+        PersistedData,
     >
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     GasPriceStore: GasPriceData,
-    Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
-        + Modifiable
-        + Send
-        + Sync
-        + Clone,
+    PersistedData: MetadataStorage + TransactionableStorage<'static>,
+    <PersistedData as TransactionableStorage<'static>>::Transaction:
+        MetadataStorage + UnrecordedBlocks,
 {
     const NAME: &'static str = "GasPriceServiceV1";
     type SharedData = SharedV1Algorithm;
-    type Task = GasPriceServiceV1<
-        FuelL2BlockSource<SettingsProvider>,
-        Metadata,
-        DA,
-        FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>,
-    >;
+    type Task = GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, PersistedData>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -298,30 +262,25 @@ where
 fn sync_gas_price_db_with_on_chain_storage<
     L2DataStore,
     L2DataStoreView,
-    Metadata,
     SettingsProvider,
-    UnrecordedBlockStorage,
+    PersistedData,
 >(
     settings: &SettingsProvider,
     config: &V1AlgorithmConfig,
-    metadata_storage: &mut Metadata,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
-    unrecorded_blocks: FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>,
+    persisted_data: &mut PersistedData,
 ) -> anyhow::Result<()>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    Metadata: MetadataStorage,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
-        + Modifiable
-        + Send
-        + Sync
-        + Clone,
+    PersistedData: MetadataStorage + TransactionableStorage<'static>,
+    <PersistedData as TransactionableStorage<'static>>::Transaction:
+        MetadataStorage + UnrecordedBlocks,
 {
-    let metadata = metadata_storage
+    let metadata = persisted_data
         .get_metadata(&metadata_height.into())?
         .ok_or(anyhow::anyhow!(
             "Expected metadata to exist for height: {metadata_height}"
@@ -333,8 +292,7 @@ where
             V1Metadata::construct_from_v0_metadata(metadata, config)?
         }
     };
-    let mut algo_updater =
-        v1_algorithm_from_metadata(metadata, config, unrecorded_blocks);
+    let mut algo_updater = v1_algorithm_from_metadata(metadata, config);
 
     sync_v1_metadata(
         settings,
@@ -342,40 +300,27 @@ where
         metadata_height,
         latest_block_height,
         &mut algo_updater,
-        metadata_storage,
+        persisted_data,
     )?;
 
     Ok(())
 }
 
-fn sync_v1_metadata<
-    L2DataStore,
-    L2DataStoreView,
-    Metadata,
-    SettingsProvider,
-    UnrecordedBlockStorage,
-    StorageTxGenerator,
->(
+fn sync_v1_metadata<L2DataStore, L2DataStoreView, SettingsProvider, StorageTxGenerator>(
     settings: &SettingsProvider,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
-    updater: &mut AlgorithmUpdaterV1<FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>>,
-    metadata_storage: &mut Metadata,
+    updater: &mut AlgorithmUpdaterV1,
     storage_tx_generator: &mut StorageTxGenerator,
 ) -> anyhow::Result<()>
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    Metadata: MetadataStorage,
     SettingsProvider: GasPriceSettingsProvider,
-    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
-        + Modifiable
-        + Send
-        + Sync
-        + Clone,
-    StorageTxGenerator: TransactionableStorage,
-    <StorageTxGenerator as TransactionableStorage>::Transaction: UnrecordedBlocks,
+    StorageTxGenerator: TransactionableStorage<'static>,
+    <StorageTxGenerator as TransactionableStorage<'static>>::Transaction:
+        MetadataStorage + UnrecordedBlocks,
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
@@ -410,9 +355,9 @@ where
             fee_wei.into(),
             &mut tx,
         )?;
-        storage_tx_generator.commit_transaction(tx)?;
         let metadata: UpdaterMetadata = updater.clone().into();
-        metadata_storage.set_metadata(&metadata)?;
+        tx.set_metadata(&metadata)?;
+        storage_tx_generator.commit_transaction(tx)?;
     }
 
     Ok(())
@@ -423,29 +368,26 @@ where
 pub fn new_gas_price_service_v1<
     L2DataStore,
     GasPriceStore,
-    Metadata,
     DA,
     SettingsProvider,
-    UnrecordedBlockStorage,
+    PersistedData,
 >(
     config: GasPriceServiceConfig,
     genesis_block_height: BlockHeight,
     settings: SettingsProvider,
     block_stream: BoxStream<SharedImportResult>,
     gas_price_db: GasPriceStore,
-    metadata: Metadata,
     da_source: DA,
     on_chain_db: L2DataStore,
-    unrecorded_block_storage: UnrecordedBlockStorage,
+    persisted_data: PersistedData,
 ) -> anyhow::Result<
     ServiceRunner<
         UninitializedTask<
             L2DataStore,
             GasPriceStore,
-            Metadata,
             DA,
             SettingsProvider,
-            UnrecordedBlockStorage,
+            PersistedData,
         >,
     >,
 >
@@ -454,26 +396,20 @@ where
     L2DataStore::LatestView: L2Data,
     GasPriceStore: GasPriceData,
     SettingsProvider: GasPriceSettingsProvider,
-    Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
-    UnrecordedBlockStorage: KeyValueInspect<Column = UnrecordedBlocksColumn>
-        + Modifiable
-        + Send
-        + Sync
-        + Clone,
+    PersistedData: MetadataStorage + TransactionableStorage<'static>,
+    PersistedData::Transaction: MetadataStorage + UnrecordedBlocks,
 {
     let v1_config = config.v1().ok_or(anyhow::anyhow!("Expected V1 config"))?;
-    let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(unrecorded_block_storage);
     let gas_price_init = UninitializedTask::new(
         v1_config,
         genesis_block_height,
         settings,
         block_stream,
         gas_price_db,
-        metadata,
         da_source,
         on_chain_db,
-        unrecorded_blocks,
+        persisted_data,
     )?;
     Ok(ServiceRunner::new(gas_price_init))
 }

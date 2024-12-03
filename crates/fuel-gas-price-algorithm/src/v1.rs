@@ -2,7 +2,6 @@ use crate::utils::cumulative_percentage_change;
 use std::{
     cmp::max,
     collections::BTreeMap,
-    marker::PhantomData,
     num::NonZeroU64,
     ops::Div,
 };
@@ -121,7 +120,7 @@ impl UnrecordedBlocks for BTreeMap<Height, Bytes> {
 /// instead of the actual profit. Setting the `avg_window` to 1 will effectively disable the
 /// moving average.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
-pub struct AlgorithmUpdaterV1<U> {
+pub struct AlgorithmUpdaterV1 {
     // Execution
     /// The gas price (scaled by the `gas_price_factor`) to cover the execution of the next block
     pub new_scaled_exec_price: u64,
@@ -167,8 +166,6 @@ pub struct AlgorithmUpdaterV1<U> {
     pub l2_activity: L2ActivityTracker,
     /// Total unrecorded block bytes
     pub unrecorded_blocks_bytes: u128,
-    /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
-    pub _unrecorded_blocks: PhantomData<U>,
 }
 
 /// The `L2ActivityTracker` tracks the chain activity to determine a safety mode for setting the DA price.
@@ -321,8 +318,8 @@ impl core::ops::Deref for ClampedPercentage {
     }
 }
 
-impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
-    pub fn update_da_record_data(
+impl AlgorithmUpdaterV1 {
+    pub fn update_da_record_data<U: UnrecordedBlocks>(
         &mut self,
         heights: &[u32],
         recorded_bytes: u32,
@@ -342,7 +339,7 @@ impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
         Ok(())
     }
 
-    pub fn update_l2_block_data(
+    pub fn update_l2_block_data<U: UnrecordedBlocks>(
         &mut self,
         height: u32,
         used: u64,
@@ -541,7 +538,7 @@ impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
             .saturating_div(100)
     }
 
-    fn da_block_update(
+    fn da_block_update<U: UnrecordedBlocks>(
         &mut self,
         heights: &[u32],
         recorded_bytes: u128,
@@ -570,7 +567,7 @@ impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
 
     // Get the bytes for all specified heights, or get none of them.
     // Always remove the blocks from the unrecorded blocks so they don't build up indefinitely
-    fn update_unrecorded_block_bytes(
+    fn update_unrecorded_block_bytes<U: UnrecordedBlocks>(
         &mut self,
         heights: &[u32],
         unrecorded_blocks: &mut U,

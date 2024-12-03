@@ -79,10 +79,7 @@ pub struct V1AlgorithmConfig {
     pub block_activity_threshold: u8,
 }
 
-pub fn updater_from_config<U>(
-    value: &V1AlgorithmConfig,
-    unrecorded_blocks: U,
-) -> AlgorithmUpdaterV1<U> {
+pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
     let l2_activity = L2ActivityTracker::new_full(
         value.normal_range_size,
         value.capped_range_size,
@@ -114,12 +111,11 @@ pub fn updater_from_config<U>(
         da_p_component: value.da_p_component,
         da_d_component: value.da_d_component,
         unrecorded_blocks_bytes,
-        _unrecorded_blocks: Default::default(),
     }
 }
 
-impl<U> From<AlgorithmUpdaterV1<U>> for V1Metadata {
-    fn from(updater: AlgorithmUpdaterV1<U>) -> Self {
+impl From<AlgorithmUpdaterV1> for V1Metadata {
+    fn from(updater: AlgorithmUpdaterV1) -> Self {
         Self {
             new_scaled_exec_price: updater.new_scaled_exec_price,
             l2_block_height: updater.l2_block_height,
@@ -135,11 +131,10 @@ impl<U> From<AlgorithmUpdaterV1<U>> for V1Metadata {
     }
 }
 
-pub fn v1_algorithm_from_metadata<U>(
+pub fn v1_algorithm_from_metadata(
     metadata: V1Metadata,
     config: &V1AlgorithmConfig,
-    unrecorded_blocks: U,
-) -> AlgorithmUpdaterV1<U> {
+) -> AlgorithmUpdaterV1 {
     let l2_activity = L2ActivityTracker::new_full(
         config.normal_range_size,
         config.capped_range_size,
@@ -174,6 +169,5 @@ pub fn v1_algorithm_from_metadata<U>(
         da_p_component: config.da_p_component,
         da_d_component: config.da_d_component,
         unrecorded_blocks_bytes,
-        _unrecorded_blocks: Default::default(),
     }
 }

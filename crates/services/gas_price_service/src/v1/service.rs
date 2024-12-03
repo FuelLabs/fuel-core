@@ -1,3 +1,24 @@
+use std::num::NonZeroU64;
+
+use anyhow::anyhow;
+use async_trait::async_trait;
+use fuel_core_services::{
+    RunnableService,
+    RunnableTask,
+    StateWatcher,
+    TaskNextAction,
+};
+use fuel_gas_price_algorithm::{
+    v0::AlgorithmUpdaterV0,
+    v1::{
+        AlgorithmUpdaterV1,
+        AlgorithmV1,
+        UnrecordedBlocks,
+    },
+};
+use futures::FutureExt;
+use tokio::sync::broadcast::Receiver;
+
 use crate::{
     common::{
         gas_price_algorithm::SharedGasPriceAlgo,
@@ -8,7 +29,10 @@ use crate::{
             Result as GasPriceResult,
         },
     },
-    ports::MetadataStorage,
+    ports::{
+        MetadataStorage,
+        TransactionableStorage,
+    },
     v0::metadata::V0Metadata,
     v1::{
         algorithm::SharedV1Algorithm,
@@ -29,62 +53,43 @@ use crate::{
         uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
     },
 };
-use anyhow::anyhow;
-use async_trait::async_trait;
-use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    StateWatcher,
-    TaskNextAction,
-};
-use fuel_gas_price_algorithm::{
-    v0::AlgorithmUpdaterV0,
-    v1::{
-        AlgorithmUpdaterV1,
-        AlgorithmV1,
-        UnrecordedBlocks,
-    },
-};
-use futures::FutureExt;
-use std::num::NonZeroU64;
-use tokio::sync::broadcast::{
-    error::RecvError,
-    Receiver,
-};
 
 /// The service that updates the gas price algorithm.
-pub struct GasPriceServiceV1<L2, Metadata, DA, U>
+pub struct GasPriceServiceV1<L2, DA, StorageTxProvider>
 where
     DA: DaBlockCostsSource,
-    U: Clone,
+    StorageTxProvider: TransactionableStorage,
 {
     /// The algorithm that can be used in the next block
     shared_algo: SharedV1Algorithm,
     /// The L2 block source
     l2_block_source: L2,
-    /// The metadata storage
-    metadata_storage: Metadata,
     /// The algorithm updater
-    algorithm_updater: AlgorithmUpdaterV1<U>,
+    algorithm_updater: AlgorithmUpdaterV1,
     /// the da source adapter handle
     da_source_adapter_handle: DaSourceService<DA>,
     /// The da source channel
     da_source_channel: Receiver<DaBlockCosts>,
     /// Buffer of block costs from the DA chain
     da_block_costs_buffer: Vec<DaBlockCosts>,
+    /// Storage transaction provider for metadata and unrecorded blocks
+    storage_tx_provider: StorageTxProvider,
 }
 
-impl<L2, Metadata, DA, U> GasPriceServiceV1<L2, Metadata, DA, U>
+impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
 where
     L2: L2BlockSource,
-    Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
-    U: UnrecordedBlocks + Clone,
+    StorageTxProvider: TransactionableStorage,
+    // StorageTxProvider::Transaction<'a>: UnrecordedBlocks + MetadataStorage,
 {
-    async fn process_l2_block_res(
-        &mut self,
+    async fn commit_block_data_to_algorithm<'a>(
+        &'a mut self,
         l2_block_res: GasPriceResult<BlockInfo>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<()>
+    where
+        StorageTxProvider::Transaction<'a>: MetadataStorage + UnrecordedBlocks,
+    {
         tracing::info!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
 
@@ -93,46 +98,46 @@ where
         Ok(())
     }
 
-    async fn process_da_block_costs_res(
-        &mut self,
-        da_block_costs: Result<DaBlockCosts, RecvError>,
-    ) -> anyhow::Result<()> {
-        tracing::info!("Received DA block costs: {:?}", da_block_costs);
-        let da_block_costs = da_block_costs?;
-
-        tracing::debug!("Updating DA block costs");
-        self.apply_da_block_costs_to_gas_algorithm(da_block_costs)
-            .await?;
-        Ok(())
-    }
+    // async fn process_da_block_costs_res(
+    //     &mut self,
+    //     da_block_costs: Result<DaBlockCosts, RecvError>,
+    // ) -> anyhow::Result<()> {
+    //     tracing::info!("Received DA block costs: {:?}", da_block_costs);
+    //     let da_block_costs = da_block_costs?;
+    //
+    //     tracing::debug!("Updating DA block costs");
+    //     self.apply_da_block_costs_to_gas_algorithm(da_block_costs)
+    //         .await?;
+    //     Ok(())
+    // }
 }
 
-impl<L2, Metadata, DA, U> GasPriceServiceV1<L2, Metadata, DA, U>
+impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
 where
-    Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
-    U: UnrecordedBlocks + Clone,
+    StorageTxProvider: TransactionableStorage,
 {
     pub fn new(
         l2_block_source: L2,
-        metadata_storage: Metadata,
         shared_algo: SharedV1Algorithm,
-        algorithm_updater: AlgorithmUpdaterV1<U>,
+        algorithm_updater: AlgorithmUpdaterV1,
         da_source_adapter_handle: DaSourceService<DA>,
+        storage_tx_provider: StorageTxProvider,
     ) -> Self {
         let da_source_channel =
             da_source_adapter_handle.shared_data().clone().subscribe();
         Self {
             shared_algo,
             l2_block_source,
-            metadata_storage,
             algorithm_updater,
             da_source_adapter_handle,
             da_source_channel,
+            da_block_costs_buffer: Vec::new(),
+            storage_tx_provider,
         }
     }
 
-    pub fn algorithm_updater(&self) -> &AlgorithmUpdaterV1<U> {
+    pub fn algorithm_updater(&self) -> &AlgorithmUpdaterV1 {
         &self.algorithm_updater
     }
 
@@ -152,21 +157,26 @@ where
             .ok_or_else(|| anyhow!("Block gas capacity must be non-zero"))
     }
 
-    async fn set_metadata(&mut self) -> anyhow::Result<()> {
-        let metadata: UpdaterMetadata = self.algorithm_updater.clone().into();
-        self.metadata_storage
-            .set_metadata(&metadata)
-            .map_err(|err| anyhow!(err))
-    }
+    // async fn set_metadata(
+    //     &mut self,
+    //     tx: &mut StorageTxProvider::Transaction,
+    // ) -> anyhow::Result<()> {
+    //     let metadata: UpdaterMetadata = self.algorithm_updater.clone().into();
+    //     tx.set_metadata(&metadata).map_err(|err| anyhow!(err))
+    // }
 
-    async fn handle_normal_block(
-        &mut self,
+    async fn handle_normal_block<'a>(
+        &'a mut self,
         height: u32,
         gas_used: u64,
         block_gas_capacity: u64,
         block_bytes: u64,
         block_fees: u64,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<()>
+    where
+        StorageTxProvider::Transaction<'a>: UnrecordedBlocks,
+    {
+        let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
         let capacity = self.validate_block_gas_capacity(block_gas_capacity)?;
 
         self.algorithm_updater.update_l2_block_data(
@@ -175,33 +185,44 @@ where
             capacity,
             block_bytes,
             block_fees as u128,
+            &mut storage_tx,
         )?;
 
-        self.set_metadata().await?;
+        StorageTxProvider::commit_transaction(storage_tx)?;
         Ok(())
     }
 
-    async fn handle_da_block_costs(
+    async fn handle_da_block_costs<'a>(
         &mut self,
         da_block_costs: DaBlockCosts,
-    ) -> anyhow::Result<()> {
+        unrecorded_blocks: &mut StorageTxProvider::Transaction<'a>,
+    ) -> anyhow::Result<()>
+    where
+        StorageTxProvider::Transaction<'a>: UnrecordedBlocks,
+    {
         self.algorithm_updater.update_da_record_data(
             &da_block_costs.l2_blocks,
             da_block_costs.blob_size_bytes,
             da_block_costs.blob_cost_wei,
+            unrecorded_blocks,
         )?;
 
-        self.set_metadata().await?;
         Ok(())
     }
 
-    async fn apply_block_info_to_gas_algorithm(
-        &mut self,
+    async fn apply_block_info_to_gas_algorithm<'a>(
+        &'a mut self,
         l2_block: BlockInfo,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<()>
+    where
+        StorageTxProvider::Transaction<'a>: MetadataStorage + UnrecordedBlocks,
+    {
         match l2_block {
             BlockInfo::GenesisBlock => {
-                self.set_metadata().await?;
+                let metadata: UpdaterMetadata = self.algorithm_updater.clone().into();
+                let mut tx = self.storage_tx_provider.begin_transaction()?;
+                tx.set_metadata(&metadata).map_err(|err| anyhow!(err))?;
+                StorageTxProvider::commit_transaction(tx)?;
             }
             BlockInfo::Block {
                 height,
@@ -221,27 +242,30 @@ where
             }
         }
 
-        self.update(self.algorithm_updater.algorithm()).await;
+        let new_algo = self.algorithm_updater.algorithm();
+        // self.update(new_algo).await;
+        self.shared_algo.update(new_algo).await;
         Ok(())
     }
 
-    async fn apply_da_block_costs_to_gas_algorithm(
-        &mut self,
-        da_block_costs: DaBlockCosts,
-    ) -> anyhow::Result<()> {
-        self.handle_da_block_costs(da_block_costs).await?;
-        self.update(self.algorithm_updater.algorithm()).await;
-        Ok(())
-    }
+    // async fn apply_da_block_costs_to_gas_algorithm(
+    //     &mut self,
+    //     da_block_costs: DaBlockCosts,
+    // ) -> anyhow::Result<()> {
+    //     self.handle_da_block_costs(da_block_costs).await?;
+    //     self.update(self.algorithm_updater.algorithm()).await;
+    //     Ok(())
+    // }
 }
 
 #[async_trait]
-impl<L2, Metadata, DA, U> RunnableTask for GasPriceServiceV1<L2, Metadata, DA, U>
+impl<L2, DA, StorageTxProvider> RunnableTask
+    for GasPriceServiceV1<L2, DA, StorageTxProvider>
 where
     L2: L2BlockSource,
-    Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
-    U: UnrecordedBlocks + Clone + Send + Sync,
+    StorageTxProvider: TransactionableStorage<'static>,
+    StorageTxProvider::Transaction: UnrecordedBlocks + MetadataStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -251,13 +275,20 @@ where
                 TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
-                let res = self.process_l2_block_res(l2_block_res).await;
+                let res = self.commit_block_data_to_algorithm(l2_block_res).await;
                 TaskNextAction::always_continue(res)
             }
-            da_block_costs = self.da_source_channel.recv() => {
-                self.da_block_costs_buffer.push(da_block_costs?);
-                // let res = self.process_da_block_costs_res(da_block_costs).await;
-                TaskNextAction::Continue
+            da_block_costs_res = self.da_source_channel.recv() => {
+                match da_block_costs_res {
+                    Ok(da_block_costs) => {
+                        self.da_block_costs_buffer.push(da_block_costs);
+                        TaskNextAction::Continue
+                    },
+                    Err(err) => {
+                        let err = anyhow!("Error receiving DA block costs: {:?}", err);
+                        TaskNextAction::ErrorContinue(err)
+                    }
+                }
             }
         }
     }
@@ -267,12 +298,6 @@ where
         while let Some(Ok(block)) = self.l2_block_source.get_l2_block().now_or_never() {
             tracing::debug!("Updating gas price algorithm before shutdown");
             self.apply_block_info_to_gas_algorithm(block).await?;
-        }
-
-        while let Ok(da_block_costs) = self.da_source_channel.try_recv() {
-            tracing::debug!("Updating DA block costs");
-            self.apply_da_block_costs_to_gas_algorithm(da_block_costs)
-                .await?;
         }
 
         // run shutdown hooks for internal services
@@ -300,15 +325,13 @@ fn convert_to_v1_metadata(
     }
 }
 
-pub fn initialize_algorithm<Metadata, U>(
+pub fn initialize_algorithm<Metadata>(
     config: &V1AlgorithmConfig,
     latest_block_height: u32,
     metadata_storage: &Metadata,
-    unrecorded_blocks: U,
-) -> crate::common::utils::Result<(AlgorithmUpdaterV1<U>, SharedV1Algorithm)>
+) -> crate::common::utils::Result<(AlgorithmUpdaterV1, SharedV1Algorithm)>
 where
     Metadata: MetadataStorage,
-    U: UnrecordedBlocks + Clone,
 {
     let algorithm_updater = if let Some(updater_metadata) = metadata_storage
         .get_metadata(&latest_block_height.into())
@@ -316,9 +339,9 @@ where
             crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(err))
         })? {
         let v1_metadata = convert_to_v1_metadata(updater_metadata, config)?;
-        v1_algorithm_from_metadata(v1_metadata, config, unrecorded_blocks)
+        v1_algorithm_from_metadata(v1_metadata, config)
     } else {
-        updater_from_config(config, unrecorded_blocks)
+        updater_from_config(config)
     };
 
     let shared_algo =
@@ -331,9 +354,29 @@ where
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
+    use std::{
+        num::NonZeroU64,
+        sync::Arc,
+        time::Duration,
+    };
+
+    use tokio::sync::mpsc;
+
+    use fuel_core_services::{
+        RunnableTask,
+        StateWatcher,
+    };
+    use fuel_core_storage::{
+        structured_storage::test::InMemoryStorage,
+        transactional::{
+            IntoTransaction,
+            StorageTransaction,
+        },
+    };
+    use fuel_core_types::fuel_types::BlockHeight;
+
     use crate::{
         common::{
-            fuel_core_storage_adapter::storage::GasPriceColumn,
             l2_block_source::L2BlockSource,
             updater_metadata::UpdaterMetadata,
             utils::{
@@ -359,24 +402,6 @@ mod tests {
             },
         },
     };
-    use fuel_core_services::{
-        RunnableTask,
-        StateWatcher,
-    };
-    use fuel_core_storage::{
-        structured_storage::test::InMemoryStorage,
-        transactional::{
-            IntoTransaction,
-            StorageTransaction,
-        },
-    };
-    use fuel_core_types::fuel_types::BlockHeight;
-    use std::{
-        num::NonZeroU64,
-        sync::Arc,
-        time::Duration,
-    };
-    use tokio::sync::mpsc;
 
     struct FakeL2BlockSource {
         l2_block: mpsc::Receiver<BlockInfo>,

@@ -28,10 +28,16 @@ pub trait MetadataStorage: Send + Sync {
 }
 
 pub trait TransactionableStorage: Send + Sync {
-    type Transaction;
+    type Transaction<'a>
+    where
+        Self: 'a;
 
-    fn begin_transaction(&self) -> Result<Self::Transaction>;
-    fn commit_transaction(&self, transaction: Self::Transaction) -> Result<()>;
+    fn begin_transaction<'a>(&'a mut self) -> Result<Self::Transaction<'a>>
+    where
+        Self: 'a;
+    fn commit_transaction<'a>(transaction: Self::Transaction<'a>) -> Result<()>
+    where
+        Self: 'a;
 }
 
 /// Provides the latest block height.

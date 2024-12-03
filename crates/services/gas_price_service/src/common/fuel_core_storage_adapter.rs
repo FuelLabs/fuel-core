@@ -14,7 +14,10 @@ use crate::{
         },
         updater_metadata::UpdaterMetadata,
     },
-    ports::MetadataStorage,
+    ports::{
+        MetadataStorage,
+        TransactionableStorage,
+    },
 };
 use fuel_core_storage::{
     codec::{
@@ -25,6 +28,7 @@ use fuel_core_storage::{
     structured_storage::StructuredStorage,
     transactional::{
         Modifiable,
+        StorageTransaction,
         WriteTransaction,
     },
     StorageAsMut,
@@ -78,6 +82,30 @@ where
                 block_height,
                 source_error: err.into(),
             })?;
+        Ok(())
+    }
+}
+
+impl<Storage> TransactionableStorage for StructuredStorage<Storage>
+where
+    Storage: Modifiable + Send + Sync,
+{
+    type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
+
+    fn begin_transaction<'a>(&'a mut self) -> GasPriceResult<Self::Transaction<'a>>
+    where
+        Self: 'a,
+    {
+        Ok(self.write_transaction())
+    }
+
+    fn commit_transaction<'a>(transaction: Self::Transaction<'a>) -> GasPriceResult<()>
+    where
+        Self: 'a,
+    {
+        transaction
+            .commit()
+            .map_err(|err| GasPriceError::CouldNotCommit(err.into()))?;
         Ok(())
     }
 }
