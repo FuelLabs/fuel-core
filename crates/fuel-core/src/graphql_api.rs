@@ -80,8 +80,8 @@ impl Default for Costs {
 }
 
 pub const DEFAULT_QUERY_COSTS: Costs = Costs {
-    // TODO: The cost of the `balance` and `balances` query should depend on the
-    //  `OffChainDatabase::balances_enabled` value. If additional indexation is enabled,
+    // TODO: The cost of the `balance`, `balances` and `coins_to_spend` query should depend on the
+    //  values of respective flags in the OffChainDatabase. If additional indexation is enabled,
     //  the cost should be cheaper.
     balance_query: 40001,
     coins_to_spend: 40001,
