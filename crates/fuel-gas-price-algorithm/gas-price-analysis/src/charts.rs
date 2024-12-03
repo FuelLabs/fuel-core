@@ -256,6 +256,14 @@ pub fn draw_bytes_and_cost_per_block(
     Ok(())
 }
 
+fn one_gwei_i128() -> i128 {
+    i128::from(ONE_GWEI)
+}
+
+fn one_gwei_u128() -> u128 {
+    u128::from(ONE_GWEI)
+}
+
 pub fn draw_profit(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
     actual_profit: &[i128],
@@ -267,14 +275,14 @@ pub fn draw_profit(
     const PROJECTED_PROFIT_COLOR: RGBColor = RED;
     const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;
     let actual_profit_gwei: Vec<_> =
-        actual_profit.iter().map(|x| x / ONE_GWEI as i128).collect();
+        actual_profit.iter().map(|x| x / one_gwei_i128()).collect();
     let projected_profit_gwei: Vec<_> = projected_profit
         .iter()
-        .map(|x| x / ONE_GWEI as i128)
+        .map(|x| x / one_gwei_i128())
         .collect();
     let pessimistic_block_costs_gwei: Vec<_> = pessimistic_block_costs
         .iter()
-        .map(|x| x / ONE_GWEI as u128)
+        .map(|x| x / one_gwei_u128())
         .collect();
     let min = *std::cmp::min(
         actual_profit_gwei

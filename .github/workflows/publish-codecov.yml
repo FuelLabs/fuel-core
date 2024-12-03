@@ -4,58 +4,58 @@ on:
   workflow_dispatch:
 
 env:
-    GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
-    GIT_REPO_OWNER: ${{ github.repository_owner }}
-    GIT_REPO: ${{ github.repository }}
-    GIT_REPO_NAME: ${{ github.event.repository.name }}
-    AWS_ROLE_ARN: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
-    AWS_ECR_ORG: fuellabs
-    CARGO_TERM_COLOR: always
-    RUST_VERSION: 1.79.0
-    RUST_VERSION_FMT: nightly-2023-10-29
-    RUST_VERSION_COV: nightly-2024-06-05
-    RUSTFLAGS: -D warnings
-    REGISTRY: ghcr.io
-    SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
+  GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
+  GIT_REPO_OWNER: ${{ github.repository_owner }}
+  GIT_REPO: ${{ github.repository }}
+  GIT_REPO_NAME: ${{ github.event.repository.name }}
+  AWS_ROLE_ARN: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
+  AWS_ECR_ORG: fuellabs
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: 1.81.0
+  RUST_VERSION_FMT: nightly-2023-10-29
+  RUST_VERSION_COV: nightly-2024-06-05
+  RUSTFLAGS: -D warnings
+  REGISTRY: ghcr.io
+  SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
 
 jobs:
-    publish-codecov:
-        name: Publish code coverage report on GitHub pages branch
-        runs-on: buildjet-4vcpu-ubuntu-2204
-        permissions: # Write access to push changes to pages
-          contents: write
-        steps:
-          - uses: actions/checkout@v4
-          - name: Install latest Rust
-            uses: dtolnay/rust-toolchain@master
-            with:
-              toolchain: ${{ env.RUST_VERSION_COV }}
-              targets: wasm32-unknown-unknown
-    
-          - name: Install cargo-llvm-codecov
-            uses: taiki-e/install-action@cargo-llvm-cov
-    
-          - name: Code coverage report
-            run: cargo  +${{ env.RUST_VERSION_COV }} llvm-cov --all-features --html --branch
-    
-          - name: Checkout the repo again for pushing pages revision
-            uses: actions/checkout@v4
-            with:
-              ref: 'codecov-pages'
-              path: 'pages-branch'
-    
-          - name: Push codecov report to pages branch
-            working-directory: ./pages-branch
-            run: |
-              export BRANCH_B64=$(echo -n "${{ env.GIT_BRANCH }}" | basenc --base64url)
-              git config user.email "2204863+Dentosal@users.noreply.github.com"
-              git config user.name "Dentosal"
-              cp -r ../target/llvm-cov/html "$BRANCH_B64"
-              python3 ../.github/workflows/scripts/generate_pages_index.py > index.html
-              git add .
-              git commit -m "Update codecov for ${{ env.GIT_BRANCH }}"
-              git push
-              export PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/$BRANCH_B64/index.html"
-              echo "$PAGES_URL"
-              echo "Codecov report $PAGES_URL" >> $GITHUB_STEP_SUMMARY          
+  publish-codecov:
+    name: Publish code coverage report on GitHub pages branch
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    permissions: # Write access to push changes to pages
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install latest Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION_COV }}
+          targets: wasm32-unknown-unknown
+
+      - name: Install cargo-llvm-codecov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Code coverage report
+        run: cargo  +${{ env.RUST_VERSION_COV }} llvm-cov --all-features --html --branch
+
+      - name: Checkout the repo again for pushing pages revision
+        uses: actions/checkout@v4
+        with:
+          ref: 'codecov-pages'
+          path: 'pages-branch'
+
+      - name: Push codecov report to pages branch
+        working-directory: ./pages-branch
+        run: |
+          export BRANCH_B64=$(echo -n "${{ env.GIT_BRANCH }}" | basenc --base64url)
+          git config user.email "2204863+Dentosal@users.noreply.github.com"
+          git config user.name "Dentosal"
+          cp -r ../target/llvm-cov/html "$BRANCH_B64"
+          python3 ../.github/workflows/scripts/generate_pages_index.py > index.html
+          git add .
+          git commit -m "Update codecov for ${{ env.GIT_BRANCH }}"
+          git push
+          export PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/$BRANCH_B64/index.html"
+          echo "$PAGES_URL"
+          echo "Codecov report $PAGES_URL" >> $GITHUB_STEP_SUMMARY          
     

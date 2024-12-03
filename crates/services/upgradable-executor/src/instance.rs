@@ -384,7 +384,7 @@ impl Instance<Source> {
                     ));
                 }
 
-                caller.write(out_ptr, value.as_slice())?;
+                caller.write(out_ptr, &value)?;
                 Ok(0)
             } else {
                 Ok(1)
