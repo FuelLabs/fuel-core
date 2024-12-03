@@ -121,7 +121,7 @@ where
 {
     let key = CoinBalancesKey::new(&coin.owner, &coin.asset_id);
     let storage = block_st_transaction.storage::<CoinBalances>();
-    let current_amount = *storage.get(&key)?.unwrap_or_default();
+    let current_amount = storage.get(&key)?.unwrap_or_default().into_owned();
 
     let new_amount =
         current_amount
