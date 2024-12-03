@@ -1,7 +1,5 @@
-use crate::v1::tests::{
-    BlockBytes,
-    UpdaterBuilder,
-};
+use crate::v1::tests::UpdaterBuilder;
+use std::collections::BTreeMap;
 
 #[test]
 fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_include_known_blocks_with_previous_cost(
@@ -11,14 +9,11 @@ fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_include_kno
     let recorded_cost = 1_000_000;
     let recorded_bytes = 500;
     let block_bytes = 1000;
-    let unrecorded_blocks = vec![BlockBytes {
-        height: 1,
-        block_bytes,
-    }];
+    let mut unrecorded_blocks: BTreeMap<_, _> = [(1, block_bytes)].into_iter().collect();
     let cost_per_byte = 333;
     let known_total_cost = 10_000;
     let mut updater = UpdaterBuilder::new()
-        .with_unrecorded_blocks(unrecorded_blocks)
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .with_da_cost_per_byte(cost_per_byte)
         .with_known_total_cost(known_total_cost)
         .build();
@@ -26,7 +21,12 @@ fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_include_kno
 
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost)
+        .update_da_record_data(
+            &recorded_heights,
+            recorded_bytes,
+            recorded_cost,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
@@ -45,14 +45,11 @@ fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_never_incre
     let recorded_cost = 200;
     let block_bytes = 1000;
     let recorded_bytes = 500;
-    let unrecorded_blocks = vec![BlockBytes {
-        height: 1,
-        block_bytes,
-    }];
+    let mut unrecorded_blocks: BTreeMap<_, _> = [(1, block_bytes)].into_iter().collect();
     let cost_per_byte = 333;
     let known_total_cost = 10_000;
     let mut updater = UpdaterBuilder::new()
-        .with_unrecorded_blocks(unrecorded_blocks)
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .with_da_cost_per_byte(cost_per_byte)
         .with_known_total_cost(known_total_cost)
         .build();
@@ -60,7 +57,12 @@ fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_never_incre
 
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost)
+        .update_da_record_data(
+            &recorded_heights,
+            recorded_bytes,
+            recorded_cost,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
@@ -76,13 +78,10 @@ fn update_da_record_data__updates_cost_per_byte() {
     // given
     let da_cost_per_byte = 20;
     let block_bytes = 1000;
-    let unrecorded_blocks = vec![BlockBytes {
-        height: 1,
-        block_bytes,
-    }];
+    let mut unrecorded_blocks: BTreeMap<_, _> = [(1, block_bytes)].into_iter().collect();
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
-        .with_unrecorded_blocks(unrecorded_blocks)
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .build();
 
     let new_cost_per_byte = 100;
@@ -91,7 +90,12 @@ fn update_da_record_data__updates_cost_per_byte() {
     let recorded_heights: Vec<u32> = (1u32..2).collect();
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost)
+        .update_da_record_data(
+            &recorded_heights,
+            recorded_bytes,
+            recorded_cost,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
@@ -107,26 +111,28 @@ fn update_da_record_data__updates_known_total_cost() {
     let l2_block_height = 15;
     let projected_total_cost = 2000;
     let known_total_cost = 1500;
-    let unrecorded_blocks = vec![
-        BlockBytes {
-            height: 11,
-            block_bytes: 1000,
-        },
-        BlockBytes {
-            height: 12,
-            block_bytes: 2000,
-        },
-        BlockBytes {
-            height: 13,
-            block_bytes: 1500,
-        },
-    ];
+    // let unrecorded_blocks = vec![
+    //     BlockBytes {
+    //         height: 11,
+    //         block_bytes: 1000,
+    //     },
+    //     BlockBytes {
+    //         height: 12,
+    //         block_bytes: 2000,
+    //     },
+    //     BlockBytes {
+    //         height: 13,
+    //         block_bytes: 1500,
+    //     },
+    // ];
+    let mut unrecorded_blocks: BTreeMap<_, _> =
+        [(11, 1000), (12, 2000), (13, 1500)].into_iter().collect();
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost)
         .with_known_total_cost(known_total_cost)
-        .with_unrecorded_blocks(unrecorded_blocks)
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .build();
 
     let recorded_heights: Vec<u32> = (11u32..14).collect();
@@ -134,7 +140,12 @@ fn update_da_record_data__updates_known_total_cost() {
     let recorded_cost = 300;
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost)
+        .update_da_record_data(
+            &recorded_heights,
+            recorded_bytes,
+            recorded_cost,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
@@ -149,24 +160,26 @@ fn update_da_record_data__if_da_height_matches_l2_height_projected_and_known_mat
     let da_cost_per_byte = 20;
     let l2_block_height = 13;
     let known_total_cost = 1500;
-    let unrecorded_blocks = vec![
-        BlockBytes {
-            height: 11,
-            block_bytes: 1000,
-        },
-        BlockBytes {
-            height: 12,
-            block_bytes: 2000,
-        },
-        BlockBytes {
-            height: 13,
-            block_bytes: 1500,
-        },
-    ];
+    // let unrecorded_blocks = vec![
+    //     BlockBytes {
+    //         height: 11,
+    //         block_bytes: 1000,
+    //     },
+    //     BlockBytes {
+    //         height: 12,
+    //         block_bytes: 2000,
+    //     },
+    //     BlockBytes {
+    //         height: 13,
+    //         block_bytes: 1500,
+    //     },
+    // ];
+    let mut unrecorded_blocks: BTreeMap<_, _> =
+        [(11, 1000), (12, 2000), (13, 1500)].into_iter().collect();
 
     let guessed_cost: u64 = unrecorded_blocks
-        .iter()
-        .map(|block| block.block_bytes * da_cost_per_byte)
+        .values()
+        .map(|bytes| bytes * da_cost_per_byte)
         .sum();
     let projected_total_cost = known_total_cost + guessed_cost;
     let mut updater = UpdaterBuilder::new()
@@ -174,7 +187,7 @@ fn update_da_record_data__if_da_height_matches_l2_height_projected_and_known_mat
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost as u128)
         .with_known_total_cost(known_total_cost as u128)
-        .with_unrecorded_blocks(unrecorded_blocks)
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .build();
 
     let block_bytes = 1000;
@@ -186,11 +199,16 @@ fn update_da_record_data__if_da_height_matches_l2_height_projected_and_known_mat
     let recorded_cost = block_cost * 3;
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost)
+        .update_da_record_data(
+            &recorded_heights,
+            recorded_bytes,
+            recorded_cost,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
-    assert_eq!(updater.unrecorded_blocks.len(), 0);
+    assert_eq!(unrecorded_blocks.len(), 0);
     assert_eq!(
         updater.projected_total_da_cost,
         updater.latest_known_total_da_cost_excess
@@ -205,35 +223,30 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
     let l2_block_height = 15;
     let original_known_total_cost: u128 = 1500;
     let block_bytes = 1000;
-    let mut unrecorded_blocks = vec![
-        BlockBytes {
-            height: 11,
-            block_bytes: 1000,
-        },
-        BlockBytes {
-            height: 12,
-            block_bytes: 2000,
-        },
-        BlockBytes {
-            height: 13,
-            block_bytes: 1500,
-        },
-    ];
+    let remaining = vec![(14, block_bytes), (15, block_bytes)];
+    // let mut unrecorded_blocks = vec![
+    //     BlockBytes {
+    //         height: 11,
+    //         block_bytes: 1000,
+    //     },
+    //     BlockBytes {
+    //         height: 12,
+    //         block_bytes: 2000,
+    //     },
+    //     BlockBytes {
+    //         height: 13,
+    //         block_bytes: 1500,
+    //     },
+    // ];
+    let mut pairs = vec![(11, 1000), (12, 2000), (13, 1500)];
 
-    let remaining = vec![
-        BlockBytes {
-            height: 14,
-            block_bytes,
-        },
-        BlockBytes {
-            height: 15,
-            block_bytes,
-        },
-    ];
-    unrecorded_blocks.extend(remaining.clone());
+    pairs.extend(remaining.clone());
+
+    let mut unrecorded_blocks: BTreeMap<_, _> = pairs.into_iter().collect();
+
     let guessed_cost: u128 = unrecorded_blocks
-        .iter()
-        .map(|block| block.block_bytes as u128 * da_cost_per_byte)
+        .values()
+        .map(|bytes| *bytes as u128 * da_cost_per_byte)
         .sum();
     let projected_total_cost: u128 = original_known_total_cost + guessed_cost;
     let mut updater = UpdaterBuilder::new()
@@ -241,7 +254,7 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost)
         .with_known_total_cost(original_known_total_cost)
-        .with_unrecorded_blocks(unrecorded_blocks)
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .build();
 
     let new_cost_per_byte = 100;
@@ -252,7 +265,12 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
 
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost)
+        .update_da_record_data(
+            &recorded_heights,
+            recorded_bytes,
+            recorded_cost,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
@@ -260,7 +278,7 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
     let new_known_total_cost = original_known_total_cost + recorded_cost;
     let guessed_part: u128 = remaining
         .iter()
-        .map(|block| block.block_bytes as u128 * new_cost_per_byte)
+        .map(|(_, bytes)| *bytes as u128 * new_cost_per_byte)
         .sum();
     let expected = new_known_total_cost + guessed_part;
     assert_eq!(actual, expected);
@@ -271,27 +289,31 @@ fn update_da_record_data__updates_known_total_cost_if_blocks_are_out_of_order() 
     // given
     let da_cost_per_byte = 20;
     let block_bytes = 1000;
-    let unrecorded_blocks = vec![
-        BlockBytes {
-            height: 1,
-            block_bytes,
-        },
-        BlockBytes {
-            height: 2,
-            block_bytes,
-        },
-        BlockBytes {
-            height: 3,
-            block_bytes,
-        },
-    ];
+    // let unrecorded_blocks = vec![
+    //     BlockBytes {
+    //         height: 1,
+    //         block_bytes,
+    //     },
+    //     BlockBytes {
+    //         height: 2,
+    //         block_bytes,
+    //     },
+    //     BlockBytes {
+    //         height: 3,
+    //         block_bytes,
+    //     },
+    // ];
+    let mut unrecorded_blocks: BTreeMap<_, _> =
+        [(1, block_bytes), (2, block_bytes), (3, block_bytes)]
+            .into_iter()
+            .collect();
     let old_known_total_cost = 500;
     let old_projected_total_cost =
         old_known_total_cost + (block_bytes as u128 * da_cost_per_byte * 3);
     let old_da_cost_per_byte = 20;
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
-        .with_unrecorded_blocks(unrecorded_blocks)
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .with_da_cost_per_byte(old_da_cost_per_byte)
         .with_known_total_cost(old_known_total_cost)
         .with_projected_total_cost(old_projected_total_cost)
@@ -303,7 +325,12 @@ fn update_da_record_data__updates_known_total_cost_if_blocks_are_out_of_order() 
 
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost as u128)
+        .update_da_record_data(
+            &recorded_heights,
+            recorded_bytes,
+            recorded_cost as u128,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
@@ -318,27 +345,31 @@ fn update_da_record_data__updates_projected_total_cost_if_blocks_are_out_of_orde
     // given
     let da_cost_per_byte = 20;
     let block_bytes = 1000;
-    let unrecorded_blocks = vec![
-        BlockBytes {
-            height: 1,
-            block_bytes,
-        },
-        BlockBytes {
-            height: 2,
-            block_bytes,
-        },
-        BlockBytes {
-            height: 3,
-            block_bytes,
-        },
-    ];
+    // let unrecorded_blocks = vec![
+    //     BlockBytes {
+    //         height: 1,
+    //         block_bytes,
+    //     },
+    //     BlockBytes {
+    //         height: 2,
+    //         block_bytes,
+    //     },
+    //     BlockBytes {
+    //         height: 3,
+    //         block_bytes,
+    //     },
+    // ];
+    let mut unrecorded_blocks: BTreeMap<_, _> =
+        [(1, block_bytes), (2, block_bytes), (3, block_bytes)]
+            .into_iter()
+            .collect();
     let old_known_total_cost = 500;
     let old_projected_total_cost =
         old_known_total_cost + (block_bytes as u128 * da_cost_per_byte * 3);
     let old_da_cost_per_byte = 20;
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
-        .with_unrecorded_blocks(unrecorded_blocks)
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .with_da_cost_per_byte(old_da_cost_per_byte)
         .with_known_total_cost(old_known_total_cost)
         .with_projected_total_cost(old_projected_total_cost)
@@ -350,7 +381,12 @@ fn update_da_record_data__updates_projected_total_cost_if_blocks_are_out_of_orde
 
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost as u128)
+        .update_da_record_data(
+            &recorded_heights,
+            recorded_bytes,
+            recorded_cost as u128,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
@@ -365,23 +401,27 @@ fn update_da_record_data__updates_unrecorded_blocks() {
     // given
     let da_cost_per_byte = 20;
     let block_bytes = 1000;
-    let unrecorded_blocks = vec![
-        BlockBytes {
-            height: 1,
-            block_bytes,
-        },
-        BlockBytes {
-            height: 2,
-            block_bytes,
-        },
-        BlockBytes {
-            height: 3,
-            block_bytes,
-        },
-    ];
+    // let unrecorded_blocks = vec![
+    //     BlockBytes {
+    //         height: 1,
+    //         block_bytes,
+    //     },
+    //     BlockBytes {
+    //         height: 2,
+    //         block_bytes,
+    //     },
+    //     BlockBytes {
+    //         height: 3,
+    //         block_bytes,
+    //     },
+    // ];
+    let mut unrecorded_blocks: BTreeMap<_, _> =
+        [(1, block_bytes), (2, block_bytes), (3, block_bytes)]
+            .into_iter()
+            .collect();
     let mut updater = UpdaterBuilder::new()
         .with_da_cost_per_byte(da_cost_per_byte)
-        .with_unrecorded_blocks(unrecorded_blocks)
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .build();
     let new_cost_per_byte = 100;
     let recorded_bytes = 500;
@@ -390,12 +430,17 @@ fn update_da_record_data__updates_unrecorded_blocks() {
 
     // when
     updater
-        .update_da_record_data(&recorded_heights, recorded_bytes, recorded_cost)
+        .update_da_record_data(
+            &recorded_heights,
+            recorded_bytes,
+            recorded_cost,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
     let expected = vec![(1, block_bytes)];
-    let actual: Vec<_> = updater.unrecorded_blocks.into_iter().collect();
+    let actual: Vec<_> = unrecorded_blocks.into_iter().collect();
     assert_eq!(actual, expected);
 }
 
@@ -405,14 +450,15 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
     let da_cost_per_byte = 40;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
-    let unrecorded_blocks = vec![BlockBytes {
-        height: 11,
-        block_bytes: 3000,
-    }];
+    // let unrecorded_blocks = vec![BlockBytes {
+    //     height: 11,
+    //     block_bytes: 3000,
+    // }];
+    let mut unrecorded_blocks: BTreeMap<_, _> = [(11, 3000)].into_iter().collect();
     let da_p_component = 2;
     let guessed_cost: u64 = unrecorded_blocks
-        .iter()
-        .map(|block| block.block_bytes * da_cost_per_byte)
+        .values()
+        .map(|bytes| bytes * da_cost_per_byte)
         .sum();
     let projected_total_cost = original_known_total_cost + guessed_cost;
 
@@ -423,19 +469,19 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost as u128)
         .with_known_total_cost(original_known_total_cost as u128)
-        .with_unrecorded_blocks(unrecorded_blocks.clone())
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .build();
 
     let new_cost_per_byte = 100;
-    let (recorded_heights, recorded_cost) =
-        unrecorded_blocks
-            .iter()
-            .fold((vec![], 0), |(mut range, cost), block| {
-                range.push(block.height);
-                (range, cost + block.block_bytes * new_cost_per_byte)
-            });
-    let min = recorded_heights.iter().min().unwrap();
-    let max = recorded_heights.iter().max().unwrap();
+    let (recorded_heights, recorded_cost) = unrecorded_blocks.iter().fold(
+        (vec![], 0),
+        |(mut range, cost), (height, bytes)| {
+            range.push(height);
+            (range, cost + bytes * new_cost_per_byte)
+        },
+    );
+    let min = *recorded_heights.iter().min().unwrap();
+    let max = *recorded_heights.iter().max().unwrap();
     let recorded_range: Vec<u32> = (*min..(max + 1)).collect();
     let recorded_bytes = 500;
 
@@ -443,7 +489,12 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
 
     // when
     updater
-        .update_da_record_data(&recorded_range, recorded_bytes, recorded_cost as u128)
+        .update_da_record_data(
+            &recorded_range,
+            recorded_bytes,
+            recorded_cost as u128,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
@@ -459,14 +510,15 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
     let da_cost_per_byte = 40;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
-    let unrecorded_blocks = vec![BlockBytes {
-        height: 11,
-        block_bytes: 3000,
-    }];
+    // let unrecorded_blocks = vec![BlockBytes {
+    //     height: 11,
+    //     block_bytes: 3000,
+    // }];
+    let mut unrecorded_blocks: BTreeMap<_, _> = [(11, 3000)].into_iter().collect();
     let da_p_component = 2;
     let guessed_cost: u64 = unrecorded_blocks
-        .iter()
-        .map(|block| block.block_bytes * da_cost_per_byte)
+        .values()
+        .map(|bytes| bytes * da_cost_per_byte)
         .sum();
     let projected_total_cost = original_known_total_cost + guessed_cost;
 
@@ -477,19 +529,24 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost as u128)
         .with_known_total_cost(original_known_total_cost as u128)
-        .with_unrecorded_blocks(unrecorded_blocks.clone())
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .build();
 
     let new_cost_per_byte = 100;
-    let (recorded_heights, recorded_cost) =
-        unrecorded_blocks
+    let (recorded_heights, recorded_cost) = unrecorded_blocks
+            // .iter()
+            // .fold((vec![], 0), |(mut range, cost), block| {
+            //     range.push(block.height);
+            //     (range, cost + block.block_bytes * new_cost_per_byte)
+            // });
             .iter()
-            .fold((vec![], 0), |(mut range, cost), block| {
-                range.push(block.height);
-                (range, cost + block.block_bytes * new_cost_per_byte)
+            .fold((vec![], 0), |(mut range, cost), (height, bytes)| {
+                range.push(height);
+                (range, cost + bytes * new_cost_per_byte)
             });
-    let min = recorded_heights.iter().min().unwrap();
-    let max = recorded_heights.iter().max().unwrap();
+
+    let min = *recorded_heights.iter().min().unwrap();
+    let max = *recorded_heights.iter().max().unwrap();
     let recorded_range: Vec<u32> = (*min..(max + 1)).collect();
     let recorded_bytes = 500;
 
@@ -497,7 +554,12 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
 
     // when
     updater
-        .update_da_record_data(&recorded_range, recorded_bytes, recorded_cost as u128)
+        .update_da_record_data(
+            &recorded_range,
+            recorded_bytes,
+            recorded_cost as u128,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then
@@ -513,14 +575,14 @@ fn update_da_record_data__da_block_will_not_change_da_gas_price() {
     let da_cost_per_byte = 40;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
-    let unrecorded_blocks = vec![BlockBytes {
-        height: 11,
-        block_bytes: 3000,
-    }];
+    // let unrecorded_blocks = vec![BlockBytes { height: 11,
+    //     block_bytes: 3000,
+    // }];
+    let mut unrecorded_blocks: BTreeMap<_, _> = [(11, 3000)].into_iter().collect();
     let da_p_component = 2;
     let guessed_cost: u64 = unrecorded_blocks
-        .iter()
-        .map(|block| block.block_bytes * da_cost_per_byte)
+        .values()
+        .map(|bytes| bytes * da_cost_per_byte)
         .sum();
     let projected_total_cost = original_known_total_cost + guessed_cost;
 
@@ -531,19 +593,19 @@ fn update_da_record_data__da_block_will_not_change_da_gas_price() {
         .with_l2_block_height(l2_block_height)
         .with_projected_total_cost(projected_total_cost as u128)
         .with_known_total_cost(original_known_total_cost as u128)
-        .with_unrecorded_blocks(unrecorded_blocks.clone())
+        .with_unrecorded_blocks(&unrecorded_blocks)
         .build();
 
     let new_cost_per_byte = 100;
-    let (recorded_heights, recorded_cost) =
-        unrecorded_blocks
-            .iter()
-            .fold((vec![], 0), |(mut range, cost), block| {
-                range.push(block.height);
-                (range, cost + block.block_bytes * new_cost_per_byte)
-            });
-    let min = recorded_heights.iter().min().unwrap();
-    let max = recorded_heights.iter().max().unwrap();
+    let (recorded_heights, recorded_cost) = unrecorded_blocks.iter().fold(
+        (vec![], 0),
+        |(mut range, cost), (height, bytes)| {
+            range.push(height);
+            (range, cost + bytes * new_cost_per_byte)
+        },
+    );
+    let min = *recorded_heights.iter().min().unwrap();
+    let max = *recorded_heights.iter().max().unwrap();
     let recorded_range: Vec<u32> = (*min..(max + 1)).collect();
     let recorded_bytes = 500;
 
@@ -551,7 +613,12 @@ fn update_da_record_data__da_block_will_not_change_da_gas_price() {
 
     // when
     updater
-        .update_da_record_data(&recorded_range, recorded_bytes, recorded_cost as u128)
+        .update_da_record_data(
+            &recorded_range,
+            recorded_bytes,
+            recorded_cost as u128,
+            &mut unrecorded_blocks,
+        )
         .unwrap();
 
     // then

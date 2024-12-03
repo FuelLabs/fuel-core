@@ -21,6 +21,7 @@ use crate::{
         GasPriceServiceConfig,
         L2Data,
         MetadataStorage,
+        TransactionableStorage,
     },
     v1::{
         algorithm::SharedV1Algorithm,
@@ -353,6 +354,7 @@ fn sync_v1_metadata<
     Metadata,
     SettingsProvider,
     UnrecordedBlockStorage,
+    StorageTxGenerator,
 >(
     settings: &SettingsProvider,
     on_chain_db: &L2DataStoreView,
@@ -360,6 +362,7 @@ fn sync_v1_metadata<
     latest_block_height: u32,
     updater: &mut AlgorithmUpdaterV1<FuelStorageUnrecordedBlocks<UnrecordedBlockStorage>>,
     metadata_storage: &mut Metadata,
+    storage_tx_generator: &mut StorageTxGenerator,
 ) -> anyhow::Result<()>
 where
     L2DataStore: L2Data,
@@ -371,6 +374,8 @@ where
         + Send
         + Sync
         + Clone,
+    StorageTxGenerator: TransactionableStorage,
+    <StorageTxGenerator as TransactionableStorage>::Transaction: UnrecordedBlocks,
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
@@ -396,13 +401,16 @@ where
 
         let block_bytes = block_bytes(&block);
         let (fee_wei, _) = mint_values(&block)?;
+        let mut tx = storage_tx_generator.begin_transaction()?;
         updater.update_l2_block_data(
             height,
             block_gas_used,
             block_gas_capacity,
             block_bytes,
             fee_wei.into(),
+            &mut tx,
         )?;
+        storage_tx_generator.commit_transaction(tx)?;
         let metadata: UpdaterMetadata = updater.clone().into();
         metadata_storage.set_metadata(&metadata)?;
     }

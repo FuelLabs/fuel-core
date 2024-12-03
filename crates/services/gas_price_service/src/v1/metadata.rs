@@ -113,8 +113,8 @@ pub fn updater_from_config<U>(
         max_da_gas_price_change_percent: value.max_da_gas_price_change_percent,
         da_p_component: value.da_p_component,
         da_d_component: value.da_d_component,
-        unrecorded_blocks,
         unrecorded_blocks_bytes,
+        _unrecorded_blocks: Default::default(),
     }
 }
 
@@ -174,6 +174,6 @@ pub fn v1_algorithm_from_metadata<U>(
         da_p_component: config.da_p_component,
         da_d_component: config.da_d_component,
         unrecorded_blocks_bytes,
-        unrecorded_blocks,
+        _unrecorded_blocks: Default::default(),
     }
 }

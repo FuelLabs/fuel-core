@@ -27,6 +27,13 @@ pub trait MetadataStorage: Send + Sync {
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()>;
 }
 
+pub trait TransactionableStorage: Send + Sync {
+    type Transaction;
+
+    fn begin_transaction(&self) -> Result<Self::Transaction>;
+    fn commit_transaction(&self, transaction: Self::Transaction) -> Result<()>;
+}
+
 /// Provides the latest block height.
 /// This is used to determine the latest block height that has been processed by the gas price service.
 /// We need this to fetch the gas price data for the latest block.

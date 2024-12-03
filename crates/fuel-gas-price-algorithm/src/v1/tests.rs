@@ -41,7 +41,7 @@ pub struct UpdaterBuilder {
     da_cost_per_byte: u128,
     project_total_cost: u128,
     latest_known_total_cost: u128,
-    unrecorded_blocks: Vec<BlockBytes>,
+    unrecorded_blocks_bytes: u64,
     last_profit: i128,
     second_to_last_profit: i128,
     da_gas_price_factor: u64,
@@ -68,7 +68,7 @@ impl UpdaterBuilder {
             da_cost_per_byte: 0,
             project_total_cost: 0,
             latest_known_total_cost: 0,
-            unrecorded_blocks: vec![],
+            unrecorded_blocks_bytes: 0,
             last_profit: 0,
             second_to_last_profit: 0,
             da_gas_price_factor: 1,
@@ -149,8 +149,14 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_unrecorded_blocks(mut self, unrecorded_blocks: Vec<BlockBytes>) -> Self {
-        self.unrecorded_blocks = unrecorded_blocks;
+    fn with_unrecorded_blocks(
+        mut self,
+        unrecorded_blocks: &BTreeMap<Height, Bytes>,
+    ) -> Self {
+        let unrecorded_block_bytes = unrecorded_blocks
+            .iter()
+            .fold(0u64, |acc, (_, bytes)| acc + bytes);
+        self.unrecorded_blocks_bytes = unrecorded_block_bytes;
         self
     }
 
@@ -183,11 +189,6 @@ impl UpdaterBuilder {
             latest_da_cost_per_byte: self.da_cost_per_byte,
             projected_total_da_cost: self.project_total_cost,
             latest_known_total_da_cost_excess: self.latest_known_total_cost,
-            unrecorded_blocks: self
-                .unrecorded_blocks
-                .iter()
-                .map(|b| (b.height, b.block_bytes))
-                .collect(),
             last_profit: self.last_profit,
             second_to_last_profit: self.second_to_last_profit,
             min_da_gas_price: self.min_da_gas_price,
@@ -196,10 +197,8 @@ impl UpdaterBuilder {
                 .try_into()
                 .expect("Should never be non-zero"),
             l2_activity: self.l2_activity,
-            unrecorded_blocks_bytes: self
-                .unrecorded_blocks
-                .iter()
-                .fold(0u128, |acc, b| acc + u128::from(b.block_bytes)),
+            unrecorded_blocks_bytes: self.unrecorded_blocks_bytes as u128,
+            _unrecorded_blocks: Default::default(),
         }
     }
 }

@@ -2,6 +2,7 @@ use crate::utils::cumulative_percentage_change;
 use std::{
     cmp::max,
     collections::BTreeMap,
+    marker::PhantomData,
     num::NonZeroU64,
     ops::Div,
 };
@@ -164,10 +165,10 @@ pub struct AlgorithmUpdaterV1<U> {
     pub latest_da_cost_per_byte: u128,
     /// Activity of L2
     pub l2_activity: L2ActivityTracker,
-    /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
-    pub unrecorded_blocks: U,
     /// Total unrecorded block bytes
     pub unrecorded_blocks_bytes: u128,
+    /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
+    pub _unrecorded_blocks: PhantomData<U>,
 }
 
 /// The `L2ActivityTracker` tracks the chain activity to determine a safety mode for setting the DA price.
@@ -326,9 +327,15 @@ impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
         heights: &[u32],
         recorded_bytes: u32,
         recording_cost: u128,
+        unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
         if !heights.is_empty() {
-            self.da_block_update(heights, recorded_bytes as u128, recording_cost)?;
+            self.da_block_update(
+                heights,
+                recorded_bytes as u128,
+                recording_cost,
+                unrecorded_blocks,
+            )?;
             self.recalculate_projected_cost();
             self.update_da_gas_price();
         }
@@ -342,6 +349,7 @@ impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
         capacity: NonZeroU64,
         block_bytes: u64,
         fee_wei: u128,
+        unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
@@ -372,7 +380,7 @@ impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
             self.update_da_gas_price();
 
             // metadata
-            self.unrecorded_blocks.insert(height, block_bytes)?;
+            unrecorded_blocks.insert(height, block_bytes)?;
             self.unrecorded_blocks_bytes = self
                 .unrecorded_blocks_bytes
                 .saturating_add(block_bytes as u128);
@@ -538,8 +546,9 @@ impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
         heights: &[u32],
         recorded_bytes: u128,
         recording_cost: u128,
+        unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
-        self.update_unrecorded_block_bytes(heights);
+        self.update_unrecorded_block_bytes(heights, unrecorded_blocks);
 
         let new_da_block_cost = self
             .latest_known_total_da_cost_excess
@@ -561,10 +570,14 @@ impl<U: UnrecordedBlocks> AlgorithmUpdaterV1<U> {
 
     // Get the bytes for all specified heights, or get none of them.
     // Always remove the blocks from the unrecorded blocks so they don't build up indefinitely
-    fn update_unrecorded_block_bytes(&mut self, heights: &[u32]) {
+    fn update_unrecorded_block_bytes(
+        &mut self,
+        heights: &[u32],
+        unrecorded_blocks: &mut U,
+    ) {
         let mut total: u128 = 0;
         for expected_height in heights {
-            let res = self.unrecorded_blocks.remove(expected_height);
+            let res = unrecorded_blocks.remove(expected_height);
             match res {
                 Ok(Some(bytes)) => {
                     total = total.saturating_add(bytes as u128);
