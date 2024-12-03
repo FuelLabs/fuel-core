@@ -32,11 +32,15 @@ use self::indexation::coins_to_spend::{
     RETRYABLE_BYTE,
 };
 
+const AMOUNT_SIZE: usize = size_of::<u64>();
+const UTXO_ID_SIZE: usize = size_of::<UtxoId>();
+const RETRYABLE_FLAG_SIZE: usize = size_of::<u8>();
+
 // TODO: Reuse `fuel_vm::storage::double_key` macro.
 pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
-    let mut default = [0u8; Address::LEN + TxId::LEN + 2];
+    let mut default = [0u8; Address::LEN + UTXO_ID_SIZE];
     default[0..Address::LEN].copy_from_slice(owner.as_ref());
-    let utxo_id_bytes: [u8; TxId::LEN + 2] = utxo_id_to_bytes(coin_id);
+    let utxo_id_bytes: [u8; UTXO_ID_SIZE] = utxo_id_to_bytes(coin_id);
     default[Address::LEN..].copy_from_slice(utxo_id_bytes.as_ref());
     default
 }
@@ -66,7 +70,7 @@ impl TableWithBlueprint for CoinsToSpendIndex {
 }
 
 // For coins, the foreign key is the UtxoId (34 bytes).
-pub(crate) const COIN_FOREIGN_KEY_LEN: usize = TxId::LEN + 2;
+pub(crate) const COIN_FOREIGN_KEY_LEN: usize = UTXO_ID_SIZE;
 
 // For messages, the foreign key is the nonce (32 bytes).
 pub(crate) const MESSAGE_FOREIGN_KEY_LEN: usize = Nonce::LEN;
@@ -161,9 +165,9 @@ impl CoinsToSpendIndexKey {
 
     #[allow(clippy::arithmetic_side_effects)]
     pub fn amount(&self) -> u64 {
-        let offset = Address::LEN + AssetId::LEN + u8::BITS as usize / 8;
+        let offset = Address::LEN + AssetId::LEN + RETRYABLE_FLAG_SIZE;
         let amount_start = offset;
-        let amount_end = amount_start + u64::BITS as usize / 8;
+        let amount_end = amount_start + AMOUNT_SIZE;
         u64::from_be_bytes(
             self.0[amount_start..amount_end]
                 .try_into()
@@ -173,8 +177,7 @@ impl CoinsToSpendIndexKey {
 
     #[allow(clippy::arithmetic_side_effects)]
     pub fn foreign_key_bytes(&self) -> Vec<u8> {
-        let offset =
-            Address::LEN + AssetId::LEN + u8::BITS as usize / 8 + u64::BITS as usize / 8;
+        let offset = Address::LEN + AssetId::LEN + RETRYABLE_FLAG_SIZE + AMOUNT_SIZE;
         self.0[offset..].into()
     }
 }
@@ -240,7 +243,7 @@ mod test {
 
     // Base part of the coins to spend index key.
     const COIN_TO_SPEND_BASE_KEY_LEN: usize =
-        Address::LEN + AssetId::LEN + u8::BITS as usize / 8 + u64::BITS as usize / 8;
+        Address::LEN + AssetId::LEN + RETRYABLE_FLAG_SIZE + AMOUNT_SIZE;
 
     // Total length of the coins to spend index key for coins.
     const COIN_TO_SPEND_COIN_KEY_LEN: usize =
@@ -301,7 +304,7 @@ mod test {
         let retryable_flag = NON_RETRYABLE_BYTE;
 
         let amount = [0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47];
-        assert_eq!(amount.len(), u64::BITS as usize / 8);
+        assert_eq!(amount.len(), AMOUNT_SIZE);
 
         let tx_id = TxId::new([
             0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C,
@@ -365,7 +368,7 @@ mod test {
         ]);
 
         let amount = [0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47];
-        assert_eq!(amount.len(), u64::BITS as usize / 8);
+        assert_eq!(amount.len(), AMOUNT_SIZE);
 
         let retryable_flag = NON_RETRYABLE_BYTE;
 
@@ -426,7 +429,7 @@ mod test {
         ]);
 
         let amount = [0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47];
-        assert_eq!(amount.len(), u64::BITS as usize / 8);
+        assert_eq!(amount.len(), AMOUNT_SIZE);
 
         let retryable_flag = RETRYABLE_BYTE;
 
