@@ -70,6 +70,7 @@ use fuel_core_types::{
             CoinSigned,
         },
         AssetId,
+        ConsensusParameters,
         Contract,
         Input,
         Output,
@@ -676,16 +677,14 @@ where
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
     tx_pool: TxPool,
     block_importer: BlockImporter,
     on_chain_database: OnChain,
     off_chain_database: OffChain,
-    chain_id: ChainId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
-    base_asset_id: AssetId,
+    consensus_parameters: &ConsensusParameters,
 ) -> ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>
 where
     TxPool: ports::worker::TxPool,
@@ -699,9 +698,9 @@ where
         block_importer,
         on_chain_database,
         off_chain_database,
-        chain_id,
+        chain_id: consensus_parameters.chain_id(),
         da_compression_config,
         continue_on_error,
-        base_asset_id,
+        base_asset_id: *consensus_parameters.base_asset_id(),
     })
 }
