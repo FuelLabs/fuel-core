@@ -16,6 +16,10 @@ use crate::{
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     allow_block_list,
+    connection_limits::{
+        self,
+        ConnectionLimits,
+    },
     gossipsub::{
         self,
         MessageAcceptance,
@@ -60,10 +64,16 @@ pub struct FuelBehaviour {
 
     /// RequestResponse protocol
     request_response: request_response::Behaviour<PostcardCodec>,
+
+    /// The Behaviour to manage connection limits.
+    connection_limits: connection_limits::Behaviour,
 }
 
 impl FuelBehaviour {
-    pub(crate) fn new(p2p_config: &Config, codec: PostcardCodec) -> anyhow::Result<Self> {
+    pub(crate) fn new(
+        p2p_config: &Config,
+        codec: PostcardCodec,
+    ) -> anyhow::Result<Self, anyhow::Error> {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -110,6 +120,17 @@ impl FuelBehaviour {
             BlockHeight::default(),
         );
 
+        let connection_limits = connection_limits::Behaviour::new(
+            ConnectionLimits::default()
+                .with_max_pending_incoming(Some(
+                    p2p_config.max_pending_incoming_connections,
+                ))
+                .with_max_pending_outgoing(Some(
+                    p2p_config.max_pending_outgoing_connections,
+                ))
+                .with_max_established(Some(p2p_config.max_established_connections)),
+        );
+
         let req_res_protocol = codec
             .get_req_res_protocols()
             .map(|protocol| (protocol, ProtocolSupport::Full));
@@ -133,6 +154,7 @@ impl FuelBehaviour {
             blocked_peer: Default::default(),
             identify,
             heartbeat,
+            connection_limits,
         })
     }
 

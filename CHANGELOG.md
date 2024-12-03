@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2327](https://github.com/FuelLabs/fuel-core/pull/2327): Add more services tests and more checks of the pool. Also add an high level documentation for users of the pool and contributors.
 - [2416](https://github.com/FuelLabs/fuel-core/issues/2416): Define the `GasPriceServiceV1` task.
 - [2033](https://github.com/FuelLabs/fuel-core/pull/2033): Remove `Option<BlockHeight>` in favor of `BlockHeightQuery` where applicable.
+- [2150](https://github.com/FuelLabs/fuel-core/pull/2150): Upgraded `libp2p` to `0.54.1` and introduced `max_pending_incoming_connections` , `max_established_connections` and `max_pending_outgoing_connections` to limit the number of pending connections.
 
 ### Fixed
 - [2365](https://github.com/FuelLabs/fuel-core/pull/2365): Fixed the error during dry run in the case of race condition.
