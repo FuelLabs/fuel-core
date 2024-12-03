@@ -313,12 +313,12 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         max_coins: u16,
         excluded_ids: &ExcludedKeysAsBytes,
     ) -> StorageResult<Vec<CoinId>> {
-        let prefix: Vec<_> = owner
+        let prefix: Vec<_> = NON_RETRYABLE_BYTE
             .as_ref()
             .iter()
             .copied()
+            .chain(owner.as_ref().iter().copied())
             .chain(asset_id.as_ref().iter().copied())
-            .chain(NON_RETRYABLE_BYTE)
             .collect();
 
         let big_first_iter = self.iter_all_filtered::<CoinsToSpendIndex, _>(
