@@ -70,6 +70,8 @@ where
     da_source_adapter_handle: DaSourceService<DA>,
     /// The da source channel
     da_source_channel: Receiver<DaBlockCosts>,
+    /// Buffer of block costs from the DA chain
+    da_block_costs_buffer: Vec<DaBlockCosts>,
 }
 
 impl<L2, Metadata, DA, U> GasPriceServiceV1<L2, Metadata, DA, U>
@@ -253,8 +255,9 @@ where
                 TaskNextAction::always_continue(res)
             }
             da_block_costs = self.da_source_channel.recv() => {
-                let res = self.process_da_block_costs_res(da_block_costs).await;
-                TaskNextAction::always_continue(res)
+                self.da_block_costs_buffer.push(da_block_costs?);
+                // let res = self.process_da_block_costs_res(da_block_costs).await;
+                TaskNextAction::Continue
             }
         }
     }
