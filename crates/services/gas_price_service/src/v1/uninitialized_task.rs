@@ -319,7 +319,6 @@ where
 #[allow(clippy::too_many_arguments)]
 pub fn new_gas_price_service_v1<
     L2DataStore,
-    L2DataStoreView,
     GasPriceStore,
     Metadata,
     DA,
@@ -332,15 +331,15 @@ pub fn new_gas_price_service_v1<
     gas_price_db: GasPriceStore,
     metadata: Metadata,
     da_source: DA,
-    on_chain_db: L2DataStoreView,
+    on_chain_db: L2DataStore,
 ) -> anyhow::Result<
     ServiceRunner<
-        UninitializedTask<L2DataStoreView, GasPriceStore, Metadata, DA, SettingsProvider>,
+        UninitializedTask<L2DataStore, GasPriceStore, Metadata, DA, SettingsProvider>,
     >,
 >
 where
-    L2DataStore: L2Data,
-    L2DataStoreView: AtomicView<LatestView = L2DataStore>,
+    L2DataStore: AtomicView,
+    L2DataStore::LatestView: L2Data,
     GasPriceStore: GasPriceData,
     SettingsProvider: GasPriceSettingsProvider,
     Metadata: MetadataStorage,
