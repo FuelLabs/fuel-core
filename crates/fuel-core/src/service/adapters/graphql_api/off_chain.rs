@@ -378,8 +378,8 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 }
 
 fn select_coins_to_spend(
-    coins_iter: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
-    coins_iter_back: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
+    big_coins_iter: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
+    dust_coins_iter: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
     total: u64,
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
@@ -391,7 +391,7 @@ fn select_coins_to_spend(
     }
 
     let (selected_big_coins_total, selected_big_coins) =
-        big_coins(coins_iter, total, max, excluded_ids)?;
+        big_coins(big_coins_iter, total, max, excluded_ids)?;
 
     if selected_big_coins_total < total {
         return Ok(vec![]);
@@ -408,7 +408,7 @@ fn select_coins_to_spend(
 
     let max_dust_count = max_dust_count(max, number_of_big_coins);
     let (dust_coins_total, selected_dust_coins) = dust_coins(
-        coins_iter_back,
+        dust_coins_iter,
         last_selected_big_coin,
         max_dust_count,
         excluded_ids,
@@ -560,7 +560,10 @@ mod tests {
             CoinOrMessageIdBytes,
             ExcludedKeysAsBytes,
         },
-        service::adapters::graphql_api::off_chain::CoinsToSpendIndexEntry,
+        service::adapters::graphql_api::off_chain::{
+            select_coins_to_spend,
+            CoinsToSpendIndexEntry,
+        },
     };
 
     use super::select_coins_until;
@@ -654,5 +657,85 @@ mod tests {
 
         assert_eq!(result.0, 1 + 2 + 3 + 4); // Keep selecting until total is greater than 7.
         assert_eq!(result.1.len(), 4);
+    }
+
+    #[test]
+    fn already_selected_big_coins_are_never_reselected_as_dust() {
+        const MAX: u16 = u16::MAX;
+        const TOTAL: u64 = 101;
+
+        let big_coins_iter = setup_test_coins([100, 4, 3, 2]).into_iter().into_boxed();
+        let dust_coins_iter = setup_test_coins([100, 4, 3, 2])
+            .into_iter()
+            .rev()
+            .into_boxed();
+
+        let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
+
+        let result =
+            select_coins_to_spend(big_coins_iter, dust_coins_iter, TOTAL, MAX, &excluded)
+                .expect("should select coins");
+
+        let mut results = result
+            .into_iter()
+            .map(|(key, _)| key.amount())
+            .collect::<Vec<_>>();
+
+        // Because we select a total of 101, first two coins should always selected (100, 4).
+        let expected = vec![100, 4];
+        let actual: Vec<_> = results.drain(..2).collect();
+        assert_eq!(expected, actual);
+
+        // The number of dust coins is selected randomly, so we might have:
+        // - 0 dust coins
+        // - 1 dust coin [2]
+        // - 2 dust coins [2, 3]
+        // Even though in majority of cases we will have 2 dust coins selected (due to
+        // MAX being huge), we can't guarantee that, hence we assert against all possible cases.
+        // The important fact is that neither 100 nor 4 are selected as dust coins.
+        let expected_1: Vec<u64> = vec![];
+        let expected_2: Vec<u64> = vec![2];
+        let expected_3: Vec<u64> = vec![2, 3];
+        let actual: Vec<_> = std::mem::take(&mut results);
+
+        assert!(
+            actual == expected_1 || actual == expected_2 || actual == expected_3,
+            "Unexpected dust coins: {:?}",
+            actual,
+        );
+    }
+
+    #[test]
+    fn selection_algorithm_should_bail_on_error() {
+        const MAX: u16 = u16::MAX;
+        const TOTAL: u64 = 101;
+
+        let mut coins = setup_test_coins([10, 9, 8, 7]);
+        let error = fuel_core_storage::Error::NotFound("S1", "S2");
+
+        let first_2: Vec<_> = coins.drain(..2).collect();
+        let last_2: Vec<_> = std::mem::take(&mut coins);
+
+        let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
+
+        // Inject an error into the middle of coins.
+        let coins: Vec<_> = first_2
+            .into_iter()
+            .take(2)
+            .chain(std::iter::once(Err(error)))
+            .chain(last_2)
+            .collect();
+
+        let result = select_coins_to_spend(
+            coins.into_iter().into_boxed(),
+            std::iter::empty().into_boxed(),
+            TOTAL,
+            MAX,
+            &excluded,
+        );
+
+        assert!(
+            matches!(result, Err(error) if error == fuel_core_storage::Error::NotFound("S1", "S2"))
+        );
     }
 }
