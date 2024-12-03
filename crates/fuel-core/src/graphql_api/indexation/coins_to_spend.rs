@@ -535,13 +535,15 @@ mod tests {
                 COINS_TO_SPEND_INDEX_IS_ENABLED,
                 &base_asset_id,
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .to_string(),
             IndexationError::CoinToSpendAlreadyIndexed {
                 owner,
                 asset_id,
                 amount: 100,
                 utxo_id: coin.utxo_id,
             }
+            .to_string()
         );
 
         let message = make_nonretryable_message(&owner, 400);
@@ -560,12 +562,14 @@ mod tests {
                 COINS_TO_SPEND_INDEX_IS_ENABLED,
                 &base_asset_id,
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .to_string(),
             IndexationError::MessageToSpendAlreadyIndexed {
                 owner,
                 amount: 400,
                 nonce: *message.nonce(),
             }
+            .to_string()
         );
     }
 
@@ -592,13 +596,15 @@ mod tests {
                 COINS_TO_SPEND_INDEX_IS_ENABLED,
                 &base_asset_id,
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .to_string(),
             IndexationError::CoinToSpendNotFound {
                 owner,
                 asset_id,
                 amount: 100,
                 utxo_id: coin.utxo_id,
             }
+            .to_string()
         );
 
         let message = make_nonretryable_message(&owner, 400);
@@ -610,12 +616,14 @@ mod tests {
                 COINS_TO_SPEND_INDEX_IS_ENABLED,
                 &base_asset_id,
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .to_string(),
             IndexationError::MessageToSpendNotFound {
                 owner,
                 amount: 400,
                 nonce: *message.nonce(),
             }
+            .to_string()
         );
     }
 

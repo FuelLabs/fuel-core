@@ -573,18 +573,24 @@ mod tests {
                 asset_id: asset_id_1,
                 current_amount: 100,
                 requested_deduction: 10000,
-            },
+            }
+            .to_string(),
             IndexationError::CoinBalanceWouldUnderflow {
                 owner,
                 asset_id: asset_id_2,
                 current_amount: 0,
                 requested_deduction: 20000,
-            },
+            }
+            .to_string(),
         ];
 
         let actual_errors: Vec<_> = events
             .iter()
-            .map(|event| update(event, &mut tx, BALANCES_ARE_ENABLED).unwrap_err())
+            .map(|event| {
+                update(event, &mut tx, BALANCES_ARE_ENABLED)
+                    .unwrap_err()
+                    .to_string()
+            })
             .collect();
 
         assert_eq!(expected_errors, actual_errors);
