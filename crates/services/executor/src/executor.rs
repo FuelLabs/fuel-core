@@ -1630,7 +1630,7 @@ where
             gas_price,
             gas_costs,
             fee_params,
-            Some(*header.block_height()),
+            Some(*header.height()),
         )?;
 
         let mut vm = Interpreter::with_storage(
