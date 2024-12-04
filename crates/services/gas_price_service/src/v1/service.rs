@@ -263,10 +263,10 @@ where
 impl<L2, DA, StorageTxProvider> RunnableTask
     for GasPriceServiceV1<L2, DA, StorageTxProvider>
 where
-    L2: L2BlockSource + 'static,
-    DA: DaBlockCostsSource + 'static,
+    L2: L2BlockSource,
+    DA: DaBlockCostsSource,
     StorageTxProvider: TransactionableStorage + 'static,
-    StorageTxProvider::Transaction<'static>: UnrecordedBlocks + MetadataStorage,
+    for<'a> StorageTxProvider::Transaction<'a>: UnrecordedBlocks + MetadataStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {

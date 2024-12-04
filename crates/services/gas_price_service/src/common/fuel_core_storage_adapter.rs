@@ -135,19 +135,13 @@ where
 {
     type Transaction<'a> = WrappedStorageTransaction<'a, Storage> where Self: 'a;
 
-    fn begin_transaction<'a>(&'a mut self) -> GasPriceResult<Self::Transaction<'a>>
-    where
-        Self: 'a,
-    {
+    fn begin_transaction(&mut self) -> GasPriceResult<Self::Transaction<'_>> {
         let tx = self.write_transaction();
         let wrapped = WrappedStorageTransaction::wrap(tx);
         Ok(wrapped)
     }
 
-    fn commit_transaction<'a>(transaction: Self::Transaction<'a>) -> GasPriceResult<()>
-    where
-        Self: 'a,
-    {
+    fn commit_transaction(transaction: Self::Transaction<'_>) -> GasPriceResult<()> {
         transaction
             .inner
             .commit()

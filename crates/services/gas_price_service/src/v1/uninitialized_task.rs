@@ -92,7 +92,6 @@ pub struct UninitializedTask<
 }
 
 impl<
-        'a,
         L2DataStore,
         L2DataStoreView,
         GasPriceStore,
@@ -106,8 +105,8 @@ where
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     GasPriceStore: GasPriceData,
     PersistedData: MetadataStorage,
-    PersistedData: TransactionableStorage + 'a,
-    PersistedData::Transaction<'a>: MetadataStorage + UnrecordedBlocks,
+    PersistedData: TransactionableStorage,
+    for<'a> PersistedData::Transaction<'a>: MetadataStorage + UnrecordedBlocks,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
 {
@@ -236,7 +235,7 @@ where
     DA: DaBlockCostsSource + 'static,
     SettingsProvider: GasPriceSettingsProvider + 'static,
     PersistedData: MetadataStorage + TransactionableStorage + 'static,
-    <PersistedData as TransactionableStorage>::Transaction<'static>:
+    for<'a> <PersistedData as TransactionableStorage>::Transaction<'a>:
         MetadataStorage + UnrecordedBlocks,
 {
     const NAME: &'static str = "GasPriceServiceV1";
@@ -403,7 +402,7 @@ where
     SettingsProvider: GasPriceSettingsProvider,
     DA: DaBlockCostsSource,
     PersistedData: MetadataStorage + TransactionableStorage + 'static,
-    PersistedData::Transaction<'static>: MetadataStorage + UnrecordedBlocks,
+    for<'a> PersistedData::Transaction<'a>: MetadataStorage + UnrecordedBlocks,
 {
     let v1_config = config.v1().ok_or(anyhow::anyhow!("Expected V1 config"))?;
     let gas_price_init = UninitializedTask::new(
