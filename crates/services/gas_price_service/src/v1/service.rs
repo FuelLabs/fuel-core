@@ -81,7 +81,6 @@ where
     L2: L2BlockSource,
     DA: DaBlockCostsSource,
     StorageTxProvider: TransactionableStorage,
-    // StorageTxProvider::Transaction<'a>: UnrecordedBlocks + MetadataStorage,
 {
     async fn commit_block_data_to_algorithm<'a>(
         &'a mut self,
@@ -176,7 +175,6 @@ where
             &mut storage_tx,
         )?;
 
-        tracing::debug!("Committing transaction");
         let metadata = self.algorithm_updater.clone().into();
         storage_tx
             .set_metadata(&metadata)
@@ -512,10 +510,6 @@ mod tests {
 
     #[tokio::test]
     async fn run__updates_gas_price_with_da_block_cost_source() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .try_init();
-
         // given
         let block_height = 2;
         let l2_block_2 = BlockInfo::Block {
