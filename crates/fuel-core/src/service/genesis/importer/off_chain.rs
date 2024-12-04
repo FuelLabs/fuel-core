@@ -43,6 +43,23 @@ use super::{
     Handler,
 };
 
+fn balances_indexation_enabled() -> bool {
+    use std::sync::OnceLock;
+
+    static BALANCES_INDEXATION_ENABLED: OnceLock<bool> = OnceLock::new();
+
+    *BALANCES_INDEXATION_ENABLED.get_or_init(|| {
+        // During re-genesis process the metadata is always doesn't exist.
+        let metadata = None;
+        let indexation_availability =
+            crate::database::database_description::indexation_availability::<OffChain>(
+                metadata,
+            );
+        indexation_availability
+            .contains(&crate::database::database_description::IndexationKind::Balances)
+    })
+}
+
 impl ImportTable for Handler<TransactionStatuses, TransactionStatuses> {
     type TableInSnapshot = TransactionStatuses;
     type TableBeingWritten = TransactionStatuses;
@@ -110,7 +127,11 @@ impl ImportTable for Handler<OwnedMessageIds, Messages> {
         let events = group
             .into_iter()
             .map(|TableEntry { value, .. }| Cow::Owned(Event::MessageImported(value)));
-        worker_service::process_executor_events(events, tx)?;
+        worker_service::process_executor_events(
+            events,
+            tx,
+            balances_indexation_enabled(),
+        )?;
         Ok(())
     }
 }
@@ -128,7 +149,11 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
         let events = group.into_iter().map(|TableEntry { value, key }| {
             Cow::Owned(Event::CoinCreated(value.uncompress(key)))
         });
-        worker_service::process_executor_events(events, tx)?;
+        worker_service::process_executor_events(
+            events,
+            tx,
+            balances_indexation_enabled(),
+        )?;
         Ok(())
     }
 }

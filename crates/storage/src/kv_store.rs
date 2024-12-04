@@ -18,7 +18,7 @@ use core::ops::Deref;
 /// The key of the storage.
 pub type Key = Vec<u8>;
 /// The value of the storage. It is wrapped into the `Arc` to provide less cloning of massive objects.
-pub type Value = alloc::sync::Arc<Vec<u8>>;
+pub type Value = alloc::sync::Arc<[u8]>;
 
 /// The pair of key and value from the storage.
 pub type KVItem = StorageResult<(Key, Value)>;

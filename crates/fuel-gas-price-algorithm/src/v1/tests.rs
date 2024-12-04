@@ -35,7 +35,6 @@ pub struct UpdaterBuilder {
     l2_block_capacity_threshold: u8,
 
     total_rewards: u128,
-    da_recorded_block_height: u32,
     da_cost_per_byte: u128,
     project_total_cost: u128,
     latest_known_total_cost: u128,
@@ -63,7 +62,6 @@ impl UpdaterBuilder {
             l2_block_capacity_threshold: 50,
 
             total_rewards: 0,
-            da_recorded_block_height: 0,
             da_cost_per_byte: 0,
             project_total_cost: 0,
             latest_known_total_cost: 0,
@@ -133,11 +131,6 @@ impl UpdaterBuilder {
         self
     }
 
-    fn with_da_recorded_block_height(mut self, da_recorded_block_height: u32) -> Self {
-        self.da_recorded_block_height = da_recorded_block_height;
-        self
-    }
-
     fn with_da_cost_per_byte(mut self, da_cost_per_byte: u128) -> Self {
         self.da_cost_per_byte = da_cost_per_byte;
         self
@@ -184,7 +177,6 @@ impl UpdaterBuilder {
             l2_block_fullness_threshold_percent: self.l2_block_capacity_threshold.into(),
             total_da_rewards_excess: self.total_rewards,
 
-            da_recorded_block_height: self.da_recorded_block_height,
             latest_da_cost_per_byte: self.da_cost_per_byte,
             projected_total_da_cost: self.project_total_cost,
             latest_known_total_da_cost_excess: self.latest_known_total_cost,
@@ -201,6 +193,10 @@ impl UpdaterBuilder {
                 .try_into()
                 .expect("Should never be non-zero"),
             l2_activity: self.l2_activity,
+            unrecorded_blocks_bytes: self
+                .unrecorded_blocks
+                .iter()
+                .fold(0u128, |acc, b| acc + u128::from(b.block_bytes)),
         }
     }
 }

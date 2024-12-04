@@ -986,6 +986,7 @@ mod tests {
             let on_chain = self.database.on_chain().clone();
             let off_chain = self.database.off_chain().clone();
             ServiceDatabase::new(100, 0u32.into(), on_chain, off_chain)
+                .expect("should create service database")
         }
     }
 

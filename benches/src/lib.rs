@@ -546,7 +546,8 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         }
         let storage_diff = vm.storage_diff();
         let mut vm = vm.remove_recording();
-        let mut diff = start_vm.diff(&vm);
+        // TODO: Check if this is the intended use of rollback_to.
+        let mut diff = start_vm.rollback_to(&vm);
         diff += storage_diff;
         let diff: diff::Diff<diff::InitialVmState> = diff.into();
         vm.reset_vm_state(&diff);

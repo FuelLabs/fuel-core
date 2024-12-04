@@ -1,6 +1,7 @@
 use crate::{
     self as fuel_core_txpool,
 };
+use fuel_core_services::TaskNextAction;
 
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
@@ -225,43 +226,43 @@ impl<View> RunnableTask for Task<View>
 where
     View: TxPoolPersistentStorage,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                return Ok(false)
+                TaskNextAction::Stop
             }
 
             block_result = self.subscriptions.imported_blocks.next() => {
                 if let Some(result) = block_result {
                     self.import_block(result);
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Stop
                 }
             }
 
             select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
                     self.borrow_txpool(select_transaction_request);
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Stop
                 }
             }
 
             _ = self.pruner.ttl_timer.tick() => {
                 self.try_prune_transactions();
-                return Ok(true)
+                TaskNextAction::Continue
             }
 
             write_pool_request = self.subscriptions.write_pool.recv() => {
                 if let Some(write_pool_request) = write_pool_request {
                     self.process_write(write_pool_request);
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Continue
                 }
             }
 
@@ -270,27 +271,27 @@ where
                     if let Some(tx) = data {
                         self.manage_tx_from_p2p(tx, message_id, peer_id);
                     }
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Stop
                 }
             }
 
             new_peer_subscribed = self.subscriptions.new_tx_source.next() => {
                 if let Some(peer_id) = new_peer_subscribed {
                     self.manage_new_peer_subscribed(peer_id);
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Stop
                 }
             }
 
             read_pool_request = self.subscriptions.read_pool.recv() => {
                 if let Some(read_pool_request) = read_pool_request {
                     self.process_read(read_pool_request);
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Stop
                 }
             }
         }
