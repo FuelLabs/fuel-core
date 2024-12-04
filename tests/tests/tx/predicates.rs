@@ -87,13 +87,15 @@ async fn transaction_with_valid_predicate_is_executed() {
         .unwrap();
 
     // check transaction change amount to see if predicate was spent
-    let transaction = context
+    let transaction: Transaction = context
         .client
         .transaction(&predicate_tx.id(&ChainId::default()))
         .await
         .unwrap()
         .unwrap()
-        .transaction;
+        .transaction
+        .try_into()
+        .unwrap();
 
     assert!(
         matches!(transaction.as_script().unwrap().outputs()[0], Output::Change { amount: change_amount, .. } if change_amount == amount)

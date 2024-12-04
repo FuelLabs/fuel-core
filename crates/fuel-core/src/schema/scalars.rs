@@ -79,6 +79,7 @@ macro_rules! number_scalar {
     };
 }
 
+number_scalar!(U128, u128, "U128");
 number_scalar!(U64, u64, "U64");
 number_scalar!(U32, u32, "U32");
 number_scalar!(U16, u16, "U16");

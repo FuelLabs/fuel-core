@@ -30,6 +30,7 @@ use fuel_core_services::{
     RunnableService,
     RunnableTask,
     StateWatcher,
+    TaskNextAction,
 };
 use fuel_gas_price_algorithm::{
     v0::AlgorithmUpdaterV0,
@@ -40,7 +41,12 @@ use fuel_gas_price_algorithm::{
 };
 use futures::FutureExt;
 use std::num::NonZeroU64;
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::{
+    error::RecvError,
+    Receiver,
+};
+
+use crate::common::utils::Result as GasPriceResult;
 
 /// The service that updates the gas price algorithm.
 pub struct GasPriceServiceV1<L2, Metadata, DA>
@@ -59,6 +65,38 @@ where
     da_source_adapter_handle: DaSourceService<DA>,
     /// The da source channel
     da_source_channel: Receiver<DaBlockCosts>,
+}
+
+impl<L2, Metadata, DA> GasPriceServiceV1<L2, Metadata, DA>
+where
+    L2: L2BlockSource,
+    Metadata: MetadataStorage,
+    DA: DaBlockCostsSource,
+{
+    async fn process_l2_block_res(
+        &mut self,
+        l2_block_res: GasPriceResult<BlockInfo>,
+    ) -> anyhow::Result<()> {
+        tracing::info!("Received L2 block result: {:?}", l2_block_res);
+        let block = l2_block_res?;
+
+        tracing::debug!("Updating gas price algorithm");
+        self.apply_block_info_to_gas_algorithm(block).await?;
+        Ok(())
+    }
+
+    async fn process_da_block_costs_res(
+        &mut self,
+        da_block_costs: Result<DaBlockCosts, RecvError>,
+    ) -> anyhow::Result<()> {
+        tracing::info!("Received DA block costs: {:?}", da_block_costs);
+        let da_block_costs = da_block_costs?;
+
+        tracing::debug!("Updating DA block costs");
+        self.apply_da_block_costs_to_gas_algorithm(da_block_costs)
+            .await?;
+        Ok(())
+    }
 }
 
 impl<L2, Metadata, DA> GasPriceServiceV1<L2, Metadata, DA>
@@ -139,7 +177,8 @@ where
         da_block_costs: DaBlockCosts,
     ) -> anyhow::Result<()> {
         self.algorithm_updater.update_da_record_data(
-            da_block_costs.l2_block_range,
+            &da_block_costs.l2_blocks,
+            da_block_costs.blob_size_bytes,
             da_block_costs.blob_cost_wei,
         )?;
 
@@ -194,32 +233,22 @@ where
     Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        let should_continue;
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
                 tracing::debug!("Stopping gas price service");
-                should_continue = false;
+                TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
-                tracing::info!("Received L2 block result: {:?}", l2_block_res);
-                let block = l2_block_res?;
-
-                tracing::debug!("Updating gas price algorithm");
-                self.apply_block_info_to_gas_algorithm(block).await?;
-                should_continue = true;
+                let res = self.process_l2_block_res(l2_block_res).await;
+                TaskNextAction::always_continue(res)
             }
             da_block_costs = self.da_source_channel.recv() => {
-                tracing::info!("Received DA block costs: {:?}", da_block_costs);
-                let da_block_costs = da_block_costs?;
-
-                tracing::debug!("Updating DA block costs");
-                self.apply_da_block_costs_to_gas_algorithm(da_block_costs).await?;
-                should_continue = true;
+                let res = self.process_da_block_costs_res(da_block_costs).await;
+                TaskNextAction::always_continue(res)
             }
         }
-        Ok(should_continue)
     }
 
     async fn shutdown(mut self) -> anyhow::Result<()> {
@@ -424,7 +453,7 @@ mod tests {
         let initial_price = read_algo.next_gas_price();
 
         // when
-        service.run(&mut watcher).await.unwrap();
+        service.run(&mut watcher).await;
         l2_block_sender.send(l2_block).await.unwrap();
         service.shutdown().await.unwrap();
 
@@ -474,7 +503,7 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
-                    l2_block_range: 1..2,
+                    l2_blocks: (1..2).collect(),
                     blob_cost_wei: 9000,
                     blob_size_bytes: 3000,
                 }),
@@ -501,11 +530,10 @@ mod tests {
         service
             .da_source_adapter_handle
             .run(&mut da_source_watcher)
-            .await
-            .unwrap();
+            .await;
 
         // when
-        service.run(&mut watcher).await.unwrap();
+        service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
         service.shutdown().await.unwrap();
 

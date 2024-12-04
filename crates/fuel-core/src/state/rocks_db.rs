@@ -58,7 +58,10 @@ use std::{
         Path,
         PathBuf,
     },
-    sync::Arc,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 use tempfile::TempDir;
 
@@ -96,6 +99,7 @@ impl Drop for DropResources {
 pub struct RocksDb<Description> {
     read_options: ReadOptions,
     db: Arc<DB>,
+    create_family: Arc<Mutex<BTreeMap<String, Options>>>,
     snapshot: Option<rocksdb::SnapshotWithThreadMode<'static, DB>>,
     metrics: Arc<DatabaseMetrics>,
     // used for RAII
@@ -271,7 +275,6 @@ where
         block_opts.set_block_size(16 * 1024);
 
         let mut opts = Options::default();
-        opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
         // TODO: Make it customizable https://github.com/FuelLabs/fuel-core/issues/1666
         opts.set_max_total_wal_size(64 * 1024 * 1024);
@@ -303,6 +306,10 @@ where
             } else {
                 cf_descriptors_to_create.insert(column_name, opts);
             }
+        }
+
+        if cf_descriptors_to_open.is_empty() {
+            opts.create_if_missing(true);
         }
 
         let unknown_columns_to_open: BTreeMap<_, _> = existing_column_families
@@ -342,22 +349,19 @@ where
         }
         .map_err(|e| DatabaseError::Other(e.into()))?;
 
-        // Setup cfs
-        for (name, opt) in cf_descriptors_to_create {
-            db.create_cf(name, &opt)
-                .map_err(|e| DatabaseError::Other(e.into()))?;
-        }
-
         let db = Arc::new(db);
+        let create_family = Arc::new(Mutex::new(cf_descriptors_to_create));
 
         let rocks_db = RocksDb {
             read_options: Self::generate_read_options(&None),
             snapshot: None,
             db,
             metrics,
+            create_family,
             _drop: Default::default(),
             _marker: Default::default(),
         };
+
         Ok(rocks_db)
     }
 
@@ -384,6 +388,7 @@ where
         &self,
     ) -> RocksDb<TargetDescription> {
         let db = self.db.clone();
+        let create_family = self.create_family.clone();
         let metrics = self.metrics.clone();
         let _drop = self._drop.clone();
 
@@ -403,6 +408,7 @@ where
             read_options: Self::generate_read_options(&snapshot),
             snapshot,
             db,
+            create_family,
             metrics,
             _drop,
             _marker: Default::default(),
@@ -414,9 +420,33 @@ where
     }
 
     fn cf_u32(&self, column: u32) -> Arc<BoundColumnFamily> {
-        self.db
-            .cf_handle(&Self::col_name(column))
-            .expect("invalid column state")
+        let family = self.db.cf_handle(&Self::col_name(column));
+
+        match family {
+            None => {
+                let mut lock = self
+                    .create_family
+                    .lock()
+                    .expect("The create family lock should be available");
+
+                let name = Self::col_name(column);
+                let Some(family) = lock.remove(&name) else {
+                    return self
+                        .db
+                        .cf_handle(&Self::col_name(column))
+                        .expect("No column family found");
+                };
+
+                self.db
+                    .create_cf(&name, &family)
+                    .expect("Couldn't create column family");
+
+                let family = self.db.cf_handle(&name).expect("invalid column state");
+
+                family
+            }
+            Some(family) => family,
+        }
     }
 
     fn col_name(column: u32) -> String {
@@ -444,12 +474,9 @@ where
     }
 
     /// RocksDB prefix iteration doesn't support reverse order,
-    /// but seeking the start key and iterating in reverse order works.
-    /// So we can create a workaround. We need to find the next available
-    /// element and use it as an anchor for reverse iteration,
-    /// but skip the first element to jump on the previous prefix.
-    /// If we can't find the next element, we are at the end of the list,
-    /// so we can use `IteratorMode::End` to start reverse iteration.
+    /// so we need to to force the RocksDB iterator to order
+    /// all the prefix in the iterator so that we can take the next prefix
+    /// as start of iterator and iterate in reverse.
     fn reverse_prefix_iter<T>(
         &self,
         prefix: &[u8],
@@ -458,28 +485,24 @@ where
     where
         T: ExtractItem,
     {
-        let maybe_next_item = next_prefix(prefix.to_vec())
-            .and_then(|next_prefix| {
-                self.iter_store(
-                    column,
-                    Some(next_prefix.as_slice()),
-                    None,
-                    IterDirection::Forward,
-                )
-                .next()
-            })
-            .and_then(|res| res.ok());
+        let reverse_iterator = next_prefix(prefix.to_vec()).map(|next_prefix| {
+            let mut opts = self.read_options();
+            // We need this option because our iterator start in the `next_prefix` prefix section
+            // and continue in `prefix` section. Without this option the correct
+            // iteration between prefix section isn't guaranteed
+            // Source : https://github.com/facebook/rocksdb/wiki/Prefix-Seek#how-to-ignore-prefix-bloom-filters-in-read
+            // and https://github.com/facebook/rocksdb/wiki/Prefix-Seek#general-prefix-seek-api
+            opts.set_total_order_seek(true);
+            self.iterator::<T>(
+                column,
+                opts,
+                IteratorMode::From(next_prefix.as_slice(), rocksdb::Direction::Reverse),
+            )
+        });
 
-        if let Some((next_start_key, _)) = maybe_next_item {
-            let iter_mode = IteratorMode::From(
-                next_start_key.as_slice(),
-                rocksdb::Direction::Reverse,
-            );
+        if let Some(iterator) = reverse_iterator {
             let prefix = prefix.to_vec();
-            self
-                .iterator::<T>(column, self.read_options(), iter_mode)
-                // Skip the element under the `next_start_key` key.
-                .skip(1)
+            iterator
                 .take_while(move |item| {
                     if let Ok(item) = item {
                         T::starts_with(item, prefix.as_slice())
@@ -519,12 +542,10 @@ where
             iter_mode,
         )
         .map(move |item| {
-            item.map(|item| {
+            item.inspect(|item| {
                 self.metrics.read_meter.inc();
                 column_metrics.map(|metric| metric.inc());
-                self.metrics.bytes_read.inc_by(T::size(&item));
-
-                item
+                self.metrics.bytes_read.inc_by(T::size(item));
             })
             .map_err(|e| DatabaseError::Other(e.into()).into())
         })
@@ -549,9 +570,8 @@ where
                 self.metrics.read_meter.inc();
                 column_metrics.map(|metric| metric.inc());
                 el.map(|value| {
-                    value.map(|vec| {
+                    value.inspect(|vec| {
                         self.metrics.bytes_read.inc_by(vec.len() as u64);
-                        vec
                     })
                 })
                 .map_err(|err| DatabaseError::Other(err.into()))
@@ -613,8 +633,14 @@ where
                 // start iterating in a certain direction from the start key
                 let iter_mode =
                     IteratorMode::From(start, convert_to_rocksdb_direction(direction));
-                self.iterator::<T>(column, self.read_options(), iter_mode)
-                    .into_boxed()
+                let mut opts = self.read_options();
+                // We need this option because our iterator start in the `start` prefix section
+                // and continue in next sections. Without this option the correct
+                // iteration between prefix section isn't guaranteed
+                // Source : https://github.com/facebook/rocksdb/wiki/Prefix-Seek#how-to-ignore-prefix-bloom-filters-in-read
+                // and https://github.com/facebook/rocksdb/wiki/Prefix-Seek#general-prefix-seek-api
+                opts.set_total_order_seek(true);
+                self.iterator::<T>(column, opts, iter_mode).into_boxed()
             }
             (Some(prefix), Some(start)) => {
                 // TODO: Maybe we want to allow the `start` to be without a `prefix` in the future.
@@ -678,7 +704,7 @@ impl ExtractItem for KeyAndValue {
     {
         raw_iterator
             .item()
-            .map(|(key, value)| (key.to_vec(), Arc::new(value.to_vec())))
+            .map(|(key, value)| (key.to_vec(), Value::from(value)))
     }
 
     fn size(item: &Self::Item) -> u64 {
@@ -726,7 +752,7 @@ where
             self.metrics.bytes_read.inc_by(value.len() as u64);
         }
 
-        Ok(value.map(Arc::new))
+        Ok(value.map(Arc::from))
     }
 
     fn read(
@@ -927,7 +953,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Value::from([1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected)
@@ -938,10 +964,10 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Value::from([1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         let prev = db
-            .replace(&key, Column::Metadata, Arc::new(vec![2, 4, 6]))
+            .replace(&key, Column::Metadata, Arc::new([2, 4, 6]))
             .unwrap();
 
         assert_eq!(prev, Some(expected));
@@ -952,7 +978,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Value::from([1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
 
@@ -965,7 +991,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Arc::new([1, 2, 3]);
         db.put(&key, Column::Metadata, expected).unwrap();
         assert!(db.exists(&key, Column::Metadata).unwrap());
     }
@@ -973,7 +999,7 @@ mod tests {
     #[test]
     fn commit_changes_inserts() {
         let key = vec![0xA, 0xB, 0xC];
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = Value::from([1, 2, 3]);
 
         let (db, _tmp) = create_db();
         let ops = vec![(
@@ -991,7 +1017,7 @@ mod tests {
     #[test]
     fn commit_changes_removes() {
         let key = vec![0xA, 0xB, 0xC];
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = Arc::new([1, 2, 3]);
 
         let (mut db, _tmp) = create_db();
         db.put(&key, Column::Metadata, value).unwrap();
@@ -1010,7 +1036,7 @@ mod tests {
         let key = vec![0x00];
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![]);
+        let expected = Value::from([]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -1034,7 +1060,7 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Value::from([1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -1058,7 +1084,7 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let (mut db, _tmp) = create_db();
-        let expected = Arc::new(vec![]);
+        let expected = Value::from([]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -1137,7 +1163,7 @@ mod tests {
     #[test]
     fn snapshot_allows_get_entry_after_it_was_removed() {
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = Value::from([1, 2, 3]);
 
         // Given
         let key_1 = [1; 32];
@@ -1158,12 +1184,12 @@ mod tests {
     #[test]
     fn snapshot_allows_correct_iteration_even_after_all_elements_where_removed() {
         let (mut db, _tmp) = create_db();
-        let value = Arc::new(vec![1, 2, 3]);
+        let value = Value::from([1, 2, 3]);
 
         // Given
-        let key_1 = [1; 32];
-        let key_2 = [2; 32];
-        let key_3 = [3; 32];
+        let key_1 = vec![1; 32];
+        let key_2 = vec![2; 32];
+        let key_3 = vec![3; 32];
         db.put(&key_1, Column::Metadata, value.clone()).unwrap();
         db.put(&key_2, Column::Metadata, value.clone()).unwrap();
         db.put(&key_3, Column::Metadata, value.clone()).unwrap();
@@ -1186,9 +1212,9 @@ mod tests {
         assert_eq!(
             snapshot_iter,
             vec![
-                Ok((key_1.to_vec(), value.clone())),
-                Ok((key_2.to_vec(), value.clone())),
-                Ok((key_3.to_vec(), value))
+                Ok((key_1, value.clone())),
+                Ok((key_2, value.clone())),
+                Ok((key_3, value))
             ]
         );
     }
@@ -1224,5 +1250,117 @@ mod tests {
         // Then
         let _ = open_with_part_of_columns
             .expect("Should open the database with shorter number of columns");
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__no_target_prefix() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Value::from([]);
+        let key_1 = [1, 1];
+        let key_2 = [2, 2];
+        let key_3 = [9, 3];
+        let key_4 = [10, 0];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_4, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![5].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![]);
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__target_prefix_at_the_middle() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Value::from([]);
+        let key_1 = [1, 1];
+        let key_2 = [2, 2];
+        let key_3 = [2, 3];
+        let key_4 = [10, 0];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_4, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![2].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__target_prefix_at_the_end() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Value::from([]);
+        let key_1 = [1, 1];
+        let key_2 = [2, 2];
+        let key_3 = [2, 3];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![2].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+    }
+
+    #[test]
+    fn iter_store__reverse_iterator__target_prefix_at_the_end__overflow() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Value::from([]);
+        let key_1 = [1, 1];
+        let key_2 = [255, 254];
+        let key_3 = [255, 255];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        let db_iter = db
+            .iter_store(
+                Column::Metadata,
+                Some(vec![255].as_slice()),
+                None,
+                IterDirection::Reverse,
+            )
+            .map(|item| item.map(|(key, _)| key))
+            .collect::<Vec<_>>();
+
+        // Then
+        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
     }
 }
