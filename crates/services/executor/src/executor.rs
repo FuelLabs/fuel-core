@@ -1626,7 +1626,6 @@ where
             .iter()
             .map(|input| input.predicate_gas_used())
             .collect();
-        // TODO: Add support for expiration policy
         let ready_tx = checked_tx.into_ready(
             gas_price,
             gas_costs,
