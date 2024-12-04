@@ -178,7 +178,7 @@ impl CoinOrMessageIdBytes {
 
     pub(crate) fn from_nonce(nonce: &fuel_types::Nonce) -> Self {
         let mut arr = [0; MESSAGE_FOREIGN_KEY_LEN];
-        arr[0..32].copy_from_slice(nonce.as_ref());
+        arr.copy_from_slice(nonce.as_ref());
         Self::Message(arr)
     }
 }
