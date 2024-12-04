@@ -218,4 +218,10 @@ impl State {
             _ => None,
         }
     }
+
+    #[cfg(test)]
+    /// Get the current status.
+    pub fn status(&self) -> &Status {
+        &self.status
+    }
 }

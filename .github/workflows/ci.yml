@@ -22,7 +22,7 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
   AWS_ECR_ORG: fuellabs
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.79.0
+  RUST_VERSION: 1.81.0
   RUST_VERSION_FMT: nightly-2023-10-29
   RUST_VERSION_COV: nightly-2024-06-05
   RUSTFLAGS: -D warnings
@@ -118,20 +118,20 @@ jobs:
             args: --all-features --workspace --no-deps
           - command: make
             args: check --locked
-          - command: test
-            args: --workspace
-          - command: test
-            args: --all-features --workspace
-          - command: test
-            args: -p fuel-core --no-default-features
-          - command: test
-            args: -p fuel-core --lib executor --features wasm-executor
+          - command: nextest
+            args: run --workspace
+          - command: nextest
+            args: run --all-features --workspace
+          - command: nextest
+            args: run -p fuel-core --no-default-features
+          - command: nextest
+            args: run -p fuel-core --lib executor --features wasm-executor
             env:
               FUEL_ALWAYS_USE_WASM=true
-          - command: test
-            args: -p fuel-core-client --no-default-features
-          - command: test
-            args: -p fuel-core-chain-config --no-default-features
+          - command: nextest
+            args: run -p fuel-core-client --no-default-features
+          - command: nextest
+            args: run -p fuel-core-chain-config --no-default-features
           # Don't split this command; this is a workaround.
           # We need to run `cargo check` first to fetch the locked dependencies
           # for `fuel-core 0.26.0`(because of the bug with `--offline`
@@ -152,6 +152,7 @@ jobs:
             args: -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features
           - command: check
             args: -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features --features alloc
+      fail-fast: false
 
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
@@ -177,6 +178,12 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ matrix.command }}-${{ matrix.args }}-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions-rs/cargo@v1
+        if: ${{ matrix.command == 'nextest' }}
+        with:
+          command: install
+          args: cargo-nextest --locked
+        continue-on-error: true
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
@@ -237,48 +244,6 @@ jobs:
       - name: Run integration tests for kms only
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
-  publish-codecov:
-    name: Publish code coverage report on GitHub pages branch
-    runs-on: buildjet-4vcpu-ubuntu-2204
-    needs:
-      - cargo-verifications
-    permissions: # Write access to push changes to pages
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install latest Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.RUST_VERSION_COV }}
-          targets: wasm32-unknown-unknown
-
-      - name: Install cargo-llvm-codecov
-        uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Code coverage report
-        run: cargo  +${{ env.RUST_VERSION_COV }} llvm-cov --all-features --html --branch
-
-      - name: Checkout the repo again for pushing pages revision
-        uses: actions/checkout@v4
-        with:
-          ref: 'codecov-pages'
-          path: 'pages-branch'
-
-      - name: Push codecov report to pages branch
-        working-directory: ./pages-branch
-        run: |
-          export BRANCH_B64=$(echo -n "${{ env.GIT_BRANCH }}" | basenc --base64url)
-          git config user.email "2204863+Dentosal@users.noreply.github.com"
-          git config user.name "Dentosal"
-          cp -r ../target/llvm-cov/html "$BRANCH_B64"
-          python3 ../.github/workflows/scripts/generate_pages_index.py > index.html
-          git add .
-          git commit -m "Update codecov for ${{ env.GIT_BRANCH }}"
-          git push
-          export PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/$BRANCH_B64/index.html"
-          echo "$PAGES_URL"
-          echo "Codecov report $PAGES_URL" >> $GITHUB_STEP_SUMMARY          
-
   verifications-complete:
     needs:
       - cargo-verifications
@@ -330,385 +295,6 @@ jobs:
 
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always()
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-
-  build-docker-images:
-    needs:
-      - publish-crates-check
-    strategy:
-      matrix:
-        arch: [
-          # build on native runners instead of using emulation
-          { platform: linux/amd64, runner: buildjet-8vcpu-ubuntu-2204 },
-          { platform: linux/arm64, runner: buildjet-16vcpu-ubuntu-2204-arm }
-        ]
-    runs-on: ${{ matrix.arch.runner }}
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Setup environment
-        run: |
-          echo "REGISTRY_URL=${REGISTRY@L}/${GIT_REPO@L}" >>${GITHUB_ENV}
-          platform=${{ matrix.arch.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the ghcr.io registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Log in to the docker.io registry
-        uses: docker/login-action@v3
-        with:
-          username: fuellabs
-          password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY_URL }}
-
-      - name: Setup Rust build cache
-        id: cache
-        uses: buildjet/cache@v3
-        with:
-          path: |
-            home-cargo-bin
-            home-cargo-registry-index
-            home-cargo-registry-cache
-            home-cargo-git-db
-            target
-          key: ${{ env.PLATFORM_PAIR }}-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Inject cache into docker
-        uses: reproducible-containers/buildkit-cache-dance@v3.1.2
-        with:
-          cache-map: |
-            {
-              "home-cargo-bin": "/usr/local/cargo/bin",
-              "home-cargo-registry-index": "/usr/local/cargo/registry/index",
-              "home-cargo-registry-cache": "/usr/local/cargo/registry/cache",
-              "home-cargo-git-db": "/usr/local/cargo/git/db",
-              "target": "/build/target"
-            }
-          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
-
-      - name: Build Docker image
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: ${{ matrix.arch.platform }}
-          file: deployment/Dockerfile
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache:latest-${{ matrix.arch.runner }}
-          cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache:latest-${{ matrix.arch.runner }},mode=max,image-manifest=true,oci-mediatypes=true
-          outputs: |
-            type=image,name=${{ env.REGISTRY_URL }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-${{ env.PLATFORM_PAIR }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
-  publish-docker-image:
-    needs:
-      - build-docker-images
-      - verifications-complete
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    steps:
-      - name: Setup environment
-        run: |
-          echo "REGISTRY_URL=${REGISTRY@L}/${GIT_REPO@L}" >>${GITHUB_ENV}
-
-      - name: Download digests
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/digests
-          pattern: digests-*
-          merge-multiple: true
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Configure AWS credentials for ECR publishing
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: us-east-1 # ecr public is only in us-east-1
-
-      - name: Login to Amazon ECR Public
-        id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@v2
-        with:
-          registry-type: public
-
-      - name: Log in to the ghcr.io registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Log in to the docker.io registry
-        uses: docker/login-action@v3
-        with:
-          username: fuellabs
-          password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
-
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.REGISTRY_URL }}
-            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}
-          tags: |
-            type=sha
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{raw}}
-            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Create manifest list and push to all registries
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY_URL }}@sha256:%s ' *)
-
-      - name: Inspect image
-        run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY_URL }}:${{ steps.meta.outputs.version }}
-
-  # duplicate of publish-docker-image, but with profiling features enabled
-  # this is split into a separate action since it takes longer to build
-  publish-docker-image-profiling:
-    needs:
-      - verifications-complete
-    runs-on: buildjet-16vcpu-ubuntu-2204
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    steps:
-      - name: Setup environment
-        run: |
-          echo "REGISTRY_URL=${REGISTRY@L}/${GIT_REPO@L}" >>${GITHUB_ENV}
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Configure AWS credentials for ECR publishing
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: us-east-1 # ecr public is only in us-east-1
-
-      - name: Login to Amazon ECR Public
-        id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@v2
-        with:
-          registry-type: public
-
-      - name: Log in to the ghcr.io registry
-        uses: docker/login-action@v1
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Log in to the docker.io registry
-        uses: docker/login-action@v2
-        with:
-          username: fuellabs
-          password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.REGISTRY_URL }}-debug
-            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-debug
-          tags: |
-            type=sha
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{raw}}
-            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Setup Rust build cache
-        id: cache
-        uses: buildjet/cache@v3
-        with:
-          path: |
-            home-cargo-bin
-            home-cargo-registry-index
-            home-cargo-registry-cache
-            home-cargo-git-db
-            target
-          key: publish-docker-image-profiling-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Inject cache into docker
-        uses: reproducible-containers/buildkit-cache-dance@v3.1.2
-        with:
-          cache-map: |
-            {
-              "home-cargo-bin": "/usr/local/cargo/bin",
-              "home-cargo-registry-index": "/usr/local/cargo/registry/index",
-              "home-cargo-registry-cache": "/usr/local/cargo/registry/cache",
-              "home-cargo-git-db": "/usr/local/cargo/git/db",
-              "target": "/build/target"
-            }
-          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
-
-      - name: Build & push Docker image
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: deployment/Dockerfile
-          build-args: "DEBUG_SYMBOLS=true"
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-debug:latest
-          cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-debug:latest,mode=max,image-manifest=true,oci-mediatypes=true
-
-      - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
-        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-
-  publish-e2e-client-docker-image:
-    needs:
-      - verifications-complete
-    runs-on: buildjet-4vcpu-ubuntu-2204
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    steps:
-      - name: Setup environment
-        run: |
-          echo "REGISTRY_URL=${REGISTRY@L}/${GIT_REPO@L}" >>${GITHUB_ENV}
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Configure AWS credentials for ECR publishing
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ env.AWS_ROLE_ARN }}
-          aws-region: us-east-1 # ecr public is only in us-east-1
-
-      - name: Login to Amazon ECR Public
-        id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@v2
-        with:
-          registry-type: public
-
-      - name: Log in to the ghcr.io registry
-        uses: docker/login-action@v1
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Log in to the docker.io registry
-        uses: docker/login-action@v2
-        with:
-          username: fuellabs
-          password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.REGISTRY_URL }}-e2e-client
-            ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-e2e-client
-          tags: |
-            type=sha
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{raw}}
-            type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Setup Rust build cache
-        id: cache
-        uses: buildjet/cache@v3
-        with:
-          path: |
-            home-cargo-bin
-            home-cargo-registry-index
-            home-cargo-registry-cache
-            home-cargo-git-db
-            target
-          key: publish-e2e-client-docker-image-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Inject cache into docker
-        uses: reproducible-containers/buildkit-cache-dance@v3.1.2
-        with:
-          cache-map: |
-            {
-              "home-cargo-bin": "/usr/local/cargo/bin",
-              "home-cargo-registry-index": "/usr/local/cargo/registry/index",
-              "home-cargo-registry-cache": "/usr/local/cargo/registry/cache",
-              "home-cargo-git-db": "/usr/local/cargo/git/db",
-              "target": "/build/target"
-            }
-          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
-
-      - name: Build & push Docker image
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: deployment/e2e-client.Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-e2e:latest
-          cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-e2e:latest,mode=max,image-manifest=true,oci-mediatypes=true
-
-      - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
-        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
@@ -858,35 +444,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-
-  # Deploy Fuel Core Ephemeral Developer Environment
-  deploy-eph-env:
-    if: startsWith(github.head_ref, 'preview/')
-    needs:
-      - publish-docker-image
-    runs-on: buildjet-4vcpu-ubuntu-2204
-    steps:
-      - name: Set Environment Variables
-        run: |
-          tag=(`echo $GITHUB_SHA | cut -c1-7`)
-          echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
-          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
-          echo "NAMESPACE=$(echo ${GITHUB_HEAD_REF} | cut -c 9-)"  >> $GITHUB_ENV
-
-      - name: Deploy Fuel Core Ephemeral Developer Environment
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          workflow: Deploy Fuel-Core on k8s
-          repo: FuelLabs/fuel-deployment
-          ref: refs/heads/master
-          token: ${{ secrets.REPO_TOKEN }}
-          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "namespace": "${{ env.NAMESPACE }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
-        env:
-          K8S: 'eks'
-          CONFIG: 'fuel-dev1'
-          ENV: 'fueldevsway.env'
-          DELETE_INFRA: true
-
   cargo-audit:
     runs-on: ubuntu-latest
     continue-on-error: true

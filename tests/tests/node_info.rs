@@ -27,7 +27,6 @@ async fn node_info() {
     assert_eq!(max_tx, node_config.txpool.pool_limits.max_txs as u64);
 }
 
-#[cfg(feature = "p2p")]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_peer_info() {
     use fuel_core::p2p_test_helpers::{

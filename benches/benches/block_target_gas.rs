@@ -27,6 +27,7 @@ use fuel_core::{
         Config,
         FuelService,
     },
+    state::historical_rocksdb::StateRewindPolicy,
 };
 use fuel_core_benches::{
     default_gas_costs::default_gas_costs,
@@ -265,7 +266,8 @@ fn service_with_many_contracts(
         .build()
         .unwrap();
     let _drop = rt.enter();
-    let mut database = Database::rocksdb_temp();
+    let mut database = Database::rocksdb_temp(StateRewindPolicy::NoRewind)
+        .expect("Failed to create database");
 
     let mut chain_config = ChainConfig::local_testnet();
 
