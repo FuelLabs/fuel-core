@@ -7,6 +7,7 @@ pub mod service;
 
 #[derive(Debug, Default, Clone, Eq, Hash, PartialEq)]
 pub struct DaBlockCosts {
+    pub sequence_number: u32,
     pub l2_blocks: Vec<u32>,
     pub blob_size_bytes: u32,
     pub blob_cost_wei: u128,
@@ -30,6 +31,7 @@ mod tests {
     async fn run__when_da_block_cost_source_gives_value_shared_state_is_updated() {
         // given
         let expected_da_cost = DaBlockCosts {
+            sequence_number: 1,
             l2_blocks: (0..10).collect(),
             blob_size_bytes: 1024 * 128,
             blob_cost_wei: 2,

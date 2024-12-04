@@ -54,6 +54,7 @@ pub struct RawDaBlockCosts {
 impl From<&RawDaBlockCosts> for DaBlockCosts {
     fn from(raw_da_block_costs: &RawDaBlockCosts) -> Self {
         DaBlockCosts {
+            sequence_number: raw_da_block_costs.sequence_number,
             l2_blocks: raw_da_block_costs
                 .blocks_heights
                 .clone()

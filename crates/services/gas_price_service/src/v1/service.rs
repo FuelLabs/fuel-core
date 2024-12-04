@@ -1,24 +1,5 @@
 use std::num::NonZeroU64;
 
-use anyhow::anyhow;
-use async_trait::async_trait;
-use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    StateWatcher,
-    TaskNextAction,
-};
-use fuel_gas_price_algorithm::{
-    v0::AlgorithmUpdaterV0,
-    v1::{
-        AlgorithmUpdaterV1,
-        AlgorithmV1,
-        UnrecordedBlocks,
-    },
-};
-use futures::FutureExt;
-use tokio::sync::broadcast::Receiver;
-
 use crate::{
     common::{
         gas_price_algorithm::SharedGasPriceAlgo,
@@ -30,6 +11,7 @@ use crate::{
         },
     },
     ports::{
+        DaSequenceNumberTracker,
         MetadataStorage,
         TransactionableStorage,
     },
@@ -53,6 +35,25 @@ use crate::{
         uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
     },
 };
+use anyhow::anyhow;
+use async_trait::async_trait;
+use fuel_core_services::{
+    RunnableService,
+    RunnableTask,
+    StateWatcher,
+    TaskNextAction,
+};
+use fuel_core_types::fuel_types::BlockHeight;
+use fuel_gas_price_algorithm::{
+    v0::AlgorithmUpdaterV0,
+    v1::{
+        AlgorithmUpdaterV1,
+        AlgorithmV1,
+        UnrecordedBlocks,
+    },
+};
+use futures::FutureExt;
+use tokio::sync::broadcast::Receiver;
 
 /// The service that updates the gas price algorithm.
 pub struct GasPriceServiceV1<L2, DA, StorageTxProvider>
@@ -87,7 +88,8 @@ where
         l2_block_res: GasPriceResult<BlockInfo>,
     ) -> anyhow::Result<()>
     where
-        StorageTxProvider::Transaction<'a>: MetadataStorage + UnrecordedBlocks,
+        StorageTxProvider::Transaction<'a>:
+            MetadataStorage + UnrecordedBlocks + DaSequenceNumberTracker,
     {
         tracing::info!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
@@ -151,7 +153,8 @@ where
         block_fees: u64,
     ) -> anyhow::Result<()>
     where
-        StorageTxProvider::Transaction<'a>: UnrecordedBlocks + MetadataStorage,
+        StorageTxProvider::Transaction<'a>:
+            UnrecordedBlocks + MetadataStorage + DaSequenceNumberTracker,
     {
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
@@ -164,6 +167,12 @@ where
                 da_block_costs.blob_cost_wei,
                 &mut storage_tx,
             )?;
+            storage_tx
+                .set_sequence_number(
+                    &BlockHeight::from(height),
+                    da_block_costs.sequence_number,
+                )
+                .map_err(|err| anyhow!(err))?;
         }
 
         self.algorithm_updater.update_l2_block_data(
@@ -185,30 +194,13 @@ where
         Ok(())
     }
 
-    async fn handle_da_block_costs<'a>(
-        &mut self,
-        da_block_costs: DaBlockCosts,
-        unrecorded_blocks: &mut StorageTxProvider::Transaction<'a>,
-    ) -> anyhow::Result<()>
-    where
-        StorageTxProvider::Transaction<'a>: UnrecordedBlocks,
-    {
-        self.algorithm_updater.update_da_record_data(
-            &da_block_costs.l2_blocks,
-            da_block_costs.blob_size_bytes,
-            da_block_costs.blob_cost_wei,
-            unrecorded_blocks,
-        )?;
-
-        Ok(())
-    }
-
     async fn apply_block_info_to_gas_algorithm<'a>(
         &'a mut self,
         l2_block: BlockInfo,
     ) -> anyhow::Result<()>
     where
-        StorageTxProvider::Transaction<'a>: MetadataStorage + UnrecordedBlocks,
+        StorageTxProvider::Transaction<'a>:
+            MetadataStorage + UnrecordedBlocks + DaSequenceNumberTracker,
     {
         match l2_block {
             BlockInfo::GenesisBlock => {
@@ -249,7 +241,8 @@ where
     L2: L2BlockSource,
     DA: DaBlockCostsSource,
     StorageTxProvider: TransactionableStorage + 'static,
-    for<'a> StorageTxProvider::Transaction<'a>: UnrecordedBlocks + MetadataStorage,
+    for<'a> StorageTxProvider::Transaction<'a>:
+        UnrecordedBlocks + MetadataStorage + DaSequenceNumberTracker,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -368,6 +361,7 @@ mod tests {
             fuel_core_storage_adapter::storage::{
                 GasPriceColumn,
                 GasPriceColumn::UnrecordedBlocks,
+                SequenceNumberTable,
                 UnrecordedBlocksTable,
             },
             gas_price_algorithm::SharedGasPriceAlgo,
@@ -559,6 +553,7 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
+                    sequence_number: 1,
                     l2_blocks: (1..2).collect(),
                     blob_cost_wei: 9000,
                     blob_size_bytes: 3000,
@@ -600,5 +595,111 @@ mod tests {
         // then
         let actual_price = read_algo.next_gas_price();
         assert_ne!(initial_price, actual_price);
+    }
+
+    fn arbitrary_v1_algorithm_config() -> V1AlgorithmConfig {
+        V1AlgorithmConfig {
+            new_exec_gas_price: 100,
+            min_exec_gas_price: 50,
+            exec_gas_price_change_percent: 0,
+            l2_block_fullness_threshold_percent: 20,
+            gas_price_factor: NonZeroU64::new(10).unwrap(),
+            min_da_gas_price: 0,
+            max_da_gas_price_change_percent: 100,
+            da_p_component: 4,
+            da_d_component: 2,
+            normal_range_size: 10,
+            capped_range_size: 100,
+            decrease_range_size: 4,
+            block_activity_threshold: 20,
+        }
+    }
+
+    #[tokio::test]
+    async fn run__responses_from_da_service_update_sequence_number_in_storage() {
+        // given
+        let sequence_number = 1234;
+        let block_height = 2;
+        let l2_block_2 = BlockInfo::Block {
+            height: block_height,
+            gas_used: 60,
+            block_gas_capacity: 100,
+            block_bytes: 100,
+            block_fees: 100,
+        };
+
+        let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
+        let l2_block_source = FakeL2BlockSource {
+            l2_block: l2_block_receiver,
+        };
+
+        let metadata_storage = FakeMetadata::empty();
+        // Configured so exec gas price doesn't change, only da gas price
+        let config = arbitrary_v1_algorithm_config();
+        let mut inner = database();
+        let mut tx = inner.write_transaction();
+        tx.storage_as_mut::<UnrecordedBlocksTable>()
+            .insert(&BlockHeight::from(1), &100)
+            .unwrap();
+        tx.commit().unwrap();
+        let mut algo_updater = updater_from_config(&config);
+        let shared_algo =
+            SharedGasPriceAlgo::new_with_algorithm(algo_updater.algorithm());
+        algo_updater.l2_block_height = block_height - 1;
+        algo_updater.last_profit = 10_000;
+        algo_updater.new_scaled_da_gas_price = 10_000_000;
+
+        let notifier = Arc::new(tokio::sync::Notify::new());
+        let da_source = DaSourceService::new(
+            DummyDaBlockCosts::new(
+                Ok(DaBlockCosts {
+                    sequence_number,
+                    l2_blocks: (1..2).collect(),
+                    blob_cost_wei: 9000,
+                    blob_size_bytes: 3000,
+                }),
+                notifier.clone(),
+            ),
+            Some(Duration::from_millis(1)),
+        );
+        let mut watcher = StateWatcher::started();
+
+        let mut service = GasPriceServiceV1::new(
+            l2_block_source,
+            shared_algo,
+            algo_updater,
+            da_source,
+            inner,
+        );
+        let read_algo = service.next_block_algorithm();
+        let initial_price = read_algo.next_gas_price();
+
+        // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
+        // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
+        // here we mimic that behaviour by running the da block cost service.
+        let mut da_source_watcher = StateWatcher::started();
+        service
+            .da_source_adapter_handle
+            .run(&mut da_source_watcher)
+            .await;
+
+        service.run(&mut watcher).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        l2_block_sender.send(l2_block_2).await.unwrap();
+
+        // when
+        service.run(&mut watcher).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // then
+        let latest_sequence_number = service
+            .storage_tx_provider
+            .storage::<SequenceNumberTable>()
+            .get(&BlockHeight::from(block_height))
+            .unwrap()
+            .unwrap();
+        assert_eq!(*latest_sequence_number, sequence_number);
+
+        service.shutdown().await.unwrap();
     }
 }

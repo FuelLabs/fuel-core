@@ -17,6 +17,7 @@ use crate::{
         },
     },
     ports::{
+        DaSequenceNumberTracker,
         GasPriceData,
         GasPriceServiceConfig,
         L2Data,
@@ -236,7 +237,7 @@ where
     SettingsProvider: GasPriceSettingsProvider + 'static,
     PersistedData: MetadataStorage + TransactionableStorage + 'static,
     for<'a> <PersistedData as TransactionableStorage>::Transaction<'a>:
-        MetadataStorage + UnrecordedBlocks,
+        MetadataStorage + UnrecordedBlocks + DaSequenceNumberTracker,
 {
     const NAME: &'static str = "GasPriceServiceV1";
     type SharedData = SharedV1Algorithm;
@@ -402,7 +403,8 @@ where
     SettingsProvider: GasPriceSettingsProvider,
     DA: DaBlockCostsSource,
     PersistedData: MetadataStorage + TransactionableStorage + 'static,
-    for<'a> PersistedData::Transaction<'a>: MetadataStorage + UnrecordedBlocks,
+    for<'a> PersistedData::Transaction<'a>:
+        MetadataStorage + UnrecordedBlocks + DaSequenceNumberTracker,
 {
     let v1_config = config.v1().ok_or(anyhow::anyhow!("Expected V1 config"))?;
     let gas_price_init = UninitializedTask::new(

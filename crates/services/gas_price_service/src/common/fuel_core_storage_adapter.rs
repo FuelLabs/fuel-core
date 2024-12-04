@@ -11,11 +11,13 @@ use crate::{
         fuel_core_storage_adapter::storage::{
             GasPriceColumn,
             GasPriceMetadata,
+            SequenceNumberTable,
             UnrecordedBlocksTable,
         },
         updater_metadata::UpdaterMetadata,
     },
     ports::{
+        DaSequenceNumberTracker,
         MetadataStorage,
         TransactionableStorage,
     },
@@ -93,17 +95,17 @@ where
     }
 }
 
-pub struct WrappedStorageTransaction<'a, Storage> {
+pub struct NewStorageTransaction<'a, Storage> {
     inner: StorageTransaction<&'a mut StructuredStorage<Storage>>,
 }
 
-impl<'a, Storage> WrappedStorageTransaction<'a, Storage> {
+impl<'a, Storage> NewStorageTransaction<'a, Storage> {
     fn wrap(inner: StorageTransaction<&'a mut StructuredStorage<Storage>>) -> Self {
         Self { inner }
     }
 }
 
-impl<'a, Storage> UnrecordedBlocks for WrappedStorageTransaction<'a, Storage>
+impl<'a, Storage> UnrecordedBlocks for NewStorageTransaction<'a, Storage>
 where
     Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
 {
@@ -133,11 +135,11 @@ impl<Storage> TransactionableStorage for StructuredStorage<Storage>
 where
     Storage: Modifiable + Send + Sync,
 {
-    type Transaction<'a> = WrappedStorageTransaction<'a, Storage> where Self: 'a;
+    type Transaction<'a> = NewStorageTransaction<'a, Storage> where Self: 'a;
 
     fn begin_transaction(&mut self) -> GasPriceResult<Self::Transaction<'_>> {
         let tx = self.write_transaction();
-        let wrapped = WrappedStorageTransaction::wrap(tx);
+        let wrapped = NewStorageTransaction::wrap(tx);
         Ok(wrapped)
     }
 
@@ -150,7 +152,7 @@ where
     }
 }
 
-impl<'a, Storage> MetadataStorage for WrappedStorageTransaction<'a, Storage>
+impl<'a, Storage> MetadataStorage for NewStorageTransaction<'a, Storage>
 where
     Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
 {
@@ -177,6 +179,36 @@ where
                 block_height,
                 source_error: err.into(),
             })?;
+        Ok(())
+    }
+}
+
+impl<'a, Storage> DaSequenceNumberTracker for NewStorageTransaction<'a, Storage>
+where
+    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
+{
+    fn get_sequence_number(
+        &self,
+        block_height: &BlockHeight,
+    ) -> GasPriceResult<Option<u32>> {
+        let sequence_number = self
+            .inner
+            .storage::<SequenceNumberTable>()
+            .get(block_height)
+            .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?
+            .map(|no| *no);
+        Ok(sequence_number)
+    }
+
+    fn set_sequence_number(
+        &mut self,
+        block_height: &BlockHeight,
+        sequence_number: u32,
+    ) -> GasPriceResult<()> {
+        self.inner
+            .storage_as_mut::<SequenceNumberTable>()
+            .insert(block_height, &sequence_number)
+            .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?;
         Ok(())
     }
 }

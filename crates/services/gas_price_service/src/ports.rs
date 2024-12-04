@@ -28,6 +28,15 @@ pub trait MetadataStorage: Send + Sync {
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()>;
 }
 
+pub trait DaSequenceNumberTracker: Send + Sync {
+    fn get_sequence_number(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
+    fn set_sequence_number(
+        &mut self,
+        block_height: &BlockHeight,
+        sequence_number: u32,
+    ) -> Result<()>;
+}
+
 pub trait TransactionableStorage: Send + Sync {
     type Transaction<'a>
     where

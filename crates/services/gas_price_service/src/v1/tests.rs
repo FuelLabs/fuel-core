@@ -578,3 +578,8 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     let is_err = res.is_err();
     assert!(is_err);
 }
+
+#[tokio::test]
+async fn uninitialized_task__starts_da_service_with_sequence_number_in_storage() {
+    todo!()
+}
