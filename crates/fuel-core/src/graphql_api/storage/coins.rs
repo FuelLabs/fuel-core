@@ -137,46 +137,44 @@ impl CoinsToSpendIndexKey {
     }
 
     pub fn owner(&self) -> Address {
-        let address_start = RETRYABLE_FLAG_SIZE;
-        let address_end = address_start + Address::LEN;
-        let address: [u8; Address::LEN] = self.0[address_start..address_end]
+        const ADDRESS_START: usize = RETRYABLE_FLAG_SIZE;
+        const ADDRESS_END: usize = ADDRESS_START + Address::LEN;
+        let address: [u8; Address::LEN] = self.0[ADDRESS_START..ADDRESS_END]
             .try_into()
             .expect("should have correct bytes");
         Address::new(address)
     }
 
     pub fn asset_id(&self) -> AssetId {
-        let offset = Address::LEN + RETRYABLE_FLAG_SIZE;
-
-        let asset_id_start = offset;
-        let asset_id_end = asset_id_start + AssetId::LEN;
-        let asset_id: [u8; AssetId::LEN] = self.0[asset_id_start..asset_id_end]
+        const OFFSET: usize = Address::LEN + RETRYABLE_FLAG_SIZE;
+        const ASSET_ID_START: usize = OFFSET;
+        const ASSET_ID_END: usize = ASSET_ID_START + AssetId::LEN;
+        let asset_id: [u8; AssetId::LEN] = self.0[ASSET_ID_START..ASSET_ID_END]
             .try_into()
             .expect("should have correct bytes");
         AssetId::new(asset_id)
     }
 
     pub fn retryable_flag(&self) -> u8 {
-        let offset = 0;
-        self.0[offset]
+        const OFFSET: usize = 0;
+        self.0[OFFSET]
     }
 
-    #[allow(clippy::arithmetic_side_effects)]
     pub fn amount(&self) -> u64 {
-        let offset = Address::LEN + AssetId::LEN + RETRYABLE_FLAG_SIZE;
-        let amount_start = offset;
-        let amount_end = amount_start + AMOUNT_SIZE;
+        const OFFSET: usize = Address::LEN + AssetId::LEN + RETRYABLE_FLAG_SIZE;
+        const AMOUNT_START: usize = OFFSET;
+        const AMOUNT_END: usize = AMOUNT_START + AMOUNT_SIZE;
         u64::from_be_bytes(
-            self.0[amount_start..amount_end]
+            self.0[AMOUNT_START..AMOUNT_END]
                 .try_into()
                 .expect("should have correct bytes"),
         )
     }
 
-    #[allow(clippy::arithmetic_side_effects)]
     pub fn foreign_key_bytes(&self) -> Vec<u8> {
-        let offset = Address::LEN + AssetId::LEN + RETRYABLE_FLAG_SIZE + AMOUNT_SIZE;
-        self.0[offset..].into()
+        const OFFSET: usize =
+            Address::LEN + AssetId::LEN + RETRYABLE_FLAG_SIZE + AMOUNT_SIZE;
+        self.0[OFFSET..].into()
     }
 }
 
