@@ -22,19 +22,25 @@ pub trait L2Data: Send + Sync {
     ) -> StorageResult<Option<Block<Transaction>>>;
 }
 
-pub trait MetadataStorage: Send + Sync {
-    fn get_metadata(&self, block_height: &BlockHeight)
-        -> Result<Option<UpdaterMetadata>>;
+pub trait SetMetadataStorage: Send + Sync {
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()>;
 }
 
-pub trait DaSequenceNumberTracker: Send + Sync {
-    fn get_sequence_number(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
+pub trait GetMetadataStorage: Send + Sync {
+    fn get_metadata(&self, block_height: &BlockHeight)
+        -> Result<Option<UpdaterMetadata>>;
+}
+
+pub trait SetDaSequenceNumber: Send + Sync {
     fn set_sequence_number(
         &mut self,
         block_height: &BlockHeight,
         sequence_number: u32,
     ) -> Result<()>;
+}
+
+pub trait GetDaSequenceNumber: Send + Sync {
+    fn get_sequence_number(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
 }
 
 pub trait TransactionableStorage: Send + Sync {

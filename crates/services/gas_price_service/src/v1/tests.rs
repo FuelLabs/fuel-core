@@ -19,10 +19,12 @@ use crate::{
         },
     },
     ports::{
-        DaSequenceNumberTracker,
         GasPriceData,
+        GetDaSequenceNumber,
+        GetMetadataStorage,
         L2Data,
-        MetadataStorage,
+        SetDaSequenceNumber,
+        SetMetadataStorage,
         TransactionableStorage,
     },
     v1::{
@@ -134,32 +136,43 @@ impl FakeMetadata {
     }
 }
 
-impl MetadataStorage for FakeMetadata {
-    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
-        let metadata = self.inner.lock().unwrap().clone();
-        Ok(metadata)
-    }
-
+impl SetMetadataStorage for FakeMetadata {
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
         *self.inner.lock().unwrap() = Some(metadata.clone());
         Ok(())
     }
 }
+impl GetMetadataStorage for FakeMetadata {
+    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
+        let metadata = self.inner.lock().unwrap().clone();
+        Ok(metadata)
+    }
+}
 
 struct ErroringPersistedData;
 
-impl MetadataStorage for ErroringPersistedData {
-    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
-        Err(GasPriceError::CouldNotFetchMetadata {
-            source_error: anyhow!("boo!"),
-        })
-    }
-
+impl SetMetadataStorage for ErroringPersistedData {
     fn set_metadata(&mut self, _: &UpdaterMetadata) -> GasPriceResult<()> {
         Err(GasPriceError::CouldNotSetMetadata {
             block_height: Default::default(),
             source_error: anyhow!("boo!"),
         })
+    }
+}
+impl GetMetadataStorage for ErroringPersistedData {
+    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
+        Err(GasPriceError::CouldNotFetchMetadata {
+            source_error: anyhow!("boo!"),
+        })
+    }
+}
+
+impl GetDaSequenceNumber for ErroringPersistedData {
+    fn get_sequence_number(
+        &self,
+        _block_height: &BlockHeight,
+    ) -> GasPriceResult<Option<u32>> {
+        Err(GasPriceError::CouldNotFetchDARecord(anyhow!("boo!")))
     }
 }
 
@@ -177,15 +190,16 @@ impl TransactionableStorage for ErroringPersistedData {
     }
 }
 
-impl MetadataStorage for UnimplementedStorageTx {
+impl SetMetadataStorage for UnimplementedStorageTx {
+    fn set_metadata(&mut self, _metadata: &UpdaterMetadata) -> GasPriceResult<()> {
+        unimplemented!()
+    }
+}
+impl GetMetadataStorage for UnimplementedStorageTx {
     fn get_metadata(
         &self,
         _block_height: &BlockHeight,
     ) -> GasPriceResult<Option<UpdaterMetadata>> {
-        unimplemented!()
-    }
-
-    fn set_metadata(&mut self, _metadata: &UpdaterMetadata) -> GasPriceResult<()> {
         unimplemented!()
     }
 }
@@ -200,19 +214,20 @@ impl UnrecordedBlocks for UnimplementedStorageTx {
     }
 }
 
-impl DaSequenceNumberTracker for UnimplementedStorageTx {
-    fn get_sequence_number(
-        &self,
-        _block_height: &BlockHeight,
-    ) -> GasPriceResult<Option<u32>> {
-        unimplemented!()
-    }
-
+impl SetDaSequenceNumber for UnimplementedStorageTx {
     fn set_sequence_number(
         &mut self,
         _block_height: &BlockHeight,
         _sequence_number: u32,
     ) -> GasPriceResult<()> {
+        unimplemented!()
+    }
+}
+impl GetDaSequenceNumber for UnimplementedStorageTx {
+    fn get_sequence_number(
+        &self,
+        _block_height: &BlockHeight,
+    ) -> GasPriceResult<Option<u32>> {
         unimplemented!()
     }
 }

@@ -11,8 +11,9 @@ use crate::{
         },
     },
     ports::{
-        DaSequenceNumberTracker,
-        MetadataStorage,
+        GetMetadataStorage,
+        SetDaSequenceNumber,
+        SetMetadataStorage,
         TransactionableStorage,
     },
     v0::metadata::V0Metadata,
@@ -89,7 +90,7 @@ where
     ) -> anyhow::Result<()>
     where
         StorageTxProvider::Transaction<'a>:
-            MetadataStorage + UnrecordedBlocks + DaSequenceNumberTracker,
+            SetMetadataStorage + UnrecordedBlocks + SetDaSequenceNumber,
     {
         tracing::info!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
@@ -154,7 +155,7 @@ where
     ) -> anyhow::Result<()>
     where
         StorageTxProvider::Transaction<'a>:
-            UnrecordedBlocks + MetadataStorage + DaSequenceNumberTracker,
+            UnrecordedBlocks + SetMetadataStorage + SetDaSequenceNumber,
     {
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
@@ -200,7 +201,7 @@ where
     ) -> anyhow::Result<()>
     where
         StorageTxProvider::Transaction<'a>:
-            MetadataStorage + UnrecordedBlocks + DaSequenceNumberTracker,
+            SetMetadataStorage + UnrecordedBlocks + SetDaSequenceNumber,
     {
         match l2_block {
             BlockInfo::GenesisBlock => {
@@ -242,7 +243,7 @@ where
     DA: DaBlockCostsSource,
     StorageTxProvider: TransactionableStorage + 'static,
     for<'a> StorageTxProvider::Transaction<'a>:
-        UnrecordedBlocks + MetadataStorage + DaSequenceNumberTracker,
+        UnrecordedBlocks + SetMetadataStorage + SetDaSequenceNumber,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -310,7 +311,7 @@ pub fn initialize_algorithm<Metadata>(
     metadata_storage: &Metadata,
 ) -> crate::common::utils::Result<(AlgorithmUpdaterV1, SharedV1Algorithm)>
 where
-    Metadata: MetadataStorage,
+    Metadata: GetMetadataStorage,
 {
     let algorithm_updater = if let Some(updater_metadata) = metadata_storage
         .get_metadata(&latest_block_height.into())
@@ -372,7 +373,10 @@ mod tests {
                 Result as GasPriceResult,
             },
         },
-        ports::MetadataStorage,
+        ports::{
+            GetMetadataStorage,
+            SetMetadataStorage,
+        },
         v1::{
             da_source_service::{
                 dummy_costs::DummyDaBlockCosts,
@@ -415,7 +419,14 @@ mod tests {
         }
     }
 
-    impl MetadataStorage for FakeMetadata {
+    impl SetMetadataStorage for FakeMetadata {
+        fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
+            *self.inner.lock().unwrap() = Some(metadata.clone());
+            Ok(())
+        }
+    }
+
+    impl GetMetadataStorage for FakeMetadata {
         fn get_metadata(
             &self,
             _: &BlockHeight,
@@ -423,13 +434,7 @@ mod tests {
             let metadata = self.inner.lock().unwrap().clone();
             Ok(metadata)
         }
-
-        fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
-            *self.inner.lock().unwrap() = Some(metadata.clone());
-            Ok(())
-        }
     }
-
     fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
         InMemoryStorage::default().into_transaction()
     }

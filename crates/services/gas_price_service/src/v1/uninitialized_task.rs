@@ -17,11 +17,13 @@ use crate::{
         },
     },
     ports::{
-        DaSequenceNumberTracker,
         GasPriceData,
         GasPriceServiceConfig,
+        GetDaSequenceNumber,
+        GetMetadataStorage,
         L2Data,
-        MetadataStorage,
+        SetDaSequenceNumber,
+        SetMetadataStorage,
         TransactionableStorage,
     },
     v1::{
@@ -111,10 +113,10 @@ where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     GasPriceStore: GasPriceData,
-    PersistedData: MetadataStorage,
+    PersistedData: GetMetadataStorage + GetDaSequenceNumber,
     PersistedData: TransactionableStorage,
     for<'a> PersistedData::Transaction<'a>:
-        MetadataStorage + UnrecordedBlocks + DaSequenceNumberTracker,
+        SetMetadataStorage + UnrecordedBlocks + SetDaSequenceNumber,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
 {
@@ -183,11 +185,12 @@ where
         // TODO: Add to config
         // https://github.com/FuelLabs/fuel-core/issues/2140
         let poll_interval = None;
-        let tx = self.persisted_data.begin_transaction()?;
-        if let Some(sequence_number) = tx.get_sequence_number(&metadata_height.into())? {
+        if let Some(sequence_number) = self
+            .persisted_data
+            .get_sequence_number(&metadata_height.into())?
+        {
             self.da_source.set_last_value(sequence_number).await?;
         }
-        drop(tx);
         let da_service = DaSourceService::new(self.da_source, poll_interval);
 
         if BlockHeight::from(latest_block_height) == self.genesis_block_height
@@ -247,9 +250,10 @@ where
     GasPriceStore: GasPriceData,
     DA: DaBlockCostsSource + 'static,
     SettingsProvider: GasPriceSettingsProvider + 'static,
-    PersistedData: MetadataStorage + TransactionableStorage + 'static,
+    PersistedData:
+        GetMetadataStorage + GetDaSequenceNumber + TransactionableStorage + 'static,
     for<'a> <PersistedData as TransactionableStorage>::Transaction<'a>:
-        MetadataStorage + UnrecordedBlocks + DaSequenceNumberTracker,
+        SetMetadataStorage + UnrecordedBlocks + SetDaSequenceNumber,
 {
     const NAME: &'static str = "GasPriceServiceV1";
     type SharedData = SharedV1Algorithm;
@@ -287,9 +291,9 @@ where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     SettingsProvider: GasPriceSettingsProvider,
-    PersistedData: MetadataStorage + TransactionableStorage + 'a,
+    PersistedData: GetMetadataStorage + TransactionableStorage + 'a,
     <PersistedData as TransactionableStorage>::Transaction<'a>:
-        MetadataStorage + UnrecordedBlocks,
+        SetMetadataStorage + UnrecordedBlocks,
 {
     let metadata = persisted_data
         .get_metadata(&metadata_height.into())?
@@ -337,7 +341,7 @@ where
     SettingsProvider: GasPriceSettingsProvider,
     StorageTxGenerator: TransactionableStorage + 'a,
     <StorageTxGenerator as TransactionableStorage>::Transaction<'a>:
-        MetadataStorage + UnrecordedBlocks,
+        SetMetadataStorage + UnrecordedBlocks,
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
@@ -414,9 +418,10 @@ where
     GasPriceStore: GasPriceData,
     SettingsProvider: GasPriceSettingsProvider,
     DA: DaBlockCostsSource,
-    PersistedData: MetadataStorage + TransactionableStorage + 'static,
+    PersistedData:
+        GetMetadataStorage + GetDaSequenceNumber + TransactionableStorage + 'static,
     for<'a> PersistedData::Transaction<'a>:
-        MetadataStorage + UnrecordedBlocks + DaSequenceNumberTracker,
+        SetMetadataStorage + UnrecordedBlocks + SetDaSequenceNumber,
 {
     let v1_config = config.v1().ok_or(anyhow::anyhow!("Expected V1 config"))?;
     let gas_price_init = UninitializedTask::new(
