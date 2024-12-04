@@ -30,15 +30,12 @@ use fuel_core_types::{
             DaBlockHeight,
         },
     },
-    entities::{
-        coins::CoinId,
-        relayer::{
-            message::{
-                MerkleProof,
-                Message,
-            },
-            transaction::RelayedTransactionStatus,
+    entities::relayer::{
+        message::{
+            MerkleProof,
+            Message,
         },
+        transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
         Bytes32,
@@ -67,9 +64,20 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-use crate::schema::coins::ExcludedKeysAsBytes;
+use super::{
+    indexation::coins_to_spend::IndexedCoinType,
+    storage::{
+        balances::TotalBalanceAmount,
+        coins::CoinsToSpendIndexKey,
+    },
+};
 
-use super::storage::balances::TotalBalanceAmount;
+pub struct CoinsToSpendIndexIter<'a> {
+    pub(crate) big_coins_iter:
+        BoxedIter<'a, Result<(CoinsToSpendIndexKey, IndexedCoinType), StorageError>>,
+    pub(crate) dust_coins_iter:
+        BoxedIter<'a, Result<(CoinsToSpendIndexKey, IndexedCoinType), StorageError>>,
+}
 
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
@@ -113,14 +121,11 @@ pub trait OffChainDatabase: Send + Sync {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
 
-    fn coins_to_spend(
+    fn coins_to_spend_index(
         &self,
         owner: &Address,
         asset_id: &AssetId,
-        target_amount: u64,
-        max_coins: u16,
-        excluded_ids: &ExcludedKeysAsBytes,
-    ) -> StorageResult<Vec<CoinId>>;
+    ) -> CoinsToSpendIndexIter;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 
