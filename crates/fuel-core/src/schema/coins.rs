@@ -411,17 +411,20 @@ async fn coins_to_spend_with_cache(
             .unwrap_or(max_input)
             .min(max_input);
 
-        let selected_iter = select_coins_to_spend(
-            db.off_chain.coins_to_spend_index(&owner, &asset_id),
-            total_amount,
-            max,
-            &excluded,
-            db.batch_size,
+        let selected_stream = futures::stream::iter(
+            select_coins_to_spend(
+                db.off_chain.coins_to_spend_index(&owner, &asset_id),
+                total_amount,
+                max,
+                &excluded,
+                db.batch_size,
+            )
+            .await?,
         )
-        .await?;
+        .yield_each(db.batch_size);
 
         let mut coins_per_asset = vec![];
-        for coin_or_message_id in into_coin_id(selected_iter, max as usize)? {
+        for coin_or_message_id in into_coin_id(selected_stream, max as usize).await? {
             let coin_type = match coin_or_message_id {
                 coins::CoinId::Utxo(utxo_id) => {
                     db.coin(utxo_id).map(|coin| CoinType::Coin(coin.into()))?
@@ -652,12 +655,12 @@ fn skip_big_coins_up_to_amount(
     })
 }
 
-fn into_coin_id(
-    selected_iter: Vec<CoinsToSpendIndexEntry>,
+async fn into_coin_id(
+    mut selected_stream: impl Stream<Item = CoinsToSpendIndexEntry> + Unpin,
     max_coins: usize,
 ) -> Result<Vec<CoinId>, StorageError> {
     let mut coins = Vec::with_capacity(max_coins);
-    for (foreign_key, coin_type) in selected_iter {
+    while let Some((foreign_key, coin_type)) = selected_stream.next().await {
         let coin = match coin_type {
             IndexedCoinType::Coin => {
                 let bytes: [u8; COIN_FOREIGN_KEY_LEN] = foreign_key
