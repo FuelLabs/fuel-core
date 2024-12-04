@@ -442,6 +442,7 @@ type GasCosts {
 	wqmm: U64!
 	xor: U64!
 	xori: U64!
+	ecop: U64!
 	alocDependentCost: DependentCost!
 	bldd: DependentCost
 	bsiz: DependentCost
@@ -466,6 +467,7 @@ type GasCosts {
 	smo: DependentCost!
 	srwq: DependentCost!
 	swwq: DependentCost!
+	epar: DependentCost!
 	contractRoot: DependentCost!
 	stateRoot: DependentCost!
 	vmInitialization: DependentCost!

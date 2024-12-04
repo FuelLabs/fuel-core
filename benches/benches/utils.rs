@@ -36,8 +36,21 @@ pub fn get_state_size() -> u64 {
 }
 
 /// Allocates a byte array from heap and initializes it. Then points `reg` to it.
-fn aloc_bytearray<const S: usize>(reg: u8, v: [u8; S]) -> Vec<Instruction> {
+pub fn aloc_bytearray<const S: usize>(reg: u8, v: [u8; S]) -> Vec<Instruction> {
     let mut ops = vec![op::movi(reg, S as u32), op::aloc(reg)];
+    for (i, b) in v.iter().enumerate() {
+        if *b != 0 {
+            ops.push(op::movi(reg, *b as u32));
+            ops.push(op::sb(RegId::HP, reg, i as u16));
+        }
+    }
+    ops.push(op::move_(reg, RegId::HP));
+    ops
+}
+
+/// Allocates a byte array of a variable size from heap and initializes it. Then points `reg` to it.
+pub fn aloc_bytearray_vec(reg: u8, v: Vec<u8>) -> Vec<Instruction> {
+    let mut ops = vec![op::movi(reg, v.len().try_into().unwrap()), op::aloc(reg)];
     for (i, b) in v.iter().enumerate() {
         if *b != 0 {
             ops.push(op::movi(reg, *b as u32));
