@@ -269,7 +269,7 @@ fn sync_gas_price_db_with_on_chain_storage<
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
-    persisted_data: &mut PersistedData,
+    persisted_data: &'a mut PersistedData,
 ) -> anyhow::Result<()>
 where
     L2DataStore: L2Data,
@@ -317,7 +317,7 @@ fn sync_v1_metadata<
     metadata_height: u32,
     latest_block_height: u32,
     updater: &mut AlgorithmUpdaterV1,
-    storage_tx_generator: &mut StorageTxGenerator,
+    storage_tx_generator: &'a mut StorageTxGenerator,
 ) -> anyhow::Result<()>
 where
     L2DataStore: L2Data,
@@ -329,6 +329,7 @@ where
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
+    let mut tx = storage_tx_generator.begin_transaction()?;
     for height in first..=latest_block_height {
         let block = view
             .get_block(&height.into())?
@@ -351,7 +352,6 @@ where
 
         let block_bytes = block_bytes(&block);
         let (fee_wei, _) = mint_values(&block)?;
-        let mut tx = storage_tx_generator.begin_transaction()?;
         updater.update_l2_block_data(
             height,
             block_gas_used,
@@ -362,8 +362,8 @@ where
         )?;
         let metadata: UpdaterMetadata = updater.clone().into();
         tx.set_metadata(&metadata)?;
-        StorageTxGenerator::commit_transaction(tx)?;
     }
+    StorageTxGenerator::commit_transaction(tx)?;
 
     Ok(())
 }
