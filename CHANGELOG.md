@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2429](https://github.com/FuelLabs/fuel-core/pull/2429): Introduce custom enum for representing result of running service tasks
 - [2377](https://github.com/FuelLabs/fuel-core/pull/2377): Add more errors that can be returned as responses when using protocol `/fuel/req_res/0.0.2`. The errors supported are `ProtocolV1EmptyResponse` (status code `0`) for converting empty responses sent via protocol `/fuel/req_res/0.0.1`, `RequestedRangeTooLarge`(status code `1`) if the client requests a range of objects such as sealed block headers or transactions too large, `Timeout` (status code `2`) if the remote peer takes too long to fulfill a request, or `SyncProcessorOutOfCapacity` if the remote peer is fulfilling too many requests concurrently.
 - [2233](https://github.com/FuelLabs/fuel-core/pull/2233): Introduce a new column `modification_history_v2` for storing the modification history in the historical rocksDB. Keys in this column are stored in big endian order. Changed the behaviour of the historical rocksDB to write changes for new block heights to the new column, and to perform lookup of values from the `modification_history_v2` table first, and then from the `modification_history` table, performing a migration upon access if necessary.
+- [2463](https://github.com/FuelLabs/fuel-core/pull/2463): The `coinsToSpend` GraphQL query handler now uses index to provide the response in a more performant way. As the index is not created retroactively, the client must be initialized with an empty database and synced from the genesis block to utilize it. Otherwise, the legacy way of retrieving data will be used.
 
 #### Breaking
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2258): Updated the `messageProof` GraphQL schema to return a non-nullable `MessageProof`.
@@ -50,6 +51,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2379](https://github.com/FuelLabs/fuel-core/issues/2379): Change `kv_store::Value` to be `Arc<[u8]>` instead of `Arc<Vec<u8>>`.
 - [2463](https://github.com/FuelLabs/fuel-core/pull/2463): 'CoinsQueryError::MaxCoinsReached` variant has been removed. The `InsufficientCoins` variant has been renamed to `InsufficientCoinsForTheMax` and it now contains the additional `max` field
 - [2463](https://github.com/FuelLabs/fuel-core/pull/2463): The number of excluded ids in the `coinsToSpend` GraphQL query is now limited to the maximum number of inputs allowed in transaction.
+- [2463](https://github.com/FuelLabs/fuel-core/pull/2463): The `coinsToSpend` GraphQL query may now return different coins, depending whether the indexation is enabled or not. However, regardless of the differences, the returned coins will accurately reflect the current state of the database within the context of the query.
 
 ## [Version 0.40.0]
 
