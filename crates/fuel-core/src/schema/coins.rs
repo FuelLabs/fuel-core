@@ -317,6 +317,17 @@ impl CoinQuery {
             .latest_consensus_params();
         let max_input = params.tx_params().max_inputs();
 
+        let excluded_id_count = excluded_ids.as_ref().map_or(0, |exclude| {
+            exclude.utxos.len().saturating_add(exclude.messages.len())
+        });
+        if excluded_id_count > max_input as usize {
+            return Err(CoinsQueryError::TooManyExcludedId {
+                provided: excluded_id_count,
+                allowed: max_input,
+            }
+            .into());
+        }
+
         let mut duplicate_checker = HashSet::with_capacity(query_per_asset.len());
         for query in &query_per_asset {
             let asset_id: fuel_tx::AssetId = query.asset_id.into();

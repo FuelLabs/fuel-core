@@ -36,6 +36,10 @@ pub enum CoinsQueryError {
     },
     #[error("the query contains duplicate assets")]
     DuplicateAssets(AssetId),
+    #[error(
+        "too many excluded ids: provided ({provided}) is > than allowed ({allowed})"
+    )]
+    TooManyExcludedId { provided: usize, allowed: u16 },
 }
 
 #[cfg(test)]

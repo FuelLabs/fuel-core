@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2446](https://github.com/FuelLabs/fuel-core/pull/2446): Use graphiql instead of graphql-playground due to known vulnerability and stale development.
 - [2379](https://github.com/FuelLabs/fuel-core/issues/2379): Change `kv_store::Value` to be `Arc<[u8]>` instead of `Arc<Vec<u8>>`.
 - [2463](https://github.com/FuelLabs/fuel-core/pull/2463): 'CoinsQueryError::MaxCoinsReached` variant has been removed. The `InsufficientCoins` variant has been renamed to `InsufficientCoinsForTheMax` and it now contains the additional `max` field
+- [2463](https://github.com/FuelLabs/fuel-core/pull/2463): The number of excluded ids in the `coinsToSpend` GraphQL query is now limited to the maximum number of inputs allowed in transaction.
 
 ## [Version 0.40.0]
 
