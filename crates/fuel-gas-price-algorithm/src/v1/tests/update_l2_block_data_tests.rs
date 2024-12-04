@@ -644,10 +644,6 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
     // given
     let starting_block = 0;
     let first_block_bytes = 1200;
-    // let preexisting_block = BlockBytes {
-    //     height: 0,
-    //     block_bytes: first_block_bytes,
-    // };
     let unrecorded_blocks: BTreeMap<_, _> =
         vec![(0, first_block_bytes)].into_iter().collect();
 

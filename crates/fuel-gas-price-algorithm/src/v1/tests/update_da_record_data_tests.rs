@@ -111,20 +111,6 @@ fn update_da_record_data__updates_known_total_cost() {
     let l2_block_height = 15;
     let projected_total_cost = 2000;
     let known_total_cost = 1500;
-    // let unrecorded_blocks = vec![
-    //     BlockBytes {
-    //         height: 11,
-    //         block_bytes: 1000,
-    //     },
-    //     BlockBytes {
-    //         height: 12,
-    //         block_bytes: 2000,
-    //     },
-    //     BlockBytes {
-    //         height: 13,
-    //         block_bytes: 1500,
-    //     },
-    // ];
     let mut unrecorded_blocks: BTreeMap<_, _> =
         [(11, 1000), (12, 2000), (13, 1500)].into_iter().collect();
     let mut updater = UpdaterBuilder::new()
@@ -160,20 +146,6 @@ fn update_da_record_data__if_da_height_matches_l2_height_projected_and_known_mat
     let da_cost_per_byte = 20;
     let l2_block_height = 13;
     let known_total_cost = 1500;
-    // let unrecorded_blocks = vec![
-    //     BlockBytes {
-    //         height: 11,
-    //         block_bytes: 1000,
-    //     },
-    //     BlockBytes {
-    //         height: 12,
-    //         block_bytes: 2000,
-    //     },
-    //     BlockBytes {
-    //         height: 13,
-    //         block_bytes: 1500,
-    //     },
-    // ];
     let mut unrecorded_blocks: BTreeMap<_, _> =
         [(11, 1000), (12, 2000), (13, 1500)].into_iter().collect();
 
@@ -224,20 +196,6 @@ fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_g
     let original_known_total_cost: u128 = 1500;
     let block_bytes = 1000;
     let remaining = vec![(14, block_bytes), (15, block_bytes)];
-    // let mut unrecorded_blocks = vec![
-    //     BlockBytes {
-    //         height: 11,
-    //         block_bytes: 1000,
-    //     },
-    //     BlockBytes {
-    //         height: 12,
-    //         block_bytes: 2000,
-    //     },
-    //     BlockBytes {
-    //         height: 13,
-    //         block_bytes: 1500,
-    //     },
-    // ];
     let mut pairs = vec![(11, 1000), (12, 2000), (13, 1500)];
 
     pairs.extend(remaining.clone());
@@ -289,20 +247,6 @@ fn update_da_record_data__updates_known_total_cost_if_blocks_are_out_of_order() 
     // given
     let da_cost_per_byte = 20;
     let block_bytes = 1000;
-    // let unrecorded_blocks = vec![
-    //     BlockBytes {
-    //         height: 1,
-    //         block_bytes,
-    //     },
-    //     BlockBytes {
-    //         height: 2,
-    //         block_bytes,
-    //     },
-    //     BlockBytes {
-    //         height: 3,
-    //         block_bytes,
-    //     },
-    // ];
     let mut unrecorded_blocks: BTreeMap<_, _> =
         [(1, block_bytes), (2, block_bytes), (3, block_bytes)]
             .into_iter()
@@ -345,20 +289,6 @@ fn update_da_record_data__updates_projected_total_cost_if_blocks_are_out_of_orde
     // given
     let da_cost_per_byte = 20;
     let block_bytes = 1000;
-    // let unrecorded_blocks = vec![
-    //     BlockBytes {
-    //         height: 1,
-    //         block_bytes,
-    //     },
-    //     BlockBytes {
-    //         height: 2,
-    //         block_bytes,
-    //     },
-    //     BlockBytes {
-    //         height: 3,
-    //         block_bytes,
-    //     },
-    // ];
     let mut unrecorded_blocks: BTreeMap<_, _> =
         [(1, block_bytes), (2, block_bytes), (3, block_bytes)]
             .into_iter()
@@ -401,20 +331,6 @@ fn update_da_record_data__updates_unrecorded_blocks() {
     // given
     let da_cost_per_byte = 20;
     let block_bytes = 1000;
-    // let unrecorded_blocks = vec![
-    //     BlockBytes {
-    //         height: 1,
-    //         block_bytes,
-    //     },
-    //     BlockBytes {
-    //         height: 2,
-    //         block_bytes,
-    //     },
-    //     BlockBytes {
-    //         height: 3,
-    //         block_bytes,
-    //     },
-    // ];
     let mut unrecorded_blocks: BTreeMap<_, _> =
         [(1, block_bytes), (2, block_bytes), (3, block_bytes)]
             .into_iter()
@@ -510,10 +426,6 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
     let da_cost_per_byte = 40;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
-    // let unrecorded_blocks = vec![BlockBytes {
-    //     height: 11,
-    //     block_bytes: 3000,
-    // }];
     let mut unrecorded_blocks: BTreeMap<_, _> = [(11, 3000)].into_iter().collect();
     let da_p_component = 2;
     let guessed_cost: u64 = unrecorded_blocks
@@ -533,17 +445,13 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
         .build();
 
     let new_cost_per_byte = 100;
-    let (recorded_heights, recorded_cost) = unrecorded_blocks
-            // .iter()
-            // .fold((vec![], 0), |(mut range, cost), block| {
-            //     range.push(block.height);
-            //     (range, cost + block.block_bytes * new_cost_per_byte)
-            // });
-            .iter()
-            .fold((vec![], 0), |(mut range, cost), (height, bytes)| {
-                range.push(height);
-                (range, cost + bytes * new_cost_per_byte)
-            });
+    let (recorded_heights, recorded_cost) = unrecorded_blocks.iter().fold(
+        (vec![], 0),
+        |(mut range, cost), (height, bytes)| {
+            range.push(height);
+            (range, cost + bytes * new_cost_per_byte)
+        },
+    );
 
     let min = *recorded_heights.iter().min().unwrap();
     let max = *recorded_heights.iter().max().unwrap();
@@ -575,9 +483,6 @@ fn update_da_record_data__da_block_will_not_change_da_gas_price() {
     let da_cost_per_byte = 40;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
-    // let unrecorded_blocks = vec![BlockBytes { height: 11,
-    //     block_bytes: 3000,
-    // }];
     let mut unrecorded_blocks: BTreeMap<_, _> = [(11, 3000)].into_iter().collect();
     let da_p_component = 2;
     let guessed_cost: u64 = unrecorded_blocks

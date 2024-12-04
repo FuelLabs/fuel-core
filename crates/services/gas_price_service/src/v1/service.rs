@@ -97,19 +97,6 @@ where
         self.apply_block_info_to_gas_algorithm(block).await?;
         Ok(())
     }
-
-    // async fn process_da_block_costs_res(
-    //     &mut self,
-    //     da_block_costs: Result<DaBlockCosts, RecvError>,
-    // ) -> anyhow::Result<()> {
-    //     tracing::info!("Received DA block costs: {:?}", da_block_costs);
-    //     let da_block_costs = da_block_costs?;
-    //
-    //     tracing::debug!("Updating DA block costs");
-    //     self.apply_da_block_costs_to_gas_algorithm(da_block_costs)
-    //         .await?;
-    //     Ok(())
-    // }
 }
 
 impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
@@ -155,14 +142,6 @@ where
         NonZeroU64::new(block_gas_capacity)
             .ok_or_else(|| anyhow!("Block gas capacity must be non-zero"))
     }
-
-    // async fn set_metadata(
-    //     &mut self,
-    //     tx: &mut StorageTxProvider::Transaction,
-    // ) -> anyhow::Result<()> {
-    //     let metadata: UpdaterMetadata = self.algorithm_updater.clone().into();
-    //     tx.set_metadata(&metadata).map_err(|err| anyhow!(err))
-    // }
 
     async fn handle_normal_block<'a>(
         &'a mut self,
@@ -263,15 +242,6 @@ where
 
         Ok(())
     }
-
-    // async fn apply_da_block_costs_to_gas_algorithm(
-    //     &mut self,
-    //     da_block_costs: DaBlockCosts,
-    // ) -> anyhow::Result<()> {
-    //     self.handle_da_block_costs(da_block_costs).await?;
-    //     self.update(self.algorithm_updater.algorithm()).await;
-    //     Ok(())
-    // }
 }
 
 #[async_trait]
