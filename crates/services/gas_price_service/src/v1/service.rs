@@ -178,6 +178,16 @@ where
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
 
+        for da_block_costs in self.da_block_costs_buffer.drain(..) {
+            tracing::debug!("Updating DA block costs: {:?}", da_block_costs);
+            self.algorithm_updater.update_da_record_data(
+                &da_block_costs.l2_blocks,
+                da_block_costs.blob_size_bytes,
+                da_block_costs.blob_cost_wei,
+                &mut storage_tx,
+            )?;
+        }
+
         self.algorithm_updater.update_l2_block_data(
             height,
             gas_used,
@@ -187,6 +197,7 @@ where
             &mut storage_tx,
         )?;
 
+        tracing::debug!("Committing transaction");
         StorageTxProvider::commit_transaction(storage_tx)?;
         let new_algo = self.algorithm_updater.algorithm();
         self.shared_algo.update(new_algo).await;
@@ -276,10 +287,12 @@ where
                 TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
+                tracing::debug!("Received L2 block result: {:?}", l2_block_res);
                 let res = self.commit_block_data_to_algorithm(l2_block_res).await;
                 TaskNextAction::always_continue(res)
             }
             da_block_costs_res = self.da_source_channel.recv() => {
+                tracing::debug!("Received DA block costs: {:?}", da_block_costs_res);
                 match da_block_costs_res {
                     Ok(da_block_costs) => {
                         self.da_block_costs_buffer.push(da_block_costs);
@@ -372,13 +385,20 @@ mod tests {
         transactional::{
             IntoTransaction,
             StorageTransaction,
+            WriteTransaction,
         },
+        StorageAsMut,
     };
     use fuel_core_types::fuel_types::BlockHeight;
 
     use crate::{
         common::{
-            fuel_core_storage_adapter::storage::GasPriceColumn,
+            fuel_core_storage_adapter::storage::{
+                GasPriceColumn,
+                GasPriceColumn::UnrecordedBlocks,
+                UnrecordedBlocksTable,
+            },
+            gas_price_algorithm::SharedGasPriceAlgo,
             l2_block_source::L2BlockSource,
             updater_metadata::UpdaterMetadata,
             utils::{
@@ -393,7 +413,10 @@ mod tests {
                 service::DaSourceService,
                 DaBlockCosts,
             },
-            metadata::V1AlgorithmConfig,
+            metadata::{
+                updater_from_config,
+                V1AlgorithmConfig,
+            },
             service::{
                 initialize_algorithm,
                 GasPriceServiceV1,
@@ -515,9 +538,13 @@ mod tests {
 
     #[tokio::test]
     async fn run__updates_gas_price_with_da_block_cost_source() {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .try_init();
+
         // given
-        let block_height = 1;
-        let l2_block = BlockInfo::Block {
+        let block_height = 2;
+        let l2_block_2 = BlockInfo::Block {
             height: block_height,
             gas_used: 60,
             block_gas_capacity: 100,
@@ -531,14 +558,15 @@ mod tests {
         };
 
         let metadata_storage = FakeMetadata::empty();
+        // Configured so exec gas price doesn't change, only da gas price
         let config = V1AlgorithmConfig {
             new_exec_gas_price: 100,
             min_exec_gas_price: 50,
-            exec_gas_price_change_percent: 20,
+            exec_gas_price_change_percent: 0,
             l2_block_fullness_threshold_percent: 20,
             gas_price_factor: NonZeroU64::new(10).unwrap(),
-            min_da_gas_price: 100,
-            max_da_gas_price_change_percent: 50,
+            min_da_gas_price: 0,
+            max_da_gas_price_change_percent: 100,
             da_p_component: 4,
             da_d_component: 2,
             normal_range_size: 10,
@@ -546,9 +574,18 @@ mod tests {
             decrease_range_size: 4,
             block_activity_threshold: 20,
         };
-        let inner = database();
-        let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, block_height, &metadata_storage).unwrap();
+        let mut inner = database();
+        let mut tx = inner.write_transaction();
+        tx.storage_as_mut::<UnrecordedBlocksTable>()
+            .insert(&BlockHeight::from(1), &100)
+            .unwrap();
+        tx.commit().unwrap();
+        let mut algo_updater = updater_from_config(&config);
+        let shared_algo =
+            SharedGasPriceAlgo::new_with_algorithm(algo_updater.algorithm());
+        algo_updater.l2_block_height = block_height - 1;
+        algo_updater.last_profit = 10_000;
+        algo_updater.new_scaled_da_gas_price = 10_000_000;
 
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_source = DaSourceService::new(
@@ -562,7 +599,7 @@ mod tests {
             ),
             Some(Duration::from_millis(1)),
         );
-        let mut watcher = StateWatcher::default();
+        let mut watcher = StateWatcher::started();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -582,6 +619,10 @@ mod tests {
             .da_source_adapter_handle
             .run(&mut da_source_watcher)
             .await;
+
+        service.run(&mut watcher).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        l2_block_sender.send(l2_block_2).await.unwrap();
 
         // when
         service.run(&mut watcher).await;

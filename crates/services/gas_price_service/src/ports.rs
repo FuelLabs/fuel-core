@@ -1,3 +1,10 @@
+use fuel_core_storage::Result as StorageResult;
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_tx::Transaction,
+    fuel_types::BlockHeight,
+};
+
 use crate::{
     common::{
         updater_metadata::UpdaterMetadata,
@@ -5,12 +12,6 @@ use crate::{
     },
     v0::metadata::V0AlgorithmConfig,
     v1::metadata::V1AlgorithmConfig,
-};
-use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_tx::Transaction,
-    fuel_types::BlockHeight,
 };
 
 pub trait L2Data: Send + Sync {

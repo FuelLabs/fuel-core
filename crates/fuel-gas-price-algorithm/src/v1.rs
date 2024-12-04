@@ -350,6 +350,11 @@ impl AlgorithmUpdaterV1 {
     ) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
+            tracing::debug!(
+                "Skipped L2 block update: expected {}, got {}",
+                expected,
+                height
+            );
             Err(Error::SkippedL2Block {
                 expected,
                 got: height,
