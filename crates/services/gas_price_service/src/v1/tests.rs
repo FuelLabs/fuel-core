@@ -2,7 +2,10 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::{
-            storage::GasPriceColumn,
+            storage::{
+                GasPriceColumn,
+                GasPriceMetadata,
+            },
             GasPriceSettings,
             GasPriceSettingsProvider,
         },
@@ -51,13 +54,16 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
+    iter::IteratorOverTable,
     structured_storage::test::InMemoryStorage,
     transactional::{
         AtomicView,
         IntoTransaction,
         StorageTransaction,
+        WriteTransaction,
     },
     Result as StorageResult,
+    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
@@ -213,6 +219,20 @@ fn different_arb_config() -> V1AlgorithmConfig {
 
 fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
     InMemoryStorage::default().into_transaction()
+}
+
+fn database_with_metadata(
+    metadata: &V1Metadata,
+) -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
+    let mut db = database();
+    let mut tx = db.write_transaction();
+    let height = metadata.l2_block_height.into();
+    let metadata = UpdaterMetadata::V1(metadata.clone());
+    tx.storage_as_mut::<GasPriceMetadata>()
+        .insert(&height, &metadata)
+        .unwrap();
+    tx.commit().unwrap();
+    db
 }
 
 #[tokio::test]
@@ -379,28 +399,21 @@ fn empty_block_stream() -> BoxStream<SharedImportResult> {
 async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overrides() {
     // given
     let original_metadata = arbitrary_metadata();
-    let original = UpdaterMetadata::V1(original_metadata.clone());
-    let metadata_inner = Arc::new(std::sync::Mutex::new(Some(original.clone())));
-    let metadata_storage = FakeMetadata {
-        inner: metadata_inner,
-    };
 
     let different_config = different_arb_config();
     let descaleed_exec_price =
         original_metadata.new_scaled_exec_price / original_metadata.gas_price_factor;
     assert_ne!(different_config.new_exec_gas_price, descaleed_exec_price);
-    let different_l2_block = 1231;
-    assert_ne!(different_l2_block, original_metadata.l2_block_height);
+    let different_l2_block = 0;
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
     let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
-    let inner = database();
-
+    let inner = database_with_metadata(&original_metadata);
     // when
     let service = UninitializedTask::new(
-        different_config,
+        different_config.clone(),
         0.into(),
         settings,
         block_stream,
@@ -413,7 +426,11 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
 
     // then
     let UninitializedTask { algo_updater, .. } = service;
-    algo_updater_matches_values_from_old_metadata(algo_updater, original_metadata);
+    algo_updater_matches_values_from_old_metadata(
+        algo_updater.clone(),
+        original_metadata.clone(),
+    );
+    algo_updater_override_values_match(algo_updater, different_config);
 }
 
 fn algo_updater_matches_values_from_old_metadata(
@@ -463,6 +480,29 @@ fn algo_updater_matches_values_from_old_metadata(
         algo_updater.unrecorded_blocks_bytes,
         original_unrecorded_block_bytes
     );
+}
+
+fn algo_updater_override_values_match(
+    algo_updater: AlgorithmUpdaterV1,
+    config: V1AlgorithmConfig,
+) {
+    assert_eq!(algo_updater.min_exec_gas_price, config.min_exec_gas_price);
+    assert_eq!(
+        algo_updater.exec_gas_price_change_percent,
+        config.exec_gas_price_change_percent
+    );
+    assert_eq!(
+        algo_updater.l2_block_fullness_threshold_percent,
+        config.l2_block_fullness_threshold_percent.into()
+    );
+    assert_eq!(algo_updater.gas_price_factor, config.gas_price_factor);
+    assert_eq!(algo_updater.min_da_gas_price, config.min_da_gas_price);
+    assert_eq!(
+        algo_updater.max_da_gas_price_change_percent,
+        config.max_da_gas_price_change_percent
+    );
+    assert_eq!(algo_updater.da_p_component, config.da_p_component);
+    assert_eq!(algo_updater.da_d_component, config.da_d_component);
 }
 
 #[tokio::test]

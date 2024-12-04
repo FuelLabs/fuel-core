@@ -57,6 +57,7 @@ impl V1Metadata {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct V1AlgorithmConfig {
     pub new_exec_gas_price: u64,
     pub min_exec_gas_price: u64,

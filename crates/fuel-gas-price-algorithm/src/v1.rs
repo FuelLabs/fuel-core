@@ -288,6 +288,22 @@ impl L2ActivityTracker {
     pub fn current_activity(&self) -> u16 {
         self.chain_activity
     }
+
+    pub fn max_activity(&self) -> u16 {
+        self.max_activity
+    }
+
+    pub fn capped_activity_threshold(&self) -> u16 {
+        self.capped_activity_threshold
+    }
+
+    pub fn decrease_activity_threshold(&self) -> u16 {
+        self.decrease_activity_threshold
+    }
+
+    pub fn block_activity_threshold(&self) -> ClampedPercentage {
+        self.block_activity_threshold.clone()
+    }
 }
 
 /// A value that represents a value between 0 and 100. Higher values are clamped to 100
