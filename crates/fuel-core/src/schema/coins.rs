@@ -737,24 +737,28 @@ mod tests {
 
     #[test]
     fn select_coins_until_respects_max() {
+        // Given
         const MAX: u16 = 3;
 
         let coins = setup_test_coins([1, 2, 3, 4, 5]);
 
         let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
 
+        // When
         let result =
             select_coins_until(coins.into_iter().into_boxed(), MAX, &excluded, |_, _| {
                 false
             })
             .expect("should select coins");
 
+        // Then
         assert_eq!(result.0, 1 + 2 + 3); // Limit is set at 3 coins
         assert_eq!(result.1.len(), 3);
     }
 
     #[test]
     fn select_coins_until_respects_excluded_ids() {
+        // Given
         const MAX: u16 = u16::MAX;
 
         let coins = setup_test_coins([1, 2, 3, 4, 5]);
@@ -768,18 +772,21 @@ mod tests {
         };
         let excluded = ExcludedKeysAsBytes::new(vec![excluded_coin_bytes], vec![]);
 
+        // When
         let result =
             select_coins_until(coins.into_iter().into_boxed(), MAX, &excluded, |_, _| {
                 false
             })
             .expect("should select coins");
 
+        // Then
         assert_eq!(result.0, 1 + 3 + 4 + 5); // '2' is skipped.
         assert_eq!(result.1.len(), 4);
     }
 
     #[test]
     fn select_coins_until_respects_predicate() {
+        // Given
         const MAX: u16 = u16::MAX;
         const TOTAL: u64 = 7;
 
@@ -790,16 +797,19 @@ mod tests {
         let predicate: fn(&CoinsToSpendIndexEntry, u64) -> bool =
             |_, total| total > TOTAL;
 
+        // When
         let result =
             select_coins_until(coins.into_iter().into_boxed(), MAX, &excluded, predicate)
                 .expect("should select coins");
 
+        // Then
         assert_eq!(result.0, 1 + 2 + 3 + 4); // Keep selecting until total is greater than 7.
         assert_eq!(result.1.len(), 4);
     }
 
     #[test]
     fn already_selected_big_coins_are_never_reselected_as_dust() {
+        // Given
         const MAX: u16 = u16::MAX;
         const TOTAL: u64 = 101;
 
@@ -815,6 +825,7 @@ mod tests {
 
         let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
 
+        // When
         let result = select_coins_to_spend(coins_to_spend_iter, TOTAL, MAX, &excluded)
             .expect("should select coins");
 
@@ -822,6 +833,8 @@ mod tests {
             .into_iter()
             .map(|(key, _)| key.amount())
             .collect::<Vec<_>>();
+
+        // Then
 
         // Because we select a total of 101, first two coins should always selected (100, 4).
         let expected = vec![100, 4];
@@ -849,6 +862,7 @@ mod tests {
 
     #[test]
     fn selection_algorithm_should_bail_on_error() {
+        // Given
         const MAX: u16 = u16::MAX;
         const TOTAL: u64 = 101;
 
@@ -872,8 +886,10 @@ mod tests {
             dust_coins_iter: std::iter::empty().into_boxed(),
         };
 
+        // When
         let result = select_coins_to_spend(coins_to_spend_iter, TOTAL, MAX, &excluded);
 
+        // Then
         assert!(
             matches!(result, Err(error) if error == fuel_core_storage::Error::NotFound("S1", "S2"))
         );

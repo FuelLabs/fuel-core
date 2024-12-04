@@ -241,6 +241,7 @@ mod tests {
                 .unwrap();
         let mut tx = db.write_transaction();
 
+        // Given
         const COINS_TO_SPEND_INDEX_IS_DISABLED: bool = false;
         let base_asset_id = AssetId::from([0; 32]);
 
@@ -271,6 +272,7 @@ mod tests {
             Event::MessageConsumed(message_2.clone()),
         ];
 
+        // When
         events.iter().for_each(|event| {
             update(
                 event,
@@ -281,6 +283,7 @@ mod tests {
             .expect("should process balance");
         });
 
+        // Then
         let key = CoinsToSpendIndexKey::from_coin(&coin_1);
         let coin = tx
             .storage::<CoinsToSpendIndex>()
@@ -319,6 +322,7 @@ mod tests {
                 .unwrap();
         let mut tx = db.write_transaction();
 
+        // Given
         const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
         let base_asset_id = AssetId::from([0; 32]);
 
@@ -360,6 +364,8 @@ mod tests {
             Event::CoinConsumed(make_coin(&owner_2, &asset_id_1, 200000)),
         ]);
 
+        // When
+
         // Process all events
         events.iter().for_each(|event| {
             update(
@@ -371,6 +377,8 @@ mod tests {
             .expect("should process coins to spend");
         });
         tx.commit().expect("should commit transaction");
+
+        // Then
 
         // Mind the sorted amounts
         let expected_index_entries = &[
@@ -400,6 +408,7 @@ mod tests {
                 .unwrap();
         let mut tx = db.write_transaction();
 
+        // Given
         const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
         let base_asset_id = AssetId::from([0; 32]);
 
@@ -428,6 +437,8 @@ mod tests {
             Event::MessageConsumed(make_nonretryable_message(&owner_2, 200000)),
         ]);
 
+        // When
+
         // Process all events
         events.iter().for_each(|event| {
             update(
@@ -439,6 +450,8 @@ mod tests {
             .expect("should process coins to spend");
         });
         tx.commit().expect("should commit transaction");
+
+        // Then
 
         // Mind the sorted amounts
         let expected_index_entries = &[
@@ -462,6 +475,7 @@ mod tests {
                 .unwrap();
         let mut tx = db.write_transaction();
 
+        // Given
         const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
         let base_asset_id = AssetId::from([0; 32]);
         let owner = Address::from([1; 32]);
@@ -489,6 +503,8 @@ mod tests {
             Event::MessageConsumed(make_nonretryable_message(&owner, 200000)),
         ]);
 
+        // When
+
         // Process all events
         events.iter().for_each(|event| {
             update(
@@ -500,6 +516,8 @@ mod tests {
             .expect("should process coins to spend");
         });
         tx.commit().expect("should commit transaction");
+
+        // Then
 
         // Mind the amounts are always correctly sorted
         let expected_index_entries = &[
@@ -517,7 +535,7 @@ mod tests {
     }
 
     #[test]
-    fn double_insertion_causes_error() {
+    fn double_insertion_of_message_causes_error() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
         let mut db: Database<OffChain> =
@@ -525,6 +543,51 @@ mod tests {
                 .unwrap();
         let mut tx = db.write_transaction();
 
+        // Given
+        const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
+        let base_asset_id = AssetId::from([0; 32]);
+        let owner = Address::from([1; 32]);
+
+        let message = make_nonretryable_message(&owner, 400);
+        let message_event = Event::MessageImported(message.clone());
+        assert!(update(
+            &message_event,
+            &mut tx,
+            COINS_TO_SPEND_INDEX_IS_ENABLED,
+            &base_asset_id,
+        )
+        .is_ok());
+
+        // When
+        let result = update(
+            &message_event,
+            &mut tx,
+            COINS_TO_SPEND_INDEX_IS_ENABLED,
+            &base_asset_id,
+        );
+
+        // Then
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            IndexationError::MessageToSpendAlreadyIndexed {
+                owner,
+                amount: 400,
+                nonce: *message.nonce(),
+            }
+            .to_string()
+        );
+    }
+
+    #[test]
+    fn double_insertion_of_coin_causes_error() {
+        use tempfile::TempDir;
+        let tmp_dir = TempDir::new().unwrap();
+        let mut db: Database<OffChain> =
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                .unwrap();
+        let mut tx = db.write_transaction();
+
+        // Given
         const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
         let base_asset_id = AssetId::from([0; 32]);
         let owner = Address::from([1; 32]);
@@ -540,15 +603,18 @@ mod tests {
             &base_asset_id,
         )
         .is_ok());
+
+        // When
+        let result = update(
+            &coin_event,
+            &mut tx,
+            COINS_TO_SPEND_INDEX_IS_ENABLED,
+            &base_asset_id,
+        );
+
+        // Then
         assert_eq!(
-            update(
-                &coin_event,
-                &mut tx,
-                COINS_TO_SPEND_INDEX_IS_ENABLED,
-                &base_asset_id,
-            )
-            .unwrap_err()
-            .to_string(),
+            result.unwrap_err().to_string(),
             IndexationError::CoinToSpendAlreadyIndexed {
                 owner,
                 asset_id,
@@ -557,36 +623,10 @@ mod tests {
             }
             .to_string()
         );
-
-        let message = make_nonretryable_message(&owner, 400);
-        let message_event = Event::MessageImported(message.clone());
-        assert!(update(
-            &message_event,
-            &mut tx,
-            COINS_TO_SPEND_INDEX_IS_ENABLED,
-            &base_asset_id,
-        )
-        .is_ok());
-        assert_eq!(
-            update(
-                &message_event,
-                &mut tx,
-                COINS_TO_SPEND_INDEX_IS_ENABLED,
-                &base_asset_id,
-            )
-            .unwrap_err()
-            .to_string(),
-            IndexationError::MessageToSpendAlreadyIndexed {
-                owner,
-                amount: 400,
-                nonce: *message.nonce(),
-            }
-            .to_string()
-        );
     }
 
     #[test]
-    fn removal_of_missing_index_entry_causes_error() {
+    fn removal_of_non_existing_coin_causes_error() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
         let mut db: Database<OffChain> =
@@ -594,6 +634,7 @@ mod tests {
                 .unwrap();
         let mut tx = db.write_transaction();
 
+        // Given
         const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
         let base_asset_id = AssetId::from([0; 32]);
         let owner = Address::from([1; 32]);
@@ -601,15 +642,18 @@ mod tests {
 
         let coin = make_coin(&owner, &asset_id, 100);
         let coin_event = Event::CoinConsumed(coin);
+
+        // When
+        let result = update(
+            &coin_event,
+            &mut tx,
+            COINS_TO_SPEND_INDEX_IS_ENABLED,
+            &base_asset_id,
+        );
+
+        // Then
         assert_eq!(
-            update(
-                &coin_event,
-                &mut tx,
-                COINS_TO_SPEND_INDEX_IS_ENABLED,
-                &base_asset_id,
-            )
-            .unwrap_err()
-            .to_string(),
+            result.unwrap_err().to_string(),
             IndexationError::CoinToSpendNotFound {
                 owner,
                 asset_id,
@@ -639,6 +683,43 @@ mod tests {
         );
     }
 
+    #[test]
+    fn removal_of_non_existing_message_causes_error() {
+        use tempfile::TempDir;
+        let tmp_dir = TempDir::new().unwrap();
+        let mut db: Database<OffChain> =
+            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
+                .unwrap();
+        let mut tx = db.write_transaction();
+
+        // Given
+        const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
+        let base_asset_id = AssetId::from([0; 32]);
+        let owner = Address::from([1; 32]);
+
+        let message = make_nonretryable_message(&owner, 400);
+        let message_event = Event::MessageConsumed(message.clone());
+
+        // When
+        let result = update(
+            &message_event,
+            &mut tx,
+            COINS_TO_SPEND_INDEX_IS_ENABLED,
+            &base_asset_id,
+        );
+
+        // Then
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            IndexationError::MessageToSpendNotFound {
+                owner,
+                amount: 400,
+                nonce: *message.nonce(),
+            }
+            .to_string()
+        );
+    }
+
     proptest! {
         #[test]
         fn test_coin_index_is_sorted(
@@ -651,12 +732,15 @@ mod tests {
                     .unwrap();
             let mut tx = db.write_transaction();
             let base_asset_id = AssetId::from([0; 32]);
+
             const COINS_TO_SPEND_INDEX_IS_ENABLED: bool = true;
 
             let events: Vec<_> = amounts.iter()
+                // Given
                 .map(|&amount| Event::CoinCreated(make_coin(&Address::from([1; 32]), &AssetId::from([11; 32]), amount)))
                 .collect();
 
+                // When
                 events.iter().for_each(|event| {
                     update(
                         event,
@@ -668,6 +752,7 @@ mod tests {
                 });
                 tx.commit().expect("should commit transaction");
 
+                // Then
                 let actual_amounts: Vec<_> = db
                     .entries::<CoinsToSpendIndex>(None, IterDirection::Forward)
                     .map(|entry| entry.expect("should read entries"))

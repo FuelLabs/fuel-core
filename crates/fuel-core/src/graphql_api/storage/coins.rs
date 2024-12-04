@@ -285,6 +285,7 @@ mod test {
 
     #[test]
     fn key_from_coin() {
+        // Given
         let retryable_flag = NON_RETRYABLE_BYTE;
 
         let owner = Address::new([
@@ -319,8 +320,10 @@ mod test {
             tx_pointer: Default::default(),
         };
 
+        // When
         let key = CoinsToSpendIndexKey::from_coin(&coin);
 
+        // Then
         let key_bytes: [u8; COIN_TO_SPEND_COIN_KEY_LEN] =
             key.as_ref().try_into().expect("should have correct length");
 
@@ -351,6 +354,7 @@ mod test {
 
     #[test]
     fn key_from_non_retryable_message() {
+        // Given
         let retryable_flag = NON_RETRYABLE_BYTE;
 
         let owner = Address::new([
@@ -383,8 +387,10 @@ mod test {
             da_height: Default::default(),
         });
 
+        // When
         let key = CoinsToSpendIndexKey::from_message(&message, &base_asset_id);
 
+        // Then
         let key_bytes: [u8; COIN_TO_SPEND_MESSAGE_KEY_LEN] =
             key.as_ref().try_into().expect("should have correct length");
 
@@ -412,6 +418,7 @@ mod test {
 
     #[test]
     fn key_from_retryable_message() {
+        // Given
         let retryable_flag = RETRYABLE_BYTE;
 
         let owner = Address::new([
@@ -444,8 +451,10 @@ mod test {
             da_height: Default::default(),
         });
 
+        // When
         let key = CoinsToSpendIndexKey::from_message(&message, &base_asset_id);
 
+        // Then
         let key_bytes: [u8; COIN_TO_SPEND_MESSAGE_KEY_LEN] =
             key.as_ref().try_into().expect("should have correct length");
 
