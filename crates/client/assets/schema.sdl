@@ -133,7 +133,7 @@ type Coin {
 	"""
 	TxPointer - the index of the transaction that created this coin
 	"""
-	txCreatedIdx: U16!
+	txCreatedIdx: U32!
 }
 
 type CoinConnection {
@@ -524,7 +524,7 @@ type Header {
 	"""
 	Number of transactions in this block.
 	"""
-	transactionsCount: U16!
+	transactionsCount: U32!
 	"""
 	Number of message receipts in this block.
 	"""

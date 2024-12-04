@@ -36,7 +36,7 @@ pub struct ContractConfig {
     /// TxPointer: auto-generated if None
     /// used if contract is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
-    pub tx_pointer_tx_idx: u16,
+    pub tx_pointer_tx_idx: u32,
     pub states: Vec<ContractStateConfig>,
     pub balances: Vec<ContractBalanceConfig>,
 }

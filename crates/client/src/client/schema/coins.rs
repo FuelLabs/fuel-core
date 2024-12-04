@@ -6,7 +6,6 @@ use crate::client::{
         Nonce,
         PageInfo,
         UtxoId,
-        U16,
         U32,
         U64,
     },
@@ -111,7 +110,7 @@ pub struct CoinEdge {
 pub struct Coin {
     pub amount: U64,
     pub block_created: U32,
-    pub tx_created_idx: U16,
+    pub tx_created_idx: U32,
     pub asset_id: AssetId,
     pub utxo_id: UtxoId,
     pub owner: Address,

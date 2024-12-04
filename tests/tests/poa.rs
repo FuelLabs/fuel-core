@@ -183,7 +183,7 @@ mod p2p {
     // after the first_producer stops, second_producer should start producing blocks
     #[tokio::test(flavor = "multi_thread")]
     async fn test_poa_multiple_producers() {
-        const SYNC_TIMEOUT: u64 = 30;
+        const SYNC_TIMEOUT: u64 = 5;
         const TIME_UNTIL_SYNCED: u64 = SYNC_TIMEOUT + 10;
 
         let mut rng = StdRng::seed_from_u64(2222);
@@ -201,7 +201,9 @@ mod p2p {
         let make_node_config = |name: &str| {
             let mut config = make_config(name.to_string(), config.clone());
             config.debug = true;
-            config.block_production = Trigger::Never;
+            config.block_production = Trigger::Interval {
+                block_time: Duration::from_secs(1),
+            };
             config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
             config.p2p.as_mut().unwrap().bootstrap_nodes = bootstrap.listeners();
             config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
@@ -216,7 +218,7 @@ mod p2p {
 
         let first_producer = make_node(first_producer_config, vec![]).await;
 
-        // The first producer should produce 3 blocks.
+        // The first producer should produce 1 block manually after `SYNC_TIMEOUT` seconds.
         first_producer
             .node
             .shared
@@ -224,14 +226,15 @@ mod p2p {
             .manually_produce_blocks(
                 None,
                 Mode::Blocks {
-                    number_of_blocks: 3,
+                    number_of_blocks: 1,
                 },
             )
             .await
-            .expect("The first should produce 3 blocks");
+            .expect("The first should produce 1 block manually");
 
-        // Start the second producer after 3 blocks.
-        // The second producer should synchronize 3 blocks produced by the first producer.
+        // After 1 manual block start the second producer.
+        // The first producer should produce 2 more blocks.
+        // The second producer should synchronize 3(1 manual and 2 produced) blocks.
         let second_producer = make_node(second_producer_config, vec![]).await;
         tokio::time::timeout(
             Duration::from_secs(SYNC_TIMEOUT),
@@ -258,7 +261,7 @@ mod p2p {
             .manually_produce_blocks(
                 None,
                 Mode::Blocks {
-                    number_of_blocks: 2,
+                    number_of_blocks: 1,
                 },
             )
             .await
@@ -270,7 +273,7 @@ mod p2p {
         let first_producer =
             make_node(make_node_config("First Producer reborn"), vec![]).await;
         tokio::time::timeout(
-            Duration::from_secs(SYNC_TIMEOUT),
+            Duration::from_secs(TIME_UNTIL_SYNCED),
             first_producer.wait_for_blocks(5, false /* is_local */),
         )
         .await

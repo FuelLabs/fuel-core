@@ -15,7 +15,6 @@ use crate::{
             AssetId,
             Nonce,
             UtxoId,
-            U16,
             U32,
             U64,
         },
@@ -68,7 +67,7 @@ impl Coin {
     }
 
     /// TxPointer - the index of the transaction that created this coin
-    async fn tx_created_idx(&self) -> U16 {
+    async fn tx_created_idx(&self) -> U32 {
         self.0.tx_pointer.tx_index().into()
     }
 }

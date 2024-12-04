@@ -15,7 +15,6 @@ use crate::{
         scalars::{
             BlockId,
             Signature,
-            U16,
             U32,
             U64,
         },
@@ -199,7 +198,7 @@ impl Header {
     }
 
     /// Number of transactions in this block.
-    async fn transactions_count(&self) -> U16 {
+    async fn transactions_count(&self) -> U32 {
         self.0.transactions_count.into()
     }
 

@@ -3061,7 +3061,7 @@ mod tests {
         }
 
         impl fuel_core_executor::ports::TransactionsSource for BadTransactionsSource {
-            fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
+            fn next(&self, _: u64, _: u32, _: u32) -> Vec<MaybeCheckedTransaction> {
                 std::mem::take(&mut *self.transactions.lock().unwrap())
             }
         }
@@ -3749,7 +3749,7 @@ mod tests {
         fn relayer_db_with_mint_relayed_tx(
             da_height: u64,
             block_height: u32,
-            tx_count: u16,
+            tx_count: u32,
         ) -> Database<Relayer> {
             let mut relayed_tx = RelayedTransaction::default();
             let base_asset_id = AssetId::BASE;

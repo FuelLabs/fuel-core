@@ -39,7 +39,7 @@ pub struct Header {
     pub da_height: u64,
     pub consensus_parameters_version: u32,
     pub state_transition_bytecode_version: u32,
-    pub transactions_count: u16,
+    pub transactions_count: u32,
     pub message_receipt_count: u32,
     pub transactions_root: MerkleRoot,
     pub message_outbox_root: MerkleRoot,

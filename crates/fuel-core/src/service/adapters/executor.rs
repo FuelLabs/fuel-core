@@ -14,7 +14,7 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     fn next(
         &self,
         gas_limit: u64,
-        transactions_limit: u16,
+        transactions_limit: u32,
         block_transaction_size_limit: u32,
     ) -> Vec<MaybeCheckedTransaction> {
         self.tx_pool

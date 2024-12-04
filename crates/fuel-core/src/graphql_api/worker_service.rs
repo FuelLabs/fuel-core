@@ -281,8 +281,8 @@ where
         let block_height = *block.header().height();
         let inputs;
         let outputs;
-        let tx_idx = u16::try_from(tx_idx).map_err(|e| {
-            anyhow::anyhow!("The block has more than `u16::MAX` transactions, {}", e)
+        let tx_idx = u32::try_from(tx_idx).map_err(|e| {
+            anyhow::anyhow!("The block has more than `u32::MAX` transactions, {}", e)
         })?;
         let tx_id = tx.id(chain_id);
         match tx {
@@ -326,7 +326,7 @@ fn persist_owners_index<T>(
     inputs: &[Input],
     outputs: &[Output],
     tx_id: &Bytes32,
-    tx_idx: u16,
+    tx_idx: u32,
     db: &mut T,
 ) -> StorageResult<()>
 where

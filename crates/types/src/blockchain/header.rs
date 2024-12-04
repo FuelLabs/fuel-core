@@ -209,7 +209,7 @@ where
 /// These are generated once the full block has been run.
 pub struct GeneratedApplicationFields {
     /// Number of transactions in this block.
-    pub transactions_count: u16,
+    pub transactions_count: u32,
     /// Number of message receipts in this block.
     pub message_receipt_count: u32,
     /// Merkle root of transactions.
@@ -445,7 +445,7 @@ impl PartialBlockHeader {
                 .application
                 .state_transition_bytecode_version,
             generated: GeneratedApplicationFields {
-                transactions_count: u16::try_from(transactions.len())
+                transactions_count: u32::try_from(transactions.len())
                     .map_err(|_| BlockHeaderError::TooManyTransactions)?,
                 message_receipt_count: u32::try_from(outbox_message_ids.len())
                     .map_err(|_| BlockHeaderError::TooManyMessages)?,

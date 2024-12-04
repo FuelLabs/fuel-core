@@ -152,7 +152,7 @@ where
         &mut self,
         owner: &Address,
         block_height: BlockHeight,
-        tx_idx: u16,
+        tx_idx: u32,
         tx_id: &Bytes32,
     ) -> StorageResult<()> {
         self.storage::<OwnedTransactions>().insert(

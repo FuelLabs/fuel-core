@@ -165,11 +165,11 @@ use alloc::{
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
 #[cfg(not(feature = "test-helpers"))]
-pub const fn max_tx_count() -> u16 {
-    u16::MAX.saturating_sub(1)
+pub const fn max_tx_count() -> u32 {
+    u32::MAX.saturating_sub(1)
 }
 #[cfg(feature = "test-helpers")]
-pub const fn max_tx_count() -> u16 {
+pub const fn max_tx_count() -> u32 {
     1024
 }
 
@@ -200,7 +200,7 @@ impl TransactionsSource for OnceTransactionsSource {
     fn next(
         &self,
         _: u64,
-        transactions_limit: u16,
+        transactions_limit: u32,
         _: u32,
     ) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
@@ -217,7 +217,7 @@ pub struct ExecutionData {
     coinbase: u64,
     used_gas: u64,
     used_size: u32,
-    tx_count: u16,
+    tx_count: u32,
     found_mint: bool,
     message_ids: Vec<MessageId>,
     tx_status: Vec<TransactionExecutionStatus>,

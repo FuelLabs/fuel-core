@@ -641,7 +641,7 @@ fn get_sorted_out_tx1_2_3() {
         .extract_transactions_for_block(Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u16::MAX,
+            maximum_txs: u32::MAX,
             maximum_block_size: u32::MAX,
         });
 
@@ -698,7 +698,7 @@ fn get_sorted_out_tx_same_tips() {
         .extract_transactions_for_block(Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u16::MAX,
+            maximum_txs: u32::MAX,
             maximum_block_size: u32::MAX,
         });
 
@@ -755,7 +755,7 @@ fn get_sorted_out_tx_profitable_ratios() {
         .extract_transactions_for_block(Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u16::MAX,
+            maximum_txs: u32::MAX,
             maximum_block_size: u32::MAX,
         });
 
@@ -794,7 +794,7 @@ fn get_sorted_out_tx_by_creation_instant() {
         .extract_transactions_for_block(Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
-            maximum_txs: u16::MAX,
+            maximum_txs: u32::MAX,
             maximum_block_size: u32::MAX,
         });
 
