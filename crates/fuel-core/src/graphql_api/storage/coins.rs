@@ -146,7 +146,7 @@ impl CoinsToSpendIndexKey {
     }
 
     pub fn asset_id(&self) -> AssetId {
-        const OFFSET: usize = Address::LEN + RETRYABLE_FLAG_SIZE;
+        const OFFSET: usize = RETRYABLE_FLAG_SIZE + Address::LEN;
         const ASSET_ID_START: usize = OFFSET;
         const ASSET_ID_END: usize = ASSET_ID_START + AssetId::LEN;
         let asset_id: [u8; AssetId::LEN] = self.0[ASSET_ID_START..ASSET_ID_END]
@@ -161,7 +161,7 @@ impl CoinsToSpendIndexKey {
     }
 
     pub fn amount(&self) -> u64 {
-        const OFFSET: usize = Address::LEN + AssetId::LEN + RETRYABLE_FLAG_SIZE;
+        const OFFSET: usize = RETRYABLE_FLAG_SIZE + Address::LEN + AssetId::LEN;
         const AMOUNT_START: usize = OFFSET;
         const AMOUNT_END: usize = AMOUNT_START + AMOUNT_SIZE;
         u64::from_be_bytes(
@@ -173,7 +173,7 @@ impl CoinsToSpendIndexKey {
 
     pub fn foreign_key_bytes(&self) -> Vec<u8> {
         const OFFSET: usize =
-            Address::LEN + AssetId::LEN + RETRYABLE_FLAG_SIZE + AMOUNT_SIZE;
+            RETRYABLE_FLAG_SIZE + Address::LEN + AssetId::LEN + AMOUNT_SIZE;
         self.0[OFFSET..].into()
     }
 }
@@ -239,7 +239,7 @@ mod test {
 
     // Base part of the coins to spend index key.
     const COIN_TO_SPEND_BASE_KEY_LEN: usize =
-        Address::LEN + AssetId::LEN + RETRYABLE_FLAG_SIZE + AMOUNT_SIZE;
+        RETRYABLE_FLAG_SIZE + Address::LEN + AssetId::LEN + AMOUNT_SIZE;
 
     // Total length of the coins to spend index key for coins.
     const COIN_TO_SPEND_COIN_KEY_LEN: usize =
