@@ -44,7 +44,6 @@ use async_graphql::{
 };
 use fuel_core_storage::{
     codec::primitive::utxo_id_to_bytes,
-    iter::BoxedIter,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -543,7 +542,7 @@ fn select_coins_to_spend(
 }
 
 fn big_coins(
-    coins_iter: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
+    coins_iter: impl Iterator<Item = StorageResult<CoinsToSpendIndexEntry>>,
     total: u64,
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
@@ -554,7 +553,7 @@ fn big_coins(
 }
 
 fn dust_coins(
-    coins_iter_back: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
+    coins_iter_back: impl Iterator<Item = StorageResult<CoinsToSpendIndexEntry>>,
     last_big_coin: &CoinsToSpendIndexEntry,
     max_dust_count: u16,
     excluded_ids: &ExcludedKeysAsBytes,
@@ -565,7 +564,7 @@ fn dust_coins(
 }
 
 fn select_coins_until<F>(
-    coins_iter: BoxedIter<StorageResult<CoinsToSpendIndexEntry>>,
+    coins_iter: impl Iterator<Item = StorageResult<CoinsToSpendIndexEntry>>,
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
     predicate: F,
@@ -745,10 +744,7 @@ mod tests {
         let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
 
         // When
-        let result =
-            select_coins_until(coins.into_iter().into_boxed(), MAX, &excluded, |_, _| {
-                false
-            })
+        let result = select_coins_until(coins.into_iter(), MAX, &excluded, |_, _| false)
             .expect("should select coins");
 
         // Then
@@ -773,10 +769,7 @@ mod tests {
         let excluded = ExcludedKeysAsBytes::new(vec![excluded_coin_bytes], vec![]);
 
         // When
-        let result =
-            select_coins_until(coins.into_iter().into_boxed(), MAX, &excluded, |_, _| {
-                false
-            })
+        let result = select_coins_until(coins.into_iter(), MAX, &excluded, |_, _| false)
             .expect("should select coins");
 
         // Then
@@ -798,9 +791,8 @@ mod tests {
             |_, total| total > TOTAL;
 
         // When
-        let result =
-            select_coins_until(coins.into_iter().into_boxed(), MAX, &excluded, predicate)
-                .expect("should select coins");
+        let result = select_coins_until(coins.into_iter(), MAX, &excluded, predicate)
+            .expect("should select coins");
 
         // Then
         assert_eq!(result.0, 1 + 2 + 3 + 4); // Keep selecting until total is greater than 7.
