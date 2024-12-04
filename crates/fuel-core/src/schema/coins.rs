@@ -42,6 +42,7 @@ use async_graphql::{
     },
     Context,
 };
+use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     codec::primitive::utxo_id_to_bytes,
     Error as StorageError,
@@ -63,6 +64,7 @@ use fuel_core_types::{
     },
     fuel_types,
 };
+use futures::Stream;
 use itertools::Itertools;
 use rand::Rng;
 use tokio_stream::StreamExt;
@@ -355,6 +357,7 @@ impl CoinQuery {
                 max_input,
                 read_view.as_ref(),
             )
+            .await
         } else {
             let base_asset_id = params.base_asset_id();
             coins_to_spend_without_cache(
@@ -370,7 +373,7 @@ impl CoinQuery {
     }
 }
 
-fn coins_to_spend_with_cache(
+async fn coins_to_spend_with_cache(
     owner: fuel_tx::Address,
     query_per_asset: Vec<SpendQueryElementInput>,
     excluded_ids: Option<ExcludeInput>,
@@ -413,7 +416,9 @@ fn coins_to_spend_with_cache(
             total_amount,
             max,
             &excluded,
-        )?;
+            db.batch_size,
+        )
+        .await?;
 
         let mut coins_per_asset = vec![];
         for coin_or_message_id in into_coin_id(selected_iter, max as usize)? {
@@ -499,21 +504,25 @@ async fn coins_to_spend_without_cache(
     Ok(all_coins)
 }
 
-fn select_coins_to_spend(
+async fn select_coins_to_spend(
     CoinsToSpendIndexIter {
         big_coins_iter,
         dust_coins_iter,
-    }: CoinsToSpendIndexIter,
+    }: CoinsToSpendIndexIter<'_>,
     total: u64,
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
+    batch_size: usize,
 ) -> StorageResult<Vec<CoinsToSpendIndexEntry>> {
     if total == 0 && max == 0 {
         return Ok(vec![]);
     }
 
+    let big_coins_stream = futures::stream::iter(big_coins_iter).yield_each(batch_size);
+    let dust_coins_stream = futures::stream::iter(dust_coins_iter).yield_each(batch_size);
+
     let (selected_big_coins_total, selected_big_coins) =
-        big_coins(big_coins_iter, total, max, excluded_ids)?;
+        big_coins(big_coins_stream, total, max, excluded_ids).await?;
 
     if selected_big_coins_total < total {
         return Ok(vec![]);
@@ -530,41 +539,47 @@ fn select_coins_to_spend(
 
     let max_dust_count = max_dust_count(max, number_of_big_coins);
     let (dust_coins_total, selected_dust_coins) = dust_coins(
-        dust_coins_iter,
+        dust_coins_stream,
         last_selected_big_coin,
         max_dust_count,
         excluded_ids,
-    )?;
+    )
+    .await?;
     let retained_big_coins_iter =
         skip_big_coins_up_to_amount(selected_big_coins, dust_coins_total);
 
     Ok((retained_big_coins_iter.chain(selected_dust_coins)).collect())
 }
 
-fn big_coins(
-    coins_iter: impl Iterator<Item = StorageResult<CoinsToSpendIndexEntry>>,
+async fn big_coins(
+    big_coins_stream: impl Stream<Item = StorageResult<CoinsToSpendIndexEntry>> + Unpin,
     total: u64,
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
 ) -> StorageResult<(u64, Vec<CoinsToSpendIndexEntry>)> {
-    select_coins_until(coins_iter, max, excluded_ids, |_, total_so_far| {
+    select_coins_until(big_coins_stream, max, excluded_ids, |_, total_so_far| {
         total_so_far >= total
     })
+    .await
 }
 
-fn dust_coins(
-    coins_iter_back: impl Iterator<Item = StorageResult<CoinsToSpendIndexEntry>>,
+async fn dust_coins(
+    dust_coins_stream: impl Stream<Item = StorageResult<CoinsToSpendIndexEntry>> + Unpin,
     last_big_coin: &CoinsToSpendIndexEntry,
     max_dust_count: u16,
     excluded_ids: &ExcludedKeysAsBytes,
 ) -> StorageResult<(u64, Vec<CoinsToSpendIndexEntry>)> {
-    select_coins_until(coins_iter_back, max_dust_count, excluded_ids, |coin, _| {
-        coin == last_big_coin
-    })
+    select_coins_until(
+        dust_coins_stream,
+        max_dust_count,
+        excluded_ids,
+        |coin, _| coin == last_big_coin,
+    )
+    .await
 }
 
-fn select_coins_until<F>(
-    coins_iter: impl Iterator<Item = StorageResult<CoinsToSpendIndexEntry>>,
+async fn select_coins_until<F>(
+    mut coins_stream: impl Stream<Item = StorageResult<CoinsToSpendIndexEntry>> + Unpin,
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
     predicate: F,
@@ -575,7 +590,7 @@ where
     let mut coins_total_value: u64 = 0;
     let mut count = 0;
     let mut coins = Vec::with_capacity(max as usize);
-    for coin in coins_iter {
+    while let Some(coin) = coins_stream.next().await {
         let coin = coin?;
         if !is_excluded(&coin, excluded_ids)? {
             if count >= max || predicate(&coin, coins_total_value) {
@@ -706,6 +721,8 @@ mod tests {
         CoinsToSpendIndexEntry,
     };
 
+    const BATCH_SIZE: usize = 1;
+
     fn setup_test_coins(
         coins: impl IntoIterator<Item = u8>,
     ) -> Vec<Result<CoinsToSpendIndexEntry, fuel_core_storage::Error>> {
@@ -734,8 +751,8 @@ mod tests {
         coins
     }
 
-    #[test]
-    fn select_coins_until_respects_max() {
+    #[tokio::test]
+    async fn select_coins_until_respects_max() {
         // Given
         const MAX: u16 = 3;
 
@@ -744,7 +761,11 @@ mod tests {
         let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
 
         // When
-        let result = select_coins_until(coins.into_iter(), MAX, &excluded, |_, _| false)
+        let result =
+            select_coins_until(futures::stream::iter(coins), MAX, &excluded, |_, _| {
+                false
+            })
+            .await
             .expect("should select coins");
 
         // Then
@@ -752,8 +773,8 @@ mod tests {
         assert_eq!(result.1.len(), 3);
     }
 
-    #[test]
-    fn select_coins_until_respects_excluded_ids() {
+    #[tokio::test]
+    async fn select_coins_until_respects_excluded_ids() {
         // Given
         const MAX: u16 = u16::MAX;
 
@@ -769,7 +790,11 @@ mod tests {
         let excluded = ExcludedKeysAsBytes::new(vec![excluded_coin_bytes], vec![]);
 
         // When
-        let result = select_coins_until(coins.into_iter(), MAX, &excluded, |_, _| false)
+        let result =
+            select_coins_until(futures::stream::iter(coins), MAX, &excluded, |_, _| {
+                false
+            })
+            .await
             .expect("should select coins");
 
         // Then
@@ -777,8 +802,8 @@ mod tests {
         assert_eq!(result.1.len(), 4);
     }
 
-    #[test]
-    fn select_coins_until_respects_predicate() {
+    #[tokio::test]
+    async fn select_coins_until_respects_predicate() {
         // Given
         const MAX: u16 = u16::MAX;
         const TOTAL: u64 = 7;
@@ -791,16 +816,18 @@ mod tests {
             |_, total| total > TOTAL;
 
         // When
-        let result = select_coins_until(coins.into_iter(), MAX, &excluded, predicate)
-            .expect("should select coins");
+        let result =
+            select_coins_until(futures::stream::iter(coins), MAX, &excluded, predicate)
+                .await
+                .expect("should select coins");
 
         // Then
         assert_eq!(result.0, 1 + 2 + 3 + 4); // Keep selecting until total is greater than 7.
         assert_eq!(result.1.len(), 4);
     }
 
-    #[test]
-    fn already_selected_big_coins_are_never_reselected_as_dust() {
+    #[tokio::test]
+    async fn already_selected_big_coins_are_never_reselected_as_dust() {
         // Given
         const MAX: u16 = u16::MAX;
         const TOTAL: u64 = 101;
@@ -818,8 +845,10 @@ mod tests {
         let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
 
         // When
-        let result = select_coins_to_spend(coins_to_spend_iter, TOTAL, MAX, &excluded)
-            .expect("should select coins");
+        let result =
+            select_coins_to_spend(coins_to_spend_iter, TOTAL, MAX, &excluded, BATCH_SIZE)
+                .await
+                .expect("should select coins");
 
         let mut results = result
             .into_iter()
@@ -852,8 +881,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn selection_algorithm_should_bail_on_error() {
+    #[tokio::test]
+    async fn selection_algorithm_should_bail_on_error() {
         // Given
         const MAX: u16 = u16::MAX;
         const TOTAL: u64 = 101;
@@ -879,7 +908,9 @@ mod tests {
         };
 
         // When
-        let result = select_coins_to_spend(coins_to_spend_iter, TOTAL, MAX, &excluded);
+        let result =
+            select_coins_to_spend(coins_to_spend_iter, TOTAL, MAX, &excluded, BATCH_SIZE)
+                .await;
 
         // Then
         assert!(
