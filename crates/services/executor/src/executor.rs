@@ -164,7 +164,14 @@ use alloc::{
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
-pub const MAX_TX_COUNT: u16 = u16::MAX.saturating_sub(1);
+#[cfg(not(feature = "test-helpers"))]
+pub const fn max_tx_count() -> u16 {
+    u16::MAX.saturating_sub(1)
+}
+#[cfg(feature = "test-helpers")]
+pub const fn max_tx_count() -> u16 {
+    1024
+}
 
 pub struct OnceTransactionsSource {
     transactions: ParkingMutex<Vec<MaybeCheckedTransaction>>,
@@ -593,7 +600,7 @@ where
         // When processing l2 transactions, we must take into account transactions from the l1
         // that have been included in the block already (stored in `data.tx_count`), as well
         // as the final mint transaction.
-        let mut remaining_tx_count = MAX_TX_COUNT.saturating_sub(data.tx_count);
+        let mut remaining_tx_count = max_tx_count().saturating_sub(data.tx_count);
 
         let mut regular_tx_iter = l2_tx_source
             .next(
@@ -636,7 +643,7 @@ where
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
                 remaining_block_transaction_size_limit =
                     block_transaction_size_limit.saturating_sub(data.used_size);
-                remaining_tx_count = MAX_TX_COUNT.saturating_sub(data.tx_count);
+                remaining_tx_count = max_tx_count().saturating_sub(data.tx_count);
             }
 
             regular_tx_iter = l2_tx_source
@@ -1619,7 +1626,12 @@ where
             .iter()
             .map(|input| input.predicate_gas_used())
             .collect();
-        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
+        let ready_tx = checked_tx.into_ready(
+            gas_price,
+            gas_costs,
+            fee_params,
+            Some(*header.height()),
+        )?;
 
         let mut vm = Interpreter::with_storage(
             memory,

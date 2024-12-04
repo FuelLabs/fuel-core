@@ -17,7 +17,7 @@ use fuel_core_sync::state::State;
 use std::time::Duration;
 use tokio::runtime::Runtime;
 
-async fn execute_import(import: PressureImport, shutdown: &mut StateWatcher) {
+async fn execute_import(mut import: PressureImport, shutdown: &mut StateWatcher) {
     import.import(shutdown).await.unwrap();
 }
 

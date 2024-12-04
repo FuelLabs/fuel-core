@@ -10,7 +10,7 @@ use crate::client::{
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Balance {
     pub owner: Address,
-    pub amount: u64,
+    pub amount: u128,
     pub asset_id: AssetId,
 }
 

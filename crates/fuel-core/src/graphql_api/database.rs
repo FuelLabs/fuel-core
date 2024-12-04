@@ -68,6 +68,8 @@ use std::{
     sync::Arc,
 };
 
+use super::ports::worker;
+
 mod arc_wrapper;
 
 /// The on-chain view of the database used by the [`ReadView`] to fetch on-chain data.
@@ -86,6 +88,8 @@ pub struct ReadDatabase {
     on_chain: Box<dyn AtomicView<LatestView = OnChainView>>,
     /// The off-chain database view provider.
     off_chain: Box<dyn AtomicView<LatestView = OffChainView>>,
+    /// The flag that indicates whether the Balances cache table is enabled.
+    balances_enabled: bool,
 }
 
 impl ReadDatabase {
@@ -95,19 +99,22 @@ impl ReadDatabase {
         genesis_height: BlockHeight,
         on_chain: OnChain,
         off_chain: OffChain,
-    ) -> Self
+    ) -> Result<Self, StorageError>
     where
         OnChain: AtomicView + 'static,
-        OffChain: AtomicView + 'static,
+        OffChain: AtomicView + worker::OffChainDatabase + 'static,
         OnChain::LatestView: OnChainDatabase,
         OffChain::LatestView: OffChainDatabase,
     {
-        Self {
+        let balances_enabled = off_chain.balances_enabled()?;
+
+        Ok(Self {
             batch_size,
             genesis_height,
             on_chain: Box::new(ArcWrapper::new(on_chain)),
             off_chain: Box::new(ArcWrapper::new(off_chain)),
-        }
+            balances_enabled,
+        })
     }
 
     /// Creates a consistent view of the database.
@@ -120,6 +127,7 @@ impl ReadDatabase {
             genesis_height: self.genesis_height,
             on_chain: self.on_chain.latest_view()?,
             off_chain: self.off_chain.latest_view()?,
+            balances_enabled: self.balances_enabled,
         })
     }
 
@@ -135,6 +143,7 @@ pub struct ReadView {
     pub(crate) genesis_height: BlockHeight,
     pub(crate) on_chain: OnChainView,
     pub(crate) off_chain: OffChainView,
+    pub(crate) balances_enabled: bool,
 }
 
 impl ReadView {

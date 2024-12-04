@@ -103,7 +103,6 @@ impl Simulator {
             // Increase to make the da price change faster
             max_da_gas_price_change_percent: 10,
             total_da_rewards_excess: 0,
-            da_recorded_block_height: 0,
             // Change to adjust the cost per byte of the DA on block 0
             latest_da_cost_per_byte: 0,
             projected_total_da_cost: 0,
@@ -114,6 +113,7 @@ impl Simulator {
             last_profit: 0,
             second_to_last_profit: 0,
             l2_activity: always_normal_activity,
+            unrecorded_blocks_bytes: 0,
         }
     }
 
@@ -160,10 +160,9 @@ impl Simulator {
 
             // Update DA blocks on the occasion there is one
             if let Some((range, cost)) = da_block {
-                for height in range {
-                    updater
-                        .update_da_record_data(height..(height + 1), cost)
-                        .unwrap();
+                for height in range.to_owned() {
+                    let block_heights: Vec<u32> = (height..(height) + 1).collect();
+                    updater.update_da_record_data(&block_heights, cost).unwrap();
                     actual_costs.push(updater.latest_known_total_da_cost_excess)
                 }
             }

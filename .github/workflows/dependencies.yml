@@ -7,7 +7,7 @@ on:
     # Run weekly
     - cron: '0 0 * * Sun'
   workflow_dispatch:
-    # Needed so we can run it manually
+  # Needed so we can run it manually
 permissions:
   contents: read
 defaults:
@@ -16,7 +16,7 @@ defaults:
 env:
   # So cargo doesn't complain about unstable features
   RUSTC_BOOTSTRAP: 1
-  RUST_VERSION: 1.79.0
+  RUST_VERSION: 1.81.0
   PR_TITLE: Weekly `cargo update`
   PR_MESSAGE: |
     Automation to keep dependencies in `Cargo.lock` current.
