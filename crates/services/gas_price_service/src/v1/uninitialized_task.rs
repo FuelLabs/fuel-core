@@ -38,10 +38,7 @@ use crate::{
             initialize_algorithm,
             GasPriceServiceV1,
         },
-        uninitialized_task::fuel_storage_unrecorded_blocks::{
-            storage::UnrecordedBlocksColumn,
-            FuelStorageUnrecordedBlocks,
-        },
+        uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
     },
 };
 use anyhow::Error;
@@ -95,6 +92,7 @@ pub struct UninitializedTask<
 }
 
 impl<
+        'a,
         L2DataStore,
         L2DataStoreView,
         GasPriceStore,
@@ -108,8 +106,8 @@ where
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     GasPriceStore: GasPriceData,
     PersistedData: MetadataStorage,
-    PersistedData: TransactionableStorage<'static>,
-    PersistedData::Transaction: MetadataStorage + UnrecordedBlocks,
+    PersistedData: TransactionableStorage + 'a,
+    PersistedData::Transaction<'a>: MetadataStorage + UnrecordedBlocks,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
 {
@@ -235,10 +233,10 @@ where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     GasPriceStore: GasPriceData,
-    DA: DaBlockCostsSource,
-    SettingsProvider: GasPriceSettingsProvider,
-    PersistedData: MetadataStorage + TransactionableStorage<'static>,
-    <PersistedData as TransactionableStorage<'static>>::Transaction:
+    DA: DaBlockCostsSource + 'static,
+    SettingsProvider: GasPriceSettingsProvider + 'static,
+    PersistedData: MetadataStorage + TransactionableStorage + 'static,
+    <PersistedData as TransactionableStorage>::Transaction<'static>:
         MetadataStorage + UnrecordedBlocks,
 {
     const NAME: &'static str = "GasPriceServiceV1";
@@ -260,6 +258,7 @@ where
 }
 
 fn sync_gas_price_db_with_on_chain_storage<
+    'a,
     L2DataStore,
     L2DataStoreView,
     SettingsProvider,
@@ -276,8 +275,8 @@ where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     SettingsProvider: GasPriceSettingsProvider,
-    PersistedData: MetadataStorage + TransactionableStorage<'static>,
-    <PersistedData as TransactionableStorage<'static>>::Transaction:
+    PersistedData: MetadataStorage + TransactionableStorage + 'a,
+    <PersistedData as TransactionableStorage>::Transaction<'a>:
         MetadataStorage + UnrecordedBlocks,
 {
     let metadata = persisted_data
@@ -306,7 +305,13 @@ where
     Ok(())
 }
 
-fn sync_v1_metadata<L2DataStore, L2DataStoreView, SettingsProvider, StorageTxGenerator>(
+fn sync_v1_metadata<
+    'a,
+    L2DataStore,
+    L2DataStoreView,
+    SettingsProvider,
+    StorageTxGenerator,
+>(
     settings: &SettingsProvider,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
@@ -318,8 +323,8 @@ where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     SettingsProvider: GasPriceSettingsProvider,
-    StorageTxGenerator: TransactionableStorage<'static>,
-    <StorageTxGenerator as TransactionableStorage<'static>>::Transaction:
+    StorageTxGenerator: TransactionableStorage + 'a,
+    <StorageTxGenerator as TransactionableStorage>::Transaction<'a>:
         MetadataStorage + UnrecordedBlocks,
 {
     let first = metadata_height.saturating_add(1);
@@ -357,7 +362,7 @@ where
         )?;
         let metadata: UpdaterMetadata = updater.clone().into();
         tx.set_metadata(&metadata)?;
-        storage_tx_generator.commit_transaction(tx)?;
+        StorageTxGenerator::commit_transaction(tx)?;
     }
 
     Ok(())
@@ -397,8 +402,8 @@ where
     GasPriceStore: GasPriceData,
     SettingsProvider: GasPriceSettingsProvider,
     DA: DaBlockCostsSource,
-    PersistedData: MetadataStorage + TransactionableStorage<'static>,
-    PersistedData::Transaction: MetadataStorage + UnrecordedBlocks,
+    PersistedData: MetadataStorage + TransactionableStorage + 'static,
+    PersistedData::Transaction<'static>: MetadataStorage + UnrecordedBlocks,
 {
     let v1_config = config.v1().ok_or(anyhow::anyhow!("Expected V1 config"))?;
     let gas_price_init = UninitializedTask::new(

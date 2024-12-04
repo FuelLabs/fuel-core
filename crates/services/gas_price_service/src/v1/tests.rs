@@ -36,10 +36,7 @@ use crate::{
             GasPriceServiceV1,
         },
         uninitialized_task::{
-            fuel_storage_unrecorded_blocks::{
-                storage::UnrecordedBlocksColumn,
-                FuelStorageUnrecordedBlocks,
-            },
+            fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
             UninitializedTask,
         },
     },
@@ -214,7 +211,7 @@ fn different_arb_config() -> V1AlgorithmConfig {
     }
 }
 
-fn database() -> StorageTransaction<InMemoryStorage<UnrecordedBlocksColumn>> {
+fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
     InMemoryStorage::default().into_transaction()
 }
 
@@ -237,18 +234,16 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let config = zero_threshold_arbitrary_config();
     let height = 0;
     let inner = database();
-    let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
     let (algo_updater, shared_algo) =
-        initialize_algorithm(&config, height, &metadata_storage, unrecorded_blocks)
-            .unwrap();
+        initialize_algorithm(&config, height, &metadata_storage).unwrap();
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
-        metadata_storage,
         shared_algo,
         algo_updater,
         da_source_service,
+        inner,
     );
 
     let read_algo = service.next_block_algorithm();
@@ -287,18 +282,16 @@ async fn run__new_l2_block_saves_old_metadata() {
     let config = zero_threshold_arbitrary_config();
     let height = 0;
     let inner = database();
-    let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
     let (algo_updater, shared_algo) =
-        initialize_algorithm(&config, height, &metadata_storage, unrecorded_blocks)
-            .unwrap();
+        initialize_algorithm(&config, height, &metadata_storage).unwrap();
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
-        metadata_storage,
         shared_algo,
         algo_updater,
         da_source_service,
+        inner,
     );
     let mut watcher = StateWatcher::default();
 
@@ -404,7 +397,6 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
     let inner = database();
-    let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
 
     // when
     let service = UninitializedTask::new(
@@ -413,10 +405,9 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
         settings,
         block_stream,
         gas_price_db,
-        metadata_storage,
         da_cost_source,
         on_chain_db,
-        unrecorded_blocks,
+        inner,
     )
     .unwrap();
 
@@ -486,7 +477,6 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
     let inner = database();
-    let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
 
     // when
     let res = UninitializedTask::new(
@@ -495,10 +485,9 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
         settings,
         block_stream,
         gas_price_db,
-        metadata_storage,
         da_cost_source,
         on_chain_db,
-        unrecorded_blocks,
+        inner,
     );
 
     // then

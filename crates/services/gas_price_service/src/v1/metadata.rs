@@ -1,15 +1,9 @@
-use crate::{
-    v0::metadata::V0Metadata,
-    v1::uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
-};
+use crate::v0::metadata::V0Metadata;
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     L2ActivityTracker,
 };
-use std::{
-    collections::BTreeMap,
-    num::NonZeroU64,
-};
+use std::num::NonZeroU64;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct V1Metadata {

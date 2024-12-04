@@ -11,6 +11,7 @@ use crate::{
         fuel_core_storage_adapter::storage::{
             GasPriceColumn,
             GasPriceMetadata,
+            UnrecordedBlocksTable,
         },
         updater_metadata::UpdaterMetadata,
     },
@@ -46,6 +47,12 @@ use fuel_core_types::{
         },
         Transaction,
     },
+};
+use fuel_gas_price_algorithm::v1::{
+    Bytes,
+    Error,
+    Height,
+    UnrecordedBlocks,
 };
 use std::cmp::min;
 
@@ -86,17 +93,55 @@ where
     }
 }
 
+pub struct WrappedStorageTransaction<'a, Storage> {
+    inner: StorageTransaction<&'a mut StructuredStorage<Storage>>,
+}
+
+impl<'a, Storage> WrappedStorageTransaction<'a, Storage> {
+    fn wrap(inner: StorageTransaction<&'a mut StructuredStorage<Storage>>) -> Self {
+        Self { inner }
+    }
+}
+
+impl<'a, Storage> UnrecordedBlocks for WrappedStorageTransaction<'a, Storage>
+where
+    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
+{
+    fn insert(&mut self, height: Height, bytes: Bytes) -> Result<(), Error> {
+        self.inner
+            .storage_as_mut::<UnrecordedBlocksTable>()
+            .insert(&height, &bytes)
+            .map_err(|err| {
+                Error::CouldNotInsertUnrecordedBlock(format!("Error: {:?}", err))
+            })?;
+        Ok(())
+    }
+
+    fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, Error> {
+        let bytes = self
+            .inner
+            .storage_as_mut::<UnrecordedBlocksTable>()
+            .take(height)
+            .map_err(|err| {
+                Error::CouldNotRemoveUnrecordedBlock(format!("Error: {:?}", err))
+            })?;
+        Ok(bytes)
+    }
+}
+
 impl<Storage> TransactionableStorage for StructuredStorage<Storage>
 where
     Storage: Modifiable + Send + Sync,
 {
-    type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
+    type Transaction<'a> = WrappedStorageTransaction<'a, Storage> where Self: 'a;
 
     fn begin_transaction<'a>(&'a mut self) -> GasPriceResult<Self::Transaction<'a>>
     where
         Self: 'a,
     {
-        Ok(self.write_transaction())
+        let tx = self.write_transaction();
+        let wrapped = WrappedStorageTransaction::wrap(tx);
+        Ok(wrapped)
     }
 
     fn commit_transaction<'a>(transaction: Self::Transaction<'a>) -> GasPriceResult<()>
@@ -104,8 +149,40 @@ where
         Self: 'a,
     {
         transaction
+            .inner
             .commit()
             .map_err(|err| GasPriceError::CouldNotCommit(err.into()))?;
+        Ok(())
+    }
+}
+
+impl<'a, Storage> MetadataStorage for WrappedStorageTransaction<'a, Storage>
+where
+    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
+{
+    fn get_metadata(
+        &self,
+        block_height: &BlockHeight,
+    ) -> GasPriceResult<Option<UpdaterMetadata>> {
+        let metadata = self
+            .inner
+            .storage::<GasPriceMetadata>()
+            .get(block_height)
+            .map_err(|err| GasPriceError::CouldNotFetchMetadata {
+                source_error: err.into(),
+            })?;
+        Ok(metadata.map(|inner| inner.into_owned()))
+    }
+
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
+        let block_height = metadata.l2_block_height();
+        self.inner
+            .storage_as_mut::<GasPriceMetadata>()
+            .insert(&block_height, metadata)
+            .map_err(|err| GasPriceError::CouldNotSetMetadata {
+                block_height,
+                source_error: err.into(),
+            })?;
         Ok(())
     }
 }

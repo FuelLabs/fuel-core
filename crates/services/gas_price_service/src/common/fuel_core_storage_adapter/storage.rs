@@ -27,6 +27,7 @@ use fuel_core_types::fuel_types::BlockHeight;
 pub enum GasPriceColumn {
     Metadata = 0,
     State = 1,
+    UnrecordedBlocks = 2,
 }
 
 impl GasPriceColumn {
@@ -66,5 +67,25 @@ impl TableWithBlueprint for GasPriceMetadata {
 
     fn column() -> Self::Column {
         GasPriceColumn::State
+    }
+}
+
+/// The storage for all the unrecorded blocks from gas price algorithm, used for guessing the cost
+/// for future blocks to be recorded on the DA chain
+pub struct UnrecordedBlocksTable;
+
+impl Mappable for UnrecordedBlocksTable {
+    type Key = Self::OwnedKey;
+    type OwnedKey = u32;
+    type Value = Self::OwnedValue;
+    type OwnedValue = u64;
+}
+
+impl TableWithBlueprint for UnrecordedBlocksTable {
+    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Column = GasPriceColumn;
+
+    fn column() -> Self::Column {
+        GasPriceColumn::UnrecordedBlocks
     }
 }

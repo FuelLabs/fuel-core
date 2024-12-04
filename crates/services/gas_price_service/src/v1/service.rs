@@ -150,7 +150,6 @@ where
     }
 
     fn validate_block_gas_capacity(
-        &self,
         block_gas_capacity: u64,
     ) -> anyhow::Result<NonZeroU64> {
         NonZeroU64::new(block_gas_capacity)
@@ -177,7 +176,7 @@ where
         StorageTxProvider::Transaction<'a>: UnrecordedBlocks,
     {
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
-        let capacity = self.validate_block_gas_capacity(block_gas_capacity)?;
+        let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
 
         self.algorithm_updater.update_l2_block_data(
             height,
@@ -189,6 +188,8 @@ where
         )?;
 
         StorageTxProvider::commit_transaction(storage_tx)?;
+        let new_algo = self.algorithm_updater.algorithm();
+        self.shared_algo.update(new_algo).await;
         Ok(())
     }
 
@@ -223,6 +224,9 @@ where
                 let mut tx = self.storage_tx_provider.begin_transaction()?;
                 tx.set_metadata(&metadata).map_err(|err| anyhow!(err))?;
                 StorageTxProvider::commit_transaction(tx)?;
+                let new_algo = self.algorithm_updater.algorithm();
+                // self.update(new_algo).await;
+                self.shared_algo.update(new_algo).await;
             }
             BlockInfo::Block {
                 height,
@@ -242,9 +246,6 @@ where
             }
         }
 
-        let new_algo = self.algorithm_updater.algorithm();
-        // self.update(new_algo).await;
-        self.shared_algo.update(new_algo).await;
         Ok(())
     }
 
@@ -262,10 +263,10 @@ where
 impl<L2, DA, StorageTxProvider> RunnableTask
     for GasPriceServiceV1<L2, DA, StorageTxProvider>
 where
-    L2: L2BlockSource,
-    DA: DaBlockCostsSource,
-    StorageTxProvider: TransactionableStorage<'static>,
-    StorageTxProvider::Transaction: UnrecordedBlocks + MetadataStorage,
+    L2: L2BlockSource + 'static,
+    DA: DaBlockCostsSource + 'static,
+    StorageTxProvider: TransactionableStorage + 'static,
+    StorageTxProvider::Transaction<'static>: UnrecordedBlocks + MetadataStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -377,6 +378,7 @@ mod tests {
 
     use crate::{
         common::{
+            fuel_core_storage_adapter::storage::GasPriceColumn,
             l2_block_source::L2BlockSource,
             updater_metadata::UpdaterMetadata,
             utils::{
@@ -396,10 +398,7 @@ mod tests {
                 initialize_algorithm,
                 GasPriceServiceV1,
             },
-            uninitialized_task::fuel_storage_unrecorded_blocks::{
-                storage::UnrecordedBlocksColumn,
-                FuelStorageUnrecordedBlocks,
-            },
+            uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
         },
     };
 
@@ -442,7 +441,7 @@ mod tests {
         }
     }
 
-    fn database() -> StorageTransaction<InMemoryStorage<UnrecordedBlocksColumn>> {
+    fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
         InMemoryStorage::default().into_transaction()
     }
 
@@ -481,14 +480,8 @@ mod tests {
             block_activity_threshold: 20,
         };
         let inner = database();
-        let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
-        let (algo_updater, shared_algo) = initialize_algorithm(
-            &config,
-            l2_block_height,
-            &metadata_storage,
-            unrecorded_blocks,
-        )
-        .unwrap();
+        let (algo_updater, shared_algo) =
+            initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();
 
         let notifier = Arc::new(tokio::sync::Notify::new());
         let dummy_da_source = DaSourceService::new(
@@ -501,10 +494,10 @@ mod tests {
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
-            metadata_storage,
             shared_algo,
             algo_updater,
             dummy_da_source,
+            inner,
         );
         let read_algo = service.next_block_algorithm();
         let mut watcher = StateWatcher::default();
@@ -554,14 +547,8 @@ mod tests {
             block_activity_threshold: 20,
         };
         let inner = database();
-        let unrecorded_blocks = FuelStorageUnrecordedBlocks::new(inner);
-        let (algo_updater, shared_algo) = initialize_algorithm(
-            &config,
-            block_height,
-            &metadata_storage,
-            unrecorded_blocks,
-        )
-        .unwrap();
+        let (algo_updater, shared_algo) =
+            initialize_algorithm(&config, block_height, &metadata_storage).unwrap();
 
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_source = DaSourceService::new(
@@ -579,10 +566,10 @@ mod tests {
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
-            metadata_storage,
             shared_algo,
             algo_updater,
             da_source,
+            inner,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
