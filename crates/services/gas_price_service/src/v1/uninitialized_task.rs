@@ -26,9 +26,15 @@ use crate::{
     },
     v1::{
         algorithm::SharedV1Algorithm,
-        da_source_service::service::{
-            DaBlockCostsSource,
-            DaSourceService,
+        da_source_service::{
+            block_committer_costs::{
+                BlockCommitterApi,
+                BlockCommitterDaBlockCosts,
+            },
+            service::{
+                DaBlockCostsSource,
+                DaSourceService,
+            },
         },
         metadata::{
             v1_algorithm_from_metadata,
@@ -107,7 +113,8 @@ where
     GasPriceStore: GasPriceData,
     PersistedData: MetadataStorage,
     PersistedData: TransactionableStorage,
-    for<'a> PersistedData::Transaction<'a>: MetadataStorage + UnrecordedBlocks,
+    for<'a> PersistedData::Transaction<'a>:
+        MetadataStorage + UnrecordedBlocks + DaSequenceNumberTracker,
     DA: DaBlockCostsSource,
     SettingsProvider: GasPriceSettingsProvider,
 {
@@ -146,7 +153,7 @@ where
         Ok(task)
     }
 
-    pub fn init(
+    pub async fn init(
         mut self,
     ) -> anyhow::Result<
         GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, PersistedData>,
@@ -176,6 +183,11 @@ where
         // TODO: Add to config
         // https://github.com/FuelLabs/fuel-core/issues/2140
         let poll_interval = None;
+        let tx = self.persisted_data.begin_transaction()?;
+        if let Some(sequence_number) = tx.get_sequence_number(&metadata_height.into())? {
+            self.da_source.set_last_value(sequence_number).await?;
+        }
+        drop(tx);
         let da_service = DaSourceService::new(self.da_source, poll_interval);
 
         if BlockHeight::from(latest_block_height) == self.genesis_block_height
@@ -253,7 +265,7 @@ where
         _state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        UninitializedTask::init(self)
+        UninitializedTask::init(self).await
     }
 }
 

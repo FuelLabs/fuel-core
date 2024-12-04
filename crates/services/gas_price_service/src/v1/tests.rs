@@ -8,6 +8,7 @@ use crate::{
             },
             GasPriceSettings,
             GasPriceSettingsProvider,
+            NewStorageTransaction,
         },
         l2_block_source::L2BlockSource,
         updater_metadata::UpdaterMetadata,
@@ -18,6 +19,7 @@ use crate::{
         },
     },
     ports::{
+        DaSequenceNumberTracker,
         GasPriceData,
         L2Data,
         MetadataStorage,
@@ -26,6 +28,10 @@ use crate::{
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
+            block_committer_costs::{
+                BlockCommitterApi,
+                RawDaBlockCosts,
+            },
             service::{
                 DaBlockCostsSource,
                 DaSourceService,
@@ -47,7 +53,10 @@ use crate::{
         },
     },
 };
-use anyhow::anyhow;
+use anyhow::{
+    anyhow,
+    Result,
+};
 use fuel_core_services::{
     stream::{
         BoxStream,
@@ -73,6 +82,7 @@ use fuel_core_types::{
         block::Block,
         header::ConsensusParametersVersion,
     },
+    fuel_asm::op::exp,
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::block_importer::{
@@ -89,8 +99,14 @@ use fuel_gas_price_algorithm::v1::{
 };
 use std::{
     num::NonZeroU64,
-    ops::Deref,
-    sync::Arc,
+    ops::{
+        Deref,
+        Range,
+    },
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 use tokio::sync::mpsc::Receiver;
 
@@ -156,7 +172,7 @@ impl TransactionableStorage for ErroringPersistedData {
         todo!()
     }
 
-    fn commit_transaction(transaction: Self::Transaction<'_>) -> GasPriceResult<()> {
+    fn commit_transaction(_transaction: Self::Transaction<'_>) -> GasPriceResult<()> {
         todo!()
     }
 }
@@ -164,28 +180,46 @@ impl TransactionableStorage for ErroringPersistedData {
 impl MetadataStorage for UnimplementedStorageTx {
     fn get_metadata(
         &self,
-        block_height: &BlockHeight,
+        _block_height: &BlockHeight,
     ) -> GasPriceResult<Option<UpdaterMetadata>> {
-        todo!()
+        unimplemented!()
     }
 
-    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
-        todo!()
+    fn set_metadata(&mut self, _metadata: &UpdaterMetadata) -> GasPriceResult<()> {
+        unimplemented!()
     }
 }
 
 impl UnrecordedBlocks for UnimplementedStorageTx {
-    fn insert(&mut self, height: Height, bytes: Bytes) -> Result<(), Error> {
-        todo!()
+    fn insert(&mut self, _height: Height, _bytes: Bytes) -> Result<(), Error> {
+        unimplemented!()
     }
 
-    fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, Error> {
-        todo!()
+    fn remove(&mut self, _height: &Height) -> Result<Option<Bytes>, Error> {
+        unimplemented!()
+    }
+}
+
+impl DaSequenceNumberTracker for UnimplementedStorageTx {
+    fn get_sequence_number(
+        &self,
+        _block_height: &BlockHeight,
+    ) -> GasPriceResult<Option<u32>> {
+        unimplemented!()
+    }
+
+    fn set_sequence_number(
+        &mut self,
+        _block_height: &BlockHeight,
+        _sequence_number: u32,
+    ) -> GasPriceResult<()> {
+        unimplemented!()
     }
 }
 
 struct FakeDABlockCost {
     da_block_costs: Receiver<DaBlockCosts>,
+    sequence_number: Arc<Mutex<Option<u32>>>,
 }
 
 impl FakeDABlockCost {
@@ -193,19 +227,41 @@ impl FakeDABlockCost {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
         Self {
             da_block_costs: receiver,
+            sequence_number: Arc::new(Mutex::new(None)),
         }
     }
 
     fn new(da_block_costs: Receiver<DaBlockCosts>) -> Self {
-        Self { da_block_costs }
+        Self {
+            da_block_costs,
+            sequence_number: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    fn never_returns_with_handle_to_sequence_number() -> (Self, Arc<Mutex<Option<u32>>>) {
+        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+        let sequence_number = Arc::new(Mutex::new(None));
+        let service = Self {
+            da_block_costs: receiver,
+            sequence_number: sequence_number.clone(),
+        };
+        (service, sequence_number)
     }
 }
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for FakeDABlockCost {
-    async fn request_da_block_cost(&mut self) -> anyhow::Result<DaBlockCosts> {
+    async fn request_da_block_cost(&mut self) -> Result<DaBlockCosts> {
         let costs = self.da_block_costs.recv().await.unwrap();
         Ok(costs)
+    }
+
+    async fn set_last_value(&mut self, sequence_number: u32) -> Result<()> {
+        self.sequence_number
+            .lock()
+            .unwrap()
+            .replace(sequence_number);
+        Ok(())
     }
 }
 
@@ -383,12 +439,26 @@ impl GasPriceSettingsProvider for FakeSettings {
 }
 
 #[derive(Clone)]
-struct FakeGasPriceDb;
+struct FakeGasPriceDb {
+    height: Option<BlockHeight>,
+}
+
+impl FakeGasPriceDb {
+    fn new(height: u32) -> Self {
+        Self {
+            height: Some(height.into()),
+        }
+    }
+
+    fn empty() -> Self {
+        Self { height: None }
+    }
+}
 
 // GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>
 impl GasPriceData for FakeGasPriceDb {
     fn latest_height(&self) -> Option<BlockHeight> {
-        unimplemented!()
+        self.height
     }
 }
 
@@ -452,7 +522,7 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let different_l2_block = 0;
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
-    let gas_price_db = FakeGasPriceDb;
+    let gas_price_db = FakeGasPriceDb::empty();
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
     let inner = database_with_metadata(&original_metadata);
@@ -558,7 +628,7 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     let erroring_persisted_data = ErroringPersistedData;
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
-    let gas_price_db = FakeGasPriceDb;
+    let gas_price_db = FakeGasPriceDb::empty();
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
 
@@ -580,6 +650,45 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
 }
 
 #[tokio::test]
-async fn uninitialized_task__starts_da_service_with_sequence_number_in_storage() {
-    todo!()
+async fn uninitialized_task__init__starts_da_service_with_sequence_number_in_storage() {
+    // given
+    let block_height = 1;
+    let sequence_number: u32 = 123;
+    let original_metadata = arbitrary_metadata();
+
+    let different_config = different_arb_config();
+    let descaleed_exec_price =
+        original_metadata.new_scaled_exec_price / original_metadata.gas_price_factor;
+    assert_ne!(different_config.new_exec_gas_price, descaleed_exec_price);
+    let different_l2_block = 0;
+    let settings = FakeSettings;
+    let block_stream = empty_block_stream();
+    let gas_price_db = FakeGasPriceDb::new(block_height);
+    let on_chain_db = FakeOnChainDb::new(different_l2_block);
+    let (da_cost_source, sequence_number_handle) =
+        FakeDABlockCost::never_returns_with_handle_to_sequence_number();
+    let mut inner = database_with_metadata(&original_metadata);
+    let mut tx = inner.begin_transaction().unwrap();
+    tx.set_sequence_number(&block_height.into(), sequence_number)
+        .unwrap();
+    StorageTransaction::commit_transaction(tx).unwrap();
+    let service = UninitializedTask::new(
+        different_config.clone(),
+        0.into(),
+        settings,
+        block_stream,
+        gas_price_db,
+        da_cost_source,
+        on_chain_db,
+        inner,
+    )
+    .unwrap();
+
+    // when
+    service.init().await.unwrap();
+
+    // then
+    let actual = sequence_number_handle.lock().unwrap();
+    let expected = Some(sequence_number);
+    assert_eq!(*actual, expected);
 }
