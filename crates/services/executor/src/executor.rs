@@ -1627,7 +1627,12 @@ where
             .map(|input| input.predicate_gas_used())
             .collect();
         // TODO: Add support for expiration policy
-        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params, None)?;
+        let ready_tx = checked_tx.into_ready(
+            gas_price,
+            gas_costs,
+            fee_params,
+            Some(*header.block_height()),
+        )?;
 
         let mut vm = Interpreter::with_storage(
             memory,
