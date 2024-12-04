@@ -21,6 +21,7 @@ use crate::{
         GasPriceData,
         L2Data,
         MetadataStorage,
+        TransactionableStorage,
     },
     v1::{
         da_source_service::{
@@ -79,6 +80,9 @@ use fuel_core_types::{
 };
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
+    Bytes,
+    Error,
+    Height,
     UnrecordedBlocks,
 };
 use std::{
@@ -124,9 +128,9 @@ impl MetadataStorage for FakeMetadata {
     }
 }
 
-struct ErroringMetadata;
+struct ErroringPersistedData;
 
-impl MetadataStorage for ErroringMetadata {
+impl MetadataStorage for ErroringPersistedData {
     fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
         Err(GasPriceError::CouldNotFetchMetadata {
             source_error: anyhow!("boo!"),
@@ -138,6 +142,43 @@ impl MetadataStorage for ErroringMetadata {
             block_height: Default::default(),
             source_error: anyhow!("boo!"),
         })
+    }
+}
+
+struct UnimplementedStorageTx;
+
+impl TransactionableStorage for ErroringPersistedData {
+    type Transaction<'a> = UnimplementedStorageTx;
+
+    fn begin_transaction(&mut self) -> GasPriceResult<Self::Transaction<'_>> {
+        todo!()
+    }
+
+    fn commit_transaction(transaction: Self::Transaction<'_>) -> GasPriceResult<()> {
+        todo!()
+    }
+}
+
+impl MetadataStorage for UnimplementedStorageTx {
+    fn get_metadata(
+        &self,
+        block_height: &BlockHeight,
+    ) -> GasPriceResult<Option<UpdaterMetadata>> {
+        todo!()
+    }
+
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
+        todo!()
+    }
+}
+
+impl UnrecordedBlocks for UnimplementedStorageTx {
+    fn insert(&mut self, height: Height, bytes: Bytes) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, Error> {
+        todo!()
     }
 }
 
@@ -510,13 +551,12 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     // given
     let config = zero_threshold_arbitrary_config();
     let different_l2_block = 1231;
-    let metadata_storage = ErroringMetadata;
+    let erroring_persisted_data = ErroringPersistedData;
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
     let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
-    let inner = database();
 
     // when
     let res = UninitializedTask::new(
@@ -527,7 +567,7 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
         gas_price_db,
         da_cost_source,
         on_chain_db,
-        inner,
+        erroring_persisted_data,
     );
 
     // then
