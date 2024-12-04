@@ -26,20 +26,32 @@ pub(crate) const RETRYABLE_BYTE: [u8; 1] = [0x00];
 pub(crate) const NON_RETRYABLE_BYTE: [u8; 1] = [0x01];
 
 #[repr(u8)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IndexedCoinType {
     Coin,
     Message,
 }
 
-impl TryFrom<u8> for IndexedCoinType {
+impl AsRef<[u8]> for IndexedCoinType {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            IndexedCoinType::Coin => &[IndexedCoinType::Coin as u8],
+            IndexedCoinType::Message => &[IndexedCoinType::Message as u8],
+        }
+    }
+}
+
+impl TryFrom<&[u8]> for IndexedCoinType {
     type Error = IndexationError;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         match value {
-            0 => Ok(IndexedCoinType::Coin),
-            1 => Ok(IndexedCoinType::Message),
-            x => Err(IndexationError::InvalidIndexedCoinType { coin_type: x }),
+            [0] => Ok(IndexedCoinType::Coin),
+            [1] => Ok(IndexedCoinType::Message),
+            [] => Err(IndexationError::InvalidIndexedCoinType { coin_type: None }),
+            x => Err(IndexationError::InvalidIndexedCoinType {
+                coin_type: Some(x[0]),
+            }),
         }
     }
 }
@@ -50,7 +62,7 @@ where
 {
     let key = CoinsToSpendIndexKey::from_coin(coin);
     let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
-    let maybe_old_value = storage.replace(&key, &(IndexedCoinType::Coin as u8))?;
+    let maybe_old_value = storage.replace(&key, &IndexedCoinType::Coin)?;
     if maybe_old_value.is_some() {
         return Err(IndexationError::CoinToSpendAlreadyIndexed {
             owner: coin.owner,
@@ -93,7 +105,7 @@ where
 {
     let key = CoinsToSpendIndexKey::from_message(message, base_asset_id);
     let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
-    let maybe_old_value = storage.replace(&key, &(IndexedCoinType::Message as u8))?;
+    let maybe_old_value = storage.replace(&key, &IndexedCoinType::Message)?;
     if maybe_old_value.is_some() {
         return Err(IndexationError::MessageToSpendAlreadyIndexed {
             owner: *message.recipient(),

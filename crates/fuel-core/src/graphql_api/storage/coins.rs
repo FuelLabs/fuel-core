@@ -2,10 +2,7 @@ use fuel_core_storage::{
     blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
-        primitive::{
-            utxo_id_to_bytes,
-            Primitive,
-        },
+        primitive::utxo_id_to_bytes,
         raw::Raw,
     },
     structured_storage::TableWithBlueprint,
@@ -28,6 +25,7 @@ use fuel_core_types::{
 use crate::graphql_api::indexation;
 
 use self::indexation::coins_to_spend::{
+    IndexedCoinType,
     NON_RETRYABLE_BYTE,
     RETRYABLE_BYTE,
 };
@@ -57,11 +55,11 @@ impl Mappable for CoinsToSpendIndex {
     type Key = Self::OwnedKey;
     type OwnedKey = CoinsToSpendIndexKey;
     type Value = Self::OwnedValue;
-    type OwnedValue = u8;
+    type OwnedValue = IndexedCoinType;
 }
 
 impl TableWithBlueprint for CoinsToSpendIndex {
-    type Blueprint = Plain<Raw, Primitive<1>>;
+    type Blueprint = Plain<Raw, Raw>;
     type Column = super::Column;
 
     fn column() -> Self::Column {
@@ -270,7 +268,7 @@ mod test {
     fuel_core_storage::basic_storage_tests!(
         CoinsToSpendIndex,
         <CoinsToSpendIndex as Mappable>::Key::default(),
-        <CoinsToSpendIndex as Mappable>::Value::default()
+        IndexedCoinType::Coin
     );
 
     fn merge_foreign_key_bytes<A, B, const N: usize>(a: A, b: B) -> [u8; N]

@@ -100,7 +100,7 @@ use fuel_core_types::{
 use rand::Rng;
 use std::iter;
 
-type CoinsToSpendIndexEntry = (CoinsToSpendIndexKey, u8);
+type CoinsToSpendIndexEntry = (CoinsToSpendIndexKey, IndexedCoinType);
 
 impl OffChainDatabase for OffChainIterableKeyValueView {
     fn block_height(&self, id: &BlockId) -> StorageResult<BlockHeight> {
@@ -346,13 +346,11 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 }
 
 fn into_coin_id(
-    selected_iter: Vec<(CoinsToSpendIndexKey, u8)>,
+    selected_iter: Vec<CoinsToSpendIndexEntry>,
     max_coins: usize,
 ) -> Result<Vec<CoinId>, StorageError> {
     let mut coins = Vec::with_capacity(max_coins);
     for (foreign_key, coin_type) in selected_iter {
-        let coin_type =
-            IndexedCoinType::try_from(coin_type).map_err(StorageError::from)?;
         let coin = match coin_type {
             IndexedCoinType::Coin => {
                 let bytes: [u8; COIN_FOREIGN_KEY_LEN] = foreign_key
@@ -473,10 +471,9 @@ where
 }
 
 fn is_excluded(
-    (key, value): &CoinsToSpendIndexEntry,
+    (key, coin_type): &CoinsToSpendIndexEntry,
     excluded_ids: &ExcludedKeysAsBytes,
 ) -> StorageResult<bool> {
-    let coin_type = IndexedCoinType::try_from(*value).map_err(StorageError::from)?;
     match coin_type {
         IndexedCoinType::Coin => {
             let foreign_key = CoinOrMessageIdBytes::Coin(
@@ -574,7 +571,7 @@ mod tests {
 
     fn setup_test_coins(
         coins: impl IntoIterator<Item = u8>,
-    ) -> Vec<Result<(CoinsToSpendIndexKey, u8), fuel_core_storage::Error>> {
+    ) -> Vec<Result<CoinsToSpendIndexEntry, fuel_core_storage::Error>> {
         let coins: Vec<StorageResult<_>> = coins
             .into_iter()
             .map(|i| {
@@ -592,7 +589,7 @@ mod tests {
 
                 let entry = (
                     CoinsToSpendIndexKey::from_coin(&coin),
-                    IndexedCoinType::Coin as u8,
+                    IndexedCoinType::Coin,
                 );
                 Ok(entry)
             })
