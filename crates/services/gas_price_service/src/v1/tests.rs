@@ -24,6 +24,7 @@ use crate::{
         TransactionableStorage,
     },
     v1::{
+        algorithm::SharedV1Algorithm,
         da_source_service::{
             service::{
                 DaBlockCostsSource,
@@ -32,6 +33,7 @@ use crate::{
             DaBlockCosts,
         },
         metadata::{
+            updater_from_config,
             V1AlgorithmConfig,
             V1Metadata,
         },
@@ -324,8 +326,9 @@ async fn next_gas_price__affected_by_new_l2_block() {
 #[tokio::test]
 async fn run__new_l2_block_saves_old_metadata() {
     // given
+    let height = 1;
     let l2_block = BlockInfo::Block {
-        height: 1,
+        height,
         gas_used: 60,
         block_gas_capacity: 100,
         block_bytes: 100,
@@ -335,16 +338,11 @@ async fn run__new_l2_block_saves_old_metadata() {
     let l2_block_source = FakeL2BlockSource {
         l2_block: l2_block_receiver,
     };
-    let metadata_inner = Arc::new(std::sync::Mutex::new(None));
-    let metadata_storage = FakeMetadata {
-        inner: metadata_inner.clone(),
-    };
 
     let config = zero_threshold_arbitrary_config();
-    let height = 0;
     let inner = database();
-    let (algo_updater, shared_algo) =
-        initialize_algorithm(&config, height, &metadata_storage).unwrap();
+    let algo_updater = updater_from_config(&config);
+    let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
     let mut service = GasPriceServiceV1::new(
@@ -354,16 +352,22 @@ async fn run__new_l2_block_saves_old_metadata() {
         da_source_service,
         inner,
     );
-    let mut watcher = StateWatcher::default();
+    let mut watcher = StateWatcher::started();
 
     // when
-    service.run(&mut watcher).await;
     l2_block_sender.send(l2_block).await.unwrap();
-    service.shutdown().await.unwrap();
+    service.run(&mut watcher).await;
 
     // then
-    let metadata_is_some = metadata_inner.lock().unwrap().is_some();
-    assert!(metadata_is_some)
+    let metadata_is_some = service
+        .storage_tx_provider
+        .get_metadata(&height.into())
+        .unwrap()
+        .is_some();
+    assert!(metadata_is_some);
+
+    // cleanup
+    service.shutdown().await.unwrap();
 }
 
 #[derive(Clone)]
