@@ -54,6 +54,7 @@ pub struct RawDaBlockCosts {
 impl From<&RawDaBlockCosts> for DaBlockCosts {
     fn from(raw_da_block_costs: &RawDaBlockCosts) -> Self {
         DaBlockCosts {
+            sequence_number: raw_da_block_costs.sequence_number,
             l2_blocks: raw_da_block_costs
                 .blocks_heights
                 .clone()
@@ -116,6 +117,11 @@ where
         self.last_raw_da_block_costs = Some(raw_da_block_costs.clone());
         Ok(da_block_costs)
     }
+    async fn set_last_value(&mut self, sequence_number: u32) -> DaBlockCostsResult<()> {
+        self.last_raw_da_block_costs =
+            self.client.get_costs_by_seqno(sequence_number).await?;
+        Ok(())
+    }
 }
 
 pub struct BlockCommitterHttpApi {
@@ -151,7 +157,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
         if let Some(url) = &self.url {
             let response = self
                 .client
-                .get(&format!("{}/{}", url, number))
+                .get(format!("{}/{}", url, number))
                 .send()
                 .await?
                 .json::<RawDaBlockCosts>()
@@ -169,7 +175,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
         if let Some(url) = &self.url {
             let response = self
                 .client
-                .get(&format!("{}/{}-{}", url, range.start, range.end))
+                .get(format!("{}/{}-{}", url, range.start, range.end))
                 .send()
                 .await?
                 .json::<Vec<RawDaBlockCosts>>()

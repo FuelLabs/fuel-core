@@ -1,15 +1,9 @@
-use crate::{
-    v0::metadata::V0Metadata,
-    v1::uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
-};
+use crate::v0::metadata::V0Metadata;
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     L2ActivityTracker,
 };
-use std::{
-    collections::BTreeMap,
-    num::NonZeroU64,
-};
+use std::num::NonZeroU64;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct V1Metadata {
@@ -63,6 +57,7 @@ impl V1Metadata {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct V1AlgorithmConfig {
     pub new_exec_gas_price: u64,
     pub min_exec_gas_price: u64,
@@ -79,10 +74,7 @@ pub struct V1AlgorithmConfig {
     pub block_activity_threshold: u8,
 }
 
-pub fn updater_from_config<U>(
-    value: &V1AlgorithmConfig,
-    unrecorded_blocks: U,
-) -> AlgorithmUpdaterV1<U> {
+pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
     let l2_activity = L2ActivityTracker::new_full(
         value.normal_range_size,
         value.capped_range_size,
@@ -115,13 +107,12 @@ pub fn updater_from_config<U>(
         max_da_gas_price_change_percent: value.max_da_gas_price_change_percent,
         da_p_component: value.da_p_component,
         da_d_component: value.da_d_component,
-        unrecorded_blocks,
         unrecorded_blocks_bytes,
     }
 }
 
-impl<U> From<AlgorithmUpdaterV1<U>> for V1Metadata {
-    fn from(updater: AlgorithmUpdaterV1<U>) -> Self {
+impl From<AlgorithmUpdaterV1> for V1Metadata {
+    fn from(updater: AlgorithmUpdaterV1) -> Self {
         Self {
             new_scaled_exec_price: updater.new_scaled_exec_price,
             l2_block_height: updater.l2_block_height,
@@ -137,11 +128,10 @@ impl<U> From<AlgorithmUpdaterV1<U>> for V1Metadata {
     }
 }
 
-pub fn v1_algorithm_from_metadata<U>(
+pub fn v1_algorithm_from_metadata(
     metadata: V1Metadata,
     config: &V1AlgorithmConfig,
-    unrecorded_blocks: U,
-) -> AlgorithmUpdaterV1<U> {
+) -> AlgorithmUpdaterV1 {
     let l2_activity = L2ActivityTracker::new_full(
         config.normal_range_size,
         config.capped_range_size,
@@ -176,6 +166,5 @@ pub fn v1_algorithm_from_metadata<U>(
         da_p_component: config.da_p_component,
         da_d_component: config.da_d_component,
         unrecorded_blocks_bytes,
-        unrecorded_blocks,
     }
 }

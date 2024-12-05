@@ -1,3 +1,10 @@
+use fuel_core_storage::Result as StorageResult;
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_tx::Transaction,
+    fuel_types::BlockHeight,
+};
+
 use crate::{
     common::{
         updater_metadata::UpdaterMetadata,
@@ -5,12 +12,6 @@ use crate::{
     },
     v0::metadata::V0AlgorithmConfig,
     v1::metadata::V1AlgorithmConfig,
-};
-use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_tx::Transaction,
-    fuel_types::BlockHeight,
 };
 use std::num::NonZeroU64;
 
@@ -22,10 +23,34 @@ pub trait L2Data: Send + Sync {
     ) -> StorageResult<Option<Block<Transaction>>>;
 }
 
-pub trait MetadataStorage: Send + Sync {
+pub trait SetMetadataStorage: Send + Sync {
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()>;
+}
+
+pub trait GetMetadataStorage: Send + Sync {
     fn get_metadata(&self, block_height: &BlockHeight)
         -> Result<Option<UpdaterMetadata>>;
-    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()>;
+}
+
+pub trait SetDaSequenceNumber: Send + Sync {
+    fn set_sequence_number(
+        &mut self,
+        block_height: &BlockHeight,
+        sequence_number: u32,
+    ) -> Result<()>;
+}
+
+pub trait GetDaSequenceNumber: Send + Sync {
+    fn get_sequence_number(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
+}
+
+pub trait TransactionableStorage: Send + Sync {
+    type Transaction<'a>
+    where
+        Self: 'a;
+
+    fn begin_transaction(&mut self) -> Result<Self::Transaction<'_>>;
+    fn commit_transaction(transaction: Self::Transaction<'_>) -> Result<()>;
 }
 
 /// Provides the latest block height.
@@ -55,6 +80,7 @@ impl GasPriceServiceConfig {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_v1(
         new_exec_gas_price: u64,
         min_exec_gas_price: u64,

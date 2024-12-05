@@ -28,6 +28,7 @@ pub enum GasPriceColumn {
     Metadata = 0,
     State = 1,
     UnrecordedBlocks = 2,
+    SequenceNumber = 3,
 }
 
 impl GasPriceColumn {
@@ -70,6 +71,8 @@ impl TableWithBlueprint for GasPriceMetadata {
     }
 }
 
+/// The storage for all the unrecorded blocks from gas price algorithm, used for guessing the cost
+/// for future blocks to be recorded on the DA chain
 pub struct UnrecordedBlocksTable;
 
 impl Mappable for UnrecordedBlocksTable {
@@ -80,10 +83,28 @@ impl Mappable for UnrecordedBlocksTable {
 }
 
 impl TableWithBlueprint for UnrecordedBlocksTable {
-    type Blueprint = Plain<Primitive<4>, Primitive<8>>;
+    type Blueprint = Plain<Primitive<4>, Postcard>;
     type Column = GasPriceColumn;
 
     fn column() -> Self::Column {
         GasPriceColumn::UnrecordedBlocks
+    }
+}
+
+pub struct SequenceNumberTable;
+
+impl Mappable for SequenceNumberTable {
+    type Key = Self::OwnedKey;
+    type OwnedKey = u32;
+    type Value = Self::OwnedValue;
+    type OwnedValue = u32;
+}
+
+impl TableWithBlueprint for SequenceNumberTable {
+    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Column = GasPriceColumn;
+
+    fn column() -> Self::Column {
+        GasPriceColumn::SequenceNumber
     }
 }
