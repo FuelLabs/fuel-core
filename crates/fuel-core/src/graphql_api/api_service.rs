@@ -17,7 +17,6 @@ use crate::{
     },
     graphql_api::{
         self,
-        block_height_header_extension::BlockHeightHeaderExtension,
     },
     schema::{
         CoreSchema,
@@ -34,22 +33,19 @@ use async_graphql::{
     Response,
 };
 use axum::{
-    async_trait,
     extract::{
         DefaultBodyLimit,
         Extension,
-        FromRequest,
-        RequestParts,
     },
     http::{
         header::{
-            HeaderMap,
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
             ACCESS_CONTROL_ALLOW_ORIGIN,
         },
         HeaderValue,
         Request as AxumRequest,
+        Response as AxumResponse,
         StatusCode,
     },
     middleware::{
@@ -101,7 +97,10 @@ use tower_http::{
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub use super::database::ReadDatabase;
-use super::ports::worker;
+use super::{
+    ports::worker,
+    worker_service::LAST_KNOWN_BLOCK_HEIGHT,
+};
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
@@ -227,22 +226,33 @@ impl RunnableTask for Task {
     }
 }
 
-struct RequiredFuelBlockHeight;
-
-// TODO: Replace this with fetching a value from a lazy static
-const ALLOWED_FUEL_BLOCK_HEIGHT: u32 = 0;
+const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "REQUIRED_FUEL_BLOCK_HEIGHT";
+const CURRENT_FUEL_BLOCK_HEIGHT_HEADER: &str = "CURRENT_FUEL_BLOCK_HEIGHT";
 
 async fn required_fuel_block_height<B>(
     req: AxumRequest<B>,
     next: Next<B>,
 ) -> impl IntoResponse {
+    let last_known_block_height: BlockHeight = LAST_KNOWN_BLOCK_HEIGHT
+    .get()
+    //Maybe too strict?
+    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
+    .load(std::sync::atomic::Ordering::Acquire)
+    .into();
+
     let Some(required_fuel_block_height_header) = req
         .headers()
-        .get("REQUIRED_FUEL_BLOCK_HEIGHT")
+        .get(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER)
         .map(|value| value.to_str())
     else {
         // Header is not present, so we don't have any requirements.
-        return Ok(next.run(req).await);
+        let mut response = next.run(req).await;
+        add_current_fuel_block_height_header_to_response(
+            &mut response,
+            &last_known_block_height,
+        );
+
+        return Ok(response);
     };
 
     let raw_required_fuel_block_height =
@@ -252,11 +262,27 @@ async fn required_fuel_block_height<B>(
         .parse::<BlockHeight>()
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    if required_fuel_block_height < ALLOWED_FUEL_BLOCK_HEIGHT.into() {
+    if required_fuel_block_height < last_known_block_height {
         Err(StatusCode::PRECONDITION_FAILED)
     } else {
-        Ok(next.run(req).await)
+        let mut response = next.run(req).await;
+        add_current_fuel_block_height_header_to_response(
+            &mut response,
+            &last_known_block_height,
+        );
+
+        Ok(response)
     }
+}
+
+fn add_current_fuel_block_height_header_to_response<Body>(
+    response: &mut AxumResponse<Body>,
+    last_known_block_height: &BlockHeight,
+) {
+    response.headers_mut().insert(
+        CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
+        HeaderValue::from_str(&last_known_block_height.to_string()).unwrap(),
+    );
 }
 
 // Need a separate Data Object for each Query endpoint, cannot be avoided
