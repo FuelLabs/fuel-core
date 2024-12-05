@@ -2,6 +2,7 @@ use crate::v1::da_source_service::service::DaBlockCostsSource;
 use std::time::Duration;
 
 pub mod block_committer_costs;
+#[cfg(test)]
 pub mod dummy_costs;
 pub mod service;
 

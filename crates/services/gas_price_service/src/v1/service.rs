@@ -75,7 +75,7 @@ where
     /// Buffer of block costs from the DA chain
     da_block_costs_buffer: Vec<DaBlockCosts>,
     /// Storage transaction provider for metadata and unrecorded blocks
-    pub(crate) storage_tx_provider: StorageTxProvider,
+    storage_tx_provider: StorageTxProvider,
 }
 
 impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
@@ -134,6 +134,11 @@ where
         self.shared_algo.clone()
     }
 
+    #[cfg(test)]
+    pub fn storage_tx_provider(&self) -> &StorageTxProvider {
+        &self.storage_tx_provider
+    }
+
     async fn update(&mut self, new_algorithm: AlgorithmV1) {
         self.shared_algo.update(new_algorithm).await;
     }
@@ -157,8 +162,8 @@ where
         StorageTxProvider::Transaction<'a>:
             UnrecordedBlocks + SetMetadataStorage + SetDaSequenceNumber,
     {
-        let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
+        let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
 
         for da_block_costs in self.da_block_costs_buffer.drain(..) {
             tracing::debug!("Updating DA block costs: {:?}", da_block_costs);
@@ -241,7 +246,7 @@ impl<L2, DA, StorageTxProvider> RunnableTask
 where
     L2: L2BlockSource,
     DA: DaBlockCostsSource,
-    StorageTxProvider: TransactionableStorage + 'static,
+    StorageTxProvider: TransactionableStorage,
     for<'a> StorageTxProvider::Transaction<'a>:
         UnrecordedBlocks + SetMetadataStorage + SetDaSequenceNumber,
 {

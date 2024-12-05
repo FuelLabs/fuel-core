@@ -302,12 +302,14 @@ impl L2ActivityTracker {
     }
 
     pub fn block_activity_threshold(&self) -> ClampedPercentage {
-        self.block_activity_threshold.clone()
+        self.block_activity_threshold
     }
 }
 
 /// A value that represents a value between 0 and 100. Higher values are clamped to 100
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Copy, Clone, PartialEq, PartialOrd,
+)]
 pub struct ClampedPercentage {
     value: u8,
 }

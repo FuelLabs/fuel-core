@@ -30,10 +30,6 @@ use crate::{
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
-            block_committer_costs::{
-                BlockCommitterApi,
-                RawDaBlockCosts,
-            },
             service::{
                 DaBlockCostsSource,
                 DaSourceService,
@@ -431,7 +427,7 @@ async fn run__new_l2_block_saves_old_metadata() {
 
     // then
     let metadata_is_some = service
-        .storage_tx_provider
+        .storage_tx_provider()
         .get_metadata(&height.into())
         .unwrap()
         .is_some();

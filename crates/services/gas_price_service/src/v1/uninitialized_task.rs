@@ -29,10 +29,7 @@ use crate::{
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
-            block_committer_costs::{
-                BlockCommitterApi,
-                BlockCommitterDaBlockCosts,
-            },
+            block_committer_costs::BlockCommitterDaBlockCosts,
             service::{
                 DaBlockCostsSource,
                 DaSourceService,
