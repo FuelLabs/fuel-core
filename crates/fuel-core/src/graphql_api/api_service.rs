@@ -15,7 +15,10 @@ use crate::{
         view_extension::ViewExtension,
         Config,
     },
-    graphql_api,
+    graphql_api::{
+        self,
+        block_height_header_extension::BlockHeightHeaderExtension,
+    },
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -31,17 +34,27 @@ use async_graphql::{
     Response,
 };
 use axum::{
+    async_trait,
     extract::{
         DefaultBodyLimit,
         Extension,
+        FromRequest,
+        RequestParts,
     },
     http::{
         header::{
+            HeaderMap,
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
             ACCESS_CONTROL_ALLOW_ORIGIN,
         },
         HeaderValue,
+        Request as AxumRequest,
+        StatusCode,
+    },
+    middleware::{
+        self,
+        Next,
     },
     response::{
         sse::Event,
@@ -214,6 +227,38 @@ impl RunnableTask for Task {
     }
 }
 
+struct RequiredFuelBlockHeight;
+
+// TODO: Replace this with fetching a value from a lazy static
+const ALLOWED_FUEL_BLOCK_HEIGHT: u32 = 0;
+
+async fn required_fuel_block_height<B>(
+    req: AxumRequest<B>,
+    next: Next<B>,
+) -> impl IntoResponse {
+    let Some(required_fuel_block_height_header) = req
+        .headers()
+        .get("REQUIRED_FUEL_BLOCK_HEIGHT")
+        .map(|value| value.to_str())
+    else {
+        // Header is not present, so we don't have any requirements.
+        return Ok(next.run(req).await);
+    };
+
+    let raw_required_fuel_block_height =
+        required_fuel_block_height_header.map_err(|_err| StatusCode::BAD_REQUEST)?;
+
+    let required_fuel_block_height = raw_required_fuel_block_height
+        .parse::<BlockHeight>()
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+    if required_fuel_block_height < ALLOWED_FUEL_BLOCK_HEIGHT.into() {
+        Err(StatusCode::PRECONDITION_FAILED)
+    } else {
+        Ok(next.run(req).await)
+    }
+}
+
 // Need a separate Data Object for each Query endpoint, cannot be avoided
 #[allow(clippy::too_many_arguments)]
 pub fn new_service<OnChain, OffChain>(
@@ -287,6 +332,7 @@ where
         .route(
             graphql_endpoint,
             post(graphql_handler)
+                .layer(middleware::from_fn(required_fuel_block_height))
                 .layer(ConcurrencyLimitLayer::new(concurrency_limit))
                 .options(ok),
         )
