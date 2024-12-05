@@ -135,7 +135,7 @@ fn dev_config() -> Config {
     chain_config.genesis_state_transition_version = Some(LATEST_STATE_TRANSITION_VERSION);
     let reader = reader.with_chain_config(chain_config);
 
-    let mut config = Config::local_node_with_reader(reader);
+    let mut config = Config::local_node_with_reader(reader, None);
     config.starting_exec_gas_price = 1;
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(

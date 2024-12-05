@@ -40,7 +40,10 @@ use crate::{
 };
 use fuel_core_gas_price_service::v1::{
     algorithm::AlgorithmV1,
-    da_source_service::block_committer_costs::BlockCommitterHttpApi,
+    da_source_service::block_committer_costs::{
+        BlockCommitterDaBlockCosts,
+        BlockCommitterHttpApi,
+    },
     uninitialized_task::new_gas_price_service_v1,
 };
 use fuel_core_poa::{
@@ -183,9 +186,10 @@ pub fn init_sub_services(
     let genesis_block_height = *genesis_block.header().height();
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
-    let metadata = StructuredStorage::new(database.gas_price().clone());
+    let persisted_data = StructuredStorage::new(database.gas_price().clone());
 
-    let committer = BlockCommitterHttpApi::new(config.da_committer_url.clone());
+    let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
+    let da_source = BlockCommitterDaBlockCosts::new(committer_api, None);
 
     let gas_price_service = new_gas_price_service_v1(
         config.clone().into(),
@@ -194,7 +198,7 @@ pub fn init_sub_services(
         block_stream,
         database.gas_price().clone(),
         da_source,
-        on_chain_db,
+        database.on_chain().clone(),
         persisted_data,
     )?;
 
