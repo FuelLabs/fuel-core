@@ -258,11 +258,12 @@ async fn required_fuel_block_height<B>(
     let raw_required_fuel_block_height =
         required_fuel_block_height_header.map_err(|_err| StatusCode::BAD_REQUEST)?;
 
-    let required_fuel_block_height = raw_required_fuel_block_height
-        .parse::<BlockHeight>()
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    let required_fuel_block_height: BlockHeight = raw_required_fuel_block_height
+        .parse::<u32>()
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .into();
 
-    if required_fuel_block_height < last_known_block_height {
+    if required_fuel_block_height > last_known_block_height {
         Err(StatusCode::PRECONDITION_FAILED)
     } else {
         let mut response = next.run(req).await;

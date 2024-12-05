@@ -240,6 +240,28 @@ impl FuelClient {
         Self::decode_response(response)
     }
 
+    pub async fn query_with_headers<ResponseData, Vars>(
+        &self,
+        q: Operation<ResponseData, Vars>,
+        headers: impl IntoIterator<Item = (String, String)>,
+    ) -> io::Result<ResponseData>
+    where
+        Vars: serde::Serialize,
+        ResponseData: serde::de::DeserializeOwned + 'static,
+    {
+        let mut request_builder = self.client.post(self.url.clone());
+        for (header_name, header_value) in headers {
+            request_builder = request_builder.header(header_name, header_value);
+        }
+
+        let response = request_builder
+            .run_graphql(q)
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        Self::decode_response(response)
+    }
+
     fn decode_response<R>(response: GraphQlResponse<R>) -> io::Result<R>
     where
         R: serde::de::DeserializeOwned + 'static,
@@ -1077,6 +1099,32 @@ impl FuelClient {
         };
         let query = schema::balance::BalanceQuery::build(BalanceArgs { owner, asset_id });
         let balance: types::Balance = self.query(query).await?.balance.into();
+        Ok(balance.amount)
+    }
+
+    pub async fn balance_with_required_block_header(
+        &self,
+        owner: &Address,
+        asset_id: Option<&AssetId>,
+        required_block_height: u32,
+    ) -> io::Result<u128> {
+        let owner: schema::Address = (*owner).into();
+        let asset_id: schema::AssetId = match asset_id {
+            Some(asset_id) => (*asset_id).into(),
+            None => schema::AssetId::default(),
+        };
+        let query = schema::balance::BalanceQuery::build(BalanceArgs { owner, asset_id });
+        let balance: types::Balance = self
+            .query_with_headers(
+                query,
+                vec![(
+                    "REQUIRED_FUEL_BLOCK_HEIGHT".to_string(),
+                    required_block_height.to_string(),
+                )],
+            )
+            .await?
+            .balance
+            .into();
         Ok(balance.amount)
     }
 
