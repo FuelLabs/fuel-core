@@ -644,8 +644,9 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
     // given
     let starting_block = 0;
     let first_block_bytes = 1200;
-    let unrecorded_blocks: BTreeMap<_, _> =
-        vec![(0, first_block_bytes)].into_iter().collect();
+    let mut unrecorded_blocks: BTreeMap<_, _> = vec![(starting_block, first_block_bytes)]
+        .into_iter()
+        .collect();
 
     let mut updater = UpdaterBuilder::new()
         .with_l2_block_height(starting_block)
@@ -657,7 +658,6 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
     let capacity = 100.try_into().unwrap();
     let new_block_bytes = 1000;
     let new_gas_price = 100;
-    let unrecorded_blocks = &mut empty_unrecorded_blocks();
 
     // when
     updater
@@ -667,7 +667,7 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
             capacity,
             new_block_bytes,
             new_gas_price,
-            unrecorded_blocks,
+            &mut unrecorded_blocks,
         )
         .unwrap();
 
@@ -680,7 +680,8 @@ fn update_l2_block_data__retains_existing_blocks_and_adds_l2_block_to_unrecorded
     assert!(contains_block_bytes);
 
     // and
-    let contains_preexisting_block_bytes = unrecorded_blocks.contains_key(&0);
+    let contains_preexisting_block_bytes =
+        unrecorded_blocks.contains_key(&starting_block);
     assert!(contains_preexisting_block_bytes);
 
     // and
