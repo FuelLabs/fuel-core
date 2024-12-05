@@ -20,7 +20,10 @@ impl From<schema::balance::Balance> for Balance {
     fn from(value: schema::balance::Balance) -> Self {
         Balance {
             owner: value.owner.into(),
-            amount: value.amount.into(),
+            amount: {
+                let amount: u64 = value.amount.into();
+                amount as u128
+            },
             asset_id: value.asset_id.into(),
         }
     }
