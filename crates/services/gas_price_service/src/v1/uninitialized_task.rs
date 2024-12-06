@@ -390,7 +390,7 @@ pub fn new_gas_price_service_v1<
     SettingsProvider,
     PersistedData,
 >(
-    config: GasPriceServiceConfig,
+    v1_config: V1AlgorithmConfig,
     genesis_block_height: BlockHeight,
     settings: SettingsProvider,
     block_stream: BoxStream<SharedImportResult>,
@@ -420,7 +420,6 @@ where
     for<'a> PersistedData::Transaction<'a>:
         SetMetadataStorage + UnrecordedBlocks + SetDaSequenceNumber,
 {
-    let v1_config = config.v1().ok_or(anyhow::anyhow!("Expected V1 config"))?;
     let gas_price_init = UninitializedTask::new(
         v1_config,
         genesis_block_height,
