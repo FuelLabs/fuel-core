@@ -207,7 +207,11 @@ impl FromStr for FuelClient {
         #[cfg(not(feature = "subscriptions"))]
         {
             let client = reqwest::Client::new();
-            Ok(Self { client, url })
+            Ok(Self {
+                client,
+                url,
+                headers: HeaderMap::new(),
+            })
         }
     }
 }
