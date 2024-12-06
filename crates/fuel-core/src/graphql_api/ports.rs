@@ -64,11 +64,11 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-use super::{
-    indexation::coins_to_spend::IndexedCoinType,
-    storage::{
-        balances::TotalBalanceAmount,
-        coins::CoinsToSpendIndexKey,
+use super::storage::{
+    balances::TotalBalanceAmount,
+    coins::{
+        CoinsToSpendIndexKey,
+        IndexedCoinType,
     },
 };
 

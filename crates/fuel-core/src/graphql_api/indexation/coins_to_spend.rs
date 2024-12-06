@@ -14,6 +14,7 @@ use crate::graphql_api::{
     storage::coins::{
         CoinsToSpendIndex,
         CoinsToSpendIndexKey,
+        IndexedCoinType,
     },
 };
 
@@ -24,37 +25,6 @@ pub(crate) const RETRYABLE_BYTE: [u8; 1] = [0x00];
 
 // Indicates that a message is non-retryable (also, all coins use this byte).
 pub(crate) const NON_RETRYABLE_BYTE: [u8; 1] = [0x01];
-
-#[repr(u8)]
-#[derive(Debug, Clone, PartialEq)]
-pub enum IndexedCoinType {
-    Coin,
-    Message,
-}
-
-impl AsRef<[u8]> for IndexedCoinType {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            IndexedCoinType::Coin => &[IndexedCoinType::Coin as u8],
-            IndexedCoinType::Message => &[IndexedCoinType::Message as u8],
-        }
-    }
-}
-
-impl TryFrom<&[u8]> for IndexedCoinType {
-    type Error = IndexationError;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        match value {
-            [0] => Ok(IndexedCoinType::Coin),
-            [1] => Ok(IndexedCoinType::Message),
-            [] => Err(IndexationError::InvalidIndexedCoinType { coin_type: None }),
-            x => Err(IndexationError::InvalidIndexedCoinType {
-                coin_type: Some(x[0]),
-            }),
-        }
-    }
-}
 
 fn add_coin<T>(block_st_transaction: &mut T, coin: &Coin) -> Result<(), IndexationError>
 where

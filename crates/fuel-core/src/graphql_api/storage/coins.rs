@@ -24,10 +24,12 @@ use fuel_core_types::{
 
 use crate::graphql_api::indexation;
 
-use self::indexation::coins_to_spend::{
-    IndexedCoinType,
-    NON_RETRYABLE_BYTE,
-    RETRYABLE_BYTE,
+use self::indexation::{
+    coins_to_spend::{
+        NON_RETRYABLE_BYTE,
+        RETRYABLE_BYTE,
+    },
+    error::IndexationError,
 };
 
 const AMOUNT_SIZE: usize = size_of::<u64>();
@@ -72,6 +74,37 @@ pub(crate) const COIN_FOREIGN_KEY_LEN: usize = UTXO_ID_SIZE;
 
 // For messages, the foreign key is the nonce (32 bytes).
 pub(crate) const MESSAGE_FOREIGN_KEY_LEN: usize = Nonce::LEN;
+
+#[repr(u8)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum IndexedCoinType {
+    Coin,
+    Message,
+}
+
+impl AsRef<[u8]> for IndexedCoinType {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            IndexedCoinType::Coin => &[IndexedCoinType::Coin as u8],
+            IndexedCoinType::Message => &[IndexedCoinType::Message as u8],
+        }
+    }
+}
+
+impl TryFrom<&[u8]> for IndexedCoinType {
+    type Error = IndexationError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        match value {
+            [0] => Ok(IndexedCoinType::Coin),
+            [1] => Ok(IndexedCoinType::Message),
+            [] => Err(IndexationError::InvalidIndexedCoinType { coin_type: None }),
+            x => Err(IndexationError::InvalidIndexedCoinType {
+                coin_type: Some(x[0]),
+            }),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CoinsToSpendIndexKey(Vec<u8>);
