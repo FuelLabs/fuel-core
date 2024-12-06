@@ -278,7 +278,11 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
     // Get the message receipts from the block.
     let leaves: Vec<Vec<Receipt>> = message_block_txs
         .iter()
-        .map(|id| database.receipts(id))
+        .filter_map(|id| match database.transaction_status(id) {
+            Ok(TransactionStatus::Success { receipts, .. }) => Some(Ok(receipts)),
+            Ok(_) => None,
+            Err(err) => Some(Err(err)),
+        })
         .try_collect()?;
     let leaves = leaves.into_iter()
         // Flatten the receipts after filtering on output messages
@@ -335,5 +339,186 @@ pub fn message_status(
         Ok(MessageStatus::unspent())
     } else {
         Ok(MessageStatus::not_found())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use fuel_core_storage::not_found;
+    use fuel_core_types::{
+        blockchain::block::CompressedBlock,
+        entities::relayer::message::MerkleProof,
+        fuel_tx::{
+            Address,
+            Bytes32,
+            Receipt,
+            TxId,
+        },
+        fuel_types::BlockHeight,
+        services::txpool::TransactionStatus,
+        tai64::Tai64,
+    };
+
+    use super::{
+        message_receipts_proof,
+        MessageProofData,
+    };
+
+    pub struct FakeDB {
+        pub blocks: HashMap<BlockHeight, CompressedBlock>,
+        pub transaction_statuses: HashMap<TxId, TransactionStatus>,
+        pub receipts: HashMap<TxId, Vec<Receipt>>,
+    }
+
+    impl FakeDB {
+        fn new() -> Self {
+            Self {
+                blocks: HashMap::new(),
+                transaction_statuses: HashMap::new(),
+                receipts: HashMap::new(),
+            }
+        }
+
+        fn insert_block(&mut self, block_height: BlockHeight, block: CompressedBlock) {
+            self.blocks.insert(block_height, block);
+        }
+
+        fn insert_transaction_status(
+            &mut self,
+            transaction_id: TxId,
+            status: TransactionStatus,
+        ) {
+            self.transaction_statuses.insert(transaction_id, status);
+        }
+
+        fn insert_receipts(&mut self, transaction_id: TxId, receipts: Vec<Receipt>) {
+            self.receipts.insert(transaction_id, receipts);
+        }
+    }
+
+    impl MessageProofData for FakeDB {
+        fn block(&self, id: &BlockHeight) -> fuel_core_storage::Result<CompressedBlock> {
+            self.blocks.get(id).cloned().ok_or(not_found!("Block"))
+        }
+
+        fn transaction_status(
+            &self,
+            transaction_id: &TxId,
+        ) -> fuel_core_storage::Result<TransactionStatus> {
+            self.transaction_statuses
+                .get(transaction_id)
+                .cloned()
+                .ok_or(not_found!("Transaction status"))
+        }
+
+        fn block_history_proof(
+            &self,
+            _message_block_height: &BlockHeight,
+            _commit_block_height: &BlockHeight,
+        ) -> fuel_core_storage::Result<MerkleProof> {
+            // Unused in current tests
+            Ok(MerkleProof::default())
+        }
+
+        fn receipts(
+            &self,
+            transaction_id: &TxId,
+        ) -> fuel_core_storage::Result<Vec<Receipt>> {
+            self.receipts
+                .get(transaction_id)
+                .cloned()
+                .ok_or(not_found!("Receipts"))
+        }
+    }
+
+    // Test will try to get the message receipt proof with a block with only valid transactions
+    // Then add an invalid transaction and check if the proof is still the same (meaning the invalid transaction was ignored)
+    #[test]
+    fn test_message_receipts_proof_ignore_failed() {
+        // Create a fake database
+        let mut database = FakeDB::new();
+
+        // Given
+        // Create a block with a valid transaction and receipts
+        let mut block = CompressedBlock::default();
+        let valid_tx_id = Bytes32::new([1; 32]);
+        let mut valid_tx_receipts = vec![];
+        for i in 0..100 {
+            valid_tx_receipts.push(Receipt::MessageOut {
+                sender: Address::default(),
+                recipient: Address::default(),
+                amount: 0,
+                nonce: 0.into(),
+                len: 32,
+                digest: Bytes32::default(),
+                data: Some(vec![i; 32]),
+            });
+        }
+        block.transactions_mut().push(valid_tx_id.clone());
+        database.insert_block(1u32.into(), block.clone());
+        database.insert_transaction_status(
+            valid_tx_id.clone(),
+            TransactionStatus::Success {
+                time: Tai64::UNIX_EPOCH,
+                block_height: 1u32.into(),
+                receipts: valid_tx_receipts.clone(),
+                total_fee: 0,
+                total_gas: 0,
+                result: None,
+            },
+        );
+        database.insert_receipts(valid_tx_id.clone(), valid_tx_receipts.clone());
+
+        // Get the message proof with the valid transaction
+        let message_proof_valid_tx = message_receipts_proof(
+            &database,
+            valid_tx_receipts[0].message_id().unwrap(),
+            &[valid_tx_id],
+        )
+        .unwrap();
+
+        // Add an invalid transaction with receipts to the block
+        let invalid_tx_id = Bytes32::new([2; 32]);
+        block.transactions_mut().push(invalid_tx_id.clone());
+        database.insert_block(1u32.into(), block.clone());
+        let mut invalid_tx_receipts = vec![];
+        for i in 0..100 {
+            invalid_tx_receipts.push(Receipt::MessageOut {
+                sender: Address::default(),
+                recipient: Address::default(),
+                amount: 0,
+                nonce: 0.into(),
+                len: 33,
+                digest: Bytes32::default(),
+                data: Some(vec![i; 33]),
+            });
+        }
+        database.insert_transaction_status(
+            invalid_tx_id.clone(),
+            TransactionStatus::Failed {
+                time: Tai64::UNIX_EPOCH,
+                block_height: 1u32.into(),
+                result: None,
+                total_fee: 0,
+                total_gas: 0,
+                receipts: invalid_tx_receipts.clone(),
+            },
+        );
+        database.insert_receipts(invalid_tx_id.clone(), invalid_tx_receipts.clone());
+
+        // When
+        // Get the message proof with the same message id
+        let message_proof_invalid_tx = message_receipts_proof(
+            &database,
+            valid_tx_receipts[0].message_id().unwrap(),
+            &[valid_tx_id, invalid_tx_id],
+        )
+        .unwrap();
+
+        // Then
+        // The proof should be the same because the invalid transaction was ignored
+        assert_eq!(message_proof_valid_tx, message_proof_invalid_tx);
     }
 }
