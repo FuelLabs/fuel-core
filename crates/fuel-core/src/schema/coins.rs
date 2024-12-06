@@ -699,7 +699,6 @@ mod tests {
     use fuel_core_storage::{
         codec::primitive::utxo_id_to_bytes,
         iter::IntoBoxedIter,
-        Result as StorageResult,
     };
     use fuel_core_types::{
         entities::coins::coin::Coin,
@@ -732,7 +731,7 @@ mod tests {
     fn setup_test_coins(
         coins: impl IntoIterator<Item = u8>,
     ) -> Vec<Result<CoinsToSpendIndexEntry, fuel_core_storage::Error>> {
-        let coins: Vec<StorageResult<_>> = coins
+        coins
             .into_iter()
             .map(|i| {
                 let tx_id: TxId = [i; 32].into();
@@ -747,14 +746,13 @@ mod tests {
                     tx_pointer: Default::default(),
                 };
 
-                let entry = (
+                (
                     CoinsToSpendIndexKey::from_coin(&coin),
                     IndexedCoinType::Coin,
-                );
-                Ok(entry)
+                )
             })
-            .collect();
-        coins
+            .map(Ok)
+            .collect()
     }
 
     #[tokio::test]
@@ -838,13 +836,9 @@ mod tests {
         const MAX: u16 = u16::MAX;
         const TOTAL: u64 = 101;
 
-        let big_coins_iter = setup_test_coins([100, 100, 4, 3, 2])
-            .into_iter()
-            .into_boxed();
-        let dust_coins_iter = setup_test_coins([100, 100, 4, 3, 2])
-            .into_iter()
-            .rev()
-            .into_boxed();
+        let test_coins = [100, 100, 4, 3, 2];
+        let big_coins_iter = setup_test_coins(test_coins).into_iter().into_boxed();
+        let dust_coins_iter = setup_test_coins(test_coins).into_iter().rev().into_boxed();
         let coins_to_spend_iter = CoinsToSpendIndexIter {
             big_coins_iter,
             dust_coins_iter,
@@ -890,7 +884,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn selects_double_the_amount_of_coins() {
+    async fn selects_double_the_value_of_coins() {
         // Given
         const MAX: u16 = u16::MAX;
         const TOTAL: u64 = 10;
