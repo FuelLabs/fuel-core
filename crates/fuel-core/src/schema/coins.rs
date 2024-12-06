@@ -517,15 +517,18 @@ async fn select_coins_to_spend(
     excluded_ids: &ExcludedKeysAsBytes,
     batch_size: usize,
 ) -> StorageResult<Vec<CoinsToSpendIndexEntry>> {
+    const TOTAL_AMOUNT_ADJUSTMENT_FACTOR: u64 = 2;
     if total == 0 && max == 0 {
         return Ok(vec![]);
     }
+
+    let adjusted_total = total.saturating_mul(TOTAL_AMOUNT_ADJUSTMENT_FACTOR);
 
     let big_coins_stream = futures::stream::iter(big_coins_iter).yield_each(batch_size);
     let dust_coins_stream = futures::stream::iter(dust_coins_iter).yield_each(batch_size);
 
     let (selected_big_coins_total, selected_big_coins) =
-        big_coins(big_coins_stream, total, max, excluded_ids).await?;
+        big_coins(big_coins_stream, adjusted_total, max, excluded_ids).await?;
 
     if selected_big_coins_total < total {
         return Ok(vec![]);
@@ -835,8 +838,10 @@ mod tests {
         const MAX: u16 = u16::MAX;
         const TOTAL: u64 = 101;
 
-        let big_coins_iter = setup_test_coins([100, 4, 3, 2]).into_iter().into_boxed();
-        let dust_coins_iter = setup_test_coins([100, 4, 3, 2])
+        let big_coins_iter = setup_test_coins([100, 100, 4, 3, 2])
+            .into_iter()
+            .into_boxed();
+        let dust_coins_iter = setup_test_coins([100, 100, 4, 3, 2])
             .into_iter()
             .rev()
             .into_boxed();
@@ -860,9 +865,9 @@ mod tests {
 
         // Then
 
-        // Because we select a total of 101, first two coins should always selected (100, 4).
-        let expected = vec![100, 4];
-        let actual: Vec<_> = results.drain(..2).collect();
+        // Because we select a total of 202 (TOTAL * 2), first 3 coins should always selected (100, 100, 4).
+        let expected = vec![100, 100, 4];
+        let actual: Vec<_> = results.drain(..3).collect();
         assert_eq!(expected, actual);
 
         // The number of dust coins is selected randomly, so we might have:
@@ -882,6 +887,32 @@ mod tests {
             "Unexpected dust coins: {:?}",
             actual,
         );
+    }
+
+    #[tokio::test]
+    async fn selects_double_the_amount_of_coins() {
+        // Given
+        const MAX: u16 = u16::MAX;
+        const TOTAL: u64 = 10;
+
+        let coins = setup_test_coins([10, 10, 9, 8, 7]);
+
+        let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
+
+        let coins_to_spend_iter = CoinsToSpendIndexIter {
+            big_coins_iter: coins.into_iter().into_boxed(),
+            dust_coins_iter: std::iter::empty().into_boxed(),
+        };
+
+        // When
+        let result =
+            select_coins_to_spend(coins_to_spend_iter, TOTAL, MAX, &excluded, BATCH_SIZE)
+                .await;
+
+        // Then
+        let result = result.expect("should select coins");
+        let results: Vec<_> = result.into_iter().map(|(key, _)| key.amount()).collect();
+        assert_eq!(results, vec![10, 10]);
     }
 
     #[tokio::test]
