@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Fix
+
+- [2476](https://github.com/FuelLabs/fuel-core/pull/2476): Hardcode the timestamp of the genesis block.
+
 ## [Version 0.40.1]
 
 - [2450](https://github.com/FuelLabs/fuel-core/pull/2450): Added support for posting blocks to the shared sequencer.
