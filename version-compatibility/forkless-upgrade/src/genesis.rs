@@ -32,6 +32,9 @@ async fn test__genesis_block__hash() {
         .await
         .expect("Failed to get blocks")
         .expect("Genesis block should exists");
+    // The hash of the genesis block should always be
+    // `0x19ac99bf59711aca047b28443e599e26f733291c2fa45f5f309b2c5c9712b215`
+    // regardless of the changes that we made.
     assert_eq!(
         original_block.id,
         Bytes32::from_str(
