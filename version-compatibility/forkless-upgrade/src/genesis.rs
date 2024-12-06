@@ -8,6 +8,7 @@ use std::str::FromStr;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test__genesis_block__hash() {
+    // Given
     let latest_node = LatestFuelCoreDriver::spawn(&[
         "--debug",
         "--poa-instant",
@@ -16,7 +17,7 @@ async fn test__genesis_block__hash() {
         IGNITION_TESTNET_SNAPSHOT,
         "--enable-relayer",
         "--relayer",
-        "https://eth-mainnet.public.blastapi.io",
+        "https://google.com",
         "--relayer-da-deploy-height",
         "5791365",
         "--relayer-v2-listening-contracts",
@@ -25,13 +26,14 @@ async fn test__genesis_block__hash() {
     .await
     .unwrap();
 
-    // Given
+    // When
     let original_block = latest_node
         .client
         .block_by_height(0u32.into())
         .await
         .expect("Failed to get blocks")
         .expect("Genesis block should exists");
+    // Then
     // The hash of the genesis block should always be
     // `0x19ac99bf59711aca047b28443e599e26f733291c2fa45f5f309b2c5c9712b215`
     // regardless of the changes that we made.
