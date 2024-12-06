@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.40.2]
+
 ### Fixed
 
 - [2476](https://github.com/FuelLabs/fuel-core/pull/2476): Hardcode the timestamp of the genesis block.
