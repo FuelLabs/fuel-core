@@ -34,7 +34,7 @@ fuel-core-types = { workspace = true, features = ["std"] }
 hex = { workspace = true }
 humantime = "2.1"
 pyroscope = "0.5"
-pyroscope_pprofrs = "0.2"
+pyroscope_pprofrs = "0.2.7"
 serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
