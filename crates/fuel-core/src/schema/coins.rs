@@ -516,7 +516,7 @@ async fn select_coins_to_spend(
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
     batch_size: usize,
-) -> StorageResult<Vec<CoinsToSpendIndexEntry>> {
+) -> Result<Vec<CoinsToSpendIndexEntry>, CoinsQueryError> {
     const TOTAL_AMOUNT_ADJUSTMENT_FACTOR: u64 = 2;
     if total == 0 && max == 0 {
         return Ok(vec![]);
@@ -538,10 +538,13 @@ async fn select_coins_to_spend(
         return Ok(vec![]);
     };
 
-    let number_of_big_coins: u16 = selected_big_coins
-        .len()
-        .try_into()
-        .map_err(anyhow::Error::from)?;
+    let selected_big_coins_len = selected_big_coins.len();
+    let number_of_big_coins: u16 = selected_big_coins_len.try_into().map_err(|_| {
+        CoinsQueryError::TooManyCoinsSelected {
+            required: selected_big_coins_len,
+            max: u16::MAX,
+        }
+    })?;
 
     let max_dust_count = max_dust_count(max, number_of_big_coins);
     let (dust_coins_total, selected_dust_coins) = dust_coins(
@@ -562,7 +565,7 @@ async fn big_coins(
     total: u64,
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
-) -> StorageResult<(u64, Vec<CoinsToSpendIndexEntry>)> {
+) -> Result<(u64, Vec<CoinsToSpendIndexEntry>), CoinsQueryError> {
     select_coins_until(big_coins_stream, max, excluded_ids, |_, total_so_far| {
         total_so_far >= total
     })
@@ -574,7 +577,7 @@ async fn dust_coins(
     last_big_coin: &CoinsToSpendIndexEntry,
     max_dust_count: u16,
     excluded_ids: &ExcludedKeysAsBytes,
-) -> StorageResult<(u64, Vec<CoinsToSpendIndexEntry>)> {
+) -> Result<(u64, Vec<CoinsToSpendIndexEntry>), CoinsQueryError> {
     select_coins_until(
         dust_coins_stream,
         max_dust_count,
@@ -589,7 +592,7 @@ async fn select_coins_until<F>(
     max: u16,
     excluded_ids: &ExcludedKeysAsBytes,
     predicate: F,
-) -> StorageResult<(u64, Vec<CoinsToSpendIndexEntry>)>
+) -> Result<(u64, Vec<CoinsToSpendIndexEntry>), CoinsQueryError>
 where
     F: Fn(&CoinsToSpendIndexEntry, u64) -> bool,
 {
@@ -614,14 +617,14 @@ where
 fn is_excluded(
     (key, coin_type): &CoinsToSpendIndexEntry,
     excluded_ids: &ExcludedKeysAsBytes,
-) -> StorageResult<bool> {
+) -> Result<bool, CoinsQueryError> {
     match coin_type {
         IndexedCoinType::Coin => {
             let foreign_key = CoinOrMessageIdBytes::Coin(
                 key.foreign_key_bytes()
                     .as_slice()
                     .try_into()
-                    .map_err(StorageError::from)?,
+                    .map_err(|_| CoinsQueryError::IncorrectCoinKeyInIndex)?,
             );
             Ok(excluded_ids.coins().contains(&foreign_key))
         }
@@ -630,7 +633,7 @@ fn is_excluded(
                 key.foreign_key_bytes()
                     .as_slice()
                     .try_into()
-                    .map_err(StorageError::from)?,
+                    .map_err(|_| CoinsQueryError::IncorrectMessageKeyInIndex)?,
             );
             Ok(excluded_ids.messages().contains(&foreign_key))
         }
@@ -661,7 +664,7 @@ fn skip_big_coins_up_to_amount(
 async fn into_coin_id(
     mut selected_stream: impl Stream<Item = CoinsToSpendIndexEntry> + Unpin,
     max_coins: usize,
-) -> Result<Vec<CoinId>, StorageError> {
+) -> Result<Vec<CoinId>, CoinsQueryError> {
     let mut coins = Vec::with_capacity(max_coins);
     while let Some((foreign_key, coin_type)) = selected_stream.next().await {
         let coin = match coin_type {
@@ -670,7 +673,7 @@ async fn into_coin_id(
                     .foreign_key_bytes()
                     .as_slice()
                     .try_into()
-                    .map_err(StorageError::from)?;
+                    .map_err(|_| CoinsQueryError::IncorrectCoinKeyInIndex)?;
 
                 let (tx_id_bytes, output_index_bytes) = bytes.split_at(TxId::LEN);
                 let tx_id = TxId::try_from(tx_id_bytes).map_err(StorageError::from)?;
@@ -684,7 +687,7 @@ async fn into_coin_id(
                     .foreign_key_bytes()
                     .as_slice()
                     .try_into()
-                    .map_err(StorageError::from)?;
+                    .map_err(|_| CoinsQueryError::IncorrectMessageKeyInIndex)?;
                 let nonce = fuel_types::Nonce::from(bytes);
                 CoinId::Message(nonce)
             }
@@ -709,6 +712,7 @@ mod tests {
     };
 
     use crate::{
+        coins_query::CoinsQueryError,
         graphql_api::{
             indexation::coins_to_spend::IndexedCoinType,
             ports::CoinsToSpendIndexIter,
@@ -910,7 +914,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn selection_algorithm_should_bail_on_error() {
+    async fn selection_algorithm_should_bail_on_storage_error() {
         // Given
         const MAX: u16 = u16::MAX;
         const TOTAL: u64 = 101;
@@ -941,8 +945,7 @@ mod tests {
                 .await;
 
         // Then
-        assert!(
-            matches!(result, Err(error) if error == fuel_core_storage::Error::NotFound("S1", "S2"))
-        );
+        assert!(matches!(result, Err(actual_error)
+            if CoinsQueryError::StorageError(fuel_core_storage::Error::NotFound("S1", "S2")) == actual_error));
     }
 }

@@ -40,6 +40,12 @@ pub enum CoinsQueryError {
         "too many excluded ids: provided ({provided}) is > than allowed ({allowed})"
     )]
     TooManyExcludedId { provided: usize, allowed: u16 },
+    #[error("the query requires more coins than the max allowed coins: required ({required}) > max ({max})")]
+    TooManyCoinsSelected { required: usize, max: u16 },
+    #[error("incorrect coin key found in coins to spend index")]
+    IncorrectCoinKeyInIndex,
+    #[error("incorrect message key found in messages to spend index")]
+    IncorrectMessageKeyInIndex,
 }
 
 #[cfg(test)]
