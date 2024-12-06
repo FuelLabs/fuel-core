@@ -86,6 +86,11 @@ mod tests {
     => Err(())
     ; "read fails on partially initialized range if keyspace exceeded"
     )]
+    #[test_case(
+    &[(*u256_to_bytes32(U256::MAX), vec![0; 32])], *u256_to_bytes32(U256::MAX), 1
+    => Ok(vec![Some(vec![0; 32])])
+    ; "read success when reading last key"
+    )]
     fn read_sequential_range(
         prefilled_slots: &[([u8; 32], Vec<u8>)],
         start_key: [u8; 32],
@@ -161,6 +166,11 @@ mod tests {
     => Err(())
     ; "insert fails if start_key + range > u256::MAX"
     )]
+    #[test_case(
+    &[(*u256_to_bytes32(U256::MAX), vec![0; 32])], *u256_to_bytes32(U256::MAX), &[vec![1; 32]]
+    => Ok(true)
+    ; "try to modify only the last value of storage"
+    )]
     fn insert_range(
         prefilled_slots: &[([u8; 32], Vec<u8>)],
         start_key: [u8; 32],
@@ -191,6 +201,7 @@ mod tests {
             )
             .map_err(|_| ())
             .map(|v| v == 0);
+        dbg!(&insert_status);
 
         // check stored data
         let results: Vec<_> = (0..insertion_range.len())
