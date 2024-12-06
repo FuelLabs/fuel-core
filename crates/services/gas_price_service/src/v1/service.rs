@@ -197,6 +197,7 @@ where
             .map_err(|err| anyhow!(err))?;
         StorageTxProvider::commit_transaction(storage_tx)?;
         let new_algo = self.algorithm_updater.algorithm();
+        tracing::debug!("Updating gas price: {}", &new_algo.calculate());
         self.shared_algo.update(new_algo).await;
         Ok(())
     }

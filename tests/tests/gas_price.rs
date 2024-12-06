@@ -451,7 +451,16 @@ fn produce_block__l1_committed_block_effects_gas_price() {
     let url = mock.url();
 
     // add the da committer url to the args
-    args.extend(&["--da-committer-url", &url, "--da-poll-interval", "10"]);
+    args.extend(&[
+        "--da-committer-url",
+        &url,
+        "--da-poll-interval",
+        "50",
+        "--da-p-component",
+        "1",
+        "--max-da-gas-price-change-percent",
+        "100",
+    ]);
 
     let new_gas_price = rt.block_on(async {
         let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
@@ -474,7 +483,7 @@ impl FakeServer {
         let mut server = mockito::Server::new();
         let costs = RawDaBlockCosts {
             sequence_number: 1,
-            blocks_heights: vec![1, 2, 3],
+            blocks_heights: vec![1],
             da_block_height: DaBlockHeight(100),
             total_cost: 100,
             total_size_bytes: 100,

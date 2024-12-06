@@ -494,6 +494,14 @@ impl AlgorithmUpdaterV1 {
                     0u64
                 }
             });
+        tracing::debug!("Profit: {}", self.last_profit);
+        tracing::debug!(
+            "DA gas price change: p: {}, d: {}, change: {}, new: {}",
+            p,
+            d,
+            da_change,
+            maybe_new_scaled_da_gas_price
+        );
         self.new_scaled_da_gas_price = max(
             self.min_scaled_da_gas_price(),
             maybe_new_scaled_da_gas_price,
