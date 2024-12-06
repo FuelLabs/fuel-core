@@ -345,12 +345,12 @@ where
 
         let mut results = Vec::new();
         for i in 0..range {
+            if i != 0 {
+                key.increase()?;
+            }
             key.to_big_endian(state_key.as_mut());
             let multikey = ContractsStateKey::new(contract_id, &state_key);
             results.push(self.database.storage::<ContractsState>().get(&multikey)?);
-            if i.saturating_add(1) != range {
-                key.increase()?;
-            }
         }
         Ok(results)
     }
@@ -375,6 +375,9 @@ where
         let mut key_bytes = Bytes32::zeroed();
         let mut found_unset = 0u32;
         for (idx, value) in values.iter().enumerate() {
+            if idx != 0 {
+                current_key.increase()?;
+            }
             current_key.to_big_endian(key_bytes.as_mut());
 
             let option = self
@@ -386,10 +389,6 @@ where
                 found_unset = found_unset
                     .checked_add(1)
                     .expect("We've checked it above via `values.len()`");
-            }
-
-            if idx.saturating_add(1) != values.len() {
-                current_key.increase()?;
             }
         }
 
@@ -407,7 +406,10 @@ where
         let mut current_key = U256::from_big_endian(start_key.as_ref());
 
         let mut key_bytes = Bytes32::zeroed();
-        for _ in 0..range {
+        for i in 0..range {
+            if i != 0 {
+                current_key.increase()?;
+            }
             current_key.to_big_endian(key_bytes.as_mut());
 
             let option = self
@@ -416,8 +418,6 @@ where
                 .take(&(contract_id, &key_bytes).into())?;
 
             found_unset |= option.is_none();
-
-            current_key.increase()?;
         }
 
         if found_unset {

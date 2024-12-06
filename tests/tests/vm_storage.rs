@@ -201,7 +201,6 @@ mod tests {
             )
             .map_err(|_| ())
             .map(|v| v == 0);
-        dbg!(&insert_status);
 
         // check stored data
         let results: Vec<_> = (0..insertion_range.len())
@@ -265,6 +264,11 @@ mod tests {
     &[([0; 32], vec![0; 32]), (key(2), vec![0; 32])], [0; 32], 3
     => (vec![], false)
     ; "remove multiple slots over partially uninitialized middle range"
+    )]
+    #[test_case(
+    &[(*u256_to_bytes32(U256::MAX), vec![0; 32])], *u256_to_bytes32(U256::MAX), 1
+    => (vec![], true)
+    ; "try to modify only the last value of storage"
     )]
     fn remove_range(
         prefilled_slots: &[([u8; 32], Vec<u8>)],
