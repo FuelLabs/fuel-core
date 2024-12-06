@@ -78,6 +78,7 @@ impl From<Config> for GasPriceServiceConfig {
             value.activity_capped_range_size,
             value.activity_decrease_range_size,
             value.block_activity_threshold,
+            value.da_poll_interval,
         )
     }
 }

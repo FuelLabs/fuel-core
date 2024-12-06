@@ -62,6 +62,7 @@ pub struct Config {
     pub min_exec_gas_price: u64,
     pub exec_gas_price_threshold_percent: u8,
     pub da_committer_url: Option<String>,
+    pub da_poll_interval: Option<u32>,
     pub da_compression: DaCompressionConfig,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -213,6 +214,7 @@ impl Config {
             activity_decrease_range_size: 0,
             da_committer_url,
             block_activity_threshold: 0,
+            da_poll_interval: Some(10),
         }
     }
 

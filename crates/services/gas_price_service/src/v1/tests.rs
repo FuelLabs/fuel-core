@@ -61,6 +61,8 @@ use fuel_core_services::{
         IntoBoxStream,
     },
     RunnableTask,
+    Service,
+    ServiceRunner,
     StateWatcher,
 };
 use fuel_core_storage::{
@@ -291,6 +293,7 @@ fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
         capped_range_size: 0,
         decrease_range_size: 0,
         block_activity_threshold: 0,
+        da_poll_interval: None,
     }
 }
 
@@ -324,6 +327,7 @@ fn different_arb_config() -> V1AlgorithmConfig {
         capped_range_size: 0,
         decrease_range_size: 0,
         block_activity_threshold: 0,
+        da_poll_interval: None,
     }
 }
 
@@ -368,11 +372,14 @@ async fn next_gas_price__affected_by_new_l2_block() {
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
+    let da_service_runner = ServiceRunner::new(da_source_service);
+    da_service_runner.start_and_await().await.unwrap();
+
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
         algo_updater,
-        da_source_service,
+        da_service_runner,
         inner,
     );
 
@@ -412,11 +419,13 @@ async fn run__new_l2_block_saves_old_metadata() {
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
+    let da_service_runner = ServiceRunner::new(da_source_service);
+    da_service_runner.start_and_await().await.unwrap();
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
         algo_updater,
-        da_source_service,
+        da_service_runner,
         inner,
     );
     let mut watcher = StateWatcher::started();

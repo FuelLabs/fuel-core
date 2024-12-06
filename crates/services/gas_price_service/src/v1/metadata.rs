@@ -72,6 +72,8 @@ pub struct V1AlgorithmConfig {
     pub capped_range_size: u16,
     pub decrease_range_size: u16,
     pub block_activity_threshold: u8,
+    /// The interval at which the `DaSourceService` polls for new data
+    pub da_poll_interval: Option<u32>,
 }
 
 pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {

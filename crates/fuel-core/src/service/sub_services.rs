@@ -188,6 +188,7 @@ pub fn init_sub_services(
     let block_stream = importer_adapter.events_shared_result();
     let persisted_data = StructuredStorage::new(database.gas_price().clone());
 
+    tracing::debug!("da_committer_url: {:?}", config.da_committer_url);
     let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
     let da_source = BlockCommitterDaBlockCosts::new(committer_api, None);
 

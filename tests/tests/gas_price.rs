@@ -451,17 +451,18 @@ fn produce_block__l1_committed_block_effects_gas_price() {
     let url = mock.url();
 
     // add the da committer url to the args
-    args.extend(&["--da-committer-url", &url]);
+    args.extend(&["--da-committer-url", &url, "--da-poll-interval", "10"]);
 
-    rt.block_on(async {
+    let new_gas_price = rt.block_on(async {
         let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
             .await
             .unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
         driver.client.produce_blocks(1, None).await.unwrap();
-        let new_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
-        assert_ne!(first_gas_price, new_gas_price);
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        driver.client.latest_gas_price().await.unwrap().gas_price
     });
+    assert_ne!(first_gas_price, new_gas_price);
 }
 
 struct FakeServer {

@@ -95,6 +95,7 @@ impl GasPriceServiceConfig {
         capped_range_size: u16,
         decrease_range_size: u16,
         block_activity_threshold: u8,
+        da_poll_interval: Option<u32>,
     ) -> Self {
         Self::V1(V1AlgorithmConfig {
             new_exec_gas_price,
@@ -110,6 +111,7 @@ impl GasPriceServiceConfig {
             capped_range_size,
             decrease_range_size,
             block_activity_threshold,
+            da_poll_interval,
         })
     }
 

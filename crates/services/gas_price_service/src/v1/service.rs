@@ -41,6 +41,8 @@ use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
+    Service,
+    ServiceRunner,
     StateWatcher,
     TaskNextAction,
 };
@@ -59,7 +61,7 @@ use tokio::sync::broadcast::Receiver;
 /// The service that updates the gas price algorithm.
 pub struct GasPriceServiceV1<L2, DA, StorageTxProvider>
 where
-    DA: DaBlockCostsSource,
+    DA: DaBlockCostsSource + 'static,
     StorageTxProvider: TransactionableStorage,
 {
     /// The algorithm that can be used in the next block
@@ -69,7 +71,7 @@ where
     /// The algorithm updater
     algorithm_updater: AlgorithmUpdaterV1,
     /// the da source adapter handle
-    da_source_adapter_handle: DaSourceService<DA>,
+    da_source_adapter_handle: ServiceRunner<DaSourceService<DA>>,
     /// The da source channel
     da_source_channel: Receiver<DaBlockCosts>,
     /// Buffer of block costs from the DA chain
@@ -110,11 +112,10 @@ where
         l2_block_source: L2,
         shared_algo: SharedV1Algorithm,
         algorithm_updater: AlgorithmUpdaterV1,
-        da_source_adapter_handle: DaSourceService<DA>,
+        da_source_adapter_handle: ServiceRunner<DaSourceService<DA>>,
         storage_tx_provider: StorageTxProvider,
     ) -> Self {
-        let da_source_channel =
-            da_source_adapter_handle.shared_data().clone().subscribe();
+        let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
         Self {
             shared_algo,
             l2_block_source,
@@ -259,11 +260,13 @@ where
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
                 tracing::debug!("Received L2 block result: {:?}", l2_block_res);
+                tracing::debug!("2222222222222222222222222222222222222");
                 let res = self.commit_block_data_to_algorithm(l2_block_res).await;
                 TaskNextAction::always_continue(res)
             }
             da_block_costs_res = self.da_source_channel.recv() => {
                 tracing::debug!("Received DA block costs: {:?}", da_block_costs_res);
+                tracing::debug!("999999999999999999999999999999999999");
                 match da_block_costs_res {
                     Ok(da_block_costs) => {
                         self.da_block_costs_buffer.push(da_block_costs);
@@ -286,7 +289,7 @@ where
         }
 
         // run shutdown hooks for internal services
-        self.da_source_adapter_handle.shutdown().await?;
+        self.da_source_adapter_handle.stop_and_await().await?;
 
         Ok(())
     }
@@ -349,6 +352,8 @@ mod tests {
 
     use fuel_core_services::{
         RunnableTask,
+        Service,
+        ServiceRunner,
         StateWatcher,
     };
     use fuel_core_storage::{
@@ -478,6 +483,7 @@ mod tests {
             capped_range_size: 100,
             decrease_range_size: 4,
             block_activity_threshold: 20,
+            da_poll_interval: None,
         };
         let inner = database();
         let (algo_updater, shared_algo) =
@@ -491,12 +497,14 @@ mod tests {
             ),
             None,
         );
+        let da_service_runner = ServiceRunner::new(dummy_da_source);
+        da_service_runner.start_and_await().await.unwrap();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
             shared_algo,
             algo_updater,
-            dummy_da_source,
+            da_service_runner,
             inner,
         );
         let read_algo = service.next_block_algorithm();
@@ -546,6 +554,7 @@ mod tests {
             capped_range_size: 100,
             decrease_range_size: 4,
             block_activity_threshold: 20,
+            da_poll_interval: None,
         };
         let mut inner = database();
         let mut tx = inner.write_transaction();
@@ -574,25 +583,27 @@ mod tests {
             Some(Duration::from_millis(1)),
         );
         let mut watcher = StateWatcher::started();
+        let da_service_runner = ServiceRunner::new(da_source);
+        da_service_runner.start_and_await().await.unwrap();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
             shared_algo,
             algo_updater,
-            da_source,
+            da_service_runner,
             inner,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
 
-        // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
-        // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
-        // here we mimic that behaviour by running the da block cost service.
-        let mut da_source_watcher = StateWatcher::started();
-        service
-            .da_source_adapter_handle
-            .run(&mut da_source_watcher)
-            .await;
+        // // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
+        // // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
+        // // here we mimic that behaviour by running the da block cost service.
+        // let mut da_source_watcher = StateWatcher::started();
+        // service
+        //     .da_source_adapter_handle
+        //     .run(&mut da_source_watcher)
+        //     .await;
 
         service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -623,6 +634,7 @@ mod tests {
             capped_range_size: 100,
             decrease_range_size: 4,
             block_activity_threshold: 20,
+            da_poll_interval: None,
         }
     }
 
@@ -674,25 +686,27 @@ mod tests {
             Some(Duration::from_millis(1)),
         );
         let mut watcher = StateWatcher::started();
+        let da_service_runner = ServiceRunner::new(da_source);
+        da_service_runner.start_and_await().await.unwrap();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
             shared_algo,
             algo_updater,
-            da_source,
+            da_service_runner,
             inner,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
 
-        // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
-        // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
-        // here we mimic that behaviour by running the da block cost service.
-        let mut da_source_watcher = StateWatcher::started();
-        service
-            .da_source_adapter_handle
-            .run(&mut da_source_watcher)
-            .await;
+        // // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
+        // // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
+        // // here we mimic that behaviour by running the da block cost service.
+        // let mut da_source_watcher = StateWatcher::started();
+        // service
+        //     .da_source_adapter_handle
+        //     .run(&mut da_source_watcher)
+        //     .await;
 
         service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;

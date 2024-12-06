@@ -225,6 +225,10 @@ pub struct Command {
     #[arg(long = "da-committer-url", env)]
     pub da_committer_url: Option<String>,
 
+    /// The interval at which the `DaSourceService` polls for new data
+    #[arg(long = "da-poll-interval", env)]
+    pub da_poll_interval: Option<u32>,
+
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
     #[arg(long = "consensus-key", env = "CONSENSUS_KEY_SECRET")]
@@ -328,6 +332,7 @@ impl Command {
             da_d_component,
             max_da_gas_price_change_percent,
             da_committer_url,
+            da_poll_interval,
             consensus_key,
             #[cfg(feature = "aws-kms")]
             consensus_aws_kms,
@@ -641,6 +646,7 @@ impl Command {
             activity_decrease_range_size: 0,
             da_committer_url,
             block_activity_threshold: 0,
+            da_poll_interval,
         };
         Ok(config)
     }
