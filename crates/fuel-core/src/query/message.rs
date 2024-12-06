@@ -456,10 +456,10 @@ mod tests {
                 data: Some(vec![i; 32]),
             });
         }
-        block.transactions_mut().push(valid_tx_id.clone());
+        block.transactions_mut().push(valid_tx_id);
         database.insert_block(1u32.into(), block.clone());
         database.insert_transaction_status(
-            valid_tx_id.clone(),
+            valid_tx_id,
             TransactionStatus::Success {
                 time: Tai64::UNIX_EPOCH,
                 block_height: 1u32.into(),
@@ -469,7 +469,7 @@ mod tests {
                 result: None,
             },
         );
-        database.insert_receipts(valid_tx_id.clone(), valid_tx_receipts.clone());
+        database.insert_receipts(valid_tx_id, valid_tx_receipts.clone());
 
         // Get the message proof with the valid transaction
         let message_proof_valid_tx = message_receipts_proof(
@@ -481,7 +481,7 @@ mod tests {
 
         // Add an invalid transaction with receipts to the block
         let invalid_tx_id = Bytes32::new([2; 32]);
-        block.transactions_mut().push(invalid_tx_id.clone());
+        block.transactions_mut().push(invalid_tx_id);
         database.insert_block(1u32.into(), block.clone());
         let mut invalid_tx_receipts = vec![];
         for i in 0..100 {
@@ -496,7 +496,7 @@ mod tests {
             });
         }
         database.insert_transaction_status(
-            invalid_tx_id.clone(),
+            invalid_tx_id,
             TransactionStatus::Failed {
                 time: Tai64::UNIX_EPOCH,
                 block_height: 1u32.into(),
@@ -506,7 +506,7 @@ mod tests {
                 receipts: invalid_tx_receipts.clone(),
             },
         );
-        database.insert_receipts(invalid_tx_id.clone(), invalid_tx_receipts.clone());
+        database.insert_receipts(invalid_tx_id, invalid_tx_receipts.clone());
 
         // When
         // Get the message proof with the same message id
