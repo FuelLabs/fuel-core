@@ -229,9 +229,9 @@ impl RunnableTask for Task {
 const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "REQUIRED_FUEL_BLOCK_HEIGHT";
 const CURRENT_FUEL_BLOCK_HEIGHT_HEADER: &str = "CURRENT_FUEL_BLOCK_HEIGHT";
 
-async fn required_fuel_block_height<B>(
-    req: AxumRequest<B>,
-    next: Next<B>,
+async fn required_fuel_block_height<Body>(
+    req: AxumRequest<Body>,
+    next: Next<Body>,
 ) -> impl IntoResponse {
     let last_known_block_height: BlockHeight = LAST_KNOWN_BLOCK_HEIGHT
     .get()
