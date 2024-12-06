@@ -77,6 +77,12 @@ use pagination::{
     PaginatedResult,
     PaginationRequest,
 };
+use reqwest::header::{
+    AsHeaderName,
+    HeaderMap,
+    HeaderValue,
+    IntoHeaderName,
+};
 use schema::{
     balance::BalanceArgs,
     blob::BlobByIdArgs,
@@ -149,12 +155,24 @@ pub mod types;
 
 type RegisterId = u32;
 
+#[derive(Debug, derive_more::Display, derive_more::From)]
+#[non_exhaustive]
+/// Error occurring during interaction with the FuelClient
+// anyhow::Error is wrapped inside a custom Error type,
+// so that we can specific error variants in the future.
+pub enum Error {
+    /// Unknown or not expected(by architecture) error.
+    #[from]
+    Other(anyhow::Error),
+}
+
 #[derive(Debug, Clone)]
 pub struct FuelClient {
     client: reqwest::Client,
     #[cfg(feature = "subscriptions")]
     cookie: std::sync::Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
+    headers: HeaderMap,
 }
 
 impl FromStr for FuelClient {
@@ -182,6 +200,7 @@ impl FromStr for FuelClient {
                 client,
                 cookie,
                 url,
+                headers: HeaderMap::new(),
             })
         }
 
@@ -221,6 +240,23 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
+    pub fn set_header(
+        &mut self,
+        key: impl IntoHeaderName,
+        value: impl TryInto<HeaderValue>,
+    ) -> Result<&mut Self, Error> {
+        let header_value: HeaderValue = value
+            .try_into()
+            .map_err(|_err| anyhow::anyhow!("Cannot parse value for header"))?;
+        self.headers.insert(key, header_value);
+        Ok(self)
+    }
+
+    pub fn remove_header(&mut self, key: impl AsHeaderName) -> &mut Self {
+        self.headers.remove(key);
+        self
+    }
+
     /// Send the GraphQL query to the client.
     pub async fn query<ResponseData, Vars>(
         &self,
@@ -230,27 +266,8 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
-        let response = self
-            .client
-            .post(self.url.clone())
-            .run_graphql(q)
-            .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-        Self::decode_response(response)
-    }
-
-    pub async fn query_with_headers<ResponseData, Vars>(
-        &self,
-        q: Operation<ResponseData, Vars>,
-        headers: impl IntoIterator<Item = (String, String)>,
-    ) -> io::Result<ResponseData>
-    where
-        Vars: serde::Serialize,
-        ResponseData: serde::de::DeserializeOwned + 'static,
-    {
         let mut request_builder = self.client.post(self.url.clone());
-        for (header_name, header_value) in headers {
+        for (header_name, header_value) in self.headers.iter() {
             request_builder = request_builder.header(header_name, header_value);
         }
 
@@ -1099,32 +1116,6 @@ impl FuelClient {
         };
         let query = schema::balance::BalanceQuery::build(BalanceArgs { owner, asset_id });
         let balance: types::Balance = self.query(query).await?.balance.into();
-        Ok(balance.amount)
-    }
-
-    pub async fn balance_with_required_block_header(
-        &self,
-        owner: &Address,
-        asset_id: Option<&AssetId>,
-        required_block_height: u32,
-    ) -> io::Result<u128> {
-        let owner: schema::Address = (*owner).into();
-        let asset_id: schema::AssetId = match asset_id {
-            Some(asset_id) => (*asset_id).into(),
-            None => schema::AssetId::default(),
-        };
-        let query = schema::balance::BalanceQuery::build(BalanceArgs { owner, asset_id });
-        let balance: types::Balance = self
-            .query_with_headers(
-                query,
-                vec![(
-                    "REQUIRED_FUEL_BLOCK_HEIGHT".to_string(),
-                    required_block_height.to_string(),
-                )],
-            )
-            .await?
-            .balance
-            .into();
         Ok(balance.amount)
     }
 

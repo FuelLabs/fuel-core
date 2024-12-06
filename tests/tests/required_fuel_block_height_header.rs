@@ -24,13 +24,14 @@ async fn balance_with_block_height_header() {
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
+    let mut client: FuelClient = FuelClient::from(srv.bound_address);
+
+    client
+        .set_header("REQUIRED_FUEL_BLOCK_HEIGHT", "100")
+        .unwrap();
 
     // Issue a request with wrong precondition
-    let error = client
-        .balance_with_required_block_header(&owner, Some(&asset_id), 100)
-        .await
-        .unwrap_err();
+    let error = client.balance(&owner, Some(&asset_id)).await.unwrap_err();
 
     let error_str = format!("{:?}", error);
     assert_eq!(
@@ -38,13 +39,16 @@ async fn balance_with_block_height_header() {
         "Custom { kind: Other, error: ErrorResponse(412, \"\") }"
     );
 
+    // Disable HEADER, otherwise requests fail with status code 412
+    client.remove_header("REQUIRED_FUEL_BLOCK_HEIGHT");
     // Meet precondition on server side
     client.produce_blocks(100, None).await.unwrap();
 
-    // Issue request again
-    let result = client
-        .balance_with_required_block_header(&owner, Some(&asset_id), 100)
-        .await;
+    // Set the header and issue request again
+    client
+        .set_header("REQUIRED_FUEL_BLOCK_HEIGHT", "100")
+        .unwrap();
+    let result = client.balance(&owner, Some(&asset_id)).await;
 
     assert!(result.is_ok());
 }
