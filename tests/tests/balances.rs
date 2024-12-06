@@ -169,7 +169,7 @@ async fn balance_messages_only() {
     let client = FuelClient::from(srv.bound_address);
 
     // run test
-    const NON_RETRYABLE_AMOUNT: u128 = 60 + 90;
+    const NON_RETRYABLE_AMOUNT: u64 = 60 + 90;
     let balance = client.balance(&owner, Some(&asset_id)).await.unwrap();
     assert_eq!(balance, NON_RETRYABLE_AMOUNT);
 }
