@@ -38,14 +38,13 @@ use axum::{
         Extension,
     },
     http::{
+        self,
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
             ACCESS_CONTROL_ALLOW_ORIGIN,
         },
         HeaderValue,
-        Request as AxumRequest,
-        Response as AxumResponse,
         StatusCode,
     },
     middleware::{
@@ -230,7 +229,7 @@ const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "REQUIRED_FUEL_BLOCK_HEIGHT";
 const CURRENT_FUEL_BLOCK_HEIGHT_HEADER: &str = "CURRENT_FUEL_BLOCK_HEIGHT";
 
 async fn required_fuel_block_height<Body>(
-    req: AxumRequest<Body>,
+    req: http::Request<Body>,
     next: Next<Body>,
 ) -> impl IntoResponse {
     let last_known_block_height: BlockHeight = LAST_KNOWN_BLOCK_HEIGHT
@@ -277,7 +276,7 @@ async fn required_fuel_block_height<Body>(
 }
 
 fn add_current_fuel_block_height_header_to_response<Body>(
-    response: &mut AxumResponse<Body>,
+    response: &mut http::Response<Body>,
     last_known_block_height: &BlockHeight,
 ) {
     response.headers_mut().insert(
