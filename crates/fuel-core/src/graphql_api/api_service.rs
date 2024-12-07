@@ -15,7 +15,9 @@ use crate::{
         view_extension::ViewExtension,
         Config,
     },
-    graphql_api,
+    graphql_api::{
+        self,
+    },
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -36,12 +38,18 @@ use axum::{
         Extension,
     },
     http::{
+        self,
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
             ACCESS_CONTROL_ALLOW_ORIGIN,
         },
         HeaderValue,
+        StatusCode,
+    },
+    middleware::{
+        self,
+        Next,
     },
     response::{
         sse::Event,
@@ -88,7 +96,10 @@ use tower_http::{
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub use super::database::ReadDatabase;
-use super::ports::worker;
+use super::{
+    ports::worker,
+    worker_service::LAST_KNOWN_BLOCK_HEIGHT,
+};
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
@@ -214,6 +225,66 @@ impl RunnableTask for Task {
     }
 }
 
+const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "REQUIRED_FUEL_BLOCK_HEIGHT";
+const CURRENT_FUEL_BLOCK_HEIGHT_HEADER: &str = "CURRENT_FUEL_BLOCK_HEIGHT";
+
+async fn required_fuel_block_height<Body>(
+    req: http::Request<Body>,
+    next: Next<Body>,
+) -> impl IntoResponse {
+    let last_known_block_height: BlockHeight = LAST_KNOWN_BLOCK_HEIGHT
+    .get()
+    //Maybe too strict?
+    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
+    .load(std::sync::atomic::Ordering::Acquire)
+    .into();
+
+    let Some(required_fuel_block_height_header) = req
+        .headers()
+        .get(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER)
+        .map(|value| value.to_str())
+    else {
+        // Header is not present, so we don't have any requirements.
+        let mut response = next.run(req).await;
+        add_current_fuel_block_height_header_to_response(
+            &mut response,
+            &last_known_block_height,
+        );
+
+        return Ok(response);
+    };
+
+    let raw_required_fuel_block_height =
+        required_fuel_block_height_header.map_err(|_err| StatusCode::BAD_REQUEST)?;
+
+    let required_fuel_block_height: BlockHeight = raw_required_fuel_block_height
+        .parse::<u32>()
+        .map_err(|_| StatusCode::BAD_REQUEST)?
+        .into();
+
+    if required_fuel_block_height > last_known_block_height {
+        Err(StatusCode::PRECONDITION_FAILED)
+    } else {
+        let mut response = next.run(req).await;
+        add_current_fuel_block_height_header_to_response(
+            &mut response,
+            &last_known_block_height,
+        );
+
+        Ok(response)
+    }
+}
+
+fn add_current_fuel_block_height_header_to_response<Body>(
+    response: &mut http::Response<Body>,
+    last_known_block_height: &BlockHeight,
+) {
+    response.headers_mut().insert(
+        CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
+        HeaderValue::from_str(&last_known_block_height.to_string()).unwrap(),
+    );
+}
+
 // Need a separate Data Object for each Query endpoint, cannot be avoided
 #[allow(clippy::too_many_arguments)]
 pub fn new_service<OnChain, OffChain>(
@@ -287,6 +358,7 @@ where
         .route(
             graphql_endpoint,
             post(graphql_handler)
+                .layer(middleware::from_fn(required_fuel_block_height))
                 .layer(ConcurrencyLimitLayer::new(concurrency_limit))
                 .options(ok),
         )
