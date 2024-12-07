@@ -55,6 +55,7 @@ use anyhow::{
     anyhow,
     Result,
 };
+use anyhow::anyhow;
 use fuel_core_services::{
     stream::{
         BoxStream,
@@ -88,6 +89,7 @@ use fuel_core_types::{
         SharedImportResult,
     },
 };
+use fuel_gas_price_algorithm::v1::AlgorithmUpdaterV1;
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     Bytes,
@@ -97,6 +99,8 @@ use fuel_gas_price_algorithm::v1::{
 };
 use std::{
     num::NonZeroU64,
+    ops::Deref,
+    sync::Arc,
     ops::{
         Deref,
         Range,
@@ -257,11 +261,13 @@ impl FakeDABlockCost {
             sequence_number: sequence_number.clone(),
         };
         (service, sequence_number)
+        Self { da_block_costs }
     }
 }
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for FakeDABlockCost {
+    async fn request_da_block_cost(&mut self) -> anyhow::Result<DaBlockCosts> {
     async fn request_da_block_cost(&mut self) -> Result<DaBlockCosts> {
         let costs = self.da_block_costs.recv().await.unwrap();
         Ok(costs)
@@ -370,6 +376,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let da_source_service = DaSourceService::new(da_source, None);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
+        metadata_storage,
         shared_algo,
         algo_updater,
         da_source_service,
@@ -405,6 +412,10 @@ async fn run__new_l2_block_saves_old_metadata() {
     let l2_block_source = FakeL2BlockSource {
         l2_block: l2_block_receiver,
     };
+    let metadata_inner = Arc::new(std::sync::Mutex::new(None));
+    let metadata_storage = FakeMetadata {
+        inner: metadata_inner.clone(),
+    };
 
     let config = zero_threshold_arbitrary_config();
     let inner = database();
@@ -414,6 +425,7 @@ async fn run__new_l2_block_saves_old_metadata() {
     let da_source_service = DaSourceService::new(da_source, None);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
+        metadata_storage,
         shared_algo,
         algo_updater,
         da_source_service,
@@ -435,6 +447,10 @@ async fn run__new_l2_block_saves_old_metadata() {
 
     // cleanup
     service.shutdown().await.unwrap();
+
+    // then
+    let metadata_is_some = metadata_inner.lock().unwrap().is_some();
+    assert!(metadata_is_some)
 }
 
 #[derive(Clone)]
@@ -525,6 +541,11 @@ fn empty_block_stream() -> BoxStream<SharedImportResult> {
 async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overrides() {
     // given
     let original_metadata = arbitrary_metadata();
+    let original = UpdaterMetadata::V1(original_metadata.clone());
+    let metadata_inner = Arc::new(std::sync::Mutex::new(Some(original.clone())));
+    let metadata_storage = FakeMetadata {
+        inner: metadata_inner,
+    };
 
     let different_config = different_arb_config();
     let descaleed_exec_price =
@@ -544,6 +565,7 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
         settings,
         block_stream,
         gas_price_db,
+        metadata_storage,
         da_cost_source,
         on_chain_db,
         inner,
@@ -650,6 +672,7 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
         settings,
         block_stream,
         gas_price_db,
+        metadata_storage,
         da_cost_source,
         on_chain_db,
         erroring_persisted_data,
