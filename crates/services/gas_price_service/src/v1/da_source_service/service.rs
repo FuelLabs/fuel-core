@@ -61,7 +61,9 @@ where
     }
 
     async fn process_block_costs(&mut self) -> Result<()> {
-        let da_block_costs = self.source.request_da_block_cost().await?;
+        let da_block_costs_res = self.source.request_da_block_cost().await;
+        tracing::debug!("Received block costs: {:?}", da_block_costs_res);
+        let da_block_costs = da_block_costs_res?;
         self.shared_state.0.send(da_block_costs)?;
         Ok(())
     }
@@ -110,12 +112,14 @@ where
     /// This function polls the source according to a polling interval
     /// described by the DaBlockCostsService
     async fn run(&mut self, state_watcher: &mut StateWatcher) -> TaskNextAction {
+        tracing::debug!("111111111111111111111111111111111");
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {
                 TaskNextAction::Stop
             }
             _ = self.poll_interval.tick() => {
+                tracing::debug!("Polling DaSourceService for block costs");
                 let da_block_costs_res = self.process_block_costs().await;
                 TaskNextAction::always_continue(da_block_costs_res)
             }
