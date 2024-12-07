@@ -44,6 +44,7 @@ pub struct GasCosts(fuel_tx::GasCosts);
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum GasCostsVersion {
     V1,
+    V2,
 }
 
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
@@ -281,6 +282,7 @@ impl GasCosts {
             | GasCostsValues::V2(_)
             | GasCostsValues::V3(_)
             | GasCostsValues::V4(_) => GasCostsVersion::V1,
+            GasCostsValues::V5(_) => GasCostsVersion::V2,
         }
     }
 
