@@ -14,6 +14,7 @@ pub mod database;
 pub(crate) mod indexation;
 pub(crate) mod metrics_extension;
 pub mod ports;
+pub(crate) mod required_fuel_block_height_extension;
 pub mod storage;
 pub(crate) mod validation_extension;
 pub(crate) mod view_extension;

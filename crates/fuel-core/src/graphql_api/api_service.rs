@@ -17,6 +17,7 @@ use crate::{
     },
     graphql_api::{
         self,
+        required_fuel_block_height_extension::RequiredFuelBlockHeightExtension,
     },
     schema::{
         CoreSchema,
@@ -36,9 +37,9 @@ use axum::{
     extract::{
         DefaultBodyLimit,
         Extension,
+        FromRequest,
     },
     http::{
-        self,
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
@@ -46,10 +47,6 @@ use axum::{
         },
         HeaderValue,
         StatusCode,
-    },
-    middleware::{
-        self,
-        Next,
     },
     response::{
         sse::Event,
@@ -98,7 +95,7 @@ pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 pub use super::database::ReadDatabase;
 use super::{
     ports::worker,
-    worker_service::LAST_KNOWN_BLOCK_HEIGHT,
+    required_fuel_block_height_extension::RequiredFuelBlockHeightTooFarInTheFuture,
 };
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
@@ -225,65 +222,7 @@ impl RunnableTask for Task {
     }
 }
 
-const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "REQUIRED_FUEL_BLOCK_HEIGHT";
-const CURRENT_FUEL_BLOCK_HEIGHT_HEADER: &str = "CURRENT_FUEL_BLOCK_HEIGHT";
-
-async fn required_fuel_block_height<Body>(
-    req: http::Request<Body>,
-    next: Next<Body>,
-) -> impl IntoResponse {
-    let last_known_block_height: BlockHeight = LAST_KNOWN_BLOCK_HEIGHT
-    .get()
-    //Maybe too strict?
-    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
-    .load(std::sync::atomic::Ordering::Acquire)
-    .into();
-
-    let Some(required_fuel_block_height_header) = req
-        .headers()
-        .get(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER)
-        .map(|value| value.to_str())
-    else {
-        // Header is not present, so we don't have any requirements.
-        let mut response = next.run(req).await;
-        add_current_fuel_block_height_header_to_response(
-            &mut response,
-            &last_known_block_height,
-        );
-
-        return Ok(response);
-    };
-
-    let raw_required_fuel_block_height =
-        required_fuel_block_height_header.map_err(|_err| StatusCode::BAD_REQUEST)?;
-
-    let required_fuel_block_height: BlockHeight = raw_required_fuel_block_height
-        .parse::<u32>()
-        .map_err(|_| StatusCode::BAD_REQUEST)?
-        .into();
-
-    if required_fuel_block_height > last_known_block_height {
-        Err(StatusCode::PRECONDITION_FAILED)
-    } else {
-        let mut response = next.run(req).await;
-        add_current_fuel_block_height_header_to_response(
-            &mut response,
-            &last_known_block_height,
-        );
-
-        Ok(response)
-    }
-}
-
-fn add_current_fuel_block_height_header_to_response<Body>(
-    response: &mut http::Response<Body>,
-    last_known_block_height: &BlockHeight,
-) {
-    response.headers_mut().insert(
-        CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
-        HeaderValue::from_str(&last_known_block_height.to_string()).unwrap(),
-    );
-}
+pub(crate) const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "REQUIRED_FUEL_BLOCK_HEIGHT";
 
 // Need a separate Data Object for each Query endpoint, cannot be avoided
 #[allow(clippy::too_many_arguments)]
@@ -345,6 +284,7 @@ where
         ))
         .extension(async_graphql::extensions::Tracing)
         .extension(ViewExtension::new())
+        .extension(RequiredFuelBlockHeightExtension::new())
         .finish();
 
     let graphql_endpoint = "/v1/graphql";
@@ -358,7 +298,6 @@ where
         .route(
             graphql_endpoint,
             post(graphql_handler)
-                .layer(middleware::from_fn(required_fuel_block_height))
                 .layer(ConcurrencyLimitLayer::new(concurrency_limit))
                 .options(ok),
         )
@@ -418,11 +357,58 @@ async fn health() -> Json<serde_json::Value> {
     Json(json!({ "up": true }))
 }
 
+#[derive(Clone)]
+struct RequiredHeight(Option<u32>);
+
+#[async_trait::async_trait]
+impl<Body> FromRequest<Body> for RequiredHeight
+where
+    Body: Send,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request(
+        req: &mut axum::extract::RequestParts<Body>,
+    ) -> Result<Self, Self::Rejection> {
+        let required_fuel_block_height = req
+            .headers()
+            .get(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER)
+            .map(|value| value.to_str())
+            .transpose()
+            .map_err(|_| (StatusCode::BAD_REQUEST, "Header Malformed".to_string()))?
+            .map(|value| value.parse::<u32>())
+            .transpose()
+            .map_err(|_| (StatusCode::BAD_REQUEST, "Header Malformed".to_string()))?;
+
+        Ok(RequiredHeight(required_fuel_block_height))
+    }
+}
+
 async fn graphql_handler(
+    extract_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Json<Response> {
-    schema.execute(req.0).await.into()
+) -> Result<Json<Response>, (StatusCode, Json<String>)> {
+    let mut request = req.0;
+    if let RequiredHeight(Some(height)) = extract_height {
+        request
+            .extensions
+            .insert(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER.to_string(), height.into());
+    }
+    let graphql_response: Response = schema.execute(request).await.into();
+    let precondition_failed = graphql_response
+        .errors
+        .first()
+        .and_then(|err| err.source::<RequiredFuelBlockHeightTooFarInTheFuture>())
+        .is_some();
+    if precondition_failed {
+        Err((
+            StatusCode::PRECONDITION_FAILED,
+            Json("Required fuel block height is too far in the future".to_string()),
+        ))
+    } else {
+        Ok(graphql_response.into())
+    }
 }
 
 async fn graphql_subscription_handler(

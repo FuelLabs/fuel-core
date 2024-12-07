@@ -100,17 +100,12 @@ use futures::{
 use std::{
     borrow::Cow,
     ops::Deref,
-    sync::{
-        atomic::AtomicU32,
-        OnceLock,
-    },
 };
 
 #[cfg(test)]
 mod tests;
 
 // The last known block height that was processed by the GraphQL service.
-pub static LAST_KNOWN_BLOCK_HEIGHT: OnceLock<AtomicU32> = OnceLock::new();
 
 #[derive(Debug, Clone)]
 pub enum DaCompressionConfig {
@@ -192,11 +187,6 @@ where
 
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
-
-        // update the block height recorded in memory
-        LAST_KNOWN_BLOCK_HEIGHT
-            .get_or_init(|| AtomicU32::new(**height))
-            .store(**height, std::sync::atomic::Ordering::Release);
 
         Ok(())
     }
