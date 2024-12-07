@@ -4,7 +4,10 @@ use crate::{
         updater_metadata::UpdaterMetadata,
         utils::BlockInfo,
     },
-    ports::MetadataStorage,
+    ports::{
+        GetMetadataStorage,
+        SetMetadataStorage,
+    },
     v0::algorithm::SharedV0Algorithm,
 };
 use anyhow::anyhow;
@@ -35,7 +38,7 @@ pub struct GasPriceServiceV0<L2, Metadata> {
 
 impl<L2, Metadata> GasPriceServiceV0<L2, Metadata>
 where
-    Metadata: MetadataStorage,
+    Metadata: GetMetadataStorage + SetMetadataStorage,
 {
     pub fn new(
         l2_block_source: L2,
@@ -120,7 +123,7 @@ where
 impl<L2, Metadata> GasPriceServiceV0<L2, Metadata>
 where
     L2: L2BlockSource,
-    Metadata: MetadataStorage,
+    Metadata: GetMetadataStorage + SetMetadataStorage,
 {
     async fn process_l2_block_res(
         &mut self,
@@ -138,7 +141,7 @@ where
 impl<L2, Metadata> RunnableTask for GasPriceServiceV0<L2, Metadata>
 where
     L2: L2BlockSource,
-    Metadata: MetadataStorage,
+    Metadata: GetMetadataStorage + SetMetadataStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tracing::trace!("Call of `run` function of the gas price service v0");
@@ -178,7 +181,10 @@ mod tests {
                 Result as GasPriceResult,
             },
         },
-        ports::MetadataStorage,
+        ports::{
+            GetMetadataStorage,
+            SetMetadataStorage,
+        },
         v0::{
             metadata::V0AlgorithmConfig,
             service::GasPriceServiceV0,
@@ -217,18 +223,20 @@ mod tests {
         }
     }
 
-    impl MetadataStorage for FakeMetadata {
+    impl SetMetadataStorage for FakeMetadata {
+        fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
+            *self.inner.lock().unwrap() = Some(metadata.clone());
+            Ok(())
+        }
+    }
+
+    impl GetMetadataStorage for FakeMetadata {
         fn get_metadata(
             &self,
             _: &BlockHeight,
         ) -> GasPriceResult<Option<UpdaterMetadata>> {
             let metadata = self.inner.lock().unwrap().clone();
             Ok(metadata)
-        }
-
-        fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
-            *self.inner.lock().unwrap() = Some(metadata.clone());
-            Ok(())
         }
     }
 
