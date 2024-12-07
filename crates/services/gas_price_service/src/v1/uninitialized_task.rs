@@ -81,7 +81,6 @@ pub mod fuel_storage_unrecorded_blocks;
 pub struct UninitializedTask<
     L2DataStoreView,
     GasPriceStore,
-    Metadata,
     DA,
     SettingsProvider,
     PersistedData,
@@ -94,7 +93,6 @@ pub struct UninitializedTask<
     pub block_stream: BoxStream<SharedImportResult>,
     pub(crate) shared_algo: SharedV1Algorithm,
     pub(crate) algo_updater: AlgorithmUpdaterV1,
-    pub(crate) metadata_storage: Metadata,
     pub(crate) da_source: DA,
     pub persisted_data: PersistedData,
 }
@@ -126,7 +124,6 @@ where
         settings: SettingsProvider,
         block_stream: BoxStream<SharedImportResult>,
         gas_price_db: GasPriceStore,
-        metadata_storage: Metadata,
         da_source: DA,
         on_chain_db: L2DataStoreView,
         persisted_data: PersistedData,
@@ -149,7 +146,6 @@ where
             block_stream,
             algo_updater,
             shared_algo,
-            metadata_storage,
             da_source,
             persisted_data,
         };
@@ -199,7 +195,6 @@ where
         {
             let service = GasPriceServiceV1::new(
                 l2_block_source,
-                self.metadata_storage,
                 self.shared_algo,
                 self.algo_updater,
                 da_service,
@@ -211,7 +206,6 @@ where
                 sync_gas_price_db_with_on_chain_storage(
                     &self.settings,
                     &self.config,
-                    &mut self.metadata_storage,
                     &self.on_chain_db,
                     metadata_height,
                     latest_block_height,
@@ -221,7 +215,6 @@ where
 
             let service = GasPriceServiceV1::new(
                 l2_block_source,
-                self.metadata_storage,
                 self.shared_algo,
                 self.algo_updater,
                 da_service,
@@ -281,13 +274,11 @@ fn sync_gas_price_db_with_on_chain_storage<
     'a,
     L2DataStore,
     L2DataStoreView,
-    Metadata,
     SettingsProvider,
     PersistedData,
 >(
     settings: &SettingsProvider,
     config: &V1AlgorithmConfig,
-    metadata_storage: &mut Metadata,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
@@ -296,7 +287,6 @@ fn sync_gas_price_db_with_on_chain_storage<
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    Metadata: MetadataStorage,
     SettingsProvider: GasPriceSettingsProvider,
     PersistedData: GetMetadataStorage + TransactionableStorage + 'a,
     <PersistedData as TransactionableStorage>::Transaction<'a>:
@@ -345,7 +335,6 @@ fn sync_v1_metadata<
 where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    Metadata: MetadataStorage,
     SettingsProvider: GasPriceSettingsProvider,
     StorageTxGenerator: TransactionableStorage + 'a,
     <StorageTxGenerator as TransactionableStorage>::Transaction<'a>:
@@ -407,7 +396,6 @@ pub fn new_gas_price_service_v1<
     settings: SettingsProvider,
     block_stream: BoxStream<SharedImportResult>,
     gas_price_db: GasPriceStore,
-    metadata: Metadata,
     da_source: DA,
     on_chain_db: L2DataStore,
     persisted_data: PersistedData,
@@ -427,7 +415,6 @@ where
     L2DataStore::LatestView: L2Data,
     GasPriceStore: GasPriceData,
     SettingsProvider: GasPriceSettingsProvider,
-    Metadata: MetadataStorage,
     DA: DaBlockCostsSource,
     PersistedData:
         GetMetadataStorage + GetDaSequenceNumber + TransactionableStorage + 'static,
@@ -440,7 +427,6 @@ where
         settings,
         block_stream,
         gas_price_db,
-        metadata,
         da_source,
         on_chain_db,
         persisted_data,
