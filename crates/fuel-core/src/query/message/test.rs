@@ -97,13 +97,17 @@ async fn can_build_message_proof() {
     let mut data = MockProofDataStorage::new();
     let mut count = 0;
 
-    data.expect_receipts().returning(move |txn_id| {
-        if *txn_id == transaction_id {
-            Ok(receipts.to_vec())
-        } else {
-            let r = other_receipts[count..=count].to_vec();
-            count += 1;
-            Ok(r)
+    data.expect_receipts().returning({
+        let receipts = receipts.to_vec();
+        let other_receipts = other_receipts.to_vec();
+        move |txn_id| {
+            if *txn_id == transaction_id {
+                Ok(receipts.clone())
+            } else {
+                let r = other_receipts[count..=count].to_vec();
+                count += 1;
+                Ok(r)
+            }
         }
     });
 
@@ -158,18 +162,23 @@ async fn can_build_message_proof() {
         });
 
     let message_block_height = *message_block.header().height();
-    data.expect_transaction_status()
-        .with(eq(transaction_id))
-        .returning(move |_| {
-            Ok(TransactionStatus::Success {
-                block_height: message_block_height,
-                time: Tai64::UNIX_EPOCH,
-                result: None,
-                receipts: vec![],
-                total_gas: 0,
-                total_fee: 0,
-            })
-        });
+    data.expect_transaction_status().returning(move |tx_id| {
+        let receipts = if *tx_id == transaction_id {
+            receipts.to_vec()
+        } else {
+            let r = other_receipts[count..=count].to_vec();
+            count += 1;
+            r
+        };
+        Ok(TransactionStatus::Success {
+            block_height: message_block_height,
+            time: Tai64::UNIX_EPOCH,
+            result: None,
+            receipts,
+            total_gas: 0,
+            total_fee: 0,
+        })
+    });
 
     data.expect_block().times(2).returning({
         let commit_block = commit_block.clone();
