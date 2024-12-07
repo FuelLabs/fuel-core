@@ -88,8 +88,10 @@ pub struct ReadDatabase {
     on_chain: Box<dyn AtomicView<LatestView = OnChainView>>,
     /// The off-chain database view provider.
     off_chain: Box<dyn AtomicView<LatestView = OffChainView>>,
-    /// The flag that indicates whether the Balances cache table is enabled.
-    balances_enabled: bool,
+    /// The flag that indicates whether the Balances indexation is enabled.
+    balances_indexation_enabled: bool,
+    /// The flag that indicates whether the CoinsToSpend indexation is enabled.
+    coins_to_spend_indexation_enabled: bool,
 }
 
 impl ReadDatabase {
@@ -106,14 +108,17 @@ impl ReadDatabase {
         OnChain::LatestView: OnChainDatabase,
         OffChain::LatestView: OffChainDatabase,
     {
-        let balances_enabled = off_chain.balances_enabled()?;
+        let balances_indexation_enabled = off_chain.balances_indexation_enabled()?;
+        let coins_to_spend_indexation_enabled =
+            off_chain.coins_to_spend_indexation_enabled()?;
 
         Ok(Self {
             batch_size,
             genesis_height,
             on_chain: Box::new(ArcWrapper::new(on_chain)),
             off_chain: Box::new(ArcWrapper::new(off_chain)),
-            balances_enabled,
+            balances_indexation_enabled,
+            coins_to_spend_indexation_enabled,
         })
     }
 
@@ -127,7 +132,8 @@ impl ReadDatabase {
             genesis_height: self.genesis_height,
             on_chain: self.on_chain.latest_view()?,
             off_chain: self.off_chain.latest_view()?,
-            balances_enabled: self.balances_enabled,
+            balances_indexation_enabled: self.balances_indexation_enabled,
+            coins_to_spend_indexation_enabled: self.coins_to_spend_indexation_enabled,
         })
     }
 
@@ -143,7 +149,8 @@ pub struct ReadView {
     pub(crate) genesis_height: BlockHeight,
     pub(crate) on_chain: OnChainView,
     pub(crate) off_chain: OffChainView,
-    pub(crate) balances_enabled: bool,
+    pub(crate) balances_indexation_enabled: bool,
+    pub(crate) coins_to_spend_indexation_enabled: bool,
 }
 
 impl ReadView {
