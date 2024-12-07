@@ -28,7 +28,6 @@ use fuel_core_storage::{
         Encode,
     },
     kv_store::KeyValueInspect,
-    structured_storage::StructuredStorage,
     transactional::{
         Modifiable,
         StorageTransaction,
@@ -37,6 +36,7 @@ use fuel_core_storage::{
     Error as StorageError,
     StorageAsMut,
     StorageAsRef,
+    StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
@@ -59,10 +59,10 @@ mod metadata_tests;
 
 pub mod storage;
 
-impl<Storage> SetMetadataStorage for StructuredStorage<Storage>
+impl<Storage> SetMetadataStorage for Storage
 where
-    Self: Send + Sync,
-    Self: StorageMutate<GasPriceMetadata, Error = StorageError>,
+    Storage: Send + Sync,
+    Storage: StorageMutate<GasPriceMetadata, Error = StorageError>,
 {
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
         let block_height = metadata.l2_block_height();
@@ -76,9 +76,10 @@ where
     }
 }
 
-impl<Storage> GetMetadataStorage for StructuredStorage<Storage>
+impl<Storage> GetMetadataStorage for Storage
 where
-    Storage: KeyValueInspect<Column = GasPriceColumn> + Send + Sync,
+    Storage: Send + Sync,
+    Storage: StorageInspect<GasPriceMetadata, Error = StorageError>,
 {
     fn get_metadata(
         &self,
@@ -94,9 +95,10 @@ where
     }
 }
 
-impl<Storage> GetDaSequenceNumber for StructuredStorage<Storage>
+impl<Storage> GetDaSequenceNumber for Storage
 where
-    Storage: KeyValueInspect<Column = GasPriceColumn> + Send + Sync,
+    Storage: Send + Sync,
+    Storage: StorageInspect<SequenceNumberTable, Error = StorageError>,
 {
     fn get_sequence_number(
         &self,
@@ -132,10 +134,10 @@ where
     }
 }
 
-impl<Storage> SetDaSequenceNumber for StructuredStorage<Storage>
+impl<Storage> SetDaSequenceNumber for Storage
 where
-    Self: Send + Sync,
-    Self: StorageMutate<SequenceNumberTable, Error = StorageError>,
+    Storage: Send + Sync,
+    Storage: StorageMutate<SequenceNumberTable, Error = StorageError>,
 {
     fn set_sequence_number(
         &mut self,

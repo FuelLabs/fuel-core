@@ -83,8 +83,8 @@ where
     DA: DaBlockCostsSource,
     StorageTxProvider: TransactionableStorage,
 {
-    async fn commit_block_data_to_algorithm<'a>(
-        &'a mut self,
+    async fn commit_block_data_to_algorithm(
+        &mut self,
         l2_block_res: GasPriceResult<BlockInfo>,
     ) -> anyhow::Result<()> {
         tracing::info!("Received L2 block result: {:?}", l2_block_res);
