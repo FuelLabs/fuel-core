@@ -46,7 +46,7 @@ pub trait GetDaSequenceNumber: Send + Sync {
     fn get_sequence_number(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
 }
 
-pub trait TransactionableStorage
+pub trait GasPriceServiceAtomicStorage
 where
     Self: 'static,
     Self: Send + Sync,

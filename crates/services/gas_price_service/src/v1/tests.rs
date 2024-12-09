@@ -19,12 +19,12 @@ use crate::{
     },
     ports::{
         GasPriceData,
+        GasPriceServiceAtomicStorage,
         GetDaSequenceNumber,
         GetMetadataStorage,
         L2Data,
         SetDaSequenceNumber,
         SetMetadataStorage,
-        TransactionableStorage,
     },
     v1::{
         algorithm::SharedV1Algorithm,
@@ -172,7 +172,7 @@ impl GetDaSequenceNumber for ErroringPersistedData {
 
 struct UnimplementedStorageTx;
 
-impl TransactionableStorage for ErroringPersistedData {
+impl GasPriceServiceAtomicStorage for ErroringPersistedData {
     type Transaction<'a> = UnimplementedStorageTx;
 
     fn begin_transaction(&mut self) -> GasPriceResult<Self::Transaction<'_>> {

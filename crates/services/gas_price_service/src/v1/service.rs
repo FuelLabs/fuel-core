@@ -11,10 +11,10 @@ use crate::{
         },
     },
     ports::{
+        GasPriceServiceAtomicStorage,
         GetMetadataStorage,
         SetDaSequenceNumber,
         SetMetadataStorage,
-        TransactionableStorage,
     },
     v0::metadata::V0Metadata,
     v1::{
@@ -77,11 +77,11 @@ pub struct GasPriceServiceV1<L2, DA, StorageTxProvider> {
     storage_tx_provider: StorageTxProvider,
 }
 
-impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
+impl<L2, DA, AtomicStorage> GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     L2: L2BlockSource,
     DA: DaBlockCostsSource,
-    StorageTxProvider: TransactionableStorage,
+    AtomicStorage: GasPriceServiceAtomicStorage,
 {
     async fn commit_block_data_to_algorithm(
         &mut self,
@@ -96,17 +96,17 @@ where
     }
 }
 
-impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
+impl<L2, DA, AtomicStorage> GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     DA: DaBlockCostsSource,
-    StorageTxProvider: TransactionableStorage,
+    AtomicStorage: GasPriceServiceAtomicStorage,
 {
     pub fn new(
         l2_block_source: L2,
         shared_algo: SharedV1Algorithm,
         algorithm_updater: AlgorithmUpdaterV1,
         da_source_adapter_handle: DaSourceService<DA>,
-        storage_tx_provider: StorageTxProvider,
+        storage_tx_provider: AtomicStorage,
     ) -> Self {
         let da_source_channel =
             da_source_adapter_handle.shared_data().clone().subscribe();
@@ -130,7 +130,7 @@ where
     }
 
     #[cfg(test)]
-    pub fn storage_tx_provider(&self) -> &StorageTxProvider {
+    pub fn storage_tx_provider(&self) -> &AtomicStorage {
         &self.storage_tx_provider
     }
 
@@ -185,7 +185,7 @@ where
         storage_tx
             .set_metadata(&metadata)
             .map_err(|err| anyhow!(err))?;
-        StorageTxProvider::commit_transaction(storage_tx)?;
+        AtomicStorage::commit_transaction(storage_tx)?;
         let new_algo = self.algorithm_updater.algorithm();
         self.shared_algo.update(new_algo).await;
         Ok(())
@@ -200,7 +200,7 @@ where
                 let metadata: UpdaterMetadata = self.algorithm_updater.clone().into();
                 let mut tx = self.storage_tx_provider.begin_transaction()?;
                 tx.set_metadata(&metadata).map_err(|err| anyhow!(err))?;
-                StorageTxProvider::commit_transaction(tx)?;
+                AtomicStorage::commit_transaction(tx)?;
                 let new_algo = self.algorithm_updater.algorithm();
                 // self.update(new_algo).await;
                 self.shared_algo.update(new_algo).await;
@@ -228,12 +228,11 @@ where
 }
 
 #[async_trait]
-impl<L2, DA, StorageTxProvider> RunnableTask
-    for GasPriceServiceV1<L2, DA, StorageTxProvider>
+impl<L2, DA, AtomicStorage> RunnableTask for GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     L2: L2BlockSource,
     DA: DaBlockCostsSource,
-    StorageTxProvider: TransactionableStorage,
+    AtomicStorage: GasPriceServiceAtomicStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {

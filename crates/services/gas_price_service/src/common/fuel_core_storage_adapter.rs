@@ -13,11 +13,11 @@ use crate::{
         },
     },
     ports::{
+        GasPriceServiceAtomicStorage,
         GetDaSequenceNumber,
         GetMetadataStorage,
         SetDaSequenceNumber,
         SetMetadataStorage,
-        TransactionableStorage,
     },
 };
 use anyhow::anyhow;
@@ -116,7 +116,7 @@ where
     }
 }
 
-impl<Storage> TransactionableStorage for Storage
+impl<Storage> GasPriceServiceAtomicStorage for Storage
 where
     Storage: 'static,
     Storage: GetMetadataStorage + GetDaSequenceNumber,
