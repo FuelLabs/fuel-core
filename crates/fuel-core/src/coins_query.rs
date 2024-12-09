@@ -1168,7 +1168,7 @@ mod tests {
             let excluded =
                 ExcludedCoinIds::new(std::iter::once(&utxo_id), std::iter::empty());
 
-            //  When
+            // When
             let result = select_coins_until(
                 futures::stream::iter(coins),
                 MAX,
