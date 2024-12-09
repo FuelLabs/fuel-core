@@ -19,6 +19,10 @@ pub enum Error {
     FailedToIncludeL2BlockData(String),
     #[error("L2 block expected but not found in unrecorded blocks: {height}")]
     L2BlockExpectedNotFound { height: u32 },
+    #[error("Could not insert unrecorded block: {0}")]
+    CouldNotInsertUnrecordedBlock(String),
+    #[error("Could not remove unrecorded block: {0}")]
+    CouldNotRemoveUnrecordedBlock(String),
 }
 
 // TODO: separate exec gas price and DA gas price into newtypes for clarity
@@ -59,6 +63,27 @@ impl AlgorithmV1 {
     }
 }
 
+pub type Height = u32;
+pub type Bytes = u64;
+
+pub trait UnrecordedBlocks {
+    fn insert(&mut self, height: Height, bytes: Bytes) -> Result<(), String>;
+
+    fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, String>;
+}
+
+impl UnrecordedBlocks for BTreeMap<Height, Bytes> {
+    fn insert(&mut self, height: Height, bytes: Bytes) -> Result<(), String> {
+        self.insert(height, bytes);
+        Ok(())
+    }
+
+    fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, String> {
+        let value = self.remove(height);
+        Ok(value)
+    }
+}
+
 /// The state of the algorithm used to update the gas price algorithm for each block
 ///
 /// Because there will always be a delay between blocks submitted to the L2 chain and the blocks
@@ -96,8 +121,6 @@ impl AlgorithmV1 {
 /// The DA portion also uses a moving average of the profits over the last `avg_window` blocks
 /// instead of the actual profit. Setting the `avg_window` to 1 will effectively disable the
 /// moving average.
-type Height = u32;
-type Bytes = u64;
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct AlgorithmUpdaterV1 {
     // Execution
@@ -143,8 +166,6 @@ pub struct AlgorithmUpdaterV1 {
     pub latest_da_cost_per_byte: u128,
     /// Activity of L2
     pub l2_activity: L2ActivityTracker,
-    /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
-    pub unrecorded_blocks: BTreeMap<Height, Bytes>,
     /// Total unrecorded block bytes
     pub unrecorded_blocks_bytes: u128,
 }
@@ -269,10 +290,28 @@ impl L2ActivityTracker {
     pub fn current_activity(&self) -> u16 {
         self.chain_activity
     }
+
+    pub fn max_activity(&self) -> u16 {
+        self.max_activity
+    }
+
+    pub fn capped_activity_threshold(&self) -> u16 {
+        self.capped_activity_threshold
+    }
+
+    pub fn decrease_activity_threshold(&self) -> u16 {
+        self.decrease_activity_threshold
+    }
+
+    pub fn block_activity_threshold(&self) -> ClampedPercentage {
+        self.block_activity_threshold
+    }
 }
 
 /// A value that represents a value between 0 and 100. Higher values are clamped to 100
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Copy, Clone, PartialEq, PartialOrd,
+)]
 pub struct ClampedPercentage {
     value: u8,
 }
@@ -300,27 +339,34 @@ impl core::ops::Deref for ClampedPercentage {
 }
 
 impl AlgorithmUpdaterV1 {
-    pub fn update_da_record_data(
+    pub fn update_da_record_data<U: UnrecordedBlocks>(
         &mut self,
         heights: &[u32],
         recorded_bytes: u32,
         recording_cost: u128,
+        unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
         if !heights.is_empty() {
-            self.da_block_update(heights, recorded_bytes as u128, recording_cost)?;
+            self.da_block_update(
+                heights,
+                recorded_bytes as u128,
+                recording_cost,
+                unrecorded_blocks,
+            )?;
             self.recalculate_projected_cost();
             self.update_da_gas_price();
         }
         Ok(())
     }
 
-    pub fn update_l2_block_data(
+    pub fn update_l2_block_data<U: UnrecordedBlocks>(
         &mut self,
         height: u32,
         used: u64,
         capacity: NonZeroU64,
         block_bytes: u64,
         fee_wei: u128,
+        unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
         let expected = self.l2_block_height.saturating_add(1);
         if height != expected {
@@ -351,7 +397,9 @@ impl AlgorithmUpdaterV1 {
             self.update_da_gas_price();
 
             // metadata
-            self.unrecorded_blocks.insert(height, block_bytes);
+            unrecorded_blocks
+                .insert(height, block_bytes)
+                .map_err(Error::CouldNotInsertUnrecordedBlock)?;
             self.unrecorded_blocks_bytes = self
                 .unrecorded_blocks_bytes
                 .saturating_add(block_bytes as u128);
@@ -512,13 +560,14 @@ impl AlgorithmUpdaterV1 {
             .saturating_div(100)
     }
 
-    fn da_block_update(
+    fn da_block_update<U: UnrecordedBlocks>(
         &mut self,
         heights: &[u32],
         recorded_bytes: u128,
         recording_cost: u128,
+        unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
-        self.update_unrecorded_block_bytes(heights);
+        self.update_unrecorded_block_bytes(heights, unrecorded_blocks)?;
 
         let new_da_block_cost = self
             .latest_known_total_da_cost_excess
@@ -540,10 +589,17 @@ impl AlgorithmUpdaterV1 {
 
     // Get the bytes for all specified heights, or get none of them.
     // Always remove the blocks from the unrecorded blocks so they don't build up indefinitely
-    fn update_unrecorded_block_bytes(&mut self, heights: &[u32]) {
+    fn update_unrecorded_block_bytes<U: UnrecordedBlocks>(
+        &mut self,
+        heights: &[u32],
+        unrecorded_blocks: &mut U,
+    ) -> Result<(), Error> {
         let mut total: u128 = 0;
         for expected_height in heights {
-            let maybe_bytes = self.unrecorded_blocks.remove(expected_height);
+            let maybe_bytes = unrecorded_blocks
+                .remove(expected_height)
+                .map_err(Error::CouldNotRemoveUnrecordedBlock)?;
+
             if let Some(bytes) = maybe_bytes {
                 total = total.saturating_add(bytes as u128);
             } else {
@@ -554,6 +610,8 @@ impl AlgorithmUpdaterV1 {
             }
         }
         self.unrecorded_blocks_bytes = self.unrecorded_blocks_bytes.saturating_sub(total);
+
+        Ok(())
     }
 
     fn recalculate_projected_cost(&mut self) {
