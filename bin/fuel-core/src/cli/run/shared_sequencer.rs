@@ -2,17 +2,17 @@ use fuel_core_types::fuel_types::Bytes32;
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct Args {
-    /// If set to true, new blocks will be posted to the shared sequencer chain
+    /// If set to true, new blocks will be posted to the shared sequencer chain.
     #[clap(long = "enable-ss", action)]
     enable: bool,
-    /// If set to true, new blocks will be posted to the shared sequencer chain
+    /// The frequency at which to post blocks to the shared sequencer.
     #[clap(long = "ss-block-posting-frequency", env, default_value = "12s")]
     block_posting_frequency: humantime::Duration,
-    /// The RPC address of the sequencer chain tendermint API
+    /// The RPC address of the sequencer chain
     /// (e.g. "http://127.0.0.1:26657")
     #[clap(long = "ss-tendermint-api", env)]
     tendermint_api: Option<String>,
-    /// The REST address of the sequencer chain blockchain/rest API
+    /// The REST address of the sequencer chain
     /// (e.g. "http://127.0.0.1:1317")
     #[clap(long = "ss-blockchain-api", env)]
     blockchain_api: Option<String>,

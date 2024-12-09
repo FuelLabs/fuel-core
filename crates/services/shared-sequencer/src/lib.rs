@@ -144,7 +144,10 @@ impl Client {
         let latest_height = self.latest_block_height().await?;
 
         self.send_raw(
-            latest_height.saturating_add(100),
+            // We don't want our transactions to be stay in the mempool for a long time,
+            // so we set the timeout height to be 64 blocks ahead of the latest block height.
+            // The 64 is an arbitrary number.
+            latest_height.saturating_add(64),
             signer,
             account,
             order,
@@ -165,6 +168,9 @@ impl Client {
         topic: [u8; 32],
         data: Bytes,
     ) -> anyhow::Result<()> {
+        // We want to estimate the transaction to know hat amount and fee to use.
+        // We use a dummy amount and fee to estimate the gas, and based on the result
+        // we calculate the actual amount and fee to use in real transaction.
         let dummy_amount = Coin {
             amount: 0,
             denom: self.coin_denom.clone(),
