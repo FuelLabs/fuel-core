@@ -65,7 +65,6 @@ mockall::mock! {
             message_block_height: &BlockHeight,
             commit_block_height: &BlockHeight,
         ) -> StorageResult<MerkleProof>;
-        fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
         fn transaction_status(&self, transaction_id: &TxId) -> StorageResult<TransactionStatus>;
     }
 }
@@ -96,20 +95,6 @@ async fn can_build_message_proof() {
 
     let mut data = MockProofDataStorage::new();
     let mut count = 0;
-
-    data.expect_receipts().returning({
-        let receipts = receipts.to_vec();
-        let other_receipts = other_receipts.to_vec();
-        move |txn_id| {
-            if *txn_id == transaction_id {
-                Ok(receipts.clone())
-            } else {
-                let r = other_receipts[count..=count].to_vec();
-                count += 1;
-                Ok(r)
-            }
-        }
-    });
 
     let commit_block_header = PartialBlockHeader {
         application: ApplicationHeader {
