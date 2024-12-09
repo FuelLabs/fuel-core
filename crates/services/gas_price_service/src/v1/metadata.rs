@@ -74,6 +74,8 @@ pub struct V1AlgorithmConfig {
     pub capped_range_size: u16,
     pub decrease_range_size: u16,
     pub block_activity_threshold: u8,
+    /// The interval at which the `DaSourceService` polls for new data
+    pub da_poll_interval: Option<u32>,
 }
 
 pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
@@ -89,7 +91,9 @@ pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
             .new_exec_gas_price
             .saturating_mul(value.gas_price_factor.get()),
         l2_block_height: 0,
-        new_scaled_da_gas_price: value.min_da_gas_price,
+        new_scaled_da_gas_price: value
+            .min_da_gas_price
+            .saturating_mul(value.gas_price_factor.get()),
         gas_price_factor: value.gas_price_factor,
         total_da_rewards_excess: 0,
         latest_known_total_da_cost_excess: 0,
