@@ -161,7 +161,7 @@ mod coin {
             .client
             .coins_to_spend(
                 &owner,
-                vec![(asset_id_a, 1, None), (asset_id_b, 1, None)],
+                vec![(asset_id_a, 1, None), (asset_id_b, 1, Some(1))],
                 None,
             )
             .await
@@ -169,8 +169,7 @@ mod coin {
         assert_eq!(coins_per_asset.len(), 2);
         assert!(coins_per_asset[0].len() >= 1);
         assert!(coins_per_asset[0].amount() >= 1);
-        assert!(coins_per_asset[1].len() >= 1);
-        assert!(coins_per_asset[1].amount() >= 1);
+        assert_eq!(coins_per_asset[1].len(), 1);
     }
 
     async fn query_target_300(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
@@ -181,7 +180,7 @@ mod coin {
             .client
             .coins_to_spend(
                 &owner,
-                vec![(asset_id_a, 300, None), (asset_id_b, 300, None)],
+                vec![(asset_id_a, 300, None), (asset_id_b, 300, Some(3))],
                 None,
             )
             .await
@@ -189,8 +188,7 @@ mod coin {
         assert_eq!(coins_per_asset.len(), 2);
         assert!(coins_per_asset[0].len() >= 3);
         assert!(coins_per_asset[0].amount() >= 300);
-        assert!(coins_per_asset[1].len() >= 3);
-        assert!(coins_per_asset[1].amount() >= 300);
+        assert_eq!(coins_per_asset[1].len(), 3);
     }
 
     async fn exclude_all(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
@@ -598,7 +596,7 @@ mod all_coins {
             .client
             .coins_to_spend(
                 &owner,
-                vec![(asset_id_a, 1, None), (asset_id_b, 1, None)],
+                vec![(asset_id_a, 1, None), (asset_id_b, 1, Some(1))],
                 None,
             )
             .await
@@ -606,8 +604,7 @@ mod all_coins {
         assert_eq!(coins_per_asset.len(), 2);
         assert!(coins_per_asset[0].len() >= 1);
         assert!(coins_per_asset[0].amount() >= 1);
-        assert!(coins_per_asset[1].len() >= 1);
-        assert!(coins_per_asset[1].amount() >= 1);
+        assert_eq!(coins_per_asset[1].len(), 1);
     }
 
     async fn query_target_300(owner: Address, asset_id_b: AssetId) {
@@ -618,7 +615,7 @@ mod all_coins {
             .client
             .coins_to_spend(
                 &owner,
-                vec![(asset_id_a, 300, None), (asset_id_b, 300, None)],
+                vec![(asset_id_a, 300, None), (asset_id_b, 300, Some(3))],
                 None,
             )
             .await
@@ -626,8 +623,7 @@ mod all_coins {
         assert_eq!(coins_per_asset.len(), 2);
         assert!(coins_per_asset[0].len() >= 3);
         assert!(coins_per_asset[0].amount() >= 300);
-        assert!(coins_per_asset[1].len() >= 3);
-        assert!(coins_per_asset[1].amount() >= 300);
+        assert_eq!(coins_per_asset[1].len(), 3);
     }
 
     async fn exclude_all(owner: Address, asset_id_b: AssetId) {
