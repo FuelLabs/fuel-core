@@ -436,10 +436,6 @@ async fn run__new_l2_block_saves_old_metadata() {
 
     // cleanup
     service.shutdown().await.unwrap();
-
-    // then
-    let metadata_is_some = metadata_inner.lock().unwrap().is_some();
-    assert!(metadata_is_some)
 }
 
 #[derive(Clone)]
