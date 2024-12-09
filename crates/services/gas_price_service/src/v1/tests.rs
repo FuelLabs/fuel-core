@@ -99,10 +99,7 @@ use fuel_gas_price_algorithm::v1::{
 };
 use std::{
     num::NonZeroU64,
-    ops::{
-        Deref,
-        Range,
-    },
+    ops::Deref,
     sync::{
         Arc,
         Mutex,
@@ -412,6 +409,10 @@ async fn run__new_l2_block_saves_old_metadata() {
     let l2_block_source = FakeL2BlockSource {
         l2_block: l2_block_receiver,
     };
+    let metadata_inner = Arc::new(std::sync::Mutex::new(None));
+    let metadata_storage = FakeMetadata {
+        inner: metadata_inner.clone(),
+    };
 
     let config = zero_threshold_arbitrary_config();
     let inner = database();
@@ -534,6 +535,11 @@ fn empty_block_stream() -> BoxStream<SharedImportResult> {
 async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overrides() {
     // given
     let original_metadata = arbitrary_metadata();
+    let original = UpdaterMetadata::V1(original_metadata.clone());
+    let metadata_inner = Arc::new(std::sync::Mutex::new(Some(original.clone())));
+    let metadata_storage = FakeMetadata {
+        inner: metadata_inner,
+    };
 
     let different_config = different_arb_config();
     let descaleed_exec_price =

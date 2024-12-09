@@ -63,6 +63,8 @@ pub struct V1AlgorithmConfig {
     pub min_exec_gas_price: u64,
     pub exec_gas_price_change_percent: u16,
     pub l2_block_fullness_threshold_percent: u8,
+    // TODO:We don't need this after we implement
+    // https://github.com/FuelLabs/fuel-core/issues/2481
     pub gas_price_factor: NonZeroU64,
     pub min_da_gas_price: u64,
     pub max_da_gas_price_change_percent: u16,
