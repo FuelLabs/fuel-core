@@ -7,7 +7,10 @@ use handler::{
     HeartbeatOutEvent,
 };
 use libp2p::{
-    core::Endpoint,
+    core::{
+        transport::PortUse,
+        Endpoint,
+    },
     swarm::{
         derive_prelude::ConnectionId,
         ConnectionDenied,
@@ -104,6 +107,7 @@ impl NetworkBehaviour for Behaviour {
         _peer: PeerId,
         _addr: &Multiaddr,
         _role_override: Endpoint,
+        _port_use: PortUse,
     ) -> Result<THandler<Self>, ConnectionDenied> {
         Ok(HeartbeatHandler::new(self.config.clone()))
     }
@@ -141,7 +145,7 @@ impl NetworkBehaviour for Behaviour {
         _: &mut std::task::Context<'_>,
     ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         if let Some(action) = self.pending_events.pop_front() {
-            return Poll::Ready(action.build())
+            return Poll::Ready(action.build());
         }
 
         Poll::Pending
