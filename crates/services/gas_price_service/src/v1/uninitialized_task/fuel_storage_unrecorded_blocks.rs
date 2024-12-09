@@ -64,22 +64,19 @@ impl<S> UnrecordedBlocks for FuelStorageUnrecordedBlocks<S>
 where
     S: StorageMutate<UnrecordedBlocksTable, Error = StorageError>,
 {
-    fn insert(&mut self, height: v1::Height, bytes: v1::Bytes) -> Result<(), v1::Error> {
-        let mut tx = self.inner.write_transaction();
+    fn insert(&mut self, height: v1::Height, bytes: v1::Bytes) -> Result<(), String> {
         let block_height = BlockHeight::from(height);
-        tx.storage_as_mut::<UnrecordedBlocksTable>()
+        self.inner
+            .storage_as_mut::<UnrecordedBlocksTable>()
             .insert(&block_height, &bytes)
-            .and_then(|_| tx.commit())
-            .map_err(|err| {
-                v1::Error::CouldNotInsertUnrecordedBlock(format!("Error: {:?}", err))
-            })?;
+            .map_err(|err| format!("Error: {:?}", err))?;
         Ok(())
     }
 
-    fn remove(&mut self, height: &v1::Height) -> Result<Option<v1::Bytes>, v1::Error> {
-        let mut tx = self.inner.write_transaction();
+    fn remove(&mut self, height: &v1::Height) -> Result<Option<v1::Bytes>, String> {
         let block_height = BlockHeight::from(*height);
-        let bytes = tx
+        let bytes = self
+            .inner
             .storage_as_mut::<UnrecordedBlocksTable>()
             .take(&block_height)
             .map_err(|err| format!("Error: {:?}", err))?;

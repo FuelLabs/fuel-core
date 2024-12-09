@@ -62,7 +62,11 @@ use futures::FutureExt;
 use tokio::sync::broadcast::Receiver;
 
 /// The service that updates the gas price algorithm.
-pub struct GasPriceServiceV1<L2, DA, StorageTxProvider> {
+pub struct GasPriceServiceV1<L2, DA, AtomicStorage>
+where
+    DA: DaBlockCostsSource + 'static,
+    AtomicStorage: GasPriceServiceAtomicStorage,
+{
     /// The algorithm that can be used in the next block
     shared_algo: SharedV1Algorithm,
     /// The L2 block source
@@ -76,7 +80,7 @@ pub struct GasPriceServiceV1<L2, DA, StorageTxProvider> {
     /// Buffer of block costs from the DA chain
     da_block_costs_buffer: Vec<DaBlockCosts>,
     /// Storage transaction provider for metadata and unrecorded blocks
-    storage_tx_provider: StorageTxProvider,
+    storage_tx_provider: AtomicStorage,
 }
 
 impl<L2, DA, AtomicStorage> GasPriceServiceV1<L2, DA, AtomicStorage>

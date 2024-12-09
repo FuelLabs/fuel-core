@@ -56,7 +56,6 @@ use fuel_core_poa::{
 };
 use fuel_core_storage::{
     self,
-    structured_storage::StructuredStorage,
     transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
@@ -190,7 +189,6 @@ pub fn init_sub_services(
     let genesis_block_height = *genesis_block.header().height();
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
-    let persisted_data = database.gas_price().clone();
 
     tracing::debug!("da_committer_url: {:?}", config.da_committer_url);
     let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
@@ -209,7 +207,6 @@ pub fn init_sub_services(
         database.gas_price().clone(),
         da_source,
         database.on_chain().clone(),
-        persisted_data,
     )?;
 
     let gas_price_provider = FuelGasPriceProvider::new(gas_price_service.shared.clone());
