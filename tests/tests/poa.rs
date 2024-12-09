@@ -156,7 +156,6 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
     Ok(())
 }
 
-#[cfg(feature = "p2p")]
 #[cfg(not(coverage))] // too slow for coverage
 mod p2p {
     use super::*;

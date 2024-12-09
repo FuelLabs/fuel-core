@@ -3,10 +3,7 @@ use std::{
     cmp::max,
     collections::BTreeMap,
     num::NonZeroU64,
-    ops::{
-        Div,
-        Range,
-    },
+    ops::Div,
 };
 
 #[cfg(test)]
@@ -16,14 +13,12 @@ mod tests;
 pub enum Error {
     #[error("Skipped L2 block update: expected {expected:?}, got {got:?}")]
     SkippedL2Block { expected: u32, got: u32 },
-    #[error("Skipped DA block update: expected {expected:?}, got {got:?}")]
-    SkippedDABlock { expected: u32, got: u32 },
     #[error("Could not calculate cost per byte: {bytes:?} bytes, {cost:?} cost")]
     CouldNotCalculateCostPerByte { bytes: u128, cost: u128 },
     #[error("Failed to include L2 block data: {0}")]
-    FailedTooIncludeL2BlockData(String),
-    #[error("L2 block expected but not found in unrecorded blocks: {0}")]
-    L2BlockExpectedNotFound(u32),
+    FailedToIncludeL2BlockData(String),
+    #[error("L2 block expected but not found in unrecorded blocks: {height}")]
+    L2BlockExpectedNotFound { height: u32 },
 }
 
 // TODO: separate exec gas price and DA gas price into newtypes for clarity
@@ -131,8 +126,6 @@ pub struct AlgorithmUpdaterV1 {
     pub max_da_gas_price_change_percent: u16,
     /// The cumulative reward from the DA portion of the gas price
     pub total_da_rewards_excess: u128,
-    /// The height of the last L2 block recorded on the DA chain
-    pub da_recorded_block_height: u32,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
     pub latest_known_total_da_cost_excess: u128,
     /// The predicted cost of recording L2 blocks on the DA chain as of the last L2 block
@@ -152,6 +145,8 @@ pub struct AlgorithmUpdaterV1 {
     pub l2_activity: L2ActivityTracker,
     /// The unrecorded blocks that are used to calculate the projected cost of recording blocks
     pub unrecorded_blocks: BTreeMap<Height, Bytes>,
+    /// Total unrecorded block bytes
+    pub unrecorded_blocks_bytes: u128,
 }
 
 /// The `L2ActivityTracker` tracks the chain activity to determine a safety mode for setting the DA price.
@@ -307,11 +302,12 @@ impl core::ops::Deref for ClampedPercentage {
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data(
         &mut self,
-        height_range: Range<u32>,
-        range_cost: u128,
+        heights: &[u32],
+        recorded_bytes: u32,
+        recording_cost: u128,
     ) -> Result<(), Error> {
-        if !height_range.is_empty() {
-            self.da_block_update(height_range, range_cost)?;
+        if !heights.is_empty() {
+            self.da_block_update(heights, recorded_bytes as u128, recording_cost)?;
             self.recalculate_projected_cost();
             self.update_da_gas_price();
         }
@@ -356,6 +352,9 @@ impl AlgorithmUpdaterV1 {
 
             // metadata
             self.unrecorded_blocks.insert(height, block_bytes);
+            self.unrecorded_blocks_bytes = self
+                .unrecorded_blocks_bytes
+                .saturating_add(block_bytes as u128);
             Ok(())
         }
     }
@@ -515,60 +514,51 @@ impl AlgorithmUpdaterV1 {
 
     fn da_block_update(
         &mut self,
-        height_range: Range<u32>,
-        range_cost: u128,
+        heights: &[u32],
+        recorded_bytes: u128,
+        recording_cost: u128,
     ) -> Result<(), Error> {
-        let expected = self.da_recorded_block_height.saturating_add(1);
-        let first = height_range.start;
-        if first != expected {
-            Err(Error::SkippedDABlock {
-                expected,
-                got: first,
-            })
-        } else {
-            let last = height_range.end.saturating_sub(1);
-            let range_bytes = self.drain_l2_block_bytes_for_range(height_range)?;
-            let new_cost_per_byte: u128 = range_cost.checked_div(range_bytes).ok_or(
-                Error::CouldNotCalculateCostPerByte {
-                    bytes: range_bytes,
-                    cost: range_cost,
-                },
-            )?;
-            self.da_recorded_block_height = last;
-            let new_da_block_cost = self
-                .latest_known_total_da_cost_excess
-                .saturating_add(range_cost);
-            self.latest_known_total_da_cost_excess = new_da_block_cost;
-            self.latest_da_cost_per_byte = new_cost_per_byte;
-            Ok(())
-        }
+        self.update_unrecorded_block_bytes(heights);
+
+        let new_da_block_cost = self
+            .latest_known_total_da_cost_excess
+            .saturating_add(recording_cost);
+        self.latest_known_total_da_cost_excess = new_da_block_cost;
+
+        let compressed_cost_per_bytes = recording_cost
+            .checked_div(recorded_bytes)
+            .ok_or(Error::CouldNotCalculateCostPerByte {
+                bytes: recorded_bytes,
+                cost: recording_cost,
+            })?;
+
+        // This is often "pessimistic" in the sense that we are charging for the compressed blocks
+        // and we will use it to calculate base on the uncompressed blocks
+        self.latest_da_cost_per_byte = compressed_cost_per_bytes;
+        Ok(())
     }
 
-    fn drain_l2_block_bytes_for_range(
-        &mut self,
-        height_range: Range<u32>,
-    ) -> Result<u128, Error> {
+    // Get the bytes for all specified heights, or get none of them.
+    // Always remove the blocks from the unrecorded blocks so they don't build up indefinitely
+    fn update_unrecorded_block_bytes(&mut self, heights: &[u32]) {
         let mut total: u128 = 0;
-        for expected_height in height_range {
-            let (actual_height, bytes) = self
-                .unrecorded_blocks
-                .pop_first()
-                .ok_or(Error::L2BlockExpectedNotFound(expected_height))?;
-            if actual_height != expected_height {
-                return Err(Error::L2BlockExpectedNotFound(expected_height));
+        for expected_height in heights {
+            let maybe_bytes = self.unrecorded_blocks.remove(expected_height);
+            if let Some(bytes) = maybe_bytes {
+                total = total.saturating_add(bytes as u128);
+            } else {
+                tracing::warn!(
+                    "L2 block expected but not found in unrecorded blocks: {}",
+                    expected_height,
+                );
             }
-            total = total.saturating_add(bytes as u128);
         }
-        Ok(total)
+        self.unrecorded_blocks_bytes = self.unrecorded_blocks_bytes.saturating_sub(total);
     }
 
     fn recalculate_projected_cost(&mut self) {
-        // add the cost of the remaining blocks
-        let projection_portion: u128 = self
-            .unrecorded_blocks
-            .iter()
-            .map(|(_, &bytes)| (bytes as u128))
-            .fold(0_u128, |acc, n| acc.saturating_add(n))
+        let projection_portion = self
+            .unrecorded_blocks_bytes
             .saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self
             .latest_known_total_da_cost_excess

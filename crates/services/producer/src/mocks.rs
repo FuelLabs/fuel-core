@@ -42,7 +42,6 @@ use fuel_core_types::{
             TransactionExecutionStatus,
             UncommittedResult,
         },
-        txpool::ArcPoolTx,
     },
 };
 use std::{
@@ -88,10 +87,10 @@ impl Relayer for MockRelayer {
 }
 
 #[derive(Default)]
-pub struct MockTxPool(pub Vec<ArcPoolTx>);
+pub struct MockTxPool(pub Vec<Transaction>);
 
 impl TxPool for MockTxPool {
-    type TxSource = Vec<ArcPoolTx>;
+    type TxSource = Vec<Transaction>;
 
     async fn get_source(&self, _: u64, _: BlockHeight) -> anyhow::Result<Self::TxSource> {
         Ok(self.0.clone())
@@ -113,23 +112,7 @@ impl AsRef<MockDb> for MockDb {
     }
 }
 
-fn arc_pool_tx_comp_to_block(component: &Components<Vec<ArcPoolTx>>) -> Block {
-    let transactions = component
-        .transactions_source
-        .clone()
-        .into_iter()
-        .map(|tx| tx.as_ref().into())
-        .collect();
-    Block::new(
-        component.header_to_produce,
-        transactions,
-        &[],
-        Default::default(),
-    )
-    .unwrap()
-}
-
-fn tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block {
+fn arc_pool_tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block {
     let transactions = component.transactions_source.clone();
     Block::new(
         component.header_to_produce,
@@ -140,10 +123,10 @@ fn tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block {
     .unwrap()
 }
 
-impl BlockProducer<Vec<ArcPoolTx>> for MockExecutor {
+impl BlockProducer<Vec<Transaction>> for MockExecutor {
     fn produce_without_commit(
         &self,
-        component: Components<Vec<ArcPoolTx>>,
+        component: Components<Vec<Transaction>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         let block = arc_pool_tx_comp_to_block(&component);
         // simulate executor inserting a block
@@ -166,10 +149,10 @@ impl BlockProducer<Vec<ArcPoolTx>> for MockExecutor {
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-impl BlockProducer<Vec<ArcPoolTx>> for FailingMockExecutor {
+impl BlockProducer<Vec<Transaction>> for FailingMockExecutor {
     fn produce_without_commit(
         &self,
-        component: Components<Vec<ArcPoolTx>>,
+        component: Components<Vec<Transaction>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
@@ -191,14 +174,14 @@ impl BlockProducer<Vec<ArcPoolTx>> for FailingMockExecutor {
 }
 
 #[derive(Clone)]
-pub struct MockExecutorWithCapture<Tx> {
-    pub captured: Arc<Mutex<Option<Components<Vec<Tx>>>>>,
+pub struct MockExecutorWithCapture {
+    pub captured: Arc<Mutex<Option<Components<Vec<Transaction>>>>>,
 }
 
-impl BlockProducer<Vec<ArcPoolTx>> for MockExecutorWithCapture<ArcPoolTx> {
+impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture {
     fn produce_without_commit(
         &self,
-        component: Components<Vec<ArcPoolTx>>,
+        component: Components<Vec<Transaction>>,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         let block = arc_pool_tx_comp_to_block(&component);
         *self.captured.lock().unwrap() = Some(component);
@@ -214,26 +197,7 @@ impl BlockProducer<Vec<ArcPoolTx>> for MockExecutorWithCapture<ArcPoolTx> {
     }
 }
 
-impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture<Transaction> {
-    fn produce_without_commit(
-        &self,
-        component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let block = tx_comp_to_block(&component);
-        *self.captured.lock().unwrap() = Some(component);
-        Ok(UncommittedResult::new(
-            ExecutionResult {
-                block,
-                skipped_transactions: vec![],
-                tx_status: vec![],
-                events: vec![],
-            },
-            Default::default(),
-        ))
-    }
-}
-
-impl DryRunner for MockExecutorWithCapture<Transaction> {
+impl DryRunner for MockExecutorWithCapture {
     fn dry_run(
         &self,
         block: Components<Vec<Transaction>>,
@@ -245,7 +209,7 @@ impl DryRunner for MockExecutorWithCapture<Transaction> {
     }
 }
 
-impl<Tx> Default for MockExecutorWithCapture<Tx> {
+impl Default for MockExecutorWithCapture {
     fn default() -> Self {
         Self {
             captured: Arc::new(Mutex::new(None)),

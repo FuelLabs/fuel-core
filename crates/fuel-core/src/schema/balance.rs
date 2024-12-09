@@ -7,7 +7,7 @@ use crate::{
         scalars::{
             Address,
             AssetId,
-            U64,
+            U128,
         },
         ReadViewProvider,
     },
@@ -25,6 +25,8 @@ use async_graphql::{
 use fuel_core_types::services::graphql_api;
 use futures::StreamExt;
 
+use super::scalars::U64;
+
 pub struct Balance(graphql_api::AddressBalance);
 
 #[Object]
@@ -34,6 +36,11 @@ impl Balance {
     }
 
     async fn amount(&self) -> U64 {
+        let amount: u64 = self.0.amount.try_into().unwrap_or(u64::MAX);
+        amount.into()
+    }
+
+    async fn amount_u128(&self) -> U128 {
         self.0.amount.into()
     }
 

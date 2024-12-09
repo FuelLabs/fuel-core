@@ -10,7 +10,7 @@ use crate::client::{
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Balance {
     pub owner: Address,
-    pub amount: u64,
+    pub amount: u128,
     pub asset_id: AssetId,
 }
 
@@ -20,7 +20,10 @@ impl From<schema::balance::Balance> for Balance {
     fn from(value: schema::balance::Balance) -> Self {
         Balance {
             owner: value.owner.into(),
-            amount: value.amount.into(),
+            amount: {
+                let amount: u64 = value.amount.into();
+                amount as u128
+            },
             asset_id: value.asset_id.into(),
         }
     }

@@ -177,7 +177,8 @@ where
         da_block_costs: DaBlockCosts,
     ) -> anyhow::Result<()> {
         self.algorithm_updater.update_da_record_data(
-            da_block_costs.l2_block_range,
+            &da_block_costs.l2_blocks,
+            da_block_costs.blob_size_bytes,
             da_block_costs.blob_cost_wei,
         )?;
 
@@ -253,7 +254,7 @@ where
     async fn shutdown(mut self) -> anyhow::Result<()> {
         // handle all the remaining l2 blocks
         while let Some(Ok(block)) = self.l2_block_source.get_l2_block().now_or_never() {
-            tracing::debug!("Updating gas price algorithm");
+            tracing::debug!("Updating gas price algorithm before shutdown");
             self.apply_block_info_to_gas_algorithm(block).await?;
         }
 
@@ -502,7 +503,7 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
-                    l2_block_range: 1..2,
+                    l2_blocks: (1..2).collect(),
                     blob_cost_wei: 9000,
                     blob_size_bytes: 3000,
                 }),

@@ -1077,7 +1077,7 @@ impl FuelClient {
         };
         let query = schema::balance::BalanceQuery::build(BalanceArgs { owner, asset_id });
         let balance: types::Balance = self.query(query).await?.balance.into();
-        Ok(balance.amount)
+        Ok(balance.amount.try_into().unwrap_or(u64::MAX))
     }
 
     // Retrieve a page of balances by their owner

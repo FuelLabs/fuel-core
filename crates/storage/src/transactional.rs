@@ -112,6 +112,13 @@ impl<S> StorageTransaction<S> {
         self.inner.changes
     }
 
+    /// Returns the storage and changes to it.
+    pub fn into_inner(self) -> (S, Changes) {
+        let storage = self.inner.storage;
+        let changes = self.inner.changes;
+        (storage, changes)
+    }
+
     /// Resets the changes to the storage.
     pub fn reset_changes(&mut self) {
         self.inner.changes = Default::default();
@@ -259,10 +266,7 @@ pub trait WriteTransaction {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self>;
 }
 
-impl<S> WriteTransaction for S
-where
-    S: Modifiable,
-{
+impl<S> WriteTransaction for S {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self> {
         StorageTransaction::transaction(
             self,
@@ -464,7 +468,7 @@ where
         self.changes
             .entry(column.id())
             .or_default()
-            .insert(k, WriteOperation::Insert(Value::new(buf.to_vec())));
+            .insert(k, WriteOperation::Insert(Value::from(buf)));
         Ok(buf.len())
     }
 
@@ -657,7 +661,7 @@ mod test {
             let storage = InMemoryStorage::<Column>::default();
             let mut view = storage.read_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             view.put(&key, Column::Metadata, expected.clone()).unwrap();
             // test
             let ret = view.get(&key, Column::Metadata).unwrap();
@@ -671,7 +675,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             write.commit().unwrap();
 
@@ -688,7 +692,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             write.commit().unwrap();
 
@@ -709,13 +713,13 @@ mod test {
             // setup
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write
                 .put(&[0xA, 0xB, 0xC], Column::Metadata, expected.clone())
                 .unwrap();
             // test
             let ret = write
-                .replace(&[0xA, 0xB, 0xC], Column::Metadata, Arc::new(vec![2, 4, 6]))
+                .replace(&[0xA, 0xB, 0xC], Column::Metadata, Value::from([2, 4, 6]))
                 .unwrap();
             // verify
             assert_eq!(ret, Some(expected))
@@ -727,7 +731,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             // test
             let ret = write.take(&key, Column::Metadata).unwrap();
@@ -743,7 +747,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             write.commit().unwrap();
 
@@ -762,7 +766,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             write.commit().unwrap();
 
@@ -783,7 +787,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected).unwrap();
             // test
             let ret = write.exists(&key, Column::Metadata).unwrap();
@@ -797,7 +801,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected).unwrap();
             write.commit().unwrap();
 
@@ -814,7 +818,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected).unwrap();
             write.commit().unwrap();
 
@@ -836,7 +840,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             // test
             write.commit().unwrap();
@@ -851,7 +855,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected).unwrap();
             write.commit().unwrap();
 
@@ -870,7 +874,7 @@ mod test {
 
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
-            let expected = Arc::new(vec![]);
+            let expected = Value::from([]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
 
             assert_eq!(
@@ -908,7 +912,7 @@ mod test {
 
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
-            let expected = Arc::new(vec![]);
+            let expected = Value::from([]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
 
             assert_eq!(
@@ -946,7 +950,7 @@ mod test {
 
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
-            let expected = Arc::new(vec![]);
+            let expected = Value::from([]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
 
             assert_eq!(

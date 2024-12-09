@@ -5,6 +5,7 @@ scalar AssetId
 type Balance {
 	owner: Address!
 	amount: U64!
+	amountU128: U128!
 	assetId: AssetId!
 }
 
@@ -1258,6 +1259,8 @@ enum TxParametersVersion {
 }
 
 scalar TxPointer
+
+scalar U128
 
 scalar U16
 
