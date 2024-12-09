@@ -11,7 +11,10 @@ use crate::{
         utils::Result,
     },
     v0::metadata::V0AlgorithmConfig,
-    v1::metadata::V1AlgorithmConfig,
+    v1::{
+        metadata::V1AlgorithmConfig,
+        uninitialized_task::fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
+    },
 };
 use std::num::NonZeroU64;
 
@@ -44,12 +47,22 @@ pub trait GetDaSequenceNumber: Send + Sync {
     fn get_sequence_number(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
 }
 
-pub trait TransactionableStorage: Send + Sync {
-    type Transaction<'a>
+pub trait GasPriceServiceAtomicStorage
+where
+    Self: 'static,
+    Self: Send + Sync,
+    Self: GetMetadataStorage + GetDaSequenceNumber,
+{
+    type Transaction<'a>: AsUnrecordedBlocks
+        + SetMetadataStorage
+        + GetMetadataStorage
+        + SetDaSequenceNumber
+        + GetDaSequenceNumber
     where
         Self: 'a;
 
     fn begin_transaction(&mut self) -> Result<Self::Transaction<'_>>;
+
     fn commit_transaction(transaction: Self::Transaction<'_>) -> Result<()>;
 }
 

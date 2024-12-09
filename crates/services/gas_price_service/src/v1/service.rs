@@ -11,10 +11,10 @@ use crate::{
         },
     },
     ports::{
+        GasPriceServiceAtomicStorage,
         GetMetadataStorage,
         SetDaSequenceNumber,
         SetMetadataStorage,
-        TransactionableStorage,
     },
     v0::metadata::V0Metadata,
     v1::{
@@ -33,7 +33,10 @@ use crate::{
             V1AlgorithmConfig,
             V1Metadata,
         },
-        uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
+        uninitialized_task::fuel_storage_unrecorded_blocks::{
+            AsUnrecordedBlocks,
+            FuelStorageUnrecordedBlocks,
+        },
     },
 };
 use anyhow::anyhow;
@@ -59,11 +62,7 @@ use futures::FutureExt;
 use tokio::sync::broadcast::Receiver;
 
 /// The service that updates the gas price algorithm.
-pub struct GasPriceServiceV1<L2, DA, StorageTxProvider>
-where
-    DA: DaBlockCostsSource + 'static,
-    StorageTxProvider: TransactionableStorage,
-{
+pub struct GasPriceServiceV1<L2, DA, StorageTxProvider> {
     /// The algorithm that can be used in the next block
     shared_algo: SharedV1Algorithm,
     /// The L2 block source
@@ -80,20 +79,16 @@ where
     storage_tx_provider: StorageTxProvider,
 }
 
-impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
+impl<L2, DA, AtomicStorage> GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     L2: L2BlockSource,
     DA: DaBlockCostsSource,
-    StorageTxProvider: TransactionableStorage,
+    AtomicStorage: GasPriceServiceAtomicStorage,
 {
-    async fn commit_block_data_to_algorithm<'a>(
-        &'a mut self,
+    async fn commit_block_data_to_algorithm(
+        &mut self,
         l2_block_res: GasPriceResult<BlockInfo>,
-    ) -> anyhow::Result<()>
-    where
-        StorageTxProvider::Transaction<'a>:
-            SetMetadataStorage + UnrecordedBlocks + SetDaSequenceNumber,
-    {
+    ) -> anyhow::Result<()> {
         tracing::info!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
 
@@ -103,17 +98,17 @@ where
     }
 }
 
-impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
+impl<L2, DA, AtomicStorage> GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     DA: DaBlockCostsSource,
-    StorageTxProvider: TransactionableStorage,
+    AtomicStorage: GasPriceServiceAtomicStorage,
 {
     pub fn new(
         l2_block_source: L2,
         shared_algo: SharedV1Algorithm,
         algorithm_updater: AlgorithmUpdaterV1,
         da_source_adapter_handle: ServiceRunner<DaSourceService<DA>>,
-        storage_tx_provider: StorageTxProvider,
+        storage_tx_provider: AtomicStorage,
     ) -> Self {
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
         Self {
@@ -136,7 +131,7 @@ where
     }
 
     #[cfg(test)]
-    pub fn storage_tx_provider(&self) -> &StorageTxProvider {
+    pub fn storage_tx_provider(&self) -> &AtomicStorage {
         &self.storage_tx_provider
     }
 
@@ -151,18 +146,14 @@ where
             .ok_or_else(|| anyhow!("Block gas capacity must be non-zero"))
     }
 
-    async fn handle_normal_block<'a>(
-        &'a mut self,
+    async fn handle_normal_block(
+        &mut self,
         height: u32,
         gas_used: u64,
         block_gas_capacity: u64,
         block_bytes: u64,
         block_fees: u64,
-    ) -> anyhow::Result<()>
-    where
-        StorageTxProvider::Transaction<'a>:
-            UnrecordedBlocks + SetMetadataStorage + SetDaSequenceNumber,
-    {
+    ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
 
@@ -172,7 +163,7 @@ where
                 &da_block_costs.l2_blocks,
                 da_block_costs.blob_size_bytes,
                 da_block_costs.blob_cost_wei,
-                &mut storage_tx,
+                &mut storage_tx.as_unrecorded_blocks(),
             )?;
             storage_tx
                 .set_sequence_number(
@@ -188,34 +179,30 @@ where
             capacity,
             block_bytes,
             block_fees as u128,
-            &mut storage_tx,
+            &mut storage_tx.as_unrecorded_blocks(),
         )?;
 
         let metadata = self.algorithm_updater.clone().into();
         storage_tx
             .set_metadata(&metadata)
             .map_err(|err| anyhow!(err))?;
-        StorageTxProvider::commit_transaction(storage_tx)?;
+        AtomicStorage::commit_transaction(storage_tx)?;
         let new_algo = self.algorithm_updater.algorithm();
         tracing::debug!("Updating gas price: {}", &new_algo.calculate());
         self.shared_algo.update(new_algo).await;
         Ok(())
     }
 
-    async fn apply_block_info_to_gas_algorithm<'a>(
-        &'a mut self,
+    async fn apply_block_info_to_gas_algorithm(
+        &mut self,
         l2_block: BlockInfo,
-    ) -> anyhow::Result<()>
-    where
-        StorageTxProvider::Transaction<'a>:
-            SetMetadataStorage + UnrecordedBlocks + SetDaSequenceNumber,
-    {
+    ) -> anyhow::Result<()> {
         match l2_block {
             BlockInfo::GenesisBlock => {
                 let metadata: UpdaterMetadata = self.algorithm_updater.clone().into();
                 let mut tx = self.storage_tx_provider.begin_transaction()?;
                 tx.set_metadata(&metadata).map_err(|err| anyhow!(err))?;
-                StorageTxProvider::commit_transaction(tx)?;
+                AtomicStorage::commit_transaction(tx)?;
                 let new_algo = self.algorithm_updater.algorithm();
                 // self.update(new_algo).await;
                 self.shared_algo.update(new_algo).await;
@@ -243,14 +230,11 @@ where
 }
 
 #[async_trait]
-impl<L2, DA, StorageTxProvider> RunnableTask
-    for GasPriceServiceV1<L2, DA, StorageTxProvider>
+impl<L2, DA, AtomicStorage> RunnableTask for GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     L2: L2BlockSource,
     DA: DaBlockCostsSource,
-    StorageTxProvider: TransactionableStorage,
-    for<'a> StorageTxProvider::Transaction<'a>:
-        UnrecordedBlocks + SetMetadataStorage + SetDaSequenceNumber,
+    AtomicStorage: GasPriceServiceAtomicStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {

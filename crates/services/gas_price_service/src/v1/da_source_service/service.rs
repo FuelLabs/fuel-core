@@ -32,10 +32,7 @@ impl SharedState {
 
 /// This struct houses the shared_state, polling interval
 /// and a source, which does the actual fetching of the data
-pub struct DaSourceService<Source>
-where
-    Source: DaBlockCostsSource,
-{
+pub struct DaSourceService<Source> {
     poll_interval: Interval,
     source: Source,
     shared_state: SharedState,

@@ -14,8 +14,10 @@ use fuel_core_storage::{
         Modifiable,
         WriteTransaction,
     },
+    Error as StorageError,
     StorageAsMut,
     StorageAsRef,
+    StorageMutate,
 };
 use fuel_core_types::{
     fuel_merkle::storage::StorageMutateInfallible,
@@ -25,6 +27,27 @@ use fuel_gas_price_algorithm::{
     v1,
     v1::UnrecordedBlocks,
 };
+
+pub trait AsUnrecordedBlocks {
+    type Wrapper<'a>: UnrecordedBlocks
+    where
+        Self: 'a;
+
+    fn as_unrecorded_blocks(&mut self) -> Self::Wrapper<'_>;
+}
+
+impl<S> AsUnrecordedBlocks for S
+where
+    S: StorageMutate<UnrecordedBlocksTable, Error = StorageError>,
+{
+    type Wrapper<'a> = FuelStorageUnrecordedBlocks<&'a mut Self>
+        where
+            Self: 'a;
+
+    fn as_unrecorded_blocks(&mut self) -> Self::Wrapper<'_> {
+        FuelStorageUnrecordedBlocks::new(self)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct FuelStorageUnrecordedBlocks<Storage> {
@@ -37,10 +60,9 @@ impl<Storage> FuelStorageUnrecordedBlocks<Storage> {
     }
 }
 
-impl<Storage> UnrecordedBlocks for FuelStorageUnrecordedBlocks<Storage>
+impl<S> UnrecordedBlocks for FuelStorageUnrecordedBlocks<S>
 where
-    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable,
-    Storage: Send + Sync,
+    S: StorageMutate<UnrecordedBlocksTable, Error = StorageError>,
 {
     fn insert(&mut self, height: v1::Height, bytes: v1::Bytes) -> Result<(), v1::Error> {
         let mut tx = self.inner.write_transaction();
@@ -60,12 +82,7 @@ where
         let bytes = tx
             .storage_as_mut::<UnrecordedBlocksTable>()
             .take(&block_height)
-            .map_err(|err| {
-                v1::Error::CouldNotRemoveUnrecordedBlock(format!("Error: {:?}", err))
-            })?;
-        tx.commit().map_err(|err| {
-            v1::Error::CouldNotRemoveUnrecordedBlock(format!("Error: {:?}", err))
-        })?;
+            .map_err(|err| format!("Error: {:?}", err))?;
         Ok(bytes)
     }
 }
