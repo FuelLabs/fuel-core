@@ -20,13 +20,13 @@ pub async fn collect_fee(ctx: &TestContext) -> Result<(), Failed> {
         return Err("collect fee transaction is not successful".into())
     }
 
-    let receipts = match &tx_status {
-        fuel_core_client::client::types::TransactionStatus::Success {
-            receipts, ..
-        } => Some(receipts),
-        _ => None,
+
+    let receipts = if let fuel_core_client::client::types::TransactionStatus::Success { receipts, .. } = tx_status {
+        receipts
+    } else {
+        return Err("collect fee transaction doesn't have receipts".into());
     };
-    let receipts = receipts.ok_or("collect fee transaction doesn't have receipts")?;
+
 
     if !receipts
         .iter()
