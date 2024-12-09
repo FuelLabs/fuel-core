@@ -38,13 +38,17 @@ use crate::{
         SubServices,
     },
 };
-use fuel_core_gas_price_service::v1::{
-    algorithm::AlgorithmV1,
-    da_source_service::block_committer_costs::{
-        BlockCommitterDaBlockCosts,
-        BlockCommitterHttpApi,
+use anyhow::anyhow;
+use fuel_core_gas_price_service::{
+    ports::GasPriceServiceConfig,
+    v1::{
+        algorithm::AlgorithmV1,
+        da_source_service::block_committer_costs::{
+            BlockCommitterDaBlockCosts,
+            BlockCommitterHttpApi,
+        },
+        uninitialized_task::new_gas_price_service_v1,
     },
-    uninitialized_task::new_gas_price_service_v1,
 };
 use fuel_core_poa::{
     signer::SignMode,
@@ -191,9 +195,14 @@ pub fn init_sub_services(
     tracing::debug!("da_committer_url: {:?}", config.da_committer_url);
     let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
     let da_source = BlockCommitterDaBlockCosts::new(committer_api, None);
+    let v1_config = GasPriceServiceConfig::from(config.clone())
+        .v1()
+        .ok_or(anyhow!(
+            "Gas price service configuration is not compatible with V1 algorithm"
+        ))?;
 
     let gas_price_service = new_gas_price_service_v1(
-        config.clone().into(),
+        v1_config,
         genesis_block_height,
         settings,
         block_stream,

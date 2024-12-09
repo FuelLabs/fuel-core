@@ -134,9 +134,10 @@ where
     Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
 {
     fn insert(&mut self, height: Height, bytes: Bytes) -> Result<(), Error> {
+        let block_height = height.into();
         self.inner
             .storage_as_mut::<UnrecordedBlocksTable>()
-            .insert(&height, &bytes)
+            .insert(&block_height, &bytes)
             .map_err(|err| {
                 Error::CouldNotInsertUnrecordedBlock(format!("Error: {:?}", err))
             })?;
@@ -144,10 +145,11 @@ where
     }
 
     fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, Error> {
+        let block_height = BlockHeight::from(*height);
         let bytes = self
             .inner
             .storage_as_mut::<UnrecordedBlocksTable>()
-            .take(height)
+            .take(&block_height)
             .map_err(|err| {
                 Error::CouldNotRemoveUnrecordedBlock(format!("Error: {:?}", err))
             })?;

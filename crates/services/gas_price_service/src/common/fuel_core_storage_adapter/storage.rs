@@ -75,11 +75,13 @@ impl TableWithBlueprint for GasPriceMetadata {
 /// for future blocks to be recorded on the DA chain
 pub struct UnrecordedBlocksTable;
 
+pub type BlockBytes = u64;
+
 impl Mappable for UnrecordedBlocksTable {
     type Key = Self::OwnedKey;
-    type OwnedKey = u32;
+    type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
-    type OwnedValue = u64;
+    type OwnedValue = BlockBytes;
 }
 
 impl TableWithBlueprint for UnrecordedBlocksTable {
@@ -93,11 +95,13 @@ impl TableWithBlueprint for UnrecordedBlocksTable {
 
 pub struct SequenceNumberTable;
 
+pub type SequenceNumber = u32;
+
 impl Mappable for SequenceNumberTable {
     type Key = Self::OwnedKey;
-    type OwnedKey = u32;
+    type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
-    type OwnedValue = u32;
+    type OwnedValue = SequenceNumber;
 }
 
 impl TableWithBlueprint for SequenceNumberTable {

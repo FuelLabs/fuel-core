@@ -392,7 +392,6 @@ where
 pub fn new_gas_price_service_v1<
     L2DataStore,
     GasPriceStore,
-    Metadata,
     DA,
     SettingsProvider,
     PersistedData,
