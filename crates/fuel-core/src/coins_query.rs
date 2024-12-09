@@ -5,8 +5,6 @@ use crate::{
         storage::coins::{
             CoinsToSpendIndexKey,
             IndexedCoinType,
-            COIN_FOREIGN_KEY_LEN,
-            MESSAGE_FOREIGN_KEY_LEN,
         },
     },
     query::asset_query::{
@@ -18,7 +16,6 @@ use crate::{
 use core::mem::swap;
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
-    codec::primitive::utxo_id_to_bytes,
     Error as StorageError,
     Result as StorageResult,
 };
@@ -27,7 +24,10 @@ use fuel_core_types::{
         CoinId,
         CoinType,
     },
-    fuel_tx::UtxoId,
+    fuel_tx::{
+        TxId,
+        UtxoId,
+    },
     fuel_types::{
         Address,
         AssetId,
@@ -80,36 +80,15 @@ impl PartialEq for CoinsQueryError {
 
 pub(crate) type CoinsToSpendIndexEntry = (CoinsToSpendIndexKey, IndexedCoinType);
 
-// The part of the `CoinsToSpendIndexKey` which is used to identify the coin or message in the
-// OnChain database. We could consider using `CoinId`, but we actually do not need to re-create
-// neither the `UtxoId` nor `Nonce` from the raw bytes and we can use the latter directly.
-#[derive(PartialEq, Eq, Hash)]
-pub(crate) enum CoinOrMessageIdBytes {
-    Coin([u8; COIN_FOREIGN_KEY_LEN]),
-    Message([u8; MESSAGE_FOREIGN_KEY_LEN]),
+pub struct ExcludedCoinIds<'a> {
+    coins: HashSet<&'a UtxoId>,
+    messages: HashSet<&'a Nonce>,
 }
 
-impl CoinOrMessageIdBytes {
-    pub(crate) fn from_utxo_id(utxo_id: &UtxoId) -> Self {
-        Self::Coin(utxo_id_to_bytes(utxo_id))
-    }
-
-    pub(crate) fn from_nonce(nonce: &Nonce) -> Self {
-        let mut arr = [0; MESSAGE_FOREIGN_KEY_LEN];
-        arr.copy_from_slice(nonce.as_ref());
-        Self::Message(arr)
-    }
-}
-
-pub struct ExcludedKeysAsBytes {
-    coins: HashSet<CoinOrMessageIdBytes>,
-    messages: HashSet<CoinOrMessageIdBytes>,
-}
-
-impl ExcludedKeysAsBytes {
+impl<'a> ExcludedCoinIds<'a> {
     pub(crate) fn new(
-        coins: impl Iterator<Item = CoinOrMessageIdBytes>,
-        messages: impl Iterator<Item = CoinOrMessageIdBytes>,
+        coins: impl Iterator<Item = &'a UtxoId>,
+        messages: impl Iterator<Item = &'a Nonce>,
     ) -> Self {
         Self {
             coins: coins.collect(),
@@ -117,12 +96,12 @@ impl ExcludedKeysAsBytes {
         }
     }
 
-    pub(crate) fn coins(&self) -> &HashSet<CoinOrMessageIdBytes> {
-        &self.coins
+    pub(crate) fn is_coin_excluded(&self, coin: &UtxoId) -> bool {
+        self.coins.contains(&coin)
     }
 
-    pub(crate) fn messages(&self) -> &HashSet<CoinOrMessageIdBytes> {
-        &self.messages
+    pub(crate) fn is_message_excluded(&self, message: &Nonce) -> bool {
+        self.messages.contains(&message)
     }
 }
 
@@ -302,7 +281,7 @@ pub async fn select_coins_to_spend(
     }: CoinsToSpendIndexIter<'_>,
     total: u64,
     max: u16,
-    excluded_ids: &ExcludedKeysAsBytes,
+    excluded_ids: &ExcludedCoinIds<'_>,
     batch_size: usize,
 ) -> Result<Vec<CoinsToSpendIndexEntry>, CoinsQueryError> {
     const TOTAL_AMOUNT_ADJUSTMENT_FACTOR: u64 = 2;
@@ -352,7 +331,7 @@ async fn big_coins(
     big_coins_stream: impl Stream<Item = StorageResult<CoinsToSpendIndexEntry>> + Unpin,
     total: u64,
     max: u16,
-    excluded_ids: &ExcludedKeysAsBytes,
+    excluded_ids: &ExcludedCoinIds<'_>,
 ) -> Result<(u64, Vec<CoinsToSpendIndexEntry>), CoinsQueryError> {
     select_coins_until(big_coins_stream, max, excluded_ids, |_, total_so_far| {
         total_so_far >= total
@@ -364,7 +343,7 @@ async fn dust_coins(
     dust_coins_stream: impl Stream<Item = StorageResult<CoinsToSpendIndexEntry>> + Unpin,
     last_big_coin: &CoinsToSpendIndexEntry,
     max_dust_count: u16,
-    excluded_ids: &ExcludedKeysAsBytes,
+    excluded_ids: &ExcludedCoinIds<'_>,
 ) -> Result<(u64, Vec<CoinsToSpendIndexEntry>), CoinsQueryError> {
     select_coins_until(
         dust_coins_stream,
@@ -378,7 +357,7 @@ async fn dust_coins(
 async fn select_coins_until<F>(
     mut coins_stream: impl Stream<Item = StorageResult<CoinsToSpendIndexEntry>> + Unpin,
     max: u16,
-    excluded_ids: &ExcludedKeysAsBytes,
+    excluded_ids: &ExcludedCoinIds<'_>,
     predicate: F,
 ) -> Result<(u64, Vec<CoinsToSpendIndexEntry>), CoinsQueryError>
 where
@@ -404,26 +383,34 @@ where
 
 fn is_excluded(
     (key, coin_type): &CoinsToSpendIndexEntry,
-    excluded_ids: &ExcludedKeysAsBytes,
+    excluded_ids: &ExcludedCoinIds,
 ) -> Result<bool, CoinsQueryError> {
     match coin_type {
         IndexedCoinType::Coin => {
-            let foreign_key = CoinOrMessageIdBytes::Coin(
-                key.foreign_key_bytes()
-                    .as_slice()
+            let utxo_id_bytes = key.foreign_key_bytes();
+            let tx_id: TxId = utxo_id_bytes
+                .get(..32)
+                .ok_or(CoinsQueryError::IncorrectCoinKeyInIndex)?
+                .try_into()
+                .map_err(|_| CoinsQueryError::IncorrectCoinKeyInIndex)?;
+
+            let output_index = u16::from_be_bytes(
+                utxo_id_bytes
+                    .get(32..34)
+                    .ok_or(CoinsQueryError::IncorrectCoinKeyInIndex)?
                     .try_into()
                     .map_err(|_| CoinsQueryError::IncorrectCoinKeyInIndex)?,
             );
-            Ok(excluded_ids.coins().contains(&foreign_key))
+            Ok(excluded_ids.is_coin_excluded(&UtxoId::new(tx_id, output_index)))
         }
         IndexedCoinType::Message => {
-            let foreign_key = CoinOrMessageIdBytes::Message(
-                key.foreign_key_bytes()
-                    .as_slice()
-                    .try_into()
-                    .map_err(|_| CoinsQueryError::IncorrectMessageKeyInIndex)?,
-            );
-            Ok(excluded_ids.messages().contains(&foreign_key))
+            let nonce_bytes = key.foreign_key_bytes();
+            let nonce: Nonce = nonce_bytes
+                .get(..)
+                .ok_or(CoinsQueryError::IncorrectMessageKeyInIndex)?
+                .try_into()
+                .map_err(|_| CoinsQueryError::IncorrectMessageKeyInIndex)?;
+            Ok(excluded_ids.is_message_excluded(&nonce))
         }
     }
 }
@@ -1088,10 +1075,7 @@ mod tests {
     }
 
     mod indexed_coins_to_spend {
-        use fuel_core_storage::{
-            codec::primitive::utxo_id_to_bytes,
-            iter::IntoBoxedIter,
-        };
+        use fuel_core_storage::iter::IntoBoxedIter;
         use fuel_core_types::{
             entities::coins::coin::Coin,
             fuel_tx::{
@@ -1104,10 +1088,9 @@ mod tests {
             coins_query::{
                 select_coins_to_spend,
                 select_coins_until,
-                CoinOrMessageIdBytes,
                 CoinsQueryError,
                 CoinsToSpendIndexEntry,
-                ExcludedKeysAsBytes,
+                ExcludedCoinIds,
             },
             graphql_api::{
                 ports::CoinsToSpendIndexIter,
@@ -1154,8 +1137,7 @@ mod tests {
 
             let coins = setup_test_coins([1, 2, 3, 4, 5]);
 
-            let excluded =
-                ExcludedKeysAsBytes::new(std::iter::empty(), std::iter::empty());
+            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
 
             // When
             let result = select_coins_until(
@@ -1180,18 +1162,13 @@ mod tests {
             let coins = setup_test_coins([1, 2, 3, 4, 5]);
 
             // Exclude coin with amount '2'.
-            let excluded_coin_bytes = {
-                let tx_id: TxId = [2; 32].into();
-                let output_index = 2;
-                let utxo_id = UtxoId::new(tx_id, output_index);
-                CoinOrMessageIdBytes::Coin(utxo_id_to_bytes(&utxo_id))
-            };
-            let excluded = ExcludedKeysAsBytes::new(
-                std::iter::once(excluded_coin_bytes),
-                std::iter::empty(),
-            );
+            let tx_id: TxId = [2; 32].into();
+            let output_index = 2;
+            let utxo_id = UtxoId::new(tx_id, output_index);
+            let excluded =
+                ExcludedCoinIds::new(std::iter::once(&utxo_id), std::iter::empty());
 
-            // When
+            //  When
             let result = select_coins_until(
                 futures::stream::iter(coins),
                 MAX,
@@ -1214,8 +1191,7 @@ mod tests {
 
             let coins = setup_test_coins([1, 2, 3, 4, 5]);
 
-            let excluded =
-                ExcludedKeysAsBytes::new(std::iter::empty(), std::iter::empty());
+            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
 
             let predicate: fn(&CoinsToSpendIndexEntry, u64) -> bool =
                 |_, total| total > TOTAL;
@@ -1250,8 +1226,7 @@ mod tests {
                 dust_coins_iter,
             };
 
-            let excluded =
-                ExcludedKeysAsBytes::new(std::iter::empty(), std::iter::empty());
+            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
 
             // When
             let result = select_coins_to_spend(
@@ -1303,8 +1278,7 @@ mod tests {
 
             let coins = setup_test_coins([10, 10, 9, 8, 7]);
 
-            let excluded =
-                ExcludedKeysAsBytes::new(std::iter::empty(), std::iter::empty());
+            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
 
             let coins_to_spend_iter = CoinsToSpendIndexIter {
                 big_coins_iter: coins.into_iter().into_boxed(),
@@ -1340,8 +1314,7 @@ mod tests {
             let first_2: Vec<_> = coins.drain(..2).collect();
             let last_2: Vec<_> = std::mem::take(&mut coins);
 
-            let excluded =
-                ExcludedKeysAsBytes::new(std::iter::empty(), std::iter::empty());
+            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
 
             // Inject an error into the middle of coins.
             let coins: Vec<_> = first_2

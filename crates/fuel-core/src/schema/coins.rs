@@ -4,10 +4,9 @@ use crate::{
     coins_query::{
         random_improve,
         select_coins_to_spend,
-        CoinOrMessageIdBytes,
         CoinsQueryError,
         CoinsToSpendIndexEntry,
-        ExcludedKeysAsBytes,
+        ExcludedCoinIds,
         SpendQuery,
     },
     fuel_core_graphql_api::{
@@ -334,19 +333,15 @@ async fn coins_to_spend_with_cache(
 ) -> async_graphql::Result<Vec<Vec<CoinType>>> {
     let mut all_coins = Vec::with_capacity(query_per_asset.len());
 
-    let excluded = ExcludedKeysAsBytes::new(
-        excluded_ids.iter().flat_map(|exclude| {
-            exclude
-                .utxos
-                .iter()
-                .map(|utxo_id| CoinOrMessageIdBytes::from_utxo_id(&utxo_id.0))
-        }),
-        excluded_ids.iter().flat_map(|exclude| {
-            exclude
-                .messages
-                .iter()
-                .map(|nonce| CoinOrMessageIdBytes::from_nonce(&nonce.0))
-        }),
+    let excluded = ExcludedCoinIds::new(
+        excluded_ids
+            .iter()
+            .flat_map(|exclude| exclude.utxos.iter())
+            .map(|utxo_id| &utxo_id.0),
+        excluded_ids
+            .iter()
+            .flat_map(|exclude| exclude.messages.iter())
+            .map(|nonce| &nonce.0),
     );
 
     for asset in query_per_asset {
@@ -464,7 +459,6 @@ async fn into_coin_id(
             IndexedCoinType::Coin => {
                 let bytes: [u8; COIN_FOREIGN_KEY_LEN] = foreign_key
                     .foreign_key_bytes()
-                    .as_slice()
                     .try_into()
                     .map_err(|_| CoinsQueryError::IncorrectCoinKeyInIndex)?;
 
@@ -478,7 +472,6 @@ async fn into_coin_id(
             IndexedCoinType::Message => {
                 let bytes: [u8; MESSAGE_FOREIGN_KEY_LEN] = foreign_key
                     .foreign_key_bytes()
-                    .as_slice()
                     .try_into()
                     .map_err(|_| CoinsQueryError::IncorrectMessageKeyInIndex)?;
                 let nonce = fuel_types::Nonce::from(bytes);

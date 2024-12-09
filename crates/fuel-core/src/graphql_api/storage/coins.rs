@@ -204,10 +204,10 @@ impl CoinsToSpendIndexKey {
         )
     }
 
-    pub fn foreign_key_bytes(&self) -> Vec<u8> {
+    pub fn foreign_key_bytes(&self) -> &[u8] {
         const OFFSET: usize =
             RETRYABLE_FLAG_SIZE + Address::LEN + AssetId::LEN + AMOUNT_SIZE;
-        self.0[OFFSET..].into()
+        &self.0[OFFSET..]
     }
 }
 
