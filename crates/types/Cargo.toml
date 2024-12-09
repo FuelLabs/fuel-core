@@ -20,7 +20,8 @@ version = { workspace = true }
 anyhow = { workspace = true }
 bs58 = { version = "0.5", optional = true }
 derivative = { version = "2", default-features = false, optional = true, features = [
-  "use_core"] }
+  "use_core",
+] }
 derive_more = { version = "0.99" }
 fuel-vm-private = { workspace = true, default-features = false, features = [
   "alloc",
