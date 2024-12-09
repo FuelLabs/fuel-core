@@ -48,6 +48,7 @@ use fuel_core_poa::{
 };
 use fuel_core_storage::{
     self,
+    structured_storage::StructuredStorage,
     transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
@@ -189,7 +190,7 @@ pub fn init_sub_services(
         settings,
         block_stream,
         database.gas_price().clone(),
-        metadata,
+        StructuredStorage::new(metadata),
         database.on_chain().clone(),
     )?;
 
