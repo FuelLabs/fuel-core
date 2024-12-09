@@ -1,5 +1,4 @@
 #![allow(non_snake_case)]
-
 use crate::{
     common::{
         fuel_core_storage_adapter::{
@@ -19,16 +18,23 @@ use crate::{
         L2Data,
         MetadataStorage,
     },
-    v0::{
+    v1::{
+        da_source_service::{
+            service::{
+                DaBlockCostsSource,
+                DaSourceService,
+            },
+            DaBlockCosts,
+        },
         metadata::{
-            V0AlgorithmConfig,
-            V0Metadata,
+            V1AlgorithmConfig,
+            V1Metadata,
         },
-        service::GasPriceServiceV0,
-        uninitialized_task::{
+        service::{
             initialize_algorithm,
-            UninitializedTask,
+            GasPriceServiceV1,
         },
+        uninitialized_task::UninitializedTask,
     },
 };
 use anyhow::anyhow;
@@ -56,7 +62,9 @@ use fuel_core_types::{
         SharedImportResult,
     },
 };
+use fuel_gas_price_algorithm::v1::AlgorithmUpdaterV1;
 use std::{
+    num::NonZeroU64,
     ops::Deref,
     sync::Arc,
 };
@@ -115,28 +123,81 @@ impl MetadataStorage for ErroringMetadata {
     }
 }
 
-fn arbitrary_config() -> V0AlgorithmConfig {
-    V0AlgorithmConfig {
-        starting_gas_price: 100,
-        min_gas_price: 0,
-        gas_price_change_percent: 10,
-        gas_price_threshold_percent: 0,
+struct FakeDABlockCost {
+    da_block_costs: Receiver<DaBlockCosts>,
+}
+
+impl FakeDABlockCost {
+    fn never_returns() -> Self {
+        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+        Self {
+            da_block_costs: receiver,
+        }
+    }
+
+    fn new(da_block_costs: Receiver<DaBlockCosts>) -> Self {
+        Self { da_block_costs }
     }
 }
 
-fn arbitrary_metadata() -> V0Metadata {
-    V0Metadata {
-        new_exec_price: 100,
+#[async_trait::async_trait]
+impl DaBlockCostsSource for FakeDABlockCost {
+    async fn request_da_block_cost(&mut self) -> anyhow::Result<DaBlockCosts> {
+        let costs = self.da_block_costs.recv().await.unwrap();
+        Ok(costs)
+    }
+}
+
+fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
+    V1AlgorithmConfig {
+        new_exec_gas_price: 100,
+        min_exec_gas_price: 0,
+        exec_gas_price_change_percent: 10,
+        l2_block_fullness_threshold_percent: 0,
+        gas_price_factor: NonZeroU64::new(100).unwrap(),
+        min_da_gas_price: 0,
+        max_da_gas_price_change_percent: 0,
+        da_p_component: 0,
+        da_d_component: 0,
+        normal_range_size: 0,
+        capped_range_size: 0,
+        decrease_range_size: 0,
+        block_activity_threshold: 0,
+        unrecorded_blocks: vec![],
+    }
+}
+
+fn arbitrary_metadata() -> V1Metadata {
+    V1Metadata {
+        new_scaled_exec_price: 100,
         l2_block_height: 0,
+        new_scaled_da_gas_price: 0,
+        gas_price_factor: NonZeroU64::new(100).unwrap(),
+        total_da_rewards_excess: 0,
+        latest_known_total_da_cost_excess: 0,
+        last_profit: 0,
+        second_to_last_profit: 0,
+        latest_da_cost_per_byte: 0,
+        unrecorded_blocks: vec![],
     }
 }
 
-fn different_arb_config() -> V0AlgorithmConfig {
-    V0AlgorithmConfig {
-        starting_gas_price: 200,
-        min_gas_price: 0,
-        gas_price_change_percent: 20,
-        gas_price_threshold_percent: 0,
+fn different_arb_config() -> V1AlgorithmConfig {
+    V1AlgorithmConfig {
+        new_exec_gas_price: 200,
+        min_exec_gas_price: 0,
+        exec_gas_price_change_percent: 20,
+        l2_block_fullness_threshold_percent: 0,
+        gas_price_factor: NonZeroU64::new(100).unwrap(),
+        min_da_gas_price: 0,
+        max_da_gas_price_change_percent: 0,
+        da_p_component: 0,
+        da_d_component: 0,
+        normal_range_size: 0,
+        capped_range_size: 0,
+        decrease_range_size: 0,
+        block_activity_threshold: 0,
+        unrecorded_blocks: vec![],
     }
 }
 
@@ -156,18 +217,19 @@ async fn next_gas_price__affected_by_new_l2_block() {
     };
     let metadata_storage = FakeMetadata::empty();
 
-    let config = arbitrary_config();
+    let config = zero_threshold_arbitrary_config();
     let height = 0;
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
-    let mut service = GasPriceServiceV0::new(
+    let da_source = FakeDABlockCost::never_returns();
+    let da_source_service = DaSourceService::new(da_source, None);
+    let mut service = GasPriceServiceV1::new(
         l2_block_source,
         metadata_storage,
         shared_algo,
         algo_updater,
+        da_source_service,
     );
-
-    tracing::debug!("service created");
 
     let read_algo = service.next_block_algorithm();
     let initial = read_algo.next_gas_price();
@@ -184,7 +246,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
 }
 
 #[tokio::test]
-async fn next__new_l2_block_saves_old_metadata() {
+async fn run__new_l2_block_saves_old_metadata() {
     // given
     let l2_block = BlockInfo::Block {
         height: 1,
@@ -202,28 +264,29 @@ async fn next__new_l2_block_saves_old_metadata() {
         inner: metadata_inner.clone(),
     };
 
-    let config = arbitrary_config();
+    let config = zero_threshold_arbitrary_config();
     let height = 0;
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
-
-    let mut service = GasPriceServiceV0::new(
+    let da_source = FakeDABlockCost::never_returns();
+    let da_source_service = DaSourceService::new(da_source, None);
+    let mut service = GasPriceServiceV1::new(
         l2_block_source,
         metadata_storage,
         shared_algo,
         algo_updater,
+        da_source_service,
     );
-
-    let mut watcher = StateWatcher::started();
-    tokio::spawn(async move { service.run(&mut watcher).await });
+    let mut watcher = StateWatcher::default();
 
     // when
+    service.run(&mut watcher).await;
     l2_block_sender.send(l2_block).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    service.shutdown().await.unwrap();
 
     // then
-    let metadata_has_been_updated = metadata_inner.lock().unwrap().is_some();
-    assert!(metadata_has_been_updated);
+    let metadata_is_some = metadata_inner.lock().unwrap().is_some();
+    assert!(metadata_is_some)
 }
 
 #[derive(Clone)]
@@ -300,23 +363,23 @@ fn empty_block_stream() -> BoxStream<SharedImportResult> {
 async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overrides() {
     // given
     let original_metadata = arbitrary_metadata();
-    let original = UpdaterMetadata::V0(original_metadata.clone());
+    let original = UpdaterMetadata::V1(original_metadata.clone());
     let metadata_inner = Arc::new(std::sync::Mutex::new(Some(original.clone())));
     let metadata_storage = FakeMetadata {
         inner: metadata_inner,
     };
 
     let different_config = different_arb_config();
-    assert_ne!(
-        different_config.starting_gas_price,
-        original_metadata.new_exec_price
-    );
+    let descaleed_exec_price =
+        original_metadata.new_scaled_exec_price / original_metadata.gas_price_factor;
+    assert_ne!(different_config.new_exec_gas_price, descaleed_exec_price);
     let different_l2_block = 1231;
     assert_ne!(different_l2_block, original_metadata.l2_block_height);
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
     let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
+    let da_cost_source = FakeDABlockCost::never_returns();
 
     // when
     let service = UninitializedTask::new(
@@ -326,30 +389,79 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
         block_stream,
         gas_price_db,
         metadata_storage,
+        da_cost_source,
         on_chain_db,
     )
     .unwrap();
 
     // then
-    let V0Metadata {
-        new_exec_price,
-        l2_block_height,
-    } = original_metadata;
     let UninitializedTask { algo_updater, .. } = service;
-    assert_eq!(algo_updater.new_exec_price, new_exec_price);
-    assert_eq!(algo_updater.l2_block_height, l2_block_height);
+    algo_updater_matches_values_from_old_metadata(algo_updater, original_metadata);
+}
+
+fn algo_updater_matches_values_from_old_metadata(
+    algo_updater: AlgorithmUpdaterV1,
+    original_metadata: V1Metadata,
+) {
+    let V1Metadata {
+        new_scaled_exec_price: original_new_scaled_exec_price,
+        l2_block_height: original_l2_block_height,
+        new_scaled_da_gas_price: original_new_scaled_da_gas_price,
+        gas_price_factor: original_gas_price_factor,
+        total_da_rewards_excess: original_total_da_rewards_excess,
+        latest_known_total_da_cost_excess: original_latest_known_total_da_cost_excess,
+        last_profit: original_last_profit,
+        second_to_last_profit: original_second_to_last_profit,
+        latest_da_cost_per_byte: original_latest_da_cost_per_byte,
+        unrecorded_blocks: original_unrecorded_blocks,
+    } = original_metadata;
+    assert_eq!(
+        algo_updater.new_scaled_exec_price,
+        original_new_scaled_exec_price
+    );
+    assert_eq!(algo_updater.l2_block_height, original_l2_block_height);
+    assert_eq!(
+        algo_updater.new_scaled_da_gas_price,
+        original_new_scaled_da_gas_price
+    );
+    assert_eq!(algo_updater.gas_price_factor, original_gas_price_factor);
+    assert_eq!(
+        algo_updater.total_da_rewards_excess,
+        original_total_da_rewards_excess
+    );
+    assert_eq!(
+        algo_updater.latest_known_total_da_cost_excess,
+        original_latest_known_total_da_cost_excess
+    );
+    assert_eq!(algo_updater.last_profit, original_last_profit);
+    assert_eq!(
+        algo_updater.second_to_last_profit,
+        original_second_to_last_profit
+    );
+    assert_eq!(
+        algo_updater.latest_da_cost_per_byte,
+        original_latest_da_cost_per_byte
+    );
+    assert_eq!(
+        algo_updater
+            .unrecorded_blocks
+            .into_iter()
+            .collect::<Vec<_>>(),
+        original_unrecorded_blocks.into_iter().collect::<Vec<_>>()
+    );
 }
 
 #[tokio::test]
 async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     // given
-    let config = arbitrary_config();
+    let config = zero_threshold_arbitrary_config();
     let different_l2_block = 1231;
     let metadata_storage = ErroringMetadata;
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
     let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
+    let da_cost_source = FakeDABlockCost::never_returns();
 
     // when
     let res = UninitializedTask::new(
@@ -359,6 +471,7 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
         block_stream,
         gas_price_db,
         metadata_storage,
+        da_cost_source,
         on_chain_db,
     );
 
