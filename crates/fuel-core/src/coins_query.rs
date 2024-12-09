@@ -41,7 +41,10 @@ use futures::{
     TryStreamExt,
 };
 use rand::prelude::*;
-use std::cmp::Reverse;
+use std::{
+    cmp::Reverse,
+    collections::HashSet,
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -78,9 +81,9 @@ impl PartialEq for CoinsQueryError {
 pub(crate) type CoinsToSpendIndexEntry = (CoinsToSpendIndexKey, IndexedCoinType);
 
 // The part of the `CoinsToSpendIndexKey` which is used to identify the coin or message in the
-// OnChain database. We could consider using `CoinId`, but we do not need to re-create
-// neither the `UtxoId` nor `Nonce` from the raw bytes.
-#[derive(PartialEq)]
+// OnChain database. We could consider using `CoinId`, but we actually do not need to re-create
+// neither the `UtxoId` nor `Nonce` from the raw bytes and we can use the latter directly.
+#[derive(PartialEq, Eq, Hash)]
 pub(crate) enum CoinOrMessageIdBytes {
     Coin([u8; COIN_FOREIGN_KEY_LEN]),
     Message([u8; MESSAGE_FOREIGN_KEY_LEN]),
@@ -99,23 +102,26 @@ impl CoinOrMessageIdBytes {
 }
 
 pub struct ExcludedKeysAsBytes {
-    coins: Vec<CoinOrMessageIdBytes>,
-    messages: Vec<CoinOrMessageIdBytes>,
+    coins: HashSet<CoinOrMessageIdBytes>,
+    messages: HashSet<CoinOrMessageIdBytes>,
 }
 
 impl ExcludedKeysAsBytes {
     pub(crate) fn new(
-        coins: Vec<CoinOrMessageIdBytes>,
-        messages: Vec<CoinOrMessageIdBytes>,
+        coins: impl Iterator<Item = CoinOrMessageIdBytes>,
+        messages: impl Iterator<Item = CoinOrMessageIdBytes>,
     ) -> Self {
-        Self { coins, messages }
+        Self {
+            coins: coins.collect(),
+            messages: messages.collect(),
+        }
     }
 
-    pub(crate) fn coins(&self) -> &[CoinOrMessageIdBytes] {
+    pub(crate) fn coins(&self) -> &HashSet<CoinOrMessageIdBytes> {
         &self.coins
     }
 
-    pub(crate) fn messages(&self) -> &[CoinOrMessageIdBytes] {
+    pub(crate) fn messages(&self) -> &HashSet<CoinOrMessageIdBytes> {
         &self.messages
     }
 }
@@ -1148,7 +1154,8 @@ mod tests {
 
             let coins = setup_test_coins([1, 2, 3, 4, 5]);
 
-            let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
+            let excluded =
+                ExcludedKeysAsBytes::new(std::iter::empty(), std::iter::empty());
 
             // When
             let result = select_coins_until(
@@ -1179,7 +1186,10 @@ mod tests {
                 let utxo_id = UtxoId::new(tx_id, output_index);
                 CoinOrMessageIdBytes::Coin(utxo_id_to_bytes(&utxo_id))
             };
-            let excluded = ExcludedKeysAsBytes::new(vec![excluded_coin_bytes], vec![]);
+            let excluded = ExcludedKeysAsBytes::new(
+                std::iter::once(excluded_coin_bytes),
+                std::iter::empty(),
+            );
 
             // When
             let result = select_coins_until(
@@ -1204,7 +1214,8 @@ mod tests {
 
             let coins = setup_test_coins([1, 2, 3, 4, 5]);
 
-            let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
+            let excluded =
+                ExcludedKeysAsBytes::new(std::iter::empty(), std::iter::empty());
 
             let predicate: fn(&CoinsToSpendIndexEntry, u64) -> bool =
                 |_, total| total > TOTAL;
@@ -1239,7 +1250,8 @@ mod tests {
                 dust_coins_iter,
             };
 
-            let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
+            let excluded =
+                ExcludedKeysAsBytes::new(std::iter::empty(), std::iter::empty());
 
             // When
             let result = select_coins_to_spend(
@@ -1291,7 +1303,8 @@ mod tests {
 
             let coins = setup_test_coins([10, 10, 9, 8, 7]);
 
-            let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
+            let excluded =
+                ExcludedKeysAsBytes::new(std::iter::empty(), std::iter::empty());
 
             let coins_to_spend_iter = CoinsToSpendIndexIter {
                 big_coins_iter: coins.into_iter().into_boxed(),
@@ -1327,7 +1340,8 @@ mod tests {
             let first_2: Vec<_> = coins.drain(..2).collect();
             let last_2: Vec<_> = std::mem::take(&mut coins);
 
-            let excluded = ExcludedKeysAsBytes::new(vec![], vec![]);
+            let excluded =
+                ExcludedKeysAsBytes::new(std::iter::empty(), std::iter::empty());
 
             // Inject an error into the middle of coins.
             let coins: Vec<_> = first_2

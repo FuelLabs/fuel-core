@@ -334,25 +334,20 @@ async fn coins_to_spend_with_cache(
 ) -> async_graphql::Result<Vec<Vec<CoinType>>> {
     let mut all_coins = Vec::with_capacity(query_per_asset.len());
 
-    let (excluded_utxo_id_bytes, excluded_nonce_bytes) = excluded_ids.map_or_else(
-        || (vec![], vec![]),
-        |exclude| {
-            (
-                exclude
-                    .utxos
-                    .into_iter()
-                    .map(|utxo_id| CoinOrMessageIdBytes::from_utxo_id(&utxo_id.0))
-                    .collect(),
-                exclude
-                    .messages
-                    .into_iter()
-                    .map(|nonce| CoinOrMessageIdBytes::from_nonce(&nonce.0))
-                    .collect(),
-            )
-        },
+    let excluded = ExcludedKeysAsBytes::new(
+        excluded_ids.iter().flat_map(|exclude| {
+            exclude
+                .utxos
+                .iter()
+                .map(|utxo_id| CoinOrMessageIdBytes::from_utxo_id(&utxo_id.0))
+        }),
+        excluded_ids.iter().flat_map(|exclude| {
+            exclude
+                .messages
+                .iter()
+                .map(|nonce| CoinOrMessageIdBytes::from_nonce(&nonce.0))
+        }),
     );
-
-    let excluded = ExcludedKeysAsBytes::new(excluded_utxo_id_bytes, excluded_nonce_bytes);
 
     for asset in query_per_asset {
         let asset_id = asset.asset_id.0;
