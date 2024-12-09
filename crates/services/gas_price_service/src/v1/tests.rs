@@ -8,7 +8,6 @@ use crate::{
             },
             GasPriceSettings,
             GasPriceSettingsProvider,
-            NewStorageTransaction,
         },
         l2_block_source::L2BlockSource,
         updater_metadata::UpdaterMetadata,
@@ -20,12 +19,12 @@ use crate::{
     },
     ports::{
         GasPriceData,
+        GasPriceServiceAtomicStorage,
         GetDaSequenceNumber,
         GetMetadataStorage,
         L2Data,
         SetDaSequenceNumber,
         SetMetadataStorage,
-        TransactionableStorage,
     },
     v1::{
         algorithm::SharedV1Algorithm,
@@ -46,7 +45,7 @@ use crate::{
             GasPriceServiceV1,
         },
         uninitialized_task::{
-            fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
+            fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
             UninitializedTask,
         },
     },
@@ -135,6 +134,7 @@ impl SetMetadataStorage for FakeMetadata {
         Ok(())
     }
 }
+
 impl GetMetadataStorage for FakeMetadata {
     fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
         let metadata = self.inner.lock().unwrap().clone();
@@ -152,6 +152,7 @@ impl SetMetadataStorage for ErroringPersistedData {
         })
     }
 }
+
 impl GetMetadataStorage for ErroringPersistedData {
     fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
         Err(GasPriceError::CouldNotFetchMetadata {
@@ -171,7 +172,7 @@ impl GetDaSequenceNumber for ErroringPersistedData {
 
 struct UnimplementedStorageTx;
 
-impl TransactionableStorage for ErroringPersistedData {
+impl GasPriceServiceAtomicStorage for ErroringPersistedData {
     type Transaction<'a> = UnimplementedStorageTx;
 
     fn begin_transaction(&mut self) -> GasPriceResult<Self::Transaction<'_>> {
@@ -188,6 +189,7 @@ impl SetMetadataStorage for UnimplementedStorageTx {
         unimplemented!()
     }
 }
+
 impl GetMetadataStorage for UnimplementedStorageTx {
     fn get_metadata(
         &self,
@@ -198,11 +200,11 @@ impl GetMetadataStorage for UnimplementedStorageTx {
 }
 
 impl UnrecordedBlocks for UnimplementedStorageTx {
-    fn insert(&mut self, _height: Height, _bytes: Bytes) -> Result<(), Error> {
+    fn insert(&mut self, _height: Height, _bytes: Bytes) -> Result<(), String> {
         unimplemented!()
     }
 
-    fn remove(&mut self, _height: &Height) -> Result<Option<Bytes>, Error> {
+    fn remove(&mut self, _height: &Height) -> Result<Option<Bytes>, String> {
         unimplemented!()
     }
 }
@@ -216,12 +218,23 @@ impl SetDaSequenceNumber for UnimplementedStorageTx {
         unimplemented!()
     }
 }
+
 impl GetDaSequenceNumber for UnimplementedStorageTx {
     fn get_sequence_number(
         &self,
         _block_height: &BlockHeight,
     ) -> GasPriceResult<Option<u32>> {
         unimplemented!()
+    }
+}
+
+impl AsUnrecordedBlocks for UnimplementedStorageTx {
+    type Wrapper<'a> = UnimplementedStorageTx
+        where
+            Self: 'a;
+
+    fn as_unrecorded_blocks(&mut self) -> Self::Wrapper<'_> {
+        UnimplementedStorageTx
     }
 }
 
@@ -402,10 +415,6 @@ async fn run__new_l2_block_saves_old_metadata() {
     let l2_block_source = FakeL2BlockSource {
         l2_block: l2_block_receiver,
     };
-    let metadata_inner = Arc::new(std::sync::Mutex::new(None));
-    let metadata_storage = FakeMetadata {
-        inner: metadata_inner.clone(),
-    };
 
     let config = zero_threshold_arbitrary_config();
     let inner = database();
@@ -539,20 +548,19 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let different_l2_block = 0;
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
-    let gas_price_db = FakeGasPriceDb::empty();
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
     let inner = database_with_metadata(&original_metadata);
     // when
     let service = UninitializedTask::new(
         different_config.clone(),
+        None,
         0.into(),
         settings,
         block_stream,
-        gas_price_db,
+        inner,
         da_cost_source,
         on_chain_db,
-        inner,
     )
     .unwrap();
 
@@ -645,20 +653,19 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     let erroring_persisted_data = ErroringPersistedData;
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
-    let gas_price_db = FakeGasPriceDb::empty();
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
 
     // when
     let res = UninitializedTask::new(
         config,
+        None,
         0.into(),
         settings,
         block_stream,
-        gas_price_db,
+        erroring_persisted_data,
         da_cost_source,
         on_chain_db,
-        erroring_persisted_data,
     );
 
     // then
@@ -680,7 +687,6 @@ async fn uninitialized_task__init__starts_da_service_with_sequence_number_in_sto
     let different_l2_block = 0;
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
-    let gas_price_db = FakeGasPriceDb::new(block_height);
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let (da_cost_source, sequence_number_handle) =
         FakeDABlockCost::never_returns_with_handle_to_sequence_number();
@@ -691,13 +697,13 @@ async fn uninitialized_task__init__starts_da_service_with_sequence_number_in_sto
     StorageTransaction::commit_transaction(tx).unwrap();
     let service = UninitializedTask::new(
         different_config.clone(),
+        Some(block_height.into()),
         0.into(),
         settings,
         block_stream,
-        gas_price_db,
+        inner,
         da_cost_source,
         on_chain_db,
-        inner,
     )
     .unwrap();
 
