@@ -254,7 +254,7 @@ where
     async fn shutdown(mut self) -> anyhow::Result<()> {
         // handle all the remaining l2 blocks
         while let Some(Ok(block)) = self.l2_block_source.get_l2_block().now_or_never() {
-            tracing::debug!("Updating gas price algorithm");
+            tracing::debug!("Updating gas price algorithm before shutdown");
             self.apply_block_info_to_gas_algorithm(block).await?;
         }
 
