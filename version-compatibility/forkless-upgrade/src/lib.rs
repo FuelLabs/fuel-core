@@ -6,6 +6,8 @@ mod backward_compatibility;
 #[cfg(test)]
 mod forward_compatibility;
 #[cfg(test)]
+mod genesis;
+#[cfg(test)]
 pub(crate) mod tests_helper;
 
 #[cfg(test)]
