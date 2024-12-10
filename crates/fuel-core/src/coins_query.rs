@@ -1103,9 +1103,12 @@ mod tests {
 
         const BATCH_SIZE: usize = 1;
 
-        fn setup_test_coins(
-            coins: impl IntoIterator<Item = u8>,
-        ) -> Vec<Result<CoinsToSpendIndexEntry, fuel_core_storage::Error>> {
+        struct TestCoinSpec {
+            index_entry: Result<CoinsToSpendIndexEntry, fuel_core_storage::Error>,
+            utxo_id: UtxoId,
+        }
+
+        fn setup_test_coins(coins: impl IntoIterator<Item = u8>) -> Vec<TestCoinSpec> {
             coins
                 .into_iter()
                 .map(|i| {
@@ -1121,12 +1124,14 @@ mod tests {
                         tx_pointer: Default::default(),
                     };
 
-                    (
-                        CoinsToSpendIndexKey::from_coin(&coin),
-                        IndexedCoinType::Coin,
-                    )
+                    TestCoinSpec {
+                        index_entry: Ok((
+                            CoinsToSpendIndexKey::from_coin(&coin),
+                            IndexedCoinType::Coin,
+                        )),
+                        utxo_id,
+                    }
                 })
-                .map(Ok)
                 .collect()
         }
 
@@ -1136,6 +1141,10 @@ mod tests {
             const MAX: u16 = 3;
 
             let coins = setup_test_coins([1, 2, 3, 4, 5]);
+            let (coins, _): (Vec<_>, Vec<_>) = coins
+                .into_iter()
+                .map(|spec| (spec.index_entry, spec.utxo_id))
+                .unzip();
 
             let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
 
@@ -1160,11 +1169,13 @@ mod tests {
             const MAX: u16 = u16::MAX;
 
             let coins = setup_test_coins([1, 2, 3, 4, 5]);
+            let (coins, utxo_ids): (Vec<_>, Vec<_>) = coins
+                .into_iter()
+                .map(|spec| (spec.index_entry, spec.utxo_id))
+                .unzip();
 
             // Exclude coin with amount '2'.
-            let tx_id: TxId = [2; 32].into();
-            let output_index = 2;
-            let utxo_id = UtxoId::new(tx_id, output_index);
+            let utxo_id = utxo_ids[1];
             let excluded =
                 ExcludedCoinIds::new(std::iter::once(&utxo_id), std::iter::empty());
 
@@ -1190,6 +1201,10 @@ mod tests {
             const TOTAL: u64 = 7;
 
             let coins = setup_test_coins([1, 2, 3, 4, 5]);
+            let (coins, _): (Vec<_>, Vec<_>) = coins
+                .into_iter()
+                .map(|spec| (spec.index_entry, spec.utxo_id))
+                .unzip();
 
             let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
 
@@ -1218,9 +1233,17 @@ mod tests {
             const TOTAL: u64 = 101;
 
             let test_coins = [100, 100, 4, 3, 2];
-            let big_coins_iter = setup_test_coins(test_coins).into_iter().into_boxed();
-            let dust_coins_iter =
-                setup_test_coins(test_coins).into_iter().rev().into_boxed();
+            let big_coins_iter = setup_test_coins(test_coins)
+                .into_iter()
+                .map(|spec| spec.index_entry)
+                .into_boxed();
+
+            let dust_coins_iter = setup_test_coins(test_coins)
+                .into_iter()
+                .rev()
+                .map(|spec| spec.index_entry)
+                .into_boxed();
+
             let coins_to_spend_iter = CoinsToSpendIndexIter {
                 big_coins_iter,
                 dust_coins_iter,
@@ -1277,6 +1300,10 @@ mod tests {
             const TOTAL: u64 = 10;
 
             let coins = setup_test_coins([10, 10, 9, 8, 7]);
+            let (coins, _): (Vec<_>, Vec<_>) = coins
+                .into_iter()
+                .map(|spec| (spec.index_entry, spec.utxo_id))
+                .unzip();
 
             let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
 
@@ -1308,7 +1335,11 @@ mod tests {
             const MAX: u16 = u16::MAX;
             const TOTAL: u64 = 101;
 
-            let mut coins = setup_test_coins([10, 9, 8, 7]);
+            let coins = setup_test_coins([10, 9, 8, 7]);
+            let (mut coins, _): (Vec<_>, Vec<_>) = coins
+                .into_iter()
+                .map(|spec| (spec.index_entry, spec.utxo_id))
+                .unzip();
             let error = fuel_core_storage::Error::NotFound("S1", "S2");
 
             let first_2: Vec<_> = coins.drain(..2).collect();
