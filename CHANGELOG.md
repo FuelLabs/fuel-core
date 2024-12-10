@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2413](https://github.com/FuelLabs/fuel-core/issues/2413): block production immediately errors if unable to lock the mutex.
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2389): Fix construction of reverse iterator in RocksDB.
 - [2479](https://github.com/FuelLabs/fuel-core/pull/2479): Fix an error on the last iteration of the read and write sequential opcodes on contract storage.
+- [2485](https://github.com/FuelLabs/fuel-core/pull/2485): Hardcode the timestamp of the genesis block and version of `tai64` to avoid breaking changes for us.
 
 ### Changed
 - [2295](https://github.com/FuelLabs/fuel-core/pull/2295): `CombinedDb::from_config` now respects `state_rewind_policy` with tmp RocksDB.
