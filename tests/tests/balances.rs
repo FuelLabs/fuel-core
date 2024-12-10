@@ -378,7 +378,7 @@ mod pagination {
     }
 
     #[tokio::test]
-    async fn balances_pagination_without_base_asset() {
+    async fn balances_forward_pagination_without_base_asset() {
         // Given
 
         // Setup coins:
@@ -426,6 +426,58 @@ mod pagination {
         assert_eq!(expected_next_pages, actual_next_pages.as_slice());
 
         let expected_balances = vec![(asset_1, 11), (asset_2, 22), (asset_3, 33)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_reversed_pagination_without_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of asset (1111...)
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        const TOTAL_ASSETS: usize = 3;
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = AssetId::new([0x11; 32]);
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+
+        let config = setup(&owner, &asset_ids).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let mut cursor = None;
+        let mut actual_next_pages = vec![];
+        let mut actual_balances = vec![];
+        for _ in 0..TOTAL_ASSETS {
+            let result = client
+                .balances(
+                    &owner,
+                    PaginationRequest {
+                        cursor,
+                        results: 1,
+                        direction: PageDirection::Backward,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.results.len(), 1);
+            let first_and_only_result = result.results.first().unwrap();
+            actual_balances
+                .push((first_and_only_result.asset_id, first_and_only_result.amount));
+            actual_next_pages.push(result.has_next_page);
+            cursor = result.cursor;
+        }
+
+        // Then
+        let expected_next_pages = [true, true, false];
+        assert_eq!(expected_next_pages, actual_next_pages.as_slice());
+
+        let expected_balances = vec![(asset_3, 33), (asset_2, 22), (asset_1, 11)];
         assert_eq!(expected_balances, actual_balances);
     }
 }
