@@ -422,9 +422,9 @@ use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::R
 
 #[test]
 fn produce_block__l1_committed_block_effects_gas_price() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .try_init();
+    // let _ = tracing_subscriber::fmt()
+    //     .with_max_level(tracing::Level::DEBUG)
+    //     .try_init();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     // set up chain with single unrecorded block
@@ -462,16 +462,21 @@ fn produce_block__l1_committed_block_effects_gas_price() {
         "100",
     ]);
 
-    let new_gas_price = rt.block_on(async {
-        let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
-            .await
-            .unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        driver.client.produce_blocks(1, None).await.unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        driver.client.latest_gas_price().await.unwrap().gas_price
-    });
-    assert_ne!(first_gas_price, new_gas_price);
+    // when
+    let new_gas_price = rt
+        .block_on(async {
+            let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
+                .await
+                .unwrap();
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            driver.client.produce_blocks(1, None).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            driver.client.estimate_gas_price(0).await.unwrap().gas_price
+        })
+        .into();
+
+    // then
+    assert!(first_gas_price < new_gas_price);
 }
 
 struct FakeServer {
