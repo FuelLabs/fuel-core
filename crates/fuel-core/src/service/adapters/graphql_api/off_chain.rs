@@ -317,7 +317,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                             })
                         })
                         .into_boxed();
-                    return non_base_asset_balance;
+                    non_base_asset_balance
                 }
             }
         } else {
