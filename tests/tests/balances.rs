@@ -354,7 +354,7 @@ mod pagination {
     async fn setup(
         owner: &Address,
         coin_asset_ids: &[AssetId],
-        message_amount: u64,
+        message_amount: Option<u64>,
     ) -> Config {
         let coins = {
             // setup all coins for all owners
@@ -379,21 +379,68 @@ mod pagination {
         let state_config = StateConfig {
             contracts: vec![],
             coins,
-            messages: vec![MessageConfig {
-                sender: *owner,
-                recipient: *owner,
-                nonce: 1.into(),
-                amount: message_amount,
-                data: vec![],
-                da_height: DaBlockHeight::from(0usize),
-            }],
+            messages: message_amount.map_or_else(
+                || vec![],
+                |amount| {
+                    vec![MessageConfig {
+                        sender: *owner,
+                        recipient: *owner,
+                        nonce: 1.into(),
+                        amount,
+                        data: vec![],
+                        da_height: DaBlockHeight::from(0usize),
+                    }]
+                },
+            ),
             ..Default::default()
         };
         Config::local_node_with_state_config(state_config)
     }
 
     #[tokio::test]
-    async fn balances_forward_pagination_request_all() {
+    async fn balances_forward_pagination_request_all_without_message_without_base_asset()
+    {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of asset (1111...)
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = AssetId::new([0x11; 32]);
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+
+        let config = setup(&owner, &asset_ids, None).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let actual_balances = client
+            .balances(
+                &owner,
+                PaginationRequest {
+                    cursor: None,
+                    results: 100,
+                    direction: PageDirection::Forward,
+                },
+            )
+            .await
+            .unwrap()
+            .results
+            .iter()
+            .map(|r| (r.asset_id, r.amount))
+            .collect::<Vec<_>>();
+
+        // Then
+        let expected_balances = vec![(asset_1, 11), (asset_2, 22), (asset_3, 33)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_forward_pagination_request_all_with_message_without_base_asset() {
         // Given
 
         // Setup coins:
@@ -410,7 +457,7 @@ mod pagination {
         let asset_ids = [asset_1, asset_2, asset_3];
         let message_amount = 44;
 
-        let config = setup(&owner, &asset_ids, message_amount).await;
+        let config = setup(&owner, &asset_ids, Some(message_amount)).await;
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
 
@@ -442,7 +489,49 @@ mod pagination {
     }
 
     #[tokio::test]
-    async fn balances_backward_pagination_request_all() {
+    async fn balances_backward_pagination_request_all_without_message_without_base_asset()
+    {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of asset (1111...)
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = AssetId::new([0x11; 32]);
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+
+        let config = setup(&owner, &asset_ids, None).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let actual_balances = client
+            .balances(
+                &owner,
+                PaginationRequest {
+                    cursor: None,
+                    results: 100,
+                    direction: PageDirection::Backward,
+                },
+            )
+            .await
+            .unwrap()
+            .results
+            .iter()
+            .map(|r| (r.asset_id, r.amount))
+            .collect::<Vec<_>>();
+
+        // Then
+        let expected_balances = vec![(asset_3, 33), (asset_2, 22), (asset_1, 11)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_backward_pagination_request_all_with_message_without_base_asset() {
         // Given
 
         // Setup coins:
@@ -459,7 +548,7 @@ mod pagination {
         let asset_ids = [asset_1, asset_2, asset_3];
         let message_amount = 44;
 
-        let config = setup(&owner, &asset_ids, message_amount).await;
+        let config = setup(&owner, &asset_ids, Some(message_amount)).await;
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
 
@@ -491,7 +580,7 @@ mod pagination {
     }
 
     #[tokio::test]
-    async fn balances_forward_pagination_one_by_one() {
+    async fn balances_forward_pagination_one_by_one_without_message_without_base_asset() {
         // Given
 
         // Setup coins:
@@ -499,17 +588,14 @@ mod pagination {
         // - 11 units of asset (1111...)
         // - 22 units of asset (2222...)
         // - 33 units of asset (3333...)
-        // - 44 units in a message
-        pub const BASE_ASSET: AssetId = AssetId::zeroed();
-        const TOTAL_ASSETS: usize = 4;
+        const TOTAL_ASSETS: usize = 3;
         let owner = Address::from([0xaa; 32]);
         let asset_1 = AssetId::new([0x11; 32]);
         let asset_2 = AssetId::new([0x22; 32]);
         let asset_3 = AssetId::new([0x33; 32]);
         let asset_ids = [asset_1, asset_2, asset_3];
-        let message_amount = 44;
 
-        let config = setup(&owner, &asset_ids, message_amount).await;
+        let config = setup(&owner, &asset_ids, None).await;
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
 
@@ -538,8 +624,63 @@ mod pagination {
         }
 
         // Then
-        // let expected_next_pages = [true, true, true, false];
-        // assert_eq!(expected_next_pages, actual_next_pages.as_slice());
+        let expected_next_pages = [true, true, false];
+        assert_eq!(expected_next_pages, actual_next_pages.as_slice());
+
+        let expected_balances = vec![(asset_1, 11), (asset_2, 22), (asset_3, 33)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_forward_pagination_one_by_one_with_message_without_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of asset (1111...)
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        // - 44 units in a message
+        pub const BASE_ASSET: AssetId = AssetId::zeroed();
+        const TOTAL_ASSETS: usize = 4;
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = AssetId::new([0x11; 32]);
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+        let message_amount = 44;
+
+        let config = setup(&owner, &asset_ids, Some(message_amount)).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let mut cursor = None;
+        let mut actual_next_pages = vec![];
+        let mut actual_balances = vec![];
+        for _ in 0..TOTAL_ASSETS {
+            let result = client
+                .balances(
+                    &owner,
+                    PaginationRequest {
+                        cursor,
+                        results: 1,
+                        direction: PageDirection::Forward,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.results.len(), 1);
+            let first_and_only_result = result.results.first().unwrap();
+            actual_balances
+                .push((first_and_only_result.asset_id, first_and_only_result.amount));
+            actual_next_pages.push(result.has_next_page);
+            cursor = result.cursor;
+        }
+
+        // Then
+        let expected_next_pages = [true, true, true, false];
+        assert_eq!(expected_next_pages, actual_next_pages.as_slice());
 
         let expected_balances = vec![
             (BASE_ASSET, 44),
@@ -547,6 +688,507 @@ mod pagination {
             (asset_2, 22),
             (asset_3, 33),
         ];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_backward_pagination_one_by_one_without_message_without_base_asset()
+    {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of asset (1111...)
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        const TOTAL_ASSETS: usize = 3;
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = AssetId::new([0x11; 32]);
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+
+        let config = setup(&owner, &asset_ids, None).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let mut cursor = None;
+        let mut actual_next_pages = vec![];
+        let mut actual_balances = vec![];
+        for _ in 0..TOTAL_ASSETS {
+            let result = client
+                .balances(
+                    &owner,
+                    PaginationRequest {
+                        cursor,
+                        results: 1,
+                        direction: PageDirection::Backward,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.results.len(), 1);
+            let first_and_only_result = result.results.first().unwrap();
+            actual_balances
+                .push((first_and_only_result.asset_id, first_and_only_result.amount));
+            actual_next_pages.push(result.has_next_page);
+            cursor = result.cursor;
+        }
+
+        // Then
+        let expected_next_pages = [true, true, false];
+        assert_eq!(expected_next_pages, actual_next_pages.as_slice());
+
+        let expected_balances = vec![(asset_3, 33), (asset_2, 22), (asset_1, 11)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_backward_pagination_one_by_one_with_message_without_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of asset (1111...)
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        // - 44 units in a message
+        pub const BASE_ASSET: AssetId = AssetId::zeroed();
+        const TOTAL_ASSETS: usize = 4;
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = AssetId::new([0x11; 32]);
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+        let message_amount = 44;
+
+        let config = setup(&owner, &asset_ids, Some(message_amount)).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let mut cursor = None;
+        let mut actual_next_pages = vec![];
+        let mut actual_balances = vec![];
+        for _ in 0..TOTAL_ASSETS {
+            let result = client
+                .balances(
+                    &owner,
+                    PaginationRequest {
+                        cursor,
+                        results: 1,
+                        direction: PageDirection::Backward,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.results.len(), 1);
+            let first_and_only_result = result.results.first().unwrap();
+            actual_balances
+                .push((first_and_only_result.asset_id, first_and_only_result.amount));
+            actual_next_pages.push(result.has_next_page);
+            cursor = result.cursor;
+        }
+
+        // Then
+        let expected_next_pages = [true, true, true, false];
+        assert_eq!(expected_next_pages, actual_next_pages.as_slice());
+
+        let expected_balances = vec![
+            (asset_3, 33),
+            (asset_2, 22),
+            (asset_1, 11),
+            (BASE_ASSET, 44),
+        ];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_forward_pagination_request_all_without_message_with_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of base asset
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        pub const BASE_ASSET: AssetId = AssetId::zeroed();
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = BASE_ASSET;
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+
+        let config = setup(&owner, &asset_ids, None).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let actual_balances = client
+            .balances(
+                &owner,
+                PaginationRequest {
+                    cursor: None,
+                    results: 100,
+                    direction: PageDirection::Forward,
+                },
+            )
+            .await
+            .unwrap()
+            .results
+            .iter()
+            .map(|r| (r.asset_id, r.amount))
+            .collect::<Vec<_>>();
+
+        // Then
+        let expected_balances = vec![(BASE_ASSET, 11), (asset_2, 22), (asset_3, 33)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_forward_pagination_request_all_with_message_with_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of base asset
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        // - 44 units in a message
+        pub const BASE_ASSET: AssetId = AssetId::zeroed();
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = BASE_ASSET;
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+        let message_amount = 44;
+
+        let config = setup(&owner, &asset_ids, Some(message_amount)).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let actual_balances = client
+            .balances(
+                &owner,
+                PaginationRequest {
+                    cursor: None,
+                    results: 100,
+                    direction: PageDirection::Forward,
+                },
+            )
+            .await
+            .unwrap()
+            .results
+            .iter()
+            .map(|r| (r.asset_id, r.amount))
+            .collect::<Vec<_>>();
+
+        // Then
+        let expected_balances = vec![(BASE_ASSET, 55), (asset_2, 22), (asset_3, 33)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_backward_pagination_request_all_without_message_with_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of base asset
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        pub const BASE_ASSET: AssetId = AssetId::zeroed();
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = BASE_ASSET;
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+
+        let config = setup(&owner, &asset_ids, None).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let actual_balances = client
+            .balances(
+                &owner,
+                PaginationRequest {
+                    cursor: None,
+                    results: 100,
+                    direction: PageDirection::Backward,
+                },
+            )
+            .await
+            .unwrap()
+            .results
+            .iter()
+            .map(|r| (r.asset_id, r.amount))
+            .collect::<Vec<_>>();
+
+        // Then
+        let expected_balances = vec![(asset_3, 33), (asset_2, 22), (asset_1, 11)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_backward_pagination_request_all_with_message_with_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of base asset
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        // - 44 units in a message
+        pub const BASE_ASSET: AssetId = AssetId::zeroed();
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = BASE_ASSET;
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+        let message_amount = 44;
+
+        let config = setup(&owner, &asset_ids, Some(message_amount)).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let actual_balances = client
+            .balances(
+                &owner,
+                PaginationRequest {
+                    cursor: None,
+                    results: 100,
+                    direction: PageDirection::Backward,
+                },
+            )
+            .await
+            .unwrap()
+            .results
+            .iter()
+            .map(|r| (r.asset_id, r.amount))
+            .collect::<Vec<_>>();
+
+        // Then
+        let expected_balances = vec![(asset_3, 33), (asset_2, 22), (BASE_ASSET, 55)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_forward_pagination_one_by_one_without_message_with_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of base asset
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        pub const BASE_ASSET: AssetId = AssetId::zeroed();
+        const TOTAL_ASSETS: usize = 3;
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = BASE_ASSET;
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+
+        let config = setup(&owner, &asset_ids, None).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let mut cursor = None;
+        let mut actual_next_pages = vec![];
+        let mut actual_balances = vec![];
+        for _ in 0..TOTAL_ASSETS {
+            let result = client
+                .balances(
+                    &owner,
+                    PaginationRequest {
+                        cursor,
+                        results: 1,
+                        direction: PageDirection::Forward,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.results.len(), 1);
+            let first_and_only_result = result.results.first().unwrap();
+            actual_balances
+                .push((first_and_only_result.asset_id, first_and_only_result.amount));
+            actual_next_pages.push(result.has_next_page);
+            cursor = result.cursor;
+        }
+
+        // Then
+        let expected_next_pages = [true, true, false];
+        assert_eq!(expected_next_pages, actual_next_pages.as_slice());
+
+        let expected_balances = vec![(asset_1, 11), (asset_2, 22), (asset_3, 33)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_forward_pagination_one_by_one_with_message_with_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of base asset
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        // - 44 units in a message
+        pub const BASE_ASSET: AssetId = AssetId::zeroed();
+        const TOTAL_ASSETS: usize = 3;
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = BASE_ASSET;
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+        let message_amount = 44;
+
+        let config = setup(&owner, &asset_ids, Some(message_amount)).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let mut cursor = None;
+        let mut actual_next_pages = vec![];
+        let mut actual_balances = vec![];
+        for _ in 0..TOTAL_ASSETS {
+            let result = client
+                .balances(
+                    &owner,
+                    PaginationRequest {
+                        cursor,
+                        results: 1,
+                        direction: PageDirection::Forward,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.results.len(), 1);
+            let first_and_only_result = result.results.first().unwrap();
+            actual_balances
+                .push((first_and_only_result.asset_id, first_and_only_result.amount));
+            actual_next_pages.push(result.has_next_page);
+            cursor = result.cursor;
+        }
+
+        // Then
+        let expected_next_pages = [true, true, false];
+        assert_eq!(expected_next_pages, actual_next_pages.as_slice());
+
+        let expected_balances = vec![(BASE_ASSET, 55), (asset_2, 22), (asset_3, 33)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_backward_pagination_one_by_one_without_message_with_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of base asset
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        pub const BASE_ASSET: AssetId = AssetId::zeroed();
+        const TOTAL_ASSETS: usize = 3;
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = BASE_ASSET;
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+
+        let config = setup(&owner, &asset_ids, None).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let mut cursor = None;
+        let mut actual_next_pages = vec![];
+        let mut actual_balances = vec![];
+        for _ in 0..TOTAL_ASSETS {
+            let result = client
+                .balances(
+                    &owner,
+                    PaginationRequest {
+                        cursor,
+                        results: 1,
+                        direction: PageDirection::Backward,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.results.len(), 1);
+            let first_and_only_result = result.results.first().unwrap();
+            actual_balances
+                .push((first_and_only_result.asset_id, first_and_only_result.amount));
+            actual_next_pages.push(result.has_next_page);
+            cursor = result.cursor;
+        }
+
+        // Then
+        let expected_next_pages = [true, true, false];
+        assert_eq!(expected_next_pages, actual_next_pages.as_slice());
+
+        let expected_balances = vec![(asset_3, 33), (asset_2, 22), (asset_1, 11)];
+        assert_eq!(expected_balances, actual_balances);
+    }
+
+    #[tokio::test]
+    async fn balances_backward_pagination_one_by_one_with_message_with_base_asset() {
+        // Given
+
+        // Setup coins:
+        // - single owner (aaaa...) has
+        // - 11 units of base asset
+        // - 22 units of asset (2222...)
+        // - 33 units of asset (3333...)
+        // - 44 units in a message
+        pub const BASE_ASSET: AssetId = AssetId::zeroed();
+        const TOTAL_ASSETS: usize = 3;
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = BASE_ASSET;
+        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_3 = AssetId::new([0x33; 32]);
+        let asset_ids = [asset_1, asset_2, asset_3];
+        let message_amount = 44;
+
+        let config = setup(&owner, &asset_ids, Some(message_amount)).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let mut cursor = None;
+        let mut actual_next_pages = vec![];
+        let mut actual_balances = vec![];
+        for _ in 0..TOTAL_ASSETS {
+            let result = client
+                .balances(
+                    &owner,
+                    PaginationRequest {
+                        cursor,
+                        results: 1,
+                        direction: PageDirection::Backward,
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(result.results.len(), 1);
+            let first_and_only_result = result.results.first().unwrap();
+            actual_balances
+                .push((first_and_only_result.asset_id, first_and_only_result.amount));
+            actual_next_pages.push(result.has_next_page);
+            cursor = result.cursor;
+        }
+
+        // Then
+        let expected_next_pages = [true, true, false];
+        assert_eq!(expected_next_pages, actual_next_pages.as_slice());
+
+        let expected_balances = vec![(asset_3, 33), (asset_2, 22), (BASE_ASSET, 55)];
         assert_eq!(expected_balances, actual_balances);
     }
 }
