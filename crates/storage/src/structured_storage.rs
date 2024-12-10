@@ -420,7 +420,6 @@ where
 }
 
 /// The module that provides helper macros for testing the structured storage.
-#[cfg(feature = "test-helpers")]
 pub mod test {
     use crate as fuel_core_storage;
     use crate::kv_store::{

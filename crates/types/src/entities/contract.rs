@@ -35,6 +35,15 @@ impl ContractUtxoInfo {
             ContractUtxoInfo::V1(info) => info.tx_pointer,
         }
     }
+
+    /// Sets the Contract UTXO's transaction pointer
+    pub fn set_tx_pointer(&mut self, tx_pointer: TxPointer) {
+        match self {
+            ContractUtxoInfo::V1(info) => {
+                info.tx_pointer = tx_pointer;
+            }
+        }
+    }
 }
 
 /// Version 1 of the ContractUtxoInfo

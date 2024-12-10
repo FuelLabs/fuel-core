@@ -44,7 +44,7 @@ use alloc::{
 pub type Result<T> = core::result::Result<T, Error>;
 /// The uncommitted result of the block production execution.
 pub type UncommittedResult<DatabaseTransaction> =
-    Uncommitted<ExecutionResult, DatabaseTransaction>;
+    Uncommitted<ProductionResult, DatabaseTransaction>;
 
 /// The uncommitted result of the block validation.
 pub type UncommittedValidationResult<DatabaseTransaction> =
@@ -53,7 +53,7 @@ pub type UncommittedValidationResult<DatabaseTransaction> =
 /// The result of transactions execution for block production.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct ExecutionResult<E = Error> {
+pub struct ProductionResult<E = Error> {
     /// Created block during the execution of transactions. It contains only valid transactions.
     pub block: Block,
     /// The list of skipped transactions with corresponding errors. Those transactions were
@@ -66,7 +66,7 @@ pub struct ExecutionResult<E = Error> {
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
-impl<E> Default for ExecutionResult<E> {
+impl<E> Default for ProductionResult<E> {
     fn default() -> Self {
         Self {
             block: Block::default(),
@@ -99,7 +99,7 @@ impl<DatabaseTransaction> UncommittedValidationResult<DatabaseTransaction> {
             changes,
         } = self;
         UncommittedResult::new(
-            ExecutionResult {
+            ProductionResult {
                 block,
                 skipped_transactions,
                 tx_status,
@@ -116,7 +116,7 @@ impl<DatabaseTransaction> UncommittedResult<DatabaseTransaction> {
         self,
     ) -> UncommittedValidationResult<DatabaseTransaction> {
         let Self {
-            result: ExecutionResult {
+            result: ProductionResult {
                 tx_status, events, ..
             },
             changes,
@@ -126,7 +126,7 @@ impl<DatabaseTransaction> UncommittedResult<DatabaseTransaction> {
 }
 
 /// The event represents some internal state changes caused by the block execution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Event {
     /// Imported a new spendable message from the relayer.
@@ -178,7 +178,7 @@ pub enum ForcedTransactionFailure {
 }
 
 /// The status of a transaction after it is executed.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TransactionExecutionStatus {
     /// The id of the transaction.
@@ -188,7 +188,7 @@ pub struct TransactionExecutionStatus {
 }
 
 /// The result of transaction execution.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransactionExecutionResult {
     /// Transaction was successfully executed.

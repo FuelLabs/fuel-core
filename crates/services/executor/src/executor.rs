@@ -128,8 +128,8 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             Event as ExecutorEvent,
-            ExecutionResult,
             ForcedTransactionFailure,
+            ProductionResult,
             Result as ExecutorResult,
             TransactionExecutionResult,
             TransactionExecutionStatus,
@@ -211,20 +211,30 @@ impl TransactionsSource for OnceTransactionsSource {
     }
 }
 
+/// The result of transactions execution.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct ExecutionResult<E = ExecutorError> {
+    /// Created partial block during the execution of transactions.
+    /// It contains only valid transactions.
+    pub partial_block: PartialFuelBlock,
+    /// Execution data accumulated during the execution of transactions.
+    pub execution_data: ExecutionData<E>,
+}
+
 /// Data that is generated after executing all transactions.
-#[derive(Default)]
-pub struct ExecutionData {
-    coinbase: u64,
-    used_gas: u64,
-    used_size: u32,
-    tx_count: u32,
-    found_mint: bool,
-    message_ids: Vec<MessageId>,
-    tx_status: Vec<TransactionExecutionStatus>,
-    events: Vec<ExecutorEvent>,
-    changes: Changes,
-    pub skipped_transactions: Vec<(TxId, ExecutorError)>,
-    event_inbox_root: Bytes32,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct ExecutionData<E = ExecutorError> {
+    pub coinbase: u64,
+    pub used_gas: u64,
+    pub used_size: u32,
+    pub tx_count: u32,
+    pub found_mint: bool,
+    pub message_ids: Vec<MessageId>,
+    pub tx_status: Vec<TransactionExecutionStatus>,
+    pub events: Vec<ExecutorEvent>,
+    pub changes: Changes,
+    pub skipped_transactions: Vec<(TxId, E)>,
+    pub event_inbox_root: Bytes32,
 }
 
 impl ExecutionData {
@@ -240,7 +250,47 @@ impl ExecutionData {
             events: Vec::new(),
             changes: Default::default(),
             skipped_transactions: Vec::new(),
-            event_inbox_root: Default::default(),
+            event_inbox_root: Self::default_event_inbox_root(),
+        }
+    }
+
+    pub fn default_event_inbox_root() -> Bytes32 {
+        let root_calculator = MerkleRootCalculator::new();
+        root_calculator.root().into()
+    }
+}
+
+impl<E> ExecutionData<E> {
+    pub fn with_skipped_transactions<NE>(
+        self,
+        new_skipped_transactions: Vec<(TxId, NE)>,
+    ) -> ExecutionData<NE> {
+        let ExecutionData {
+            coinbase,
+            used_gas,
+            used_size,
+            tx_count,
+            found_mint,
+            message_ids,
+            tx_status,
+            events,
+            changes,
+            event_inbox_root,
+            ..
+        } = self;
+
+        ExecutionData {
+            coinbase,
+            used_gas,
+            used_size,
+            tx_count,
+            found_mint,
+            message_ids,
+            tx_status,
+            events,
+            changes,
+            skipped_transactions: new_skipped_transactions,
+            event_inbox_root,
         }
     }
 }
@@ -278,10 +328,32 @@ where
     }
 
     #[tracing::instrument(skip_all)]
+    pub fn execute_transactions<TxSource>(
+        self,
+        components: Components<TxSource>,
+    ) -> ExecutorResult<ExecutionResult>
+    where
+        TxSource: TransactionsSource,
+    {
+        let consensus_params_version = components.consensus_parameters_version();
+        let (block_executor, storage_tx) =
+            self.into_executor(consensus_params_version)?;
+
+        let (partial_block, execution_data) =
+            block_executor.dry_run_block(components, storage_tx)?;
+
+        let result = ExecutionResult {
+            partial_block,
+            execution_data,
+        };
+
+        Ok(result)
+    }
+
+    #[tracing::instrument(skip_all)]
     pub fn produce_without_commit<TxSource>(
         self,
         components: Components<TxSource>,
-        dry_run: bool,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
@@ -290,11 +362,8 @@ where
         let (block_executor, storage_tx) =
             self.into_executor(consensus_params_version)?;
 
-        let (partial_block, execution_data) = if dry_run {
-            block_executor.dry_run_block(components, storage_tx)?
-        } else {
-            block_executor.produce_block(components, storage_tx)?
-        };
+        let (partial_block, execution_data) =
+            block_executor.produce_block(components, storage_tx)?;
 
         let ExecutionData {
             message_ids,
@@ -320,7 +389,7 @@ where
             finalized_block_id, coinbase, used_gas, used_size
         );
 
-        let result = ExecutionResult {
+        let result = ProductionResult {
             block,
             skipped_transactions,
             tx_status,
@@ -375,7 +444,7 @@ where
                 consensus_params_version,
             ))?
             .into_owned();
-        let executor = BlockExecutor::new(self.relayer, self.options, consensus_params)?;
+        let executor = BlockExecutor::new(self.relayer, self.options, consensus_params);
         Ok((executor, storage_tx))
     }
 }
@@ -395,12 +464,12 @@ impl<R> BlockExecutor<R> {
         relayer: R,
         options: ExecutionOptions,
         consensus_params: ConsensusParameters,
-    ) -> ExecutorResult<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             relayer,
             consensus_params,
             options,
-        })
+        }
     }
 }
 
@@ -451,8 +520,10 @@ where
         data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))
     }
+}
 
-    fn produce_mint_tx<TxSource, T>(
+impl<R> BlockExecutor<R> {
+    pub fn produce_mint_tx<TxSource, T>(
         &self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
@@ -507,7 +578,9 @@ where
 
         Ok(())
     }
+}
 
+impl<R> BlockExecutor<R> {
     /// Execute dry-run of block with specified components
     fn dry_run_block<TxSource, D>(
         mut self,
@@ -533,7 +606,12 @@ where
         data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))
     }
+}
 
+impl<R> BlockExecutor<R>
+where
+    R: RelayerPort,
+{
     fn process_l1_txs<T>(
         &mut self,
         block: &mut PartialFuelBlock,
@@ -566,7 +644,9 @@ where
 
         Ok(())
     }
+}
 
+impl<R> BlockExecutor<R> {
     fn process_l2_txs<T, TxSource>(
         &mut self,
         block: &mut PartialFuelBlock,
@@ -701,7 +781,12 @@ where
 
         Ok(())
     }
+}
 
+impl<R> BlockExecutor<R>
+where
+    R: RelayerPort,
+{
     #[tracing::instrument(skip_all)]
     fn validate_block<D>(
         mut self,
@@ -759,7 +844,12 @@ where
             Err(ExecutorError::MintMissing)
         }
     }
+}
 
+impl<R> BlockExecutor<R>
+where
+    R: RelayerPort,
+{
     const RELAYED_GAS_PRICE: Word = 0;
 
     fn process_relayed_txs<T>(
@@ -831,7 +921,9 @@ where
         };
         Ok(forced_transactions)
     }
+}
 
+impl<R> BlockExecutor<R> {
     fn check_block_matches(
         &self,
         new_partial_block: PartialFuelBlock,
@@ -881,7 +973,12 @@ where
             Ok(())
         }
     }
+}
 
+impl<R> BlockExecutor<R>
+where
+    R: RelayerPort,
+{
     fn process_da<D>(
         &mut self,
         block_height: BlockHeight,
@@ -962,7 +1059,9 @@ where
 
         Ok(checked_forced_txs)
     }
+}
 
+impl<R> BlockExecutor<R> {
     /// Parse forced transaction payloads and perform basic checks
     fn validate_forced_tx<D>(
         relayed_tx: RelayedTransaction,
@@ -1088,7 +1187,8 @@ where
                 storage_tx,
                 memory,
             ),
-            CheckedTransaction::Mint(mint) => self.execute_mint(
+            CheckedTransaction::Mint(mint) => Self::execute_mint(
+                self.options.extra_tx_checks,
                 mint,
                 header,
                 coinbase_contract_id,
@@ -1175,8 +1275,8 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn execute_mint<T>(
-        &self,
+    pub fn execute_mint<T>(
+        extra_tx_checks: bool,
         checked_mint: Checked<Mint>,
         header: &PartialBlockHeader,
         coinbase_contract_id: ContractId,
@@ -1203,17 +1303,21 @@ where
             let input = mint.input_contract().clone();
             let mut input = Input::Contract(input);
 
-            if self.options.extra_tx_checks {
-                self.verify_inputs_exist_and_values_match(
+            if extra_tx_checks {
+                Self::verify_inputs_exist_and_values_match(
                     storage_tx,
                     core::slice::from_ref(&input),
                     header.da_height,
                 )?;
             }
 
-            self.compute_inputs(core::slice::from_mut(&mut input), storage_tx)?;
+            Self::compute_inputs(
+                extra_tx_checks,
+                core::slice::from_mut(&mut input),
+                storage_tx,
+            )?;
 
-            let (input, output) = self.execute_mint_with_vm(
+            let (input, output) = Self::execute_mint_with_vm(
                 header,
                 coinbase_contract_id,
                 execution_data,
@@ -1261,9 +1365,15 @@ where
             memory,
         )?;
 
-        self.spend_input_utxos(tx.inputs(), storage_tx, reverted, execution_data)?;
+        Self::spend_input_utxos(
+            self.options.extra_tx_checks,
+            tx.inputs(),
+            storage_tx,
+            reverted,
+            execution_data,
+        )?;
 
-        self.persist_output_utxos(
+        Self::persist_output_utxos(
             *header.height(),
             execution_data,
             &tx_id,
@@ -1369,7 +1479,6 @@ where
 
     #[allow(clippy::too_many_arguments)]
     fn execute_mint_with_vm<T>(
-        &self,
         header: &PartialBlockHeader,
         coinbase_contract_id: ContractId,
         execution_data: &mut ExecutionData,
@@ -1405,7 +1514,7 @@ where
         let block_height = *header.height();
         let output = *mint.output_contract();
         let mut outputs = [Output::Contract(output)];
-        self.persist_output_utxos(
+        Self::persist_output_utxos(
             block_height,
             execution_data,
             coinbase_id,
@@ -1413,7 +1522,7 @@ where
             core::slice::from_ref(input),
             outputs.as_slice(),
         )?;
-        self.compute_state_of_not_utxo_outputs(
+        Self::compute_state_of_not_utxo_outputs(
             outputs.as_mut_slice(),
             core::slice::from_ref(input),
             *coinbase_id,
@@ -1433,7 +1542,6 @@ where
     }
 
     fn update_tx_outputs<Tx, T>(
-        &self,
         storage_tx: &TxStorageTransaction<T>,
         tx_id: TxId,
         tx: &mut Tx,
@@ -1443,7 +1551,7 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         let mut outputs = core::mem::take(tx.outputs_mut());
-        self.compute_state_of_not_utxo_outputs(
+        Self::compute_state_of_not_utxo_outputs(
             &mut outputs,
             tx.inputs(),
             tx_id,
@@ -1578,7 +1686,7 @@ where
             })?;
         debug_assert!(checked_tx.checks().contains(Checks::Predicates));
 
-        self.verify_inputs_exist_and_values_match(
+        Self::verify_inputs_exist_and_values_match(
             storage_tx,
             checked_tx.transaction().inputs(),
             header.da_height,
@@ -1654,7 +1762,7 @@ where
 
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
-        self.compute_inputs(tx.inputs_mut(), storage_tx)?;
+        Self::compute_inputs(self.options.extra_tx_checks, tx.inputs_mut(), storage_tx)?;
 
         // only commit state changes if execution was a success
         if !reverted {
@@ -1663,12 +1771,11 @@ where
             storage_tx.commit_changes(changes)?;
         }
 
-        self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
+        Self::update_tx_outputs(storage_tx, tx_id, &mut tx)?;
         Ok((reverted, state, tx, receipts))
     }
 
     fn verify_inputs_exist_and_values_match<T>(
-        &self,
         db: &StorageTransaction<T>,
         inputs: &[Input],
         block_da_height: DaBlockHeight,
@@ -1734,7 +1841,7 @@ where
 
     /// Mark input utxos as spent
     fn spend_input_utxos<T>(
-        &self,
+        extra_tx_checks: bool,
         inputs: &[Input],
         db: &mut TxStorageTransaction<T>,
         reverted: bool,
@@ -1768,8 +1875,13 @@ where
                         .unwrap_or_else(|| {
                             // If the coin is not found in the database, it means that it was
                             // already spent or `utxo_validation` is `false`.
-                            self.get_coin_or_default(
-                                db, *utxo_id, *owner, *amount, *asset_id,
+                            Self::get_coin_or_default(
+                                extra_tx_checks,
+                                db,
+                                *utxo_id,
+                                *owner,
+                                *amount,
+                                *asset_id,
                             )
                         })?;
 
@@ -1847,7 +1959,7 @@ where
 
     /// Computes all zeroed or variable inputs.
     fn compute_inputs<T>(
-        &self,
+        extra_tx_checks: bool,
         inputs: &mut [Input],
         db: &TxStorageTransaction<T>,
     ) -> ExecutorResult<()>
@@ -1872,8 +1984,14 @@ where
                     asset_id,
                     ..
                 }) => {
-                    let coin = self
-                        .get_coin_or_default(db, *utxo_id, *owner, *amount, *asset_id)?;
+                    let coin = Self::get_coin_or_default(
+                        extra_tx_checks,
+                        db,
+                        *utxo_id,
+                        *owner,
+                        *amount,
+                        *asset_id,
+                    )?;
                     *tx_pointer = *coin.tx_pointer();
                 }
                 Input::Contract(input::contract::Contract {
@@ -1885,8 +2003,7 @@ where
                     ..
                 }) => {
                     let contract = ContractRef::new(db, *contract_id);
-                    let utxo_info =
-                        contract.validated_utxo(self.options.extra_tx_checks)?;
+                    let utxo_info = contract.validated_utxo(extra_tx_checks)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
                     *balance_root = contract.balance_root()?;
@@ -1904,7 +2021,6 @@ where
     /// In production mode, updates the outputs with computed values.
     /// In validation mode, compares the outputs with computed inputs.
     fn compute_state_of_not_utxo_outputs<T>(
-        &self,
         outputs: &mut [Output],
         inputs: &[Input],
         tx_id: TxId,
@@ -1938,7 +2054,7 @@ where
 
     #[allow(clippy::too_many_arguments)]
     pub fn get_coin_or_default<T>(
-        &self,
+        extra_tx_checks: bool,
         db: &TxStorageTransaction<T>,
         utxo_id: UtxoId,
         owner: Address,
@@ -1948,7 +2064,7 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        if self.options.extra_tx_checks {
+        if extra_tx_checks {
             db.storage::<Coins>()
                 .get(&utxo_id)?
                 .ok_or(ExecutorError::TransactionValidity(
@@ -2001,7 +2117,6 @@ where
     }
 
     fn persist_output_utxos<T>(
-        &self,
         block_height: BlockHeight,
         execution_data: &mut ExecutionData,
         tx_id: &Bytes32,

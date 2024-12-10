@@ -26,6 +26,7 @@ members = [
   "crates/services/relayer",
   "crates/services/sync",
   "crates/services/txpool_v2",
+  "crates/services/parallel-executor",
   "crates/services/upgradable-executor",
   "crates/services/upgradable-executor/wasm-executor",
   "crates/storage",
@@ -82,12 +83,13 @@ fuel-core-trace = { version = "0.40.0", path = "./crates/trace" }
 fuel-core-types = { version = "0.40.0", path = "./crates/types", default-features = false }
 fuel-core-tests = { version = "0.0.0", path = "./tests" }
 fuel-core-upgradable-executor = { version = "0.40.0", path = "./crates/services/upgradable-executor" }
+fuel-core-parallel-executor = { version = "0.40.0", path = "./crates/services/parallel-executor" }
 fuel-core-wasm-executor = { version = "0.40.0", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 fuel-gas-price-algorithm = { version = "0.40.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.58.2", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.58.2", package = "fuel-vm", default-features = false, git = "https://github.com/FuelLabs/fuel-vm/", branch = "feature/big-blocks" }
 
 # Common dependencies
 anyhow = "1.0"
@@ -143,6 +145,3 @@ itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
-
-[patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm/", branch = "feature/big-blocks" }

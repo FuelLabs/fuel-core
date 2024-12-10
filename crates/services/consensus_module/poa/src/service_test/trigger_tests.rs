@@ -111,7 +111,7 @@ impl DefaultContext {
                 block.header_mut().set_time(time);
                 block.header_mut().recalculate_metadata();
                 Ok(UncommittedResult::new(
-                    ExecutionResult {
+                    ProductionResult {
                         block,
                         ..Default::default()
                     },

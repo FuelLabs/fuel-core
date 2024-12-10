@@ -15,7 +15,8 @@
 
 use crate as fuel_core_wasm_executor;
 use crate::utils::{
-    convert_to_v1_execution_result,
+    convert_to_execution_result,
+    convert_to_v1_production_result,
     InputDeserializationType,
     WasmDeserializationBlockTypes,
 };
@@ -61,7 +62,7 @@ pub fn execute_without_commit(input_len: u32) -> ReturnType {
     let input = match input {
         Ok(input) => input,
         Err(err) => {
-            return ReturnType::ExecutionV1(Err(err.into()));
+            return ReturnType::ProductionV1(Err(err.into()));
         }
     };
 
@@ -100,16 +101,16 @@ fn execute_dry_run(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
 ) -> ReturnType {
-    let result = instance.produce_without_commit(block, true);
-    ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
+    let result = instance.execute_transactions(block);
+    ReturnType::Execution(convert_to_execution_result(result))
 }
 
 fn execute_production(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
 ) -> ReturnType {
-    let result = instance.produce_without_commit(block, false);
-    ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
+    let result = instance.produce_without_commit(block);
+    ReturnType::ProductionV1(convert_to_v1_production_result(result))
 }
 
 fn execute_validation(

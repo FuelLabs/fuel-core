@@ -10,6 +10,8 @@ pub mod executor;
 #[cfg(feature = "wasm-executor")]
 pub mod instance;
 
+pub use fuel_core_executor as native_executor;
+
 /// The WASM version of the underlying [`fuel_core_executor::executor::ExecutionInstance`].
 #[cfg(feature = "wasm-executor")]
 pub const WASM_BYTECODE: &[u8] = include_bytes!(concat!(

@@ -23,7 +23,7 @@ pub struct ChangesIterator<'a, Column> {
     _marker: core::marker::PhantomData<Column>,
 }
 
-impl<'a, Description> ChangesIterator<'a, Description> {
+impl<'a, Column> ChangesIterator<'a, Column> {
     /// Creates a new instance of the `ChangesIterator`.
     pub fn new(changes: &'a Changes) -> Self {
         Self {

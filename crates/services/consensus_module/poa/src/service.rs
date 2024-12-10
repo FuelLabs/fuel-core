@@ -60,7 +60,7 @@ use fuel_core_types::{
         block_importer::ImportResult,
         executor::{
             Error as ExecutorError,
-            ExecutionResult,
+            ProductionResult,
             UncommittedResult as UncommittedExecutionResult,
         },
         Uncommitted,
@@ -328,7 +328,7 @@ where
 
         // Ask the block producer to create the block
         let (
-            ExecutionResult {
+            ProductionResult {
                 block,
                 skipped_transactions,
                 tx_status,
@@ -388,7 +388,7 @@ where
 
         // Ask the block producer to create the block
         let (
-            ExecutionResult {
+            ProductionResult {
                 block,
                 skipped_transactions,
                 tx_status,

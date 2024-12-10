@@ -48,7 +48,7 @@ use fuel_core_types::{
     secrecy::Secret,
     services::executor::{
         Error as ExecutorError,
-        ExecutionResult,
+        ProductionResult,
         UncommittedResult,
     },
     tai64::{
@@ -144,7 +144,7 @@ impl TestContextBuilder {
                 .expect_produce_and_execute_block()
                 .returning(|_, _, _| {
                     Ok(UncommittedResult::new(
-                        ExecutionResult {
+                        ProductionResult {
                             block: Default::default(),
                             skipped_transactions: Default::default(),
                             tx_status: Default::default(),
@@ -293,7 +293,7 @@ async fn remove_skipped_transactions() {
         .times(1)
         .returning(move |_, _, _| {
             Ok(UncommittedResult::new(
-                ExecutionResult {
+                ProductionResult {
                     block: Default::default(),
                     skipped_transactions: mock_skipped_txs
                         .clone()
@@ -413,7 +413,7 @@ impl BlockProducer for FakeBlockProducer {
             .await
             .unwrap();
         Ok(UncommittedResult::new(
-            ExecutionResult {
+            ProductionResult {
                 block: Default::default(),
                 skipped_transactions: Default::default(),
                 tx_status: Default::default(),
@@ -432,7 +432,7 @@ impl BlockProducer for FakeBlockProducer {
             .await
             .unwrap();
         Ok(UncommittedResult::new(
-            ExecutionResult {
+            ProductionResult {
                 block: block.clone(),
                 skipped_transactions: Default::default(),
                 tx_status: Default::default(),

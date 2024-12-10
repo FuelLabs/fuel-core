@@ -3554,6 +3554,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-parallel-executor"
+version = "0.40.0"
+dependencies = [
+ "fuel-core-storage",
+ "fuel-core-types 0.40.0",
+ "fuel-core-upgradable-executor",
+ "futures",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fuel-core-poa"
 version = "0.40.0"
 dependencies = [

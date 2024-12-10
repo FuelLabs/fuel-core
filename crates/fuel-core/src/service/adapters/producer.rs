@@ -117,10 +117,36 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
 impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
     fn dry_run(
         &self,
-        block: Components<Vec<fuel_tx::Transaction>>,
+        component: Components<Vec<fuel_tx::Transaction>>,
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        self.executor.dry_run(block, utxo_validation)
+        let component = Components {
+            header_to_produce: component.header_to_produce,
+            transactions_source:
+                fuel_core_executor::executor::OnceTransactionsSource::new(
+                    component.transactions_source,
+                ),
+            coinbase_recipient: component.coinbase_recipient,
+            gas_price: component.gas_price,
+        };
+
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/2062
+        let allow_historical = false;
+        let result =
+            self.executor
+                .dry_run(component, utxo_validation, allow_historical)?;
+
+        // If one of the transactions fails, return an error.
+        if let Some((_, err)) = result
+            .execution_data
+            .skipped_transactions
+            .into_iter()
+            .next()
+        {
+            return Err(err)
+        }
+
+        Ok(result.execution_data.tx_status)
     }
 }
 

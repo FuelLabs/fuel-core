@@ -70,6 +70,7 @@ pub type CompressedBlock = Block<TxId>;
 /// it can be created with pre-executed transactions in
 /// order to validate they were constructed correctly.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PartialFuelBlock {
     /// The partial header.
     pub header: PartialBlockHeader,

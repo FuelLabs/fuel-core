@@ -37,7 +37,7 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Error as ExecutorError,
-            ExecutionResult,
+            ProductionResult,
             Result as ExecutorResult,
             TransactionExecutionStatus,
             UncommittedResult,
@@ -136,7 +136,7 @@ impl BlockProducer<Vec<Transaction>> for MockExecutor {
             block.compress(&ChainId::default()),
         );
         Ok(UncommittedResult::new(
-            ExecutionResult {
+            ProductionResult {
                 block,
                 skipped_transactions: vec![],
                 tx_status: vec![],
@@ -161,7 +161,7 @@ impl BlockProducer<Vec<Transaction>> for FailingMockExecutor {
         } else {
             let block = arc_pool_tx_comp_to_block(&component);
             Ok(UncommittedResult::new(
-                ExecutionResult {
+                ProductionResult {
                     block,
                     skipped_transactions: vec![],
                     tx_status: vec![],
@@ -186,7 +186,7 @@ impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture {
         let block = arc_pool_tx_comp_to_block(&component);
         *self.captured.lock().unwrap() = Some(component);
         Ok(UncommittedResult::new(
-            ExecutionResult {
+            ProductionResult {
                 block,
                 skipped_transactions: vec![],
                 tx_status: vec![],

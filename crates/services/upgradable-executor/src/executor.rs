@@ -6,7 +6,7 @@ use fuel_core_executor::{
     executor::{
         ExecutionInstance,
         ExecutionOptions,
-        OnceTransactionsSource,
+        ExecutionResult,
     },
     ports::{
         RelayerPort,
@@ -33,15 +33,13 @@ use fuel_core_types::{
             LATEST_STATE_TRANSITION_VERSION,
         },
     },
-    fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::{
         block_producer::Components,
         executor::{
             Error as ExecutorError,
-            ExecutionResult,
+            ProductionResult,
             Result as ExecutorResult,
-            TransactionExecutionStatus,
             ValidationResult,
         },
         Uncommitted,
@@ -65,8 +63,9 @@ use fuel_core_types::blockchain::block::PartialFuelBlock;
 use fuel_core_types::services::executor::UncommittedResult;
 #[cfg(feature = "wasm-executor")]
 use fuel_core_wasm_executor::utils::{
-    convert_from_v0_execution_result,
-    convert_from_v1_execution_result,
+    convert_from_execution_result,
+    convert_from_v0_production_result,
+    convert_from_v1_production_result,
     ReturnType,
 };
 
@@ -239,7 +238,7 @@ where
     pub fn produce_and_commit(
         &mut self,
         block: PartialFuelBlock,
-    ) -> fuel_core_types::services::executor::Result<ExecutionResult> {
+    ) -> fuel_core_types::services::executor::Result<ProductionResult> {
         let (result, changes) = self.produce_without_commit(block)?.into();
 
         self.storage_view_provider.commit_changes(changes)?;
@@ -291,19 +290,20 @@ where
         };
 
         let options = self.config.as_ref().into();
-        self.produce_inner(component, options, false)
+        self.produce_inner(component, options)
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
     pub fn dry_run_without_commit_with_source<TxSource>(
         &self,
         block: Components<TxSource>,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<ExecutionResult>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(block, options, true)
+        let allow_historical = false;
+        self.execute_transactions_inner(block, options, allow_historical)
     }
 }
 
@@ -319,21 +319,25 @@ where
     pub fn produce_without_commit_with_source<TxSource>(
         &self,
         components: Components<TxSource>,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(components, options, false)
+        self.produce_inner(components, options)
     }
 
     /// Executes the block and returns the result of the execution without committing
     /// the changes in the dry run mode.
-    pub fn dry_run(
+    pub fn dry_run<TxSource>(
         &self,
-        component: Components<Vec<Transaction>>,
+        component: Components<TxSource>,
         utxo_validation: Option<bool>,
-    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+        allow_historical: bool,
+    ) -> ExecutorResult<ExecutionResult>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation =
             utxo_validation.unwrap_or(self.config.utxo_validation_default);
@@ -343,27 +347,10 @@ where
             backtrace: self.config.backtrace,
         };
 
-        let component = Components {
-            header_to_produce: component.header_to_produce,
-            transactions_source: OnceTransactionsSource::new(
-                component.transactions_source,
-            ),
-            coinbase_recipient: Default::default(),
-            gas_price: component.gas_price,
-        };
+        let result =
+            self.execute_transactions_inner(component, options, allow_historical)?;
 
-        let ExecutionResult {
-            skipped_transactions,
-            tx_status,
-            ..
-        } = self.produce_inner(component, options, true)?.into_result();
-
-        // If one of the transactions fails, return an error.
-        if let Some((_, err)) = skipped_transactions.into_iter().next() {
-            return Err(err)
-        }
-
-        Ok(tx_status)
+        Ok(result)
     }
 
     pub fn validate(
@@ -379,8 +366,7 @@ where
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
-        dry_run: bool,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -388,21 +374,19 @@ where
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
             match &self.execution_strategy {
-                ExecutionStrategy::Native => {
-                    self.native_produce_inner(block, options, dry_run)
-                }
+                ExecutionStrategy::Native => self.native_produce_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
                     let maybe_blocks_module = self.get_module(block_version).ok();
                     if let Some(blocks_module) = maybe_blocks_module {
-                        self.wasm_produce_inner(&blocks_module, block, options, dry_run)
+                        self.wasm_produce_inner(&blocks_module, block, options)
                     } else {
-                        self.wasm_produce_inner(module, block, options, dry_run)
+                        self.wasm_produce_inner(module, block, options)
                     }
                 }
             }
         } else {
             let module = self.get_module(block_version)?;
-            self.wasm_produce_inner(&module, block, options, dry_run)
+            self.wasm_produce_inner(&module, block, options)
         }
     }
 
@@ -411,15 +395,14 @@ where
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
-        dry_run: bool,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
-            self.native_produce_inner(block, options, dry_run)
+            self.native_produce_inner(block, options)
         } else {
             Err(ExecutorError::Other(format!(
                 "Not supported version `{block_version}`. Expected version is `{}`",
@@ -483,13 +466,76 @@ where
     }
 
     #[cfg(feature = "wasm-executor")]
+    fn execute_transactions_inner<TxSource>(
+        &self,
+        block: Components<TxSource>,
+        options: ExecutionOptions,
+        allow_historical: bool,
+    ) -> ExecutorResult<ExecutionResult>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        let block_version = block.header_to_produce.state_transition_bytecode_version;
+        let native_executor_version = self.native_executor_version();
+        if block_version == native_executor_version {
+            match &self.execution_strategy {
+                ExecutionStrategy::Native => {
+                    self.native_execute_txs_inner(block, options, allow_historical)
+                }
+                ExecutionStrategy::Wasm { module } => {
+                    let maybe_blocks_module = self.get_module(block_version).ok();
+                    if let Some(blocks_module) = maybe_blocks_module {
+                        self.wasm_execute_txs_inner(
+                            &blocks_module,
+                            block,
+                            options,
+                            allow_historical,
+                        )
+                    } else {
+                        self.wasm_execute_txs_inner(
+                            module,
+                            block,
+                            options,
+                            allow_historical,
+                        )
+                    }
+                }
+            }
+        } else {
+            let module = self.get_module(block_version)?;
+            self.wasm_execute_txs_inner(&module, block, options, allow_historical)
+        }
+    }
+
+    #[cfg(not(feature = "wasm-executor"))]
+    fn execute_transactions_inner<TxSource>(
+        &self,
+        block: Components<TxSource>,
+        options: ExecutionOptions,
+        allow_historical: bool,
+    ) -> ExecutorResult<ExecutionResult>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        let block_version = block.header_to_produce.state_transition_bytecode_version;
+        let native_executor_version = self.native_executor_version();
+        if block_version == native_executor_version {
+            self.native_execute_txs_inner(block, options, allow_historical)
+        } else {
+            Err(ExecutorError::Other(format!(
+                "Not supported version `{block_version}`. Expected version is `{}`",
+                Self::VERSION
+            )))
+        }
+    }
+
+    #[cfg(feature = "wasm-executor")]
     fn wasm_produce_inner<TxSource>(
         &self,
         module: &wasmtime::Module,
         component: Components<TxSource>,
         options: ExecutionOptions,
-        dry_run: bool,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -512,12 +558,7 @@ where
             gas_price,
         };
 
-        let previous_block_height = if !dry_run {
-            block.header_to_produce.height().pred()
-        } else {
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/2062
-            None
-        };
+        let previous_block_height = block.header_to_produce.height().pred();
 
         let instance_without_input =
             crate::instance::Instance::new(&self.engine).add_source(source)?;
@@ -535,27 +576,24 @@ where
         let relayer = self.relayer_view_provider.latest_view()?;
         let instance_without_input = instance_without_input.add_relayer(relayer)?;
 
-        let instance = if dry_run {
-            instance_without_input.add_dry_run_input_data(block, options)?
-        } else {
-            instance_without_input.add_production_input_data(block, options)?
-        };
+        let instance =
+            instance_without_input.add_production_input_data(block, options)?;
 
         let output = instance.run(module)?;
 
         match output {
-            ReturnType::ExecutionV0(result) => {
-                convert_from_v0_execution_result(result)
-            },
-            ReturnType::ExecutionV1(result) => {
-                convert_from_v1_execution_result(result)
-            }
-            ReturnType::Validation(_) => {
-                Err(ExecutorError::Other(
-                    "The WASM executor returned a validation result instead of an execution result"
-                        .to_string(),
-                ))
-            }
+            ReturnType::ProductionV0(result) => convert_from_v0_production_result(result),
+            ReturnType::ProductionV1(result) => convert_from_v1_production_result(result),
+            ReturnType::Validation(_) => Err(ExecutorError::Other(
+                "The WASM executor returned a validation result \
+                    instead of an production result"
+                    .to_string(),
+            )),
+            ReturnType::Execution(_) => Err(ExecutorError::Other(
+                "The WASM executor returned a execution result \
+                    instead of an production result"
+                    .to_string(),
+            )),
         }
     }
 
@@ -589,14 +627,112 @@ where
         let output = instance.run(module)?;
 
         match output {
-            ReturnType::ExecutionV0(result) => {
-                Ok(convert_from_v0_execution_result(result)?.into_validation_result())
+            ReturnType::ProductionV0(result) => {
+                Ok(convert_from_v0_production_result(result)?.into_validation_result())
             }
-            ReturnType::ExecutionV1(result) => {
-                let result = convert_from_v1_execution_result(result)?;
+            ReturnType::ProductionV1(result) => {
+                let result = convert_from_v1_production_result(result)?;
                 Ok(result.into_validation_result())
             }
             ReturnType::Validation(result) => Ok(result?),
+            ReturnType::Execution(_) => Err(ExecutorError::Other(
+                "The WASM executor returned a execution result instead \
+                    of an validation/production result"
+                    .to_string(),
+            )),
+        }
+    }
+
+    #[cfg(feature = "wasm-executor")]
+    fn wasm_execute_txs_inner<TxSource>(
+        &self,
+        module: &wasmtime::Module,
+        component: Components<TxSource>,
+        options: ExecutionOptions,
+        allow_historical: bool,
+    ) -> ExecutorResult<ExecutionResult>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        let Components {
+            header_to_produce,
+            transactions_source,
+            coinbase_recipient,
+            gas_price,
+        } = component;
+        self.trace_block_version_warning(
+            header_to_produce.state_transition_bytecode_version,
+        );
+
+        let source = Some(transactions_source);
+
+        let block = Components {
+            header_to_produce,
+            transactions_source: (),
+            coinbase_recipient,
+            gas_price,
+        };
+
+        let previous_block_height = if allow_historical {
+            block.header_to_produce.height().pred()
+        } else {
+            None
+        };
+
+        let instance_without_input =
+            crate::instance::Instance::new(&self.engine).add_source(source)?;
+
+        let instance_without_input = if let Some(previous_block_height) =
+            previous_block_height
+        {
+            let storage = self.storage_view_provider.view_at(&previous_block_height)?;
+            instance_without_input.add_storage(storage)?
+        } else {
+            let storage = self.storage_view_provider.latest_view()?;
+            instance_without_input.add_storage(storage)?
+        };
+
+        let relayer = self.relayer_view_provider.latest_view()?;
+        let instance_without_input = instance_without_input.add_relayer(relayer)?;
+
+        let instance = instance_without_input.add_dry_run_input_data(block, options)?;
+
+        let output = instance.run(module)?;
+
+        match output {
+            ReturnType::ProductionV0(result) => {
+                todo!()
+                // fuel_vm::interpreter::contract::balance_decrease(
+                //     &mut vm_db,
+                //     &mint.input_contract().contract_id,
+                //     mint.mint_asset_id(),
+                //     *mint.mint_amount(),
+                // )
+                //     .map_err(|e| format!("{e}"))
+                //     .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
+                // convert_from_v0_production_result(result)
+            },
+            ReturnType::ProductionV1(result) => {
+                todo!()
+                // fuel_vm::interpreter::contract::balance_decrease(
+                //     &mut vm_db,
+                //     &mint.input_contract().contract_id,
+                //     mint.mint_asset_id(),
+                //     *mint.mint_amount(),
+                // )
+                //     .map_err(|e| format!("{e}"))
+                //     .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
+                // convert_from_v1_production_result(result)
+            }
+            ReturnType::Validation(_) => {
+                Err(ExecutorError::Other(
+                    "The WASM executor returned a validation result instead of an production result"
+                        .to_string(),
+                ))
+            }
+            ReturnType::Execution(result) => {
+                convert_from_execution_result(result)
+            }
         }
     }
 
@@ -604,27 +740,21 @@ where
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
-        dry_run: bool,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let previous_block_height = if !dry_run {
-            block.header_to_produce.height().pred()
-        } else {
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/2062
-            None
-        };
+        let previous_block_height = block.header_to_produce.height().pred();
         let relayer = self.relayer_view_provider.latest_view()?;
 
         if let Some(previous_block_height) = previous_block_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, dry_run)
+                .produce_without_commit(block)
         } else {
             let database = self.storage_view_provider.latest_view()?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, dry_run)
+                .produce_without_commit(block)
         }
     }
 
@@ -644,6 +774,31 @@ where
             let database = self.storage_view_provider.latest_view()?;
             ExecutionInstance::new(relayer, database, options)
                 .validate_without_commit(block)
+        }
+    }
+
+    fn native_execute_txs_inner<TxSource>(
+        &self,
+        block: Components<TxSource>,
+        options: ExecutionOptions,
+        allow_historical: bool,
+    ) -> ExecutorResult<ExecutionResult>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        let previous_block_height = if allow_historical {
+            block.header_to_produce.height().pred()
+        } else {
+            None
+        };
+        let relayer = self.relayer_view_provider.latest_view()?;
+
+        if let Some(previous_block_height) = previous_block_height {
+            let database = self.storage_view_provider.view_at(&previous_block_height)?;
+            ExecutionInstance::new(relayer, database, options).execute_transactions(block)
+        } else {
+            let database = self.storage_view_provider.latest_view()?;
+            ExecutionInstance::new(relayer, database, options).execute_transactions(block)
         }
     }
 
@@ -740,6 +895,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use fuel_core_executor::executor::ExecutionData;
     use fuel_core_storage::{
         kv_store::Value,
         structured_storage::test::InMemoryStorage,
@@ -767,7 +923,6 @@ mod test {
         },
         fuel_tx::{
             AssetId,
-            Bytes32,
             Transaction,
         },
         services::relayer::Event,
@@ -935,7 +1090,7 @@ mod test {
             )
             .into()],
         )
-        .generate(&[], Bytes32::zeroed())
+        .generate(&[], ExecutionData::default_event_inbox_root())
         .unwrap()
     }
 

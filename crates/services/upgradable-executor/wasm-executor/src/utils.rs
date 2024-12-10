@@ -1,4 +1,7 @@
-use fuel_core_executor::executor::ExecutionOptions;
+use fuel_core_executor::executor::{
+    ExecutionOptions,
+    ExecutionResult,
+};
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
@@ -6,7 +9,7 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Error as ExecutorError,
-            ExecutionResult,
+            ProductionResult,
             UncommittedResult,
             ValidationResult,
         },
@@ -123,11 +126,12 @@ impl From<JSONError> for ExecutorError {
 #[cfg(feature = "std")]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ReturnType {
-    ExecutionV0(
-        Result<Uncommitted<ExecutionResult<ExecutorErrorV0>, Changes>, ExecutorErrorV0>,
+    ProductionV0(
+        Result<Uncommitted<ProductionResult<ExecutorErrorV0>, Changes>, ExecutorErrorV0>,
     ),
-    ExecutionV1(Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError>),
+    ProductionV1(Result<Uncommitted<ProductionResult<JSONError>, Changes>, JSONError>),
     Validation(Result<Uncommitted<ValidationResult, Changes>, JSONError>),
+    Execution(Result<ExecutionResult<JSONError>, JSONError>),
 }
 
 /// The return type for the WASM executor. Enum allows handling different
@@ -136,19 +140,20 @@ pub enum ReturnType {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ReturnType {
     /// WASM executor doesn't use this variant, so from its perspective it is empty.
-    ExecutionV0,
-    ExecutionV1(Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError>),
+    ProductionV0,
+    ProductionV1(Result<Uncommitted<ProductionResult<JSONError>, Changes>, JSONError>),
     Validation(Result<Uncommitted<ValidationResult, Changes>, JSONError>),
+    Execution(Result<ExecutionResult<JSONError>, JSONError>),
 }
 
-/// Converts the latest execution result to the `ExecutionV1`.
-pub fn convert_to_v1_execution_result(
+/// Converts the latest execution result to the `ProductionV1`.
+pub fn convert_to_v1_production_result(
     result: Result<UncommittedResult<Changes>, ExecutorError>,
-) -> Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError> {
+) -> Result<Uncommitted<ProductionResult<JSONError>, Changes>, JSONError> {
     result
         .map(|result| {
             let (result, changes) = result.into();
-            let ExecutionResult {
+            let ProductionResult {
                 block,
                 skipped_transactions,
                 tx_status,
@@ -160,7 +165,7 @@ pub fn convert_to_v1_execution_result(
                 .map(|(id, error)| (id, JSONError::from(error)))
                 .collect();
 
-            let result = ExecutionResult {
+            let result = ProductionResult {
                 block,
                 skipped_transactions,
                 tx_status,
@@ -172,14 +177,14 @@ pub fn convert_to_v1_execution_result(
         .map_err(JSONError::from)
 }
 
-/// Converts the `ExecutionV1` to latest execution result.
-pub fn convert_from_v1_execution_result(
-    result: Result<Uncommitted<ExecutionResult<JSONError>, Changes>, JSONError>,
+/// Converts the `ProductionV1` to latest execution result.
+pub fn convert_from_v1_production_result(
+    result: Result<Uncommitted<ProductionResult<JSONError>, Changes>, JSONError>,
 ) -> Result<UncommittedResult<Changes>, ExecutorError> {
     result
         .map(|result| {
             let (result, changes) = result.into();
-            let ExecutionResult {
+            let ProductionResult {
                 block,
                 skipped_transactions,
                 tx_status,
@@ -191,7 +196,7 @@ pub fn convert_from_v1_execution_result(
                 .map(|(id, error)| (id, ExecutorError::from(error)))
                 .collect();
 
-            let result = ExecutionResult {
+            let result = ProductionResult {
                 block,
                 skipped_transactions,
                 tx_status,
@@ -203,18 +208,18 @@ pub fn convert_from_v1_execution_result(
         .map_err(ExecutorError::from)
 }
 
-/// Converts the `ExecutionV0` to latest execution result.
+/// Converts the `ProductionV0` to latest execution result.
 #[cfg(feature = "std")]
-pub fn convert_from_v0_execution_result(
+pub fn convert_from_v0_production_result(
     result: Result<
-        Uncommitted<ExecutionResult<ExecutorErrorV0>, Changes>,
+        Uncommitted<ProductionResult<ExecutorErrorV0>, Changes>,
         ExecutorErrorV0,
     >,
 ) -> Result<UncommittedResult<Changes>, ExecutorError> {
     result
         .map(|result| {
             let (result, changes) = result.into();
-            let ExecutionResult {
+            let ProductionResult {
                 block,
                 skipped_transactions,
                 tx_status,
@@ -226,7 +231,7 @@ pub fn convert_from_v0_execution_result(
                 .map(|(id, error)| (id, ExecutorError::from(JSONError::from(error))))
                 .collect();
 
-            let result = ExecutionResult {
+            let result = ProductionResult {
                 block,
                 skipped_transactions,
                 tx_status,
@@ -236,6 +241,66 @@ pub fn convert_from_v0_execution_result(
             Uncommitted::new(result, changes)
         })
         .map_err(JSONError::from)
+        .map_err(ExecutorError::from)
+}
+
+/// Converts the transactions execution result to the `Execution`.
+pub fn convert_to_execution_result(
+    result: Result<ExecutionResult, ExecutorError>,
+) -> Result<ExecutionResult<JSONError>, JSONError> {
+    result
+        .map(|result| {
+            let ExecutionResult {
+                partial_block,
+                mut execution_data,
+            } = result;
+            let skipped_transactions =
+                core::mem::take(&mut execution_data.skipped_transactions);
+
+            let skipped_transactions: Vec<_> = skipped_transactions
+                .into_iter()
+                .map(|(id, error)| (id, JSONError::from(error)))
+                .collect();
+
+            let execution_data =
+                execution_data.with_skipped_transactions(skipped_transactions);
+
+            ExecutionResult {
+                partial_block,
+                execution_data,
+            }
+        })
+        .map_err(JSONError::from)
+}
+
+/// Converts the `Execution` to `ExecutionResult`.
+#[cfg(feature = "std")]
+pub fn convert_from_execution_result(
+    result: Result<ExecutionResult<JSONError>, JSONError>,
+) -> Result<ExecutionResult, ExecutorError> {
+    result
+        .map(|result| {
+            let ExecutionResult {
+                partial_block,
+                mut execution_data,
+            } = result;
+
+            let skipped_transactions =
+                core::mem::take(&mut execution_data.skipped_transactions);
+
+            let skipped_transactions: Vec<_> = skipped_transactions
+                .into_iter()
+                .map(|(id, error)| (id, ExecutorError::from(error)))
+                .collect();
+
+            let execution_data =
+                execution_data.with_skipped_transactions(skipped_transactions);
+
+            ExecutionResult {
+                partial_block,
+                execution_data,
+            }
+        })
         .map_err(ExecutorError::from)
 }
 

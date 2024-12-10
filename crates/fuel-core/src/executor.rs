@@ -132,7 +132,7 @@ mod tests {
             executor::{
                 Error as ExecutorError,
                 Event as ExecutorEvent,
-                ExecutionResult,
+                ProductionResult,
                 TransactionExecutionResult,
                 TransactionValidityError,
             },
@@ -336,7 +336,7 @@ mod tests {
         let verifier = create_executor(Default::default(), Default::default());
         let block = test_block(1u32.into(), 0u64.into(), 10);
 
-        let ExecutionResult {
+        let ProductionResult {
             block,
             skipped_transactions,
             ..
@@ -354,7 +354,7 @@ mod tests {
         let block = test_block(1u32.into(), 0u64.into(), 10);
         let start_block = block.clone();
 
-        let ExecutionResult {
+        let ProductionResult {
             block,
             skipped_transactions,
             ..
@@ -458,7 +458,7 @@ mod tests {
             header.consensus.height = 1.into();
 
             let (
-                ExecutionResult {
+                ProductionResult {
                     block,
                     skipped_transactions,
                     ..
@@ -541,7 +541,7 @@ mod tests {
             header.consensus.height = 2.into();
 
             let (
-                ExecutionResult {
+                ProductionResult {
                     block,
                     skipped_transactions,
                     ..
@@ -647,9 +647,9 @@ mod tests {
                     gas_price: 0,
                 })
                 .unwrap();
-            let ExecutionResult { block, .. } = result.into_result();
+            let txs = result.partial_block.transactions;
 
-            assert_eq!(block.transactions().len(), 1);
+            assert_eq!(txs.len(), 1);
         }
 
         #[test]
@@ -685,7 +685,7 @@ mod tests {
 
             let producer = create_executor(database.clone(), config.clone());
 
-            let ExecutionResult {
+            let ProductionResult {
                 block,
                 skipped_transactions,
                 ..
@@ -767,7 +767,7 @@ mod tests {
                 let mut block = Block::default();
                 *block.transactions_mut() = vec![script.clone().into()];
 
-                let (ExecutionResult { tx_status, .. }, changes) = producer
+                let (ProductionResult { tx_status, .. }, changes) = producer
                     .produce_without_commit_with_coinbase(
                         block.into(),
                         config_coinbase,
@@ -996,7 +996,7 @@ mod tests {
             transactions: vec![tx.clone()],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             mut block,
             ..
@@ -1045,7 +1045,7 @@ mod tests {
             ],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             mut block,
             ..
@@ -1112,7 +1112,7 @@ mod tests {
             transactions: vec![tx.clone()],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             mut block,
             ..
@@ -1168,7 +1168,7 @@ mod tests {
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
 
-        let ExecutionResult { mut block, .. } =
+        let ProductionResult { mut block, .. } =
             producer.produce_and_commit(block.into()).unwrap();
 
         // modify change amount
@@ -1207,7 +1207,7 @@ mod tests {
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
 
-        let ExecutionResult { mut block, .. } =
+        let ProductionResult { mut block, .. } =
             producer.produce_and_commit(block.into()).unwrap();
 
         // randomize transaction commitment
@@ -1238,7 +1238,7 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             ..
         } = executor.produce_and_commit(block).unwrap();
@@ -1317,7 +1317,7 @@ mod tests {
             .unwrap()
             .expect("coin should be unspent");
 
-        let ExecutionResult {
+        let ProductionResult {
             block,
             skipped_transactions,
             ..
@@ -1375,7 +1375,7 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             ..
         } = executor.produce_and_commit(block).unwrap();
@@ -1424,7 +1424,7 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             ..
         } = executor.produce_and_commit(block).unwrap();
@@ -1454,7 +1454,7 @@ mod tests {
         };
 
         // When
-        let ExecutionResult { tx_status, .. } =
+        let ProductionResult { tx_status, .. } =
             executor.produce_and_commit(block).unwrap();
         let tx_gas_usage = tx_status[0].result.total_gas();
 
@@ -1483,7 +1483,7 @@ mod tests {
         };
 
         // When
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             ..
         } = executor.produce_and_commit(block).unwrap();
@@ -1523,7 +1523,7 @@ mod tests {
             transactions: vec![tx1.clone(), tx2.clone().into(), tx3.clone().into()],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             block,
             skipped_transactions,
             ..
@@ -1570,7 +1570,7 @@ mod tests {
             transactions: vec![tx],
         };
 
-        let ExecutionResult { block, .. } = executor.produce_and_commit(block).unwrap();
+        let ProductionResult { block, .. } = executor.produce_and_commit(block).unwrap();
 
         // assert the tx coin is spent
         let coin = db
@@ -1625,7 +1625,7 @@ mod tests {
             transactions: vec![create.into(), non_modify_state_tx],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             block, tx_status, ..
         } = executor.produce_and_commit(block).unwrap();
 
@@ -1680,7 +1680,7 @@ mod tests {
             transactions: vec![create.into(), non_modify_state_tx],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             block, tx_status, ..
         } = executor.produce_and_commit(block).unwrap();
 
@@ -1781,7 +1781,7 @@ mod tests {
             transactions: vec![create.into(), modify_balance_and_state_tx.into()],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             block, tx_status, ..
         } = executor.produce_and_commit(block).unwrap();
 
@@ -1887,7 +1887,7 @@ mod tests {
             transactions: vec![create.into(), modify_balance_and_state_tx.into()],
         };
 
-        let ExecutionResult { block, .. } = executor.produce_and_commit(block).unwrap();
+        let ProductionResult { block, .. } = executor.produce_and_commit(block).unwrap();
 
         let executed_tx = block.transactions()[1].as_script().unwrap();
         let state_root = executed_tx.outputs()[0].state_root();
@@ -1908,7 +1908,7 @@ mod tests {
             transactions: vec![new_tx.into()],
         };
 
-        let ExecutionResult {
+        let ProductionResult {
             block, tx_status, ..
         } = executor
             .produce_without_commit_with_source(Components {
@@ -2047,7 +2047,7 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
-        let ExecutionResult { block, events, .. } =
+        let ProductionResult { block, events, .. } =
             executor.produce_and_commit(block).unwrap();
 
         // assert the tx coin is spent
@@ -2099,14 +2099,14 @@ mod tests {
 
         let mut setup = create_executor(db.clone(), Default::default());
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             ..
         } = setup.produce_and_commit(first_block).unwrap();
         assert!(skipped_transactions.is_empty());
 
         let producer = create_executor(db.clone(), Default::default());
-        let ExecutionResult {
+        let ProductionResult {
             block: second_block,
             skipped_transactions,
             ..
@@ -2174,7 +2174,7 @@ mod tests {
 
         let producer = create_executor(db.clone(), Default::default());
 
-        let ExecutionResult {
+        let ProductionResult {
             block: mut second_block,
             ..
         } = producer
@@ -2215,7 +2215,7 @@ mod tests {
             transactions: vec![deploy.into(), script.into()],
         };
 
-        let ExecutionResult { block, .. } = executor.produce_and_commit(block).unwrap();
+        let ProductionResult { block, .. } = executor.produce_and_commit(block).unwrap();
 
         // ensure that all utxos with an amount are stored into the utxo set
         for (idx, output) in block.transactions()[1]
@@ -2337,7 +2337,7 @@ mod tests {
             transactions: vec![tx],
         };
 
-        let ExecutionResult { block, .. } = make_executor(&[&message])
+        let ProductionResult { block, .. } = make_executor(&[&message])
             .produce_and_commit(block)
             .expect("block execution failed unexpectedly");
 
@@ -2375,7 +2375,7 @@ mod tests {
         assert!(view.message_exists(message_coin.nonce()).unwrap());
         assert!(view.message_exists(message_data.nonce()).unwrap());
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             ..
         } = exec.produce_and_commit(block).unwrap();
@@ -2422,7 +2422,7 @@ mod tests {
         assert!(view.message_exists(message_coin.nonce()).unwrap());
         assert!(view.message_exists(message_data.nonce()).unwrap());
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             ..
         } = exec.produce_and_commit(block).unwrap();
@@ -2444,7 +2444,7 @@ mod tests {
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx.clone()];
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             mut block,
             ..
@@ -2486,7 +2486,7 @@ mod tests {
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx.clone()];
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             mut block,
             ..
@@ -2530,7 +2530,7 @@ mod tests {
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx.clone()];
 
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             ..
         } = make_executor(&[&message])
@@ -2561,7 +2561,7 @@ mod tests {
         };
 
         let exec = make_executor(&[&message]);
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             mut block,
             ..
@@ -2619,7 +2619,7 @@ mod tests {
         };
 
         // When
-        let ExecutionResult { block, .. } =
+        let ProductionResult { block, .. } =
             create_executor(Default::default(), Default::default())
                 .produce_and_commit(block)
                 .expect("block execution failed unexpectedly");
@@ -2683,7 +2683,7 @@ mod tests {
         };
 
         // When
-        let ExecutionResult { block, .. } =
+        let ProductionResult { block, .. } =
             create_executor(Default::default(), Default::default())
                 .produce_and_commit(block)
                 .expect("block execution failed unexpectedly");
@@ -2752,7 +2752,7 @@ mod tests {
             },
         );
 
-        let ExecutionResult { tx_status, .. } = executor
+        let ProductionResult { tx_status, .. } = executor
             .produce_and_commit(block)
             .expect("Should execute the block");
 
@@ -2816,7 +2816,7 @@ mod tests {
             },
         );
 
-        let ExecutionResult { tx_status, .. } = executor
+        let ProductionResult { tx_status, .. } = executor
             .produce_and_commit(block)
             .expect("Should execute the block");
 
@@ -2887,7 +2887,7 @@ mod tests {
 
         let producer = create_executor(db.clone(), config.clone());
 
-        let ExecutionResult {
+        let ProductionResult {
             block,
             skipped_transactions,
             ..
@@ -2964,7 +2964,7 @@ mod tests {
         );
 
         // When
-        let ExecutionResult {
+        let ProductionResult {
             skipped_transactions,
             ..
         } = producer
