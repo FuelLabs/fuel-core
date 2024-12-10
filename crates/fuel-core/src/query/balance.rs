@@ -143,7 +143,7 @@ impl ReadView {
         &'a self,
         owner: &'a Address,
         start: Option<AssetId>,
-        base_asset_id: &AssetId,
+        base_asset_id: &'a AssetId,
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
         stream::iter(

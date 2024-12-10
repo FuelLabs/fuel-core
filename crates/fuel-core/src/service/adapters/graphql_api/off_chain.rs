@@ -233,60 +233,191 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         }
     }
 
-    fn balances(
-        &self,
+    fn balances<'a>(
+        &'a self,
         owner: &Address,
         start: Option<AssetId>,
-        base_asset_id: &AssetId,
+        base_asset_id: &'a AssetId,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<(AssetId, TotalBalanceAmount)>> {
-        let base_asset_id = *base_asset_id;
-        let base_balance = self.balance(owner, &base_asset_id, &base_asset_id);
-        let base_asset_balance = match base_balance {
-            Ok(base_asset_balance) => {
-                if base_asset_balance != 0 {
-                    iter::once(Ok((base_asset_id, base_asset_balance))).into_boxed()
-                } else {
-                    iter::empty().into_boxed()
+    ) -> BoxedIter<'a, StorageResult<(AssetId, TotalBalanceAmount)>> {
+        if direction == IterDirection::Forward {
+            match start {
+                None => {
+                    let base_asset_id = *base_asset_id;
+                    let base_balance =
+                        self.balance(owner, &base_asset_id, &base_asset_id);
+                    let base_asset_balance = match base_balance {
+                        Ok(base_asset_balance) => {
+                            if base_asset_balance != 0 {
+                                iter::once(Ok((base_asset_id, base_asset_balance)))
+                                    .into_boxed()
+                            } else {
+                                iter::empty().into_boxed()
+                            }
+                        }
+                        Err(err) => iter::once(Err(err)).into_boxed(),
+                    };
+
+                    let start =
+                        start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
+
+                    let non_base_asset_balance = self
+                        .iter_all_filtered_keys::<CoinBalances, _>(
+                            Some(owner),
+                            start.as_ref(),
+                            Some(direction),
+                        )
+                        .filter_map(move |result| match result {
+                            Ok(key) if *key.asset_id() != base_asset_id => Some(Ok(key)),
+                            Ok(_) => None,
+                            Err(err) => Some(Err(err)),
+                        })
+                        .map(move |result| {
+                            result.and_then(|key| {
+                                let asset_id = key.asset_id();
+                                let coin_balance = self
+                                    .storage_as_ref::<CoinBalances>()
+                                    .get(&key)?
+                                    .unwrap_or_default()
+                                    .into_owned()
+                                    as TotalBalanceAmount;
+                                Ok((*asset_id, coin_balance))
+                            })
+                        })
+                        .into_boxed();
+                    return base_asset_balance
+                        .chain(non_base_asset_balance)
+                        .into_boxed()
+                }
+                Some(_) => {
+                    let start =
+                        start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
+
+                    let non_base_asset_balance = self
+                        .iter_all_filtered_keys::<CoinBalances, _>(
+                            Some(owner),
+                            start.as_ref(),
+                            Some(direction),
+                        )
+                        .filter_map(move |result| match result {
+                            Ok(key) if key.asset_id() != base_asset_id => Some(Ok(key)),
+                            Ok(_) => None,
+                            Err(err) => Some(Err(err)),
+                        })
+                        .map(move |result| {
+                            result.and_then(|key| {
+                                let asset_id = key.asset_id();
+                                let coin_balance = self
+                                    .storage_as_ref::<CoinBalances>()
+                                    .get(&key)?
+                                    .unwrap_or_default()
+                                    .into_owned()
+                                    as TotalBalanceAmount;
+                                Ok((*asset_id, coin_balance))
+                            })
+                        })
+                        .into_boxed();
+                    return non_base_asset_balance;
                 }
             }
-            Err(err) => iter::once(Err(err)).into_boxed(),
-        };
-
-        let start = start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
-
-        let non_base_asset_balance = self
-            .iter_all_filtered_keys::<CoinBalances, _>(
-                Some(owner),
-                start.as_ref(),
-                Some(direction),
-            )
-            .filter_map(move |result| match result {
-                Ok(key) if *key.asset_id() != base_asset_id => Some(Ok(key)),
-                Ok(_) => None,
-                Err(err) => Some(Err(err)),
-            })
-            .map(move |result| {
-                result.and_then(|key| {
-                    let asset_id = key.asset_id();
-                    let coin_balance =
-                        self.storage_as_ref::<CoinBalances>()
-                            .get(&key)?
-                            .unwrap_or_default()
-                            .into_owned() as TotalBalanceAmount;
-                    Ok((*asset_id, coin_balance))
-                })
-            })
-            .into_boxed();
-
-        if direction == IterDirection::Forward {
-            base_asset_balance
-                .chain(non_base_asset_balance)
-                .into_boxed()
         } else {
-            non_base_asset_balance
-                .chain(base_asset_balance)
-                .into_boxed()
+            match start {
+                None => {
+                    let base_asset_id = *base_asset_id;
+                    let base_balance =
+                        self.balance(owner, &base_asset_id, &base_asset_id);
+                    let base_asset_balance = match base_balance {
+                        Ok(base_asset_balance) => {
+                            if base_asset_balance != 0 {
+                                iter::once(Ok((base_asset_id, base_asset_balance)))
+                                    .into_boxed()
+                            } else {
+                                iter::empty().into_boxed()
+                            }
+                        }
+                        Err(err) => iter::once(Err(err)).into_boxed(),
+                    };
+
+                    let start =
+                        start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
+
+                    let non_base_asset_balance = self
+                        .iter_all_filtered_keys::<CoinBalances, _>(
+                            Some(owner),
+                            start.as_ref(),
+                            Some(direction),
+                        )
+                        .filter_map(move |result| match result {
+                            Ok(key) if *key.asset_id() != base_asset_id => Some(Ok(key)),
+                            Ok(_) => None,
+                            Err(err) => Some(Err(err)),
+                        })
+                        .map(move |result| {
+                            result.and_then(|key| {
+                                let asset_id = key.asset_id();
+                                let coin_balance = self
+                                    .storage_as_ref::<CoinBalances>()
+                                    .get(&key)?
+                                    .unwrap_or_default()
+                                    .into_owned()
+                                    as TotalBalanceAmount;
+                                Ok((*asset_id, coin_balance))
+                            })
+                        })
+                        .into_boxed();
+                    return non_base_asset_balance
+                        .chain(base_asset_balance)
+                        .into_boxed()
+                }
+                Some(_) => {
+                    let base_asset_id = *base_asset_id;
+                    let base_balance =
+                        self.balance(owner, &base_asset_id, &base_asset_id);
+                    let base_asset_balance = match base_balance {
+                        Ok(base_asset_balance) => {
+                            if base_asset_balance != 0 {
+                                iter::once(Ok((base_asset_id, base_asset_balance)))
+                                    .into_boxed()
+                            } else {
+                                iter::empty().into_boxed()
+                            }
+                        }
+                        Err(err) => iter::once(Err(err)).into_boxed(),
+                    };
+
+                    let start =
+                        start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
+
+                    let non_base_asset_balance = self
+                        .iter_all_filtered_keys::<CoinBalances, _>(
+                            Some(owner),
+                            start.as_ref(),
+                            Some(direction),
+                        )
+                        .filter_map(move |result| match result {
+                            Ok(key) if *key.asset_id() != base_asset_id => Some(Ok(key)),
+                            Ok(_) => None,
+                            Err(err) => Some(Err(err)),
+                        })
+                        .map(move |result| {
+                            result.and_then(|key| {
+                                let asset_id = key.asset_id();
+                                let coin_balance = self
+                                    .storage_as_ref::<CoinBalances>()
+                                    .get(&key)?
+                                    .unwrap_or_default()
+                                    .into_owned()
+                                    as TotalBalanceAmount;
+                                Ok((*asset_id, coin_balance))
+                            })
+                        })
+                        .into_boxed();
+
+                    return non_base_asset_balance
+                        .chain(base_asset_balance)
+                        .into_boxed()
+                }
+            }
         }
     }
 }

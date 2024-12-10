@@ -80,13 +80,13 @@ pub trait OffChainDatabase: Send + Sync {
         base_asset_id: &AssetId,
     ) -> StorageResult<TotalBalanceAmount>;
 
-    fn balances(
-        &self,
+    fn balances<'a>(
+        &'a self,
         owner: &Address,
         start: Option<AssetId>,
-        base_asset_id: &AssetId,
+        base_asset_id: &'a AssetId,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<(AssetId, TotalBalanceAmount)>>;
+    ) -> BoxedIter<'a, StorageResult<(AssetId, TotalBalanceAmount)>>;
 
     fn owned_coins_ids(
         &self,
