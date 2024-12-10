@@ -78,8 +78,6 @@ impl BalanceQuery {
         Ok(balance)
     }
 
-    // TODO: This API should be migrated to the indexer for better support and
-    //  discontinued within fuel-core.
     #[graphql(complexity = "query_costs().balance_query")]
     async fn balances(
         &self,
