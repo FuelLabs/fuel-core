@@ -12,6 +12,7 @@ use crate::{
         ReadViewProvider,
     },
 };
+use anyhow::anyhow;
 use async_graphql::{
     connection::{
         Connection,
@@ -90,14 +91,20 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
         let query = ctx.read_view()?;
+        if !query.balances_enabled && (before.is_some() || after.is_some()) {
+            return Err(anyhow!(
+                "Can not use pagination when balances indexation is not available"
+            )
+            .into())
+        }
         let base_asset_id = *ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params()
             .base_asset_id();
         let owner = filter.owner.into();
-        crate::schema::query_pagination(after, before, first, last, |_, direction| {
+        crate::schema::query_pagination(after, before, first, last, |start, direction| {
             Ok(query
-                .balances(&owner, direction, &base_asset_id)
+                .balances(&owner, (*start).map(Into::into), direction, &base_asset_id)
                 .map(|result| {
                     result.map(|balance| (balance.asset_id.into(), balance.into()))
                 }))

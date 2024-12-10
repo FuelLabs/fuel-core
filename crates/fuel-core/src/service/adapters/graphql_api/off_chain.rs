@@ -236,6 +236,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     fn balances(
         &self,
         owner: &Address,
+        start: Option<AssetId>,
         base_asset_id: &AssetId,
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<(AssetId, TotalBalanceAmount)>> {
@@ -252,8 +253,14 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             Err(err) => iter::once(Err(err)).into_boxed(),
         };
 
+        let start = start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
+
         let non_base_asset_balance = self
-            .iter_all_filtered_keys::<CoinBalances, _>(Some(owner), None, Some(direction))
+            .iter_all_filtered_keys::<CoinBalances, _>(
+                Some(owner),
+                start.as_ref(),
+                Some(direction),
+            )
             .filter_map(move |result| match result {
                 Ok(key) if *key.asset_id() != base_asset_id => Some(Ok(key)),
                 Ok(_) => None,
