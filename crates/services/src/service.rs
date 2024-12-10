@@ -427,7 +427,7 @@ where
     match shutdown.catch_unwind().await {
         Ok(Ok(_)) => {}
         Ok(Err(e)) => {
-            tracing::error!("Go an error during shutdown of the task: {e}");
+            tracing::error!("Got an error during shutdown of the task: {e}");
         }
         Err(e) => {
             if got_panic.is_some() {
