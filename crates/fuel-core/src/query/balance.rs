@@ -6,7 +6,6 @@ use std::{
 use crate::{
     fuel_core_graphql_api::database::ReadView,
     graphql_api::storage::balances::TotalBalanceAmount,
-    schema::scalars::UtxoId,
 };
 use asset_query::{
     AssetQuery,
@@ -147,14 +146,17 @@ impl ReadView {
         base_asset_id: &AssetId,
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        stream::iter(self.off_chain.balances(owner, start, base_asset_id, direction))
-            .map(move |result| {
-                result.map(|(asset_id, amount)| AddressBalance {
-                    owner: *owner,
-                    asset_id,
-                    amount,
-                })
+        stream::iter(
+            self.off_chain
+                .balances(owner, start, base_asset_id, direction),
+        )
+        .map(move |result| {
+            result.map(|(asset_id, amount)| AddressBalance {
+                owner: *owner,
+                asset_id,
+                amount,
             })
-            .yield_each(self.batch_size)
+        })
+        .yield_each(self.batch_size)
     }
 }
