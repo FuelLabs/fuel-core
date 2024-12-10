@@ -438,15 +438,20 @@ fn produce_block__l1_committed_block_effects_gas_price() {
     let (first_gas_price, temp_dir) = rt.block_on(async {
         let driver = FuelCoreDriver::spawn(&args).await.unwrap();
         driver.client.produce_blocks(1, None).await.unwrap();
-        let first_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
+        let first_gas_price: u64 = driver
+            .client
+            .estimate_gas_price(0)
+            .await
+            .unwrap()
+            .gas_price
+            .into();
         tokio::time::sleep(Duration::from_millis(100)).await;
         let temp_dir = driver.kill().await;
         (first_gas_price, temp_dir)
     });
 
-    assert_eq!(100, first_gas_price);
+    assert_eq!(100u64, first_gas_price);
 
-    // set up chain with single recorded block
     let mock = FakeServer::new();
     let url = mock.url();
 
@@ -455,7 +460,7 @@ fn produce_block__l1_committed_block_effects_gas_price() {
         "--da-committer-url",
         &url,
         "--da-poll-interval",
-        "50",
+        "5",
         "--da-p-component",
         "1",
         "--max-da-gas-price-change-percent",
@@ -468,9 +473,9 @@ fn produce_block__l1_committed_block_effects_gas_price() {
             let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
                 .await
                 .unwrap();
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
             driver.client.produce_blocks(1, None).await.unwrap();
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
             driver.client.estimate_gas_price(0).await.unwrap().gas_price
         })
         .into();
