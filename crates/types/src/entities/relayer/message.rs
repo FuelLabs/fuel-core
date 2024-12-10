@@ -249,6 +249,7 @@ pub struct MerkleProof {
     pub proof_index: u64,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 /// Proves to da layer that this message was included in a Fuel block.
 pub struct MessageProof {
     /// Proof that message is contained within the provided block header.
