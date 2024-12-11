@@ -390,6 +390,7 @@ impl AlgorithmUpdaterV1 {
             let rewards = self.clamped_rewards_as_i128();
 
             // costs
+            tracing::info!("Block bytes: {}", block_bytes);
             self.update_projected_da_cost(block_bytes);
             let projected_total_da_cost = self.clamped_projected_cost_as_i128();
 

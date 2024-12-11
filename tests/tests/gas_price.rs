@@ -587,7 +587,8 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     let half_of_blocks = block_delay as u32 / 2;
     let blocks_heights: Vec<_> = (1..half_of_blocks).collect();
     let count = blocks_heights.len() as u128;
-    let new_price = 2_000_000_000;
+    let new_price_gwei = 500_000;
+    let new_price = new_price_gwei * 1_000_000_000; // Wei
     let cost = count * new_price;
     mock.add_response(RawDaBlockCosts {
         sequence_number: 1,
@@ -661,10 +662,11 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
 }
 
 async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mut R) {
-    let arb_tx_count = 10;
+    let arb_tx_count = 2;
     for i in 0..arb_tx_count {
         let large_fee_limit = u32::MAX as u64 - i;
         let tx = arb_large_tx(large_fee_limit, rng);
+        // let tx = arb_large_tx(189028 + i as Word, rng);
         let _status = client.submit(&tx).await.unwrap();
     }
     let _ = client.produce_blocks(1, None).await.unwrap();
