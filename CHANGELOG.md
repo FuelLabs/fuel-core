@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- [2495](https://github.com/FuelLabs/fuel-core/pull/2495): Log full response body when the shared sequencer response cannot be parsed.
+
 ## [Version 0.40.2]
 
 ### Fixed
