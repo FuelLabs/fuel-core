@@ -40,7 +40,7 @@
       },
       "chain_id": 0,
       "gas_costs": {
-        "V4": {
+        "V5": {
           "add": 2,
           "addi": 2,
           "and": 2,
