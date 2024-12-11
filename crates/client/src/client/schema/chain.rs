@@ -303,7 +303,7 @@ pub struct GasCosts {
     pub wqmm: U64,
     pub xor: U64,
     pub xori: U64,
-    pub ecop: U64,
+    pub ecop: Option<U64>,
 
     pub aloc_dependent_cost: DependentCost,
     pub bsiz: Option<DependentCost>,
@@ -329,7 +329,7 @@ pub struct GasCosts {
     pub smo: DependentCost,
     pub srwq: DependentCost,
     pub swwq: DependentCost,
-    pub epar: DependentCost,
+    pub epar: Option<DependentCost>,
 
     // Non-opcodes prices
     pub contract_root: DependentCost,
@@ -559,7 +559,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                         wqmm: value.wqmm.into(),
                         xor: value.xor.into(),
                         xori: value.xori.into(),
-                        ecop: value.ecop.into(),
+                        ecop: value.ecop.map(Into::into).unwrap_or(0),
 
                         aloc: value.aloc_dependent_cost.into(),
                         bsiz: value.bsiz.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
@@ -585,7 +585,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                         smo: value.smo.into(),
                         srwq: value.srwq.into(),
                         swwq: value.swwq.into(),
-                        epar: value.epar.into(),
+                        epar: value.epar.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
                         contract_root: value.contract_root.into(),
                         state_root: value.state_root.into(),
                         vm_initialization: value.vm_initialization.into(),
