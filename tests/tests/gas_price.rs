@@ -54,6 +54,7 @@ use fuel_core_types::{
 use rand::Rng;
 use std::{
     iter::repeat,
+    num::NonZero,
     ops::Deref,
     time::Duration,
 };
@@ -527,10 +528,13 @@ mod prop_tests {
     fn dummy() {}
 }
 
+// P: 4,707,680, D: 114,760
 fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     let _ = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .try_init();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
     // given
     let mut mock = FakeServer::new();
     let url = mock.url();
@@ -552,22 +556,17 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     node_config.block_production = Trigger::Never;
     node_config.da_committer_url = Some(url.clone());
     node_config.da_poll_interval = Some(1);
+    // node_config.da_p_component = 4_707_680;
+    // node_config.da_d_component = 114_760;
     node_config.da_p_component = 1;
     node_config.block_activity_threshold = 0;
 
     let (srv, client) = rt.block_on(async {
         let srv = FuelService::new_node(node_config.clone()).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
-        let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
-        // when
         for _b in 0..block_delay {
-            let arb_tx_count = 10;
-            for i in 0..arb_tx_count {
-                let tx = arb_large_tx(189028 + i as Word, &mut rng);
-                let _status = client.submit(&tx).await.unwrap();
-            }
-            let _ = client.produce_blocks(1, None).await.unwrap();
+            produce_a_block(&client, &mut rng).await;
         }
         let _ = client.produce_blocks(1, None).await.unwrap();
 
@@ -586,19 +585,22 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     });
 
     let half_of_blocks = block_delay as u32 / 2;
-    let blocks_heights = (1..half_of_blocks).collect();
+    let blocks_heights: Vec<_> = (1..half_of_blocks).collect();
+    let count = blocks_heights.len() as u128;
+    let new_price = 2_000_000_000;
+    let cost = count * new_price;
     mock.add_response(RawDaBlockCosts {
         sequence_number: 1,
         blocks_heights,
         da_block_height: DaBlockHeight(100),
-        total_cost: 9999999999999,
-        total_size_bytes: 100,
+        total_cost: cost,
+        total_size_bytes: 128_000,
     });
 
+    let mut profits = Vec::new();
+    let mut gas_prices = Vec::new();
     rt.block_on(async {
         tokio::time::sleep(Duration::from_millis(10)).await;
-        client.produce_blocks(1, None).await.unwrap();
-        client.produce_blocks(1, None).await.unwrap();
         client.produce_blocks(1, None).await.unwrap();
         client.produce_blocks(1, None).await.unwrap();
         let height = srv.shared.database.gas_price().latest_height().unwrap();
@@ -611,7 +613,61 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
             .and_then(|x| x.v1().cloned())
             .unwrap();
         tracing::info!("metadata: {:?}", metadata);
-    })
+        profits.push(metadata.last_profit);
+        gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
+    });
+
+    let tries = 100;
+
+    let mut success = false;
+    let mut success_iteration = i32::MAX;
+    rt.block_on(async {
+        for i in 0..tries {
+            produce_a_block(&client, &mut rng).await;
+            let metadata = srv
+                .shared
+                .database
+                .gas_price()
+                .get_metadata(&srv.shared.database.gas_price().latest_height().unwrap())
+                .unwrap()
+                .and_then(|x| x.v1().cloned())
+                .unwrap();
+            let profit = metadata.last_profit;
+            profits.push(profit);
+            gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
+            if profit > 0 && !success {
+                success = true;
+                success_iteration = i as i32;
+            }
+        }
+    });
+    let changes = profits.windows(2).map(|x| x[1] - x[0]).collect::<Vec<_>>();
+    let gas_price_changes = gas_prices
+        .windows(2)
+        .map(|x| x[1] as i128 - x[0] as i128)
+        .collect::<Vec<_>>();
+    if !success {
+        panic!(
+            "Could not recover from divergent profit after {} tries.\n Profits: {:?}.\n Changes: {:?}.\n Gas prices: {:?}\n Gas price changes: {:?}",
+            tries, profits, changes, gas_prices, gas_price_changes
+        );
+    } else {
+        tracing::info!("Success on try {}/{}", success_iteration, tries);
+        tracing::info!("Profits: {:?}", profits);
+        tracing::info!("Changes: {:?}", changes);
+        tracing::info!("Gas prices: {:?}", gas_prices);
+        tracing::info!("Gas price changes: {:?}", gas_price_changes);
+    }
+}
+
+async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mut R) {
+    let arb_tx_count = 10;
+    for i in 0..arb_tx_count {
+        let large_fee_limit = u32::MAX as u64 - i;
+        let tx = arb_large_tx(large_fee_limit, rng);
+        let _status = client.submit(&tx).await.unwrap();
+    }
+    let _ = client.produce_blocks(1, None).await.unwrap();
 }
 
 struct FakeServer {
@@ -631,6 +687,7 @@ impl FakeServer {
             .mock("GET", "/")
             .with_status(201)
             .with_body(body)
+            .expect_at_least(1)
             .create();
     }
 

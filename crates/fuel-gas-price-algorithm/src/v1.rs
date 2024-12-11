@@ -496,13 +496,14 @@ impl AlgorithmUpdaterV1 {
     fn update_da_gas_price(&mut self) {
         let p = self.p();
         let d = self.d();
-        let maybe_da_change = self.da_change(p, d);
-        let da_change = self.da_change_accounting_for_activity(maybe_da_change);
+        let maybe_scaled_da_change = self.da_change(p, d);
+        let scaled_da_change =
+            self.da_change_accounting_for_activity(maybe_scaled_da_change);
         let maybe_new_scaled_da_gas_price = i128::from(self.new_scaled_da_gas_price)
-            .checked_add(da_change)
+            .checked_add(scaled_da_change)
             .and_then(|x| u64::try_from(x).ok())
             .unwrap_or_else(|| {
-                if da_change.is_positive() {
+                if scaled_da_change.is_positive() {
                     u64::MAX
                 } else {
                     0u64
@@ -513,7 +514,7 @@ impl AlgorithmUpdaterV1 {
             "DA gas price change: p: {}, d: {}, change: {}, new: {}",
             p,
             d,
-            da_change,
+            scaled_da_change,
             maybe_new_scaled_da_gas_price
         );
         self.new_scaled_da_gas_price = max(
@@ -558,10 +559,12 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn da_change(&self, p: i128, d: i128) -> i128 {
-        let pd_change = p.saturating_add(d);
+        let scaled_pd_change = p
+            .saturating_add(d)
+            .saturating_mul(self.gas_price_factor.get() as i128);
         let max_change = self.max_change();
-        let clamped_change = pd_change.saturating_abs().min(max_change);
-        pd_change.signum().saturating_mul(clamped_change)
+        let clamped_change = scaled_pd_change.saturating_abs().min(max_change);
+        scaled_pd_change.signum().saturating_mul(clamped_change)
     }
 
     // Should always be positive

@@ -179,12 +179,13 @@ where
                 .map_err(|err| anyhow!(err))?;
         }
 
+        let fee_in_wei = block_fees as u128 * 1_000_000_000;
         self.algorithm_updater.update_l2_block_data(
             height,
             gas_used,
             capacity,
             block_bytes,
-            block_fees as u128,
+            fee_in_wei,
             &mut storage_tx.as_unrecorded_blocks(),
         )?;
 
