@@ -406,11 +406,11 @@ mod pagination {
     const BASE_ASSET_ID: AssetId = AssetId::zeroed();
     const MESSAGE_BALANCE: u64 = 44;
 
-    #[tokio::test]
     #[test_matrix(
         [PageDirection::Forward, PageDirection::Backward],
         [MessageCoin::Missing, MessageCoin::Present],
         [BaseAssetCoin::Present, BaseAssetCoin::Missing])]
+    #[tokio::test]
     async fn all_balances_at_once(
         direction: PageDirection,
         message_coin: MessageCoin,
