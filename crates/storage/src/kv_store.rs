@@ -67,17 +67,23 @@ pub trait KeyValueInspect {
         &self,
         key: &[u8],
         column: Self::Column,
+        offset: usize,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
         self.get(key, column)?
             .map(|value| {
                 let read = value.len();
-                if read != buf.len() {
+                if offset + read != buf.len() {
                     return Err(StorageError::Other(anyhow::anyhow!(
-                        "Buffer size is not equal to the value size"
+                        "Buffer size is not equal to the value size after offset"
                     )));
                 }
-                buf.copy_from_slice(value.as_ref());
+                if offset >= buf.len() {
+                    return Err(StorageError::Other(anyhow::anyhow!(
+                        "Offset too large for the buffer"
+                    )));
+                }
+                buf.copy_from_slice(&value.as_ref()[offset..]);
                 Ok(read)
             })
             .transpose()
@@ -111,9 +117,10 @@ where
         &self,
         key: &[u8],
         column: Self::Column,
+        offset: usize,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        self.deref().read(key, column, buf)
+        self.deref().read(key, column, offset, buf)
     }
 }
 

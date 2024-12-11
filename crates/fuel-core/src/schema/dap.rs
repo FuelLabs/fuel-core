@@ -132,7 +132,7 @@ impl ConcreteStorage {
         let fee_params = params.fee_params();
 
         let ready_tx = checked_tx
-            .into_ready(GAS_PRICE, gas_costs, fee_params)
+            .into_ready(GAS_PRICE, gas_costs, fee_params, None)
             .map_err(|e| {
                 anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
             })?;
@@ -176,7 +176,7 @@ impl ConcreteStorage {
         let fee_params = params.fee_params();
 
         let ready_tx = checked_tx
-            .into_ready(GAS_PRICE, gas_costs, fee_params)
+            .into_ready(GAS_PRICE, gas_costs, fee_params, None)
             .map_err(|e| {
                 anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
             })?;
@@ -456,7 +456,7 @@ impl DapMutation {
         match checked_tx {
             CheckedTransaction::Script(script) => {
                 let ready_tx = script
-                    .into_ready(GAS_PRICE, gas_costs, fee_params)
+                    .into_ready(GAS_PRICE, gas_costs, fee_params, None)
                     .map_err(|e| {
                         anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
                     })?;

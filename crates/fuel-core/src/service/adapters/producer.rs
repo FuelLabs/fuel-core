@@ -33,6 +33,7 @@ use fuel_core_storage::{
         ConsensusParametersVersions,
         FuelBlocks,
         StateTransitionBytecodeVersions,
+        Transactions,
     },
     transactional::Changes,
     Result as StorageResult,
@@ -40,15 +41,18 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         header::{
             ConsensusParametersVersion,
             StateTransitionBytecodeVersion,
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx,
     fuel_tx::{
+        self,
         ConsensusParameters,
         Transaction,
     },
@@ -56,6 +60,7 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
+    fuel_vm::interpreter::trace::Trigger,
     services::{
         block_producer::Components,
         executor::{
@@ -121,6 +126,16 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         self.executor.dry_run(block, utxo_validation)
+    }
+}
+
+impl fuel_core_producer::ports::BlockExecutionTracer for ExecutorAdapter {
+    fn execution_trace(
+        &self,
+        block: &Block,
+        trigger: Trigger,
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+        self.executor.execution_traces(block, trigger)
     }
 }
 
@@ -219,6 +234,12 @@ impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableKeyValu
         self.storage::<FuelBlocks>()
             .get(height)?
             .ok_or(not_found!(FuelBlocks))
+    }
+
+    fn get_transaction(&self, id: &fuel_tx::TxId) -> StorageResult<Cow<Transaction>> {
+        self.storage::<Transactions>()
+            .get(id)?
+            .ok_or(not_found!(Transactions))
     }
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {

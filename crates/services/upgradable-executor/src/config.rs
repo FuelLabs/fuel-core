@@ -20,6 +20,7 @@ impl From<&Config> for ExecutionOptions {
         Self {
             extra_tx_checks: value.utxo_validation_default,
             backtrace: value.backtrace,
+            execution_trace: None,
         }
     }
 }

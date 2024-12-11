@@ -4,7 +4,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         header::{
             ConsensusParametersVersion,
             StateTransitionBytecodeVersion,
@@ -14,8 +17,10 @@ use fuel_core_types::{
     fuel_tx::{
         Bytes32,
         Transaction,
+        TxId,
     },
     fuel_types::BlockHeight,
+    fuel_vm::interpreter::trace::Trigger,
     services::{
         block_producer::Components,
         executor::{
@@ -33,6 +38,9 @@ pub trait BlockProducerDatabase: Send + Sync {
 
     /// Gets the committed block at the `height`.
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>>;
+
+    /// Gets the transaction by id
+    fn get_transaction(&self, id: &TxId) -> StorageResult<Cow<Transaction>>;
 
     /// Gets the block header BMT MMR root at `height`.
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
@@ -99,5 +107,13 @@ pub trait DryRunner: Send + Sync {
         &self,
         block: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>>;
+}
+
+pub trait BlockExecutionTracer: Send + Sync {
+    fn execution_trace(
+        &self,
+        block: &Block,
+        trigger: Trigger,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>>;
 }
