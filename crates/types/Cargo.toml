@@ -29,7 +29,8 @@ k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }
-tai64 = { version = "4.1", features = ["serde"] }
+# We force the version because 4.1.0 update leap seconds that breaks our timestamps
+tai64 = { version = "=4.0.0", features = ["serde"] }
 zeroize = "1.5"
 
 [dev-dependencies]
