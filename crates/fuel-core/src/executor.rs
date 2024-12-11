@@ -13,6 +13,8 @@ mod tests {
         },
         refs::ContractRef,
     };
+    #[cfg(feature = "parallel-executor")]
+    use fuel_core_parallel_executor::executor::Executor;
     use fuel_core_storage::{
         tables::{
             Coins,
@@ -140,6 +142,7 @@ mod tests {
         },
         tai64::Tai64,
     };
+    #[cfg(not(feature = "parallel-executor"))]
     use fuel_core_upgradable_executor::executor::Executor;
     use itertools::Itertools;
     use rand::{
@@ -194,6 +197,7 @@ mod tests {
         database
     }
 
+    #[cfg(not(feature = "parallel-executor"))]
     fn create_executor(
         database: Database,
         config: Config,
@@ -202,6 +206,27 @@ mod tests {
             backtrace: config.backtrace,
             utxo_validation_default: config.utxo_validation_default,
             native_executor_version: None,
+        };
+
+        let database = add_consensus_parameters(database, &config.consensus_parameters);
+
+        Executor::new(database, DisabledRelayer, executor_config)
+    }
+
+    #[cfg(feature = "parallel-executor")]
+    fn create_executor(
+        database: Database,
+        config: Config,
+    ) -> Executor<Database, DisabledRelayer> {
+        use std::num::NonZeroUsize;
+
+        let executor_config = fuel_core_parallel_executor::config::Config {
+            executor_config: fuel_core_upgradable_executor::config::Config {
+                backtrace: config.backtrace,
+                utxo_validation_default: config.utxo_validation_default,
+                native_executor_version: None,
+            },
+            number_of_cores: NonZeroUsize::new(2).unwrap(),
         };
 
         let database = add_consensus_parameters(database, &config.consensus_parameters);
@@ -442,7 +467,11 @@ mod tests {
                 .insert(&recipient, &[])
                 .expect("Should insert coinbase contract");
 
+            #[cfg(not(feature = "parallel-executor"))]
             let mut producer = create_executor(database.clone(), config);
+
+            #[cfg(feature = "parallel-executor")]
+            let producer = create_executor(database.clone(), config.clone());
 
             let expected_fee_amount_1 = TransactionFee::checked_from_tx(
                 consensus_parameters.gas_costs(),
@@ -476,7 +505,18 @@ mod tests {
                 })
                 .unwrap()
                 .into();
+
+            #[cfg(not(feature = "parallel-executor"))]
             producer
+                .storage_view_provider
+                .commit_changes(changes)
+                .unwrap();
+
+            #[cfg(feature = "parallel-executor")]
+            producer
+                .get_executor()
+                .write()
+                .unwrap()
                 .storage_view_provider
                 .commit_changes(changes)
                 .unwrap();
@@ -506,6 +546,7 @@ mod tests {
                 panic!("Invalid coinbase transaction");
             }
 
+            #[cfg(not(feature = "parallel-executor"))]
             let ContractBalance {
                 asset_id, amount, ..
             } = producer
@@ -516,6 +557,22 @@ mod tests {
                 .next()
                 .unwrap()
                 .unwrap();
+
+            #[cfg(feature = "parallel-executor")]
+            let ContractBalance {
+                asset_id, amount, ..
+            } = producer
+                .get_executor()
+                .read()
+                .unwrap()
+                .storage_view_provider
+                .latest_view()
+                .unwrap()
+                .contract_balances(recipient, None, IterDirection::Forward)
+                .next()
+                .unwrap()
+                .unwrap();
+
             assert_eq!(asset_id, AssetId::zeroed());
             assert_eq!(amount, expected_fee_amount_1);
 
@@ -556,7 +613,18 @@ mod tests {
                 })
                 .unwrap()
                 .into();
+
+            #[cfg(not(feature = "parallel-executor"))]
             producer
+                .storage_view_provider
+                .commit_changes(changes)
+                .unwrap();
+
+            #[cfg(feature = "parallel-executor")]
+            producer
+                .get_executor()
+                .write()
+                .unwrap()
                 .storage_view_provider
                 .commit_changes(changes)
                 .unwrap();
@@ -597,9 +665,26 @@ mod tests {
             } else {
                 panic!("Invalid coinbase transaction");
             }
+
+            #[cfg(not(feature = "parallel-executor"))]
             let ContractBalance {
                 asset_id, amount, ..
             } = producer
+                .storage_view_provider
+                .latest_view()
+                .unwrap()
+                .contract_balances(recipient, None, IterDirection::Forward)
+                .next()
+                .unwrap()
+                .unwrap();
+
+            #[cfg(feature = "parallel-executor")]
+            let ContractBalance {
+                asset_id, amount, ..
+            } = producer
+                .get_executor()
+                .read()
+                .unwrap()
                 .storage_view_provider
                 .latest_view()
                 .unwrap()
@@ -708,6 +793,8 @@ mod tests {
             );
             let _ = validator.validate_and_commit(&block).unwrap();
             assert_eq!(block.transactions(), produced_txs);
+
+            #[cfg(not(feature = "parallel-executor"))]
             let ContractBalance {
                 asset_id, amount, ..
             } = validator
@@ -718,6 +805,22 @@ mod tests {
                 .next()
                 .unwrap()
                 .unwrap();
+
+            #[cfg(feature = "parallel-executor")]
+            let ContractBalance {
+                asset_id, amount, ..
+            } = validator
+                .get_executor()
+                .read()
+                .unwrap()
+                .storage_view_provider
+                .latest_view()
+                .unwrap()
+                .contract_balances(recipient, None, IterDirection::Forward)
+                .next()
+                .unwrap()
+                .unwrap();
+
             assert_eq!(asset_id, AssetId::zeroed());
             assert_ne!(amount, 0);
         }
@@ -761,8 +864,12 @@ mod tests {
                     .transaction()
                     .clone();
 
+                #[cfg(not(feature = "parallel-executor"))]
                 let mut producer =
                     create_executor(Default::default(), Default::default());
+
+                #[cfg(feature = "parallel-executor")]
+                let producer = create_executor(Default::default(), Default::default());
 
                 let mut block = Block::default();
                 *block.transactions_mut() = vec![script.clone().into()];
@@ -775,10 +882,22 @@ mod tests {
                     )
                     .expect("Should execute the block")
                     .into();
+
+                #[cfg(not(feature = "parallel-executor"))]
                 producer
                     .storage_view_provider
                     .commit_changes(changes)
                     .unwrap();
+
+                #[cfg(feature = "parallel-executor")]
+                producer
+                    .get_executor()
+                    .write()
+                    .unwrap()
+                    .storage_view_provider
+                    .commit_changes(changes)
+                    .unwrap();
+
                 let receipts = tx_status[0].result.receipts();
 
                 if let Some(Receipt::Return { val, .. }) = receipts.first() {
@@ -2305,7 +2424,31 @@ mod tests {
         (tx.into(), message)
     }
 
+    #[cfg(not(feature = "parallel-executor"))]
     /// Helper to build database and executor for some of the message tests
+    fn make_executor(messages: &[&Message]) -> Executor<Database, DisabledRelayer> {
+        let mut database = Database::default();
+        let database_ref = &mut database;
+
+        for message in messages {
+            database_ref
+                .storage::<Messages>()
+                .insert(message.id(), message)
+                .unwrap();
+        }
+
+        create_executor(
+            database,
+            Config {
+                utxo_validation_default: true,
+                ..Default::default()
+            },
+        )
+    }
+
+    #[cfg(feature = "parallel-executor")]
+    /// Helper to build database and executor for some of the message tests
+    /// This version is used when the `parallel-executor` feature is enabled.
     fn make_executor(messages: &[&Message]) -> Executor<Database, DisabledRelayer> {
         let mut database = Database::default();
         let database_ref = &mut database;
@@ -2371,7 +2514,16 @@ mod tests {
         };
 
         let mut exec = make_executor(&messages);
+        #[cfg(not(feature = "parallel-executor"))]
         let view = exec.storage_view_provider.latest_view().unwrap();
+        #[cfg(feature = "parallel-executor")]
+        let view = exec
+            .get_executor()
+            .write()
+            .unwrap()
+            .storage_view_provider
+            .latest_view()
+            .unwrap();
         assert!(view.message_exists(message_coin.nonce()).unwrap());
         assert!(view.message_exists(message_data.nonce()).unwrap());
 
@@ -2382,7 +2534,16 @@ mod tests {
         assert_eq!(skipped_transactions.len(), 0);
 
         // Successful execution consumes `message_coin` and `message_data`.
+        #[cfg(not(feature = "parallel-executor"))]
         let view = exec.storage_view_provider.latest_view().unwrap();
+        #[cfg(feature = "parallel-executor")]
+        let view = exec
+            .get_executor()
+            .write()
+            .unwrap()
+            .storage_view_provider
+            .latest_view()
+            .unwrap();
         assert!(!view.message_exists(message_coin.nonce()).unwrap());
         assert!(!view.message_exists(message_data.nonce()).unwrap());
         assert_eq!(
@@ -2418,7 +2579,16 @@ mod tests {
         };
 
         let mut exec = make_executor(&messages);
+        #[cfg(not(feature = "parallel-executor"))]
         let view = exec.storage_view_provider.latest_view().unwrap();
+        #[cfg(feature = "parallel-executor")]
+        let view = exec
+            .get_executor()
+            .write()
+            .unwrap()
+            .storage_view_provider
+            .latest_view()
+            .unwrap();
         assert!(view.message_exists(message_coin.nonce()).unwrap());
         assert!(view.message_exists(message_data.nonce()).unwrap());
 
@@ -2429,7 +2599,16 @@ mod tests {
         assert_eq!(skipped_transactions.len(), 0);
 
         // We should spend only `message_coin`. The `message_data` should be unspent.
+        #[cfg(not(feature = "parallel-executor"))]
         let view = exec.storage_view_provider.latest_view().unwrap();
+        #[cfg(feature = "parallel-executor")]
+        let view = exec
+            .get_executor()
+            .write()
+            .unwrap()
+            .storage_view_provider
+            .latest_view()
+            .unwrap();
         assert!(!view.message_exists(message_coin.nonce()).unwrap());
         assert!(view.message_exists(message_data.nonce()).unwrap());
         assert_eq!(*view.coin(&UtxoId::new(tx_id, 0)).unwrap().amount(), amount);

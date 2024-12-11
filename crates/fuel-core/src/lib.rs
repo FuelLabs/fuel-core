@@ -3,6 +3,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+use fuel_core_parallel_executor as _;
+
 use crate::service::genesis::NotifyCancel;
 use tokio_util::sync::CancellationToken;
 

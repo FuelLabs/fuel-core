@@ -223,6 +223,10 @@ where
         })?;
         executor.dry_run_without_commit_with_source(block)
     }
+
+    pub fn get_executor(&self) -> Arc<RwLock<UpgradableExecutor<S, R>>> {
+        self.executor.clone()
+    }
 }
 
 impl<S, R> Executor<S, R>
@@ -445,20 +449,13 @@ where
             block.transactions()
         )?;
 
-        dbg!(block
-            .transactions()
-            .split_last()
-            .ok_or(ExecutorError::MintMismatch)?
-            .1
-            .to_vec());
-
         let components = Components {
             header_to_produce: block.header().into(),
             transactions_source: OnceTransactionsSource::new(
                 block
                     .transactions()
                     .split_last()
-                    .ok_or(ExecutorError::MintMismatch)?
+                    .ok_or(ExecutorError::MintMissing)?
                     .1
                     .to_vec(),
             ),
@@ -467,13 +464,15 @@ where
         };
         let executed_block_result = self.produce_inner(components)?;
 
-        // TODO: Verif
-        // if &executed_block_result.result().block == block {
-        //     Ok(executed_block_result.into_validation_result())
-        // } else {
-        //     Err(ExecutorError::BlockMismatch)
-        // }
-        Ok(executed_block_result.into_validation_result())
+        dbg!(&executed_block_result.result().block.id());
+        dbg!(&block.id());
+        dbg!(&executed_block_result.result().block);
+        dbg!(&block);
+        if &executed_block_result.result().block == block {
+            Ok(executed_block_result.into_validation_result())
+        } else {
+            Err(ExecutorError::BlockMismatch)
+        }
     }
 }
 
@@ -793,7 +792,9 @@ mod tests {
         },
         fuel_tx::{
             AssetId,
+            Cacheable,
             Transaction,
+            TxPointer,
         },
         fuel_types::{
             BlockHeight,
@@ -884,6 +885,7 @@ mod tests {
     fn valid_block(
         storage: &mut Storage,
         state_transition_bytecode_version: StateTransitionBytecodeVersion,
+        mut transactions: Vec<Transaction>,
     ) -> Block {
         let prev_block = PartialFuelBlock::new(
             PartialBlockHeader {
@@ -920,6 +922,16 @@ mod tests {
             )
             .unwrap();
         tx.commit().unwrap();
+        let mut mint_tx = Transaction::mint(
+            TxPointer::new(BlockHeight::new(1), 0),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            AssetId::BASE,
+            Default::default(),
+        );
+        mint_tx.precompute(&ChainId::default()).unwrap();
+        transactions.push(mint_tx.into());
         PartialFuelBlock::new(
             PartialBlockHeader {
                 application: ApplicationHeader {
@@ -935,15 +947,7 @@ mod tests {
                     generated: Empty,
                 },
             },
-            vec![Transaction::mint(
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                AssetId::BASE,
-                Default::default(),
-            )
-            .into()],
+            transactions,
         )
         .generate(&[], ExecutionData::default_event_inbox_root())
         .unwrap()
@@ -954,7 +958,7 @@ mod tests {
         let mut storage = storage();
 
         // Given
-        let block = valid_block(&mut storage, LATEST_STATE_TRANSITION_VERSION);
+        let block = valid_block(&mut storage, LATEST_STATE_TRANSITION_VERSION, vec![]);
         let executor = Executor::new(storage, DisabledRelayer, Default::default());
 
         // When

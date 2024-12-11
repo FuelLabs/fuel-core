@@ -32,6 +32,7 @@ fuel-core-importer = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-p2p = { workspace = true, optional = true }
 fuel-core-poa = { workspace = true }
+fuel-core-parallel-executor = { workspace = true, optional = true, features = ["std"] }
 fuel-core-producer = { workspace = true }
 fuel-core-relayer = { workspace = true, optional = true }
 fuel-core-services = { workspace = true }
@@ -72,6 +73,7 @@ uuid = { version = "1.1", features = ["v4"] }
 assert_matches = "1.5"
 fuel-core = { path = ".", features = ["smt", "test-helpers"] }
 fuel-core-executor = { workspace = true, features = ["std", "test-helpers"] }
+fuel-core-parallel-executor = { workspace = true, features = ["std", "test-helpers"] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "./../trace" }
@@ -103,7 +105,9 @@ test-helpers = [
   "fuel-core-txpool/test-helpers",
   "fuel-core-services/test-helpers",
   "fuel-core-importer/test-helpers",
+  "fuel-core-parallel-executor/test-helpers"
 ]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
 wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
+parallel-executor = ["fuel-core-parallel-executor"]
