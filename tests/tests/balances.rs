@@ -420,19 +420,19 @@ mod pagination {
         const REQUESTED_COUNT: i32 = i32::MAX;
 
         // Owner has the following assets:
-        // - asset_1 (0x1111...): 11 coins (replaced with base asset if BaseAssetCoin is set to Present)
-        // - asset_2 (0x2222...): 22 coins
-        // - asset_3 (0x3333...): 33 coins
-        // - message with amount 44 (only if MessageCoin is set to Present)
+        // |  asset_id  | amount |  type   |         when?          |
+        // | ---------- | ------ | ------- | ---------------------- |
+        // | asset_1    | 11     | coin    | always                 |
+        // | asset_2    | 22     | coin    | always                 |
+        // | base_asset | 33     | coin    | BaseAssetCoin::Present |
+        // | n/a        | 44     | message | MessageCoin::Present   |
         let owner = Address::from([0xaa; 32]);
-        let asset_1 = match base_asset_coin {
-            BaseAssetCoin::Present => BASE_ASSET_ID,
-            BaseAssetCoin::Missing => AssetId::new([0x11; 32]),
-        };
+        let asset_1 = AssetId::new([0x11; 32]);
         let asset_2 = AssetId::new([0x22; 32]);
-        let asset_3 = AssetId::new([0x33; 32]);
-
-        let assets = [(asset_1, 11), (asset_2, 22), (asset_3, 33)];
+        let mut assets = vec![(asset_1, 11), (asset_2, 22)];
+        if let BaseAssetCoin::Present = base_asset_coin {
+            assets.push((BASE_ASSET_ID, 33));
+        }
         let config = setup(
             &owner,
             &assets,
@@ -463,27 +463,25 @@ mod pagination {
             .collect::<Vec<_>>();
 
         // Then
+
+        // Please mind that if present, base asset id is always reported first
+        // (or last in case of backward pagination).
         let mut expected_balances = match (message_coin, base_asset_coin) {
             (MessageCoin::Missing, BaseAssetCoin::Missing) => {
-                // Assert for regular set of assets
-                vec![(asset_1, 11), (asset_2, 22), (asset_3, 33)]
+                // Expect just regular coin balances
+                vec![(asset_1, 11), (asset_2, 22)]
             }
             (MessageCoin::Missing, BaseAssetCoin::Present) => {
-                // Assert for base asset replacing asset_1
-                vec![(BASE_ASSET_ID, 11), (asset_2, 22), (asset_3, 33)]
+                // Expect regular coin balances + base asset
+                vec![(BASE_ASSET_ID, 33), (asset_1, 11), (asset_2, 22)]
             }
             (MessageCoin::Present, BaseAssetCoin::Missing) => {
-                // Message coin only, so base asset equal to message amount
-                vec![
-                    (BASE_ASSET_ID, 44),
-                    (asset_1, 11),
-                    (asset_2, 22),
-                    (asset_3, 33),
-                ]
+                // Expect base asset id amount equal to message amount
+                vec![(BASE_ASSET_ID, 44), (asset_1, 11), (asset_2, 22)]
             }
             (MessageCoin::Present, BaseAssetCoin::Present) => {
-                // Both message (worth 44) and base asset coin (worth 11) are present, expect sum (55)
-                vec![(BASE_ASSET_ID, 55), (asset_2, 22), (asset_3, 33)]
+                // Expect base asset id to be a sum of the message and base asset coin: 33 + 44 = 77
+                vec![(BASE_ASSET_ID, 77), (asset_1, 11), (asset_2, 22)]
             }
         };
 
