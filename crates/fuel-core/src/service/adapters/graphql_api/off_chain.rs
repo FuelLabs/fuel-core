@@ -289,14 +289,13 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                         .chain(non_base_asset_balance)
                         .into_boxed()
                 }
-                Some(_) => {
-                    let start =
-                        start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
+                Some(asset_id) => {
+                    let start = CoinBalancesKey::new(owner, &asset_id);
 
                     let non_base_asset_balance = self
                         .iter_all_filtered_keys::<CoinBalances, _>(
                             Some(owner),
-                            start.as_ref(),
+                            Some(&start),
                             Some(direction),
                         )
                         .filter_map(move |result| match result {
@@ -369,7 +368,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                         .chain(base_asset_balance)
                         .into_boxed()
                 }
-                Some(_) => {
+                Some(asset_id) => {
                     let base_asset_id = *base_asset_id;
                     let base_balance =
                         self.balance(owner, &base_asset_id, &base_asset_id);
@@ -385,13 +384,12 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                         Err(err) => iter::once(Err(err)).into_boxed(),
                     };
 
-                    let start =
-                        start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
+                    let start = CoinBalancesKey::new(owner, &asset_id);
 
                     let non_base_asset_balance = self
                         .iter_all_filtered_keys::<CoinBalances, _>(
                             Some(owner),
-                            start.as_ref(),
+                            Some(&start),
                             Some(direction),
                         )
                         .filter_map(move |result| match result {

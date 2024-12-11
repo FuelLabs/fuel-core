@@ -409,15 +409,16 @@ mod pagination {
     #[test_matrix(
         [PageDirection::Forward, PageDirection::Backward],
         [MessageCoin::Missing, MessageCoin::Present],
-        [BaseAssetCoin::Present, BaseAssetCoin::Missing])]
+        [BaseAssetCoin::Present, BaseAssetCoin::Missing],
+        [1, 2, 3, 4, 2137])]
     #[tokio::test]
-    async fn all_balances_at_once(
+    async fn all_balances_in_chunks(
         direction: PageDirection,
         message_coin: MessageCoin,
         base_asset_coin: BaseAssetCoin,
+        chunk_size: i32,
     ) {
         // Given
-        const REQUESTED_COUNT: i32 = i32::MAX;
 
         // Owner has the following assets:
         // |  asset_id  | amount |  type   |         when?          |
@@ -446,21 +447,32 @@ mod pagination {
         let client = FuelClient::from(srv.bound_address);
 
         // When
-        let actual_balances = client
-            .balances(
-                &owner,
-                PaginationRequest {
-                    cursor: None,
-                    results: REQUESTED_COUNT,
-                    direction,
-                },
-            )
-            .await
-            .unwrap()
-            .results
-            .iter()
-            .map(|r| (r.asset_id, r.amount))
-            .collect::<Vec<_>>();
+        let mut cursor = None;
+        let mut actual_balances = vec![];
+        loop {
+            let paginated_result = client
+                .balances(
+                    &owner,
+                    PaginationRequest {
+                        cursor,
+                        results: chunk_size,
+                        direction,
+                    },
+                )
+                .await
+                .unwrap();
+
+            cursor = paginated_result.cursor;
+            actual_balances.extend(
+                paginated_result
+                    .results
+                    .iter()
+                    .map(|r| (r.asset_id, r.amount)),
+            );
+            if !paginated_result.has_next_page {
+                break
+            }
+        }
 
         // Then
 
@@ -482,104 +494,6 @@ mod pagination {
             (MessageCoin::Present, BaseAssetCoin::Present) => {
                 // Expect base asset id to be a sum of the message and base asset coin: 33 + 44 = 77
                 vec![(BASE_ASSET_ID, 77), (asset_1, 11), (asset_2, 22)]
-            }
-        };
-
-        // If requesting backward, reverse the expected balances
-        if direction == PageDirection::Backward {
-            expected_balances.reverse();
-        }
-
-        assert_eq!(expected_balances, actual_balances);
-    }
-
-    #[tokio::test]
-    #[test_matrix(
-        [PageDirection::Forward, PageDirection::Backward],
-        [MessageCoin::Missing, MessageCoin::Present],
-        [BaseAssetCoin::Present, BaseAssetCoin::Missing])]
-    async fn all_balances_one_by_one(
-        direction: PageDirection,
-        message_coin: MessageCoin,
-        base_asset_coin: BaseAssetCoin,
-    ) {
-        // Given
-        const REQUESTED_COUNT: i32 = 1;
-
-        // Owner has the following assets:
-        // - asset_1 (0x1111...): 11 coins (replaced with base asset if BaseAssetCoin is set to Present)
-        // - asset_2 (0x2222...): 22 coins
-        // - asset_3 (0x3333...): 33 coins
-        // - message with amount 44 (only if MessageCoin is set to Present)
-        let owner = Address::from([0xaa; 32]);
-        let asset_1 = match base_asset_coin {
-            BaseAssetCoin::Present => BASE_ASSET_ID,
-            BaseAssetCoin::Missing => AssetId::new([0x11; 32]),
-        };
-        let asset_2 = AssetId::new([0x22; 32]);
-        let asset_3 = AssetId::new([0x33; 32]);
-
-        let assets = [(asset_1, 11), (asset_2, 22), (asset_3, 33)];
-        let config = setup(
-            &owner,
-            &assets,
-            match message_coin {
-                MessageCoin::Present => Some(MESSAGE_BALANCE),
-                MessageCoin::Missing => None,
-            },
-        )
-        .await;
-        let srv = FuelService::new_node(config).await.unwrap();
-        let client = FuelClient::from(srv.bound_address);
-
-        // When
-        let mut cursor = None;
-        let mut actual_balances = vec![];
-        loop {
-            let paginated_result = client
-                .balances(
-                    &owner,
-                    PaginationRequest {
-                        cursor,
-                        results: REQUESTED_COUNT,
-                        direction,
-                    },
-                )
-                .await
-                .unwrap();
-
-            cursor = paginated_result.cursor;
-            actual_balances.push((
-                paginated_result.results[0].asset_id,
-                paginated_result.results[0].amount,
-            ));
-            if !paginated_result.has_next_page {
-                break
-            }
-        }
-
-        // Then
-        let mut expected_balances = match (message_coin, base_asset_coin) {
-            (MessageCoin::Missing, BaseAssetCoin::Missing) => {
-                // Assert for regular set of assets
-                vec![(asset_1, 11), (asset_2, 22), (asset_3, 33)]
-            }
-            (MessageCoin::Missing, BaseAssetCoin::Present) => {
-                // Assert for base asset replacing asset_1
-                vec![(BASE_ASSET_ID, 11), (asset_2, 22), (asset_3, 33)]
-            }
-            (MessageCoin::Present, BaseAssetCoin::Missing) => {
-                // Message coin only, so base asset equal to message amount
-                vec![
-                    (BASE_ASSET_ID, 44),
-                    (asset_1, 11),
-                    (asset_2, 22),
-                    (asset_3, 33),
-                ]
-            }
-            (MessageCoin::Present, BaseAssetCoin::Present) => {
-                // Both message (worth 44) and base asset coin (worth 11) are present, expect sum (55)
-                vec![(BASE_ASSET_ID, 55), (asset_2, 22), (asset_3, 33)]
             }
         };
 
