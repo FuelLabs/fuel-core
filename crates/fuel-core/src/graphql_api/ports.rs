@@ -238,7 +238,7 @@ pub trait BlockProducerPort: Send + Sync {
         gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>>;
 
-    async fn exection_trace_block(
+    async fn execution_trace_block(
         &self,
         height: BlockHeight,
         trigger: Trigger,

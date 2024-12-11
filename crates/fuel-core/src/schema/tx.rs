@@ -357,7 +357,7 @@ impl TxMutation {
 
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let status = block_producer
-            .exection_trace_block(block_height, trigger.into())
+            .execution_trace_block(block_height, trigger.into())
             .await?;
         dbg!(&status);
         Ok(status

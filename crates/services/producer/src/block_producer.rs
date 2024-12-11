@@ -389,7 +389,7 @@ where
     ConsensusProvider: ConsensusParametersProvider,
 {
     /// Re-executes an old block, getting full execution traces.
-    pub async fn exection_trace_block(
+    pub async fn execution_trace_block(
         &self,
         height: BlockHeight,
         trigger: Trigger,

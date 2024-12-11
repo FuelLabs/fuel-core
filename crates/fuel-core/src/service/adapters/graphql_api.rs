@@ -125,13 +125,13 @@ impl BlockProducerPort for BlockProducerAdapter {
             .await
     }
 
-    async fn exection_trace_block(
+    async fn execution_trace_block(
         &self,
         height: BlockHeight,
         trigger: Trigger,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         self.block_producer
-            .exection_trace_block(height, trigger)
+            .execution_trace_block(height, trigger)
             .await
     }
 }
