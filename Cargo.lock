@@ -3557,6 +3557,7 @@ dependencies = [
 name = "fuel-core-parallel-executor"
 version = "0.40.0"
 dependencies = [
+ "anyhow",
  "fuel-core-storage",
  "fuel-core-types 0.40.0",
  "fuel-core-upgradable-executor",
