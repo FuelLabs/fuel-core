@@ -1,6 +1,9 @@
-use crate::common::fuel_core_storage_adapter::storage::{
-    GasPriceColumn,
-    UnrecordedBlocksTable,
+use crate::common::{
+    fuel_core_storage_adapter::storage::{
+        GasPriceColumn,
+        UnrecordedBlocksTable,
+    },
+    utils::BlockInfo::Block,
 };
 use fuel_core_storage::{
     kv_store::{
@@ -16,7 +19,10 @@ use fuel_core_storage::{
     StorageAsRef,
     StorageMutate,
 };
-use fuel_core_types::fuel_merkle::storage::StorageMutateInfallible;
+use fuel_core_types::{
+    fuel_merkle::storage::StorageMutateInfallible,
+    fuel_types::BlockHeight,
+};
 use fuel_gas_price_algorithm::{
     v1,
     v1::UnrecordedBlocks,
@@ -59,18 +65,20 @@ where
     S: StorageMutate<UnrecordedBlocksTable, Error = StorageError>,
 {
     fn insert(&mut self, height: v1::Height, bytes: v1::Bytes) -> Result<(), String> {
+        let block_height = BlockHeight::from(height);
         self.inner
             .storage_as_mut::<UnrecordedBlocksTable>()
-            .insert(&height, &bytes)
+            .insert(&block_height, &bytes)
             .map_err(|err| format!("Error: {:?}", err))?;
         Ok(())
     }
 
     fn remove(&mut self, height: &v1::Height) -> Result<Option<v1::Bytes>, String> {
+        let block_height = BlockHeight::from(*height);
         let bytes = self
             .inner
             .storage_as_mut::<UnrecordedBlocksTable>()
-            .take(height)
+            .take(&block_height)
             .map_err(|err| format!("Error: {:?}", err))?;
         Ok(bytes)
     }

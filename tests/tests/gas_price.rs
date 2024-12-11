@@ -1,4 +1,7 @@
 #![allow(non_snake_case)]
+// TODO: REMOVE BEFORE MERGING
+#![allow(dead_code)]
+#![allow(unused_imports)]
 
 use crate::helpers::{
     TestContext,
@@ -21,6 +24,10 @@ use fuel_core_client::client::{
 };
 use fuel_core_gas_price_service::{
     common::fuel_core_storage_adapter::storage::GasPriceMetadata,
+    ports::{
+        GasPriceData,
+        GetMetadataStorage,
+    },
     v0::metadata::V0Metadata,
 };
 use fuel_core_poa::Trigger;
@@ -29,6 +36,7 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
     fuel_asm::*,
     fuel_crypto::{
         coins_bip32::ecdsa::signature::rand_core::SeedableRng,
@@ -103,7 +111,7 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
     // given
     let mut config = Config::local_node();
     let starting_gas_price = 982;
-    config.starting_gas_price = starting_gas_price;
+    config.starting_exec_gas_price = starting_gas_price;
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
         .unwrap();
@@ -122,6 +130,9 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
 
 #[tokio::test]
 async fn produce_block__raises_gas_price() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
     // given
     let block_gas_limit = 3_000_000;
     let chain_config = ChainConfig {
@@ -137,9 +148,9 @@ async fn produce_block__raises_gas_price() {
     let percent = 10;
     let threshold = 50;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
-    node_config.starting_gas_price = starting_gas_price;
-    node_config.gas_price_change_percent = percent;
-    node_config.gas_price_threshold_percent = threshold;
+    node_config.starting_exec_gas_price = starting_gas_price;
+    node_config.exec_gas_price_change_percent = percent;
+    node_config.exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
@@ -158,7 +169,7 @@ async fn produce_block__raises_gas_price() {
     let _ = client.produce_blocks(1, None).await.unwrap();
 
     // then
-    let change = starting_gas_price * percent / 100;
+    let change = starting_gas_price * percent as u64 / 100;
     let expected = starting_gas_price + change;
     let latest = client.latest_gas_price().await.unwrap();
     let actual = latest.gas_price;
@@ -182,9 +193,9 @@ async fn produce_block__lowers_gas_price() {
     let percent = 10;
     let threshold = 50;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
-    node_config.starting_gas_price = starting_gas_price;
-    node_config.gas_price_change_percent = percent;
-    node_config.gas_price_threshold_percent = threshold;
+    node_config.starting_exec_gas_price = starting_gas_price;
+    node_config.exec_gas_price_change_percent = percent;
+    node_config.exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
@@ -203,7 +214,7 @@ async fn produce_block__lowers_gas_price() {
     let _ = client.produce_blocks(1, None).await.unwrap();
 
     // then
-    let change = starting_gas_price * percent / 100;
+    let change = starting_gas_price * percent as u64 / 100;
     let expected = starting_gas_price - change;
     let latest = client.latest_gas_price().await.unwrap();
     let actual = latest.gas_price;
@@ -216,10 +227,10 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     let mut node_config = Config::local_node();
     let starting_gas_price = 1000;
     let percent = 10;
-    node_config.starting_gas_price = starting_gas_price;
-    node_config.gas_price_change_percent = percent;
+    node_config.starting_exec_gas_price = starting_gas_price;
+    node_config.exec_gas_price_change_percent = percent;
     // Always increase
-    node_config.gas_price_threshold_percent = 0;
+    node_config.exec_gas_price_threshold_percent = 0;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -247,8 +258,8 @@ async fn estimate_gas_price__returns_min_gas_price_if_starting_gas_price_is_zero
 
     // Given
     let mut node_config = Config::local_node();
-    node_config.min_gas_price = MIN_GAS_PRICE;
-    node_config.starting_gas_price = 0;
+    node_config.min_exec_gas_price = MIN_GAS_PRICE;
+    node_config.starting_exec_gas_price = 0;
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
@@ -267,7 +278,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
         "--debug",
         "--poa-instant",
         "true",
-        "--starting-gas-price",
+        "--starting-exec-gas-price",
         "1000",
         "--gas-price-change-percent",
         "10",
@@ -275,7 +286,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
         "0",
     ];
     let driver = FuelCoreDriver::spawn(&args).await.unwrap();
-    let starting = driver.node.shared.config.starting_gas_price;
+    let starting = driver.node.shared.config.starting_exec_gas_price;
     let arb_blocks_to_produce = 10;
     for _ in 0..arb_blocks_to_produce {
         driver.client.produce_blocks(1, None).await.unwrap();
@@ -415,4 +426,215 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
     } = new_metadata.try_into().unwrap();
     assert_eq!(l2_block_height, new_height);
     recovered_driver.kill().await;
+}
+
+use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::RawDaBlockCosts;
+
+#[test]
+fn produce_block__l1_committed_block_effects_gas_price() {
+    // let _ = tracing_subscriber::fmt()
+    //     .with_max_level(tracing::Level::DEBUG)
+    //     .try_init();
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    // set up chain with single unrecorded block
+    let mut args = vec![
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--min-da-gas-price",
+        "100",
+    ];
+    let (first_gas_price, temp_dir) = rt.block_on(async {
+        let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+        driver.client.produce_blocks(1, None).await.unwrap();
+        let first_gas_price: u64 = driver
+            .client
+            .estimate_gas_price(0)
+            .await
+            .unwrap()
+            .gas_price
+            .into();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let temp_dir = driver.kill().await;
+        (first_gas_price, temp_dir)
+    });
+
+    assert_eq!(100u64, first_gas_price);
+
+    let mut mock = FakeServer::new();
+    let url = mock.url();
+    let costs = RawDaBlockCosts {
+        sequence_number: 1,
+        blocks_heights: vec![1],
+        da_block_height: DaBlockHeight(100),
+        total_cost: 100,
+        total_size_bytes: 100,
+    };
+    mock.add_response(costs);
+
+    // add the da committer url to the args
+    args.extend(&[
+        "--da-committer-url",
+        &url,
+        "--da-poll-interval",
+        "1",
+        "--da-p-component",
+        "1",
+        "--max-da-gas-price-change-percent",
+        "100",
+    ]);
+
+    // when
+    let new_gas_price = rt
+        .block_on(async {
+            let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
+                .await
+                .unwrap();
+            tokio::time::sleep(Duration::from_millis(2)).await;
+            driver.client.produce_blocks(1, None).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(2)).await;
+            driver.client.estimate_gas_price(0).await.unwrap().gas_price
+        })
+        .into();
+
+    // then
+    assert!(first_gas_price < new_gas_price);
+}
+
+#[allow(unused_variables)]
+mod prop_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    // the blobs costs will never change more than 12.5% between blobs
+
+    proptest! {
+        // This test will generate a many l2 blocks, and then after the block delay, it will
+        // start receiving costs for committing to DA in blobs. If the profit is positive after the
+        // first blob, we will continue to process blocks until the profit is negative (if it is
+        // negative, we will check the opposite). We will say the test passed if it can recover from
+        // the divergent profit after a set amount of l2 blocks.
+        #![proptest_config(ProptestConfig::with_cases(1))]
+        #[test]
+        fn produce_bock__algorithm_recovers_from_divergent_profit(block_delay in 11..12usize, blob_size in 50..100usize) {
+            produce_blocks__lolz(block_delay, blob_size);
+        }
+    }
+
+    #[ignore]
+    #[test]
+    fn dummy() {}
+}
+
+fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+    // given
+    let mut mock = FakeServer::new();
+    let url = mock.url();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let block_gas_limit = 3_000_000;
+    let chain_config = ChainConfig {
+        consensus_parameters: ConsensusParameters::V1(ConsensusParametersV1 {
+            block_gas_limit,
+            ..Default::default()
+        }),
+        ..ChainConfig::local_testnet()
+    };
+    let mut node_config =
+        Config::local_node_with_configs(chain_config, StateConfig::local_testnet());
+    let starting_gas_price = 1_000_000_000;
+    node_config.block_producer.coinbase_recipient = Some([5; 32].into());
+    node_config.min_da_gas_price = starting_gas_price;
+    node_config.max_da_gas_price_change_percent = 10;
+    node_config.block_production = Trigger::Never;
+    node_config.da_committer_url = Some(url.clone());
+    node_config.da_poll_interval = Some(1);
+    node_config.da_p_component = 1;
+    node_config.block_activity_threshold = 0;
+
+    let (srv, client) = rt.block_on(async {
+        let srv = FuelService::new_node(node_config.clone()).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+        // when
+        for _b in 0..block_delay {
+            let arb_tx_count = 10;
+            for i in 0..arb_tx_count {
+                let tx = arb_large_tx(189028 + i as Word, &mut rng);
+                let _status = client.submit(&tx).await.unwrap();
+            }
+            let _ = client.produce_blocks(1, None).await.unwrap();
+        }
+        let _ = client.produce_blocks(1, None).await.unwrap();
+
+        let height = srv.shared.database.gas_price().latest_height().unwrap();
+        let metadata = srv
+            .shared
+            .database
+            .gas_price()
+            .get_metadata(&height)
+            .unwrap()
+            .and_then(|x| x.v1().cloned())
+            .unwrap();
+        tracing::info!("metadata: {:?}", metadata);
+        assert_ne!(metadata.last_profit, 0);
+        (srv, client)
+    });
+
+    let half_of_blocks = block_delay as u32 / 2;
+    let blocks_heights = (1..half_of_blocks).collect();
+    mock.add_response(RawDaBlockCosts {
+        sequence_number: 1,
+        blocks_heights,
+        da_block_height: DaBlockHeight(100),
+        total_cost: 9999999999999,
+        total_size_bytes: 100,
+    });
+
+    rt.block_on(async {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        client.produce_blocks(1, None).await.unwrap();
+        client.produce_blocks(1, None).await.unwrap();
+        client.produce_blocks(1, None).await.unwrap();
+        client.produce_blocks(1, None).await.unwrap();
+        let height = srv.shared.database.gas_price().latest_height().unwrap();
+        let metadata = srv
+            .shared
+            .database
+            .gas_price()
+            .get_metadata(&height)
+            .unwrap()
+            .and_then(|x| x.v1().cloned())
+            .unwrap();
+        tracing::info!("metadata: {:?}", metadata);
+    })
+}
+
+struct FakeServer {
+    server: mockito::ServerGuard,
+}
+
+impl FakeServer {
+    fn new() -> Self {
+        let server = mockito::Server::new();
+        Self { server }
+    }
+
+    pub fn add_response(&mut self, costs: RawDaBlockCosts) {
+        let body = serde_json::to_string(&costs).unwrap();
+        let _mock = self
+            .server
+            .mock("GET", "/")
+            .with_status(201)
+            .with_body(body)
+            .create();
+    }
+
+    fn url(&self) -> String {
+        self.server.url()
+    }
 }

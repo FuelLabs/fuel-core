@@ -4,6 +4,7 @@ use crate::{
             block_bytes,
             get_block_info,
             mint_values,
+            storage::GasPriceColumn,
             GasPriceSettings,
             GasPriceSettingsProvider,
         },
@@ -54,6 +55,7 @@ use anyhow::Error;
 use fuel_core_services::{
     stream::BoxStream,
     RunnableService,
+    Service,
     ServiceRunner,
     StateWatcher,
 };
@@ -78,6 +80,7 @@ use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     UnrecordedBlocks,
 };
+use std::time::Duration;
 
 pub mod fuel_storage_unrecorded_blocks;
 
@@ -100,7 +103,7 @@ where
     L2DataStore: L2Data,
     L2DataStoreView: AtomicView<LatestView = L2DataStore>,
     AtomicStorage: GasPriceServiceAtomicStorage,
-    DA: DaBlockCostsSource,
+    DA: DaBlockCostsSource + 'static,
     SettingsProvider: GasPriceSettingsProvider,
 {
     #[allow(clippy::too_many_arguments)]
@@ -165,16 +168,19 @@ where
             self.block_stream,
         );
 
-        // TODO: Add to config
-        // https://github.com/FuelLabs/fuel-core/issues/2140
-        let poll_interval = None;
         if let Some(sequence_number) = self
             .gas_price_db
             .get_sequence_number(&metadata_height.into())?
         {
             self.da_source.set_last_value(sequence_number).await?;
         }
-        let da_service = DaSourceService::new(self.da_source, poll_interval);
+        let poll_duration = self
+            .config
+            .da_poll_interval
+            .map(|x| Duration::from_millis(x.into()));
+        let da_service = DaSourceService::new(self.da_source, poll_duration);
+        let da_service_runner = ServiceRunner::new(da_service);
+        da_service_runner.start_and_await().await?;
 
         if BlockHeight::from(latest_block_height) == self.genesis_block_height
             || first_run
@@ -183,7 +189,7 @@ where
                 l2_block_source,
                 self.shared_algo,
                 self.algo_updater,
-                da_service,
+                da_service_runner,
                 self.gas_price_db,
             );
             Ok(service)
@@ -203,7 +209,7 @@ where
                 l2_block_source,
                 self.shared_algo,
                 self.algo_updater,
-                da_service,
+                da_service_runner,
                 self.gas_price_db,
             );
             Ok(service)
@@ -340,6 +346,7 @@ where
 }
 
 #[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_arguments)]
 pub fn new_gas_price_service_v1<L2DataStore, AtomicStorage, DA, SettingsProvider>(
     v1_config: V1AlgorithmConfig,
     genesis_block_height: BlockHeight,
