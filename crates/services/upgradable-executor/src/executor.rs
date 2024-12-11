@@ -284,7 +284,10 @@ where
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
         let component = Components {
             header_to_produce: block.header,
-            transactions_source: fuel_core_executor::executor::OnceTransactionsSource::new(block.transactions),
+            transactions_source:
+                fuel_core_executor::executor::OnceTransactionsSource::new(
+                    block.transactions,
+                ),
             coinbase_recipient,
             gas_price,
         };

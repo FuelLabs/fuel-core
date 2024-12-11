@@ -578,6 +578,16 @@ impl<R> BlockExecutor<R> {
 
         Ok(())
     }
+
+    pub fn get_coinbase_info_from_mint_tx(
+        transactions: &[Transaction],
+    ) -> ExecutorResult<(u64, ContractId)> {
+        if let Some(Transaction::Mint(mint)) = transactions.last() {
+            Ok((*mint.gas_price(), mint.input_contract().contract_id))
+        } else {
+            Err(ExecutorError::MintMissing)
+        }
+    }
 }
 
 impl<R> BlockExecutor<R> {
@@ -833,16 +843,6 @@ where
 
         data.changes = block_storage_tx.into_changes();
         Ok(data)
-    }
-
-    fn get_coinbase_info_from_mint_tx(
-        transactions: &[Transaction],
-    ) -> ExecutorResult<(u64, ContractId)> {
-        if let Some(Transaction::Mint(mint)) = transactions.last() {
-            Ok((*mint.gas_price(), mint.input_contract().contract_id))
-        } else {
-            Err(ExecutorError::MintMissing)
-        }
     }
 }
 

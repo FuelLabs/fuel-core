@@ -430,14 +430,27 @@ where
 
     fn validate_inner(
         &self,
-        _block: &Block,
+        block: &Block,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
-        todo!()
-        // let component = convert `_block` into `Component`;
-        // let new_block = self.produce_inner(component)?;
-        // if new_block != _block {
-        //     return Err(ExecutorError::BlockMismatch)
-        // }
+        let (gas_price, coinbase_contract_id) = native_executor::executor::BlockExecutor::<
+            (),
+        >::get_coinbase_info_from_mint_tx(
+            block.transactions()
+        )?;
+        let components = Components {
+            header_to_produce: block.header().into(),
+            transactions_source: OnceTransactionsSource::new(
+                block.transactions_vec().clone(),
+            ),
+            coinbase_recipient: coinbase_contract_id,
+            gas_price,
+        };
+        let executed_block_result = self.produce_inner(components)?;
+        if &executed_block_result.result().block == block {
+            Ok(executed_block_result.into_validation_result())
+        } else {
+            Err(ExecutorError::BlockMismatch)
+        }
     }
 }
 
