@@ -1178,6 +1178,7 @@ type TraceFailureStatus {
 	programState: ProgramState
 	reason: String!
 	receipts: [Receipt!]!
+	executionTrace: [TraceFrame!]!
 	totalGas: U64!
 	totalFee: U64!
 }
@@ -1211,7 +1212,7 @@ type TraceFrameMemoryPatch {
 type TraceSuccessStatus {
 	programState: ProgramState
 	receipts: [Receipt!]!
-	executionTrace: [TraceFrame!]
+	executionTrace: [TraceFrame!]!
 	totalGas: U64!
 	totalFee: U64!
 }
