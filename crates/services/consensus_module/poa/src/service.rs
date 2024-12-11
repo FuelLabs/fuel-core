@@ -123,9 +123,8 @@ pub(crate) enum RequestType {
     Manual,
     Trigger,
 }
-
 pub struct MainTask<T, B, I, S, PB, C> {
-    signer: S,
+    signer: Arc<S>,
     block_producer: B,
     block_importer: I,
     txpool: T,
@@ -157,7 +156,7 @@ where
         block_producer: B,
         block_importer: I,
         p2p_port: P,
-        signer: S,
+        signer: Arc<S>,
         predefined_blocks: PB,
         clock: C,
     ) -> Self {
@@ -613,7 +612,7 @@ pub fn new_service<T, B, I, P, S, PB, C>(
     block_producer: B,
     block_importer: I,
     p2p_port: P,
-    block_signer: S,
+    block_signer: Arc<S>,
     predefined_blocks: PB,
     clock: C,
 ) -> Service<T, B, I, S, PB, C>
