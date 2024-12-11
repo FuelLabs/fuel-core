@@ -560,7 +560,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                         xor: value.xor.into(),
                         xori: value.xori.into(),
                         ecop: value.ecop.into(),
-    
+
                         aloc: value.aloc_dependent_cost.into(),
                         bsiz: value.bsiz.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
                         bldd: value.bldd.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
