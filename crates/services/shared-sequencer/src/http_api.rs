@@ -1,3 +1,4 @@
+use anyhow::Context;
 use base64::prelude::*;
 use cosmrs::AccountId;
 
@@ -92,14 +93,16 @@ pub async fn estimate_transaction(
         .send()
         .await?;
     let text = r.text().await?;
-    let resp: api_types::SimulateResponse = serde_json::from_str(&text)?;
+    let resp: api_types::SimulateResponse =
+        serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     Ok(resp.gas_info.gas_used.parse()?)
 }
 
 pub async fn get_account_prefix(api_url: &str) -> anyhow::Result<String> {
     let r = reqwest::get(format!("{api_url}/cosmos/auth/v1beta1/bech32")).await?;
     let text = r.text().await?;
-    let resp: api_types::AccountPrefix = serde_json::from_str(&text)?;
+    let resp: api_types::AccountPrefix =
+        serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     Ok(resp.bech32_prefix)
 }
 
@@ -109,21 +112,24 @@ pub async fn chain_id(api_url: &str) -> anyhow::Result<String> {
     ))
     .await?;
     let text = r.text().await?;
-    let resp: api_types::NodeInfo = serde_json::from_str(&text)?;
+    let resp: api_types::NodeInfo =
+        serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     Ok(resp.default_node_info.network)
 }
 
 pub async fn config(api_url: &str) -> anyhow::Result<api_types::Config> {
     let r = reqwest::get(format!("{api_url}/cosmos/base/node/v1beta1/config")).await?;
     let text = r.text().await?;
-    let resp: api_types::Config = serde_json::from_str(&text)?;
+    let resp: api_types::Config =
+        serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     Ok(resp)
 }
 
 pub async fn coin_denom(api_url: &str) -> anyhow::Result<String> {
     let r = reqwest::get(format!("{api_url}/cosmos/staking/v1beta1/params")).await?;
     let text = r.text().await?;
-    let resp: api_types::StakingParams = serde_json::from_str(&text)?;
+    let resp: api_types::StakingParams =
+        serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     Ok(resp.params.bond_denom)
 }
 
@@ -133,7 +139,8 @@ pub async fn get_account(
 ) -> anyhow::Result<AccountMetadata> {
     let r = reqwest::get(format!("{api_url}/cosmos/auth/v1beta1/accounts/{id}")).await?;
     let text = r.text().await?;
-    let resp: api_types::AccountResponse = serde_json::from_str(&text)?;
+    let resp: api_types::AccountResponse =
+        serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     let account_number = resp
         .account
         .account_number
@@ -166,7 +173,8 @@ pub async fn get_topic(api_url: &str, id: [u8; 32]) -> anyhow::Result<Option<Top
         return Ok(None);
     }
     let text = r.text().await?;
-    let resp: api_types::TopicResponse = serde_json::from_str(&text)?;
+    let resp: api_types::TopicResponse =
+        serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     let owner = resp
         .topic
         .owner
