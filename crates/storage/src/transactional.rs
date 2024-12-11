@@ -556,7 +556,7 @@ where
 #[cfg(feature = "test-helpers")]
 mod test {
     use super::*;
-    use crate::structured_storage::test::InMemoryStorage;
+    use crate::structured_storage::memory::InMemoryStorage;
     #[cfg(test)]
     use crate::{
         tables::Messages,

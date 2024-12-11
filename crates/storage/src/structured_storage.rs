@@ -419,8 +419,9 @@ where
     }
 }
 
-/// The module that provides helper macros for testing the structured storage.
-pub mod test {
+/// The module that provides dummy in-memory storage implementations for simple dummy storage usage and testing.
+#[cfg(feature = "std")]
+pub mod memory {
     use crate as fuel_core_storage;
     use crate::kv_store::{
         KeyValueInspect,

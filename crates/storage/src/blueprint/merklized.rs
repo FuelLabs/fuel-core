@@ -306,7 +306,7 @@ where
 }
 
 /// The macro that generates basic storage tests for the table with the merklelized structure.
-/// It uses the [`InMemoryStorage`](crate::structured_storage::test::InMemoryStorage).
+/// It uses the [`InMemoryStorage`](crate::structured_storage::memory::InMemoryStorage).
 #[cfg(feature = "test-helpers")]
 #[macro_export]
 macro_rules! basic_merklelized_storage_tests {
@@ -317,7 +317,7 @@ macro_rules! basic_merklelized_storage_tests {
         mod [< $table:snake _basic_tests >] {
             use super::*;
             use $crate::{
-                structured_storage::test::InMemoryStorage,
+                structured_storage::memory::InMemoryStorage,
                 transactional::WriteTransaction,
                 StorageAsMut,
             };

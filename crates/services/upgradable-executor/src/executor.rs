@@ -284,7 +284,7 @@ where
     ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
         let component = Components {
             header_to_produce: block.header,
-            transactions_source: OnceTransactionsSource::new(block.transactions),
+            transactions_source: fuel_core_executor::executor::OnceTransactionsSource::new(block.transactions),
             coinbase_recipient,
             gas_price,
         };
@@ -700,7 +700,7 @@ where
         let output = instance.run(module)?;
 
         match output {
-            ReturnType::ProductionV0(result) => {
+            ReturnType::ProductionV0(_result) => {
                 todo!()
                 // fuel_vm::interpreter::contract::balance_decrease(
                 //     &mut vm_db,
@@ -712,7 +712,7 @@ where
                 //     .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
                 // convert_from_v0_production_result(result)
             },
-            ReturnType::ProductionV1(result) => {
+            ReturnType::ProductionV1(_result) => {
                 todo!()
                 // fuel_vm::interpreter::contract::balance_decrease(
                 //     &mut vm_db,
@@ -898,7 +898,7 @@ mod test {
     use fuel_core_executor::executor::ExecutionData;
     use fuel_core_storage::{
         kv_store::Value,
-        structured_storage::test::InMemoryStorage,
+        structured_storage::memory::InMemoryStorage,
         tables::ConsensusParametersVersions,
         transactional::WriteTransaction,
         Result as StorageResult,

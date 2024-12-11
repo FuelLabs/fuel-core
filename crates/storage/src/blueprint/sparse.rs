@@ -481,7 +481,7 @@ where
     }
 }
 
-/// The macro that generates SMT storage tests for the table with [`crate::structured_storage::test::InMemoryStorage`].
+/// The macro that generates SMT storage tests for the table with [`crate::structured_storage::memory::InMemoryStorage`].
 #[cfg(feature = "test-helpers")]
 #[macro_export]
 macro_rules! root_storage_tests {
@@ -491,7 +491,7 @@ macro_rules! root_storage_tests {
         mod [< $table:snake _root_tests >] {
             use super::*;
             use $crate::{
-                structured_storage::test::InMemoryStorage,
+                structured_storage::memory::InMemoryStorage,
                 transactional::WriteTransaction,
                 StorageAsMut,
             };

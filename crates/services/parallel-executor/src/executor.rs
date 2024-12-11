@@ -11,7 +11,7 @@ use fuel_core_storage::{
     },
     kv_store::KeyValueInspect,
     structured_storage::{
-        test::InMemoryStorage,
+        memory::InMemoryStorage,
         StructuredStorage,
     },
     tables::{
@@ -421,7 +421,8 @@ where
                 gas_price,
             };
             let old_result = executor.produce_without_commit_with_source(components)?;
-            assert_eq!(old_result, result);
+            assert_eq!(old_result.changes(), result.changes());
+            assert_eq!(old_result.result(), result.result());
         }
 
         Ok(result)

@@ -96,7 +96,7 @@ mod smt {
     mod structured_storage_tests {
         use crate::{
             column::Column,
-            structured_storage::test::InMemoryStorage,
+            structured_storage::memory::InMemoryStorage,
             transactional::ReadTransaction,
             StorageAsMut,
             StorageMutate,

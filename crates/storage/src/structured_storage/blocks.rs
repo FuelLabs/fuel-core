@@ -63,7 +63,7 @@ impl TableWithBlueprint for FuelBlocks {
 mod tests {
     use crate::{
         structured_storage::{
-            test::InMemoryStorage,
+            memory::InMemoryStorage,
             TableWithBlueprint,
         },
         tables::FuelBlocks,

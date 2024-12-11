@@ -2,7 +2,7 @@
 
 use super::*;
 use fuel_core_storage::{
-    structured_storage::test::InMemoryStorage,
+    structured_storage::memory::InMemoryStorage,
     transactional::{
         IntoTransaction,
         StorageTransaction,

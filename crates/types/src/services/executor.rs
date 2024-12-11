@@ -52,7 +52,7 @@ pub type UncommittedValidationResult<DatabaseTransaction> =
 
 /// The result of transactions execution for block production.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ProductionResult<E = Error> {
     /// Created block during the execution of transactions. It contains only valid transactions.
     pub block: Block,

@@ -35,6 +35,11 @@ impl<Result, Changes> Uncommitted<Result, Changes> {
         &self.result
     }
 
+    /// Returns a reference to the `Changes`.
+    pub fn changes(&self) -> &Changes {
+        &self.changes
+    }
+
     /// Return the result and storage changes.
     pub fn into(self) -> (Result, Changes) {
         (self.result, self.changes)
