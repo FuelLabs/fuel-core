@@ -1,17 +1,13 @@
-use self::adapters::BlockImporterAdapter;
-use crate::{
-    combined_database::{
-        CombinedDatabase,
-        ShutdownListener,
-    },
-    database::Database,
-    service::{
-        adapters::{
-            ExecutorAdapter,
-            PoAAdapter,
-        },
-        sub_services::TxPoolSharedState,
-    },
+use std::{
+    net::SocketAddr,
+    sync::Arc,
+};
+
+pub use config::{
+    Config,
+    DbType,
+    RelayerConsensusConfig,
+    VMConfig,
 };
 use fuel_core_chain_config::{
     ConsensusConfig,
@@ -21,6 +17,7 @@ use fuel_core_poa::{
     ports::BlockImporter,
     verifier::verify_consensus,
 };
+pub use fuel_core_services::Service as ServiceTrait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -40,18 +37,23 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_core_types::blockchain::consensus::Consensus;
-use std::{
-    net::SocketAddr,
-    sync::Arc,
+
+use crate::{
+    combined_database::{
+        CombinedDatabase,
+        ShutdownListener,
+    },
+    database::Database,
+    service::{
+        adapters::{
+            ExecutorAdapter,
+            PoAAdapter,
+        },
+        sub_services::TxPoolSharedState,
+    },
 };
 
-pub use config::{
-    Config,
-    DbType,
-    RelayerConsensusConfig,
-    VMConfig,
-};
-pub use fuel_core_services::Service as ServiceTrait;
+use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
@@ -465,17 +467,19 @@ impl RunnableTask for Task {
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
+    use std::{
+        thread::sleep,
+        time::Duration,
+    };
+
+    use fuel_core_services::State;
+
     use crate::{
         service::{
             Config,
             FuelService,
         },
         ShutdownListener,
-    };
-    use fuel_core_services::State;
-    use std::{
-        thread::sleep,
-        time::Duration,
     };
 
     #[tokio::test]

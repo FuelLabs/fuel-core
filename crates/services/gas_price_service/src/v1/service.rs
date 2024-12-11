@@ -161,8 +161,10 @@ where
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
 
-        for da_block_costs in self.da_block_costs_buffer.drain(..) {
-            tracing::debug!("Updating DA block costs: {:?}", da_block_costs);
+        let drained = self.da_block_costs_buffer.drain(..);
+        tracing::info!("Drained DA block costs: {:?}", drained);
+        for da_block_costs in drained {
+            tracing::info!("Updating DA block costs: {:?}", da_block_costs);
             self.algorithm_updater.update_da_record_data(
                 &da_block_costs.l2_blocks,
                 da_block_costs.blob_size_bytes,

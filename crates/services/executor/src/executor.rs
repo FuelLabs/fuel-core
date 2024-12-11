@@ -1626,7 +1626,9 @@ where
             .iter()
             .map(|input| input.predicate_gas_used())
             .collect();
+        tracing::info!("Executing transaction: {:?}", tx_id);
         let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
+        tracing::info!("Transaction ready: {:?}", tx_id);
 
         let mut vm = Interpreter::with_storage(
             memory,

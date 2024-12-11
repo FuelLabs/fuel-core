@@ -269,9 +269,9 @@ impl L2ActivityTracker {
     }
 
     pub fn safety_mode(&self) -> DAGasPriceSafetyMode {
-        if self.chain_activity > self.capped_activity_threshold {
+        if self.chain_activity >= self.capped_activity_threshold {
             DAGasPriceSafetyMode::Normal
-        } else if self.chain_activity > self.decrease_activity_threshold {
+        } else if self.chain_activity >= self.decrease_activity_threshold {
             DAGasPriceSafetyMode::Capped
         } else {
             DAGasPriceSafetyMode::AlwaysDecrease
@@ -279,7 +279,15 @@ impl L2ActivityTracker {
     }
 
     pub fn update(&mut self, block_usage: ClampedPercentage) {
+        tracing::info!("Block usage: {:?}", block_usage);
+        tracing::info!("Chain activity: {}", self.chain_activity);
+        tracing::info!("threshold: {:?}", self.block_activity_threshold);
         if block_usage < self.block_activity_threshold {
+            tracing::info!(
+                "Decreasing activity {:?} < {:?}",
+                block_usage,
+                self.block_activity_threshold
+            );
             self.chain_activity = self.chain_activity.saturating_sub(1);
         } else {
             self.chain_activity =
@@ -414,7 +422,9 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn update_da_rewards(&mut self, fee_wei: u128) {
+        tracing::info!("Fee: {}", fee_wei);
         let block_da_reward = self.da_portion_of_fee(fee_wei);
+        tracing::info!("DA reward: {}", block_da_reward);
         self.total_da_rewards_excess =
             self.total_da_rewards_excess.saturating_add(block_da_reward);
     }
@@ -498,8 +508,8 @@ impl AlgorithmUpdaterV1 {
                     0u64
                 }
             });
-        tracing::debug!("Profit: {}", self.last_profit);
-        tracing::debug!(
+        tracing::info!("Profit: {}", self.last_profit);
+        tracing::info!(
             "DA gas price change: p: {}, d: {}, change: {}, new: {}",
             p,
             d,
@@ -518,6 +528,7 @@ impl AlgorithmUpdaterV1 {
                 DAGasPriceSafetyMode::Normal => maybe_da_change,
                 DAGasPriceSafetyMode::Capped => 0,
                 DAGasPriceSafetyMode::AlwaysDecrease => {
+                    tracing::info!("Activity is low, decreasing DA gas price");
                     self.max_change().saturating_mul(-1)
                 }
             }

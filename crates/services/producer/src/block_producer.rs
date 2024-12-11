@@ -245,10 +245,13 @@ where
     }
 
     async fn calculate_gas_price(&self) -> anyhow::Result<u64> {
-        self.gas_price_provider
+        let price = self
+            .gas_price_provider
             .next_gas_price()
             .await
-            .map_err(|e| anyhow!("No gas price found: {e:?}"))
+            .map_err(|e| anyhow!("No gas price found: {e:?}"));
+        tracing::info!("Gas price: {:?}", price);
+        price
     }
 }
 
