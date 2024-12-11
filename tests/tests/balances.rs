@@ -461,6 +461,7 @@ mod pagination {
                 )
                 .await
                 .unwrap();
+            assert!(paginated_result.results.len() <= chunk_size as usize);
 
             cursor = paginated_result.cursor;
             actual_balances.extend(
