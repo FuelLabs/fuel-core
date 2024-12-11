@@ -41,6 +41,7 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
+    fuel_vm::interpreter::trace::Trigger,
     services::{
         block_importer::SharedImportResult,
         executor::TransactionExecutionStatus,
@@ -121,6 +122,16 @@ impl BlockProducerPort for BlockProducerAdapter {
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         self.block_producer
             .dry_run(transactions, height, time, utxo_validation, gas_price)
+            .await
+    }
+
+    async fn exection_trace_block(
+        &self,
+        height: BlockHeight,
+        trigger: Trigger,
+    ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
+        self.block_producer
+            .exection_trace_block(height, trigger)
             .await
     }
 }

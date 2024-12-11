@@ -35,6 +35,7 @@ use fuel_core_types::{
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
+    fuel_vm::interpreter::trace::Trigger,
     services::{
         block_producer::Components,
         executor::{
@@ -341,6 +342,7 @@ where
         let options = ExecutionOptions {
             extra_tx_checks: utxo_validation,
             backtrace: self.config.backtrace,
+            execution_trace: None,
         };
 
         let component = Components {
@@ -372,6 +374,17 @@ where
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let options = self.config.as_ref().into();
         self.validate_inner(block, options)
+    }
+
+    pub fn execution_traces(
+        &self,
+        block: &Block,
+        trigger: Trigger,
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+        let mut options: ExecutionOptions = self.config.as_ref().into();
+        options.execution_trace = Some(trigger);
+        self.validate_inner(block, options)
+            .map(|v| v.into_result().tx_status)
     }
 
     #[cfg(feature = "wasm-executor")]

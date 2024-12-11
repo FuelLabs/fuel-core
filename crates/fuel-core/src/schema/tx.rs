@@ -51,6 +51,7 @@ use fuel_core_types::{
         Bytes32,
         Cacheable,
         Transaction as FuelTx,
+        TxId,
         UniqueIdentifier,
     },
     fuel_types::{
@@ -73,6 +74,8 @@ use std::{
 };
 use types::{
     DryRunTransactionExecutionStatus,
+    TraceTransactionExecutionStatus,
+    TraceTrigger,
     Transaction,
 };
 
@@ -329,6 +332,38 @@ impl TxMutation {
             .collect();
 
         Ok(tx_statuses)
+    }
+
+    /// Get execution trace for an already-executed transaction.
+    #[graphql(complexity = "query_costs().dry_run + child_complexity")]
+    async fn trace_tx(
+        &self,
+        ctx: &Context<'_>,
+        tx_id: HexString,
+        trigger: TraceTrigger,
+    ) -> async_graphql::Result<Vec<TraceTransactionExecutionStatus>> {
+        let tx_id = TxId::try_from(tx_id.0.as_slice()).expect("TOOD: handle this");
+
+        // Get the block height of the transaction
+        let fuel_core_types::services::txpool::TransactionStatus::Success {
+            block_height,
+            ..
+        } = ctx.read_view()?.tx_status(&tx_id)?
+        else {
+            return Err(async_graphql::Error::new(
+                "The transaction is not part of any block (yet)",
+            ));
+        };
+
+        let block_producer = ctx.data_unchecked::<BlockProducer>();
+        let status = block_producer
+            .exection_trace_block(block_height, trigger.into())
+            .await?;
+        dbg!(&status);
+        Ok(status
+            .into_iter()
+            .map(TraceTransactionExecutionStatus)
+            .collect())
     }
 
     /// Submits transaction to the `TxPool`.

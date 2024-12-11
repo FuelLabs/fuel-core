@@ -17,6 +17,7 @@ use anyhow::{
 use fuel_core_storage::transactional::{
     AtomicView,
     Changes,
+    HistoricalView,
 };
 use fuel_core_types::{
     blockchain::{
@@ -39,6 +40,7 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
+    fuel_vm::interpreter::trace::Trigger,
     services::{
         block_producer::Components,
         executor::{
@@ -374,6 +376,35 @@ where
         } else {
             Ok(tx_statuses)
         }
+    }
+}
+
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+where
+    ViewProvider: HistoricalView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
+    Executor: ports::BlockExecutionTracer + 'static,
+    GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
+{
+    /// Re-executes an old block, getting full execution traces.
+    pub async fn exection_trace_block(
+        &self,
+        height: BlockHeight,
+        trigger: Trigger,
+    ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
+        let view = self.view_provider.latest_view()?;
+
+        let block = view.get_block(&height)?;
+        let transactions = block
+            .transactions()
+            .iter()
+            .map(|id| view.get_transaction(id).map(|tx| tx.into_owned()))
+            .collect::<Result<Vec<_>, _>>()?;
+        let block = block.into_owned().uncompress(transactions);
+
+        Ok(self.executor.execution_trace(&block, trigger)?)
     }
 }
 

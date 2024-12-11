@@ -112,11 +112,7 @@ use fuel_core_types::{
             IntoChecked,
         },
         interpreter::{
-            CheckedMetadata as CheckedMetadataTrait,
-            ExecutableTransaction,
-            InterpreterParams,
-            Memory,
-            MemoryInstance,
+            trace::Frame, CheckedMetadata as CheckedMetadataTrait, ExecutableTransaction, InterpreterParams, Memory, MemoryInstance
         },
         state::StateTransition,
         Backtrace as FuelBacktrace,
@@ -253,6 +249,9 @@ pub struct ExecutionOptions {
     pub extra_tx_checks: bool,
     /// Print execution backtraces if transaction execution reverts.
     pub backtrace: bool,
+    /// Record execution traces for each transaction with the given trigger
+    #[serde(default)]
+    pub execution_trace: Option<fuel_vm::interpreter::trace::Trigger>,
 }
 
 /// The executor instance performs block production and validation. Given a block, it will execute all
@@ -1252,7 +1251,7 @@ where
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
-        let (reverted, state, tx, receipts) = self.attempt_tx_execution_with_vm(
+        let (reverted, state, tx, receipts, trace_frames) = self.attempt_tx_execution_with_vm(
             checked_tx,
             header,
             coinbase_contract_id,
@@ -1280,6 +1279,7 @@ where
             &tx,
             execution_data,
             receipts,
+            trace_frames,
             gas_price,
             reverted,
             state,
@@ -1352,6 +1352,7 @@ where
             result: TransactionExecutionResult::Success {
                 result: None,
                 receipts: vec![],
+                execution_trace: Vec::new(),
                 total_gas: 0,
                 total_fee: 0,
             },
@@ -1459,6 +1460,7 @@ where
         tx: &Tx,
         execution_data: &mut ExecutionData,
         receipts: Vec<Receipt>,
+        execution_trace: Vec<Frame>,
         gas_price: Word,
         reverted: bool,
         state: ProgramState,
@@ -1493,6 +1495,7 @@ where
             TransactionExecutionResult::Failed {
                 result: Some(state),
                 receipts,
+                execution_trace,
                 total_gas: used_gas,
                 total_fee: tx_fee,
             }
@@ -1501,6 +1504,7 @@ where
             TransactionExecutionResult::Success {
                 result: Some(state),
                 receipts,
+                execution_trace,
                 total_gas: used_gas,
                 total_fee: tx_fee,
             }
@@ -1598,7 +1602,7 @@ where
         gas_price: Word,
         storage_tx: &mut TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
+    ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>, Vec<Frame>)>
     where
         Tx: ExecutableTransaction + Cacheable,
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
@@ -1626,13 +1630,18 @@ where
             .iter()
             .map(|input| input.predicate_gas_used())
             .collect();
-        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
+        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params, None)?; // TODO: block_height argument?
 
         let mut vm = Interpreter::with_storage(
             memory,
             vm_db,
             InterpreterParams::new(gas_price, &self.consensus_params),
         );
+
+        let mut trace_tmp_memory = MemoryInstance::new();
+        if let Some(trigger) = self.options.execution_trace {
+            vm = vm.with_trace_recording(trigger, &mut trace_tmp_memory);
+        }
 
         let vm_result: StateTransition<_> = vm
             .transact(ready_tx)
@@ -1643,6 +1652,7 @@ where
             .into();
         let reverted = vm_result.should_revert();
 
+        let trace_frames = vm.trace_frames().to_vec();
         let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
@@ -1664,7 +1674,7 @@ where
         }
 
         self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
-        Ok((reverted, state, tx, receipts))
+        Ok((reverted, state, tx, receipts, trace_frames))
     }
 
     fn verify_inputs_exist_and_values_match<T>(

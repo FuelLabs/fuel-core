@@ -53,7 +53,10 @@ use fuel_core_types::{
         ContractId,
         Nonce,
     },
-    fuel_vm::interpreter::Memory,
+    fuel_vm::interpreter::{
+        trace::Trigger,
+        Memory,
+    },
     services::{
         executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
@@ -233,6 +236,12 @@ pub trait BlockProducerPort: Send + Sync {
         time: Option<Tai64>,
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
+    ) -> anyhow::Result<Vec<TransactionExecutionStatus>>;
+
+    async fn exection_trace_block(
+        &self,
+        height: BlockHeight,
+        trigger: Trigger,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>>;
 }
 

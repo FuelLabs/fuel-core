@@ -734,6 +734,10 @@ type Mutation {
 	"""
 	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64): [DryRunTransactionExecutionStatus!]!
 	"""
+	Get execution trace for an already-executed transaction.
+	"""
+	traceTx(txId: HexString!, trigger: TraceTrigger!): [TraceTransactionExecutionStatus!]!
+	"""
 	Submits transaction to the `TxPool`.
 	
 	Returns submitted transaction if the transaction is included in the `TxPool` without problems.
@@ -1169,6 +1173,70 @@ type SuccessStatus {
 }
 
 scalar Tai64Timestamp
+
+type TraceFailureStatus {
+	programState: ProgramState
+	reason: String!
+	receipts: [Receipt!]!
+	totalGas: U64!
+	totalFee: U64!
+}
+
+type TraceFrame {
+	"""
+	Register values
+	"""
+	registers: [U64!]!
+	"""
+	Changes to memory `(address, bytes)` that occurred since the last frame
+	"""
+	memoryDiff: [TraceFrameMemoryPatch!]!
+	"""
+	How many of the original receipts have been produced by this point
+	"""
+	receiptCount: Int!
+}
+
+type TraceFrameMemoryPatch {
+	"""
+	Start address
+	"""
+	start: Int!
+	"""
+	Bytes of data
+	"""
+	bytes: HexString!
+}
+
+type TraceSuccessStatus {
+	programState: ProgramState
+	receipts: [Receipt!]!
+	executionTrace: [TraceFrame!]
+	totalGas: U64!
+	totalFee: U64!
+}
+
+type TraceTransactionExecutionStatus {
+	id: TransactionId!
+	status: TraceTransactionStatus!
+	receipts: [Receipt!]!
+}
+
+union TraceTransactionStatus = TraceSuccessStatus | TraceFailureStatus
+
+"""
+One of the films in the Star Wars Trilogy
+"""
+enum TraceTrigger {
+	"""
+	After each instruction
+	"""
+	ON_INSTRUCTION
+	"""
+	After an instruction has created a receipt
+	"""
+	ON_RECEIPT
+}
 
 type Transaction {
 	id: TransactionId!
