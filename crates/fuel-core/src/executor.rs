@@ -778,13 +778,15 @@ mod tests {
 
             let producer = create_executor(database.clone(), config.clone());
 
+            let mut partial_header = PartialBlockHeader::default();
+            partial_header.consensus.height = 1.into();
             let ProductionResult {
                 block,
                 skipped_transactions,
                 ..
             } = producer
                 .produce_without_commit_with_source(Components {
-                    header_to_produce: PartialBlockHeader::default(),
+                    header_to_produce: partial_header,
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
                     gas_price: price,
                     coinbase_recipient: recipient,
@@ -1028,6 +1030,7 @@ mod tests {
             );
 
             let mut block = Block::default();
+            block.header_mut().set_block_height(1.into());
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
@@ -1043,12 +1046,22 @@ mod tests {
                 .validate_and_commit(&block)
                 .expect_err("Expected error because coinbase if invalid");
 
+            // The error is different for parallel and non-parallel executors
+            // because in parallel mode we are not executing the mint transaction
+            // that is in the block but we create a correct one inside the block.
+            // This means that the block we created internally is not the same as the block
+            // we are validating because the mint transaction is correct.
+            // And so the error reported is BlockMismatch.
+            #[cfg(not(feature = "parallel-executor"))]
             assert!(matches!(
                 validation_err,
                 ExecutorError::InvalidTransaction(CheckError::Validity(
                     ValidityError::TransactionMintNonBaseAsset
                 ))
             ));
+
+            #[cfg(feature = "parallel-executor")]
+            assert_eq!(validation_err, ExecutorError::BlockMismatch);
         }
 
         #[test]
@@ -1063,6 +1076,7 @@ mod tests {
             );
 
             let mut block = Block::default();
+            block.header_mut().set_block_height(1.into());
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
@@ -1070,10 +1084,21 @@ mod tests {
             let validation_err = validator
                 .validate_and_commit(&block)
                 .expect_err("Expected error because coinbase if invalid");
+
+            // The error is different for parallel and non-parallel executors
+            // because in parallel mode we are not executing the mint transaction
+            // that is in the block but we create a correct one inside the block.
+            // This means that the block we created internally is not the same as the block
+            // we are validating because the mint transaction is correct.
+            // And so the error reported is BlockMismatch.
+            #[cfg(not(feature = "parallel-executor"))]
             assert!(matches!(
                 validation_err,
                 ExecutorError::CoinbaseAmountMismatch
             ));
+
+            #[cfg(feature = "parallel-executor")]
+            assert_eq!(validation_err, ExecutorError::BlockMismatch);
         }
     }
 
@@ -1105,10 +1130,11 @@ mod tests {
             .finalize();
         let tx: Transaction = script.into();
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.clone()],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult {
             skipped_transactions,

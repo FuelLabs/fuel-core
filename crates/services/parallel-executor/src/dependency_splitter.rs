@@ -89,11 +89,12 @@ impl DependencySplitter {
         }
     }
 
-    pub fn verify_transaction(
-        &self,
-        tx: &MaybeCheckedTransaction,
+    pub fn process(
+        &mut self,
+        tx: MaybeCheckedTransaction,
         tx_id: TxId,
-    ) -> ExecutorResult<u64> {
+    ) -> ExecutorResult<()> {
+        let gas = tx.max_gas(&self.consensus_parameters)?;
         let inputs = tx.inputs()?;
 
         for input in inputs {
@@ -131,16 +132,6 @@ impl DependencySplitter {
                 }
             }
         }
-        Ok(tx.max_gas(&self.consensus_parameters)?)
-    }
-
-    pub fn process(
-        &mut self,
-        tx: MaybeCheckedTransaction,
-        tx_id: TxId,
-        gas: u64,
-    ) -> ExecutorResult<()> {
-        let inputs = tx.inputs()?;
 
         if is_blob(&tx) {
             // Blobs can't touch contracts, so we don't worry about them.

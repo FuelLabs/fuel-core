@@ -9,10 +9,7 @@ use fuel_core_storage::{
         changes_iterator::ChangesIterator,
         IteratorOverTable,
     },
-    kv_store::{
-        KeyValueInspect,
-        WriteOperation,
-    },
+    kv_store::KeyValueInspect,
     structured_storage::StructuredStorage,
     tables::{
         Coins,
@@ -26,7 +23,6 @@ use fuel_core_storage::{
         ConflictPolicy,
         HistoricalView,
         Modifiable,
-        ReferenceBytesKey,
         StorageTransaction,
     },
     StorageAsMut,
@@ -84,8 +80,9 @@ use fuel_core_upgradable_executor::{
         },
     },
 };
+#[cfg(debug_assertions)]
+use std::collections::HashMap;
 use std::{
-    collections::BTreeMap,
     num::NonZeroUsize,
     sync::{
         Arc,
@@ -310,6 +307,9 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
+        #[cfg(debug_assertions)]
+        let mut saved_txs: HashMap<TxId, MaybeCheckedTransaction> = HashMap::new();
+
         let prev_height = components
             .header_to_produce
             .height()
@@ -379,22 +379,23 @@ where
         let mut splitter = DependencySplitter::new(consensus_parameters.clone());
 
         let mut skipped_transactions_ids = vec![];
-        let mut skipped_transactions = vec![];
 
         for tx in txs {
+            #[cfg(debug_assertions)]
+            {
+                let tx_id = tx.id(&chain_id);
+                saved_txs.insert(tx_id, tx.clone());
+            }
             if tx.is_mint() {
                 return Err(ExecutorError::MintIsNotLastTransaction);
             }
             let tx_id = tx.id(&chain_id);
-            let result = splitter.verify_transaction(&tx, tx_id);
-            match result {
-                Ok(gas) => splitter.process(tx, tx_id, gas)?,
-                Err(err) => {
-                    skipped_transactions_ids.push((tx_id, err));
-                    skipped_transactions.push(tx);
-                    continue;
-                }
-            };
+
+            let result = splitter.process(tx, tx_id);
+
+            if let Err(e) = result {
+                skipped_transactions_ids.push((tx_id, e));
+            }
         }
 
         let buckets = splitter.split_equally(self.number_of_cores);
@@ -458,9 +459,12 @@ where
         {
             // Add the skipped transactions to the source of normal execution so that they appears on the result also.
             let mut transactions = Vec::with_capacity(
-                skipped_transactions
+                result
+                    .result()
+                    .block
+                    .transactions()
                     .len()
-                    .saturating_add(result.result().block.transactions().len()),
+                    .saturating_add(result.result().skipped_transactions.len()),
             );
             transactions.extend(
                 result
@@ -473,7 +477,13 @@ where
                     .iter()
                     .map(|tx| MaybeCheckedTransaction::Transaction(tx.clone())),
             );
-            transactions.extend(skipped_transactions);
+            transactions.extend(
+                result
+                    .result()
+                    .skipped_transactions
+                    .iter()
+                    .map(|(tx_id, _)| saved_txs.get(tx_id).cloned().unwrap()),
+            );
             let components = Components {
                 header_to_produce,
                 transactions_source: OnceTransactionsSource::new_maybe_checked(
@@ -484,20 +494,7 @@ where
             };
             let old_result = executor.produce_without_commit_with_source(components)?;
             assert_eq!(old_result.result(), result.result());
-            let old_results_changes_column_ordered = old_result
-                .changes()
-                .iter()
-                .map(|(k, v)| (*k, v.clone()))
-                .collect::<BTreeMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>>();
-            let results_changes_column_ordered = result
-                .changes()
-                .iter()
-                .map(|(k, v)| (*k, v.clone()))
-                .collect::<BTreeMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>>();
-            assert_eq!(
-                old_results_changes_column_ordered,
-                results_changes_column_ordered
-            );
+            assert_eq!(old_result.changes(), result.changes());
         }
 
         Ok(result)
@@ -527,6 +524,12 @@ where
             gas_price,
         };
         let executed_block_result = self.produce_inner(components)?;
+
+        if let Some((_, error)) =
+            executed_block_result.result().skipped_transactions.first()
+        {
+            return Err(error.clone());
+        }
 
         if &executed_block_result.result().block == block {
             Ok(executed_block_result.into_validation_result())
