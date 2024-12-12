@@ -382,15 +382,13 @@ where
     F: Fn(&CoinsToSpendIndexEntry, u64) -> bool,
 {
     let mut coins_total_value: u64 = 0;
-    let mut count = 0;
     let mut coins = Vec::with_capacity(max as usize);
     while let Some(coin) = coins_stream.next().await {
         let coin = coin?;
         if !is_excluded(&coin, excluded_ids)? {
-            if count >= max || predicate(&coin, coins_total_value) {
+            if coins.len() >= max as usize || predicate(&coin, coins_total_value) {
                 break;
             }
-            count = count.saturating_add(1);
             let amount = coin.0.amount();
             coins_total_value = coins_total_value.saturating_add(amount);
             coins.push(coin);
