@@ -558,7 +558,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     };
     let mut node_config =
         Config::local_node_with_configs(chain_config, StateConfig::local_testnet());
-    let starting_gas_price = 1_000_000_000;
+    let starting_gas_price = 10_000_000;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.min_da_gas_price = starting_gas_price;
     node_config.max_da_gas_price_change_percent = 10;
@@ -596,7 +596,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     let half_of_blocks = block_delay as u32 / 2;
     let blocks_heights: Vec<_> = (1..half_of_blocks).collect();
     let count = blocks_heights.len() as u128;
-    let new_price_gwei = 100;
+    let new_price_gwei = 500_000;
     let new_price = new_price_gwei * 1_000_000_000; // Wei
     let cost = count * new_price;
     mock.add_response(RawDaBlockCosts {
@@ -627,7 +627,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
         gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
     });
 
-    let tries = 200;
+    let tries = 100;
 
     let mut success = false;
     let mut success_iteration = i32::MAX;
@@ -646,7 +646,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
             tracing::info!("metadata: {:?}", metadata);
             profits.push(profit);
             gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
-            if profit > 0 {
+            if profit > 0 && !success {
                 success = true;
                 success_iteration = i as i32;
             }

@@ -328,7 +328,8 @@ where
             };
 
         let block_bytes = block_bytes(&block);
-        let (fee_wei, _) = mint_values(&block)?;
+        let (fee_gwei, _) = mint_values(&block)?;
+        let fee_wei = fee_gwei.saturating_mul(1_000_000_000);
         updater.update_l2_block_data(
             height,
             block_gas_used,

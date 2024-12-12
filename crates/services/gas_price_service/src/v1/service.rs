@@ -183,7 +183,7 @@ where
                 .map_err(|err| anyhow!(err))?;
         }
 
-        let fee_in_wei = u128::from(block_fees).saturating_add(1_000_000_000);
+        let fee_in_wei = u128::from(block_fees).saturating_mul(1_000_000_000);
         self.algorithm_updater.update_l2_block_data(
             height,
             gas_used,
