@@ -1394,6 +1394,60 @@ mod tests {
             assert!(matches!(result, Err(actual_error)
                 if CoinsQueryError::StorageError(fuel_core_storage::Error::NotFound("S1", "S2")) == actual_error));
         }
+
+        #[tokio::test]
+        async fn selection_algorithm_should_bail_on_incorrect_max() {
+            // Given
+            const MAX: u16 = 0;
+            const TOTAL: u64 = 101;
+
+            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+
+            let coins_to_spend_iter = CoinsToSpendIndexIter {
+                big_coins_iter: std::iter::empty().into_boxed(),
+                dust_coins_iter: std::iter::empty().into_boxed(),
+            };
+
+            let result = select_coins_to_spend(
+                coins_to_spend_iter,
+                TOTAL,
+                MAX,
+                &excluded,
+                BATCH_SIZE,
+            )
+            .await;
+
+            // Then
+            assert!(matches!(result, Err(actual_error)
+                if CoinsQueryError::IncorrectQueryParameters{ provided_total: 101, provided_max: 0 } == actual_error));
+        }
+
+        #[tokio::test]
+        async fn selection_algorithm_should_bail_on_incorrect_total() {
+            // Given
+            const MAX: u16 = 101;
+            const TOTAL: u64 = 0;
+
+            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+
+            let coins_to_spend_iter = CoinsToSpendIndexIter {
+                big_coins_iter: std::iter::empty().into_boxed(),
+                dust_coins_iter: std::iter::empty().into_boxed(),
+            };
+
+            let result = select_coins_to_spend(
+                coins_to_spend_iter,
+                TOTAL,
+                MAX,
+                &excluded,
+                BATCH_SIZE,
+            )
+            .await;
+
+            // Then
+            assert!(matches!(result, Err(actual_error)
+                if CoinsQueryError::IncorrectQueryParameters{ provided_total: 0, provided_max: 101 } == actual_error));
+        }
     }
 
     #[derive(Clone, Debug)]
