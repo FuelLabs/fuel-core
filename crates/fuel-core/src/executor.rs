@@ -187,16 +187,14 @@ mod tests {
     }
 
     fn add_consensus_parameters(
-        mut database: Database,
+        database: &mut Database,
         consensus_parameters: &ConsensusParameters,
-    ) -> Database {
+    ) {
         // Set the consensus parameters for the executor.
-        let mut tx = database.write_transaction();
-        tx.storage_as_mut::<ConsensusParametersVersions>()
+        database
+            .storage_as_mut::<ConsensusParametersVersions>()
             .insert(&0, consensus_parameters)
             .unwrap();
-        tx.commit().unwrap();
-        database
     }
 
     #[cfg(not(feature = "parallel-executor"))]
@@ -210,14 +208,14 @@ mod tests {
             native_executor_version: None,
         };
 
-        let database = add_consensus_parameters(database, &config.consensus_parameters);
+        add_consensus_parameters(database, &config.consensus_parameters);
 
         Executor::new(database, DisabledRelayer, executor_config)
     }
 
     #[cfg(feature = "parallel-executor")]
     fn create_executor(
-        database: Database,
+        mut database: Database,
         config: Config,
     ) -> Executor<Database, DisabledRelayer> {
         use std::num::NonZeroUsize;
@@ -231,9 +229,8 @@ mod tests {
             number_of_cores: NonZeroUsize::new(3).unwrap(),
         };
 
-        let mut database =
-            add_consensus_parameters(database, &config.consensus_parameters);
         let prev_block = Block::default();
+        add_consensus_parameters(&mut database, &config.consensus_parameters);
         store_block(&mut database, &prev_block);
         Executor::new(database, DisabledRelayer, executor_config)
     }
@@ -390,9 +387,9 @@ mod tests {
             .into()
     }
 
-    pub(crate) fn create_contract<R: Rng>(
+    pub(crate) fn create_contract(
         contract_code: Vec<u8>,
-        rng: &mut R,
+        rng: &mut StdRng,
     ) -> (Create, ContractId) {
         let salt: Salt = rng.gen();
         let contract = Contract::from(contract_code.clone());
@@ -402,7 +399,7 @@ mod tests {
 
         let tx =
             TransactionBuilder::create(contract_code.into(), salt, Default::default())
-                .add_fee_input()
+                .add_random_fee_input(rng)
                 .add_output(Output::contract_created(contract_id, state_root))
                 .finalize();
         (tx, contract_id)
@@ -1350,6 +1347,8 @@ mod tests {
 
         let mut block = Block::default();
         *block.transactions_mut() = vec![tx];
+        block.header_mut().set_block_height(1.into());
+        block.header_mut().recalculate_metadata();
 
         let ProductionResult { mut block, .. } =
             producer.produce_and_commit(block.into()).unwrap();
@@ -1377,10 +1376,11 @@ mod tests {
             },
         );
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into()],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult {
             skipped_transactions,
@@ -1445,10 +1445,11 @@ mod tests {
             },
         );
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx1.into(), tx2.clone().into()],
         };
+        block.header.consensus.height = 1.into();
 
         // The first input should be `Unspent` before execution.
         db.storage::<Coins>()
@@ -1514,10 +1515,11 @@ mod tests {
             },
         );
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into()],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult {
             skipped_transactions,
@@ -1563,10 +1565,11 @@ mod tests {
             },
         );
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into()],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult {
             skipped_transactions,
@@ -1585,17 +1588,19 @@ mod tests {
 
     #[test]
     fn transaction_consuming_too_much_gas_are_skipped() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
         // Gather the gas consumption of the transaction
         let mut executor = create_executor(Default::default(), Default::default());
-        let block: PartialFuelBlock = PartialFuelBlock {
+        let mut block: PartialFuelBlock = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![TransactionBuilder::script(vec![], vec![])
                 .max_fee_limit(100_000_000)
-                .add_fee_input()
+                .add_random_fee_input(&mut rng)
                 .script_gas_limit(0)
                 .tip(123)
                 .finalize_as_transaction()],
         };
+        block.header.consensus.height = 1.into();
 
         // When
         let ProductionResult { tx_status, .. } =
@@ -1607,7 +1612,7 @@ mod tests {
         for i in 0..10 {
             let tx = TransactionBuilder::script(vec![], vec![])
                 .max_fee_limit(100_000_000)
-                .add_fee_input()
+                .add_random_fee_input(&mut rng)
                 .script_gas_limit(0)
                 .tip(i * 100)
                 .finalize_as_transaction();
@@ -1621,10 +1626,11 @@ mod tests {
             .set_block_gas_limit(block_gas_limit);
         let mut executor = create_executor(Default::default(), config);
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: txs,
         };
+        block.header.consensus.height = 1.into();
 
         // When
         let ProductionResult {
@@ -1646,6 +1652,7 @@ mod tests {
 
     #[test]
     fn skipped_txs_not_affect_order() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
         // `tx1` is invalid because it doesn't have inputs for max fee.
         // `tx2` is a `Create` transaction with some code inside.
         // `tx3` is a `Script` transaction that depends on `tx2`. It will be skipped
@@ -1654,7 +1661,7 @@ mod tests {
         // The test checks that execution for the block with transactions [tx1, tx2, tx3] skips
         // transaction `tx1` and produce a block [tx2, tx3] with the expected order.
         let tx1 = TransactionBuilder::script(vec![], vec![])
-            .add_fee_input()
+            .add_random_fee_input(&mut rng)
             .script_gas_limit(1000000)
             .tip(1000000)
             .finalize_as_transaction();
@@ -1662,10 +1669,11 @@ mod tests {
 
         let mut executor = create_executor(Default::default(), Default::default());
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx1.clone(), tx2.clone().into(), tx3.clone().into()],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult {
             block,
@@ -1709,10 +1717,11 @@ mod tests {
         let db = &Database::default();
         let mut executor = create_executor(db.clone(), Default::default());
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult { block, .. } = executor.produce_and_commit(block).unwrap();
 
@@ -1758,7 +1767,7 @@ mod tests {
             },
         );
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
                     height: 1.into(),
@@ -1768,6 +1777,7 @@ mod tests {
             },
             transactions: vec![create.into(), non_modify_state_tx],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult {
             block, tx_status, ..
@@ -1813,7 +1823,7 @@ mod tests {
             },
         );
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
                     height: 1.into(),
@@ -1823,6 +1833,7 @@ mod tests {
             },
             transactions: vec![create.into(), non_modify_state_tx],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult {
             block, tx_status, ..
@@ -1899,7 +1910,10 @@ mod tests {
             .start_script(script, script_data)
             .contract_input(contract_id)
             .coin_input(asset_id, transfer_amount)
-            .fee_input()
+            .coin_input(
+                *ConsensusParameters::standard().base_asset_id(),
+                u32::MAX as u64,
+            )
             .contract_output(&contract_id)
             .build()
             .transaction()
@@ -2003,7 +2017,10 @@ mod tests {
             .start_script(script, script_data)
             .contract_input(contract_id)
             .coin_input(asset_id, transfer_amount)
-            .fee_input()
+            .coin_input(
+                *ConsensusParameters::standard().base_asset_id(),
+                u32::MAX as u64,
+            )
             .contract_output(&contract_id)
             .build()
             .transaction()
@@ -2183,7 +2200,7 @@ mod tests {
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
-                    height: 6.into(),
+                    height: 1.into(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -2213,10 +2230,11 @@ mod tests {
         // create a contract in block 1
         // verify a block 2 with tx containing contract id from block 1, using the correct contract utxo_id from block 1.
         let (tx, contract_id) = create_contract(vec![], &mut rng);
-        let first_block = PartialFuelBlock {
+        let mut first_block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into()],
         };
+        first_block.header.consensus.height = 1.into();
 
         let tx2: Transaction = TxBuilder::new(2322)
             .start_script(vec![op::ret(1)], vec![])
@@ -2241,15 +2259,14 @@ mod tests {
 
         let db = Database::default();
 
-        let mut setup = create_executor(db.clone(), Default::default());
+        let mut producer = create_executor(db.clone(), Default::default());
 
         let ProductionResult {
             skipped_transactions,
             ..
-        } = setup.produce_and_commit(first_block).unwrap();
+        } = producer.produce_and_commit(first_block).unwrap();
         assert!(skipped_transactions.is_empty());
 
-        let producer = create_executor(db.clone(), Default::default());
         let ProductionResult {
             block: second_block,
             skipped_transactions,
@@ -2260,8 +2277,7 @@ mod tests {
             .into_result();
         assert!(skipped_transactions.is_empty());
 
-        let verifier = create_executor(db, Default::default());
-        let verify_result = verifier.validate(&second_block);
+        let verify_result = producer.validate(&second_block);
         assert!(verify_result.is_ok());
     }
 
@@ -2276,19 +2292,23 @@ mod tests {
         let tx2: Transaction = TxBuilder::new(2322)
             .start_script(vec![op::addi(0x10, RegId::ZERO, 0), op::ret(1)], vec![])
             .contract_input(contract_id)
-            .fee_input()
+            .coin_input(
+                *ConsensusParameters::standard().base_asset_id(),
+                u32::MAX as u64,
+            )
             .contract_output(&contract_id)
             .build()
             .transaction()
             .clone()
             .into();
 
-        let first_block = PartialFuelBlock {
+        let mut first_block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into(), tx2],
         };
+        first_block.header.consensus.height = 1.into();
 
-        let tx3: Transaction = TxBuilder::new(2322)
+        let tx3: Transaction = TxBuilder::new(2324)
             .start_script(vec![op::addi(0x10, RegId::ZERO, 1), op::ret(1)], vec![])
             .contract_input(contract_id)
             .fee_input()
@@ -2312,11 +2332,9 @@ mod tests {
 
         let db = Database::default();
 
-        let mut setup = create_executor(db.clone(), Default::default());
+        let mut producer = create_executor(db.clone(), Default::default());
 
-        setup.produce_and_commit(first_block).unwrap();
-
-        let producer = create_executor(db.clone(), Default::default());
+        producer.produce_and_commit(first_block).unwrap();
 
         let ProductionResult {
             block: mut second_block,
@@ -2335,8 +2353,7 @@ mod tests {
             }
         }
 
-        let verifier = create_executor(db, Default::default());
-        let err = verifier.validate(&second_block).unwrap_err();
+        let err = producer.validate(&second_block).unwrap_err();
 
         assert_eq!(
             err,
@@ -2354,10 +2371,11 @@ mod tests {
         let database = &Database::default();
         let mut executor = create_executor(database.clone(), Default::default());
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![deploy.into(), script.into()],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult { block, .. } = executor.produce_and_commit(block).unwrap();
 
@@ -2403,10 +2421,11 @@ mod tests {
         let database = &Database::default();
         let mut executor = create_executor(database.clone(), Default::default());
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx],
         };
+        block.header.consensus.height = 1.into();
 
         executor.produce_and_commit(block).unwrap();
 
@@ -2500,10 +2519,11 @@ mod tests {
 
         let (tx, message) = make_tx_and_message(&mut rng, 0);
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult { block, .. } = make_executor(&[&message])
             .produce_and_commit(block)
@@ -2533,10 +2553,11 @@ mod tests {
         let message_data = message_from_input(&tx.inputs()[1], 0);
         let messages = vec![&message_coin, &message_data];
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into()],
         };
+        block.header.consensus.height = 1.into();
 
         let mut exec = make_executor(&messages);
         #[cfg(not(feature = "parallel-executor"))]
@@ -2598,10 +2619,11 @@ mod tests {
         let message_data = message_from_input(&tx.inputs()[1], 0);
         let messages = vec![&message_coin, &message_data];
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into()],
         };
+        block.header.consensus.height = 1.into();
 
         let mut exec = make_executor(&messages);
         #[cfg(not(feature = "parallel-executor"))]
@@ -2646,7 +2668,9 @@ mod tests {
         let (tx, _message) = make_tx_and_message(&mut rng, 0);
 
         let mut block = Block::default();
+        block.header_mut().set_block_height(1.into());
         *block.transactions_mut() = vec![tx.clone()];
+        block.header_mut().recalculate_metadata();
 
         let ProductionResult {
             skipped_transactions,
@@ -2688,7 +2712,9 @@ mod tests {
         let (tx, message) = make_tx_and_message(&mut rng, 1); // Block has zero da_height
 
         let mut block = Block::default();
+        block.header_mut().set_block_height(1.into());
         *block.transactions_mut() = vec![tx.clone()];
+        block.header_mut().recalculate_metadata();
 
         let ProductionResult {
             skipped_transactions,
@@ -2732,7 +2758,9 @@ mod tests {
         message.set_amount(123);
 
         let mut block = Block::default();
+        block.header_mut().set_block_height(1.into());
         *block.transactions_mut() = vec![tx.clone()];
+        block.header_mut().recalculate_metadata();
 
         let ProductionResult {
             skipped_transactions,
@@ -2759,10 +2787,11 @@ mod tests {
         tx2.as_script_mut().unwrap().inputs_mut()[0] =
             tx1.as_script().unwrap().inputs()[0].clone();
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx1, tx2.clone()],
         };
+        block.header.consensus.height = 1.into();
 
         let exec = make_executor(&[&message]);
         let ProductionResult {
@@ -2799,6 +2828,7 @@ mod tests {
 
     #[test]
     fn withdrawal_message_included_in_header_for_successfully_executed_transaction() {
+        let mut rng = StdRng::seed_from_u64(2322);
         // Given
         let amount_from_random_input = 1000;
         let smo_tx = TransactionBuilder::script(
@@ -2813,14 +2843,15 @@ mod tests {
             .collect(),
             vec![],
         )
-        .add_fee_input()
+        .add_random_fee_input(&mut rng)
         .script_gas_limit(1000000)
         .finalize_as_transaction();
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![smo_tx],
         };
+        block.header.consensus.height = 1.into();
 
         // When
         let ProductionResult { block, .. } =
@@ -2863,6 +2894,7 @@ mod tests {
 
     #[test]
     fn withdrawal_message_not_included_in_header_for_failed_transaction() {
+        let mut rng = StdRng::seed_from_u64(2322);
         // Given
         let amount_from_random_input = 1000;
         let smo_tx = TransactionBuilder::script(
@@ -2877,14 +2909,15 @@ mod tests {
             .collect(),
             vec![],
         )
-        .add_fee_input()
+        .add_random_fee_input(&mut rng)
         .script_gas_limit(1000000)
         .finalize_as_transaction();
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![smo_tx],
         };
+        block.header.consensus.height = 1.into();
 
         // When
         let ProductionResult { block, .. } =
@@ -2920,7 +2953,7 @@ mod tests {
             .finalize();
 
         // setup block
-        let block_height = rng.gen_range(5u32..1000u32);
+        let block_height = rng.gen_range(1u32..1000u32);
         let block_tx_idx = rng.gen();
 
         let block = PartialFuelBlock {
@@ -2984,7 +3017,7 @@ mod tests {
             .finalize();
 
         // setup block
-        let block_height = rng.gen_range(5u32..1000u32);
+        let block_height = rng.gen_range(1u32..1000u32);
         let time = Tai64(rng.gen_range(1u32..u32::MAX) as u64);
 
         let block = PartialFuelBlock {
@@ -3097,7 +3130,13 @@ mod tests {
             ..
         } = producer
             .produce_without_commit_with_source(Components {
-                header_to_produce: PartialBlockHeader::default(),
+                header_to_produce: PartialBlockHeader {
+                    consensus: ConsensusHeader {
+                        height: 1.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
                 transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                 coinbase_recipient: Default::default(),
                 gas_price: 1,
@@ -3179,7 +3218,10 @@ mod tests {
                             expensive_consensus_parameters_version,
                         ..Default::default()
                     },
-                    ..Default::default()
+                    consensus: ConsensusHeader {
+                        height: 1.into(),
+                        ..Default::default()
+                    },
                 },
                 transactions_source: OnceTransactionsSource::new_maybe_checked(vec![
                     cheaply_checked_tx,
@@ -3340,10 +3382,8 @@ mod tests {
         };
 
         fn database_with_genesis_block(da_block_height: u64) -> Database<OnChain> {
-            let mut db = add_consensus_parameters(
-                Database::default(),
-                &ConsensusParameters::default(),
-            );
+            let mut db = Database::default();
+            add_consensus_parameters(&mut db, &ConsensusParameters::default());
             let mut block = Block::default();
             block.header_mut().set_da_height(da_block_height.into());
             block.header_mut().recalculate_metadata();
@@ -3450,10 +3490,9 @@ mod tests {
             let on_chain_db = if let Some(genesis_da_height) = input.genesis_da_height {
                 database_with_genesis_block(genesis_da_height)
             } else {
-                add_consensus_parameters(
-                    Database::default(),
-                    &ConsensusParameters::default(),
-                )
+                let mut db = Database::default();
+                add_consensus_parameters(&mut db, &ConsensusParameters::default());
+                db
             };
             let mut relayer_db = Database::<Relayer>::default();
 

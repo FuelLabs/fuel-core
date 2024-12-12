@@ -5,8 +5,10 @@ use fuel_core_types::{
     },
     fuel_tx::{
         self,
+        field::Outputs,
         Chargeable,
         ConsensusParameters,
+        Output,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -87,6 +89,8 @@ impl MaybeCheckedTransaction {
 pub trait TransactionExt {
     fn inputs(&self) -> ExecutorResult<&Vec<Input>>;
 
+    fn outputs(&self) -> ExecutorResult<&Vec<Output>>;
+
     fn inputs_mut(&mut self) -> ExecutorResult<&mut Vec<Input>>;
 
     fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64>;
@@ -103,6 +107,19 @@ impl TransactionExt for Transaction {
             Transaction::Upgrade(tx) => Ok(tx.inputs()),
             Transaction::Upload(tx) => Ok(tx.inputs()),
             Transaction::Blob(tx) => Ok(tx.inputs()),
+        }
+    }
+
+    fn outputs(&self) -> ExecutorResult<&Vec<Output>> {
+        match self {
+            Transaction::Script(tx) => Ok(tx.outputs()),
+            Transaction::Create(tx) => Ok(tx.outputs()),
+            Transaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have max_gas".to_string(),
+            )),
+            Transaction::Upgrade(tx) => Ok(tx.outputs()),
+            Transaction::Upload(tx) => Ok(tx.outputs()),
+            Transaction::Blob(tx) => Ok(tx.outputs()),
         }
     }
 
@@ -149,6 +166,19 @@ impl TransactionExt for CheckedTransaction {
         }
     }
 
+    fn outputs(&self) -> ExecutorResult<&Vec<Output>> {
+        match self {
+            CheckedTransaction::Script(tx) => Ok(tx.transaction().outputs()),
+            CheckedTransaction::Create(tx) => Ok(tx.transaction().outputs()),
+            CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have max_gas".to_string(),
+            )),
+            CheckedTransaction::Upgrade(tx) => Ok(tx.transaction().outputs()),
+            CheckedTransaction::Upload(tx) => Ok(tx.transaction().outputs()),
+            CheckedTransaction::Blob(tx) => Ok(tx.transaction().outputs()),
+        }
+    }
+
     fn inputs_mut(&mut self) -> ExecutorResult<&mut Vec<Input>> {
         Err(ExecutorError::Other(
             "It is not allowed to change the `Checked` transaction".to_string(),
@@ -174,6 +204,13 @@ impl TransactionExt for MaybeCheckedTransaction {
         match self {
             MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.inputs(),
             MaybeCheckedTransaction::Transaction(tx) => tx.inputs(),
+        }
+    }
+
+    fn outputs(&self) -> ExecutorResult<&Vec<Output>> {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.outputs(),
+            MaybeCheckedTransaction::Transaction(tx) => tx.outputs(),
         }
     }
 

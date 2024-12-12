@@ -685,11 +685,6 @@ where
                         Input::Contract(contract) => {
                             let tx_pointer = &mut contract.tx_pointer;
 
-                            debug_assert_eq!(
-                                tx_pointer.block_height(),
-                                *total_partial_block.header.height()
-                            );
-
                             if tx_pointer.block_height() == current_height {
                                 let new_tx_index = tx_pointer
                                     .tx_index()

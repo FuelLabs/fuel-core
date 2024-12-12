@@ -7,7 +7,9 @@ use fuel_core_types::{
             },
             message,
         },
+        output,
         ConsensusParameters,
+        ContractId,
         Input,
         Transaction,
         TxId,
@@ -72,7 +74,9 @@ pub struct DependencySplitter {
     txs: HashMap<TxId, MaybeCheckedTransaction>,
     used_coins: HashSet<UtxoId>,
     used_messages: HashSet<Nonce>,
+    created_contracts: HashMap<ContractId, TxId>,
     consensus_parameters: ConsensusParameters,
+    remaning_block_gas: u64,
 }
 
 impl DependencySplitter {
@@ -85,6 +89,8 @@ impl DependencySplitter {
             txs: Default::default(),
             used_coins: Default::default(),
             used_messages: Default::default(),
+            created_contracts: Default::default(),
+            remaning_block_gas: consensus_parameters.block_gas_limit(),
             consensus_parameters,
         }
     }
@@ -95,14 +101,32 @@ impl DependencySplitter {
         tx_id: TxId,
     ) -> ExecutorResult<()> {
         let gas = tx.max_gas(&self.consensus_parameters)?;
+        let remaining_block_gas = self.remaning_block_gas;
+        self.remaning_block_gas = self
+            .remaning_block_gas
+            .checked_sub(gas)
+            .ok_or(ExecutorError::GasOverflow(
+            format!(
+                "Transaction cannot fit in remaining gas limit: ({remaining_block_gas})."
+            ),
+            gas,
+            remaining_block_gas,
+        ))?;
+
         let inputs = tx.inputs()?;
+
+        if self.txs.contains_key(&tx_id) {
+            return Err(ExecutorError::TransactionIdCollision(tx_id))
+        }
 
         for input in inputs {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     if self.used_coins.contains(utxo_id) {
-                        return Err(ExecutorError::TransactionIdCollision(tx_id))
+                        return Err(ExecutorError::TransactionValidity(
+                            TransactionValidityError::CoinDoesNotExist(*utxo_id),
+                        ))
                     }
                 }
                 Input::Contract(_) => {
@@ -168,11 +192,26 @@ impl DependencySplitter {
                         }
                     }
                 }
-                Input::Contract(_) => {
-                    // Always go to other buket
-                    // TODO: Put independent contract into `independent_bucket`.
-                    //  Contract is independent if it is used once and not a coinbase contract.
-                    index = BucketIndex::Other;
+                Input::Contract(contract) => {
+                    // TODO: Filter coinbase contract ?
+                    if let Some(creator_tx_id) =
+                        self.created_contracts.get(&contract.contract_id)
+                    {
+                        index = BucketIndex::Other;
+                        if let Some(parent_index) =
+                            self.txs_to_bucket.get_mut(creator_tx_id)
+                        {
+                            if *parent_index == BucketIndex::Independent {
+                                *parent_index = BucketIndex::Other;
+                                let parent_gas =
+                                    self.independent_bucket.remove(creator_tx_id);
+
+                                if let Some(parent_gas) = parent_gas {
+                                    self.other_buckets.add(*creator_tx_id, parent_gas);
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Always go to other buket if nonce already is used
@@ -192,6 +231,16 @@ impl DependencySplitter {
                 }) => {
                     self.used_messages.insert(*nonce);
                 }
+            }
+        }
+
+        let outputs = tx.outputs()?;
+        for output in outputs {
+            match output {
+                output::Output::ContractCreated { contract_id, .. } => {
+                    self.created_contracts.insert(*contract_id, tx_id);
+                }
+                _ => {}
             }
         }
 
