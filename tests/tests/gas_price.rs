@@ -509,33 +509,9 @@ fn produce_block__l1_committed_block_effects_gas_price() {
     assert!(first_gas_price < new_gas_price);
 }
 
-#[allow(unused_variables)]
-mod prop_tests {
-    use super::*;
-    use proptest::prelude::*;
-
-    // the blobs costs will never change more than 12.5% between blobs
-
-    // proptest! {
-    //     // This test will generate a many l2 blocks, and then after the block delay, it will
-    //     // start receiving costs for committing to DA in blobs. If the profit is positive after the
-    //     // first blob, we will continue to process blocks until the profit is negative (if it is
-    //     // negative, we will check the opposite). We will say the test passed if it can recover from
-    //     // the divergent profit after a set amount of l2 blocks.
-    //     #![proptest_config(ProptestConfig::with_cases(1))]
-    //     #[test]
-    //     fn produce_bock__algorithm_recovers_from_divergent_profit(block_delay in 11..12usize, blob_size in 50..100usize) {
-    //         produce_blocks__lolz(block_delay, blob_size);
-    //     }
-    // }
-    #[test]
-    fn produce_block__algorithm_recovers_from_divergent_profit() {
-        produce_blocks__lolz(11, 50);
-    }
-
-    #[ignore]
-    #[test]
-    fn dummy() {}
+#[test]
+fn produce_block__algorithm_recovers_from_divergent_profit() {
+    produce_blocks__lolz(11, 50);
 }
 
 fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
@@ -558,7 +534,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     };
     let mut node_config =
         Config::local_node_with_configs(chain_config, StateConfig::local_testnet());
-    let starting_gas_price = 10_000_000;
+    let starting_gas_price = 1_000_000_000;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.min_da_gas_price = starting_gas_price;
     node_config.max_da_gas_price_change_percent = 10;
@@ -567,7 +543,8 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     node_config.da_poll_interval = Some(100);
     // node_config.da_p_component = 4_707_680;
     // node_config.da_d_component = 114_760;
-    node_config.da_p_component = 1;
+    node_config.da_p_component = 10;
+    node_config.da_d_component = 1;
     node_config.block_activity_threshold = 0;
 
     let (srv, client) = rt.block_on(async {
@@ -627,7 +604,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
         gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
     });
 
-    let tries = 100;
+    let tries = 1000;
 
     let mut success = false;
     let mut success_iteration = i32::MAX;
@@ -649,6 +626,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
             if profit > 0 && !success {
                 success = true;
                 success_iteration = i as i32;
+                // break;
             }
         }
     });
@@ -664,10 +642,31 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
         );
     } else {
         tracing::info!("Success on try {}/{}", success_iteration, tries);
-        tracing::info!("Profits: {:?}", profits);
-        tracing::info!("Changes: {:?}", changes);
-        tracing::info!("Gas prices: {:?}", gas_prices);
-        tracing::info!("Gas price changes: {:?}", gas_price_changes);
+        // tracing::info!("Profits: {:?}", profits);
+        // tracing::info!("Changes: {:?}", changes);
+        // tracing::info!("Gas prices: {:?}", gas_prices);
+        // tracing::info!("Gas price changes: {:?}", gas_price_changes);
+        // trace the same as f64 and converted into gwei
+        let profits_as_gwei = profits
+            .iter()
+            .map(|x| *x as f64 / 1_000_000_000.0)
+            .collect::<Vec<_>>();
+        let changes_as_gwei = changes
+            .iter()
+            .map(|x| *x as f64 / 1_000_000_000.0)
+            .collect::<Vec<_>>();
+        let gas_prices_as_gwei = gas_prices
+            .iter()
+            .map(|x| *x as f64 / 1_000_000_000.0)
+            .collect::<Vec<_>>();
+        let gas_price_changes_as_gwei = gas_price_changes
+            .iter()
+            .map(|x| *x as f64 / 1_000_000_000.0)
+            .collect::<Vec<_>>();
+        tracing::info!("Profits as gwei: {:?}", profits_as_gwei);
+        tracing::info!("Changes as gwei: {:?}", changes_as_gwei);
+        tracing::info!("Gas prices as gwei: {:?}", gas_prices_as_gwei);
+        tracing::info!("Gas price changes as gwei: {:?}", gas_price_changes_as_gwei);
     }
     drop(mock);
 }
