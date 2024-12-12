@@ -54,13 +54,13 @@ pub struct RawDaBlockCosts {
 impl From<&RawDaBlockCosts> for DaBlockCosts {
     fn from(raw_da_block_costs: &RawDaBlockCosts) -> Self {
         DaBlockCosts {
-            sequence_number: raw_da_block_costs.sequence_number,
+            bundle_sequence_number: raw_da_block_costs.sequence_number,
             l2_blocks: raw_da_block_costs
                 .blocks_heights
                 .clone()
                 .into_iter()
                 .collect(),
-            blob_size_bytes: raw_da_block_costs.total_size_bytes,
+            bundle_size_bytes: raw_da_block_costs.total_size_bytes,
             blob_cost_wei: raw_da_block_costs.total_cost,
         }
     }
@@ -99,7 +99,7 @@ where
             |costs: DaBlockCostsResult<DaBlockCosts>, last_value| {
                 let costs = costs.expect("Defined to be OK");
                 let blob_size_bytes = costs
-                    .blob_size_bytes
+                    .bundle_size_bytes
                     .checked_sub(last_value.total_size_bytes)
                     .ok_or(anyhow!("Blob size bytes underflow"))?;
                 let blob_cost_wei = raw_da_block_costs
@@ -107,7 +107,7 @@ where
                     .checked_sub(last_value.total_cost)
                     .ok_or(anyhow!("Blob cost wei underflow"))?;
                 Ok(DaBlockCosts {
-                    blob_size_bytes,
+                    bundle_size_bytes: blob_size_bytes,
                     blob_cost_wei,
                     ..costs
                 })
