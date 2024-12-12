@@ -112,7 +112,12 @@ use fuel_core_types::{
             IntoChecked,
         },
         interpreter::{
-            trace::Frame, CheckedMetadata as CheckedMetadataTrait, ExecutableTransaction, InterpreterParams, Memory, MemoryInstance
+            trace::Frame,
+            CheckedMetadata as CheckedMetadataTrait,
+            ExecutableTransaction,
+            InterpreterParams,
+            Memory,
+            MemoryInstance,
         },
         state::StateTransition,
         Backtrace as FuelBacktrace,
@@ -1251,14 +1256,15 @@ where
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
-        let (reverted, state, tx, receipts, trace_frames) = self.attempt_tx_execution_with_vm(
-            checked_tx,
-            header,
-            coinbase_contract_id,
-            gas_price,
-            storage_tx,
-            memory,
-        )?;
+        let (reverted, state, tx, receipts, trace_frames) = self
+            .attempt_tx_execution_with_vm(
+                checked_tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                storage_tx,
+                memory,
+            )?;
 
         self.spend_input_utxos(tx.inputs(), storage_tx, reverted, execution_data)?;
 

@@ -1066,7 +1066,9 @@ impl TraceFrame {
         self.0
             .memory_diff
             .clone()
-            .into_iter().map(|c| c.into()).collect()
+            .into_iter()
+            .map(|c| c.into())
+            .collect()
     }
 
     /// How many of the original receipts have been produced by this point
@@ -1080,9 +1082,14 @@ pub struct TraceFrameMemoryPatch {
     start: usize,
     bytes: Vec<u8>,
 }
-impl From<fuel_core_types::fuel_vm::interpreter::MemorySliceChange> for TraceFrameMemoryPatch {
+impl From<fuel_core_types::fuel_vm::interpreter::MemorySliceChange>
+    for TraceFrameMemoryPatch
+{
     fn from(change: fuel_core_types::fuel_vm::interpreter::MemorySliceChange) -> Self {
-        Self { start: change.global_start, bytes: change.data }
+        Self {
+            start: change.global_start,
+            bytes: change.data,
+        }
     }
 }
 

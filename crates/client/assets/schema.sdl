@@ -736,7 +736,7 @@ type Mutation {
 	"""
 	Get execution trace for an already-executed transaction.
 	"""
-	traceTx(txId: HexString!, trigger: TraceTrigger!): [TraceTransactionExecutionStatus!]!
+	executionTraceBlock(height: U32!, trigger: TraceTrigger!): [TraceTransactionExecutionStatus!]!
 	"""
 	Submits transaction to the `TxPool`.
 	

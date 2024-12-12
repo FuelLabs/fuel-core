@@ -1,4 +1,7 @@
-use super::scalars::U64;
+use super::scalars::{
+    U32,
+    U64,
+};
 use crate::{
     fuel_core_graphql_api::{
         api_service::{
@@ -51,7 +54,6 @@ use fuel_core_types::{
         Bytes32,
         Cacheable,
         Transaction as FuelTx,
-        TxId,
         UniqueIdentifier,
     },
     fuel_types::{
@@ -336,30 +338,17 @@ impl TxMutation {
 
     /// Get execution trace for an already-executed transaction.
     #[graphql(complexity = "query_costs().dry_run + child_complexity")]
-    async fn trace_tx(
+    async fn execution_trace_block(
         &self,
         ctx: &Context<'_>,
-        tx_id: HexString,
+        height: U32,
         trigger: TraceTrigger,
     ) -> async_graphql::Result<Vec<TraceTransactionExecutionStatus>> {
-        let tx_id = TxId::try_from(tx_id.0.as_slice()).expect("TOOD: handle this");
-
-        // Get the block height of the transaction
-        let fuel_core_types::services::txpool::TransactionStatus::Success {
-            block_height,
-            ..
-        } = ctx.read_view()?.tx_status(&tx_id)?
-        else {
-            return Err(async_graphql::Error::new(
-                "The transaction is not part of any block (yet)",
-            ));
-        };
-
+        let block_height = height.into();
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let status = block_producer
             .execution_trace_block(block_height, trigger.into())
             .await?;
-        dbg!(&status);
         Ok(status
             .into_iter()
             .map(TraceTransactionExecutionStatus)
