@@ -12,6 +12,7 @@ use crate::{
     },
     ports::{
         GasPriceServiceAtomicStorage,
+        GetDaSequenceNumber,
         GetMetadataStorage,
         SetDaSequenceNumber,
         SetMetadataStorage,
@@ -160,26 +161,29 @@ where
     ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
+        let prev_height = height.saturating_sub(1);
+        let mut sequence_number = storage_tx
+            .get_sequence_number(&BlockHeight::from(prev_height))
+            .map_err(|err| anyhow!(err))?;
 
-        let drained = self.da_block_costs_buffer.drain(..);
-        tracing::info!("Drained DA block costs: {:?}", drained);
-        for da_block_costs in drained {
-            tracing::info!("Updating DA block costs: {:?}", da_block_costs);
+        for da_block_costs in &self.da_block_costs_buffer {
+            tracing::debug!("Updating DA block costs: {:?}", da_block_costs);
             self.algorithm_updater.update_da_record_data(
                 &da_block_costs.l2_blocks,
-                da_block_costs.blob_size_bytes,
+                da_block_costs.bundle_size_bytes,
                 da_block_costs.blob_cost_wei,
                 &mut storage_tx.as_unrecorded_blocks(),
             )?;
+            sequence_number = Some(da_block_costs.bundle_sequence_number);
+        }
+
+        if let Some(sequence_number) = sequence_number {
             storage_tx
-                .set_sequence_number(
-                    &BlockHeight::from(height),
-                    da_block_costs.sequence_number,
-                )
+                .set_sequence_number(&BlockHeight::from(height), sequence_number)
                 .map_err(|err| anyhow!(err))?;
         }
 
-        let fee_in_wei = block_fees as u128 * 1_000_000_000;
+        let fee_in_wei = u128::from(block_fees).saturating_add(1_000_000_000);
         self.algorithm_updater.update_l2_block_data(
             height,
             gas_used,
@@ -197,6 +201,8 @@ where
         let new_algo = self.algorithm_updater.algorithm();
         tracing::debug!("Updating gas price: {}", &new_algo.calculate());
         self.shared_algo.update(new_algo).await;
+        // Clear the buffer after committing changes
+        self.da_block_costs_buffer.clear();
         Ok(())
     }
 
@@ -211,7 +217,6 @@ where
                 tx.set_metadata(&metadata).map_err(|err| anyhow!(err))?;
                 AtomicStorage::commit_transaction(tx)?;
                 let new_algo = self.algorithm_updater.algorithm();
-                // self.update(new_algo).await;
                 self.shared_algo.update(new_algo).await;
             }
             BlockInfo::Block {
@@ -565,10 +570,10 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
-                    sequence_number: 1,
+                    bundle_sequence_number: 1,
                     l2_blocks: (1..2).collect(),
                     blob_cost_wei: 9000,
-                    blob_size_bytes: 3000,
+                    bundle_size_bytes: 3000,
                 }),
                 notifier.clone(),
             ),
@@ -668,10 +673,10 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
-                    sequence_number,
+                    bundle_sequence_number: sequence_number,
                     l2_blocks: (1..2).collect(),
                     blob_cost_wei: 9000,
-                    blob_size_bytes: 3000,
+                    bundle_size_bytes: 3000,
                 }),
                 notifier.clone(),
             ),

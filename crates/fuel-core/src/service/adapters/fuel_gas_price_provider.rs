@@ -58,14 +58,12 @@ impl<A> FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    fn get_scaled_gas_price(&self) -> u64 {
+    fn next_gas_price(&self) -> u64 {
         self.algorithm.next_gas_price()
-        // .saturating_div(self.scaling_factor)
     }
 
-    async fn get_scaled_worst_case_gas_price(&self, height: BlockHeight) -> u64 {
+    async fn get_worst_case_gas_price(&self, height: BlockHeight) -> u64 {
         self.algorithm.worst_case_gas_price(height).await
-        // .saturating_div(self.scaling_factor)
     }
 }
 
@@ -75,7 +73,7 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn next_gas_price(&self) -> anyhow::Result<u64> {
-        Ok(self.get_scaled_gas_price())
+        Ok(self.next_gas_price())
     }
 }
 
@@ -84,7 +82,7 @@ where
     A: GasPriceAlgorithm + Send + Sync + 'static,
 {
     fn next_gas_price(&self) -> u64 {
-        self.get_scaled_gas_price()
+        self.next_gas_price()
     }
 }
 
@@ -94,6 +92,6 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
-        Some(self.get_scaled_worst_case_gas_price(height).await)
+        Some(self.get_worst_case_gas_price(height).await)
     }
 }
