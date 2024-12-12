@@ -472,12 +472,42 @@ mod tests {
         use super::*;
         use fuel_core_storage::{
             iter::IterDirection,
-            transactional::{
-                AtomicView,
-                Modifiable,
-            },
+            transactional::AtomicView,
         };
         use fuel_core_types::services::graphql_api::ContractBalance;
+
+        #[cfg(feature = "parallel-executor")]
+        fn get_contract_balance(
+            executor: &Executor<Database, DisabledRelayer>,
+            contract_id: ContractId,
+        ) -> ContractBalance {
+            executor
+                .get_executor()
+                .read()
+                .unwrap()
+                .storage_view_provider
+                .latest_view()
+                .unwrap()
+                .contract_balances(contract_id, None, IterDirection::Forward)
+                .next()
+                .unwrap()
+                .unwrap()
+        }
+
+        #[cfg(not(feature = "parallel-executor"))]
+        fn get_contract_balance(
+            executor: &Executor<Database, DisabledRelayer>,
+            contract_id: ContractId,
+        ) -> ContractBalance {
+            executor
+                .storage_view_provider
+                .latest_view()
+                .unwrap()
+                .contract_balances(contract_id, None, IterDirection::Forward)
+                .next()
+                .unwrap()
+                .unwrap()
+        }
 
         #[test]
         fn executor_commits_transactions_with_non_zero_coinbase_generation() {
@@ -521,11 +551,7 @@ mod tests {
                 .insert(&recipient, &[])
                 .expect("Should insert coinbase contract");
 
-            #[cfg(not(feature = "parallel-executor"))]
             let mut producer = create_executor(database.clone(), config);
-
-            #[cfg(feature = "parallel-executor")]
-            let producer = create_executor(database.clone(), config.clone());
 
             let expected_fee_amount_1 = TransactionFee::checked_from_tx(
                 consensus_parameters.gas_costs(),
@@ -560,20 +586,7 @@ mod tests {
                 .unwrap()
                 .into();
 
-            #[cfg(not(feature = "parallel-executor"))]
-            producer
-                .storage_view_provider
-                .commit_changes(changes)
-                .unwrap();
-
-            #[cfg(feature = "parallel-executor")]
-            producer
-                .get_executor()
-                .write()
-                .unwrap()
-                .storage_view_provider
-                .commit_changes(changes)
-                .unwrap();
+            commit_changes(&mut producer, changes, &block);
 
             assert_eq!(skipped_transactions.len(), 1);
             assert_eq!(block.transactions().len(), 2);
@@ -600,32 +613,9 @@ mod tests {
                 panic!("Invalid coinbase transaction");
             }
 
-            #[cfg(not(feature = "parallel-executor"))]
             let ContractBalance {
                 asset_id, amount, ..
-            } = producer
-                .storage_view_provider
-                .latest_view()
-                .unwrap()
-                .contract_balances(recipient, None, IterDirection::Forward)
-                .next()
-                .unwrap()
-                .unwrap();
-
-            #[cfg(feature = "parallel-executor")]
-            let ContractBalance {
-                asset_id, amount, ..
-            } = producer
-                .get_executor()
-                .read()
-                .unwrap()
-                .storage_view_provider
-                .latest_view()
-                .unwrap()
-                .contract_balances(recipient, None, IterDirection::Forward)
-                .next()
-                .unwrap()
-                .unwrap();
+            } = get_contract_balance(&producer, recipient);
 
             assert_eq!(asset_id, AssetId::zeroed());
             assert_eq!(amount, expected_fee_amount_1);
@@ -668,20 +658,7 @@ mod tests {
                 .unwrap()
                 .into();
 
-            #[cfg(not(feature = "parallel-executor"))]
-            producer
-                .storage_view_provider
-                .commit_changes(changes)
-                .unwrap();
-
-            #[cfg(feature = "parallel-executor")]
-            producer
-                .get_executor()
-                .write()
-                .unwrap()
-                .storage_view_provider
-                .commit_changes(changes)
-                .unwrap();
+            commit_changes(&mut producer, changes, &block);
 
             assert_eq!(skipped_transactions.len(), 0);
             assert_eq!(block.transactions().len(), 2);
@@ -720,32 +697,9 @@ mod tests {
                 panic!("Invalid coinbase transaction");
             }
 
-            #[cfg(not(feature = "parallel-executor"))]
             let ContractBalance {
                 asset_id, amount, ..
-            } = producer
-                .storage_view_provider
-                .latest_view()
-                .unwrap()
-                .contract_balances(recipient, None, IterDirection::Forward)
-                .next()
-                .unwrap()
-                .unwrap();
-
-            #[cfg(feature = "parallel-executor")]
-            let ContractBalance {
-                asset_id, amount, ..
-            } = producer
-                .get_executor()
-                .read()
-                .unwrap()
-                .storage_view_provider
-                .latest_view()
-                .unwrap()
-                .contract_balances(recipient, None, IterDirection::Forward)
-                .next()
-                .unwrap()
-                .unwrap();
+            } = get_contract_balance(&producer, recipient);
 
             assert_eq!(asset_id, AssetId::zeroed());
             assert_eq!(amount, expected_fee_amount_1 + expected_fee_amount_2);
@@ -848,32 +802,9 @@ mod tests {
             let _ = validator.validate_and_commit(&block).unwrap();
             assert_eq!(block.transactions(), produced_txs);
 
-            #[cfg(not(feature = "parallel-executor"))]
             let ContractBalance {
                 asset_id, amount, ..
-            } = validator
-                .storage_view_provider
-                .latest_view()
-                .unwrap()
-                .contract_balances(recipient, None, IterDirection::Forward)
-                .next()
-                .unwrap()
-                .unwrap();
-
-            #[cfg(feature = "parallel-executor")]
-            let ContractBalance {
-                asset_id, amount, ..
-            } = validator
-                .get_executor()
-                .read()
-                .unwrap()
-                .storage_view_provider
-                .latest_view()
-                .unwrap()
-                .contract_balances(recipient, None, IterDirection::Forward)
-                .next()
-                .unwrap()
-                .unwrap();
+            } = get_contract_balance(&validator, recipient);
 
             assert_eq!(asset_id, AssetId::zeroed());
             assert_ne!(amount, 0);

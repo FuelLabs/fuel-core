@@ -26,8 +26,10 @@ use fuel_core_upgradable_executor::native_executor::ports::{
     TransactionExt,
 };
 use std::{
+    cmp::Reverse,
     collections::{
         BTreeMap,
+        BTreeSet,
         HashMap,
         HashSet,
     },
@@ -87,11 +89,11 @@ impl DependencySplitter {
         }
     }
 
-    pub fn process(&mut self, tx: MaybeCheckedTransaction) -> ExecutorResult<()> {
-        let gas = tx.max_gas(&self.consensus_parameters)?;
-
-        let tx_id = tx.id(&self.consensus_parameters.chain_id());
-
+    pub fn verify_transaction(
+        &self,
+        tx: &MaybeCheckedTransaction,
+        tx_id: TxId,
+    ) -> ExecutorResult<u64> {
         let inputs = tx.inputs()?;
 
         for input in inputs {
@@ -99,9 +101,7 @@ impl DependencySplitter {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     if self.used_coins.contains(utxo_id) {
-                        return Err(ExecutorError::TransactionValidity(
-                            TransactionValidityError::CoinAlreadySpent(*utxo_id),
-                        ))
+                        return Err(ExecutorError::TransactionIdCollision(tx_id))
                     }
                 }
                 Input::Contract(_) => {
@@ -131,6 +131,16 @@ impl DependencySplitter {
                 }
             }
         }
+        Ok(tx.max_gas(&self.consensus_parameters)?)
+    }
+
+    pub fn process(
+        &mut self,
+        tx: MaybeCheckedTransaction,
+        tx_id: TxId,
+        gas: u64,
+    ) -> ExecutorResult<()> {
+        let inputs = tx.inputs()?;
 
         if is_blob(&tx) {
             // Blobs can't touch contracts, so we don't worry about them.
@@ -242,13 +252,12 @@ impl DependencySplitter {
             .independent_bucket
             .elements
             .into_iter()
-            .map(|(tx_id, (seq_num, gas))| ((gas, seq_num), tx_id))
-            .collect::<BTreeMap<_, _>>();
+            .map(|(tx_id, (seq_num, gas))| (Reverse(gas), tx_id, seq_num))
+            .collect::<BTreeSet<_>>();
 
-        let independent_most_expensive_transactions =
-            sorted_independent_txs.into_iter().rev();
+        let independent_most_expensive_transactions = sorted_independent_txs.into_iter();
 
-        for ((gas, seq_num), tx_id) in independent_most_expensive_transactions {
+        for (gas, tx_id, seq_num) in independent_most_expensive_transactions {
             let most_empty_bucket = sorted_buckets
                 .pop_first()
                 .expect("Always has items in the `sorted_buckets`; qed");
@@ -256,7 +265,7 @@ impl DependencySplitter {
             let (total_gas, idx) = most_empty_bucket.0;
             let mut txs = most_empty_bucket.1;
 
-            let new_total_gas = total_gas.saturating_add(gas);
+            let new_total_gas = total_gas.saturating_add(gas.0);
             txs.insert(seq_num, tx_id);
 
             sorted_buckets.insert((new_total_gas, idx), txs);
@@ -292,7 +301,6 @@ impl DependencySplitter {
         let bucket_with_blobs = txs_from_most_empty_bucket;
 
         buckets.push(bucket_with_blobs);
-        // TODO: maybe Can be less than `number_of_buckets` if there is less transactions than buckets.
         debug_assert_eq!(buckets.len(), number_of_buckets.get());
 
         buckets

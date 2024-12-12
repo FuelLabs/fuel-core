@@ -9,11 +9,11 @@ use fuel_core_storage::{
         changes_iterator::ChangesIterator,
         IteratorOverTable,
     },
-    kv_store::KeyValueInspect,
-    structured_storage::{
-        memory::InMemoryStorage,
-        StructuredStorage,
+    kv_store::{
+        KeyValueInspect,
+        WriteOperation,
     },
+    structured_storage::StructuredStorage,
     tables::{
         Coins,
         ConsensusParametersVersions,
@@ -26,6 +26,7 @@ use fuel_core_storage::{
         ConflictPolicy,
         HistoricalView,
         Modifiable,
+        ReferenceBytesKey,
         StorageTransaction,
     },
     StorageAsMut,
@@ -46,6 +47,7 @@ use fuel_core_types::{
         },
         ConsensusParameters,
         Input,
+        TxId,
         TxPointer,
     },
     fuel_types::BlockHeight,
@@ -65,8 +67,8 @@ use fuel_core_types::{
 };
 use fuel_core_upgradable_executor::{
     executor::Executor as UpgradableExecutor,
-    native_executor,
     native_executor::{
+        self,
         executor::{
             max_tx_count,
             ExecutionData,
@@ -75,6 +77,7 @@ use fuel_core_upgradable_executor::{
             OnceTransactionsSource,
         },
         ports::{
+            MaybeCheckedTransaction,
             RelayerPort,
             TransactionExt,
             TransactionsSource,
@@ -82,6 +85,7 @@ use fuel_core_upgradable_executor::{
     },
 };
 use std::{
+    collections::BTreeMap,
     num::NonZeroUsize,
     sync::{
         Arc,
@@ -374,6 +378,7 @@ where
         // TODO: Use reference for `consensus_parameters`.
         let mut splitter = DependencySplitter::new(consensus_parameters.clone());
 
+        let mut skipped_transactions_ids = vec![];
         let mut skipped_transactions = vec![];
 
         for tx in txs {
@@ -381,11 +386,15 @@ where
                 return Err(ExecutorError::MintIsNotLastTransaction);
             }
             let tx_id = tx.id(&chain_id);
-            let result = splitter.process(tx);
-
-            if let Err(err) = result {
-                skipped_transactions.push((tx_id, err));
-            }
+            let result = splitter.verify_transaction(&tx, tx_id);
+            match result {
+                Ok(gas) => splitter.process(tx, tx_id, gas)?,
+                Err(err) => {
+                    skipped_transactions_ids.push((tx_id, err));
+                    skipped_transactions.push(tx);
+                    continue;
+                }
+            };
         }
 
         let buckets = splitter.split_equally(self.number_of_cores);
@@ -435,33 +444,60 @@ where
             gas_price,
         };
 
-        let result = merge_execution_results(
+        let latest_view = executor.storage_view_provider.latest_view()?;
+        let result = Self::merge_execution_results(
+            latest_view,
             components,
-            consensus_parameters,
+            consensus_parameters.clone(),
             execution_options,
             execution_results,
+            skipped_transactions_ids,
         )?;
 
         #[cfg(debug_assertions)]
         {
+            // Add the skipped transactions to the source of normal execution so that they appears on the result also.
+            let mut transactions = Vec::with_capacity(
+                skipped_transactions
+                    .len()
+                    .saturating_add(result.result().block.transactions().len()),
+            );
+            transactions.extend(
+                result
+                    .result()
+                    .block
+                    .transactions()
+                    .split_last()
+                    .ok_or(ExecutorError::MintMismatch)?
+                    .1
+                    .iter()
+                    .map(|tx| MaybeCheckedTransaction::Transaction(tx.clone())),
+            );
+            transactions.extend(skipped_transactions);
             let components = Components {
                 header_to_produce,
-                transactions_source: OnceTransactionsSource::new(
-                    result
-                        .result()
-                        .block
-                        .transactions()
-                        .split_last()
-                        .ok_or(ExecutorError::MintMismatch)?
-                        .1
-                        .to_vec(),
+                transactions_source: OnceTransactionsSource::new_maybe_checked(
+                    transactions,
                 ),
                 coinbase_recipient,
                 gas_price,
             };
             let old_result = executor.produce_without_commit_with_source(components)?;
-            assert_eq!(old_result.changes(), result.changes());
             assert_eq!(old_result.result(), result.result());
+            let old_results_changes_column_ordered = old_result
+                .changes()
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect::<BTreeMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>>();
+            let results_changes_column_ordered = result
+                .changes()
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect::<BTreeMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>>();
+            assert_eq!(
+                old_results_changes_column_ordered,
+                results_changes_column_ordered
+            );
         }
 
         Ok(result)
@@ -498,198 +534,157 @@ where
             Err(ExecutorError::BlockMismatch)
         }
     }
-}
 
-fn merge_execution_results(
-    components: Components<()>,
-    consensus_parameters: ConsensusParameters,
-    options: ExecutionOptions,
-    uncommited_results: Vec<ExecutionResult>,
-) -> ExecutorResult<UncommittedResult<Changes>> {
-    let dummy_view = InMemoryStorage::default();
-    let partial_block_header = components.header_to_produce;
+    fn merge_execution_results(
+        view: S::LatestView,
+        components: Components<()>,
+        consensus_parameters: ConsensusParameters,
+        options: ExecutionOptions,
+        uncommited_results: Vec<ExecutionResult>,
+        skipped_txs: Vec<(TxId, ExecutorError)>,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        let partial_block_header = components.header_to_produce;
 
-    let mut txs_count = 0usize;
-    let mut events_count = 0usize;
-    let mut skipped_count = 0usize;
+        let mut txs_count = 0usize;
+        let mut events_count = 0usize;
+        let mut skipped_count = skipped_txs.len();
 
-    for part in uncommited_results.iter() {
-        let tx_count_with_mint = part.partial_block.transactions.len();
-        txs_count = txs_count.saturating_add(tx_count_with_mint);
+        for part in uncommited_results.iter() {
+            let tx_count_with_mint = part.partial_block.transactions.len();
+            txs_count = txs_count.saturating_add(tx_count_with_mint);
 
-        let events_with_mint = part.execution_data.events.len();
-        events_count = events_count.saturating_add(events_with_mint);
+            let events_with_mint = part.execution_data.events.len();
+            events_count = events_count.saturating_add(events_with_mint);
 
-        let skipped = part.execution_data.skipped_transactions.len();
-        skipped_count = skipped_count.saturating_add(skipped);
-    }
-
-    let mut total_partial_block = PartialFuelBlock {
-        header: partial_block_header,
-        transactions: Vec::with_capacity(txs_count),
-    };
-
-    let mut total_data = ExecutionData {
-        coinbase: 0,
-        used_gas: 0,
-        used_size: 0,
-        tx_count: 0,
-        found_mint: false,
-        message_ids: vec![],
-        tx_status: Vec::with_capacity(txs_count),
-        events: Vec::with_capacity(events_count),
-        changes: Default::default(),
-        skipped_transactions: Vec::with_capacity(skipped_count),
-        event_inbox_root: ExecutionData::default_event_inbox_root(),
-    };
-
-    let mut total_changes = StorageTransaction::transaction(
-        &dummy_view,
-        ConflictPolicy::Fail,
-        Changes::default(),
-    );
-
-    let current_height = *total_partial_block.header.height();
-
-    for part in uncommited_results {
-        let ExecutionResult {
-            partial_block: mut part_block,
-            mut execution_data,
-        } = part;
-
-        total_data.coinbase = total_data
-            .coinbase
-            .checked_add(execution_data.coinbase)
-            .ok_or(ExecutorError::FeeOverflow)?;
-        total_data.used_gas = total_data
-            .used_gas
-            .checked_add(execution_data.used_gas)
-            .ok_or(ExecutorError::GasOverflow(
-                "Execution used gas overflowed.".into(),
-                total_data.used_gas,
-                execution_data.used_gas,
-            ))?;
-        total_data.used_size = total_data
-            .used_size
-            .checked_add(execution_data.used_size)
-            .ok_or(ExecutorError::TxSizeOverflow)?;
-
-        debug_assert_eq!(part_block.header, total_partial_block.header);
-
-        let tx_index_offset = u32::try_from(total_partial_block.transactions.len())
-            .map_err(|_| {
-                ExecutorError::BlockHeaderError(BlockHeaderError::TooManyTransactions)
-            })?;
-
-        for tx in part_block.transactions.iter_mut() {
-            let inputs = tx.inputs_mut()?;
-
-            for input in inputs {
-                match input {
-                    Input::CoinSigned(CoinSigned { tx_pointer, .. })
-                    | Input::CoinPredicate(CoinPredicate { tx_pointer, .. }) => {
-                        if tx_pointer.block_height() == current_height {
-                            let new_tx_index = tx_pointer
-                                .tx_index()
-                                .checked_add(tx_index_offset)
-                                .ok_or(ExecutorError::BlockHeaderError(
-                                    BlockHeaderError::TooManyTransactions,
-                                ))?;
-                            let new_tx_pointer =
-                                TxPointer::new(current_height, new_tx_index);
-
-                            *tx_pointer = new_tx_pointer;
-                        }
-                    }
-                    Input::Contract(contract) => {
-                        let tx_pointer = &mut contract.tx_pointer;
-
-                        debug_assert_eq!(
-                            tx_pointer.block_height(),
-                            *total_partial_block.header.height()
-                        );
-
-                        if tx_pointer.block_height() == current_height {
-                            let new_tx_index = tx_pointer
-                                .tx_index()
-                                .checked_add(tx_index_offset)
-                                .ok_or(ExecutorError::BlockHeaderError(
-                                    BlockHeaderError::TooManyTransactions,
-                                ))?;
-                            let new_tx_pointer =
-                                TxPointer::new(current_height, new_tx_index);
-
-                            *tx_pointer = new_tx_pointer;
-                        }
-                    }
-                    Input::MessageCoinSigned(_)
-                    | Input::MessageCoinPredicate(_)
-                    | Input::MessageDataSigned(_)
-                    | Input::MessageDataPredicate(_) => {
-                        // Nothing to update
-                    }
-                }
-            }
+            let skipped = part.execution_data.skipped_transactions.len();
+            skipped_count = skipped_count.saturating_add(skipped);
         }
 
-        let changes = execution_data.changes;
-        let mut changes_storage_tx = StorageTransaction::transaction(
-            &dummy_view,
-            ConflictPolicy::Overwrite,
+        let mut total_partial_block = PartialFuelBlock {
+            header: partial_block_header,
+            transactions: Vec::with_capacity(txs_count),
+        };
+
+        let mut total_data = ExecutionData {
+            coinbase: 0,
+            used_gas: 0,
+            used_size: 0,
+            tx_count: 0,
+            found_mint: false,
+            message_ids: vec![],
+            tx_status: Vec::with_capacity(txs_count),
+            events: Vec::with_capacity(events_count),
+            changes: Default::default(),
+            skipped_transactions: Vec::with_capacity(skipped_count),
+            event_inbox_root: ExecutionData::default_event_inbox_root(),
+        };
+
+        total_data.skipped_transactions.extend(skipped_txs);
+
+        let mut total_changes = StorageTransaction::transaction(
+            &view,
+            ConflictPolicy::Fail,
             Changes::default(),
         );
 
-        let iter = ChangesIterator::<Column>::new(&changes);
-        let coins_iter = iter.iter_all::<Coins>(None);
-        let contracts_iter = iter.iter_all::<ContractsLatestUtxo>(None);
+        let current_height = *total_partial_block.header.height();
 
-        for result in coins_iter {
-            let (utxo_id, mut coin) = result?;
+        for part in uncommited_results {
+            let ExecutionResult {
+                partial_block: mut part_block,
+                mut execution_data,
+            } = part;
 
-            let tx_pointer = *coin.tx_pointer();
+            total_data.coinbase = total_data
+                .coinbase
+                .checked_add(execution_data.coinbase)
+                .ok_or(ExecutorError::FeeOverflow)?;
+            total_data.used_gas = total_data
+                .used_gas
+                .checked_add(execution_data.used_gas)
+                .ok_or(ExecutorError::GasOverflow(
+                    "Execution used gas overflowed.".into(),
+                    total_data.used_gas,
+                    execution_data.used_gas,
+                ))?;
+            total_data.used_size = total_data
+                .used_size
+                .checked_add(execution_data.used_size)
+                .ok_or(ExecutorError::TxSizeOverflow)?;
 
-            if tx_pointer.block_height() == current_height {
-                let new_tx_index = tx_pointer
-                    .tx_index()
-                    .checked_add(tx_index_offset)
-                    .ok_or(ExecutorError::BlockHeaderError(
-                        BlockHeaderError::TooManyTransactions,
-                    ))?;
-                let new_tx_pointer = TxPointer::new(current_height, new_tx_index);
+            debug_assert_eq!(part_block.header, total_partial_block.header);
 
-                coin.set_tx_pointer(new_tx_pointer);
+            let tx_index_offset = u32::try_from(total_partial_block.transactions.len())
+                .map_err(|_| {
+                ExecutorError::BlockHeaderError(BlockHeaderError::TooManyTransactions)
+            })?;
 
-                changes_storage_tx
-                    .storage_as_mut::<Coins>()
-                    .insert(&utxo_id, &coin)?;
+            for tx in part_block.transactions.iter_mut() {
+                let inputs = tx.inputs_mut()?;
+
+                for input in inputs {
+                    match input {
+                        Input::CoinSigned(CoinSigned { tx_pointer, .. })
+                        | Input::CoinPredicate(CoinPredicate { tx_pointer, .. }) => {
+                            if tx_pointer.block_height() == current_height {
+                                let new_tx_index = tx_pointer
+                                    .tx_index()
+                                    .checked_add(tx_index_offset)
+                                    .ok_or(ExecutorError::BlockHeaderError(
+                                        BlockHeaderError::TooManyTransactions,
+                                    ))?;
+                                let new_tx_pointer =
+                                    TxPointer::new(current_height, new_tx_index);
+
+                                *tx_pointer = new_tx_pointer;
+                            }
+                        }
+                        Input::Contract(contract) => {
+                            let tx_pointer = &mut contract.tx_pointer;
+
+                            debug_assert_eq!(
+                                tx_pointer.block_height(),
+                                *total_partial_block.header.height()
+                            );
+
+                            if tx_pointer.block_height() == current_height {
+                                let new_tx_index = tx_pointer
+                                    .tx_index()
+                                    .checked_add(tx_index_offset)
+                                    .ok_or(ExecutorError::BlockHeaderError(
+                                        BlockHeaderError::TooManyTransactions,
+                                    ))?;
+                                let new_tx_pointer =
+                                    TxPointer::new(current_height, new_tx_index);
+
+                                *tx_pointer = new_tx_pointer;
+                            }
+                        }
+                        Input::MessageCoinSigned(_)
+                        | Input::MessageCoinPredicate(_)
+                        | Input::MessageDataSigned(_)
+                        | Input::MessageDataPredicate(_) => {
+                            // Nothing to update
+                        }
+                    }
+                }
             }
-        }
 
-        for result in contracts_iter {
-            let (contract_id, mut info) = result?;
+            let changes = execution_data.changes;
+            let mut changes_storage_tx = StorageTransaction::transaction(
+                &view,
+                ConflictPolicy::Overwrite,
+                Changes::default(),
+            );
 
-            let tx_pointer = info.tx_pointer();
+            let iter = ChangesIterator::<Column>::new(&changes);
+            let coins_iter = iter.iter_all::<Coins>(None);
+            let contracts_iter = iter.iter_all::<ContractsLatestUtxo>(None);
 
-            if tx_pointer.block_height() == current_height {
-                let new_tx_index = tx_pointer
-                    .tx_index()
-                    .checked_add(tx_index_offset)
-                    .ok_or(ExecutorError::BlockHeaderError(
-                        BlockHeaderError::TooManyTransactions,
-                    ))?;
-                let new_tx_pointer = TxPointer::new(current_height, new_tx_index);
+            for result in coins_iter {
+                let (utxo_id, mut coin) = result?;
 
-                info.set_tx_pointer(new_tx_pointer);
-
-                changes_storage_tx
-                    .storage_as_mut::<ContractsLatestUtxo>()
-                    .insert(&contract_id, &info)?;
-            }
-        }
-
-        for event in execution_data.events.iter_mut() {
-            if let Event::CoinCreated(coin) = event {
-                let tx_pointer = coin.tx_pointer;
+                let tx_pointer = *coin.tx_pointer();
 
                 if tx_pointer.block_height() == current_height {
                     let new_tx_index = tx_pointer
@@ -700,90 +695,137 @@ fn merge_execution_results(
                         ))?;
                     let new_tx_pointer = TxPointer::new(current_height, new_tx_index);
 
-                    coin.tx_pointer = new_tx_pointer;
+                    coin.set_tx_pointer(new_tx_pointer);
+
+                    changes_storage_tx
+                        .storage_as_mut::<Coins>()
+                        .insert(&utxo_id, &coin)?;
                 }
             }
-        }
 
-        let shifted_changes = changes_storage_tx.into_changes();
+            for result in contracts_iter {
+                let (contract_id, mut info) = result?;
 
-        let mut final_storage_tx = StorageTransaction::transaction(
-            &dummy_view,
-            ConflictPolicy::Overwrite,
-            changes,
-        );
-        final_storage_tx.commit_changes(shifted_changes)?;
+                let tx_pointer = info.tx_pointer();
 
-        let part_changes = final_storage_tx.into_changes();
+                if tx_pointer.block_height() == current_height {
+                    let new_tx_index = tx_pointer
+                        .tx_index()
+                        .checked_add(tx_index_offset)
+                        .ok_or(ExecutorError::BlockHeaderError(
+                            BlockHeaderError::TooManyTransactions,
+                        ))?;
+                    let new_tx_pointer = TxPointer::new(current_height, new_tx_index);
 
-        // If `part_changes` to the database gas conflicts, `commit_changes` should fail.
-        total_changes.commit_changes(part_changes)?;
+                    info.set_tx_pointer(new_tx_pointer);
 
-        total_data.tx_status.extend(execution_data.tx_status);
-        total_data.events.extend(execution_data.events);
-        total_data
-            .skipped_transactions
-            .extend(execution_data.skipped_transactions);
-        total_data.message_ids.extend(execution_data.message_ids);
+                    changes_storage_tx
+                        .storage_as_mut::<ContractsLatestUtxo>()
+                        .insert(&contract_id, &info)?;
+                }
+            }
 
-        total_partial_block
-            .transactions
-            .extend(part_block.transactions);
-        total_data.tx_count = u32::try_from(total_partial_block.transactions.len())
-            .map_err(|_| {
+            for event in execution_data.events.iter_mut() {
+                if let Event::CoinCreated(coin) = event {
+                    let tx_pointer = coin.tx_pointer;
+
+                    if tx_pointer.block_height() == current_height {
+                        let new_tx_index = tx_pointer
+                            .tx_index()
+                            .checked_add(tx_index_offset)
+                            .ok_or(ExecutorError::BlockHeaderError(
+                                BlockHeaderError::TooManyTransactions,
+                            ))?;
+                        let new_tx_pointer = TxPointer::new(current_height, new_tx_index);
+
+                        coin.tx_pointer = new_tx_pointer;
+                    }
+                }
+            }
+
+            let shifted_changes = changes_storage_tx.into_changes();
+
+            let mut final_storage_tx = StorageTransaction::transaction(
+                &view,
+                ConflictPolicy::Overwrite,
+                changes,
+            );
+            final_storage_tx.commit_changes(shifted_changes)?;
+
+            let part_changes = final_storage_tx.into_changes();
+
+            // If `part_changes` to the database gas conflicts, `commit_changes` should fail.
+            total_changes.commit_changes(part_changes)?;
+
+            total_data.tx_status.extend(execution_data.tx_status);
+            total_data.events.extend(execution_data.events);
+            total_data
+                .skipped_transactions
+                .extend(execution_data.skipped_transactions);
+            total_data.message_ids.extend(execution_data.message_ids);
+
+            total_partial_block
+                .transactions
+                .extend(part_block.transactions);
+            total_data.tx_count = u32::try_from(total_partial_block.transactions.len())
+                .map_err(|_| {
                 ExecutorError::BlockHeaderError(BlockHeaderError::TooManyTransactions)
             })?;
+        }
+
+        let block_executor = native_executor::executor::BlockExecutor::new(
+            (),
+            options,
+            consensus_parameters,
+        );
+
+        let mut memory = MemoryInstance::new();
+        block_executor.produce_mint_tx(
+            &mut total_partial_block,
+            &components,
+            &mut total_changes,
+            &mut total_data,
+            &mut memory,
+        )?;
+
+        total_data.changes = total_changes.into_changes();
+
+        let ExecutionData {
+            message_ids,
+            event_inbox_root,
+            changes,
+            events,
+            tx_status,
+            skipped_transactions,
+            coinbase,
+            used_gas,
+            used_size,
+            ..
+        } = total_data;
+
+        let block = total_partial_block
+            .generate(&message_ids[..], event_inbox_root)
+            .map_err(ExecutorError::BlockHeaderError)?;
+
+        let finalized_block_id = block.id();
+
+        tracing::debug!(
+            "Block {:#x} fees: {} gas: {} tx_size: {}",
+            finalized_block_id,
+            coinbase,
+            used_gas,
+            used_size
+        );
+
+        let result = ProductionResult {
+            block,
+            skipped_transactions,
+            tx_status,
+            events,
+        };
+
+        Ok(UncommittedResult::new(result, changes))
     }
-
-    let block_executor =
-        native_executor::executor::BlockExecutor::new((), options, consensus_parameters);
-
-    let mut memory = MemoryInstance::new();
-    block_executor.produce_mint_tx(
-        &mut total_partial_block,
-        &components,
-        &mut total_changes,
-        &mut total_data,
-        &mut memory,
-    )?;
-
-    total_data.changes = total_changes.into_changes();
-
-    let ExecutionData {
-        message_ids,
-        event_inbox_root,
-        changes,
-        events,
-        tx_status,
-        skipped_transactions,
-        coinbase,
-        used_gas,
-        used_size,
-        ..
-    } = total_data;
-
-    let block = total_partial_block
-        .generate(&message_ids[..], event_inbox_root)
-        .map_err(ExecutorError::BlockHeaderError)?;
-
-    let finalized_block_id = block.id();
-
-    tracing::debug!(
-        "Block {:#x} fees: {} gas: {} tx_size: {}",
-        finalized_block_id,
-        coinbase,
-        used_gas,
-        used_size
-    );
-
-    let result = ProductionResult {
-        block,
-        skipped_transactions,
-        tx_status,
-        events,
-    };
-
-    Ok(UncommittedResult::new(result, changes))
 }
 
 #[cfg(test)]
