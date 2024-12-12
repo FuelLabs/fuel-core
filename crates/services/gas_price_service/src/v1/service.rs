@@ -160,7 +160,7 @@ where
             .get_sequence_number(&BlockHeight::from(height - 1))
             .map_err(|err| anyhow!(err))?;
 
-        for da_block_costs in self.da_block_costs_buffer {
+        for da_block_costs in &self.da_block_costs_buffer {
             tracing::debug!("Updating DA block costs: {:?}", da_block_costs);
             self.algorithm_updater.update_da_record_data(
                 &da_block_costs.l2_blocks,
