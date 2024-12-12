@@ -72,7 +72,7 @@ where
 #[async_trait::async_trait]
 pub trait DaBlockCostsSource: Send + Sync {
     async fn request_da_block_cost(&mut self) -> Result<Option<DaBlockCosts>>;
-    async fn set_last_value(&mut self, sequence_number: u32) -> Result<()>;
+    async fn set_last_value(&mut self, bundle_id: u32) -> Result<()>;
 }
 
 #[async_trait::async_trait]

@@ -35,29 +35,26 @@ pub trait GetMetadataStorage: Send + Sync {
         -> Result<Option<UpdaterMetadata>>;
 }
 
-pub trait SetDaSequenceNumber: Send + Sync {
-    fn set_sequence_number(
-        &mut self,
-        block_height: &BlockHeight,
-        sequence_number: u32,
-    ) -> Result<()>;
+pub trait SetDaBundleId: Send + Sync {
+    fn set_bundle_id(&mut self, block_height: &BlockHeight, bundle_id: u32)
+        -> Result<()>;
 }
 
-pub trait GetDaSequenceNumber: Send + Sync {
-    fn get_sequence_number(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
+pub trait GetDaBundleId: Send + Sync {
+    fn get_bundle_id(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
 }
 
 pub trait GasPriceServiceAtomicStorage
 where
     Self: 'static,
     Self: Send + Sync,
-    Self: GetMetadataStorage + GetDaSequenceNumber,
+    Self: GetMetadataStorage + GetDaBundleId,
 {
     type Transaction<'a>: AsUnrecordedBlocks
         + SetMetadataStorage
         + GetMetadataStorage
-        + SetDaSequenceNumber
-        + GetDaSequenceNumber
+        + SetDaBundleId
+        + GetDaBundleId
     where
         Self: 'a;
 

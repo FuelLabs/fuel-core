@@ -366,10 +366,6 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
     let da_cost_per_byte = 40;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
-    // let unrecorded_blocks = vec![BlockBytes {
-    //     height: 11,
-    //     block_bytes: 3000,
-    // }];
     let mut unrecorded_blocks: BTreeMap<_, _> = [(11, 3000)].into_iter().collect();
     let da_p_component = 2;
     let guessed_cost: u64 = unrecorded_blocks

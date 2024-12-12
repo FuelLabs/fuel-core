@@ -21,10 +21,10 @@ use crate::{
         GasPriceData,
         GasPriceServiceAtomicStorage,
         GasPriceServiceConfig,
-        GetDaSequenceNumber,
+        GetDaBundleId,
         GetMetadataStorage,
         L2Data,
-        SetDaSequenceNumber,
+        SetDaBundleId,
         SetMetadataStorage,
     },
     v1::{
@@ -168,11 +168,10 @@ where
             self.block_stream,
         );
 
-        if let Some(sequence_number) = self
-            .gas_price_db
-            .get_sequence_number(&metadata_height.into())?
+        if let Some(bundle_id) =
+            self.gas_price_db.get_bundle_id(&metadata_height.into())?
         {
-            self.da_source.set_last_value(sequence_number).await?;
+            self.da_source.set_last_value(bundle_id).await?;
         }
         let poll_duration = self
             .config
