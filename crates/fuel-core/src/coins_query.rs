@@ -51,7 +51,7 @@ use thiserror::Error;
 pub enum CoinsQueryError {
     #[error("store error occurred: {0}")]
     StorageError(StorageError),
-    #[error("target can't be met without exceeding the {max} coin limit.")]
+    #[error("the target cannot be met due to no coins available or exceeding the {max} coin limit.")]
     InsufficientCoinsForTheMax {
         asset_id: AssetId,
         collected_amount: Word,
@@ -71,7 +71,7 @@ pub enum CoinsQueryError {
     IncorrectMessageKeyInIndex,
     #[error("error while processing the query: {0}")]
     UnexpectedInternalState(&'static str),
-    #[error("total and max can not be 0 (provided total: {provided_total}, provided max: {provided_max})")]
+    #[error("both total and max must be greater than 0 (provided total: {provided_total}, provided max: {provided_max})")]
     IncorrectQueryParameters {
         provided_total: u64,
         provided_max: u16,
@@ -292,7 +292,7 @@ pub async fn select_coins_to_spend(
     batch_size: usize,
 ) -> Result<Option<Vec<CoinsToSpendIndexEntry>>, CoinsQueryError> {
     const TOTAL_AMOUNT_ADJUSTMENT_FACTOR: u64 = 2;
-    if total == 0 && max == 0 {
+    if total == 0 || max == 0 {
         return Err(CoinsQueryError::IncorrectQueryParameters {
             provided_total: total,
             provided_max: max,
