@@ -34,6 +34,7 @@ use fuel_core_types::fuel_tx::{
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
 pub enum MaybeCheckedTransaction {
     CheckedTransaction(CheckedTransaction, ConsensusParametersVersion),
     Transaction(fuel_tx::Transaction),
@@ -67,6 +68,17 @@ impl MaybeCheckedTransaction {
                 _,
             ) => tx.id(),
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
+        }
+    }
+
+    pub fn is_mint(&self) -> bool {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Mint(_),
+                _,
+            ) => true,
+            MaybeCheckedTransaction::Transaction(Transaction::Mint(_)) => true,
+            _ => false,
         }
     }
 }

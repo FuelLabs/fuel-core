@@ -56,7 +56,7 @@ impl Bucket {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum BucketIndex {
     Independent,
     Other,
@@ -150,7 +150,7 @@ impl DependencySplitter {
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     self.used_coins.insert(*utxo_id);
 
-                    // Always go to other buket if parent in this block
+                    // Always go to other bucket if parent in this block
                     if let Some(parent_index) =
                         self.txs_to_bucket.get_mut(utxo_id.tx_id())
                     {
@@ -218,16 +218,15 @@ impl DependencySplitter {
         // The last bucket should contain all blobs as the end of all transactions.
         // Blobs at the end avoids potential invalidation of the predicates or transactions
         // after then.
-
         let mut sorted_buckets = BTreeMap::new();
 
-        // On of buckets is reserved for the `other_bucket`, so subtract 1 from the
+        // One of buckets is reserved for the `other_bucket`, so subtract 1 from the
         // `number_of_buckets`.
-        let number_of_wild_buckets = number_of_buckets.get().saturating_sub(1);
-        for _ in 0..number_of_wild_buckets {
+        let number_of_wild_buckets = number_of_buckets.get().saturating_sub(1) as u64;
+        for idx in 0..number_of_wild_buckets {
             let gas = 0u64;
             let txs = BTreeMap::<SequenceNumber, TxId>::new();
-            sorted_buckets.insert(gas, txs);
+            sorted_buckets.insert((gas, idx), txs);
         }
 
         let other_gas = self.other_buckets.gas;
@@ -237,30 +236,30 @@ impl DependencySplitter {
             .into_iter()
             .map(|(tx_id, (seq_num, _))| (seq_num, tx_id))
             .collect();
-        sorted_buckets.insert(other_gas, other_transactions);
+        sorted_buckets.insert((other_gas, number_of_wild_buckets), other_transactions);
 
         let sorted_independent_txs = self
             .independent_bucket
             .elements
             .into_iter()
-            .map(|(tx_id, (seq_num, gas))| (gas, (seq_num, tx_id)))
+            .map(|(tx_id, (seq_num, gas))| ((gas, seq_num), tx_id))
             .collect::<BTreeMap<_, _>>();
 
         let independent_most_expensive_transactions =
             sorted_independent_txs.into_iter().rev();
 
-        for (gas, (seq_num, tx_id)) in independent_most_expensive_transactions {
+        for ((gas, seq_num), tx_id) in independent_most_expensive_transactions {
             let most_empty_bucket = sorted_buckets
                 .pop_first()
                 .expect("Always has items in the `sorted_buckets`; qed");
 
-            let total_gas = most_empty_bucket.0;
+            let (total_gas, idx) = most_empty_bucket.0;
             let mut txs = most_empty_bucket.1;
 
             let new_total_gas = total_gas.saturating_add(gas);
             txs.insert(seq_num, tx_id);
 
-            sorted_buckets.insert(new_total_gas, txs);
+            sorted_buckets.insert((new_total_gas, idx), txs);
         }
 
         let most_empty_bucket = sorted_buckets
@@ -293,6 +292,7 @@ impl DependencySplitter {
         let bucket_with_blobs = txs_from_most_empty_bucket;
 
         buckets.push(bucket_with_blobs);
+        // TODO: maybe Can be less than `number_of_buckets` if there is less transactions than buckets.
         debug_assert_eq!(buckets.len(), number_of_buckets.get());
 
         buckets

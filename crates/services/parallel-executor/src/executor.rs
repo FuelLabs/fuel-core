@@ -54,6 +54,7 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Error as ExecutorError,
+            Event,
             ProductionResult,
             Result as ExecutorResult,
             UncommittedResult,
@@ -94,6 +95,7 @@ pub struct Executor<S, R> {
     runtime: Runtime,
     number_of_cores: NonZeroUsize,
 }
+
 // TODO: Shutdown the tokio runtime to avoid panic if executor is already
 //   used from another tokio runtime
 // impl<S, R> Drop for Executor<S, R> {
@@ -142,13 +144,25 @@ where
         &mut self,
         block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<ProductionResult> {
-        let (result, changes) = self.produce_without_commit(block)?.into();
+        use fuel_core_storage::transactional::WriteTransaction;
+        use fuel_core_types::fuel_types::ChainId;
+        let (result, mut changes) = self.produce_without_commit(block)?.into();
 
         let mut executor = self.executor.write().map_err(|e| {
             ExecutorError::Other(format!(
                 "Unable to get the write lock for the executor: {e}"
             ))
         })?;
+
+        let mut latest_view = executor.storage_view_provider.latest_view()?;
+        let mut tx = latest_view.write_transaction();
+        tx.storage_as_mut::<FuelBlocks>()
+            .insert(
+                &result.block.header().height(),
+                &result.block.compress(&ChainId::default()),
+            )
+            .unwrap();
+        changes.extend(tx.into_changes());
 
         executor.storage_view_provider.commit_changes(changes)?;
         Ok(result)
@@ -160,13 +174,24 @@ where
         &mut self,
         block: &Block,
     ) -> fuel_core_types::services::executor::Result<ValidationResult> {
-        let (result, changes) = self.validate(block)?.into();
+        use fuel_core_storage::transactional::WriteTransaction;
+        use fuel_core_types::fuel_types::ChainId;
+        let (result, mut changes) = self.validate(block)?.into();
 
         let mut executor = self.executor.write().map_err(|e| {
             ExecutorError::Other(format!(
                 "Unable to get the write lock for the executor: {e}"
             ))
         })?;
+        let mut latest_view = executor.storage_view_provider.latest_view()?;
+        let mut tx = latest_view.write_transaction();
+        tx.storage_as_mut::<FuelBlocks>()
+            .insert(
+                &block.header().height(),
+                &block.compress(&ChainId::default()),
+            )
+            .unwrap();
+        changes.extend(tx.into_changes());
         executor.storage_view_provider.commit_changes(changes)?;
 
         Ok(result)
@@ -352,6 +377,9 @@ where
         let mut skipped_transactions = vec![];
 
         for tx in txs {
+            if tx.is_mint() {
+                return Err(ExecutorError::MintIsNotLastTransaction);
+            }
             let tx_id = tx.id(&chain_id);
             let result = splitter.process(tx);
 
@@ -464,10 +492,6 @@ where
         };
         let executed_block_result = self.produce_inner(components)?;
 
-        dbg!(&executed_block_result.result().block.id());
-        dbg!(&block.id());
-        dbg!(&executed_block_result.result().block);
-        dbg!(&block);
         if &executed_block_result.result().block == block {
             Ok(executed_block_result.into_validation_result())
         } else {
@@ -530,7 +554,7 @@ fn merge_execution_results(
     for part in uncommited_results {
         let ExecutionResult {
             partial_block: mut part_block,
-            execution_data,
+            mut execution_data,
         } = part;
 
         total_data.coinbase = total_data
@@ -564,11 +588,6 @@ fn merge_execution_results(
                 match input {
                     Input::CoinSigned(CoinSigned { tx_pointer, .. })
                     | Input::CoinPredicate(CoinPredicate { tx_pointer, .. }) => {
-                        debug_assert_eq!(
-                            tx_pointer.block_height(),
-                            *total_partial_block.header.height()
-                        );
-
                         if tx_pointer.block_height() == current_height {
                             let new_tx_index = tx_pointer
                                 .tx_index()
@@ -665,6 +684,24 @@ fn merge_execution_results(
                 changes_storage_tx
                     .storage_as_mut::<ContractsLatestUtxo>()
                     .insert(&contract_id, &info)?;
+            }
+        }
+
+        for event in execution_data.events.iter_mut() {
+            if let Event::CoinCreated(coin) = event {
+                let tx_pointer = coin.tx_pointer;
+
+                if tx_pointer.block_height() == current_height {
+                    let new_tx_index = tx_pointer
+                        .tx_index()
+                        .checked_add(tx_index_offset)
+                        .ok_or(ExecutorError::BlockHeaderError(
+                            BlockHeaderError::TooManyTransactions,
+                        ))?;
+                    let new_tx_pointer = TxPointer::new(current_height, new_tx_index);
+
+                    coin.tx_pointer = new_tx_pointer;
+                }
             }
         }
 

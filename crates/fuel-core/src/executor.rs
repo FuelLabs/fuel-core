@@ -24,6 +24,8 @@ mod tests {
         },
         transactional::{
             AtomicView,
+            Changes,
+            Modifiable,
             WriteTransaction,
         },
         Result as StorageResult,
@@ -226,12 +228,64 @@ mod tests {
                 utxo_validation_default: config.utxo_validation_default,
                 native_executor_version: None,
             },
-            number_of_cores: NonZeroUsize::new(2).unwrap(),
+            number_of_cores: NonZeroUsize::new(3).unwrap(),
         };
 
-        let database = add_consensus_parameters(database, &config.consensus_parameters);
-
+        let mut database =
+            add_consensus_parameters(database, &config.consensus_parameters);
+        let prev_block = Block::default();
+        store_block(&mut database, &prev_block);
         Executor::new(database, DisabledRelayer, executor_config)
+    }
+
+    #[cfg(feature = "parallel-executor")]
+    fn store_block(database: &mut Database, block: &Block) {
+        use fuel_core_storage::tables::FuelBlocks;
+
+        let mut tx = database.write_transaction();
+        tx.storage_as_mut::<FuelBlocks>()
+            .insert(
+                &block.header().height(),
+                &block.compress(&ChainId::default()),
+            )
+            .unwrap();
+        tx.commit().unwrap();
+    }
+
+    #[cfg(feature = "parallel-executor")]
+    fn commit_changes(
+        executor: &mut Executor<Database, DisabledRelayer>,
+        mut changes: Changes,
+        block: &Block,
+    ) {
+        use fuel_core_storage::tables::FuelBlocks;
+
+        let executor = executor.get_executor();
+        let mut executor = executor.write().unwrap();
+        let mut tx = executor.storage_view_provider.write_transaction();
+        tx.storage_as_mut::<FuelBlocks>()
+            .insert(
+                &block.header().height(),
+                &block.compress(&ChainId::default()),
+            )
+            .unwrap();
+        changes.extend(tx.into_changes());
+        executor
+            .storage_view_provider
+            .commit_changes(changes)
+            .unwrap();
+    }
+
+    #[cfg(not(feature = "parallel-executor"))]
+    fn commit_changes(
+        executor: &mut Executor<Database, DisabledRelayer>,
+        changes: Changes,
+        _block: &Block,
+    ) {
+        executor
+            .storage_view_provider
+            .commit_changes(changes)
+            .unwrap();
     }
 
     pub(crate) fn setup_executable_script() -> (Create, Script) {
@@ -325,7 +379,7 @@ mod tests {
 
     fn script_tx_for_amount(amount: usize) -> Transaction {
         let asset = AssetId::BASE;
-        TxBuilder::new(2322u64)
+        TxBuilder::new(2322u64.saturating_add(amount as u64))
             .script_gas_limit(10)
             .coin_input(asset, (amount as Word) * 100)
             .coin_output(asset, (amount as Word) * 50)
@@ -832,6 +886,7 @@ mod tests {
                 expected_in_tx_coinbase: ContractId,
             ) -> bool {
                 let script = TxBuilder::new(2322u64)
+                    .block_height(BlockHeight::new(1))
                     .script_gas_limit(100000)
                     // Set a price for the test
                     .gas_price(0)
@@ -864,39 +919,24 @@ mod tests {
                     .transaction()
                     .clone();
 
-                #[cfg(not(feature = "parallel-executor"))]
                 let mut producer =
                     create_executor(Default::default(), Default::default());
 
-                #[cfg(feature = "parallel-executor")]
-                let producer = create_executor(Default::default(), Default::default());
-
                 let mut block = Block::default();
+                block.header_mut().set_block_height(1.into());
                 *block.transactions_mut() = vec![script.clone().into()];
+                block.header_mut().recalculate_metadata();
 
                 let (ProductionResult { tx_status, .. }, changes) = producer
                     .produce_without_commit_with_coinbase(
-                        block.into(),
+                        block.clone().into(),
                         config_coinbase,
                         0,
                     )
                     .expect("Should execute the block")
                     .into();
 
-                #[cfg(not(feature = "parallel-executor"))]
-                producer
-                    .storage_view_provider
-                    .commit_changes(changes)
-                    .unwrap();
-
-                #[cfg(feature = "parallel-executor")]
-                producer
-                    .get_executor()
-                    .write()
-                    .unwrap()
-                    .storage_view_provider
-                    .commit_changes(changes)
-                    .unwrap();
+                commit_changes(&mut producer, changes, &block);
 
                 let receipts = tx_status[0].result.receipts();
 
@@ -928,7 +968,7 @@ mod tests {
         #[test]
         fn invalidate_unexpected_index() {
             let mint = Transaction::mint(
-                TxPointer::new(Default::default(), 1),
+                TxPointer::new(BlockHeight::new(1), 1),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -938,6 +978,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.into()];
+            block.header_mut().set_block_height(1.into());
             block.header_mut().recalculate_metadata();
 
             let mut validator = create_executor(
@@ -950,16 +991,27 @@ mod tests {
             let validation_err = validator
                 .validate_and_commit(&block)
                 .expect_err("Expected error because coinbase if invalid");
+
+            // The error is different for parallel and non-parallel executors
+            // because in parallel mode we are not executing the mint transaction
+            // that is in the block but we create a correct one inside the block.
+            // This means that the block we created internally is not the same as the block
+            // we are validating because the mint transaction is correct.
+            // And so the error reported is BlockMismatch.
+            #[cfg(not(feature = "parallel-executor"))]
             assert!(matches!(
                 validation_err,
                 ExecutorError::MintHasUnexpectedIndex
             ));
+
+            #[cfg(feature = "parallel-executor")]
+            assert_eq!(validation_err, ExecutorError::BlockMismatch);
         }
 
         #[test]
         fn invalidate_is_not_last() {
             let mint = Transaction::mint(
-                TxPointer::new(Default::default(), 0),
+                TxPointer::new(BlockHeight::new(1), 0),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -970,6 +1022,7 @@ mod tests {
 
             let mut block = Block::default();
             *block.transactions_mut() = vec![mint.clone().into(), tx, mint.into()];
+            block.header_mut().set_block_height(1.into());
             block.header_mut().recalculate_metadata();
 
             let mut validator = create_executor(Default::default(), Default::default());
@@ -996,7 +1049,7 @@ mod tests {
         #[test]
         fn invalidate_block_height() {
             let mint = Transaction::mint(
-                TxPointer::new(1.into(), Default::default()),
+                TxPointer::new(2.into(), Default::default()),
                 Default::default(),
                 Default::default(),
                 Default::default(),
@@ -1005,6 +1058,7 @@ mod tests {
             );
 
             let mut block = Block::default();
+            block.header_mut().set_block_height(1.into());
             *block.transactions_mut() = vec![mint.into()];
             block.header_mut().recalculate_metadata();
 
@@ -1013,12 +1067,22 @@ mod tests {
                 .validate_and_commit(&block)
                 .expect_err("Expected error because coinbase if invalid");
 
+            // The error is different for parallel and non-parallel executors
+            // because in parallel mode we are not executing the mint transaction
+            // that is in the block but we create a correct one inside the block.
+            // This means that the block we created internally is not the same as the block
+            // we are validating because the mint transaction is correct.
+            // And so the error reported is BlockMismatch.
+            #[cfg(not(feature = "parallel-executor"))]
             assert!(matches!(
                 validation_err,
                 ExecutorError::InvalidTransaction(CheckError::Validity(
                     ValidityError::TransactionMintIncorrectBlockHeight
                 ))
             ));
+
+            #[cfg(feature = "parallel-executor")]
+            assert_eq!(validation_err, ExecutorError::BlockMismatch);
         }
 
         #[test]
