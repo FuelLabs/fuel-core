@@ -53,9 +53,14 @@ use fuel_core_types::{
 };
 use rand::Rng;
 use std::{
+    collections::HashMap,
     iter::repeat,
     num::NonZero,
     ops::Deref,
+    sync::{
+        Arc,
+        Mutex,
+    },
     time::Duration,
 };
 use test_helpers::fuel_core_driver::FuelCoreDriver;
@@ -673,23 +678,49 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
 
 struct FakeServer {
     server: mockito::ServerGuard,
+    responses: Arc<Mutex<(HashMap<u32, RawDaBlockCosts>, u32)>>,
 }
 
 impl FakeServer {
     fn new() -> Self {
-        let server = mockito::Server::new();
-        Self { server }
+        let mut server = mockito::Server::new();
+        let responses = Arc::new(Mutex::new((HashMap::new(), 1)));
+        let shared_responses = responses.clone();
+        server
+            .mock("GET", "/")
+            .with_status(201)
+            .with_body_from_request(move |request| {
+                // take the requested number and return the corresponding response from the `responses` hashmap
+                let path = request.path();
+                let maybe_sequence_number =
+                    path.split('/').last().and_then(|x| x.parse::<u32>().ok());
+                match maybe_sequence_number {
+                    Some(sequence_number) => {
+                        let guard = shared_responses.lock().unwrap();
+                        let responses = &guard.0;
+                        let response = responses.get(&sequence_number).cloned();
+                        serde_json::to_string(&response).unwrap().into()
+                    }
+                    None => {
+                        let guard = shared_responses.lock().unwrap();
+                        let responses = &guard.0;
+                        let latest = &guard.1;
+                        let response = responses.get(latest).cloned();
+                        serde_json::to_string(&response).unwrap().into()
+                    }
+                }
+            })
+            .expect_at_least(1)
+            .create();
+        Self { server, responses }
     }
 
     pub fn add_response(&mut self, costs: RawDaBlockCosts) {
-        let body = serde_json::to_string(&costs).unwrap();
-        let _mock = self
-            .server
-            .mock("GET", "/")
-            .with_status(201)
-            .with_body(body)
-            .expect_at_least(1)
-            .create();
+        let mut guard = self.responses.lock().unwrap();
+        let latest = guard.1;
+        let new_seq_no = latest + 1;
+        guard.0.insert(new_seq_no, costs);
+        guard.1 = new_seq_no;
     }
 
     fn url(&self) -> String {

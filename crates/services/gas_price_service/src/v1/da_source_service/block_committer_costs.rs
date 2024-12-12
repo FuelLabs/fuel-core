@@ -160,9 +160,9 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
                 .get(format!("{}/{}", url, number))
                 .send()
                 .await?
-                .json::<RawDaBlockCosts>()
+                .json::<Option<RawDaBlockCosts>>()
                 .await?;
-            Ok(Some(response))
+            Ok(response)
         } else {
             Ok(None)
         }
