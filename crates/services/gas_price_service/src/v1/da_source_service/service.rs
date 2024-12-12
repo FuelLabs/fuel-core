@@ -60,8 +60,9 @@ where
     async fn process_block_costs(&mut self) -> Result<()> {
         let da_block_costs_res = self.source.request_da_block_cost().await;
         tracing::debug!("Received block costs: {:?}", da_block_costs_res);
-        let da_block_costs = da_block_costs_res?;
-        self.shared_state.0.send(da_block_costs)?;
+        if let Some(da_block_costs) = da_block_costs_res? {
+            self.shared_state.0.send(da_block_costs)?;
+        }
         Ok(())
     }
 }
@@ -70,7 +71,7 @@ where
 /// da block costs in a way they see fit
 #[async_trait::async_trait]
 pub trait DaBlockCostsSource: Send + Sync {
-    async fn request_da_block_cost(&mut self) -> Result<DaBlockCosts>;
+    async fn request_da_block_cost(&mut self) -> Result<Option<DaBlockCosts>>;
     async fn set_last_value(&mut self, sequence_number: u32) -> Result<()>;
 }
 

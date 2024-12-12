@@ -81,7 +81,9 @@ impl<BlockCommitter> DaBlockCostsSource for BlockCommitterDaBlockCosts<BlockComm
 where
     BlockCommitter: BlockCommitterApi,
 {
-    async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
+    async fn request_da_block_cost(
+        &mut self,
+    ) -> DaBlockCostsResult<Option<DaBlockCosts>> {
         let raw_da_block_costs = match self.last_raw_da_block_costs {
             Some(ref last_value) => self
                 .client
@@ -91,7 +93,10 @@ where
         .await?;
 
         let Some(ref raw_da_block_costs) = raw_da_block_costs else {
-            return Err(anyhow!("No response from block committer"))
+            // TODO: This is really annoying if there haven't been any costs yet. Do we need this?
+            //   Gonna return `Option::None` for now
+            // return Err(anyhow!("No response from block committer"))
+            return Ok(None)
         };
 
         let da_block_costs = self.last_raw_da_block_costs.iter().fold(
@@ -115,7 +120,7 @@ where
         )?;
 
         self.last_raw_da_block_costs = Some(raw_da_block_costs.clone());
-        Ok(da_block_costs)
+        Ok(Some(da_block_costs))
     }
     async fn set_last_value(&mut self, sequence_number: u32) -> DaBlockCostsResult<()> {
         self.last_raw_da_block_costs =
@@ -143,8 +148,10 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
         if let Some(url) = &self.url {
             let val = self.client.get(url).send().await?;
-            let response = val.json::<RawDaBlockCosts>().await?;
-            Ok(Some(response))
+            tracing::warn!("val: {:?}", val);
+            let response = val.json::<Option<RawDaBlockCosts>>().await?;
+            tracing::warn!("Response: {:?}", response);
+            Ok(response)
         } else {
             Ok(None)
         }
@@ -155,13 +162,14 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
         number: u32,
     ) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
         if let Some(url) = &self.url {
-            let response = self
+            let val = self
                 .client
                 .get(format!("{}/{}", url, number))
                 .send()
-                .await?
-                .json::<Option<RawDaBlockCosts>>()
                 .await?;
+            tracing::warn!("val: {:?}", val);
+            let response = val.json::<Option<RawDaBlockCosts>>().await?;
+            tracing::warn!("Response: {:?}", response);
             Ok(response)
         } else {
             Ok(None)

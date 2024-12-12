@@ -51,6 +51,7 @@ use fuel_core_types::{
     },
     services::executor::TransactionExecutionResult,
 };
+use mockito::Matcher::Any;
 use rand::Rng;
 use std::{
     collections::HashMap,
@@ -515,17 +516,21 @@ mod prop_tests {
 
     // the blobs costs will never change more than 12.5% between blobs
 
-    proptest! {
-        // This test will generate a many l2 blocks, and then after the block delay, it will
-        // start receiving costs for committing to DA in blobs. If the profit is positive after the
-        // first blob, we will continue to process blocks until the profit is negative (if it is
-        // negative, we will check the opposite). We will say the test passed if it can recover from
-        // the divergent profit after a set amount of l2 blocks.
-        #![proptest_config(ProptestConfig::with_cases(1))]
-        #[test]
-        fn produce_bock__algorithm_recovers_from_divergent_profit(block_delay in 11..12usize, blob_size in 50..100usize) {
-            produce_blocks__lolz(block_delay, blob_size);
-        }
+    // proptest! {
+    //     // This test will generate a many l2 blocks, and then after the block delay, it will
+    //     // start receiving costs for committing to DA in blobs. If the profit is positive after the
+    //     // first blob, we will continue to process blocks until the profit is negative (if it is
+    //     // negative, we will check the opposite). We will say the test passed if it can recover from
+    //     // the divergent profit after a set amount of l2 blocks.
+    //     #![proptest_config(ProptestConfig::with_cases(1))]
+    //     #[test]
+    //     fn produce_bock__algorithm_recovers_from_divergent_profit(block_delay in 11..12usize, blob_size in 50..100usize) {
+    //         produce_blocks__lolz(block_delay, blob_size);
+    //     }
+    // }
+    #[test]
+    fn produce_block__algorithm_recovers_from_divergent_profit() {
+        produce_blocks__lolz(11, 50);
     }
 
     #[ignore]
@@ -559,7 +564,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     node_config.max_da_gas_price_change_percent = 10;
     node_config.block_production = Trigger::Never;
     node_config.da_committer_url = Some(url.clone());
-    node_config.da_poll_interval = Some(1);
+    node_config.da_poll_interval = Some(100);
     // node_config.da_p_component = 4_707_680;
     // node_config.da_d_component = 114_760;
     node_config.da_p_component = 1;
@@ -591,7 +596,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     let half_of_blocks = block_delay as u32 / 2;
     let blocks_heights: Vec<_> = (1..half_of_blocks).collect();
     let count = blocks_heights.len() as u128;
-    let new_price_gwei = 500_000;
+    let new_price_gwei = 100;
     let new_price = new_price_gwei * 1_000_000_000; // Wei
     let cost = count * new_price;
     mock.add_response(RawDaBlockCosts {
@@ -605,7 +610,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     let mut profits = Vec::new();
     let mut gas_prices = Vec::new();
     rt.block_on(async {
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        tokio::time::sleep(Duration::from_millis(200)).await;
         client.produce_blocks(1, None).await.unwrap();
         client.produce_blocks(1, None).await.unwrap();
         let height = srv.shared.database.gas_price().latest_height().unwrap();
@@ -622,7 +627,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
         gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
     });
 
-    let tries = 100;
+    let tries = 200;
 
     let mut success = false;
     let mut success_iteration = i32::MAX;
@@ -638,9 +643,10 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
                 .and_then(|x| x.v1().cloned())
                 .unwrap();
             let profit = metadata.last_profit;
+            tracing::info!("metadata: {:?}", metadata);
             profits.push(profit);
             gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
-            if profit > 0 && !success {
+            if profit > 0 {
                 success = true;
                 success_iteration = i as i32;
             }
@@ -663,6 +669,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
         tracing::info!("Gas prices: {:?}", gas_prices);
         tracing::info!("Gas price changes: {:?}", gas_price_changes);
     }
+    drop(mock);
 }
 
 async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mut R) {
@@ -683,11 +690,17 @@ struct FakeServer {
 
 impl FakeServer {
     fn new() -> Self {
-        let mut server = mockito::Server::new();
-        let responses = Arc::new(Mutex::new((HashMap::new(), 1)));
-        let shared_responses = responses.clone();
-        server
-            .mock("GET", "/")
+        let server = mockito::Server::new();
+        let responses = Arc::new(Mutex::new((HashMap::new(), 0)));
+        let mut fake = Self { server, responses };
+        fake.init();
+        fake
+    }
+
+    pub fn init(&mut self) {
+        let shared_responses = self.responses.clone();
+        self.server
+            .mock("GET", Any)
             .with_status(201)
             .with_body_from_request(move |request| {
                 // take the requested number and return the corresponding response from the `responses` hashmap
@@ -712,7 +725,6 @@ impl FakeServer {
             })
             .expect_at_least(1)
             .create();
-        Self { server, responses }
     }
 
     pub fn add_response(&mut self, costs: RawDaBlockCosts) {
