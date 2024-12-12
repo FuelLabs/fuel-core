@@ -156,8 +156,9 @@ where
     ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
+        let prev_height = height.saturating_sub(1);
         let mut sequence_number = storage_tx
-            .get_sequence_number(&BlockHeight::from(height - 1))
+            .get_sequence_number(&BlockHeight::from(prev_height))
             .map_err(|err| anyhow!(err))?;
 
         for da_block_costs in &self.da_block_costs_buffer {
