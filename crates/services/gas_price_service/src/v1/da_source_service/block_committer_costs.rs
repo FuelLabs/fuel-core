@@ -40,7 +40,7 @@ pub struct BlockCommitterDaBlockCosts<BlockCommitter> {
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
 pub struct RawDaBlockCosts {
     /// Sequence number (Monotonically increasing nonce)
-    pub sequence_number: u32,
+    pub bundle_id: u32,
     /// The range of blocks that the costs apply to
     pub blocks_heights: Vec<u32>,
     /// The DA block height of the last transaction for the range of blocks
@@ -54,7 +54,7 @@ pub struct RawDaBlockCosts {
 impl From<&RawDaBlockCosts> for DaBlockCosts {
     fn from(raw_da_block_costs: &RawDaBlockCosts) -> Self {
         DaBlockCosts {
-            bundle_sequence_number: raw_da_block_costs.sequence_number,
+            bundle_id: raw_da_block_costs.bundle_id,
             l2_blocks: raw_da_block_costs
                 .blocks_heights
                 .clone()
@@ -83,9 +83,9 @@ where
 {
     async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<DaBlockCosts> {
         let raw_da_block_costs = match self.last_raw_da_block_costs {
-            Some(ref last_value) => self
-                .client
-                .get_costs_by_seqno(last_value.sequence_number + 1),
+            Some(ref last_value) => {
+                self.client.get_costs_by_seqno(last_value.bundle_id + 1)
+            }
             _ => self.client.get_latest_costs(),
         }
         .await?;
@@ -117,9 +117,8 @@ where
         self.last_raw_da_block_costs = Some(raw_da_block_costs.clone());
         Ok(da_block_costs)
     }
-    async fn set_last_value(&mut self, sequence_number: u32) -> DaBlockCostsResult<()> {
-        self.last_raw_da_block_costs =
-            self.client.get_costs_by_seqno(sequence_number).await?;
+    async fn set_last_value(&mut self, bundle_id: u32) -> DaBlockCostsResult<()> {
+        self.last_raw_da_block_costs = self.client.get_costs_by_seqno(bundle_id).await?;
         Ok(())
     }
 }
@@ -207,7 +206,7 @@ mod tests {
             // arbitrary logic to generate a new value
             let mut value = self.value.clone();
             if let Some(value) = &mut value {
-                value.sequence_number = seq_no;
+                value.bundle_id = seq_no;
                 value.blocks_heights = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
                     .to_vec()
                     .iter()
@@ -230,7 +229,7 @@ mod tests {
 
     fn test_da_block_costs() -> RawDaBlockCosts {
         RawDaBlockCosts {
-            sequence_number: 1,
+            bundle_id: 1,
             blocks_heights: (0..10).collect(),
             da_block_height: 1u64.into(),
             total_cost: 1,
@@ -305,7 +304,7 @@ mod tests {
             // arbitrary logic to generate a new value
             let mut value = self.value.clone();
             if let Some(value) = &mut value {
-                value.sequence_number = seq_no;
+                value.bundle_id = seq_no;
                 value.blocks_heights =
                     value.blocks_heights.iter().map(|x| x + seq_no).collect();
                 value.da_block_height = value.da_block_height + 1u64.into();

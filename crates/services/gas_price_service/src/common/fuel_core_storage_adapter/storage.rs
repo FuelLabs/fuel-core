@@ -28,7 +28,7 @@ pub enum GasPriceColumn {
     Metadata = 0,
     State = 1,
     UnrecordedBlocks = 2,
-    SequenceNumber = 3,
+    BundleId = 3,
 }
 
 impl GasPriceColumn {
@@ -93,23 +93,23 @@ impl TableWithBlueprint for UnrecordedBlocksTable {
     }
 }
 
-pub struct SequenceNumberTable;
+pub struct BundleIdTable;
 
 /// The sequence number or bundle id of the posted blocks.
 type BundleId = u32;
 
-impl Mappable for SequenceNumberTable {
+impl Mappable for BundleIdTable {
     type Key = Self::OwnedKey;
     type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
     type OwnedValue = BundleId;
 }
 
-impl TableWithBlueprint for SequenceNumberTable {
+impl TableWithBlueprint for BundleIdTable {
     type Blueprint = Plain<Primitive<4>, Postcard>;
     type Column = GasPriceColumn;
 
     fn column() -> Self::Column {
-        GasPriceColumn::SequenceNumber
+        GasPriceColumn::BundleId
     }
 }

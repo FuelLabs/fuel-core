@@ -20,10 +20,10 @@ use crate::{
     ports::{
         GasPriceData,
         GasPriceServiceAtomicStorage,
-        GetDaSequenceNumber,
+        GetDaBundleId,
         GetMetadataStorage,
         L2Data,
-        SetDaSequenceNumber,
+        SetDaBundleId,
         SetMetadataStorage,
     },
     v1::{
@@ -161,11 +161,8 @@ impl GetMetadataStorage for ErroringPersistedData {
     }
 }
 
-impl GetDaSequenceNumber for ErroringPersistedData {
-    fn get_sequence_number(
-        &self,
-        _block_height: &BlockHeight,
-    ) -> GasPriceResult<Option<u32>> {
+impl GetDaBundleId for ErroringPersistedData {
+    fn get_bundle_id(&self, _block_height: &BlockHeight) -> GasPriceResult<Option<u32>> {
         Err(GasPriceError::CouldNotFetchDARecord(anyhow!("boo!")))
     }
 }
@@ -209,21 +206,18 @@ impl UnrecordedBlocks for UnimplementedStorageTx {
     }
 }
 
-impl SetDaSequenceNumber for UnimplementedStorageTx {
-    fn set_sequence_number(
+impl SetDaBundleId for UnimplementedStorageTx {
+    fn set_bundle_id(
         &mut self,
         _block_height: &BlockHeight,
-        _sequence_number: u32,
+        _bundle_id: u32,
     ) -> GasPriceResult<()> {
         unimplemented!()
     }
 }
 
-impl GetDaSequenceNumber for UnimplementedStorageTx {
-    fn get_sequence_number(
-        &self,
-        _block_height: &BlockHeight,
-    ) -> GasPriceResult<Option<u32>> {
+impl GetDaBundleId for UnimplementedStorageTx {
+    fn get_bundle_id(&self, _block_height: &BlockHeight) -> GasPriceResult<Option<u32>> {
         unimplemented!()
     }
 }
@@ -240,7 +234,7 @@ impl AsUnrecordedBlocks for UnimplementedStorageTx {
 
 struct FakeDABlockCost {
     da_block_costs: Receiver<DaBlockCosts>,
-    sequence_number: Arc<Mutex<Option<u32>>>,
+    bundle_id: Arc<Mutex<Option<u32>>>,
 }
 
 impl FakeDABlockCost {
@@ -248,25 +242,25 @@ impl FakeDABlockCost {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
         Self {
             da_block_costs: receiver,
-            sequence_number: Arc::new(Mutex::new(None)),
+            bundle_id: Arc::new(Mutex::new(None)),
         }
     }
 
     fn new(da_block_costs: Receiver<DaBlockCosts>) -> Self {
         Self {
             da_block_costs,
-            sequence_number: Arc::new(Mutex::new(None)),
+            bundle_id: Arc::new(Mutex::new(None)),
         }
     }
 
-    fn never_returns_with_handle_to_sequence_number() -> (Self, Arc<Mutex<Option<u32>>>) {
+    fn never_returns_with_handle_to_bundle_id() -> (Self, Arc<Mutex<Option<u32>>>) {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
-        let sequence_number = Arc::new(Mutex::new(None));
+        let bundle_id = Arc::new(Mutex::new(None));
         let service = Self {
             da_block_costs: receiver,
-            sequence_number: sequence_number.clone(),
+            bundle_id: bundle_id.clone(),
         };
-        (service, sequence_number)
+        (service, bundle_id)
     }
 }
 
@@ -277,11 +271,8 @@ impl DaBlockCostsSource for FakeDABlockCost {
         Ok(costs)
     }
 
-    async fn set_last_value(&mut self, sequence_number: u32) -> Result<()> {
-        self.sequence_number
-            .lock()
-            .unwrap()
-            .replace(sequence_number);
+    async fn set_last_value(&mut self, bundle_id: u32) -> Result<()> {
+        self.bundle_id.lock().unwrap().replace(bundle_id);
         Ok(())
     }
 }
@@ -674,10 +665,10 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
 }
 
 #[tokio::test]
-async fn uninitialized_task__init__starts_da_service_with_sequence_number_in_storage() {
+async fn uninitialized_task__init__starts_da_service_with_bundle_id_in_storage() {
     // given
     let block_height = 1;
-    let sequence_number: u32 = 123;
+    let bundle_id: u32 = 123;
     let original_metadata = arbitrary_metadata();
 
     let different_config = different_arb_config();
@@ -688,12 +679,11 @@ async fn uninitialized_task__init__starts_da_service_with_sequence_number_in_sto
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
-    let (da_cost_source, sequence_number_handle) =
-        FakeDABlockCost::never_returns_with_handle_to_sequence_number();
+    let (da_cost_source, bundle_id_handle) =
+        FakeDABlockCost::never_returns_with_handle_to_bundle_id();
     let mut inner = database_with_metadata(&original_metadata);
     let mut tx = inner.begin_transaction().unwrap();
-    tx.set_sequence_number(&block_height.into(), sequence_number)
-        .unwrap();
+    tx.set_bundle_id(&block_height.into(), bundle_id).unwrap();
     StorageTransaction::commit_transaction(tx).unwrap();
     let service = UninitializedTask::new(
         different_config.clone(),
@@ -711,7 +701,7 @@ async fn uninitialized_task__init__starts_da_service_with_sequence_number_in_sto
     service.init().await.unwrap();
 
     // then
-    let actual = sequence_number_handle.lock().unwrap();
-    let expected = Some(sequence_number);
+    let actual = bundle_id_handle.lock().unwrap();
+    let expected = Some(bundle_id);
     assert_eq!(*actual, expected);
 }

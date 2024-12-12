@@ -12,9 +12,9 @@ use crate::{
     },
     ports::{
         GasPriceServiceAtomicStorage,
-        GetDaSequenceNumber,
+        GetDaBundleId,
         GetMetadataStorage,
-        SetDaSequenceNumber,
+        SetDaBundleId,
         SetMetadataStorage,
     },
     v0::metadata::V0Metadata,
@@ -157,8 +157,8 @@ where
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
         let prev_height = height.saturating_sub(1);
-        let mut sequence_number = storage_tx
-            .get_sequence_number(&BlockHeight::from(prev_height))
+        let mut bundle_id = storage_tx
+            .get_bundle_id(&BlockHeight::from(prev_height))
             .map_err(|err| anyhow!(err))?;
 
         for da_block_costs in &self.da_block_costs_buffer {
@@ -169,12 +169,12 @@ where
                 da_block_costs.blob_cost_wei,
                 &mut storage_tx.as_unrecorded_blocks(),
             )?;
-            sequence_number = Some(da_block_costs.bundle_sequence_number);
+            bundle_id = Some(da_block_costs.bundle_id);
         }
 
-        if let Some(sequence_number) = sequence_number {
+        if let Some(bundle_id) = bundle_id {
             storage_tx
-                .set_sequence_number(&BlockHeight::from(height), sequence_number)
+                .set_bundle_id(&BlockHeight::from(height), bundle_id)
                 .map_err(|err| anyhow!(err))?;
         }
 
@@ -356,9 +356,9 @@ mod tests {
     use crate::{
         common::{
             fuel_core_storage_adapter::storage::{
+                BundleIdTable,
                 GasPriceColumn,
                 GasPriceColumn::UnrecordedBlocks,
-                SequenceNumberTable,
                 UnrecordedBlocksTable,
             },
             gas_price_algorithm::SharedGasPriceAlgo,
@@ -554,7 +554,7 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
-                    bundle_sequence_number: 1,
+                    bundle_id: 1,
                     l2_blocks: (1..2).collect(),
                     blob_cost_wei: 9000,
                     bundle_size_bytes: 3000,
@@ -617,9 +617,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run__responses_from_da_service_update_sequence_number_in_storage() {
+    async fn run__responses_from_da_service_update_bundle_id_in_storage() {
         // given
-        let sequence_number = 1234;
+        let bundle_id = 1234;
         let block_height = 2;
         let l2_block_2 = BlockInfo::Block {
             height: block_height,
@@ -654,7 +654,7 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
-                    bundle_sequence_number: sequence_number,
+                    bundle_id,
                     l2_blocks: (1..2).collect(),
                     blob_cost_wei: 9000,
                     bundle_size_bytes: 3000,
@@ -693,13 +693,13 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // then
-        let latest_sequence_number = service
+        let latest_bundle_id = service
             .storage_tx_provider
-            .storage::<SequenceNumberTable>()
+            .storage::<BundleIdTable>()
             .get(&BlockHeight::from(block_height))
             .unwrap()
             .unwrap();
-        assert_eq!(*latest_sequence_number, sequence_number);
+        assert_eq!(*latest_bundle_id, bundle_id);
 
         service.shutdown().await.unwrap();
     }

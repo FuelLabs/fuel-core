@@ -1,9 +1,9 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::storage::{
+            BundleIdTable,
             GasPriceColumn,
             GasPriceMetadata,
-            SequenceNumberTable,
         },
         updater_metadata::UpdaterMetadata,
         utils::{
@@ -14,9 +14,9 @@ use crate::{
     },
     ports::{
         GasPriceServiceAtomicStorage,
-        GetDaSequenceNumber,
+        GetDaBundleId,
         GetMetadataStorage,
-        SetDaSequenceNumber,
+        SetDaBundleId,
         SetMetadataStorage,
     },
 };
@@ -99,28 +99,25 @@ where
     }
 }
 
-impl<Storage> GetDaSequenceNumber for Storage
+impl<Storage> GetDaBundleId for Storage
 where
     Storage: Send + Sync,
-    Storage: StorageInspect<SequenceNumberTable, Error = StorageError>,
+    Storage: StorageInspect<BundleIdTable, Error = StorageError>,
 {
-    fn get_sequence_number(
-        &self,
-        block_height: &BlockHeight,
-    ) -> GasPriceResult<Option<u32>> {
-        let sequence_number = self
-            .storage::<SequenceNumberTable>()
+    fn get_bundle_id(&self, block_height: &BlockHeight) -> GasPriceResult<Option<u32>> {
+        let bundle_id = self
+            .storage::<BundleIdTable>()
             .get(block_height)
             .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?
             .map(|no| *no);
-        Ok(sequence_number)
+        Ok(bundle_id)
     }
 }
 
 impl<Storage> GasPriceServiceAtomicStorage for Storage
 where
     Storage: 'static,
-    Storage: GetMetadataStorage + GetDaSequenceNumber,
+    Storage: GetMetadataStorage + GetDaBundleId,
     Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
 {
     type Transaction<'a> = StorageTransaction<&'a mut Storage> where Self: 'a;
@@ -138,18 +135,18 @@ where
     }
 }
 
-impl<Storage> SetDaSequenceNumber for Storage
+impl<Storage> SetDaBundleId for Storage
 where
     Storage: Send + Sync,
-    Storage: StorageMutate<SequenceNumberTable, Error = StorageError>,
+    Storage: StorageMutate<BundleIdTable, Error = StorageError>,
 {
-    fn set_sequence_number(
+    fn set_bundle_id(
         &mut self,
         block_height: &BlockHeight,
-        sequence_number: u32,
+        bundle_id: u32,
     ) -> GasPriceResult<()> {
-        self.storage_as_mut::<SequenceNumberTable>()
-            .insert(block_height, &sequence_number)
+        self.storage_as_mut::<BundleIdTable>()
+            .insert(block_height, &bundle_id)
             .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?;
         Ok(())
     }
