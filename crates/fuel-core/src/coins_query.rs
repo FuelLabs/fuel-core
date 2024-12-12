@@ -422,13 +422,13 @@ fn max_dust_count(max: u16, big_coins_len: u16) -> u16 {
 
 fn skip_big_coins_up_to_amount(
     big_coins: impl IntoIterator<Item = CoinsToSpendIndexEntry>,
-    amount: u64,
+    skipped_amount: u64,
 ) -> impl Iterator<Item = CoinsToSpendIndexEntry> {
-    let mut current_dust_coins_value = amount;
+    let mut current_dust_coins_value = skipped_amount;
     big_coins.into_iter().skip_while(move |item| {
-        let amount = item.0.amount();
+        let item_amount = item.0.amount();
         current_dust_coins_value
-            .checked_sub(amount)
+            .checked_sub(item_amount)
             .map(|new_value| {
                 current_dust_coins_value = new_value;
                 true
