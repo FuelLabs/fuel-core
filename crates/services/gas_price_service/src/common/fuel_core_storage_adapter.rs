@@ -111,7 +111,7 @@ pub fn get_block_info(
     Ok(info)
 }
 
-fn mint_values(block: &Block<Transaction>) -> GasPriceResult<(u64, u64)> {
+pub(crate) fn mint_values(block: &Block<Transaction>) -> GasPriceResult<(u64, u64)> {
     let mint = block
         .transactions()
         .last()
@@ -121,6 +121,13 @@ fn mint_values(block: &Block<Transaction>) -> GasPriceResult<(u64, u64)> {
         })?;
     Ok((*mint.mint_amount(), *mint.gas_price()))
 }
+
+// TODO: Don't take a direct dependency on `Postcard` as it's not guaranteed to be the encoding format
+// https://github.com/FuelLabs/fuel-core/issues/2443
+pub(crate) fn block_bytes(block: &Block<Transaction>) -> u64 {
+    Postcard::encode(block).len() as u64
+}
+
 fn block_used_gas(
     fee: u64,
     gas_price: u64,
