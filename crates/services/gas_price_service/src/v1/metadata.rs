@@ -92,7 +92,11 @@ impl From<&V1AlgorithmConfig> for AlgorithmUpdaterV1 {
             .map(|size| u128::from(*size))
             .sum();
         Self {
-            new_scaled_exec_price: value.new_exec_gas_price,
+            // TODO:We don't need this after we implement
+            // https://github.com/FuelLabs/fuel-core/issues/2481
+            new_scaled_exec_price: value
+                .new_exec_gas_price
+                .saturating_mul(value.gas_price_factor.get()),
             l2_block_height: 0,
             new_scaled_da_gas_price: value.min_da_gas_price,
             gas_price_factor: value.gas_price_factor,
