@@ -433,7 +433,7 @@ fn skip_big_coins_up_to_amount(
                 current_dust_coins_value = new_value;
                 true
             })
-            .unwrap_or_default()
+            .unwrap_or(false)
     })
 }
 
