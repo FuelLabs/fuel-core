@@ -20,6 +20,7 @@ mod tests {
             Coins,
             ConsensusParametersVersions,
             ContractsRawCode,
+            FuelBlocks,
             Messages,
         },
         transactional::{
@@ -186,6 +187,7 @@ mod tests {
         }
     }
 
+    #[cfg(any(not(feature = "parallel-executor"), feature = "relayer"))]
     fn add_consensus_parameters(
         database: &mut Database,
         consensus_parameters: &ConsensusParameters,
@@ -230,16 +232,27 @@ mod tests {
         };
 
         let prev_block = Block::default();
-        add_consensus_parameters(&mut database, &config.consensus_parameters);
-        store_block(&mut database, &prev_block);
+        store_block(&mut database, &prev_block, &config.consensus_parameters);
         Executor::new(database, DisabledRelayer, executor_config)
     }
 
     #[cfg(feature = "parallel-executor")]
-    fn store_block(database: &mut Database, block: &Block) {
-        use fuel_core_storage::tables::FuelBlocks;
+    fn store_block(
+        database: &mut Database,
+        block: &Block,
+        consensus_parameters: &ConsensusParameters,
+    ) {
+        if let Ok(Some(_)) = database
+            .storage_as_ref::<FuelBlocks>()
+            .get(&block.header().height())
+        {
+            return;
+        }
 
         let mut tx = database.write_transaction();
+        tx.storage_as_mut::<ConsensusParametersVersions>()
+            .insert(&0, consensus_parameters)
+            .unwrap();
         tx.storage_as_mut::<FuelBlocks>()
             .insert(
                 &block.header().height(),
@@ -2968,7 +2981,7 @@ mod tests {
         };
 
         // setup db with coin to spend
-        let database = &mut &mut Database::default();
+        let mut database = &mut Database::default();
         let coin_input = &tx.inputs()[0];
         let mut coin = CompressedCoin::default();
         coin.set_owner(*coin_input.input_owner().unwrap());
@@ -2979,6 +2992,16 @@ mod tests {
             .storage::<Coins>()
             .insert(coin_input.utxo_id().unwrap(), &coin)
             .unwrap();
+        let mut default_block = Block::default();
+        for i in 0..block_height {
+            default_block.header_mut().set_block_height(i.into());
+            default_block.header_mut().recalculate_metadata();
+            store_block(
+                &mut database,
+                &default_block,
+                &ConsensusParameters::standard(),
+            );
+        }
 
         // make executor with db
         let mut executor = create_executor(
@@ -3033,7 +3056,7 @@ mod tests {
         };
 
         // setup db with coin to spend
-        let database = &mut &mut Database::default();
+        let mut database = &mut Database::default();
         let coin_input = &tx.inputs()[0];
         let mut coin = CompressedCoin::default();
         coin.set_owner(*coin_input.input_owner().unwrap());
@@ -3043,6 +3066,16 @@ mod tests {
             .storage::<Coins>()
             .insert(coin_input.utxo_id().unwrap(), &coin)
             .unwrap();
+        let mut default_block = Block::default();
+        for i in 0..block_height {
+            default_block.header_mut().set_block_height(i.into());
+            default_block.header_mut().recalculate_metadata();
+            store_block(
+                &mut database,
+                &default_block,
+                &ConsensusParameters::standard(),
+            );
+        }
 
         // make executor with db
         let mut executor = create_executor(

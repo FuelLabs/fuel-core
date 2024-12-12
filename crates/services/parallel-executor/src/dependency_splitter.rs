@@ -102,16 +102,15 @@ impl DependencySplitter {
     ) -> ExecutorResult<()> {
         let gas = tx.max_gas(&self.consensus_parameters)?;
         let remaining_block_gas = self.remaning_block_gas;
-        self.remaning_block_gas = self
-            .remaning_block_gas
-            .checked_sub(gas)
-            .ok_or(ExecutorError::GasOverflow(
-            format!(
+        self.remaning_block_gas = self.remaning_block_gas.checked_sub(gas).ok_or(
+            ExecutorError::GasOverflow(
+                format!(
                 "Transaction cannot fit in remaining gas limit: ({remaining_block_gas})."
             ),
-            gas,
-            remaining_block_gas,
-        ))?;
+                gas,
+                remaining_block_gas,
+            ),
+        )?;
 
         let inputs = tx.inputs()?;
 
