@@ -69,6 +69,8 @@ pub enum CoinsQueryError {
     IncorrectCoinKeyInIndex,
     #[error("incorrect message key found in messages to spend index")]
     IncorrectMessageKeyInIndex,
+    #[error("error while processing the query: {0}")]
+    UnexpectedInternalState(&'static str),
 }
 
 #[cfg(test)]
@@ -301,8 +303,14 @@ pub async fn select_coins_to_spend(
         return Ok(vec![]);
     }
     let Some(last_selected_big_coin) = selected_big_coins.last() else {
-        // Should never happen.
-        return Ok(vec![]);
+        // Should never happen, because at this stage we know that:
+        // 1) selected_big_coins_total >= total
+        // 2) total > 0
+        // hence: selected_big_coins_total > 0
+        // therefore, at least one coin is selected - if not, it's a bug
+        return Err(CoinsQueryError::UnexpectedInternalState(
+            "at least one coin should be selected",
+        ));
     };
 
     let selected_big_coins_len = selected_big_coins.len();
