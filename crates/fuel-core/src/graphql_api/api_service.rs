@@ -40,6 +40,7 @@ use axum::{
         FromRequest,
     },
     http::{
+        self,
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
@@ -74,6 +75,7 @@ use futures::Stream;
 use hyper::rt::Executor;
 use serde_json::json;
 use std::{
+    any::Any,
     future::Future,
     net::{
         SocketAddr,
@@ -82,6 +84,7 @@ use std::{
     pin::Pin,
     sync::Arc,
 };
+use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::{
@@ -223,6 +226,7 @@ impl RunnableTask for Task {
 }
 
 pub(crate) const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "REQUIRED_FUEL_BLOCK_HEIGHT";
+pub(crate) const CURRENT_FUEL_BLOCK_HEIGHT_HEADER: &str = "CURRENT_FUEL_BLOCK_HEIGHT";
 
 // Need a separate Data Object for each Query endpoint, cannot be avoided
 #[allow(clippy::too_many_arguments)]
@@ -388,22 +392,37 @@ async fn graphql_handler(
     extract_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Result<Json<Response>, (StatusCode, Json<String>)> {
+) -> Result<Json<Response>, (StatusCode, http::HeaderMap, Json<String>)> {
     let mut request = req.0;
+
     if let RequiredHeight(Some(height)) = extract_height {
         request
             .extensions
             .insert(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER.to_string(), height.into());
-    }
+    };
+
+    let current_fuel_block_height_data: Arc<Mutex<Option<BlockHeight>>> =
+        Arc::new(Mutex::new(None));
+
+    let request = request.data(current_fuel_block_height_data.clone());
     let graphql_response: Response = schema.execute(request).await.into();
-    let precondition_failed = graphql_response
-        .errors
-        .first()
-        .and_then(|err| err.source::<RequiredFuelBlockHeightTooFarInTheFuture>())
-        .is_some();
-    if precondition_failed {
+    let precondition_failed_error = graphql_response.errors.first().filter(|err| {
+        err.source::<RequiredFuelBlockHeightTooFarInTheFuture>()
+            .is_some()
+    });
+    if precondition_failed_error.is_some() {
+        let mut header_map = http::HeaderMap::new();
+        {
+            let current_fuel_block_height = current_fuel_block_height_data.lock().await;
+
+            header_map.insert(
+                CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
+                (*current_fuel_block_height.expect("Block height is set")).into(),
+            );
+        }
         Err((
             StatusCode::PRECONDITION_FAILED,
+            header_map,
             Json("Required fuel block height is too far in the future".to_string()),
         ))
     } else {
