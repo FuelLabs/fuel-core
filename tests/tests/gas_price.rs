@@ -528,7 +528,6 @@ mod prop_tests {
     fn dummy() {}
 }
 
-// P: 4,707,680, D: 114,760
 fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     let _ = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
