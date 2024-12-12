@@ -28,7 +28,6 @@ use fuel_core_storage::{
         Encode,
     },
     kv_store::KeyValueInspect,
-    structured_storage::StructuredStorage,
     transactional::{
         Modifiable,
         StorageTransaction,
@@ -60,10 +59,12 @@ mod metadata_tests;
 
 pub mod storage;
 
-impl<Storage> SetMetadataStorage for StructuredStorage<Storage>
+impl<Storage> SetMetadataStorage for Storage
 where
     Storage: Send + Sync,
-    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable,
+    Storage: Modifiable,
+    for<'a> StorageTransaction<&'a mut Storage>:
+        StorageMutate<GasPriceMetadata, Error = StorageError>,
 {
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
         let block_height = metadata.l2_block_height();

@@ -61,7 +61,7 @@ where
     fn insert(&mut self, height: v1::Height, bytes: v1::Bytes) -> Result<(), String> {
         self.inner
             .storage_as_mut::<UnrecordedBlocksTable>()
-            .insert(&height, &bytes)
+            .insert(&height.into(), &bytes)
             .map_err(|err| format!("Error: {:?}", err))?;
         Ok(())
     }
@@ -70,7 +70,7 @@ where
         let bytes = self
             .inner
             .storage_as_mut::<UnrecordedBlocksTable>()
-            .take(height)
+            .take(&(*height).into())
             .map_err(|err| format!("Error: {:?}", err))?;
         Ok(bytes)
     }
