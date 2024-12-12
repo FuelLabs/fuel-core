@@ -58,6 +58,7 @@ use fuel_gas_price_algorithm::{
 };
 use futures::FutureExt;
 use tokio::sync::broadcast::Receiver;
+use crate::ports::GetDaSequenceNumber;
 
 /// The service that updates the gas price algorithm.
 pub struct GasPriceServiceV1<L2, DA, StorageTxProvider> {
@@ -155,6 +156,9 @@ where
     ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
+        let mut sequence_number = storage_tx
+            .get_sequence_number(&BlockHeight::from(height -1))
+            .map_err(|err| anyhow!(err))?;
 
         for da_block_costs in self.da_block_costs_buffer.drain(..) {
             tracing::debug!("Updating DA block costs: {:?}", da_block_costs);
@@ -164,10 +168,14 @@ where
                 da_block_costs.blob_cost_wei,
                 &mut storage_tx.as_unrecorded_blocks(),
             )?;
+            sequence_number = Some(da_block_costs.sequence_number);
+        }
+
+        if let Some(sequence_number) = sequence_number {
             storage_tx
                 .set_sequence_number(
                     &BlockHeight::from(height),
-                    da_block_costs.sequence_number,
+                    sequence_number,
                 )
                 .map_err(|err| anyhow!(err))?;
         }
