@@ -45,6 +45,7 @@ use fuel_core_types::{
         Input,
         TxId,
         TxPointer,
+        UniqueIdentifier,
     },
     fuel_types::BlockHeight,
     fuel_vm::interpreter::MemoryInstance,
@@ -531,7 +532,46 @@ where
             return Err(error.clone());
         }
 
-        if &executed_block_result.result().block == block {
+        let chain_id = {
+            let executor = self.executor.read().map_err(|e| {
+                ExecutorError::Other(format!(
+                    "Unable to get the read lock for the executor: {e}"
+                ))
+            })?;
+            let view =
+                StructuredStorage::new(executor.storage_view_provider.latest_view()?);
+            let consensus_parameters = view
+                .storage_as_ref::<ConsensusParametersVersions>()
+                .get(&block.header().consensus_parameters_version)?
+                .ok_or(ExecutorError::ConsensusParametersNotFound(
+                    block.header().consensus_parameters_version,
+                ))?;
+            consensus_parameters.chain_id()
+        };
+
+        if executed_block_result.result().block.header() == block.header() {
+            executed_block_result
+                .result()
+                .block
+                .transactions()
+                .iter()
+                .zip(block.transactions())
+                .try_for_each(|(new_tx, old_tx)| {
+                    if new_tx != old_tx {
+                        let transaction_id = old_tx.id(&chain_id);
+
+                        tracing::info!(
+                        "Transaction {:?} does not match: new_tx {:?} and old_tx {:?}",
+                        transaction_id,
+                        new_tx,
+                        old_tx
+                    );
+
+                        Err(ExecutorError::InvalidTransactionOutcome { transaction_id })
+                    } else {
+                        Ok(())
+                    }
+                })?;
             Ok(executed_block_result.into_validation_result())
         } else {
             Err(ExecutorError::BlockMismatch)

@@ -1177,13 +1177,14 @@ mod tests {
 
         let verifier = create_executor(Default::default(), Default::default());
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![
                 Transaction::default_test_tx(),
                 Transaction::default_test_tx(),
             ],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult {
             skipped_transactions,
@@ -1247,10 +1248,11 @@ mod tests {
 
         let verifier = create_executor(Default::default(), config);
 
-        let block = PartialFuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.clone()],
         };
+        block.header.consensus.height = 1.into();
 
         let ProductionResult {
             skipped_transactions,
@@ -1306,7 +1308,9 @@ mod tests {
         let mut verifier = create_executor(Default::default(), Default::default());
 
         let mut block = Block::default();
+        block.header_mut().set_block_height(1.into());
         *block.transactions_mut() = vec![tx];
+        block.header_mut().recalculate_metadata();
 
         let ProductionResult { mut block, .. } =
             producer.produce_and_commit(block.into()).unwrap();
