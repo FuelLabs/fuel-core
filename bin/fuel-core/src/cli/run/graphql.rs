@@ -112,7 +112,7 @@ pub struct QueryCosts {
     )]
     pub dry_run: usize,
 
-    /// Query costs for generating execution trace for a block.
+    /// Query costs for generating execution trace for a block.®
     #[clap(
         long = "query-cost-execution-trace-block",
         default_value = DEFAULT_QUERY_COSTS.execution_trace_block.to_string(),

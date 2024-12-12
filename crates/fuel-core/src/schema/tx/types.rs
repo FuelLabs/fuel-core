@@ -894,8 +894,8 @@ impl DryRunTransactionStatus {
     }
 }
 
-/// One of the films in the Star Wars Trilogy
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+/// When to record a trace frames during execution
+#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum TraceTrigger {
     /// After each instruction
     OnInstruction,
@@ -1097,7 +1097,7 @@ impl From<fuel_core_types::fuel_vm::interpreter::MemorySliceChange>
 impl TraceFrameMemoryPatch {
     /// Start address
     async fn start(&self) -> u32 {
-        self.start as u32
+        u32::try_from(self.start).expect("Invalid memory address")
     }
 
     /// Bytes of data

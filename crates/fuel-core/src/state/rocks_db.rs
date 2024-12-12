@@ -770,12 +770,12 @@ where
             .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?
             .map(|value| {
-                if offset >= value.len() {
+                let Some(read) = value.len().checked_sub(offset) else {
                     return Ok(0);
-                }
+                };
                 std::io::Write::write_all(&mut buf, &value.as_ref()[offset..])
                     .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
-                StorageResult::Ok(value.len() - offset)
+                StorageResult::Ok(read)
             })
             .transpose()?;
 

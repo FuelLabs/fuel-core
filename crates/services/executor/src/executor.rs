@@ -1600,6 +1600,7 @@ where
         Ok(checked_tx)
     }
 
+    #[allow(clippy::type_complexity)]
     fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
         checked_tx: Checked<Tx>,

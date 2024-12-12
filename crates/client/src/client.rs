@@ -49,22 +49,19 @@ use fuel_core_types::{
     fuel_asm::{
         Instruction,
         Word,
-    },
-    fuel_tx::{
+    }, fuel_tx::{
         BlobId,
         Bytes32,
         ConsensusParameters,
         Receipt,
         Transaction,
         TxId,
-    },
-    fuel_types::{
+    }, fuel_types::{
         self,
         canonical::Serialize,
         BlockHeight,
         Nonce,
-    },
-    services::executor::TransactionExecutionStatus,
+    }, fuel_vm::interpreter::trace::Trigger, services::executor::TransactionExecutionStatus
 };
 #[cfg(feature = "subscriptions")]
 use futures::{
@@ -500,6 +497,28 @@ impl FuelClient {
                 gas_price: gas_price.map(|gp| gp.into()),
             });
         let tx_statuses = self.query(query).await.map(|r| r.dry_run)?;
+        tx_statuses
+            .into_iter()
+            .map(|tx_status| tx_status.try_into().map_err(Into::into))
+            .collect()
+    }
+
+    /// Exectuion trace for a block
+    pub async fn execution_trace_block(
+        &self,
+        height: &BlockHeight,
+        trigger: Trigger
+    ) -> io::Result<Vec<TransactionExecutionStatus>> {
+        let query: Operation<
+            schema::execution_trace::ExectionTraceBlock,
+            schema::execution_trace::ExectionTraceBlockArgs,
+        > = schema::execution_trace::ExectionTraceBlock::build(
+            schema::execution_trace::ExectionTraceBlockArgs {
+                height: (*height).into(),
+                trigger: trigger.into(),
+            },
+        );
+        let tx_statuses = self.query(query).await.map(|r| r.execution_trace_block)?;
         tx_statuses
             .into_iter()
             .map(|tx_status| tx_status.try_into().map_err(Into::into))

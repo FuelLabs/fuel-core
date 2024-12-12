@@ -399,7 +399,7 @@ where
             match operation {
                 WriteOperation::Insert(value) => {
                     let read = value.len();
-                    if offset + read != buf.len() {
+                    if offset.saturating_add(read) != buf.len() {
                         return Err(crate::Error::Other(anyhow::anyhow!(
                             "Buffer size is not equal to the value size after offset"
                         )));

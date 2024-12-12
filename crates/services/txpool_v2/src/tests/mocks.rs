@@ -126,13 +126,15 @@ impl StorageRead<BlobData> for MockDb {
     fn read(
         &self,
         key: &<BlobData as Mappable>::Key,
+        offset: usize,
         buf: &mut [u8],
     ) -> Result<Option<usize>, Self::Error> {
         let table = self.data.lock().unwrap();
         let bytes = table.blobs.get(key);
 
         let len = bytes.map(|bytes| {
-            buf.copy_from_slice(bytes.0.as_slice());
+            assert!(offset < bytes.0.len());
+            buf.copy_from_slice(&bytes.0.as_slice()[offset..]);
             bytes.0.len()
         });
         Ok(len)
