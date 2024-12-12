@@ -71,6 +71,11 @@ pub enum CoinsQueryError {
     IncorrectMessageKeyInIndex,
     #[error("error while processing the query: {0}")]
     UnexpectedInternalState(&'static str),
+    #[error("total and max can not be 0 (provided total: {provided_total}, provided max: {provided_max})")]
+    IncorrectQueryParameters {
+        provided_total: u64,
+        provided_max: u16,
+    },
 }
 
 #[cfg(test)]
@@ -285,10 +290,13 @@ pub async fn select_coins_to_spend(
     max: u16,
     excluded_ids: &ExcludedCoinIds<'_>,
     batch_size: usize,
-) -> Result<Vec<CoinsToSpendIndexEntry>, CoinsQueryError> {
+) -> Result<Option<Vec<CoinsToSpendIndexEntry>>, CoinsQueryError> {
     const TOTAL_AMOUNT_ADJUSTMENT_FACTOR: u64 = 2;
     if total == 0 && max == 0 {
-        return Ok(vec![]);
+        return Err(CoinsQueryError::IncorrectQueryParameters {
+            provided_total: total,
+            provided_max: max,
+        });
     }
 
     let adjusted_total = total.saturating_mul(TOTAL_AMOUNT_ADJUSTMENT_FACTOR);
@@ -300,7 +308,7 @@ pub async fn select_coins_to_spend(
         big_coins(big_coins_stream, adjusted_total, max, excluded_ids).await?;
 
     if selected_big_coins_total < total {
-        return Ok(vec![]);
+        return Ok(None);
     }
     let Some(last_selected_big_coin) = selected_big_coins.last() else {
         // Should never happen, because at this stage we know that:
@@ -332,7 +340,9 @@ pub async fn select_coins_to_spend(
     let retained_big_coins_iter =
         skip_big_coins_up_to_amount(selected_big_coins, dust_coins_total);
 
-    Ok((retained_big_coins_iter.chain(selected_dust_coins)).collect())
+    Ok(Some(
+        (retained_big_coins_iter.chain(selected_dust_coins)).collect(),
+    ))
 }
 
 async fn big_coins(
@@ -1269,7 +1279,8 @@ mod tests {
                 BATCH_SIZE,
             )
             .await
-            .expect("should select coins");
+            .expect("should not error")
+            .expect("should select some coins");
 
             let mut results = result
                 .into_iter()
@@ -1329,10 +1340,11 @@ mod tests {
                 &excluded,
                 BATCH_SIZE,
             )
-            .await;
+            .await
+            .expect("should not error")
+            .expect("should select some coins");
 
             // Then
-            let result = result.expect("should select coins");
             let results: Vec<_> =
                 result.into_iter().map(|(key, _)| key.amount()).collect();
             assert_eq!(results, vec![10, 10]);

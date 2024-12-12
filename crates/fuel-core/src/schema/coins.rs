@@ -353,17 +353,25 @@ async fn coins_to_spend_with_cache(
             .unwrap_or(max_input)
             .min(max_input);
 
-        let selected_stream = futures::stream::iter(
-            select_coins_to_spend(
-                db.off_chain.coins_to_spend_index(&owner, &asset_id),
-                total_amount,
-                max,
-                &excluded,
-                db.batch_size,
-            )
-            .await?,
+        let selected_coins = select_coins_to_spend(
+            db.off_chain.coins_to_spend_index(&owner, &asset_id),
+            total_amount,
+            max,
+            &excluded,
+            db.batch_size,
         )
-        .yield_each(db.batch_size);
+        .await?;
+        let Some(selected_coins) = selected_coins else {
+            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                asset_id,
+                collected_amount: total_amount,
+                max,
+            }
+            .into())
+        };
+
+        let selected_stream =
+            futures::stream::iter(selected_coins).yield_each(db.batch_size);
 
         let mut coins_per_asset = vec![];
         for coin_or_message_id in into_coin_id(selected_stream, max as usize).await? {
@@ -381,14 +389,6 @@ async fn coins_to_spend_with_cache(
             coins_per_asset.push(coin_type);
         }
 
-        if coins_per_asset.is_empty() {
-            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
-                asset_id,
-                collected_amount: total_amount,
-                max,
-            }
-            .into())
-        }
         all_coins.push(coins_per_asset);
     }
     Ok(all_coins)
