@@ -315,7 +315,7 @@ where
             .header_to_produce
             .height()
             .pred()
-            .ok_or(ExecutorError::PreviousBlockIsNotFound)?;
+            .ok_or(ExecutorError::ExecutingGenesisBlock)?;
         let executor = self.executor.read().map_err(|e| {
             ExecutorError::Other(format!(
                 "Unable to get the read lock for the executor: {e}"
@@ -345,6 +345,7 @@ where
         // TODO: Support parallel execution when the block is increased.
         //  We can always process DA first, and on top of this result run transactions in parallel.
         if previous_block.header().da_height != components.header_to_produce.da_height {
+            dbg!(previous_block.header().da_height, components.header_to_produce.da_height);
             let new_small_block = Components {
                 header_to_produce: components.header_to_produce,
                 transactions_source: OneCoreTxSource::new(
@@ -400,7 +401,9 @@ where
         }
 
         let buckets = splitter.split_equally(self.number_of_cores);
-
+        for bucket in &buckets {
+            dbg!(bucket.len());
+        }
         let handlers = buckets
             .into_iter()
             .map(|txs| {
