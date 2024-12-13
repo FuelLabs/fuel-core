@@ -45,7 +45,6 @@ use fuel_core_types::{
         Input,
         TxId,
         TxPointer,
-        UniqueIdentifier,
     },
     fuel_types::BlockHeight,
     fuel_vm::interpreter::MemoryInstance,
@@ -91,6 +90,7 @@ use std::{
         Arc,
         RwLock,
     },
+    time::Instant,
 };
 use tokio::runtime::Runtime;
 
@@ -443,7 +443,15 @@ where
             }
         }
 
+        let start = Instant::now();
         let buckets = splitter.split_equally(self.number_of_cores);
+
+        tracing::info!(
+            "Splitting transactions took: {}ms",
+            start.elapsed().as_millis()
+        );
+
+        let start = Instant::now();
         let handlers = buckets
             .into_iter()
             .map(|txs| {
@@ -466,8 +474,9 @@ where
             })
             .collect::<Vec<_>>();
 
-        let results = runtime
-            .block_on(async move { futures::future::join_all(handlers).await });
+        let results = futures::executor::block_on(async move {
+            futures::future::join_all(handlers).await
+        });
 
         let execution_results = results
             .into_iter()
@@ -481,6 +490,11 @@ where
             })
             .collect::<ExecutorResult<Vec<_>>>()?;
 
+        tracing::info!(
+            "Execution of transactions took: {}ms",
+            start.elapsed().as_millis()
+        );
+
         let components = Components {
             header_to_produce,
             transactions_source: (),
@@ -488,6 +502,7 @@ where
             gas_price,
         };
 
+        let start = Instant::now();
         let latest_view = executor.storage_view_provider.latest_view()?;
         let result = Self::merge_execution_results(
             latest_view,
@@ -539,6 +554,10 @@ where
             assert_eq!(old_result.result(), result.result());
             assert_eq!(old_result.changes(), result.changes());
         }
+        tracing::info!(
+            "Merging of transactions took: {}ms",
+            start.elapsed().as_millis()
+        );
 
         Ok(result)
     }
@@ -578,16 +597,12 @@ where
             return executor.validate(block)
         }
 
+        let mut txs = block.transactions_vec().clone();
+        txs.pop().ok_or(ExecutorError::MintMissing)?;
+
         let components = Components {
             header_to_produce: block.header().into(),
-            transactions_source: OnceTransactionsSource::new(
-                block
-                    .transactions()
-                    .split_last()
-                    .ok_or(ExecutorError::MintMissing)?
-                    .1
-                    .to_vec(),
-            ),
+            transactions_source: OnceTransactionsSource::new(txs),
             coinbase_recipient: coinbase_contract_id,
             gas_price,
         };
@@ -609,46 +624,7 @@ where
             return Err(error.clone());
         }
 
-        let chain_id = {
-            let executor = self.executor.read().map_err(|e| {
-                ExecutorError::Other(format!(
-                    "Unable to get the read lock for the executor: {e}"
-                ))
-            })?;
-            let view =
-                StructuredStorage::new(executor.storage_view_provider.latest_view()?);
-            let consensus_parameters = view
-                .storage_as_ref::<ConsensusParametersVersions>()
-                .get(&block.header().consensus_parameters_version)?
-                .ok_or(ExecutorError::ConsensusParametersNotFound(
-                    block.header().consensus_parameters_version,
-                ))?;
-            consensus_parameters.chain_id()
-        };
-
-        if executed_block_result.result().block.header() == block.header() {
-            executed_block_result
-                .result()
-                .block
-                .transactions()
-                .iter()
-                .zip(block.transactions())
-                .try_for_each(|(new_tx, old_tx)| {
-                    if new_tx != old_tx {
-                        let transaction_id = old_tx.id(&chain_id);
-
-                        tracing::info!(
-                        "Transaction {:?} does not match: new_tx {:?} and old_tx {:?}",
-                        transaction_id,
-                        new_tx,
-                        old_tx
-                    );
-
-                        Err(ExecutorError::InvalidTransactionOutcome { transaction_id })
-                    } else {
-                        Ok(())
-                    }
-                })?;
+        if executed_block_result.result().block.header().id() == block.header().id() {
             Ok(executed_block_result.into_validation_result())
         } else {
             Err(ExecutorError::BlockMismatch)
@@ -738,6 +714,8 @@ where
                 .map_err(|_| {
                 ExecutorError::BlockHeaderError(BlockHeaderError::TooManyTransactions)
             })?;
+
+            let start = Instant::now();
 
             for tx in part_block.transactions.iter_mut() {
                 let inputs = tx.inputs_mut()?;
@@ -843,20 +821,24 @@ where
             for event in execution_data.events.iter_mut() {
                 if let Event::CoinCreated(coin) = event {
                     let tx_pointer = coin.tx_pointer;
+                    assert_eq!(tx_pointer.block_height(), current_height);
 
-                    if tx_pointer.block_height() == current_height {
-                        let new_tx_index = tx_pointer
-                            .tx_index()
-                            .checked_add(tx_index_offset)
-                            .ok_or(ExecutorError::BlockHeaderError(
-                                BlockHeaderError::TooManyTransactions,
-                            ))?;
-                        let new_tx_pointer = TxPointer::new(current_height, new_tx_index);
+                    let new_tx_index = tx_pointer
+                        .tx_index()
+                        .checked_add(tx_index_offset)
+                        .ok_or(ExecutorError::BlockHeaderError(
+                            BlockHeaderError::TooManyTransactions,
+                        ))?;
+                    let new_tx_pointer = TxPointer::new(current_height, new_tx_index);
 
-                        coin.tx_pointer = new_tx_pointer;
-                    }
+                    coin.tx_pointer = new_tx_pointer;
                 }
             }
+
+            tracing::info!(
+                "Setting correct pointers took: {}ms",
+                start.elapsed().as_millis()
+            );
 
             let shifted_changes = changes_storage_tx.into_changes();
 
@@ -918,11 +900,18 @@ where
             ..
         } = total_data;
 
+        let start = Instant::now();
+
         let block = total_partial_block
             .generate(&message_ids[..], event_inbox_root)
             .map_err(ExecutorError::BlockHeaderError)?;
 
         let finalized_block_id = block.id();
+
+        tracing::info!(
+            "Final block creation took: {}ms",
+            start.elapsed().as_millis()
+        );
 
         tracing::debug!(
             "Block {:#x} fees: {} gas: {} tx_size: {}",

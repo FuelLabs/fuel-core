@@ -46,10 +46,7 @@ use rand::{
     rngs::StdRng,
     SeedableRng,
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::time::Duration;
 use test_helpers::builder::{
     local_chain_config,
     TestContext,
@@ -64,6 +61,12 @@ fn bench_txs<F>(group_id: &str, c: &mut Criterion, f: F)
 where
     F: Fn(&mut StdRng) -> Script,
 {
+    #[cfg(feature = "parallel-executor")]
+    let number_of_cores = std::env::var("FUEL_BENCH_CORES")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap();
+
     let inner_bench = |c: &mut BenchmarkGroup<WallTime>, n: u64| {
         let id = format!("{}", n);
         c.bench_function(id.as_str(), |b| {
@@ -90,53 +93,56 @@ where
             test_builder.utxo_validation = true;
             test_builder.gas_limit = Some(10_000_000_000);
             test_builder.block_size_limit = Some(1_000_000_000_000);
+            test_builder.max_txs = transactions.len();
             #[cfg(feature = "parallel-executor")]
             {
-                test_builder.executor_number_of_cores = 4;
+                test_builder.executor_number_of_cores = number_of_cores;
             }
 
             // spin up node
             let transactions: Vec<Transaction> =
                 transactions.into_iter().map(|tx| tx.into()).collect();
-            let transactions = Arc::new(transactions);
+
+            let sealed_block = rt.block_on({
+                let mut test_builder = test_builder.clone();
+                async move {
+                    let sealed_block = {
+                        // start the producer node
+                        let TestContext { srv, client, .. } =
+                            test_builder.finalize().await;
+
+                        // insert all transactions
+                        for tx in transactions {
+                            srv.shared.txpool_shared_state.insert(tx).await.unwrap();
+                        }
+                        let _ = client.produce_blocks(1, None).await;
+
+                        // sanity check block to ensure the transactions were actually processed
+                        let block = srv
+                            .shared
+                            .database
+                            .on_chain()
+                            .latest_view()
+                            .unwrap()
+                            .get_sealed_block_by_height(&1.into())
+                            .unwrap()
+                            .unwrap();
+                        assert_eq!(block.entity.transactions().len(), (n + 1) as usize);
+                        block
+                    };
+                    sealed_block
+                }
+            });
 
             b.to_async(&rt).iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
                 let test_builder = test_builder.clone();
-                let transactions = transactions.clone();
+                let sealed_block = sealed_block.clone();
 
                 async move {
                     for _ in 0..iters {
                         let mut test_builder = test_builder.clone();
-                        let sealed_block = {
-                            let transactions: Vec<Transaction> =
-                                transactions.iter().cloned().collect();
-                            // start the producer node
-                            let TestContext { srv, client, .. } =
-                                test_builder.finalize().await;
-
-                            // insert all transactions
-                            for tx in transactions {
-                                srv.shared.txpool_shared_state.insert(tx).await.unwrap();
-                            }
-                            let _ = client.produce_blocks(1, None).await;
-
-                            // sanity check block to ensure the transactions were actually processed
-                            let block = srv
-                                .shared
-                                .database
-                                .on_chain()
-                                .latest_view()
-                                .unwrap()
-                                .get_sealed_block_by_height(&1.into())
-                                .unwrap()
-                                .unwrap();
-                            assert_eq!(
-                                block.entity.transactions().len(),
-                                (n + 1) as usize
-                            );
-                            block
-                        };
+                        let sealed_block = sealed_block.clone();
 
                         // start the validator node
                         let TestContext { srv, .. } = test_builder.finalize().await;
@@ -159,7 +165,12 @@ where
 
     let mut group = c.benchmark_group(group_id);
 
-    for i in [100, 500, 1000, 1500] {
+    let number_of_txs = std::env::var("BENCH_TXS_NUMBER")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap();
+
+    for i in [number_of_txs] {
         group.throughput(criterion::Throughput::Elements(i));
         group.sampling_mode(SamplingMode::Flat);
         group.sample_size(10);
@@ -382,15 +393,25 @@ fn predicate_transfers_ed19(c: &mut Criterion) {
     bench_txs("predicate transfers ed19", c, generator);
 }
 
-criterion_group!(
-    benches,
-    signed_transfers,
-    predicate_transfers,
-    predicate_transfers_eck1,
-    predicate_transfers_ed19
-);
-criterion_main!(benches);
+// criterion_group!(
+//     benches,
+//     signed_transfers,
+//     // predicate_transfers,
+//     // predicate_transfers_eck1,
+//     // predicate_transfers_ed19
+// );
+// criterion_main!(benches);
 
 fn checked_parameters() -> CheckPredicateParams {
     local_chain_config().consensus_parameters.into()
 }
+
+fn main() {
+    let mut criterion = Criterion::default();
+    signed_transfers(&mut criterion);
+}
+
+#[test]
+fn dummy() {}
+
+fuel_core_trace::enable_tracing!();

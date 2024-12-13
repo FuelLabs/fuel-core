@@ -96,6 +96,7 @@ pub struct TestSetupBuilder {
     pub block_size_limit: Option<u64>,
     pub starting_block: Option<BlockHeight>,
     pub utxo_validation: bool,
+    pub max_txs: usize,
     pub privileged_address: Address,
     pub base_asset_id: AssetId,
     pub trigger: Trigger,
@@ -233,13 +234,23 @@ impl TestSetupBuilder {
             ..StateConfig::default()
         };
 
+        let mut txpool = fuel_core_txpool::config::Config::default();
+        txpool.pool_limits.max_txs = self.max_txs;
+        txpool.max_tx_update_subscriptions = self.max_txs;
+        txpool.service_channel_limits = fuel_core_txpool::config::ServiceChannelLimits {
+            max_pending_write_pool_requests: self.max_txs,
+            max_pending_read_pool_requests: self.max_txs,
+        };
+
         let config = Config {
             utxo_validation: self.utxo_validation,
-            txpool: fuel_core_txpool::config::Config::default(),
+            txpool,
             block_production: self.trigger,
             starting_gas_price: self.starting_gas_price,
+            executor_number_of_cores: self.executor_number_of_cores,
             ..Config::local_node_with_configs(chain_conf, state)
         };
+
         assert_eq!(config.combined_db_config.database_type, DbType::RocksDb);
 
         let srv = FuelService::new_node(config).await.unwrap();
@@ -264,6 +275,7 @@ impl Default for TestSetupBuilder {
             block_size_limit: None,
             starting_block: None,
             utxo_validation: true,
+            max_txs: 1000000,
             privileged_address: Default::default(),
             base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,

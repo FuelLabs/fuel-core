@@ -3231,6 +3231,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",
+ "fuel-core-trace",
  "fuel-core-types 0.40.0",
  "futures",
  "itertools 0.12.1",

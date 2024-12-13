@@ -272,7 +272,6 @@ where
         fields(
             block_id = %result.result().sealed_block.entity.id(),
             height = **result.result().sealed_block.entity.header().height(),
-            tx_status = ?result.result().tx_status,
         ),
         err
     )]
@@ -334,6 +333,8 @@ where
         // execution without block itself.
         let expected_block_root = database.latest_block_root()?;
 
+        let start = Instant::now();
+
         #[cfg(feature = "test-helpers")]
         let changes_clone = changes.clone();
         let mut db_after_execution = database.storage_transaction(changes);
@@ -350,6 +351,10 @@ where
         }
 
         db_after_execution.commit()?;
+        tracing::info!(
+            "Commiting to the database took: {}ms",
+            start.elapsed().as_millis()
+        );
 
         if self.metrics {
             Self::update_metrics(&result, &actual_next_height);
@@ -523,6 +528,7 @@ where
         &self,
         sealed_block: SealedBlock,
     ) -> Result<(), Error> {
+        let start = Instant::now();
         let _guard = self.lock()?;
 
         let executor = self.executor.clone();
@@ -536,6 +542,10 @@ where
                     sealed_block,
                 );
                 let execute_time = start.elapsed().as_secs_f64();
+                tracing::info!(
+                    "Just verify and execute took: {}ms",
+                    start.elapsed().as_millis()
+                );
                 (result, execute_time)
             })
             .await?;
@@ -580,6 +590,10 @@ where
         };
 
         importer_metrics().execute_and_commit_duration.observe(time);
+        tracing::info!(
+            "Total execute and commit took: {}ms",
+            start.elapsed().as_millis()
+        );
         // return execution result
         commit_result.map(|_| ())
     }

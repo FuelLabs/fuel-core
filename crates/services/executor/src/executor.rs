@@ -207,7 +207,9 @@ impl TransactionsSource for OnceTransactionsSource {
         let transactions: &mut Vec<MaybeCheckedTransaction> = lock.as_mut();
         // Avoid panicking if we request more transactions than there are in the vector
         let transactions_limit = (transactions_limit as usize).min(transactions.len());
-        transactions.drain(..transactions_limit).collect()
+        let mut txs = core::mem::take(transactions);
+        txs.truncate(transactions_limit);
+        txs
     }
 }
 
