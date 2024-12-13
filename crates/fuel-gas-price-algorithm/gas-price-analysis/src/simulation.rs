@@ -96,7 +96,7 @@ impl Simulator {
         let always_normal_activity = L2ActivityTracker::new_always_normal();
         AlgorithmUpdaterV1 {
             min_exec_gas_price: 1_000_000_000,
-            min_da_gas_price: 1_000_000_000,
+            min_da_gas_price: 100,
             // Change to adjust where the exec gas price starts on block 0
             new_scaled_exec_price: 10_000_000 * gas_price_factor,
             // Change to adjust where the da gas price starts on block 0
