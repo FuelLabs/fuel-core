@@ -423,8 +423,8 @@ async fn coins_to_spend_with_cache(
             .into())
         };
 
-        let mut coins_per_asset = vec![];
-        for coin_or_message_id in into_coin_id(&selected_coins, max as usize)? {
+        let mut coins_per_asset = Vec::with_capacity(selected_coins.len());
+        for coin_or_message_id in into_coin_id(&selected_coins)? {
             let coin_type = match coin_or_message_id {
                 coins::CoinId::Utxo(utxo_id) => {
                     db.coin(utxo_id).map(|coin| CoinType::Coin(coin.into()))?
@@ -446,9 +446,8 @@ async fn coins_to_spend_with_cache(
 
 fn into_coin_id(
     selected: &[CoinsToSpendIndexEntry],
-    max_coins: usize,
 ) -> Result<Vec<CoinId>, CoinsQueryError> {
-    let mut coins = Vec::with_capacity(max_coins);
+    let mut coins = Vec::with_capacity(selected.len());
     for (foreign_key, coin_type) in selected {
         let coin = match coin_type {
             IndexedCoinType::Coin => {
