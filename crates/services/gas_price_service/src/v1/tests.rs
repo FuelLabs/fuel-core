@@ -277,6 +277,11 @@ impl DaBlockCostsSource for FakeDABlockCost {
         self.bundle_id.lock().unwrap().replace(bundle_id);
         Ok(())
     }
+
+    async fn set_last_value(&mut self, bundle_id: u32) -> Result<()> {
+        self.bundle_id.lock().unwrap().replace(bundle_id);
+        Ok(())
+    }
 }
 
 fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
@@ -382,6 +387,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         algo_updater,
         da_service_runner,
         inner,
+        inner,
     );
 
     let read_algo = service.next_block_algorithm();
@@ -427,6 +433,7 @@ async fn run__new_l2_block_saves_old_metadata() {
         shared_algo,
         algo_updater,
         da_service_runner,
+        inner,
         inner,
     );
     let mut watcher = StateWatcher::started();

@@ -177,6 +177,11 @@ where
             .config
             .da_poll_interval
             .map(|x| Duration::from_millis(x.into()));
+        if let Some(bundle_id) =
+            self.gas_price_db.get_bundle_id(&metadata_height.into())?
+        {
+            self.da_source.set_last_value(bundle_id).await?;
+        }
         let da_service = DaSourceService::new(self.da_source, poll_duration);
         let da_service_runner = ServiceRunner::new(da_service);
         da_service_runner.start_and_await().await?;
@@ -346,7 +351,6 @@ where
 }
 
 #[allow(clippy::type_complexity)]
-#[allow(clippy::too_many_arguments)]
 pub fn new_gas_price_service_v1<L2DataStore, AtomicStorage, DA, SettingsProvider>(
     v1_config: V1AlgorithmConfig,
     genesis_block_height: BlockHeight,

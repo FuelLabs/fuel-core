@@ -183,6 +183,12 @@ where
                 .map_err(|err| anyhow!(err))?;
         }
 
+        if let Some(bundle_id) = bundle_id {
+            storage_tx
+                .set_bundle_id(&BlockHeight::from(height), bundle_id)
+                .map_err(|err| anyhow!(err))?;
+        }
+
         let fee_in_wei = u128::from(block_fees).saturating_mul(1_000_000_000);
         self.algorithm_updater.update_l2_block_data(
             height,
@@ -257,13 +263,11 @@ where
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
                 tracing::debug!("Received L2 block result: {:?}", l2_block_res);
-                tracing::debug!("2222222222222222222222222222222222222");
                 let res = self.commit_block_data_to_algorithm(l2_block_res).await;
                 TaskNextAction::always_continue(res)
             }
             da_block_costs_res = self.da_source_channel.recv() => {
                 tracing::debug!("Received DA block costs: {:?}", da_block_costs_res);
-                tracing::debug!("999999999999999999999999999999999999");
                 match da_block_costs_res {
                     Ok(da_block_costs) => {
                         self.da_block_costs_buffer.push(da_block_costs);
@@ -503,6 +507,7 @@ mod tests {
             algo_updater,
             da_service_runner,
             inner,
+            inner,
         );
         let read_algo = service.next_block_algorithm();
         let mut watcher = StateWatcher::default();
@@ -601,6 +606,10 @@ mod tests {
         //     .da_source_adapter_handle
         //     .run(&mut da_source_watcher)
         //     .await;
+
+        service.run(&mut watcher).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        l2_block_sender.send(l2_block_2).await.unwrap();
 
         service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;

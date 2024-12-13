@@ -3,7 +3,6 @@ use crate::common::{
         GasPriceColumn,
         UnrecordedBlocksTable,
     },
-    utils::BlockInfo::Block,
 };
 use fuel_core_storage::{
     kv_store::{
@@ -20,9 +19,9 @@ use fuel_core_storage::{
     StorageMutate,
 };
 use fuel_core_types::{
-    fuel_merkle::storage::StorageMutateInfallible,
     fuel_types::BlockHeight,
 };
+use fuel_core_types::fuel_merkle::storage::StorageMutateInfallible;
 use fuel_gas_price_algorithm::{
     v1,
     v1::UnrecordedBlocks,

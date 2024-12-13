@@ -93,7 +93,7 @@ pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
         l2_block_height: 0,
         new_scaled_da_gas_price: value
             .min_da_gas_price
-            .saturating_mul(value.gas_price_factor.get()),
+        .saturating_mul(value.gas_price_factor.get()),
         gas_price_factor: value.gas_price_factor,
         total_da_rewards_excess: 0,
         latest_known_total_da_cost_excess: 0,
