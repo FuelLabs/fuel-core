@@ -65,7 +65,6 @@ mockall::mock! {
             message_block_height: &BlockHeight,
             commit_block_height: &BlockHeight,
         ) -> StorageResult<MerkleProof>;
-        fn receipts(&self, transaction_id: &TxId) -> StorageResult<Vec<Receipt>>;
         fn transaction_status(&self, transaction_id: &TxId) -> StorageResult<TransactionStatus>;
     }
 }
@@ -96,16 +95,6 @@ async fn can_build_message_proof() {
 
     let mut data = MockProofDataStorage::new();
     let mut count = 0;
-
-    data.expect_receipts().returning(move |txn_id| {
-        if *txn_id == transaction_id {
-            Ok(receipts.to_vec())
-        } else {
-            let r = other_receipts[count..=count].to_vec();
-            count += 1;
-            Ok(r)
-        }
-    });
 
     let commit_block_header = PartialBlockHeader {
         application: ApplicationHeader {
@@ -158,18 +147,23 @@ async fn can_build_message_proof() {
         });
 
     let message_block_height = *message_block.header().height();
-    data.expect_transaction_status()
-        .with(eq(transaction_id))
-        .returning(move |_| {
-            Ok(TransactionStatus::Success {
-                block_height: message_block_height,
-                time: Tai64::UNIX_EPOCH,
-                result: None,
-                receipts: vec![],
-                total_gas: 0,
-                total_fee: 0,
-            })
-        });
+    data.expect_transaction_status().returning(move |tx_id| {
+        let receipts = if *tx_id == transaction_id {
+            receipts.to_vec()
+        } else {
+            let r = other_receipts[count..=count].to_vec();
+            count += 1;
+            r
+        };
+        Ok(TransactionStatus::Success {
+            block_height: message_block_height,
+            time: Tai64::UNIX_EPOCH,
+            result: None,
+            receipts,
+            total_gas: 0,
+            total_fee: 0,
+        })
+    });
 
     data.expect_block().times(2).returning({
         let commit_block = commit_block.clone();
