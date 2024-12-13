@@ -14,12 +14,16 @@ use fuel_core_types::{
         Message,
     },
     fuel_tx::{
+        self,
         Address,
         AssetId,
         TxId,
         UtxoId,
     },
-    fuel_types::Nonce,
+    fuel_types::{
+        self,
+        Nonce,
+    },
 };
 
 use crate::graphql_api::indexation;
@@ -119,6 +123,31 @@ impl core::fmt::Display for CoinsToSpendIndexKey {
             self.asset_id(),
             self.amount()
         )
+    }
+}
+
+impl TryFrom<&CoinsToSpendIndexKey> for fuel_tx::UtxoId {
+    type Error = ();
+
+    fn try_from(value: &CoinsToSpendIndexKey) -> Result<Self, Self::Error> {
+        let bytes: [u8; COIN_FOREIGN_KEY_LEN] =
+            value.foreign_key_bytes().try_into().map_err(|_| ())?;
+
+        let (tx_id_bytes, output_index_bytes) = bytes.split_at(TxId::LEN);
+        let tx_id = TxId::try_from(tx_id_bytes).map_err(|_| ())?;
+        let output_index =
+            u16::from_be_bytes(output_index_bytes.try_into().map_err(|_| ())?);
+        Ok(fuel_tx::UtxoId::new(tx_id, output_index))
+    }
+}
+
+impl TryFrom<&CoinsToSpendIndexKey> for fuel_types::Nonce {
+    type Error = ();
+
+    fn try_from(value: &CoinsToSpendIndexKey) -> Result<Self, Self::Error> {
+        let bytes: [u8; MESSAGE_FOREIGN_KEY_LEN] =
+            value.foreign_key_bytes().try_into().map_err(|_| ())?;
+        Ok(fuel_types::Nonce::from(bytes))
     }
 }
 

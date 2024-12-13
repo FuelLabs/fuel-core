@@ -16,11 +16,7 @@ use crate::{
     graphql_api::{
         api_service::ConsensusProvider,
         database::ReadView,
-        storage::coins::{
-            IndexedCoinType,
-            COIN_FOREIGN_KEY_LEN,
-            MESSAGE_FOREIGN_KEY_LEN,
-        },
+        storage::coins::IndexedCoinType,
     },
     query::asset_query::AssetSpendTarget,
     schema::{
@@ -43,7 +39,6 @@ use async_graphql::{
     },
     Context,
 };
-use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     entities::coins::{
         self,
@@ -56,9 +51,7 @@ use fuel_core_types::{
     },
     fuel_tx::{
         self,
-        TxId,
     },
-    fuel_types,
 };
 use itertools::Itertools;
 use tokio_stream::StreamExt;
@@ -448,27 +441,18 @@ fn into_coin_id(
     selected: &[CoinsToSpendIndexEntry],
 ) -> Result<Vec<CoinId>, CoinsQueryError> {
     let mut coins = Vec::with_capacity(selected.len());
-    for (foreign_key, coin_type) in selected {
+    for (key, coin_type) in selected {
         let coin = match coin_type {
             IndexedCoinType::Coin => {
-                let bytes: [u8; COIN_FOREIGN_KEY_LEN] = foreign_key
-                    .foreign_key_bytes()
+                let utxo = key
                     .try_into()
                     .map_err(|_| CoinsQueryError::IncorrectCoinKeyInIndex)?;
-
-                let (tx_id_bytes, output_index_bytes) = bytes.split_at(TxId::LEN);
-                let tx_id = TxId::try_from(tx_id_bytes).map_err(StorageError::from)?;
-                let output_index = u16::from_be_bytes(
-                    output_index_bytes.try_into().map_err(StorageError::from)?,
-                );
-                CoinId::Utxo(fuel_tx::UtxoId::new(tx_id, output_index))
+                CoinId::Utxo(utxo)
             }
             IndexedCoinType::Message => {
-                let bytes: [u8; MESSAGE_FOREIGN_KEY_LEN] = foreign_key
-                    .foreign_key_bytes()
+                let nonce = key
                     .try_into()
                     .map_err(|_| CoinsQueryError::IncorrectMessageKeyInIndex)?;
-                let nonce = fuel_types::Nonce::from(bytes);
                 CoinId::Message(nonce)
             }
         };
