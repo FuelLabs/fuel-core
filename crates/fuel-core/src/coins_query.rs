@@ -3,7 +3,7 @@ use crate::{
     graphql_api::{
         ports::CoinsToSpendIndexIter,
         storage::coins::{
-            CoinsToSpendIndexKey,
+            CoinsToSpendIndexEntry,
             IndexedCoinType,
         },
     },
@@ -81,8 +81,6 @@ impl PartialEq for CoinsQueryError {
         format!("{self:?}") == format!("{other:?}")
     }
 }
-
-pub(crate) type CoinsToSpendIndexEntry = (CoinsToSpendIndexKey, IndexedCoinType);
 
 pub struct ExcludedCoinIds<'a> {
     coins: HashSet<&'a UtxoId>,

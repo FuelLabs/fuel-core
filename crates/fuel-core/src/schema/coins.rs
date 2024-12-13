@@ -5,7 +5,6 @@ use crate::{
         random_improve,
         select_coins_to_spend,
         CoinsQueryError,
-        CoinsToSpendIndexEntry,
         ExcludedCoinIds,
         SpendQuery,
     },
@@ -16,7 +15,10 @@ use crate::{
     graphql_api::{
         api_service::ConsensusProvider,
         database::ReadView,
-        storage::coins::IndexedCoinType,
+        storage::coins::{
+            CoinsToSpendIndexEntry,
+            IndexedCoinType,
+        },
     },
     query::asset_query::AssetSpendTarget,
     schema::{

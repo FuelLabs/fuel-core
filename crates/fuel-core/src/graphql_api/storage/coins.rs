@@ -110,6 +110,8 @@ impl TryFrom<&[u8]> for IndexedCoinType {
     }
 }
 
+pub type CoinsToSpendIndexEntry = (CoinsToSpendIndexKey, IndexedCoinType);
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CoinsToSpendIndexKey(Vec<u8>);
 

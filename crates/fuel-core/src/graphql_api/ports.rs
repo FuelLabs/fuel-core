@@ -66,17 +66,12 @@ use std::sync::Arc;
 
 use super::storage::{
     balances::TotalBalanceAmount,
-    coins::{
-        CoinsToSpendIndexKey,
-        IndexedCoinType,
-    },
+    coins::CoinsToSpendIndexEntry,
 };
 
 pub struct CoinsToSpendIndexIter<'a> {
-    pub(crate) big_coins_iter:
-        BoxedIter<'a, Result<(CoinsToSpendIndexKey, IndexedCoinType), StorageError>>,
-    pub(crate) dust_coins_iter:
-        BoxedIter<'a, Result<(CoinsToSpendIndexKey, IndexedCoinType), StorageError>>,
+    pub big_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexEntry, StorageError>>,
+    pub dust_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexEntry, StorageError>>,
 }
 
 pub trait OffChainDatabase: Send + Sync {
