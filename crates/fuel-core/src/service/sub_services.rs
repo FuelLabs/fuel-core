@@ -109,13 +109,13 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.relayer().clone(),
         #[cfg(not(feature = "parallel-executor"))]
-        upgradable_executor_config,        
+        upgradable_executor_config,
         #[cfg(feature = "parallel-executor")]
         fuel_core_parallel_executor::config::Config {
             // TODO: Change
             number_of_cores: NonZero::new(3).unwrap(),
             executor_config: upgradable_executor_config,
-        }
+        },
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());
