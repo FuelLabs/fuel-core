@@ -18,14 +18,11 @@ ctrlc = "3.2.3"
 ed25519-dalek = { version = "2.0", features = ["rand_core"] }
 enum-iterator = { workspace = true }
 ethnum = "1.3"
-fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
-  "smt",
-  "rocksdb-production",
-] }
+fuel-core = { path = "../crates/fuel-core", default-features = false }
 fuel-core-chain-config = { workspace = true }
 fuel-core-database = { path = "./../crates/database" }
 fuel-core-services = { path = "./../crates/services" }
-fuel-core-storage = { path = "./../crates/storage", features = ["smt"] }
+fuel-core-storage = { path = "./../crates/storage" }
 fuel-core-sync = { path = "./../crates/services/sync", features = [
   "benchmarking",
 ] }
@@ -63,7 +60,9 @@ harness = false
 name = "vm"
 
 [features]
-default = ["fuel-core/rocksdb"]
+default = ["fuel-core/rocksdb-production", "fuel-core/rocksdb"]
+smt = ["fuel-core/smt", "fuel-core-storage/smt"]
+parallel-executor = ["fuel-core/rocksdb-production", "fuel-core/parallel-executor", "test-helpers/parallel-executor"]
 
 [[bench]]
 harness = false

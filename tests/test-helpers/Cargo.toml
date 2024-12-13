@@ -36,3 +36,6 @@ rand = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }
 tempfile = { workspace = true }
+
+[features]
+parallel-executor = ["fuel-core/parallel-executor", "fuel-core-bin/parallel-executor"]

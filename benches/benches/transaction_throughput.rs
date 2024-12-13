@@ -90,6 +90,10 @@ where
             test_builder.utxo_validation = true;
             test_builder.gas_limit = Some(10_000_000_000);
             test_builder.block_size_limit = Some(1_000_000_000_000);
+            #[cfg(feature = "parallel-executor")]
+            {
+                test_builder.executor_number_of_cores = 4;
+            }
 
             // spin up node
             let transactions: Vec<Transaction> =

@@ -51,6 +51,8 @@ pub struct Config {
     pub debug: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
+    #[cfg(feature = "parallel-executor")]
+    pub executor_number_of_cores: usize,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
     pub block_production: Trigger,
     pub predefined_blocks_path: Option<PathBuf>,
@@ -176,6 +178,8 @@ impl Config {
             min_gas_price,
             gas_price_threshold_percent,
             block_importer,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores: 1,
             #[cfg(feature = "relayer")]
             relayer: None,
             #[cfg(feature = "p2p")]

@@ -102,17 +102,19 @@ use fuel_core_types::fuel_types::Bytes32;
 
 pub struct Executor<S, R> {
     executor: Arc<RwLock<UpgradableExecutor<S, R>>>,
-    runtime: Runtime,
+    runtime: Option<Runtime>,
     number_of_cores: NonZeroUsize,
 }
 
-// TODO: Shutdown the tokio runtime to avoid panic if executor is already
+// Shutdown the tokio runtime to avoid panic if executor is already
 //   used from another tokio runtime
-// impl<S, R> Drop for Executor<S, R> {
-//     fn drop(&mut self) {
-//         self.runtime.shutdown_background();
-//     }
-// }
+impl<S, R> Drop for Executor<S, R> {
+    fn drop(&mut self) {
+        if let Some(runtime) = self.runtime.take() {
+            runtime.shutdown_background();
+        }
+    }
+}
 
 impl<S, R> Executor<S, R> {
     pub fn new(
@@ -134,7 +136,7 @@ impl<S, R> Executor<S, R> {
 
         Self {
             executor: Arc::new(RwLock::new(executor)),
-            runtime,
+            runtime: Some(runtime),
             number_of_cores,
         }
     }
@@ -386,6 +388,9 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
+        let runtime = self.runtime.as_ref().ok_or(ExecutorError::Other(
+            "The executor runtime is not initialized.".to_string(),
+        ))?;
         #[cfg(debug_assertions)]
         let mut saved_txs: HashMap<TxId, MaybeCheckedTransaction> = HashMap::new();
 
@@ -449,7 +454,7 @@ where
                     gas_price,
                 };
                 let executor = self.executor.clone();
-                self.runtime.spawn(async move {
+                runtime.spawn(async move {
                     let executor = executor.read().map_err(|e| {
                         ExecutorError::Other(format!(
                             "Unable to get the read lock for the executor: {e}"
@@ -461,8 +466,7 @@ where
             })
             .collect::<Vec<_>>();
 
-        let results = self
-            .runtime
+        let results = runtime
             .block_on(async move { futures::future::join_all(handlers).await });
 
         let execution_results = results

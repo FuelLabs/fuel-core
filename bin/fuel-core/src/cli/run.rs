@@ -185,6 +185,11 @@ pub struct Command {
     #[arg(long = "utxo-validation", env)]
     pub utxo_validation: bool,
 
+    /// Number of cores to use for the parallel executor.
+    #[cfg(feature = "parallel-executor")]
+    #[arg(long = "executor-number-of-cores", env, default_value = "1")]
+    pub executor_number_of_cores: usize,
+
     /// Overrides the version of the native executor.
     #[arg(long = "native-executor-version", env)]
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
@@ -310,6 +315,8 @@ impl Command {
             poa_trigger,
             predefined_blocks_path,
             coinbase_recipient,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores,
             #[cfg(feature = "relayer")]
             relayer_args,
             #[cfg(feature = "p2p")]
@@ -567,6 +574,8 @@ impl Command {
             native_executor_version,
             continue_on_error,
             utxo_validation,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores,
             block_production: trigger,
             predefined_blocks_path,
             vm: VMConfig {

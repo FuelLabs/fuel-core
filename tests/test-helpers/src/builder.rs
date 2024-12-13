@@ -99,6 +99,8 @@ pub struct TestSetupBuilder {
     pub privileged_address: Address,
     pub base_asset_id: AssetId,
     pub trigger: Trigger,
+    #[cfg(feature = "parallel-executor")]
+    pub executor_number_of_cores: usize,
 }
 
 impl TestSetupBuilder {
@@ -265,6 +267,8 @@ impl Default for TestSetupBuilder {
             privileged_address: Default::default(),
             base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores: 1,
         }
     }
 }

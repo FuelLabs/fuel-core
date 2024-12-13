@@ -113,7 +113,7 @@ pub fn init_sub_services(
         #[cfg(feature = "parallel-executor")]
         fuel_core_parallel_executor::config::Config {
             // TODO: Change
-            number_of_cores: NonZero::new(3).unwrap(),
+            number_of_cores: NonZero::new(config.executor_number_of_cores).unwrap(),
             executor_config: upgradable_executor_config,
         },
     );
