@@ -123,6 +123,15 @@ impl ChainConfig {
             ..Default::default()
         }
     }
+
+    #[cfg(feature = "test-helpers")]
+    pub fn local_testnet_with_consensus_parameters(cp: &ConsensusParameters) -> Self {
+        Self {
+            chain_name: LOCAL_TESTNET.to_string(),
+            consensus_parameters: cp.clone(),
+            ..Default::default()
+        }
+    }    
 }
 
 impl GenesisCommitment for ChainConfig {

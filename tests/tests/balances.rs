@@ -328,6 +328,7 @@ async fn first_5_balances() {
 mod pagination {
     use fuel_core::{
         chain_config::{
+            ChainConfig,
             CoinConfig,
             CoinConfigGenerator,
             MessageConfig,
@@ -348,6 +349,7 @@ mod pagination {
         fuel_tx::{
             Address,
             AssetId,
+            ConsensusParameters,
         },
     };
     use test_case::test_matrix;
@@ -356,6 +358,7 @@ mod pagination {
         owner: &Address,
         coin: &[(AssetId, u128)],
         message_amount: Option<u64>,
+        base_asset_id: AssetId,
     ) -> Config {
         let coins = {
             // setup all coins for all owners
@@ -390,7 +393,13 @@ mod pagination {
             }),
             ..Default::default()
         };
-        Config::local_node_with_state_config(state_config)
+
+        // setup chain config
+        let mut cp = ConsensusParameters::default();
+        cp.set_base_asset_id(base_asset_id);
+
+        let chain_config = ChainConfig::local_testnet_with_consensus_parameters(&cp);
+        Config::local_node_with_configs(chain_config, state_config)
     }
 
     enum BaseAssetCoin {
@@ -403,36 +412,46 @@ mod pagination {
         Missing,
     }
 
-    const BASE_ASSET_ID: AssetId = AssetId::zeroed();
     const MESSAGE_BALANCE: u64 = 44;
 
     #[test_matrix(
         [PageDirection::Forward, PageDirection::Backward],
         [MessageCoin::Missing, MessageCoin::Present],
         [BaseAssetCoin::Present, BaseAssetCoin::Missing],
-        [1, 2, 3, 4, 2137])]
+        [1, 2, 3, 4, 2137],
+        [0x11, 0x33, 0x99])]
     #[tokio::test]
     async fn all_balances_in_chunks(
         direction: PageDirection,
         message_coin: MessageCoin,
         base_asset_coin: BaseAssetCoin,
         chunk_size: i32,
+        base_asset_id_byte: u8,
     ) {
         // Given
 
         // Owner has the following assets:
-        // |  asset_id  | amount |  type   |         when?          |
-        // | ---------- | ------ | ------- | ---------------------- |
-        // | asset_1    | 11     | coin    | always                 |
-        // | asset_2    | 22     | coin    | always                 |
-        // | base_asset | 33     | coin    | BaseAssetCoin::Present |
-        // | n/a        | 44     | message | MessageCoin::Present   |
+        // |   asset    | asset_id  | amount |  type   |         when?          |
+        // | ---------- | --------- | ------ | ------- | ---------------------- |
+        // | asset_1    | 0x2222... | 11     | coin    | always                 |
+        // | asset_2    | 0x7777... | 22     | coin    | always                 |
+        // | base_asset | 0x????... | 33     | coin    | BaseAssetCoin::Present |
+        // | n/a        | 0x????... | 44     | message | MessageCoin::Present   |
+        //
+        // Please note that the lexicographical order of "base asset" is dependent on the test parameter,
+        // so we can check for all three cases, i.e.: base asset is first, last or in the middle
+        // of other assets, like so:
+        // 1) base asset, asset_1, asset_2
+        // 2) asset_1, base_asset, asset_2
+        // 3) asset_1, asset_2, base_asset
+        let base_asset_id = AssetId::from([base_asset_id_byte; 32]);
+
         let owner = Address::from([0xaa; 32]);
-        let asset_1 = AssetId::new([0x11; 32]);
-        let asset_2 = AssetId::new([0x22; 32]);
+        let asset_1 = AssetId::new([0x22; 32]);
+        let asset_2 = AssetId::new([0x77; 32]);
         let mut assets = vec![(asset_1, 11), (asset_2, 22)];
         if let BaseAssetCoin::Present = base_asset_coin {
-            assets.push((BASE_ASSET_ID, 33));
+            assets.push((base_asset_id, 33));
         }
         let config = setup(
             &owner,
@@ -441,6 +460,7 @@ mod pagination {
                 MessageCoin::Present => Some(MESSAGE_BALANCE),
                 MessageCoin::Missing => None,
             },
+            base_asset_id,
         )
         .await;
         let srv = FuelService::new_node(config).await.unwrap();
@@ -486,15 +506,15 @@ mod pagination {
             }
             (MessageCoin::Missing, BaseAssetCoin::Present) => {
                 // Expect regular coin balances + base asset
-                vec![(BASE_ASSET_ID, 33), (asset_1, 11), (asset_2, 22)]
+                vec![(base_asset_id, 33), (asset_1, 11), (asset_2, 22)]
             }
             (MessageCoin::Present, BaseAssetCoin::Missing) => {
                 // Expect base asset id amount equal to message amount
-                vec![(BASE_ASSET_ID, 44), (asset_1, 11), (asset_2, 22)]
+                vec![(base_asset_id, 44), (asset_1, 11), (asset_2, 22)]
             }
             (MessageCoin::Present, BaseAssetCoin::Present) => {
                 // Expect base asset id to be a sum of the message and base asset coin: 33 + 44 = 77
-                vec![(BASE_ASSET_ID, 77), (asset_1, 11), (asset_2, 22)]
+                vec![(base_asset_id, 77), (asset_1, 11), (asset_2, 22)]
             }
         };
 

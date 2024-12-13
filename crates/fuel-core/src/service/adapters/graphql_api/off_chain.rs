@@ -250,8 +250,9 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                     .into_boxed()
             }
             (IterDirection::Forward, Some(asset_id)) => {
-                let start = CoinBalancesKey::new(owner, &asset_id);
-                self.non_base_asset_balance(owner, Some(start), direction, base_asset_id)
+                let start = (asset_id != *base_asset_id)
+                    .then_some(CoinBalancesKey::new(owner, &asset_id));
+                self.non_base_asset_balance(owner, start, direction, base_asset_id)
             }
             (IterDirection::Reverse, _) => {
                 let start = start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
