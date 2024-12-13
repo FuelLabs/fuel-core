@@ -62,6 +62,8 @@ use fuel_core_types::{
         Uncommitted,
     },
 };
+#[cfg(debug_assertions)]
+use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 use fuel_core_upgradable_executor::{
     executor::Executor as UpgradableExecutor,
     native_executor::{
@@ -74,7 +76,6 @@ use fuel_core_upgradable_executor::{
             OnceTransactionsSource,
         },
         ports::{
-            MaybeCheckedTransaction,
             RelayerPort,
             TransactionExt,
             TransactionsSource,
