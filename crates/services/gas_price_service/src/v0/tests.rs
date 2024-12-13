@@ -16,8 +16,9 @@ use crate::{
     },
     ports::{
         GasPriceData,
+        GetMetadataStorage,
         L2Data,
-        MetadataStorage,
+        SetMetadataStorage,
     },
     v0::{
         metadata::{
@@ -86,30 +87,34 @@ impl FakeMetadata {
     }
 }
 
-impl MetadataStorage for FakeMetadata {
-    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
-        let metadata = self.inner.lock().unwrap().clone();
-        Ok(metadata)
-    }
-
+impl SetMetadataStorage for FakeMetadata {
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
         *self.inner.lock().unwrap() = Some(metadata.clone());
         Ok(())
     }
 }
 
+impl GetMetadataStorage for FakeMetadata {
+    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
+        let metadata = self.inner.lock().unwrap().clone();
+        Ok(metadata)
+    }
+}
+
 struct ErroringMetadata;
 
-impl MetadataStorage for ErroringMetadata {
-    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
-        Err(GasPriceError::CouldNotFetchMetadata {
-            source_error: anyhow!("boo!"),
-        })
-    }
-
+impl SetMetadataStorage for ErroringMetadata {
     fn set_metadata(&mut self, _: &UpdaterMetadata) -> GasPriceResult<()> {
         Err(GasPriceError::CouldNotSetMetadata {
             block_height: Default::default(),
+            source_error: anyhow!("boo!"),
+        })
+    }
+}
+
+impl GetMetadataStorage for ErroringMetadata {
+    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
+        Err(GasPriceError::CouldNotFetchMetadata {
             source_error: anyhow!("boo!"),
         })
     }
