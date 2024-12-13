@@ -324,76 +324,6 @@ impl CoinQuery {
     }
 }
 
-async fn coins_to_spend_with_cache(
-    owner: fuel_tx::Address,
-    query_per_asset: Vec<SpendQueryElementInput>,
-    excluded_ids: Option<ExcludeInput>,
-    max_input: u16,
-    db: &ReadView,
-) -> async_graphql::Result<Vec<Vec<CoinType>>> {
-    let mut all_coins = Vec::with_capacity(query_per_asset.len());
-
-    let excluded = ExcludedCoinIds::new(
-        excluded_ids
-            .iter()
-            .flat_map(|exclude| exclude.utxos.iter())
-            .map(|utxo_id| &utxo_id.0),
-        excluded_ids
-            .iter()
-            .flat_map(|exclude| exclude.messages.iter())
-            .map(|nonce| &nonce.0),
-    );
-
-    for asset in query_per_asset {
-        let asset_id = asset.asset_id.0;
-        let total_amount = asset.amount.0;
-        let max = asset
-            .max
-            .and_then(|max| u16::try_from(max.0).ok())
-            .unwrap_or(max_input)
-            .min(max_input);
-
-        let selected_coins = select_coins_to_spend(
-            db.off_chain.coins_to_spend_index(&owner, &asset_id),
-            total_amount,
-            max,
-            &excluded,
-            db.batch_size,
-        )
-        .await?;
-        let Some(selected_coins) = selected_coins else {
-            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
-                asset_id,
-                collected_amount: total_amount,
-                max,
-            }
-            .into())
-        };
-
-        let selected_stream =
-            futures::stream::iter(selected_coins).yield_each(db.batch_size);
-
-        let mut coins_per_asset = vec![];
-        for coin_or_message_id in into_coin_id(selected_stream, max as usize).await? {
-            let coin_type = match coin_or_message_id {
-                coins::CoinId::Utxo(utxo_id) => {
-                    db.coin(utxo_id).map(|coin| CoinType::Coin(coin.into()))?
-                }
-                coins::CoinId::Message(nonce) => {
-                    let message = db.message(&nonce)?;
-                    let message_coin: message_coin::MessageCoin = message.try_into()?;
-                    CoinType::MessageCoin(message_coin.into())
-                }
-            };
-
-            coins_per_asset.push(coin_type);
-        }
-
-        all_coins.push(coins_per_asset);
-    }
-    Ok(all_coins)
-}
-
 async fn coins_to_spend_without_cache(
     owner: fuel_tx::Address,
     query_per_asset: Vec<SpendQueryElementInput>,
@@ -446,6 +376,76 @@ async fn coins_to_spend_without_cache(
         })
         .collect();
 
+    Ok(all_coins)
+}
+
+async fn coins_to_spend_with_cache(
+    owner: fuel_tx::Address,
+    query_per_asset: Vec<SpendQueryElementInput>,
+    excluded_ids: Option<ExcludeInput>,
+    max_input: u16,
+    db: &ReadView,
+) -> async_graphql::Result<Vec<Vec<CoinType>>> {
+    let mut all_coins = Vec::with_capacity(query_per_asset.len());
+
+    let excluded = ExcludedCoinIds::new(
+        excluded_ids
+            .iter()
+            .flat_map(|exclude| exclude.utxos.iter())
+            .map(|utxo_id| &utxo_id.0),
+        excluded_ids
+            .iter()
+            .flat_map(|exclude| exclude.messages.iter())
+            .map(|nonce| &nonce.0),
+    );
+
+    for asset in query_per_asset {
+        let asset_id = asset.asset_id.0;
+        let total_amount = asset.amount.0;
+        let max = asset
+            .max
+            .and_then(|max| u16::try_from(max.0).ok())
+            .unwrap_or(max_input)
+            .min(max_input);
+
+        let selected_coins = select_coins_to_spend(
+            db.off_chain.coins_to_spend_index(&owner, &asset_id),
+            total_amount,
+            max,
+            &excluded,
+            db.batch_size,
+        )
+        .await?;
+        let Some(selected_coins) = selected_coins else {
+            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                asset_id,
+                collected_amount: 0,
+                max,
+            }
+            .into())
+        };
+
+        let selected_stream =
+            futures::stream::iter(selected_coins).yield_each(db.batch_size);
+
+        let mut coins_per_asset = vec![];
+        for coin_or_message_id in into_coin_id(selected_stream, max as usize).await? {
+            let coin_type = match coin_or_message_id {
+                coins::CoinId::Utxo(utxo_id) => {
+                    db.coin(utxo_id).map(|coin| CoinType::Coin(coin.into()))?
+                }
+                coins::CoinId::Message(nonce) => {
+                    let message = db.message(&nonce)?;
+                    let message_coin: message_coin::MessageCoin = message.try_into()?;
+                    CoinType::MessageCoin(message_coin.into())
+                }
+            };
+
+            coins_per_asset.push(coin_type);
+        }
+
+        all_coins.push(coins_per_asset);
+    }
     Ok(all_coins)
 }
 
