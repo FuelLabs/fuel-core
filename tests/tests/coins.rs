@@ -23,7 +23,10 @@ use rand::{
 
 mod coin {
     use super::*;
-    use fuel_core::chain_config::CoinConfigGenerator;
+    use fuel_core::chain_config::{
+        ChainConfig,
+        CoinConfigGenerator,
+    };
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::fuel_crypto::SecretKey;
     use rand::Rng;
@@ -32,7 +35,8 @@ mod coin {
         owner: Address,
         asset_id_a: AssetId,
         asset_id_b: AssetId,
-    ) -> (TestContext, u16) {
+        consensus_parameters: &ConsensusParameters,
+    ) -> TestContext {
         // setup config
         let mut coin_generator = CoinConfigGenerator::new();
         let state = StateConfig {
@@ -56,26 +60,18 @@ mod coin {
             messages: vec![],
             ..Default::default()
         };
-        let config = Config::local_node_with_state_config(state);
+        let chain =
+            ChainConfig::local_testnet_with_consensus_parameters(consensus_parameters);
+        let config = Config::local_node_with_configs(chain, state);
 
-        // setup server & client
-        let max_inputs = config
-            .snapshot_reader
-            .chain_config()
-            .consensus_parameters
-            .tx_params()
-            .max_inputs();
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
 
-        (
-            TestContext {
-                srv,
-                rng: StdRng::seed_from_u64(0x123),
-                client,
-            },
-            max_inputs,
-        )
+        TestContext {
+            srv,
+            rng: StdRng::seed_from_u64(0x123),
+            client,
+        }
     }
 
     #[rstest::rstest]
@@ -101,7 +97,8 @@ mod coin {
         let secret_key: SecretKey = SecretKey::random(&mut rng);
         let pk = secret_key.public_key();
         let owner = Input::owner(&pk);
-        let (context, _) = setup(owner, asset_id_a, asset_id_b).await;
+        let cp = ConsensusParameters::default();
+        let context = setup(owner, asset_id_a, asset_id_b, &cp).await;
         // select all available coins to spend
         let coins_per_asset = context
             .client
@@ -154,7 +151,8 @@ mod coin {
     }
 
     async fn query_target_1(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
-        let (context, _) = setup(owner, asset_id_a, asset_id_b).await;
+        let cp = ConsensusParameters::default();
+        let context = setup(owner, asset_id_a, asset_id_b, &cp).await;
 
         // spend_query for 1 a and 1 b
         let coins_per_asset = context
@@ -173,7 +171,8 @@ mod coin {
     }
 
     async fn query_target_300(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
-        let (context, _) = setup(owner, asset_id_a, asset_id_b).await;
+        let cp = ConsensusParameters::default();
+        let context = setup(owner, asset_id_a, asset_id_b, &cp).await;
 
         // spend_query for 300 a and 300 b
         let coins_per_asset = context
@@ -191,8 +190,17 @@ mod coin {
         assert_eq!(coins_per_asset[1].len(), 3);
     }
 
+    fn consensus_parameters_with_max_inputs(max_inputs: u16) -> ConsensusParameters {
+        let mut cp = ConsensusParameters::default();
+        let tx_params = TxParameters::default().with_max_inputs(max_inputs);
+        cp.set_tx_params(tx_params);
+        cp
+    }
+
     async fn exclude_all(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
-        let (context, max_inputs) = setup(owner, asset_id_a, asset_id_b).await;
+        const MAX_INPUTS: u16 = 255;
+        let cp = consensus_parameters_with_max_inputs(MAX_INPUTS);
+        let context = setup(owner, asset_id_a, asset_id_b, &cp).await;
 
         // query all coins
         let coins_per_asset = context
@@ -230,7 +238,7 @@ mod coin {
             CoinsQueryError::InsufficientCoinsForTheMax {
                 asset_id: asset_id_a,
                 collected_amount: 0,
-                max: max_inputs
+                max: MAX_INPUTS
             }
             .to_str_error_string()
         );
@@ -241,7 +249,9 @@ mod coin {
         asset_id_a: AssetId,
         asset_id_b: AssetId,
     ) {
-        let (context, max_inputs) = setup(owner, asset_id_a, asset_id_b).await;
+        const MAX_INPUTS: u16 = 255;
+        let cp = consensus_parameters_with_max_inputs(MAX_INPUTS);
+        let context = setup(owner, asset_id_a, asset_id_b, &cp).await;
 
         // not enough coins
         let coins_per_asset = context
@@ -258,14 +268,15 @@ mod coin {
             CoinsQueryError::InsufficientCoinsForTheMax {
                 asset_id: asset_id_a,
                 collected_amount: 300,
-                max: max_inputs
+                max: MAX_INPUTS
             }
             .to_str_error_string()
         );
     }
 
     async fn query_limit_coins(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
-        let (context, _) = setup(owner, asset_id_a, asset_id_b).await;
+        let cp = ConsensusParameters::default();
+        let context = setup(owner, asset_id_a, asset_id_b, &cp).await;
 
         const MAX: u16 = 2;
 
