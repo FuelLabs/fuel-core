@@ -131,7 +131,7 @@ impl ChainConfig {
             consensus_parameters: cp.clone(),
             ..Default::default()
         }
-    }    
+    }
 }
 
 impl GenesisCommitment for ChainConfig {
