@@ -56,6 +56,10 @@ use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+// TODO: Remove this once we have a better way to configure the number of cores
+#[cfg(feature = "parallel-executor")]
+use std::num::NonZero;
+
 pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
     BlockProducerAdapter,
@@ -96,14 +100,22 @@ pub fn init_sub_services(
 
     let last_height = *last_block_header.height();
 
+    let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
+        backtrace: config.vm.backtrace,
+        utxo_validation_default: config.utxo_validation,
+        native_executor_version: config.native_executor_version,
+    };
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
-        fuel_core_upgradable_executor::config::Config {
-            backtrace: config.vm.backtrace,
-            utxo_validation_default: config.utxo_validation,
-            native_executor_version: config.native_executor_version,
-        },
+        #[cfg(not(feature = "parallel-executor"))]
+        upgradable_executor_config,        
+        #[cfg(feature = "parallel-executor")]
+        fuel_core_parallel_executor::config::Config {
+            // TODO: Change
+            number_of_cores: NonZero::new(3).unwrap(),
+            executor_config: upgradable_executor_config,
+        }
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());

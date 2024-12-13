@@ -29,6 +29,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
 
@@ -117,16 +118,37 @@ impl TransactionsSource {
 
 #[derive(Clone)]
 pub struct ExecutorAdapter {
+    #[cfg(not(feature = "parallel-executor"))]
     pub(crate) executor: Arc<Executor<Database, Database<Relayer>>>,
+    #[cfg(feature = "parallel-executor")]
+    pub(crate) executor:
+        Arc<fuel_core_parallel_executor::executor::Executor<Database, Database<Relayer>>>,
 }
 
 impl ExecutorAdapter {
+    #[cfg(not(feature = "parallel-executor"))]
     pub fn new(
         database: Database,
         relayer_database: Database<Relayer>,
         config: fuel_core_upgradable_executor::config::Config,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);
+        Self {
+            executor: Arc::new(executor),
+        }
+    }
+
+    #[cfg(feature = "parallel-executor")]
+    pub fn new(
+        database: Database,
+        relayer_database: Database<Relayer>,
+        config: fuel_core_parallel_executor::config::Config,
+    ) -> Self {
+        let executor = fuel_core_parallel_executor::executor::Executor::new(
+            database,
+            relayer_database,
+            config,
+        );
         Self {
             executor: Arc::new(executor),
         }

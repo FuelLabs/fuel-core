@@ -93,6 +93,12 @@ use std::{
 };
 use tokio::runtime::Runtime;
 
+#[cfg(feature = "wasm-executor")]
+use fuel_core_upgradable_executor::error::UpgradableError;
+
+#[cfg(feature = "wasm-executor")]
+use fuel_core_types::fuel_types::Bytes32;
+
 pub struct Executor<S, R> {
     executor: Arc<RwLock<UpgradableExecutor<S, R>>>,
     runtime: Runtime,
@@ -265,6 +271,20 @@ where
     R: AtomicView + 'static,
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
+    /// Attempt to fetch and validate an uploaded WASM module.
+    #[cfg(feature = "wasm-executor")]
+    pub fn validate_uploaded_wasm(
+        &self,
+        wasm_root: &Bytes32,
+    ) -> Result<(), UpgradableError> {
+        let executor = self.executor.read().map_err(|e| {
+            UpgradableError::ExecutorError(ExecutorError::Other(format!(
+                "Unable to get the read lock for the executor: {e}"
+            )))
+        })?;
+        executor.validate_uploaded_wasm(wasm_root)
+    }
+
     /// Produces the block and returns the result of the execution without committing the changes.
     pub fn produce_without_commit_with_source<TxSource>(
         &self,

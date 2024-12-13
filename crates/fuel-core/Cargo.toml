@@ -109,5 +109,5 @@ test-helpers = [
 ]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
-wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
+wasm-executor = ["fuel-core-upgradable-executor/wasm-executor", "fuel-core-parallel-executor/wasm-executor"]
 parallel-executor = ["fuel-core-parallel-executor"]
