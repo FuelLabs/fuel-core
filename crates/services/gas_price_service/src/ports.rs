@@ -18,7 +18,6 @@ use crate::{
 };
 use std::num::NonZeroU64;
 
-
 pub trait L2Data: Send + Sync {
     fn latest_height(&self) -> StorageResult<BlockHeight>;
     fn get_block(
