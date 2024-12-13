@@ -112,6 +112,7 @@ impl TryFrom<&[u8]> for IndexedCoinType {
 
 pub type CoinsToSpendIndexEntry = (CoinsToSpendIndexKey, IndexedCoinType);
 
+// TODO: Convert this key from Vec to strongly typed struct: https://github.com/FuelLabs/fuel-core/issues/2498
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CoinsToSpendIndexKey(Vec<u8>);
 
