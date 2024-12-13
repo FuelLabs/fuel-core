@@ -507,7 +507,6 @@ mod tests {
             algo_updater,
             da_service_runner,
             inner,
-            inner,
         );
         let read_algo = service.next_block_algorithm();
         let mut watcher = StateWatcher::default();
@@ -606,10 +605,6 @@ mod tests {
         //     .da_source_adapter_handle
         //     .run(&mut da_source_watcher)
         //     .await;
-
-        service.run(&mut watcher).await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        l2_block_sender.send(l2_block_2).await.unwrap();
 
         service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
