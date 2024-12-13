@@ -405,18 +405,11 @@ async fn coins_to_spend_with_cache(
             db.off_chain.coins_to_spend_index(&owner, &asset_id),
             total_amount,
             max,
+            &asset_id,
             &excluded,
             db.batch_size,
         )
         .await?;
-        let Some(selected_coins) = selected_coins else {
-            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
-                asset_id,
-                collected_amount: 0,
-                max,
-            }
-            .into())
-        };
 
         let mut coins_per_asset = Vec::with_capacity(selected_coins.len());
         for coin_or_message_id in into_coin_id(&selected_coins)? {

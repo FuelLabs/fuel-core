@@ -283,9 +283,10 @@ pub async fn select_coins_to_spend(
     }: CoinsToSpendIndexIter<'_>,
     total: u64,
     max: u16,
+    asset_id: &AssetId,
     excluded_ids: &ExcludedCoinIds<'_>,
     batch_size: usize,
-) -> Result<Option<Vec<CoinsToSpendIndexEntry>>, CoinsQueryError> {
+) -> Result<Vec<CoinsToSpendIndexEntry>, CoinsQueryError> {
     const TOTAL_AMOUNT_ADJUSTMENT_FACTOR: u64 = 2;
     if total == 0 || max == 0 {
         return Err(CoinsQueryError::IncorrectQueryParameters {
@@ -303,8 +304,13 @@ pub async fn select_coins_to_spend(
         big_coins(big_coins_stream, adjusted_total, max, excluded_ids).await?;
 
     if selected_big_coins_total < total {
-        return Ok(None);
+        return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+            asset_id: *asset_id,
+            collected_amount: selected_big_coins_total,
+            max,
+        });
     }
+
     let Some(last_selected_big_coin) = selected_big_coins.last() else {
         // Should never happen, because at this stage we know that:
         // 1) selected_big_coins_total >= total
@@ -335,9 +341,7 @@ pub async fn select_coins_to_spend(
     let retained_big_coins_iter =
         skip_big_coins_up_to_amount(selected_big_coins, dust_coins_total);
 
-    Ok(Some(
-        (retained_big_coins_iter.chain(selected_dust_coins)).collect(),
-    ))
+    Ok((retained_big_coins_iter.chain(selected_dust_coins)).collect())
 }
 
 async fn big_coins(
@@ -1077,8 +1081,10 @@ mod tests {
         use fuel_core_types::{
             entities::coins::coin::Coin,
             fuel_tx::{
+                AssetId,
                 TxId,
                 UtxoId,
+                Word,
             },
         };
 
@@ -1254,12 +1260,12 @@ mod tests {
                 coins_to_spend_iter,
                 TOTAL,
                 MAX,
+                &AssetId::default(),
                 &excluded,
                 BATCH_SIZE,
             )
             .await
-            .expect("should not error")
-            .expect("should select some coins");
+            .expect("should not error");
 
             let mut results = result
                 .into_iter()
@@ -1316,12 +1322,12 @@ mod tests {
                 coins_to_spend_iter,
                 TOTAL,
                 MAX,
+                &AssetId::default(),
                 &excluded,
                 BATCH_SIZE,
             )
             .await
-            .expect("should not error")
-            .expect("should select some coins");
+            .expect("should not error");
 
             // Then
             let results: Vec<_> =
@@ -1364,6 +1370,7 @@ mod tests {
                 coins_to_spend_iter,
                 TOTAL,
                 MAX,
+                &AssetId::default(),
                 &excluded,
                 BATCH_SIZE,
             )
@@ -1391,6 +1398,7 @@ mod tests {
                 coins_to_spend_iter,
                 TOTAL,
                 MAX,
+                &AssetId::default(),
                 &excluded,
                 BATCH_SIZE,
             )
@@ -1418,6 +1426,7 @@ mod tests {
                 coins_to_spend_iter,
                 TOTAL,
                 MAX,
+                &AssetId::default(),
                 &excluded,
                 BATCH_SIZE,
             )
@@ -1426,6 +1435,44 @@ mod tests {
             // Then
             assert!(matches!(result, Err(actual_error)
                 if CoinsQueryError::IncorrectQueryParameters{ provided_total: 0, provided_max: 101 } == actual_error));
+        }
+
+        #[tokio::test]
+        async fn selection_algorithm_should_bail_on_not_enough_coins() {
+            // Given
+            const MAX: u16 = 3;
+            const TOTAL: u64 = 2137;
+
+            let coins = setup_test_coins([10, 9, 8, 7]);
+            let (coins, _): (Vec<_>, Vec<_>) = coins
+                .into_iter()
+                .map(|spec| (spec.index_entry, spec.utxo_id))
+                .unzip();
+
+            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+
+            let coins_to_spend_iter = CoinsToSpendIndexIter {
+                big_coins_iter: coins.into_iter().into_boxed(),
+                dust_coins_iter: std::iter::empty().into_boxed(),
+            };
+
+            let asset_id = AssetId::default();
+
+            let result = select_coins_to_spend(
+                coins_to_spend_iter,
+                TOTAL,
+                MAX,
+                &asset_id,
+                &excluded,
+                BATCH_SIZE,
+            )
+            .await;
+
+            const EXPECTED_COLLECTED_AMOUNT: Word = 10 + 9 + 8; // Because MAX == 3
+
+            // Then
+            assert!(matches!(result, Err(actual_error)
+                if CoinsQueryError::InsufficientCoinsForTheMax { asset_id, collected_amount: EXPECTED_COLLECTED_AMOUNT, max: MAX } == actual_error));
         }
     }
 
