@@ -151,7 +151,6 @@ impl Simulator {
             let gas_price = updater.algorithm().calculate();
             gas_prices.push(gas_price);
             let total_fee = gas_price as u128 * fullness as u128;
-            println!("used: {}, capacity: {}", fullness, capacity);
             updater
                 .update_l2_block_data(
                     height,
