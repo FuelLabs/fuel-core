@@ -84,6 +84,7 @@ use fuel_core_upgradable_executor::{
 #[cfg(debug_assertions)]
 use std::collections::HashMap;
 use std::{
+    borrow::Cow,
     num::NonZeroUsize,
     sync::{
         Arc,
@@ -308,21 +309,17 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        #[cfg(debug_assertions)]
-        let mut saved_txs: HashMap<TxId, MaybeCheckedTransaction> = HashMap::new();
-
         let prev_height = components
             .header_to_produce
             .height()
             .pred()
             .ok_or(ExecutorError::ExecutingGenesisBlock)?;
+
         let executor = self.executor.read().map_err(|e| {
             ExecutorError::Other(format!(
                 "Unable to get the read lock for the executor: {e}"
             ))
         })?;
-
-        let execution_options = executor.config.as_ref().into();
         let view =
             StructuredStorage::new(executor.storage_view_provider.view_at(&prev_height)?);
 
@@ -333,7 +330,6 @@ where
 
         let consensus_parameters_version =
             components.header_to_produce.consensus_parameters_version;
-
         let consensus_parameters = view
             .storage_as_ref::<ConsensusParametersVersions>()
             .get(&consensus_parameters_version)?
@@ -345,7 +341,6 @@ where
         // TODO: Support parallel execution when the block is increased.
         //  We can always process DA first, and on top of this result run transactions in parallel.
         if previous_block.header().da_height != components.header_to_produce.da_height {
-            dbg!(previous_block.header().da_height, components.header_to_produce.da_height);
             let new_small_block = Components {
                 header_to_produce: components.header_to_produce,
                 transactions_source: OneCoreTxSource::new(
@@ -359,7 +354,29 @@ where
 
             return executor.produce_without_commit_with_source(new_small_block)
         }
+        self.produce_inner_without_da(components, consensus_parameters)
+    }
 
+    fn produce_inner_without_da<TxSource>(
+        &self,
+        components: Components<TxSource>,
+        consensus_parameters: Cow<ConsensusParameters>,
+    ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        #[cfg(debug_assertions)]
+        let mut saved_txs: HashMap<TxId, MaybeCheckedTransaction> = HashMap::new();
+
+        let executor = self.executor.read().map_err(|e| {
+            ExecutorError::Other(format!(
+                "Unable to get the read lock for the executor: {e}"
+            ))
+        })?;
+
+        let execution_options = executor.config.as_ref().into();
+
+        let block_gas_limit = consensus_parameters.block_gas_limit();
         let max_tx_number = max_tx_count();
         let block_size_limit =
             u32::try_from(consensus_parameters.block_transaction_size_limit())
@@ -401,9 +418,6 @@ where
         }
 
         let buckets = splitter.split_equally(self.number_of_cores);
-        for bucket in &buckets {
-            dbg!(bucket.len());
-        }
         let handlers = buckets
             .into_iter()
             .map(|txs| {
@@ -514,6 +528,31 @@ where
             block.transactions()
         )?;
 
+        let prev_height = block
+            .header()
+            .height()
+            .pred()
+            .ok_or(ExecutorError::ExecutingGenesisBlock)?;
+
+        let executor = self.executor.read().map_err(|e| {
+            ExecutorError::Other(format!(
+                "Unable to get the read lock for the executor: {e}"
+            ))
+        })?;
+        let view =
+            StructuredStorage::new(executor.storage_view_provider.view_at(&prev_height)?);
+
+        let previous_block = view
+            .storage_as_ref::<FuelBlocks>()
+            .get(&prev_height)?
+            .ok_or(ExecutorError::PreviousBlockIsNotFound)?;
+
+        // TODO: Support parallel execution when the block is increased.
+        //  We can always process DA first, and on top of this result run transactions in parallel.
+        if previous_block.header().da_height != block.header().da_height {
+            return executor.validate(block)
+        }
+
         let components = Components {
             header_to_produce: block.header().into(),
             transactions_source: OnceTransactionsSource::new(
@@ -527,7 +566,17 @@ where
             coinbase_recipient: coinbase_contract_id,
             gas_price,
         };
-        let executed_block_result = self.produce_inner(components)?;
+        let consensus_parameters_version =
+            components.header_to_produce.consensus_parameters_version;
+        let consensus_parameters = view
+            .storage_as_ref::<ConsensusParametersVersions>()
+            .get(&consensus_parameters_version)?
+            .ok_or(ExecutorError::ConsensusParametersNotFound(
+                consensus_parameters_version,
+            ))?;
+
+        let executed_block_result =
+            self.produce_inner_without_da(components, consensus_parameters)?;
 
         if let Some((_, error)) =
             executed_block_result.result().skipped_transactions.first()

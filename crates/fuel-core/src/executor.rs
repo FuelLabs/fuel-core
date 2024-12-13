@@ -4084,7 +4084,6 @@ mod tests {
                 .into();
 
             // then
-            dbg!(&result);
             let txs = result.block.transactions();
             assert_eq!(txs.len(), 2);
 
