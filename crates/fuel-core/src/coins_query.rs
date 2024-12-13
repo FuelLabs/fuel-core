@@ -24,10 +24,7 @@ use fuel_core_types::{
         CoinId,
         CoinType,
     },
-    fuel_tx::{
-        TxId,
-        UtxoId,
-    },
+    fuel_tx::UtxoId,
     fuel_types::{
         Address,
         AssetId,
@@ -403,27 +400,13 @@ fn is_excluded(
 ) -> Result<bool, CoinsQueryError> {
     match coin_type {
         IndexedCoinType::Coin => {
-            let utxo_id_bytes = key.foreign_key_bytes();
-            let tx_id: TxId = utxo_id_bytes
-                .get(..32)
-                .ok_or(CoinsQueryError::IncorrectCoinKeyInIndex)?
+            let utxo = key
                 .try_into()
                 .map_err(|_| CoinsQueryError::IncorrectCoinKeyInIndex)?;
-
-            let output_index = u16::from_be_bytes(
-                utxo_id_bytes
-                    .get(32..34)
-                    .ok_or(CoinsQueryError::IncorrectCoinKeyInIndex)?
-                    .try_into()
-                    .map_err(|_| CoinsQueryError::IncorrectCoinKeyInIndex)?,
-            );
-            Ok(excluded_ids.is_coin_excluded(&UtxoId::new(tx_id, output_index)))
+            Ok(excluded_ids.is_coin_excluded(&utxo))
         }
         IndexedCoinType::Message => {
-            let nonce_bytes = key.foreign_key_bytes();
-            let nonce: Nonce = nonce_bytes
-                .get(..)
-                .ok_or(CoinsQueryError::IncorrectMessageKeyInIndex)?
+            let nonce = key
                 .try_into()
                 .map_err(|_| CoinsQueryError::IncorrectMessageKeyInIndex)?;
             Ok(excluded_ids.is_message_excluded(&nonce))
