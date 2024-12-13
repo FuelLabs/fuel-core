@@ -43,7 +43,6 @@ use async_graphql::{
     },
     Context,
 };
-use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     entities::coins::{
@@ -61,7 +60,6 @@ use fuel_core_types::{
     },
     fuel_types,
 };
-use futures::Stream;
 use itertools::Itertools;
 use tokio_stream::StreamExt;
 
@@ -425,11 +423,8 @@ async fn coins_to_spend_with_cache(
             .into())
         };
 
-        let selected_stream =
-            futures::stream::iter(selected_coins).yield_each(db.batch_size);
-
         let mut coins_per_asset = vec![];
-        for coin_or_message_id in into_coin_id(selected_stream, max as usize).await? {
+        for coin_or_message_id in into_coin_id(&selected_coins, max as usize)? {
             let coin_type = match coin_or_message_id {
                 coins::CoinId::Utxo(utxo_id) => {
                     db.coin(utxo_id).map(|coin| CoinType::Coin(coin.into()))?
@@ -449,12 +444,12 @@ async fn coins_to_spend_with_cache(
     Ok(all_coins)
 }
 
-async fn into_coin_id(
-    mut selected_stream: impl Stream<Item = CoinsToSpendIndexEntry> + Unpin,
+fn into_coin_id(
+    selected: &[CoinsToSpendIndexEntry],
     max_coins: usize,
 ) -> Result<Vec<CoinId>, CoinsQueryError> {
     let mut coins = Vec::with_capacity(max_coins);
-    while let Some((foreign_key, coin_type)) = selected_stream.next().await {
+    for (foreign_key, coin_type) in selected {
         let coin = match coin_type {
             IndexedCoinType::Coin => {
                 let bytes: [u8; COIN_FOREIGN_KEY_LEN] = foreign_key
