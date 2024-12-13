@@ -472,7 +472,7 @@ fn produce_block__l1_committed_block_effects_gas_price() {
     let mut mock = FakeServer::new();
     let url = mock.url();
     let costs = RawDaBlockCosts {
-        sequence_number: 1,
+        bundle_id: 1,
         blocks_heights: vec![1],
         da_block_height: DaBlockHeight(100),
         total_cost: 100,
@@ -511,13 +511,13 @@ fn produce_block__l1_committed_block_effects_gas_price() {
 
 #[test]
 fn produce_block__algorithm_recovers_from_divergent_profit() {
-    produce_blocks__lolz(11, 50);
+    produce_blocks__lolz(110, 50);
 }
 
 fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
+    // let _ = tracing_subscriber::fmt()
+    //     .with_max_level(tracing::Level::INFO)
+    //     .try_init();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given
@@ -577,7 +577,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     let new_price = new_price_gwei * 1_000_000_000; // Wei
     let cost = count * new_price;
     mock.add_response(RawDaBlockCosts {
-        sequence_number: 1,
+        bundle_id: 1,
         blocks_heights,
         da_block_height: DaBlockHeight(100),
         total_cost: cost,
@@ -626,7 +626,7 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
             if profit > 0 && !success {
                 success = true;
                 success_iteration = i as i32;
-                // break;
+                break;
             }
         }
     });
