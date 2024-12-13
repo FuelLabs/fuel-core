@@ -287,7 +287,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                 .into_boxed()
         }
     }
-
+    // TODO: Return error if indexation is not available: https://github.com/FuelLabs/fuel-core/issues/2499
     fn coins_to_spend_index(
         &self,
         owner: &Address,
