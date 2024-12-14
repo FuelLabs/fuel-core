@@ -557,10 +557,10 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
     };
     let mut node_config =
         Config::local_node_with_configs(chain_config, StateConfig::local_testnet());
-    let starting_gas_price = 1_000_000_000;
+    let starting_gas_price = 10_000_000;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.min_da_gas_price = starting_gas_price;
-    node_config.max_da_gas_price_change_percent = 10;
+    node_config.max_da_gas_price_change_percent = 15;
     node_config.block_production = Trigger::Never;
     node_config.da_committer_url = Some(url.clone());
     node_config.da_poll_interval = Some(100);

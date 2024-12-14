@@ -576,7 +576,7 @@ mod tests {
                 Ok(DaBlockCosts {
                     bundle_id: 1,
                     l2_blocks: (1..2).collect(),
-                    blob_cost_wei: 9000,
+                    blob_cost_wei: u128::MAX, // Very expensive to trigger a change
                     bundle_size_bytes: 3000,
                 }),
                 notifier.clone(),
@@ -598,12 +598,12 @@ mod tests {
         let initial_price = read_algo.next_gas_price();
 
         service.run(&mut watcher).await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(3)).await;
         l2_block_sender.send(l2_block_2).await.unwrap();
 
         // when
         service.run(&mut watcher).await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(3)).await;
         service.shutdown().await.unwrap();
 
         // then
