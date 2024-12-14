@@ -660,7 +660,6 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
         tracing::info!("Gas prices as gwei: {:?}", gas_prices_as_gwei);
         tracing::info!("Gas price changes as gwei: {:?}", gas_price_changes_as_gwei);
     }
-    drop(mock);
 }
 
 async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mut R) {
