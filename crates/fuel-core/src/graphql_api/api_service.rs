@@ -17,7 +17,7 @@ use crate::{
     },
     graphql_api::{
         self,
-        required_fuel_block_height_extension::RequiredFuelBlockHeightExtension,
+        fuel_block_height_checks::RequiredFuelBlockHeightExtension,
     },
     schema::{
         CoreSchema,
@@ -98,7 +98,7 @@ pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 pub use super::database::ReadDatabase;
 use super::{
     ports::worker,
-    required_fuel_block_height_extension::RequiredFuelBlockHeightTooFarInTheFuture,
+    fuel_block_height_checks::RequiredFuelBlockHeightTooFarInTheFuture,
 };
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
