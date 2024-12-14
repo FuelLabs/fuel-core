@@ -44,7 +44,7 @@ serde_json = { workspace = true }
 serde_yaml = "0.9.13"
 strum = { workspace = true }
 strum_macros = { workspace = true }
-test-helpers = { path = "../tests/test-helpers" }
+test-helpers = { path = "../tests/test-helpers", default-features = false }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full", "rt-multi-thread"] }
 
