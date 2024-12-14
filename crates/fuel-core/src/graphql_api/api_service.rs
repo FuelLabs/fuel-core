@@ -362,7 +362,7 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 #[derive(Clone)]
-struct RequiredHeight(Option<u32>);
+struct RequiredHeight(Option<BlockHeight>);
 
 #[async_trait::async_trait]
 impl<Body> FromRequest<Body> for RequiredHeight
@@ -384,7 +384,9 @@ where
             .transpose()
             .map_err(|_| (StatusCode::BAD_REQUEST, "Header Malformed".to_string()))?;
 
-        Ok(RequiredHeight(required_fuel_block_height))
+        Ok(RequiredHeight(
+            required_fuel_block_height.map(BlockHeight::new),
+        ))
     }
 }
 
@@ -420,6 +422,7 @@ async fn graphql_handler(
     let mut request = req.0;
 
     if let RequiredHeight(Some(height)) = extract_height {
+        let height: u32 = height.into();
         request
             .extensions
             .insert(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER.to_string(), height.into());
