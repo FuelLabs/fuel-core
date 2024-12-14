@@ -17,7 +17,7 @@ use crate::{
     },
     graphql_api::{
         self,
-        fuel_block_height_checks::RequiredFuelBlockHeightExtension,
+        required_fuel_block_height_extension::RequiredFuelBlockHeightExtension,
     },
     schema::{
         CoreSchema,
@@ -98,7 +98,7 @@ pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 pub use super::database::ReadDatabase;
 use super::{
     ports::worker,
-    fuel_block_height_checks::RequiredFuelBlockHeightTooFarInTheFuture,
+    required_fuel_block_height_extension::RequiredFuelBlockHeightTooFarInTheFuture,
 };
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
@@ -362,7 +362,7 @@ async fn health() -> Json<serde_json::Value> {
 }
 
 #[derive(Clone)]
-struct RequiredHeight(Option<BlockHeight>);
+pub(crate) struct RequiredHeight(pub(crate) Option<BlockHeight>);
 
 #[async_trait::async_trait]
 impl<Body> FromRequest<Body> for RequiredHeight
@@ -415,13 +415,13 @@ impl IntoResponse for CurrentBlockHeight {
 }
 
 async fn graphql_handler(
-    extract_height: RequiredHeight,
+    required_fuel_block_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Result<(CurrentBlockHeight, Json<Response>), (StatusCode, CurrentBlockHeight)> {
     let mut request = req.0;
 
-    if let RequiredHeight(Some(height)) = extract_height {
+    if let RequiredHeight(Some(height)) = required_fuel_block_height {
         let height: u32 = height.into();
         request
             .extensions
@@ -431,7 +431,9 @@ async fn graphql_handler(
     let current_fuel_block_height_data: Arc<Mutex<Option<BlockHeight>>> =
         Arc::new(Mutex::new(None));
 
-    let request = request.data(current_fuel_block_height_data.clone());
+    let request = request
+        .data(current_fuel_block_height_data.clone())
+        .data(required_fuel_block_height);
 
     let graphql_response: Response = schema.execute(request).await.into();
 

@@ -18,7 +18,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-use super::api_service::REQUIRED_FUEL_BLOCK_HEIGHT_HEADER;
+use super::api_service::RequiredHeight;
 
 /// The extension that adds the `ReadView` to the request context.
 /// It guarantees that the request works with the one view of the database,
@@ -49,21 +49,13 @@ impl Extension for RequiredFuelBlockHeightExtension {
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
         let database: &ReadDatabase = ctx.data_unchecked();
-        let required_fuel_block_height_header_value = request
-            .extensions
-            .get(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER)
-            .map(|value| match value {
-                async_graphql::Value::Number(number) => {
-                    // Safety: The value was constructed
-                    BlockHeight::new(
-                        number
-                            .as_u64()
-                            .and_then(|n| n.try_into().ok())
-                            .expect("The REQUIRED_FUEL_BLOCK_HEIGHT_HEADER value has been constructed from a u64 value"),
-                    )
-                }
-                _ => panic!("The REQUIRED_FUEL_BLOCK_HEIGHT_HEADER value has been constructed from a u64 value"),
-            });
+
+        let required_fuel_block_height = request
+            .data
+            .get(&TypeId::of::<RequiredHeight>())
+            .and_then(|data| data.downcast_ref::<RequiredHeight>())
+            .expect("Required height request data was set in th graphql_handler")
+            .0;
 
         let latest_known_block_height = database
             .view()
@@ -95,8 +87,7 @@ impl Extension for RequiredFuelBlockHeightExtension {
             *current_fuel_block_height = Some(latest_known_block_height);
         }
 
-        if let Some(required_fuel_block_height) = required_fuel_block_height_header_value
-        {
+        if let Some(required_fuel_block_height) = required_fuel_block_height {
             if required_fuel_block_height > latest_known_block_height {
                 return Err(ServerError {
                     message: "".to_string(),
