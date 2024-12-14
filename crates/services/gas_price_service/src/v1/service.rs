@@ -597,15 +597,6 @@ mod tests {
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
 
-        // // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
-        // // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
-        // // here we mimic that behaviour by running the da block cost service.
-        // let mut da_source_watcher = StateWatcher::started();
-        // service
-        //     .da_source_adapter_handle
-        //     .run(&mut da_source_watcher)
-        //     .await;
-
         service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
         l2_block_sender.send(l2_block_2).await.unwrap();
@@ -699,15 +690,6 @@ mod tests {
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
-
-        // // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
-        // // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
-        // // here we mimic that behaviour by running the da block cost service.
-        // let mut da_source_watcher = StateWatcher::started();
-        // service
-        //     .da_source_adapter_handle
-        //     .run(&mut da_source_watcher)
-        //     .await;
 
         service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;

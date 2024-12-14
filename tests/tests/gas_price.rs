@@ -511,13 +511,10 @@ fn produce_block__l1_committed_block_effects_gas_price() {
 
 #[test]
 fn produce_block__algorithm_recovers_from_divergent_profit() {
-    produce_blocks__lolz(110, 50);
+    _produce_block__algorithm_recovers_from_divergent_profit(110);
 }
 
-fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
-    // let _ = tracing_subscriber::fmt()
-    //     .with_max_level(tracing::Level::INFO)
-    //     .try_init();
+fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given
@@ -541,8 +538,8 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
     node_config.block_production = Trigger::Never;
     node_config.da_committer_url = Some(url.clone());
     node_config.da_poll_interval = Some(100);
-    // node_config.da_p_component = 4_707_680;
-    // node_config.da_d_component = 114_760;
+    node_config.da_p_component = 224_000;
+    node_config.da_d_component = 2_690_000;
     node_config.da_p_component = 10;
     node_config.da_d_component = 1;
     node_config.block_activity_threshold = 0;
@@ -642,11 +639,6 @@ fn produce_blocks__lolz(block_delay: usize, _blob_size: usize) {
         );
     } else {
         tracing::info!("Success on try {}/{}", success_iteration, tries);
-        // tracing::info!("Profits: {:?}", profits);
-        // tracing::info!("Changes: {:?}", changes);
-        // tracing::info!("Gas prices: {:?}", gas_prices);
-        // tracing::info!("Gas price changes: {:?}", gas_price_changes);
-        // trace the same as f64 and converted into gwei
         let profits_as_gwei = profits
             .iter()
             .map(|x| *x as f64 / 1_000_000_000.0)
