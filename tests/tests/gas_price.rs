@@ -97,6 +97,29 @@ fn arb_large_tx<R: Rng + rand::CryptoRng>(
         .into()
 }
 
+fn arb_small_tx<R: Rng + rand::CryptoRng>(
+    max_fee_limit: Word,
+    rng: &mut R,
+) -> Transaction {
+    let mut script: Vec<_> = repeat(op::noop()).take(10).collect();
+    script.push(op::ret(RegId::ONE));
+    let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
+    let mut builder = TransactionBuilder::script(script_bytes, vec![]);
+    let asset_id = *builder.get_params().base_asset_id();
+    builder
+        .max_fee_limit(max_fee_limit)
+        .script_gas_limit(22430)
+        .add_unsigned_coin_input(
+            SecretKey::random(rng),
+            rng.gen(),
+            u32::MAX as u64,
+            asset_id,
+            Default::default(),
+        )
+        .finalize()
+        .into()
+}
+
 #[tokio::test]
 async fn latest_gas_price__if_no_mint_tx_in_previous_block_gas_price_is_zero() {
     // given
@@ -515,6 +538,9 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
 }
 
 fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given
@@ -538,10 +564,10 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
     node_config.block_production = Trigger::Never;
     node_config.da_committer_url = Some(url.clone());
     node_config.da_poll_interval = Some(100);
-    node_config.da_p_component = 224_000;
-    node_config.da_d_component = 2_690_000;
-    node_config.da_p_component = 10;
-    node_config.da_d_component = 1;
+    // node_config.da_p_component = 224_000;
+    // node_config.da_d_component = 2_690_000;
+    node_config.da_p_component = 1;
+    node_config.da_d_component = 10;
     node_config.block_activity_threshold = 0;
 
     let (srv, client) = rt.block_on(async {
@@ -570,15 +596,17 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
     let half_of_blocks = block_delay as u32 / 2;
     let blocks_heights: Vec<_> = (1..half_of_blocks).collect();
     let count = blocks_heights.len() as u128;
-    let new_price_gwei = 500_000;
-    let new_price = new_price_gwei * 1_000_000_000; // Wei
-    let cost = count * new_price;
+    let block_bytes = 1000;
+    let total_size_bytes = block_bytes * count as u32;
+    let gas = 16 * total_size_bytes as u128;
+    let cost_gwei = gas * 1; // blob gas price 1 gwei
+    let cost = cost_gwei * 1_000_000_000; // Wei
     mock.add_response(RawDaBlockCosts {
         bundle_id: 1,
         blocks_heights,
         da_block_height: DaBlockHeight(100),
         total_cost: cost,
-        total_size_bytes: 128_000,
+        total_size_bytes,
     });
 
     let mut profits = Vec::new();
@@ -601,7 +629,7 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
         gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
     });
 
-    let tries = 1000;
+    let tries = 300;
 
     let mut success = false;
     let mut success_iteration = i32::MAX;
@@ -623,7 +651,6 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
             if profit > 0 && !success {
                 success = true;
                 success_iteration = i as i32;
-                break;
             }
         }
     });
@@ -666,7 +693,8 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
     let arb_tx_count = 2;
     for i in 0..arb_tx_count {
         let large_fee_limit = u32::MAX as u64 - i;
-        let tx = arb_large_tx(large_fee_limit, rng);
+        // let tx = arb_large_tx(large_fee_limit, rng);
+        let tx = arb_small_tx(large_fee_limit, rng);
         // let tx = arb_large_tx(189028 + i as Word, rng);
         let _status = client.submit(&tx).await.unwrap();
     }
