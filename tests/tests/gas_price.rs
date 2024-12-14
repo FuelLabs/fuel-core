@@ -557,7 +557,7 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
     };
     let mut node_config =
         Config::local_node_with_configs(chain_config, StateConfig::local_testnet());
-    let starting_gas_price = 1_000_000_000;
+    let starting_gas_price = 10_000_000;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.min_da_gas_price = starting_gas_price;
     node_config.max_da_gas_price_change_percent = 10;
@@ -629,7 +629,7 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
         gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
     });
 
-    let tries = 300;
+    let tries = 100;
 
     let mut success = false;
     let mut success_iteration = i32::MAX;
