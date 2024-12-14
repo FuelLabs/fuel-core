@@ -36,7 +36,7 @@ async fn balance_with_block_height_header() {
     let error_str = format!("{:?}", error);
     assert_eq!(
         error_str,
-        "Custom { kind: Other, error: ErrorResponse(412, \"\\\"Required fuel block height is too far in the future\\\"\") }"
+        "Custom { kind: Other, error: ErrorResponse(412, \"\") }"
     );
 
     // Disable HEADER, otherwise requests fail with status code 412

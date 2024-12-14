@@ -40,7 +40,6 @@ use axum::{
         FromRequest,
     },
     http::{
-        self,
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
@@ -53,6 +52,7 @@ use axum::{
         sse::Event,
         Html,
         IntoResponse,
+        IntoResponseParts,
         Sse,
     },
     routing::{
@@ -75,7 +75,7 @@ use futures::Stream;
 use hyper::rt::Executor;
 use serde_json::json;
 use std::{
-    any::Any,
+    convert::Infallible,
     future::Future,
     net::{
         SocketAddr,
@@ -388,11 +388,35 @@ where
     }
 }
 
+struct CurrentBlockHeight(BlockHeight);
+
+impl IntoResponseParts for CurrentBlockHeight {
+    type Error = Infallible;
+
+    fn into_response_parts(
+        self,
+        mut res: axum::response::ResponseParts,
+    ) -> Result<axum::response::ResponseParts, Self::Error> {
+        let current_block_height: u32 = self.0.into();
+        res.headers_mut().insert(
+            CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
+            current_block_height.into(),
+        );
+        Ok(res)
+    }
+}
+
+impl IntoResponse for CurrentBlockHeight {
+    fn into_response(self) -> axum::response::Response {
+        (self, ()).into_response()
+    }
+}
+
 async fn graphql_handler(
     extract_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Result<Json<Response>, (StatusCode, http::HeaderMap, Json<String>)> {
+) -> Result<(CurrentBlockHeight, Json<Response>), (StatusCode, CurrentBlockHeight)> {
     let mut request = req.0;
 
     if let RequiredHeight(Some(height)) = extract_height {
@@ -405,28 +429,26 @@ async fn graphql_handler(
         Arc::new(Mutex::new(None));
 
     let request = request.data(current_fuel_block_height_data.clone());
-    let graphql_response: Response = schema.execute(request).await.into();
-    let precondition_failed_error = graphql_response.errors.first().filter(|err| {
-        err.source::<RequiredFuelBlockHeightTooFarInTheFuture>()
-            .is_some()
-    });
-    if precondition_failed_error.is_some() {
-        let mut header_map = http::HeaderMap::new();
-        {
-            let current_fuel_block_height = current_fuel_block_height_data.lock().await;
 
-            header_map.insert(
-                CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
-                (*current_fuel_block_height.expect("Block height is set")).into(),
-            );
-        }
-        Err((
-            StatusCode::PRECONDITION_FAILED,
-            header_map,
-            Json("Required fuel block height is too far in the future".to_string()),
-        ))
+    let graphql_response: Response = schema.execute(request).await.into();
+
+    let current_block_height: CurrentBlockHeight = CurrentBlockHeight(
+        current_fuel_block_height_data
+            .lock()
+            .await
+            .expect("Block height is set")
+            .into(),
+    );
+
+    if graphql_response
+        .errors
+        .first()
+        .and_then(|err| err.source::<RequiredFuelBlockHeightTooFarInTheFuture>())
+        .is_some()
+    {
+        Err((StatusCode::PRECONDITION_FAILED, current_block_height))
     } else {
-        Ok(graphql_response.into())
+        Ok((current_block_height, graphql_response.into()))
     }
 }
 
