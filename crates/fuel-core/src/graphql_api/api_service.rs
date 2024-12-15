@@ -441,8 +441,7 @@ async fn graphql_handler(
         current_fuel_block_height_data
             .lock()
             .await
-            .expect("Block height is set")
-            .into(),
+            .expect("Block height is set"),
     );
 
     if graphql_response
