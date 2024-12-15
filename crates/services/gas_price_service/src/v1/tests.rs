@@ -78,11 +78,18 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block,
+        block::{
+            Block,
+            BlockV1,
+            PartialFuelBlock,
+        },
         header::ConsensusParametersVersion,
     },
     fuel_asm::op::exp,
-    fuel_tx::Transaction,
+    fuel_tx::{
+        Mint,
+        Transaction,
+    },
     fuel_types::BlockHeight,
     services::block_importer::{
         ImportResult,
@@ -97,6 +104,7 @@ use fuel_gas_price_algorithm::v1::{
     UnrecordedBlocks,
 };
 use std::{
+    collections::HashMap,
     num::NonZeroU64,
     ops::Deref,
     sync::{
@@ -336,7 +344,7 @@ fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
     InMemoryStorage::default().into_transaction()
 }
 
-fn database_with_metadata(
+fn gas_price_database_with_metadata(
     metadata: &V1Metadata,
 ) -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
     let mut db = database();
@@ -448,14 +456,27 @@ async fn run__new_l2_block_saves_old_metadata() {
 }
 
 #[derive(Clone)]
-struct FakeSettings;
+struct FakeSettings {
+    settings: GasPriceSettings,
+}
+
+impl Default for FakeSettings {
+    fn default() -> Self {
+        Self {
+            settings: GasPriceSettings {
+                gas_price_factor: 100,
+                block_gas_limit: u64::MAX,
+            },
+        }
+    }
+}
 
 impl GasPriceSettingsProvider for FakeSettings {
     fn settings(
         &self,
         _param_version: &ConsensusParametersVersion,
     ) -> GasPriceResult<GasPriceSettings> {
-        unimplemented!()
+        Ok(self.settings.clone())
     }
 }
 
@@ -486,23 +507,29 @@ impl GasPriceData for FakeGasPriceDb {
 #[derive(Clone)]
 struct FakeOnChainDb {
     height: BlockHeight,
+    blocks: HashMap<BlockHeight, Block<Transaction>>,
 }
 
 impl FakeOnChainDb {
     fn new(height: u32) -> Self {
         Self {
             height: height.into(),
+            blocks: HashMap::new(),
         }
     }
 }
 
 struct FakeL2Data {
     height: BlockHeight,
+    blocks: HashMap<BlockHeight, Block<Transaction>>,
 }
 
 impl FakeL2Data {
-    fn new(height: BlockHeight) -> Self {
-        Self { height }
+    fn new(
+        height: BlockHeight,
+        blocks: HashMap<BlockHeight, Block<Transaction>>,
+    ) -> Self {
+        Self { height, blocks }
     }
 }
 
@@ -513,16 +540,16 @@ impl L2Data for FakeL2Data {
 
     fn get_block(
         &self,
-        _height: &BlockHeight,
+        height: &BlockHeight,
     ) -> StorageResult<Option<Block<Transaction>>> {
-        unimplemented!()
+        Ok(self.blocks.get(height).cloned())
     }
 }
 impl AtomicView for FakeOnChainDb {
     type LatestView = FakeL2Data;
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
-        Ok(FakeL2Data::new(self.height))
+        Ok(FakeL2Data::new(self.height, self.blocks.clone()))
     }
 }
 
@@ -535,22 +562,16 @@ fn empty_block_stream() -> BoxStream<SharedImportResult> {
 async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overrides() {
     // given
     let original_metadata = arbitrary_metadata();
-    let original = UpdaterMetadata::V1(original_metadata.clone());
-    let metadata_inner = Arc::new(std::sync::Mutex::new(Some(original.clone())));
-    let metadata_storage = FakeMetadata {
-        inner: metadata_inner,
-    };
-
     let different_config = different_arb_config();
     let descaleed_exec_price =
         original_metadata.new_scaled_exec_price / original_metadata.gas_price_factor;
     assert_ne!(different_config.new_exec_gas_price, descaleed_exec_price);
     let different_l2_block = 0;
-    let settings = FakeSettings;
+    let settings = FakeSettings::default();
     let block_stream = empty_block_stream();
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
-    let inner = database_with_metadata(&original_metadata);
+    let inner = gas_price_database_with_metadata(&original_metadata);
     // when
     let service = UninitializedTask::new(
         different_config.clone(),
@@ -651,7 +672,7 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     let config = zero_threshold_arbitrary_config();
     let different_l2_block = 1231;
     let erroring_persisted_data = ErroringPersistedData;
-    let settings = FakeSettings;
+    let settings = FakeSettings::default();
     let block_stream = empty_block_stream();
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
@@ -685,12 +706,12 @@ async fn uninitialized_task__init__starts_da_service_with_bundle_id_in_storage()
         original_metadata.new_scaled_exec_price / original_metadata.gas_price_factor;
     assert_ne!(different_config.new_exec_gas_price, descaleed_exec_price);
     let different_l2_block = 0;
-    let settings = FakeSettings;
+    let settings = FakeSettings::default();
     let block_stream = empty_block_stream();
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let (da_cost_source, bundle_id_handle) =
         FakeDABlockCost::never_returns_with_handle_to_bundle_id();
-    let mut inner = database_with_metadata(&original_metadata);
+    let mut inner = gas_price_database_with_metadata(&original_metadata);
     let mut tx = inner.begin_transaction().unwrap();
     tx.set_bundle_id(&block_height.into(), bundle_id).unwrap();
     StorageTransaction::commit_transaction(tx).unwrap();
@@ -713,4 +734,59 @@ async fn uninitialized_task__init__starts_da_service_with_bundle_id_in_storage()
     let actual = bundle_id_handle.lock().unwrap();
     let expected = Some(bundle_id);
     assert_eq!(*actual, expected);
+}
+
+fn arb_block() -> Block<Transaction> {
+    let mut block = Block::default();
+    let mint = Mint::default();
+    block.transactions_mut().push(mint.into());
+    block
+}
+
+#[tokio::test]
+async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init();
+    // given
+    let metadata_height = 100;
+    let l2_height = 200;
+    let config = zero_threshold_arbitrary_config();
+
+    let metadata = V1Metadata {
+        new_scaled_exec_price: 100,
+        l2_block_height: metadata_height,
+        new_scaled_da_gas_price: 0,
+        gas_price_factor: NonZeroU64::new(100).unwrap(),
+        total_da_rewards_excess: 0,
+        latest_known_total_da_cost_excess: 0,
+        last_profit: 0,
+        second_to_last_profit: 0,
+        latest_da_cost_per_byte: 0,
+        unrecorded_block_bytes: 0,
+    };
+    let gas_price_db = gas_price_database_with_metadata(&metadata);
+    let mut onchain_db = FakeOnChainDb::new(l2_height);
+    for height in 1..=l2_height {
+        let block = arb_block();
+        onchain_db.blocks.insert(BlockHeight::from(height), block);
+    }
+
+    let service = UninitializedTask::new(
+        config,
+        Some(metadata_height.into()),
+        0.into(),
+        FakeSettings::default(),
+        empty_block_stream(),
+        gas_price_db,
+        FakeDABlockCost::never_returns(),
+        onchain_db,
+    )
+    .unwrap();
+
+    // when
+    service.init().await.unwrap();
+
+    // then
+    // no panic
 }

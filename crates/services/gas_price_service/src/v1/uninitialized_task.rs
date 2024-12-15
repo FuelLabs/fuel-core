@@ -177,6 +177,7 @@ where
             .config
             .da_poll_interval
             .map(|x| Duration::from_millis(x.into()));
+        // TODO: Dupe code
         if let Some(bundle_id) =
             self.gas_price_db.get_bundle_id(&metadata_height.into())?
         {
@@ -310,8 +311,13 @@ where
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
-    let mut tx = da_storage.begin_transaction()?;
+    tracing::info!(
+        "Syncing gas price metadata from {} to {}",
+        first,
+        latest_block_height
+    );
     for height in first..=latest_block_height {
+        let mut tx = da_storage.begin_transaction()?;
         let block = view
             .get_block(&height.into())?
             .ok_or(not_found!("FullBlock"))?;
@@ -344,8 +350,8 @@ where
         )?;
         let metadata: UpdaterMetadata = updater.clone().into();
         tx.set_metadata(&metadata)?;
+        AtomicStorage::commit_transaction(tx)?;
     }
-    AtomicStorage::commit_transaction(tx)?;
 
     Ok(())
 }

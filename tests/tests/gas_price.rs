@@ -533,6 +533,79 @@ fn produce_block__l1_committed_block_effects_gas_price() {
 }
 
 #[test]
+fn run__if_metadata_is_behind_l2_then_will_catch_up() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init();
+
+    // given
+    // produce 100 blocks
+    let args = vec![
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--min-da-gas-price",
+        "100",
+    ];
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let temp_dir = rt.block_on(async {
+        let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+        driver.client.produce_blocks(100, None).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        driver.kill().await
+    });
+
+    // rollback 50 blocks
+    let temp_dir = rt.block_on(async {
+        let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
+            .await
+            .unwrap();
+        for _ in 0..50 {
+            driver
+                .node
+                .shared
+                .database
+                .gas_price()
+                .rollback_last_block()
+                .unwrap();
+            let gas_price_db_height = driver
+                .node
+                .shared
+                .database
+                .gas_price()
+                .latest_height()
+                .unwrap();
+            tracing::info!("gas price db height: {:?}", gas_price_db_height);
+        }
+        driver.kill().await
+    });
+
+    // when
+    // restart node
+    rt.block_on(async {
+        let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
+            .await
+            .unwrap();
+        let onchain_db_height = driver
+            .node
+            .shared
+            .database
+            .on_chain()
+            .latest_height_from_metadata()
+            .unwrap()
+            .unwrap();
+        let gas_price_db_height = driver
+            .node
+            .shared
+            .database
+            .gas_price()
+            .latest_height()
+            .unwrap();
+        assert_eq!(onchain_db_height, gas_price_db_height);
+    });
+}
+
+#[test]
 fn produce_block__algorithm_recovers_from_divergent_profit() {
     _produce_block__algorithm_recovers_from_divergent_profit(110);
 }
