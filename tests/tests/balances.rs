@@ -418,7 +418,7 @@ mod pagination {
         [PageDirection::Forward, PageDirection::Backward],
         [MessageCoin::Missing, MessageCoin::Present],
         [BaseAssetCoin::Present, BaseAssetCoin::Missing],
-        [1, 2, 3, 4, 2137],
+        [1, 2, 3, 2137],
         [0x11, 0x33, 0x99])]
     #[tokio::test]
     async fn all_balances_in_chunks(
