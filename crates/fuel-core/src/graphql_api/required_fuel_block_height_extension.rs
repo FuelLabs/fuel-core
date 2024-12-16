@@ -98,7 +98,10 @@ impl Extension for RequiredFuelBlockHeightExtension {
 
             // We save the current fuel block height in the request data.
             // This avoids fetching the current fuel block height from the view again
-            // in the execute method.
+            // in the execute method, which could lead to scenarios where
+            // the returned CURRENT_FUEL_BLOCK_HEIGHT_HEADER value is equal
+            // than the REQUIRED_FUEL_BLOCK_HEIGHT value, but the request fails
+            // with a 412 status code.
             *current_fuel_block_height = Some(latest_known_block_height);
         }
 
