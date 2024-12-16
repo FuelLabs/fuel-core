@@ -86,7 +86,7 @@ pub mod fuel_storage_unrecorded_blocks;
 
 pub struct UninitializedTask<L2DataStoreView, GasPriceStore, DA, SettingsProvider> {
     pub config: V1AlgorithmConfig,
-    pub gas_metadata_height: Option<BlockHeight>,
+    pub gas_metadata_height: BlockHeight,
     pub genesis_block_height: BlockHeight,
     pub settings: SettingsProvider,
     pub gas_price_db: GasPriceStore,
@@ -117,18 +117,14 @@ where
         da_source: DA,
         on_chain_db: L2DataStoreView,
     ) -> anyhow::Result<Self> {
-        let latest_block_height: u32 = on_chain_db
-            .latest_view()?
-            .latest_height()
-            .unwrap_or(genesis_block_height)
-            .into();
+        let gas_price_db_height = gas_metadata_height.unwrap_or(genesis_block_height);
 
         let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, latest_block_height, &gas_price_db)?;
+            initialize_algorithm(&config, gas_price_db_height.into(), &gas_price_db)?;
 
         let task = Self {
             config,
-            gas_metadata_height,
+            gas_metadata_height: gas_price_db_height,
             genesis_block_height,
             settings,
             gas_price_db,
@@ -146,7 +142,6 @@ where
     ) -> anyhow::Result<
         GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, AtomicStorage>,
     > {
-        let mut first_run = false;
         let latest_block_height: u32 = self
             .on_chain_db
             .latest_view()?
@@ -154,22 +149,15 @@ where
             .unwrap_or(self.genesis_block_height)
             .into();
 
-        let maybe_metadata_height = self.gas_metadata_height;
-        let metadata_height = if let Some(metadata_height) = maybe_metadata_height {
-            metadata_height.into()
-        } else {
-            first_run = true;
-            latest_block_height
-        };
-
         let l2_block_source = FuelL2BlockSource::new(
             self.genesis_block_height,
             self.settings.clone(),
             self.block_stream,
         );
 
-        if let Some(bundle_id) =
-            self.gas_price_db.get_bundle_id(&metadata_height.into())?
+        if let Some(bundle_id) = self
+            .gas_price_db
+            .get_bundle_id(&self.gas_metadata_height.into())?
         {
             self.da_source.set_last_value(bundle_id).await?;
         }
@@ -178,8 +166,9 @@ where
             .da_poll_interval
             .map(|x| Duration::from_millis(x.into()));
         // TODO: Dupe code
-        if let Some(bundle_id) =
-            self.gas_price_db.get_bundle_id(&metadata_height.into())?
+        if let Some(bundle_id) = self
+            .gas_price_db
+            .get_bundle_id(&self.gas_metadata_height.into())?
         {
             self.da_source.set_last_value(bundle_id).await?;
         }
@@ -187,9 +176,7 @@ where
         let da_service_runner = ServiceRunner::new(da_service);
         da_service_runner.start_and_await().await?;
 
-        if BlockHeight::from(latest_block_height) == self.genesis_block_height
-            || first_run
-        {
+        if BlockHeight::from(latest_block_height) == self.genesis_block_height {
             let service = GasPriceServiceV1::new(
                 l2_block_source,
                 self.shared_algo,
@@ -199,12 +186,12 @@ where
             );
             Ok(service)
         } else {
-            if latest_block_height > metadata_height {
+            if latest_block_height > *self.gas_metadata_height {
                 sync_gas_price_db_with_on_chain_storage(
                     &self.settings,
-                    &self.config,
+                    &mut self.algo_updater,
                     &self.on_chain_db,
-                    metadata_height,
+                    *self.gas_metadata_height,
                     latest_block_height,
                     &mut self.gas_price_db,
                 )?;
@@ -257,7 +244,7 @@ fn sync_gas_price_db_with_on_chain_storage<
     AtomicStorage,
 >(
     settings: &SettingsProvider,
-    config: &V1AlgorithmConfig,
+    updater: &mut AlgorithmUpdaterV1,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
     latest_block_height: u32,
@@ -275,20 +262,20 @@ where
             "Expected metadata to exist for height: {metadata_height}"
         ))?;
 
-    let metadata = match metadata {
-        UpdaterMetadata::V1(metadata) => metadata,
-        UpdaterMetadata::V0(metadata) => {
-            V1Metadata::construct_from_v0_metadata(metadata, config)?
-        }
-    };
-    let mut algo_updater = v1_algorithm_from_metadata(metadata, config);
+    // let metadata = match metadata {
+    //     UpdaterMetadata::V1(metadata) => metadata,
+    //     UpdaterMetadata::V0(metadata) => {
+    //         V1Metadata::construct_from_v0_metadata(metadata, config)?
+    //     }
+    // };
+    // let mut algo_updater = v1_algorithm_from_metadata(metadata, config);
 
     sync_v1_metadata(
         settings,
         on_chain_db,
         metadata_height,
         latest_block_height,
-        &mut algo_updater,
+        updater,
         persisted_data,
     )?;
 
@@ -317,6 +304,7 @@ where
         latest_block_height
     );
     for height in first..=latest_block_height {
+        tracing::info!("Syncing gas price metadata for block {}", height);
         let mut tx = da_storage.begin_transaction()?;
         let block = view
             .get_block(&height.into())?
