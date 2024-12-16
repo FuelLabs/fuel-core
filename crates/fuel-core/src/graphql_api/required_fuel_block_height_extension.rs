@@ -3,10 +3,12 @@ use async_graphql::{
         Extension,
         ExtensionContext,
         ExtensionFactory,
+        NextExecute,
         NextPrepareRequest,
     },
     Pos,
     Request,
+    Response,
     ServerError,
     ServerResult,
 };
@@ -16,6 +18,8 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Mutex;
+
+use crate::graphql_api::api_service::CURRENT_FUEL_BLOCK_HEIGHT_HEADER;
 
 use super::{
     api_service::RequiredHeight,
@@ -45,7 +49,7 @@ impl ExtensionFactory for RequiredFuelBlockHeightExtension {
 
 /// Error value returned by the extension when the required fuel block height
 /// precondition is not met.
-pub(crate) struct RequiredFuelBlockHeightTooFarInTheFuture;
+pub(crate) struct RequiredFuelBlockHeightTooFarInTheFuture(pub(crate) BlockHeight);
 
 #[async_trait::async_trait]
 impl Extension for RequiredFuelBlockHeightExtension {
@@ -92,15 +96,22 @@ impl Extension for RequiredFuelBlockHeightExtension {
             .lock()
             .await;
 
+            // We save the current fuel block height in the request data.
+            // This avoids fetching the current fuel block height from the view again
+            // in the execute method.
             *current_fuel_block_height = Some(latest_known_block_height);
         }
 
         if let Some(required_fuel_block_height) = required_fuel_block_height {
             if required_fuel_block_height > latest_known_block_height {
+                // TODO: https://github.com/FuelLabs/fuel-core/issues/1897
+                // Update the view until the required fuel block height is reached or a timeout occurs.
                 return Err(ServerError {
                     message: "".to_string(),
                     locations: vec![],
-                    source: Some(Arc::new(RequiredFuelBlockHeightTooFarInTheFuture)),
+                    source: Some(Arc::new(RequiredFuelBlockHeightTooFarInTheFuture(
+                        latest_known_block_height,
+                    ))),
                     path: vec![],
                     extensions: None,
                 });
@@ -108,5 +119,35 @@ impl Extension for RequiredFuelBlockHeightExtension {
         }
 
         next.run(ctx, request).await
+    }
+
+    async fn execute(
+        &self,
+        ctx: &ExtensionContext<'_>,
+        operation_name: Option<&str>,
+        next: NextExecute<'_>,
+    ) -> Response {
+        // The query data has been referenced in the Extension context after
+        // Self::prepare_request has been executed.
+        // See https://github.com/async-graphql/async-graphql/blob/7f1791488463d4e9c5adcd543962173e2f6cbd34/src/schema.rs#L845.
+        // We can fetch the value of the current_fuel_block_height from the extension
+
+        let current_block_height = ctx
+            .query_data
+            .and_then(|data| data
+            .get(&TypeId::of::<Arc<Mutex<Option<BlockHeight>>>>()))
+            .and_then(|data| data.downcast_ref::<Arc<Mutex<Option<BlockHeight>>>>())
+            .expect("Data to store current fuel block height was set when preparing the request")
+            .lock()
+            .await
+            .expect("Data to store current fuel block height was set when preparing the request");
+
+        let mut result = next.run(ctx, operation_name).await;
+
+        result.http_headers.append(
+            CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
+            (*current_block_height).into(),
+        );
+        result
     }
 }

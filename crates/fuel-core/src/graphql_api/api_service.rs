@@ -52,7 +52,6 @@ use axum::{
         sse::Event,
         Html,
         IntoResponse,
-        IntoResponseParts,
         Sse,
     },
     routing::{
@@ -72,10 +71,12 @@ use fuel_core_services::{
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
-use hyper::rt::Executor;
+use hyper::{
+    rt::Executor,
+    HeaderMap,
+};
 use serde_json::json;
 use std::{
-    convert::Infallible,
     future::Future,
     net::{
         SocketAddr,
@@ -396,40 +397,11 @@ where
     }
 }
 
-/// Structure to be used to store the current fuel block height
-/// in the graphql `RequiredFuelBlockHeightExtension`.
-/// Instances of this type returned by the [RequiredFuelBlockHeightExtension]
-/// are used to se the `CURRENT_FUEL_BLOCK_HEIGHT` header in the response.
-
-struct CurrentHeight(BlockHeight);
-
-impl IntoResponseParts for CurrentHeight {
-    type Error = Infallible;
-
-    fn into_response_parts(
-        self,
-        mut res: axum::response::ResponseParts,
-    ) -> Result<axum::response::ResponseParts, Self::Error> {
-        let current_block_height: u32 = self.0.into();
-        res.headers_mut().insert(
-            CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
-            current_block_height.into(),
-        );
-        Ok(res)
-    }
-}
-
-impl IntoResponse for CurrentHeight {
-    fn into_response(self) -> axum::response::Response {
-        (self, ()).into_response()
-    }
-}
-
 async fn graphql_handler(
     required_fuel_block_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Result<(CurrentHeight, Json<Response>), (StatusCode, CurrentHeight)> {
+) -> Result<Json<Response>, (StatusCode, HeaderMap)> {
     let current_fuel_block_height_data: Arc<Mutex<Option<BlockHeight>>> =
         Arc::new(Mutex::new(None));
 
@@ -440,26 +412,26 @@ async fn graphql_handler(
 
     let graphql_response: Response = schema.execute(request).await;
 
-    let current_block_height = CurrentHeight(
-        current_fuel_block_height_data
-            .lock()
-            .await
-            .expect("Block height is set"),
-    );
-
-    if graphql_response
-        .errors
-        .first()
-        .and_then(|err| err.source::<RequiredFuelBlockHeightTooFarInTheFuture>())
-        .is_some()
+    if let Some(RequiredFuelBlockHeightTooFarInTheFuture(current_block_height)) =
+        graphql_response
+            .errors
+            .first()
+            .and_then(|err| err.source::<RequiredFuelBlockHeightTooFarInTheFuture>())
     {
-        Err((StatusCode::PRECONDITION_FAILED, current_block_height))
+        let current_block_height: u32 = (*current_block_height).into();
+        let mut header_map = HeaderMap::new();
+        header_map.insert(
+            CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
+            current_block_height.into(),
+        );
+        Err((StatusCode::PRECONDITION_FAILED, header_map))
     } else {
-        Ok((current_block_height, graphql_response.into()))
+        Ok(graphql_response.into())
     }
 }
 
 async fn graphql_subscription_handler(
+    required_fuel_block_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
@@ -467,7 +439,7 @@ async fn graphql_subscription_handler(
         Arc::new(Mutex::new(None));
     let request = req
         .0
-        .data(RequiredHeight(None))
+        .data(required_fuel_block_height)
         .data(current_fuel_block_height_data);
     let stream = schema
         .execute_stream(request)
