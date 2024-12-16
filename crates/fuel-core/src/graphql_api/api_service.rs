@@ -361,6 +361,10 @@ async fn health() -> Json<serde_json::Value> {
     Json(json!({ "up": true }))
 }
 
+/// Optional value which is set via the REQUIRED_FUEL_BLOCK_HEIGHT_HEADER header.
+/// When present, it is used to check whether the current block height is lower
+/// than the current fuel block height. Requests that do not meet this
+/// condition fail with a 412 `Precondition Failed` status code.
 #[derive(Clone)]
 pub(crate) struct RequiredHeight(pub(crate) Option<BlockHeight>);
 
@@ -389,6 +393,11 @@ where
         ))
     }
 }
+
+/// Structure to be used to store the current fuel block height
+/// in the graphql `RequiredFuelBlockHeightExtension`.
+/// Instances of this type returned by the [RequiredFuelBlockHeightExtension]
+/// are used to se the `CURRENT_FUEL_BLOCK_HEIGHT` header in the response.
 
 struct CurrentHeight(BlockHeight);
 
@@ -419,12 +428,11 @@ async fn graphql_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Result<(CurrentHeight, Json<Response>), (StatusCode, CurrentHeight)> {
-    let request = req.0;
-
     let current_fuel_block_height_data: Arc<Mutex<Option<BlockHeight>>> =
         Arc::new(Mutex::new(None));
 
-    let request = request
+    let request = req
+        .0
         .data(current_fuel_block_height_data.clone())
         .data(required_fuel_block_height);
 

@@ -20,9 +20,12 @@ use tokio::sync::Mutex;
 
 use super::api_service::RequiredHeight;
 
-/// The extension that adds the `ReadView` to the request context.
-/// It guarantees that the request works with the one view of the database,
-/// and external database modification cannot affect the result.
+/// The extension that implements the logic for checking whether
+/// the precondition that REQUIRED_FUEL_BLOCK_HEADER must
+/// be higher than the current block height is met.
+/// The value of the REQUIRED_FUEL_BLOCK_HEADER is set in
+/// the request data by the graphql handler as a value of type
+/// `RequiredHeight`.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub(crate) struct RequiredFuelBlockHeightExtension;
 
@@ -38,6 +41,8 @@ impl ExtensionFactory for RequiredFuelBlockHeightExtension {
     }
 }
 
+/// Error value returned by the extnesion when the required fuel block height
+/// precondition is not met.
 pub(crate) struct RequiredFuelBlockHeightTooFarInTheFuture;
 
 #[async_trait::async_trait]
