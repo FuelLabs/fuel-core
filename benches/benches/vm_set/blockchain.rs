@@ -47,8 +47,11 @@ use fuel_core_types::{
     },
     fuel_tx::{
         ContractIdExt,
+        Finalizable,
         Input,
         Output,
+        Transaction,
+        TransactionBuilder,
         Word,
     },
     fuel_types::*,
@@ -132,8 +135,13 @@ impl BenchDb {
 
     fn add_blocks(&mut self, nb_blocks: u32) {
         for i in 1..=nb_blocks {
-            let block =
+            let mut block =
                 fuel_core::service::genesis::create_genesis_block(&Config::local_node());
+            let transactions = block.transactions_mut();
+            // Add a dummy transaction to the block to make the block bigger.
+            transactions.push(Transaction::Script(
+                TransactionBuilder::script(vec![], vec![1; 200_000]).finalize(),
+            ));
             let config = Config::local_node();
             let chain_config = config.snapshot_reader.chain_config();
             self.db
