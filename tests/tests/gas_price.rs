@@ -304,6 +304,7 @@ async fn estimate_gas_price__returns_min_gas_price_if_starting_gas_price_is_zero
     assert_eq!(MIN_GAS_PRICE, actual)
 }
 
+// This test passed before this PR, but doesn't now
 #[tokio::test(flavor = "multi_thread")]
 async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     // given
