@@ -288,6 +288,8 @@ where
         ))
         .extension(async_graphql::extensions::Tracing)
         .extension(ViewExtension::new())
+        // `RequiredFuelBlockHeightExtension`` uses the view set by the ViewExtension.
+        // Do not reorder this line before adding the `ViewExtension`.
         .extension(RequiredFuelBlockHeightExtension::new())
         .finish();
 

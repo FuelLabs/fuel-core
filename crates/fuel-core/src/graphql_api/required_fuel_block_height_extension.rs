@@ -1,4 +1,4 @@
-use crate::graphql_api::database::ReadDatabase;
+// use crate::graphql_api::database::ReadDatabase;
 use async_graphql::{
     extensions::{
         Extension,
@@ -18,7 +18,10 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-use super::api_service::RequiredHeight;
+use super::{
+    api_service::RequiredHeight,
+    database::ReadView,
+};
 
 /// The extension that implements the logic for checking whether
 /// the precondition that REQUIRED_FUEL_BLOCK_HEADER must
@@ -53,7 +56,12 @@ impl Extension for RequiredFuelBlockHeightExtension {
         request: Request,
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
-        let database: &ReadDatabase = ctx.data_unchecked();
+        // let database: &ReadDatabase = ctx.data_unchecked();
+        let view = request
+            .data
+            .get(&TypeId::of::<ReadView>())
+            .and_then(|data| data.downcast_ref::<ReadView>())
+            .expect("Read view was set in the view extension.");
 
         let required_fuel_block_height = request
             .data
@@ -62,19 +70,16 @@ impl Extension for RequiredFuelBlockHeightExtension {
             .expect("Required height request data was set in th graphql_handler")
             .0;
 
-        let latest_known_block_height = database
-            .view()
-            .and_then(|view| view.latest_block_height())
-            .map_err(|e| {
-                let (line, column) = (line!(), column!());
-                ServerError::new(
-                    e.to_string(),
-                    Some(Pos {
-                        line: line as usize,
-                        column: column as usize,
-                    }),
-                )
-            })?;
+        let latest_known_block_height = view.latest_block_height().map_err(|e| {
+            let (line, column) = (line!(), column!());
+            ServerError::new(
+                e.to_string(),
+                Some(Pos {
+                    line: line as usize,
+                    column: column as usize,
+                }),
+            )
+        })?;
 
         {
             // At this point, the query_data in the ExtensionContext is empty.
