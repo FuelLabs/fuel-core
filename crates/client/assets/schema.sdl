@@ -4,7 +4,8 @@ scalar AssetId
 
 type Balance {
 	owner: Address!
-	amount: U128!
+	amount: U64!
+	amountU128: U128!
 	assetId: AssetId!
 }
 
@@ -442,7 +443,7 @@ type GasCosts {
 	wqmm: U64!
 	xor: U64!
 	xori: U64!
-	ecop: U64!
+	ecop: U64
 	alocDependentCost: DependentCost!
 	bldd: DependentCost
 	bsiz: DependentCost
@@ -467,7 +468,7 @@ type GasCosts {
 	smo: DependentCost!
 	srwq: DependentCost!
 	swwq: DependentCost!
-	epar: DependentCost!
+	epar: DependentCost
 	contractRoot: DependentCost!
 	stateRoot: DependentCost!
 	vmInitialization: DependentCost!
@@ -476,6 +477,7 @@ type GasCosts {
 
 enum GasCostsVersion {
 	V1
+	V2
 }
 
 type Genesis {

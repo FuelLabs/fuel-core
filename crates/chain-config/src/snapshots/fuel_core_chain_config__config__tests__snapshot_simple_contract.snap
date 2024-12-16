@@ -130,6 +130,7 @@ expression: json
       "wqmm": 3,
       "xor": 1,
       "xori": 1,
+      "ecop": 1,
       "call": {
         "LightOperation": {
           "base": 144,
@@ -236,6 +237,12 @@ expression: json
         "LightOperation": {
           "base": 44,
           "units_per_gas": 5
+        }
+      },
+      "epar": {
+        "HeavyOperation": {
+          "base": 100,
+          "gas_per_unit": 1
         }
       },
       "contract_root": {

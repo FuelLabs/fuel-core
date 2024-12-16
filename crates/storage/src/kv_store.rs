@@ -78,6 +78,7 @@ pub trait KeyValueInspect {
                             "Buffer size is not equal to the value size"
                         )));
                     };
+                    // SAFETY: offset is guaranteed to be less or equal to value.len() by the if let check above
                     buf.copy_from_slice(value[offset..].as_ref());
                     Ok(buf.len())
                 } else {
