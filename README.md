@@ -115,6 +115,8 @@ $ ./target/debug/fuel-core run --poa-instant=false
 
 If you want to participate in the Ignition network with your own node you can launch it following these simple commands.
 
+### From pre-compiled binaries
+
 Install the latest fuelup :
 ```bash
 curl -fsSL https://install.fuel.network/ | sh
@@ -139,18 +141,130 @@ fuel-core run \
 --service-name fuel-ignition-node \
 --keypair {KEYGEN_SECRET_KEY} \
 --relayer {ETHEREUM_RPC_ENDPOINT} \
---ip=0.0.0.0 --port 4000 --peering-port 30333 \
+--ip=0.0.0.0 \
+--port 4000 \
+--peering-port 30333 \
 --db-path ~/.fuel-ignition \
 --snapshot {PATH_TO_CHAIN_CONFIGURATION_FOLDER}/ignition \
---utxo-validation --poa-instant false --enable-p2p \
+--utxo-validation \
+--poa-instant false \
+--enable-p2p \
 --bootstrap-nodes /dnsaddr/mainnet.fuel.network \
 --sync-header-batch-size 100 \
---relayer-v2-listening-contracts=0xAEB0c00D0125A8a788956ade4f4F12Ead9f65DDf \
---relayer-da-deploy-height=20620434 \
---relayer-log-page-size=100 \
---sync-block-stream-buffer-size 30
+--relayer-v2-listening-contracts 0xAEB0c00D0125A8a788956ade4f4F12Ead9f65DDf \
+--relayer-da-deploy-height 20620434 \
+--relayer-log-page-size 100 \
+--sync-block-stream-buffer-size 30 \
+--min-gas-price 1000 \
+--starting-gas-price 1000 \
+--gas-price-change-percent 10 \
+--gas-price-threshold-percent 50
 ```
+All the values used for the L1 relayer are based on Ethereum Mainnet make sure `{ETHEREUM_RPC_ENDPOINT}` is a RPC communicating to Ethereum Mainnet network.
+
 Instead of directly placing your personal values on the command we advise you to use, for example, environment variables.
+
+### From source
+
+Clone the chain configuration folder :
+```
+git clone https://github.com/FuelLabs/chain-configuration
+```
+
+Clone this repository : 
+```
+git clone https://github.com/FuelLabs/fuel-core.git
+```
+
+Go to the latest release tag for ignition on the `fuel-core` repository :
+```
+git checkout v0.40.2
+```
+
+Generate a keyparr for your node :
+```
+cargo run --bin fuel-core-keygen -- new --key-type peering
+```
+and copy the secret key displayed.
+
+Run your node (change all variable with {} to your own personal variables):
+```bash
+cargo run --release --bin fuel-core -- run \
+--enable-relayer \
+--service-name fuel-ignition-node \
+--keypair {KEYGEN_SECRET_KEY} \
+--relayer {ETHEREUM_RPC_ENDPOINT} \
+--ip=0.0.0.0 \
+--port 4000 \
+--peering-port 30333 \
+--db-path ~/.fuel-ignition \
+--snapshot {PATH_TO_CHAIN_CONFIGURATION_FOLDER}/ignition \
+--utxo-validation \
+--poa-instant false \
+--enable-p2p \
+--bootstrap-nodes /dnsaddr/mainnet.fuel.network \
+--sync-header-batch-size 100 \
+--relayer-v2-listening-contracts 0xAEB0c00D0125A8a788956ade4f4F12Ead9f65DDf \
+--relayer-da-deploy-height 20620434 \
+--relayer-log-page-size 100 \
+--sync-block-stream-buffer-size 30 \
+--min-gas-price 1000 \
+--starting-gas-price 1000 \
+--gas-price-change-percent 10 \
+--gas-price-threshold-percent 50
+```
+All the values used for the L1 relayer are based on Ethereum Mainnet make sure `{ETHEREUM_RPC_ENDPOINT}` is a RPC communicating to Ethereum Mainnet network.
+
+Instead of directly placing your personal values on the command we advise you to use, for example, environment variables.
+
+## Running a Local network from source
+
+Clone this repository : 
+```
+git clone https://github.com/FuelLabs/fuel-core.git
+```
+
+Generate a keypair for the p2p of your node :
+```
+cargo run --bin fuel-core-keygen -- new --key-type peering
+```
+and copy the secret key displayed.
+
+Generate a keypair for the block production of your node :
+```
+cargo run --bin fuel-core-keygen -- new --key-type block-production
+```
+and copy the secret key displayed.
+
+Run your node (change all variable with {} to your own personal variables):
+```bash
+cargo run --release --bin fuel-core -- run \
+--enable-relayer \
+--consensus-key {KEYGEN_BLOCK_PRODUCTION_SECRET_KEY}
+--service-name fuel-local-node \
+--relayer {ETHEREUM_RPC_ENDPOINT} \
+--enable-p2p \
+--ip=0.0.0.0 \
+--port 4000 \
+--peering-port 30333 \
+--keypair {KEYGEN_P2P_SECRET_KEY} \
+--db-path ~/.fuel-local \
+--utxo-validation \
+--poa-interval-period 1s \
+--sync-header-batch-size 100 \
+--relayer-v2-listening-contracts 0xAEB0c00D0125A8a788956ade4f4F12Ead9f65DDf \
+--relayer-da-deploy-height 20620434 \
+--relayer-log-page-size 100 \
+--sync-block-stream-buffer-size 30 \
+--min-gas-price 1000 \
+--starting-gas-price 1000 \
+--gas-price-change-percent 10 \
+--gas-price-threshold-percent 50
+```
+All the values used for the L1 relayer are based on Ethereum Sepolia make sure `{ETHEREUM_RPC_ENDPOINT}` is a RPC communicating to Ethereum Sepolia network.
+
+Instead of directly placing your personal values on the command we advise you to use, for example, environment variables.
+
 
 ### Troubleshooting
 
