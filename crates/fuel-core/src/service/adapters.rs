@@ -1,3 +1,17 @@
+use crate::{
+    database::{
+        database_description::relayer::Relayer,
+        Database,
+    },
+    fuel_core_graphql_api::ports::GasPriceEstimate,
+    service::{
+        sub_services::{
+            BlockProducerService,
+            TxPoolSharedState,
+        },
+        vm_pool::MemoryPool,
+    },
+};
 use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
@@ -19,6 +33,7 @@ use fuel_core_types::{
         consensus::Consensus,
     },
     fuel_tx::Transaction,
+    fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
         block_producer::Components,
@@ -31,20 +46,6 @@ use fuel_core_types::{
 };
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
-
-use crate::{
-    database::{
-        database_description::relayer::Relayer,
-        Database,
-    },
-    service::{
-        sub_services::{
-            BlockProducerService,
-            TxPoolSharedState,
-        },
-        vm_pool::MemoryPool,
-    },
-};
 
 pub mod block_importer;
 pub mod consensus_module;
@@ -83,6 +84,155 @@ impl StaticGasPrice {
     pub fn new(gas_price: u64) -> Self {
         Self { gas_price }
     }
+}
+
+#[cfg(test)]
+mod arc_gas_price_estimate_tests {
+    #![allow(non_snake_case)]
+
+    use super::*;
+    use proptest::proptest;
+
+    async fn _worst_case__correctly_calculates_value(
+        gas_price: u64,
+        starting_height: u32,
+        block_horizon: u32,
+        percentage: u16,
+    ) {
+        // given
+        let subject = ArcGasPriceEstimate::new(starting_height, gas_price, percentage);
+
+        // when
+        let target_height = starting_height.saturating_add(block_horizon);
+        let actual = subject
+            .worst_case_gas_price(target_height.into())
+            .await
+            .unwrap();
+
+        // then
+        let mut expected = gas_price;
+
+        for _ in 0..block_horizon {
+            let change_amount = expected
+                .saturating_mul(percentage as u64)
+                .saturating_div(100);
+            expected = expected.saturating_add(change_amount);
+        }
+
+        assert!(actual >= expected);
+    }
+
+    proptest! {
+        #[test]
+        fn worst_case_gas_price__correctly_calculates_value(
+            gas_price: u64,
+            starting_height: u32,
+            block_horizon in 0..10_000u32,
+            percentage: u16,
+        ) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(_worst_case__correctly_calculates_value(
+                gas_price,
+                starting_height,
+                block_horizon,
+                percentage,
+            ));
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn worst_case_gas_price__never_overflows(
+            gas_price: u64,
+            starting_height: u32,
+            block_horizon in 0..10_000u32,
+            percentage: u16
+        ) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+
+            // given
+            let subject = ArcGasPriceEstimate::new(starting_height, gas_price, percentage);
+
+            // when
+            let target_height = starting_height.saturating_add(block_horizon);
+
+            let _ = rt.block_on(subject.worst_case_gas_price(target_height.into()));
+
+            // then
+            // doesn't panic with an overflow
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub struct ArcGasPriceEstimate<Height, GasPrice> {
+    inner: Arc<parking_lot::RwLock<(Height, GasPrice)>>,
+    percentage: u16,
+}
+
+impl<Height, GasPrice> ArcGasPriceEstimate<Height, GasPrice> {
+    #[cfg(test)]
+    pub fn new(height: Height, price: GasPrice, percentage: u16) -> Self {
+        let pair = (height, price);
+        let inner = Arc::new(parking_lot::RwLock::new(pair));
+        Self { inner, percentage }
+    }
+
+    pub fn new_from_inner(
+        inner: Arc<parking_lot::RwLock<(Height, GasPrice)>>,
+        percentage: u16,
+    ) -> Self {
+        Self { inner, percentage }
+    }
+}
+
+impl<Height: Copy, GasPrice> ArcGasPriceEstimate<Height, GasPrice> {
+    pub fn get_height(&self) -> Height {
+        self.inner.read().0
+    }
+}
+impl<Height, GasPrice: Copy> ArcGasPriceEstimate<Height, GasPrice> {
+    pub fn get_gas_price(&self) -> GasPrice {
+        self.inner.read().1
+    }
+}
+
+#[async_trait::async_trait]
+impl GasPriceEstimate for ArcGasPriceEstimate<u32, u64> {
+    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
+        let best_gas_price = self.get_gas_price();
+        let best_height = self.get_height();
+        let percentage = self.percentage;
+
+        let worst = cumulative_percentage_change(
+            best_gas_price,
+            best_height,
+            percentage as u64,
+            height.into(),
+        );
+        Some(worst)
+    }
+}
+
+#[allow(clippy::cast_possible_truncation)]
+pub(crate) fn cumulative_percentage_change(
+    best_gas_price: u64,
+    best_height: u32,
+    percentage: u64,
+    target_height: u32,
+) -> u64 {
+    let blocks = target_height.saturating_sub(best_height) as f64;
+    let percentage_as_decimal = percentage as f64 / 100.0;
+    let multiple = (1.0f64 + percentage_as_decimal).powf(blocks);
+    let mut approx = best_gas_price as f64 * multiple;
+    // account for rounding errors and take a slightly higher value
+    const ROUNDING_ERROR_CUTOFF: f64 = 16948547188989277.0;
+    if approx > ROUNDING_ERROR_CUTOFF {
+        const ROUNDING_ERROR_COMPENSATION: f64 = 2000.0;
+        approx += ROUNDING_ERROR_COMPENSATION;
+    }
+    // `f64` over `u64::MAX` are cast to `u64::MAX`
+    approx.ceil() as u64
 }
 
 #[derive(Clone)]
