@@ -435,7 +435,7 @@ async fn graphql_handler(
         .data(current_fuel_block_height_data.clone())
         .data(required_fuel_block_height);
 
-    let graphql_response: Response = schema.execute(request).await.into();
+    let graphql_response: Response = schema.execute(request).await;
 
     let current_block_height: CurrentBlockHeight = CurrentBlockHeight(
         current_fuel_block_height_data
