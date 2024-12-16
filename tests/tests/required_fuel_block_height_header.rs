@@ -12,6 +12,7 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
+use reqwest::header::CONTENT_TYPE;
 
 #[tokio::test]
 async fn balance_with_block_height_header() {
@@ -51,4 +52,32 @@ async fn balance_with_block_height_header() {
     let result = client.balance(&owner, Some(&asset_id)).await;
 
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn current_fuel_block_height_header_is_present() {
+    let query = r#"{ "query": "{ contract(id:\"0x7e2becd64cd598da59b4d1064b711661898656c6b1f4918a787156b8965dc83c\") { id bytecode } }" }"#;
+
+    // setup config
+    let state_config = StateConfig::default();
+    let config = Config::local_node_with_state_config(state_config);
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let url: reqwest::Url = format!("http://{}/v1/graphql", srv.bound_address)
+        .as_str()
+        .parse()
+        .unwrap();
+
+    let client = reqwest::Client::new();
+
+    let request = client
+        .post(url)
+        .body(query)
+        .header(CONTENT_TYPE, "application/json")
+        .build()
+        .unwrap();
+    let response = client.execute(request).await.unwrap();
+
+    println!("{:?}", response.text().await.unwrap());
 }

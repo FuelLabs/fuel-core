@@ -124,12 +124,14 @@ impl Extension for RequiredFuelBlockHeightExtension {
             .and_then(|data| data.downcast_ref::<CurrentHeight>())
             .expect("Data to store current fuel block height was set when preparing the request").0;
 
-        let mut result = next.run(ctx, operation_name).await;
+        let mut response = next.run(ctx, operation_name).await;
 
-        result.http_headers.append(
+        println!("CURRENT BLOCK HEIGHT: {:?}", current_block_height);
+
+        response.http_headers.append(
             CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
             (*current_block_height).into(),
         );
-        result
+        response
     }
 }

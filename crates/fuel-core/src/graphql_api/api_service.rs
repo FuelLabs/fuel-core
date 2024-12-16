@@ -403,7 +403,7 @@ async fn graphql_handler(
     required_fuel_block_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Result<Json<Response>, (StatusCode, HeaderMap)> {
+) -> Result<(HeaderMap, Json<Response>), (StatusCode, HeaderMap)> {
     let current_fuel_block_height_data: Arc<Mutex<Option<BlockHeight>>> =
         Arc::new(Mutex::new(None));
 
@@ -428,7 +428,9 @@ async fn graphql_handler(
         );
         Err((StatusCode::PRECONDITION_FAILED, header_map))
     } else {
-        Ok(graphql_response.into())
+        // The version of the http crate used by axum and async-graphql do
+        // not match, so we need to convert the headers to the version used by axum.
+        Ok((graphql_response.http_headers, graphql_response.into()))
     }
 }
 
