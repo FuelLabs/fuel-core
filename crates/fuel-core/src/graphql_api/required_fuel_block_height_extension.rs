@@ -17,12 +17,14 @@ use std::{
     any::TypeId,
     sync::Arc,
 };
-use tokio::sync::Mutex;
 
 use crate::graphql_api::api_service::CURRENT_FUEL_BLOCK_HEIGHT_HEADER;
 
 use super::{
-    api_service::RequiredHeight,
+    api_service::{
+        CurrentHeight,
+        RequiredHeight,
+    },
     database::ReadView,
 };
 
@@ -83,27 +85,7 @@ impl Extension for RequiredFuelBlockHeightExtension {
             )
         })?;
 
-        {
-            // At this point, the query_data in the ExtensionContext is empty.
-            // See https://github.com/async-graphql/async-graphql/blob/7f1791488463d4e9c5adcd543962173e2f6cbd34/src/schema.rs#L521
-            // We need to fetch the mutable location to store the current fuel block height
-            // directly from request.data
-            let mut current_fuel_block_height = request
-            .data
-            .get(&TypeId::of::<Arc<Mutex<Option<BlockHeight>>>>())
-            .and_then(|data| data.downcast_ref::<Arc<Mutex<Option<BlockHeight>>>>())
-            .expect("Data to store current fuel block height was set in th graphql_handler")
-            .lock()
-            .await;
-
-            // We save the current fuel block height in the request data.
-            // This avoids fetching the current fuel block height from the view again
-            // in the execute method, which could lead to scenarios where
-            // the returned CURRENT_FUEL_BLOCK_HEIGHT_HEADER value is equal
-            // than the REQUIRED_FUEL_BLOCK_HEIGHT value, but the request fails
-            // with a 412 status code.
-            *current_fuel_block_height = Some(latest_known_block_height);
-        }
+        let request = request.data(CurrentHeight(latest_known_block_height));
 
         if let Some(required_fuel_block_height) = required_fuel_block_height {
             if required_fuel_block_height > latest_known_block_height {
@@ -138,12 +120,9 @@ impl Extension for RequiredFuelBlockHeightExtension {
         let current_block_height = ctx
             .query_data
             .and_then(|data| data
-            .get(&TypeId::of::<Arc<Mutex<Option<BlockHeight>>>>()))
-            .and_then(|data| data.downcast_ref::<Arc<Mutex<Option<BlockHeight>>>>())
-            .expect("Data to store current fuel block height was set when preparing the request")
-            .lock()
-            .await
-            .expect("Data to store current fuel block height was set when preparing the request");
+            .get(&TypeId::of::<CurrentHeight>()))
+            .and_then(|data| data.downcast_ref::<CurrentHeight>())
+            .expect("Data to store current fuel block height was set when preparing the request").0;
 
         let mut result = next.run(ctx, operation_name).await;
 

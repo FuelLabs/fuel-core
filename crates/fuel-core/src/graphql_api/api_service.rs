@@ -371,6 +371,8 @@ async fn health() -> Json<serde_json::Value> {
 #[derive(Clone)]
 pub(crate) struct RequiredHeight(pub(crate) Option<BlockHeight>);
 
+pub(crate) struct CurrentHeight(pub(crate) BlockHeight);
+
 #[async_trait::async_trait]
 impl<Body> FromRequest<Body> for RequiredHeight
 where
