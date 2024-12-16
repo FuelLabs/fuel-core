@@ -1,4 +1,3 @@
-// use crate::graphql_api::database::ReadDatabase;
 use async_graphql::{
     extensions::{
         Extension,
@@ -56,7 +55,6 @@ impl Extension for RequiredFuelBlockHeightExtension {
         request: Request,
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
-        // let database: &ReadDatabase = ctx.data_unchecked();
         let view = request
             .data
             .get(&TypeId::of::<ReadView>())
