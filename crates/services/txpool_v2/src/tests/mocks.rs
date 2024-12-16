@@ -137,6 +137,7 @@ impl StorageRead<BlobData> for MockDb {
         bytes
             .map(|bytes| {
                 if let Some(len) = bytes.0.len().checked_sub(offset) {
+                    // SAFETY: offset is guaranteed to be less or equal to value.len() by the check above
                     buf.copy_from_slice(&bytes.0[offset..]);
                     Ok(len)
                 } else {
