@@ -19,6 +19,8 @@ pub enum Error {
     CouldNotInitUpdater(anyhow::Error),
     #[error("Failed to convert metadata to concrete type. There is no migration path for this metadata version")]
     CouldNotConvertMetadata, // todo(https://github.com/FuelLabs/fuel-core/issues/2286)
+    #[error("Failed to commit to storage: {0:?}")]
+    CouldNotCommit(anyhow::Error),
 }
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;

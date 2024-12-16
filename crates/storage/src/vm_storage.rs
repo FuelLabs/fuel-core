@@ -344,11 +344,13 @@ where
         let mut state_key = Bytes32::zeroed();
 
         let mut results = Vec::new();
-        for _ in 0..range {
+        for i in 0..range {
+            if i != 0 {
+                key.increase()?;
+            }
             key.to_big_endian(state_key.as_mut());
             let multikey = ContractsStateKey::new(contract_id, &state_key);
             results.push(self.database.storage::<ContractsState>().get(&multikey)?);
-            key.increase()?;
         }
         Ok(results)
     }
@@ -367,12 +369,15 @@ where
 
         // verify key is in range
         current_key
-            .checked_add(U256::from(values.len()))
+            .checked_add(U256::from(values.len().saturating_sub(1)))
             .ok_or_else(|| anyhow!("range op exceeded available keyspace"))?;
 
         let mut key_bytes = Bytes32::zeroed();
         let mut found_unset = 0u32;
-        for value in values {
+        for (idx, value) in values.iter().enumerate() {
+            if idx != 0 {
+                current_key.increase()?;
+            }
             current_key.to_big_endian(key_bytes.as_mut());
 
             let option = self
@@ -385,8 +390,6 @@ where
                     .checked_add(1)
                     .expect("We've checked it above via `values.len()`");
             }
-
-            current_key.increase()?;
         }
 
         Ok(found_unset as usize)
@@ -403,7 +406,10 @@ where
         let mut current_key = U256::from_big_endian(start_key.as_ref());
 
         let mut key_bytes = Bytes32::zeroed();
-        for _ in 0..range {
+        for i in 0..range {
+            if i != 0 {
+                current_key.increase()?;
+            }
             current_key.to_big_endian(key_bytes.as_mut());
 
             let option = self
@@ -412,8 +418,6 @@ where
                 .take(&(contract_id, &key_bytes).into())?;
 
             found_unset |= option.is_none();
-
-            current_key.increase()?;
         }
 
         if found_unset {
