@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [2442](https://github.com/FuelLabs/fuel-core/pull/2442): Add uninitialized task for V1 gas price service
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `ConsensusParameters` graphql queries
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `Block` graphql queries
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `TransactionType` type in `fuel-client`
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2416](https://github.com/FuelLabs/fuel-core/issues/2416): Define the `GasPriceServiceV1` task.
 - [2033](https://github.com/FuelLabs/fuel-core/pull/2033): Remove `Option<BlockHeight>` in favor of `BlockHeightQuery` where applicable.
 - [2439](https://github.com/FuelLabs/fuel-core/pull/2439): Add gas costs for the two new zk opcodes `ecop` and `eadd` and the benches that allow to calibrate them.
+- [2472](https://github.com/FuelLabs/fuel-core/pull/2472): Added the `amountU128` field to the `Balance` GraphQL schema, providing the total balance as a `U128`. The existing `amount` field clamps any balance exceeding `U64` to `u64::MAX`.
 
 ### Fixed
 - [2365](https://github.com/FuelLabs/fuel-core/pull/2365): Fixed the error during dry run in the case of race condition.
@@ -35,6 +37,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2369](https://github.com/FuelLabs/fuel-core/pull/2369): The `transaction_insertion_time_in_thread_pool_milliseconds` metric is properly collected.
 - [2413](https://github.com/FuelLabs/fuel-core/issues/2413): block production immediately errors if unable to lock the mutex.
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2389): Fix construction of reverse iterator in RocksDB.
+- [2478](https://github.com/FuelLabs/fuel-core/pull/2478): Fix proof created by `message_receipts_proof` function by ignoring the receipts from failed transactions to match `message_outbox_root`.
+- [2485](https://github.com/FuelLabs/fuel-core/pull/2485): Hardcode the timestamp of the genesis block and version of `tai64` to avoid breaking changes for us.
 
 ### Changed
 - [2295](https://github.com/FuelLabs/fuel-core/pull/2295): `CombinedDb::from_config` now respects `state_rewind_policy` with tmp RocksDB.
@@ -46,7 +50,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 #### Breaking
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2258): Updated the `messageProof` GraphQL schema to return a non-nullable `MessageProof`.
-- [2383](https://github.com/FuelLabs/fuel-core/pull/2383): Asset balance queries now return U128 instead of U64. 
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Transaction graphql endpoints use `TransactionType` instead of `fuel_tx::Transaction`.
 - [2446](https://github.com/FuelLabs/fuel-core/pull/2446): Use graphiql instead of graphql-playground due to known vulnerability and stale development.
 - [2379](https://github.com/FuelLabs/fuel-core/issues/2379): Change `kv_store::Value` to be `Arc<[u8]>` instead of `Arc<Vec<u8>>`.
