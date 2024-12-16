@@ -43,7 +43,7 @@ impl ExtensionFactory for RequiredFuelBlockHeightExtension {
     }
 }
 
-/// Error value returned by the extnesion when the required fuel block height
+/// Error value returned by the extension when the required fuel block height
 /// precondition is not met.
 pub(crate) struct RequiredFuelBlockHeightTooFarInTheFuture;
 
