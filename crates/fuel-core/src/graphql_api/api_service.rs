@@ -390,9 +390,9 @@ where
     }
 }
 
-struct CurrentBlockHeight(BlockHeight);
+struct CurrentHeight(BlockHeight);
 
-impl IntoResponseParts for CurrentBlockHeight {
+impl IntoResponseParts for CurrentHeight {
     type Error = Infallible;
 
     fn into_response_parts(
@@ -408,7 +408,7 @@ impl IntoResponseParts for CurrentBlockHeight {
     }
 }
 
-impl IntoResponse for CurrentBlockHeight {
+impl IntoResponse for CurrentHeight {
     fn into_response(self) -> axum::response::Response {
         (self, ()).into_response()
     }
@@ -418,15 +418,8 @@ async fn graphql_handler(
     required_fuel_block_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Result<(CurrentBlockHeight, Json<Response>), (StatusCode, CurrentBlockHeight)> {
-    let mut request = req.0;
-
-    if let RequiredHeight(Some(height)) = required_fuel_block_height {
-        let height: u32 = height.into();
-        request
-            .extensions
-            .insert(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER.to_string(), height.into());
-    };
+) -> Result<(CurrentHeight, Json<Response>), (StatusCode, CurrentHeight)> {
+    let request = req.0;
 
     let current_fuel_block_height_data: Arc<Mutex<Option<BlockHeight>>> =
         Arc::new(Mutex::new(None));
@@ -437,7 +430,7 @@ async fn graphql_handler(
 
     let graphql_response: Response = schema.execute(request).await;
 
-    let current_block_height: CurrentBlockHeight = CurrentBlockHeight(
+    let current_block_height = CurrentHeight(
         current_fuel_block_height_data
             .lock()
             .await
