@@ -1,3 +1,9 @@
+use super::database::ReadView;
+use crate::fuel_core_graphql_api::api_service::{
+    CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
+    REQUIRED_BLOCK_HEIGHT_CHECK_FAILED,
+    REQUIRED_FUEL_BLOCK_HEIGHT_HEADER,
+};
 use async_graphql::{
     extensions::{
         Extension,
@@ -11,21 +17,13 @@ use async_graphql::{
     Response,
     ServerError,
     ServerResult,
+    Value,
 };
+use async_graphql_value::ConstValue;
 use fuel_core_types::fuel_types::BlockHeight;
-use std::{
-    any::TypeId,
-    sync::Arc,
-};
-
-use crate::graphql_api::api_service::CURRENT_FUEL_BLOCK_HEIGHT_HEADER;
-
-use super::{
-    api_service::{
-        CurrentHeight,
-        RequiredHeight,
-    },
-    database::ReadView,
+use std::sync::{
+    Arc,
+    OnceLock,
 };
 
 /// The extension that implements the logic for checking whether
@@ -43,63 +41,47 @@ impl RequiredFuelBlockHeightExtension {
     }
 }
 
-impl ExtensionFactory for RequiredFuelBlockHeightExtension {
-    fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(RequiredFuelBlockHeightExtension::new())
+pub(crate) struct RequiredFuelBlockHeightInner {
+    required_height: OnceLock<BlockHeight>,
+}
+
+impl RequiredFuelBlockHeightInner {
+    pub fn new() -> Self {
+        Self {
+            required_height: OnceLock::new(),
+        }
     }
 }
 
-/// Error value returned by the extension when the required fuel block height
-/// precondition is not met.
-pub(crate) struct RequiredFuelBlockHeightTooFarInTheFuture(pub(crate) BlockHeight);
+impl ExtensionFactory for RequiredFuelBlockHeightExtension {
+    fn create(&self) -> Arc<dyn Extension> {
+        Arc::new(RequiredFuelBlockHeightInner::new())
+    }
+}
 
 #[async_trait::async_trait]
-impl Extension for RequiredFuelBlockHeightExtension {
+impl Extension for RequiredFuelBlockHeightInner {
     async fn prepare_request(
         &self,
         ctx: &ExtensionContext<'_>,
         request: Request,
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
-        let view = request
-            .data
-            .get(&TypeId::of::<ReadView>())
-            .and_then(|data| data.downcast_ref::<ReadView>())
-            .expect("Read view was set in the view extension.");
+        let required_fuel_block_height =
+            request.extensions.get(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER);
 
-        let required_fuel_block_height = request
-            .data
-            .get(&TypeId::of::<RequiredHeight>())
-            .and_then(|data| data.downcast_ref::<RequiredHeight>())
-            .expect("Required height request data was set in th graphql_handler")
-            .0;
-
-        let latest_known_block_height = view.latest_block_height().map_err(|e| {
-            let (line, column) = (line!(), column!());
-            ServerError::new(
-                e.to_string(),
-                Some(Pos {
-                    line: line as usize,
-                    column: column as usize,
-                }),
-            )
-        })?;
-
-        let request = request.data(CurrentHeight(latest_known_block_height));
-
-        if let Some(required_fuel_block_height) = required_fuel_block_height {
-            if required_fuel_block_height > latest_known_block_height {
-                // TODO: https://github.com/FuelLabs/fuel-core/issues/1897
-                // Update the view until the required fuel block height is reached or a timeout occurs.
-                return Err(ServerError {
-                    message: "".to_string(),
-                    locations: vec![],
-                    source: Some(Arc::new(RequiredFuelBlockHeightTooFarInTheFuture(
-                        latest_known_block_height,
-                    ))),
-                    path: vec![],
-                    extensions: None,
-                });
+        if let Some(ConstValue::Number(required_fuel_block_height)) =
+            required_fuel_block_height
+        {
+            if let Some(required_fuel_block_height) = required_fuel_block_height.as_u64()
+            {
+                let required_fuel_block_height: u32 =
+                    required_fuel_block_height.try_into().unwrap_or(u32::MAX);
+                let required_block_height: BlockHeight =
+                    required_fuel_block_height.into();
+                self.required_height
+                    .set(required_block_height)
+                    .expect("`prepare_request` called only once; qed");
             }
         }
 
@@ -112,26 +94,47 @@ impl Extension for RequiredFuelBlockHeightExtension {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
-        // The query data has been referenced in the Extension context after
-        // Self::prepare_request has been executed.
-        // See https://github.com/async-graphql/async-graphql/blob/7f1791488463d4e9c5adcd543962173e2f6cbd34/src/schema.rs#L845.
-        // We can fetch the value of the current_fuel_block_height from the extension
+        let view: &ReadView = ctx.data_unchecked();
+        if let Some(required_block_height) = self.required_height.get() {
+            if let Ok(current_block_height) = view.latest_block_height() {
+                if *required_block_height > current_block_height {
+                    let (line, column) = (line!(), column!());
+                    let mut response = Response::from_errors(vec![ServerError::new(
+                        format!(
+                            "The required fuel block height is higher than the current block height. \
+                            Required: {}, Current: {}",
+                            required_block_height,
+                            current_block_height
+                        ),
+                        Some(Pos {
+                            line: line as usize,
+                            column: column as usize,
+                        }),
+                    )]);
 
-        let current_block_height = ctx
-            .query_data
-            .and_then(|data| data
-            .get(&TypeId::of::<CurrentHeight>()))
-            .and_then(|data| data.downcast_ref::<CurrentHeight>())
-            .expect("Data to store current fuel block height was set when preparing the request").0;
+                    response.extensions.insert(
+                        REQUIRED_BLOCK_HEIGHT_CHECK_FAILED.to_string(),
+                        Value::Boolean(true),
+                    );
+
+                    return response
+                }
+            }
+        }
 
         let mut response = next.run(ctx, operation_name).await;
 
-        println!("CURRENT BLOCK HEIGHT: {:?}", current_block_height);
+        let view: &ReadView = ctx.data_unchecked();
+        if let Ok(current_block_height) = view.latest_block_height() {
+            let current_block_height: u32 = *current_block_height;
+            response.extensions.insert(
+                CURRENT_FUEL_BLOCK_HEIGHT_HEADER.to_string(),
+                Value::Number(current_block_height.into()),
+            );
+        } else {
+            tracing::error!("Failed to get the current block height");
+        }
 
-        response.http_headers.append(
-            CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
-            (*current_block_height).into(),
-        );
         response
     }
 }

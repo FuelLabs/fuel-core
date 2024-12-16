@@ -33,6 +33,7 @@ use async_graphql::{
     Request,
     Response,
 };
+use async_graphql_value::ConstValue;
 use axum::{
     extract::{
         DefaultBodyLimit,
@@ -71,10 +72,7 @@ use fuel_core_services::{
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
-use hyper::{
-    rt::Executor,
-    HeaderMap,
-};
+use hyper::rt::Executor;
 use serde_json::json;
 use std::{
     future::Future,
@@ -94,16 +92,15 @@ use tower_http::{
     trace::TraceLayer,
 };
 
+pub(crate) const REQUIRED_BLOCK_HEIGHT_CHECK_FAILED: &str =
+    "REQUIRED_BLOCK_HEIGHT_CHECK_FAILED";
 pub(crate) const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "REQUIRED_FUEL_BLOCK_HEIGHT";
 pub(crate) const CURRENT_FUEL_BLOCK_HEIGHT_HEADER: &str = "CURRENT_FUEL_BLOCK_HEIGHT";
 
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub use super::database::ReadDatabase;
-use super::{
-    ports::worker,
-    required_fuel_block_height_extension::RequiredFuelBlockHeightTooFarInTheFuture,
-};
+use super::ports::worker;
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
@@ -371,8 +368,6 @@ async fn health() -> Json<serde_json::Value> {
 #[derive(Clone)]
 pub(crate) struct RequiredHeight(pub(crate) Option<BlockHeight>);
 
-pub(crate) struct CurrentHeight(pub(crate) BlockHeight);
-
 #[async_trait::async_trait]
 impl<Body> FromRequest<Body> for RequiredHeight
 where
@@ -403,35 +398,43 @@ async fn graphql_handler(
     required_fuel_block_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> Result<(HeaderMap, Json<Response>), (StatusCode, HeaderMap)> {
-    let current_fuel_block_height_data: Arc<Mutex<Option<BlockHeight>>> =
-        Arc::new(Mutex::new(None));
+) -> axum::response::Response {
+    let mut request = req.0;
 
-    let request = req
-        .0
-        .data(current_fuel_block_height_data.clone())
-        .data(required_fuel_block_height);
-
-    let graphql_response: Response = schema.execute(request).await;
-
-    if let Some(RequiredFuelBlockHeightTooFarInTheFuture(current_block_height)) =
-        graphql_response
-            .errors
-            .first()
-            .and_then(|err| err.source::<RequiredFuelBlockHeightTooFarInTheFuture>())
-    {
-        let current_block_height: u32 = (*current_block_height).into();
-        let mut header_map = HeaderMap::new();
-        header_map.insert(
-            CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
-            current_block_height.into(),
+    if let Some(require_height) = required_fuel_block_height.0 {
+        let require_height: u32 = *require_height;
+        request.extensions.insert(
+            REQUIRED_FUEL_BLOCK_HEIGHT_HEADER.to_string(),
+            ConstValue::Number(require_height.into()),
         );
-        Err((StatusCode::PRECONDITION_FAILED, header_map))
-    } else {
-        // The version of the http crate used by axum and async-graphql do
-        // not match, so we need to convert the headers to the version used by axum.
-        Ok((graphql_response.http_headers, graphql_response.into()))
     }
+
+    let response = schema.execute(request).await;
+
+    if response.is_err() {
+        if response
+            .extensions
+            .contains_key(REQUIRED_BLOCK_HEIGHT_CHECK_FAILED)
+        {
+            return StatusCode::PRECONDITION_FAILED.into_response();
+        }
+    }
+
+    let current_block_height = response
+        .extensions
+        .get(CURRENT_FUEL_BLOCK_HEIGHT_HEADER)
+        .cloned();
+    let json_response: Json<Response> = response.into();
+    let mut response = json_response.into_response();
+
+    if let Some(current_block_height) = current_block_height {
+        response.headers_mut().insert(
+            CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
+            HeaderValue::from_str(&current_block_height.to_string()).unwrap(),
+        );
+    }
+
+    response
 }
 
 async fn graphql_subscription_handler(
