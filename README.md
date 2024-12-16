@@ -153,7 +153,7 @@ fuel-core run \
 --sync-header-batch-size 100 \
 --relayer-v2-listening-contracts 0xAEB0c00D0125A8a788956ade4f4F12Ead9f65DDf \
 --relayer-da-deploy-height 20620434 \
---relayer-log-page-size 100 \
+--relayer-log-page-size 2000 \
 --sync-block-stream-buffer-size 30 \
 --min-gas-price 1000 \
 --starting-gas-price 1000 \
@@ -206,7 +206,7 @@ cargo run --release --bin fuel-core -- run \
 --sync-header-batch-size 100 \
 --relayer-v2-listening-contracts 0xAEB0c00D0125A8a788956ade4f4F12Ead9f65DDf \
 --relayer-da-deploy-height 20620434 \
---relayer-log-page-size 100 \
+--relayer-log-page-size 2000 \
 --sync-block-stream-buffer-size 30 \
 --min-gas-price 1000 \
 --starting-gas-price 1000 \
@@ -254,7 +254,7 @@ cargo run --release --bin fuel-core -- run \
 --sync-header-batch-size 100 \
 --relayer-v2-listening-contracts 0xAEB0c00D0125A8a788956ade4f4F12Ead9f65DDf \
 --relayer-da-deploy-height 20620434 \
---relayer-log-page-size 100 \
+--relayer-log-page-size 2000 \
 --sync-block-stream-buffer-size 30 \
 --min-gas-price 1000 \
 --starting-gas-price 1000 \
