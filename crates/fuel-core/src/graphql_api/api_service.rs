@@ -460,8 +460,14 @@ async fn graphql_subscription_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
+    let current_fuel_block_height_data: Arc<Mutex<Option<BlockHeight>>> =
+        Arc::new(Mutex::new(None));
+    let request = req
+        .0
+        .data(RequiredHeight(None))
+        .data(current_fuel_block_height_data);
     let stream = schema
-        .execute_stream(req.0)
+        .execute_stream(request)
         .map(|r| Event::default().json_data(r));
     Sse::new(stream)
         .keep_alive(axum::response::sse::KeepAlive::new().text("keep-alive-text"))
