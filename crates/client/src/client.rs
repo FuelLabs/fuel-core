@@ -270,10 +270,10 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
-        let mut request_builder = self.client.post(self.url.clone());
-        for (header_name, header_value) in self.headers.iter() {
-            request_builder = request_builder.header(header_name, header_value);
-        }
+        let request_builder = self
+            .client
+            .post(self.url.clone())
+            .headers(self.headers.clone());
 
         let response = request_builder
             .run_graphql(q)
