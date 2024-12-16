@@ -105,8 +105,6 @@ use std::{
 #[cfg(test)]
 mod tests;
 
-// The last known block height that was processed by the GraphQL service.
-
 #[derive(Debug, Clone)]
 pub enum DaCompressionConfig {
     Disabled,
