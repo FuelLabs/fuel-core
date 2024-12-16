@@ -525,4 +525,59 @@ mod pagination {
 
         assert_eq!(expected_balances, actual_balances);
     }
+
+    #[test_matrix(
+        [PageDirection::Forward, PageDirection::Backward],
+        [0x11, 0x33, 0x99])]
+    #[tokio::test]
+    async fn no_balances_after_last_page(
+        direction: PageDirection,
+        base_asset_id_byte: u8,
+    ) {
+        let base_asset_id = AssetId::from([base_asset_id_byte; 32]);
+
+        // Given
+        let owner = Address::from([0xaa; 32]);
+        let asset_1 = AssetId::new([0x22; 32]);
+        let asset_2 = AssetId::new([0x77; 32]);
+        let assets = vec![(asset_1, 11), (asset_2, 22), (base_asset_id, 33)];
+        let config = setup(&owner, &assets, Some(MESSAGE_BALANCE), base_asset_id).await;
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        // When
+        let mut cursor = None;
+        loop {
+            let paginated_result = client
+                .balances(
+                    &owner,
+                    PaginationRequest {
+                        cursor,
+                        results: 1,
+                        direction,
+                    },
+                )
+                .await
+                .unwrap();
+
+            cursor = paginated_result.cursor;
+            if !paginated_result.has_next_page {
+                break
+            }
+        }
+
+        // Then
+        let paginated_result = client
+            .balances(
+                &owner,
+                PaginationRequest {
+                    cursor,
+                    results: 1,
+                    direction,
+                },
+            )
+            .await
+            .unwrap();
+        assert!(paginated_result.results.is_empty());
+    }
 }

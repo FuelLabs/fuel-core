@@ -254,14 +254,15 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                     .then_some(CoinBalancesKey::new(owner, &asset_id));
                 self.non_base_asset_balance(owner, start, direction, base_asset_id)
             }
-            (IterDirection::Reverse, _) => {
-                let start = start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
-                let base_asset_balance = self.base_asset_balance(base_asset_id, owner);
-                let non_base_asset_balance =
-                    self.non_base_asset_balance(owner, start, direction, base_asset_id);
-                non_base_asset_balance
-                    .chain(base_asset_balance)
-                    .into_boxed()
+            (IterDirection::Reverse, None) => {
+                self.non_base_assets_first(start, owner, base_asset_id, direction)
+            }
+            (IterDirection::Reverse, Some(asset_id)) => {
+                if asset_id == *base_asset_id {
+                    std::iter::empty().into_boxed()
+                } else {
+                    self.non_base_assets_first(start, owner, base_asset_id, direction)
+                }
             }
         }
     }
@@ -316,6 +317,22 @@ impl OffChainIterableKeyValueView {
             })
         })
         .into_boxed()
+    }
+
+    fn non_base_assets_first<'a>(
+        &'a self,
+        start: Option<AssetId>,
+        owner: &Address,
+        base_asset_id: &'a AssetId,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, Result<(AssetId, u128), StorageError>> {
+        let start = start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
+        let base_asset_balance = self.base_asset_balance(base_asset_id, owner);
+        let non_base_asset_balance =
+            self.non_base_asset_balance(owner, start, direction, base_asset_id);
+        non_base_asset_balance
+            .chain(base_asset_balance)
+            .into_boxed()
     }
 }
 
