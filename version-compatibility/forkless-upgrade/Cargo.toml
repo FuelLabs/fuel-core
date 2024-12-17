@@ -29,6 +29,8 @@ latest-fuel-core-type = { path = "../../crates/types", package = "fuel-core-type
   "test-helpers",
 ] }
 latest-fuel-core-client = { path = "../../crates/client", package = "fuel-core-client" }
+latest-fuel-core-gas-price-service = { path = "../../crates/services/gas_price_service", package = "fuel-core-gas-price-service" }
+latest-fuel-core-storage = { path = "../../crates/storage", package = "fuel-core-storage" }
 latest-fuel-core-upgradable-executor = { path = "../../crates/services/upgradable-executor", package = "fuel-core-upgradable-executor", features = [
   "wasm-executor",
 ] }
