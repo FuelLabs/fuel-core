@@ -47,69 +47,6 @@ You'll need `wasm32-unknown-unknown` target installed.
 rustup target add wasm32-unknown-unknown
 ```
 
-### Compiling
-
-We recommend using `xtask` to build fuel-core:
-
-```sh
-cargo xtask build
-```
-
-This will run `cargo build` as well as any other custom build processes we have such as re-generating a GraphQL schema for the client.
-
-### Testing
-
-The [ci_checks.sh](ci_checks.sh) script file can be used to run all CI checks,
-including the running of tests.
-
-```shell
-source ci_checks.sh
-```
-
-The script requires pre-installed tools. For more information run:
-
-```shell
-cat ci_checks.sh
-```
-
-## Running
-
-The service can be launched by executing `fuel-core run`. The list of options for running can be accessed via the `help` option:
-
-```console
-$ ./target/debug/fuel-core run --help
-
-USAGE:
-    fuel-core run [OPTIONS]
-
-OPTIONS:
-        --snapshot <SNAPSHOT>
-          Snapshot from which to do (re)genesis. Defaults to local testnet configuration
-
-          [env: SNAPSHOT=]
-        ...
-```
-
-For many development purposes it is useful to have a state that won't persist and the `db-type` option can be set to `in-memory` as in the following example.
-
-### Example
-
-```console
-$ ./target/debug/fuel-core run --db-type in-memory
-2023-06-13T12:45:22.860536Z  INFO fuel_core::cli::run: 230: Block production mode: Instant
-2023-06-13T12:38:47.059783Z  INFO fuel_core::cli::run: 310: Fuel Core version v0.18.1
-2023-06-13T12:38:47.078969Z  INFO new{name=fuel-core}:_commit_result{block_id=b1807ca9f2eec7e459b866ecf69b68679fc6b205a9a85c16bd4943d1bfc6fb2a height=0 tx_status=[]}: fuel_core_importer::importer: 231: Committed block
-2023-06-13T12:38:47.097777Z  INFO new{name=fuel-core}: fuel_core::graphql_api::service: 208: Binding GraphQL provider to 127.0.0.1:4000
-```
-
-To disable block production on your local node, set `--poa-instant=false`
-
-### Example
-
-```console
-$ ./target/debug/fuel-core run --poa-instant=false
-2023-06-13T12:44:12.857763Z  INFO fuel_core::cli::run: 232: Block production disabled
-```
 
 ## Running a Ignition node
 
@@ -189,7 +126,7 @@ and copy the secret key displayed.
 
 Run your node (change all variable with {} to your own personal variables):
 ```bash
-cargo run --release --bin fuel-core -- run \
+cargo run --release --bin fuel-core --no-default-features --features production -- run \
 --enable-relayer \
 --service-name fuel-ignition-node \
 --keypair {KEYGEN_SECRET_KEY} \
@@ -238,7 +175,7 @@ and copy the secret key displayed.
 
 Run your node (change all variable with {} to your own personal variables):
 ```bash
-cargo run --release --bin fuel-core -- run \
+cargo run --release --bin fuel-core --no-default-features --features production -- run \
 --enable-relayer \
 --consensus-key {KEYGEN_BLOCK_PRODUCTION_SECRET_KEY}
 --service-name fuel-local-node \
@@ -265,6 +202,71 @@ All the values used for the L1 relayer are based on Ethereum Sepolia make sure `
 
 Instead of directly placing your personal values on the command we advise you to use, for example, environment variables.
 
+## Setup to make conntributions
+
+### Compiling
+
+We recommend using `xtask` to build fuel-core:
+
+```sh
+cargo xtask build
+```
+
+This will run `cargo build` as well as any other custom build processes we have such as re-generating a GraphQL schema for the client.
+
+### Testing
+
+The [ci_checks.sh](ci_checks.sh) script file can be used to run all CI checks,
+including the running of tests.
+
+```shell
+source ci_checks.sh
+```
+
+The script requires pre-installed tools. For more information run:
+
+```shell
+cat ci_checks.sh
+```
+
+## Running
+
+The service can be launched by executing `fuel-core run`. The list of options for running can be accessed via the `help` option:
+
+```console
+$ ./target/debug/fuel-core run --help
+
+USAGE:
+    fuel-core run [OPTIONS]
+
+OPTIONS:
+        --snapshot <SNAPSHOT>
+          Snapshot from which to do (re)genesis. Defaults to local testnet configuration
+
+          [env: SNAPSHOT=]
+        ...
+```
+
+For many development purposes it is useful to have a state that won't persist and the `db-type` option can be set to `in-memory` as in the following example.
+
+### Example
+
+```console
+$ ./target/debug/fuel-core run --db-type in-memory
+2023-06-13T12:45:22.860536Z  INFO fuel_core::cli::run: 230: Block production mode: Instant
+2023-06-13T12:38:47.059783Z  INFO fuel_core::cli::run: 310: Fuel Core version v0.18.1
+2023-06-13T12:38:47.078969Z  INFO new{name=fuel-core}:_commit_result{block_id=b1807ca9f2eec7e459b866ecf69b68679fc6b205a9a85c16bd4943d1bfc6fb2a height=0 tx_status=[]}: fuel_core_importer::importer: 231: Committed block
+2023-06-13T12:38:47.097777Z  INFO new{name=fuel-core}: fuel_core::graphql_api::service: 208: Binding GraphQL provider to 127.0.0.1:4000
+```
+
+To disable block production on your local node, set `--poa-instant=false`
+
+### Example
+
+```console
+$ ./target/debug/fuel-core run --poa-instant=false
+2023-06-13T12:44:12.857763Z  INFO fuel_core::cli::run: 232: Block production disabled
+```
 
 ### Troubleshooting
 
