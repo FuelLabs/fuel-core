@@ -15,6 +15,8 @@ Before pushing any changes or creating pull request please run `source ci_checks
 
 ## Building
 
+If you plan to use already pre-compiled binairies you can directly go to [Running a Ignition node](#running-a-ignition-node).
+
 ### System Requirements
 
 There are several system requirements including clang.
