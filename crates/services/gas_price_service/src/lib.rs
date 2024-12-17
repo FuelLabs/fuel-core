@@ -2,6 +2,7 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
+extern crate core;
 
 #[allow(unused)]
 pub mod static_updater;

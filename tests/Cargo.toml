@@ -38,7 +38,7 @@ fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-compression = { path = "../crates/compression" }
 fuel-core-executor = { workspace = true, features = ["test-helpers"] }
-fuel-core-gas-price-service = { path = "../crates/services/gas_price_service" }
+fuel-core-gas-price-service = { path = "../crates/services/gas_price_service", features = ["test-helpers"] }
 fuel-core-p2p = { path = "../crates/services/p2p", features = [
   "test-helpers",
 ], optional = true }
@@ -59,7 +59,6 @@ hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
 k256 = { version = "0.13.3", features = ["ecdsa-core"] }
-mockito = "1.6.1"
 postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
