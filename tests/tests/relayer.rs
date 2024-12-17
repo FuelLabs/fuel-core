@@ -590,7 +590,7 @@ async fn balances_do_not_return_retryable_messages() {
     })
     .await;
     if let Err(_) = result {
-        panic!("Off-chain worker didn't process balances withing timeout")
+        panic!("Off-chain worker didn't process balances within timeout")
     }
     // Then
 
