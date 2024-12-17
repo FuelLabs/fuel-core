@@ -168,7 +168,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
         // Latest: http://localhost:8080/v1/costs?variant=latest&limit=5
         if let Some(url) = &self.url {
             let formatted_url = format!("{url}/v1/costs?variant=latest&limit=1");
-            let val = self.client.get(formatted_url).send().await?;
+            let response = self.client.get(formatted_url).send().await?;
             tracing::warn!("val: {:?}", val);
             let response = val.json::<Vec<RawDaBlockCosts>>().await?;
             tracing::warn!("Response: {:?}", response);
