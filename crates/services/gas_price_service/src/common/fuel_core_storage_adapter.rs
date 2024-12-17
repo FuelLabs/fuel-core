@@ -108,12 +108,12 @@ where
         &self,
         block_height: &BlockHeight,
     ) -> GasPriceResult<Option<BlockHeight>> {
-        let bundle_id = self
+        let recorded_height = self
             .storage::<RecordedHeights>()
             .get(block_height)
             .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?
             .map(|no| *no);
-        Ok(bundle_id)
+        Ok(recorded_height)
     }
 }
 
@@ -149,7 +149,7 @@ where
         recorded_height: BlockHeight,
     ) -> GasPriceResult<()> {
         self.storage_as_mut::<RecordedHeights>()
-            .insert(block_height, &bundle_id)
+            .insert(block_height, &recorded_height)
             .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?;
         Ok(())
     }

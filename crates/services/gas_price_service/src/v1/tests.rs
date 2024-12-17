@@ -282,7 +282,7 @@ impl FakeDABlockCost {
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for FakeDABlockCost {
-    async fn request_da_block_cost(&mut self) -> Result<Vec<DaBlockCosts>> {
+    async fn request_da_block_costs(&mut self) -> Result<Vec<DaBlockCosts>> {
         let costs = self.da_block_costs.recv().await.unwrap();
         Ok(vec![costs])
     }

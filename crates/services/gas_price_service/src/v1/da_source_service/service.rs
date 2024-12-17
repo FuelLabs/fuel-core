@@ -59,7 +59,7 @@ where
     }
 
     async fn process_block_costs(&mut self) -> Result<()> {
-        let da_block_costs_res = self.source.request_da_block_cost().await;
+        let da_block_costs_res = self.source.request_da_block_costs().await;
         tracing::debug!("Received block costs: {:?}", da_block_costs_res);
         let da_block_costs = da_block_costs_res?;
         for da_block_costs in da_block_costs {

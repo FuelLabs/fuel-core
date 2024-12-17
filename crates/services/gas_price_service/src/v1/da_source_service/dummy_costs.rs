@@ -23,7 +23,7 @@ impl DummyDaBlockCosts {
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for DummyDaBlockCosts {
-    async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
+    async fn request_da_block_costs(&mut self) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
         match &self.value {
             Ok(da_block_costs) => {
                 self.notifier.notify_waiters();

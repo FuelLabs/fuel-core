@@ -89,7 +89,7 @@ impl<BlockCommitter> DaBlockCostsSource for BlockCommitterDaBlockCosts<BlockComm
 where
     BlockCommitter: BlockCommitterApi,
 {
-    async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
+    async fn request_da_block_costs(&mut self) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
         let raw_da_block_costs: Vec<_> =
             match self.last_recorded_height.and_then(|x| x.succ()) {
                 Some(ref next_height) => {
@@ -101,10 +101,8 @@ where
             };
 
         tracing::info!("raw_da_block_costs: {:?}", raw_da_block_costs);
-        let da_block_costs: Vec<_> = raw_da_block_costs
-            .iter()
-            .map(|raw| DaBlockCosts::from(raw))
-            .collect();
+        let da_block_costs: Vec<_> =
+            raw_da_block_costs.iter().map(DaBlockCosts::from).collect();
         tracing::info!("da_block_costs: {:?}", da_block_costs);
         if let Some(cost) = raw_da_block_costs.last() {
             self.last_recorded_height = Some(BlockHeight::from(cost.end_height));
@@ -169,10 +167,11 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
         if let Some(url) = &self.url {
             let formatted_url = format!("{url}/v1/costs?variant=latest&limit=1");
             let response = self.client.get(formatted_url).send().await?;
-            tracing::warn!("val: {:?}", val);
-            let raw_da_block_costs = val.json::<Vec<RawDaBlockCosts>>().await?;
-            tracing::warn!("Response: {:?}", response);
-            Ok(response.first().cloned())
+            tracing::warn!("val: {:?}", response);
+            let raw_da_block_costs = response.json::<Vec<RawDaBlockCosts>>().await?;
+            tracing::warn!("Response: {:?}", raw_da_block_costs);
+            // only take the first element, since we are only looking for the most recent
+            Ok(raw_da_block_costs.first().cloned())
         } else {
             Ok(None)
         }
@@ -427,7 +426,7 @@ pub mod fake_server {
                                 .iter()
                                 .filter(|costs| costs.end_height >= height)
                                 .take(maybe_limit.unwrap_or(usize::MAX))
-                                .map(|c| c.clone())
+                                .cloned()
                                 .collect::<Vec<_>>();
                             serde_json::to_string(&response).unwrap().into()
                         }
@@ -447,6 +446,11 @@ pub mod fake_server {
 
         pub fn url(&self) -> String {
             self.server.url()
+        }
+    }
+    impl Default for FakeServer {
+        fn default() -> Self {
+            Self::new()
         }
     }
 }
@@ -510,7 +514,7 @@ mod tests {
         let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
 
         // when
-        let actual = block_committer.request_da_block_cost().await.unwrap();
+        let actual = block_committer.request_da_block_costs().await.unwrap();
 
         // then
         assert_eq!(actual, expected);
@@ -528,7 +532,7 @@ mod tests {
             BlockCommitterDaBlockCosts::new(mock_api, Some(latest_height));
 
         // when
-        let actual = block_committer.request_da_block_cost().await.unwrap();
+        let actual = block_committer.request_da_block_costs().await.unwrap();
 
         // then
         assert_ne!(
