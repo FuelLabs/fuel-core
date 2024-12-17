@@ -65,7 +65,6 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
-    iter::IteratorOverTable,
     structured_storage::test::InMemoryStorage,
     transactional::{
         AtomicView,
@@ -728,7 +727,7 @@ async fn uninitialized_task__init__starts_da_service_with_bundle_id_in_storage()
     .unwrap();
 
     // when
-    service.init().await.unwrap();
+    service.init(&StateWatcher::started()).await.unwrap();
 
     // then
     let actual = bundle_id_handle.lock().unwrap();
@@ -782,7 +781,7 @@ async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
     .unwrap();
 
     // when
-    let gas_price_service = service.init().await.unwrap();
+    let gas_price_service = service.init(&StateWatcher::started()).await.unwrap();
 
     // then
     // sleep to allow the service to sync
