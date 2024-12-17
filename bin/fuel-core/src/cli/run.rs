@@ -195,7 +195,6 @@ pub struct Command {
 
     /// The percentage change in gas price per block
     #[arg(long = "gas-price-change-percent", default_value = "2", env)]
-    // https://docs.rs/tokio/latest/tokio/time/fn.pause.html
     pub gas_price_change_percent: u16,
 
     /// The minimum allowed gas price
