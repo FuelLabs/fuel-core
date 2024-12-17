@@ -108,7 +108,7 @@ Clone the chain configuration folder :
 git clone https://github.com/FuelLabs/chain-configuration
 ```
 
-Clone this repository : 
+Clone the `fuel-core` repository : 
 ```
 git clone https://github.com/FuelLabs/fuel-core.git
 ```
@@ -118,7 +118,7 @@ Go to the latest release tag for ignition on the `fuel-core` repository :
 git checkout v0.40.2
 ```
 
-Generate a keyparr for your node :
+Generate a keypair for your node :
 ```
 cargo run --bin fuel-core-keygen -- new --key-type peering
 ```
@@ -156,7 +156,7 @@ Instead of directly placing your personal values on the command we advise you to
 
 ## Running a Local network from source
 
-Clone this repository : 
+Clone the `fuel-core` repository : 
 ```
 git clone https://github.com/FuelLabs/fuel-core.git
 ```
