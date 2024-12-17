@@ -146,7 +146,7 @@ where
     fn set_recorded_height(
         &mut self,
         block_height: &BlockHeight,
-        bundle_id: BlockHeight,
+        recorded_height: BlockHeight,
     ) -> GasPriceResult<()> {
         self.storage_as_mut::<RecordedHeights>()
             .insert(block_height, &bundle_id)
