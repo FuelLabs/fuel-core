@@ -73,7 +73,7 @@ where
 /// da block costs in a way they see fit
 #[async_trait::async_trait]
 pub trait DaBlockCostsSource: Send + Sync {
-    async fn request_da_block_cost(&mut self) -> Result<Vec<DaBlockCosts>>;
+    async fn request_da_block_costs(&mut self) -> Result<Vec<DaBlockCosts>>;
     async fn set_last_value(&mut self, block_height: BlockHeight) -> Result<()>;
 }
 
