@@ -160,7 +160,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
             tracing::warn!("Response: {:?}", response);
             Ok(response)
         } else {
-            Ok(Vec::new())
+            Ok(vec![])
         }
     }
 
