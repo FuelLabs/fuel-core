@@ -34,10 +34,9 @@ tracing = { workspace = true }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { path = "./../../types", features = ["test-helpers"] }
-mockito = { version = "1.6.1"}
+mockito = { version = "1.6.1" }
 serde_json = { workspace = true }
 tracing-subscriber = { workspace = true }
-
 
 [features]
 test-helpers = ["dep:mockito", "dep:serde_json"]
