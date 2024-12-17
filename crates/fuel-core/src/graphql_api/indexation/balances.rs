@@ -34,9 +34,9 @@ where
         mut non_retryable,
     } = current_balance;
     if message.is_retryable_message() {
-        retryable = retryable.saturating_add(message.amount() as u128);
+        retryable = retryable.saturating_add(u128::from(message.amount()));
     } else {
-        non_retryable = non_retryable.saturating_add(message.amount() as u128);
+        non_retryable = non_retryable.saturating_add(u128::from(message.amount()));
     }
     let new_balance = MessageBalance {
         retryable,
@@ -69,11 +69,11 @@ where
     };
 
     let new_amount = current_balance
-        .checked_sub(message.amount() as u128)
+        .checked_sub(u128::from(message.amount()))
         .ok_or_else(|| IndexationError::MessageBalanceWouldUnderflow {
             owner: *message.recipient(),
             current_amount: current_balance,
-            requested_deduction: message.amount() as u128,
+            requested_deduction: u128::from(message.amount()),
             retryable: message.is_retryable_message(),
         })?;
 
@@ -104,7 +104,7 @@ where
     let key = CoinBalancesKey::new(&coin.owner, &coin.asset_id);
     let storage = block_st_transaction.storage::<CoinBalances>();
     let current_amount = storage.get(&key)?.unwrap_or_default().into_owned();
-    let new_amount = current_amount.saturating_add(coin.amount as u128);
+    let new_amount = current_amount.saturating_add(u128::from(coin.amount));
 
     block_st_transaction
         .storage::<CoinBalances>()
@@ -123,15 +123,14 @@ where
     let storage = block_st_transaction.storage::<CoinBalances>();
     let current_amount = storage.get(&key)?.unwrap_or_default().into_owned();
 
-    let new_amount =
-        current_amount
-            .checked_sub(coin.amount as u128)
-            .ok_or_else(|| IndexationError::CoinBalanceWouldUnderflow {
-                owner: coin.owner,
-                asset_id: coin.asset_id,
-                current_amount,
-                requested_deduction: coin.amount as u128,
-            })?;
+    let new_amount = current_amount
+        .checked_sub(u128::from(coin.amount))
+        .ok_or_else(|| IndexationError::CoinBalanceWouldUnderflow {
+            owner: coin.owner,
+            asset_id: coin.asset_id,
+            current_amount,
+            requested_deduction: u128::from(coin.amount),
+        })?;
 
     block_st_transaction
         .storage::<CoinBalances>()
