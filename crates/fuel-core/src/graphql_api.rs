@@ -81,8 +81,8 @@ impl Default for Costs {
 
 pub const DEFAULT_QUERY_COSTS: Costs = Costs {
     // TODO: The cost of the `balance`, `balances` and `coins_to_spend` query should depend on the
-    //  values of respective flags in the OffChainDatabase. If additional indexation is enabled,
-    //  the cost should be cheaper.
+    // values of respective flags in the OffChainDatabase. If additional indexation is enabled,
+    // the cost should be cheaper (https://github.com/FuelLabs/fuel-core/issues/2496)
     balance_query: 40001,
     coins_to_spend: 40001,
     get_peers: 40001,
