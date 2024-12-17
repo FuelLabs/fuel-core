@@ -170,7 +170,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
             let formatted_url = format!("{url}/v1/costs?variant=latest&limit=1");
             let response = self.client.get(formatted_url).send().await?;
             tracing::warn!("val: {:?}", val);
-            let response = val.json::<Vec<RawDaBlockCosts>>().await?;
+            let raw_da_block_costs = val.json::<Vec<RawDaBlockCosts>>().await?;
             tracing::warn!("Response: {:?}", response);
             Ok(response.first().cloned())
         } else {
