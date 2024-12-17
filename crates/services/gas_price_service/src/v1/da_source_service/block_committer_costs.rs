@@ -149,8 +149,8 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     ) -> DaBlockCostsResult<Vec<RawDaBlockCosts>> {
         // Specific: http://localhost:8080/v1/costs?variant=specific&value=19098935&limit=5
         if let Some(url) = &self.url {
-            let formated_url = format!("{url}/v1/costs?variant=specific&value={l2_block_number}&limit={PAGE_SIZE}");
-            let val = self.client.get(formated_url).send().await?;
+            let formatted_url = format!("{url}/v1/costs?variant=specific&value={l2_block_number}&limit={PAGE_SIZE}");
+            let val = self.client.get(formatted_url).send().await?;
             tracing::warn!("val: {:?}", val);
             let response = val.json::<Vec<RawDaBlockCosts>>().await?;
             tracing::warn!("Response: {:?}", response);
@@ -163,8 +163,8 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
         // Latest: http://localhost:8080/v1/costs?variant=latest&limit=5
         if let Some(url) = &self.url {
-            let formated_url = format!("{url}/v1/costs?variant=latest&limit=1");
-            let val = self.client.get(formated_url).send().await?;
+            let formatted_url = format!("{url}/v1/costs?variant=latest&limit=1");
+            let val = self.client.get(formatted_url).send().await?;
             tracing::warn!("val: {:?}", val);
             let response = val.json::<Vec<RawDaBlockCosts>>().await?;
             tracing::warn!("Response: {:?}", response);
