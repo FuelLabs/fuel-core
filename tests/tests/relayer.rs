@@ -486,7 +486,7 @@ async fn handle(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn balances_do_not_return_retryable_messages() {
+async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     let mut rng = StdRng::seed_from_u64(1234);
     let mut config = Config::local_node();
     config.relayer = Some(relayer::Config::default());
@@ -496,7 +496,7 @@ async fn balances_do_not_return_retryable_messages() {
     const TIMEOUT: Duration = Duration::from_secs(1);
 
     // Large enough to get all messages, but not to trigger the "query is too complex" error.
-    const UNLIMITED_QUERY: i32 = 100;
+    const UNLIMITED_QUERY_RESULTS: i32 = 100;
 
     // Given
 
@@ -576,7 +576,7 @@ async fn balances_do_not_return_retryable_messages() {
                     &recipient,
                     PaginationRequest {
                         cursor: None,
-                        results: UNLIMITED_QUERY,
+                        results: UNLIMITED_QUERY_RESULTS,
                         direction: PageDirection::Forward,
                     },
                 )
@@ -600,7 +600,7 @@ async fn balances_do_not_return_retryable_messages() {
             None,
             PaginationRequest {
                 cursor: None,
-                results: UNLIMITED_QUERY,
+                results: UNLIMITED_QUERY_RESULTS,
                 direction: PageDirection::Forward,
             },
         )
@@ -623,7 +623,7 @@ async fn balances_do_not_return_retryable_messages() {
             &recipient,
             PaginationRequest {
                 cursor: None,
-                results: UNLIMITED_QUERY,
+                results: UNLIMITED_QUERY_RESULTS,
                 direction: PageDirection::Forward,
             },
         )
@@ -639,6 +639,43 @@ async fn balances_do_not_return_retryable_messages() {
         })
         .sum::<u128>();
     assert_eq!(total_amount, NON_RETRYABLE_AMOUNT as u128);
+
+    // Expect only the non-retryable message balance to be returned via "coins to spend"
+    let query = client
+        .coins_to_spend(
+            &recipient,
+            vec![(base_asset_id, NON_RETRYABLE_AMOUNT, None)],
+            None,
+        )
+        .await
+        .unwrap();
+    let message_coins: Vec<_> = query
+        .iter()
+        .flatten()
+        .map(|m| {
+            let CoinType::MessageCoin(m) = m else {
+                panic!("should have message coin")
+            };
+            m
+        })
+        .collect();
+    assert_eq!(message_coins.len(), 1);
+    assert_eq!(message_coins[0].amount, NON_RETRYABLE_AMOUNT);
+    assert_eq!(message_coins[0].nonce, NON_RETRYABLE_NONCE.into());
+
+    // Expect no messages when querying more than the available non-retryable amount
+    let query = client
+        .coins_to_spend(
+            &recipient,
+            vec![(base_asset_id, NON_RETRYABLE_AMOUNT + 1, None)],
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        query.to_string(),
+        "Response errors; not enough coins to fit the target"
+    );
 
     srv.send_stop_signal_and_await_shutdown().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();
