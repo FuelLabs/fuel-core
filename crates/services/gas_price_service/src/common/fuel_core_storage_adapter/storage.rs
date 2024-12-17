@@ -93,19 +93,16 @@ impl TableWithBlueprint for UnrecordedBlocksTable {
     }
 }
 
-pub struct BundleIdTable;
+pub struct RecordedHeights;
 
-/// The sequence number or bundle id of the posted blocks.
-type BundleId = u32;
-
-impl Mappable for BundleIdTable {
+impl Mappable for RecordedHeights {
     type Key = Self::OwnedKey;
     type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
-    type OwnedValue = BundleId;
+    type OwnedValue = BlockHeight;
 }
 
-impl TableWithBlueprint for BundleIdTable {
+impl TableWithBlueprint for RecordedHeights {
     type Blueprint = Plain<Primitive<4>, Postcard>;
     type Column = GasPriceColumn;
 

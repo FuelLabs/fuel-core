@@ -12,9 +12,9 @@ use crate::{
     },
     ports::{
         GasPriceServiceAtomicStorage,
-        GetDaBundleId,
+        GetLatestRecordedHeight,
         GetMetadataStorage,
-        SetDaBundleId,
+        SetLatestRecordedHeight,
         SetMetadataStorage,
     },
     v0::metadata::V0Metadata,
@@ -162,8 +162,8 @@ where
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
         let prev_height = height.saturating_sub(1);
-        let mut bundle_id = storage_tx
-            .get_bundle_id(&BlockHeight::from(prev_height))
+        let mut latest_recorded_height = storage_tx
+            .get_recorded_height(&BlockHeight::from(prev_height))
             .map_err(|err| anyhow!(err))?;
 
         for da_block_costs in &self.da_block_costs_buffer {
@@ -174,18 +174,15 @@ where
                 da_block_costs.blob_cost_wei,
                 &mut storage_tx.as_unrecorded_blocks(),
             )?;
-            bundle_id = Some(da_block_costs.bundle_id);
+            latest_recorded_height = da_block_costs
+                .l2_blocks
+                .last()
+                .map(|x| BlockHeight::from(*x));
         }
 
-        if let Some(bundle_id) = bundle_id {
+        if let Some(recorded_height) = latest_recorded_height {
             storage_tx
-                .set_bundle_id(&BlockHeight::from(height), bundle_id)
-                .map_err(|err| anyhow!(err))?;
-        }
-
-        if let Some(bundle_id) = bundle_id {
-            storage_tx
-                .set_bundle_id(&BlockHeight::from(height), bundle_id)
+                .set_recorded_height(&BlockHeight::from(height), recorded_height)
                 .map_err(|err| anyhow!(err))?;
         }
 
@@ -372,9 +369,9 @@ mod tests {
     use crate::{
         common::{
             fuel_core_storage_adapter::storage::{
-                BundleIdTable,
                 GasPriceColumn,
                 GasPriceColumn::UnrecordedBlocks,
+                RecordedHeights,
                 UnrecordedBlocksTable,
             },
             gas_price_algorithm::SharedGasPriceAlgo,
@@ -632,11 +629,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run__responses_from_da_service_update_bundle_id_in_storage() {
+    async fn run__responses_from_da_service_update_recorded_height_in_storage() {
         // given
-        let bundle_id = 1234;
-        let block_height = 2;
-        let l2_block_2 = BlockInfo::Block {
+        let recorded_block_height = 100;
+        let block_height = 200;
+        let l2_block = BlockInfo::Block {
             height: block_height,
             gas_used: 60,
             block_gas_capacity: 100,
@@ -669,8 +666,8 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
-                    bundle_id,
-                    l2_blocks: (1..2).collect(),
+                    bundle_id: 8765,
+                    l2_blocks: (1..=recorded_block_height).collect(),
                     blob_cost_wei: 9000,
                     bundle_size_bytes: 3000,
                 }),
@@ -694,20 +691,23 @@ mod tests {
 
         service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
-        l2_block_sender.send(l2_block_2).await.unwrap();
+        l2_block_sender.send(l2_block).await.unwrap();
 
         // when
         service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // then
-        let latest_bundle_id = service
+        let latest_recorded_block_height = service
             .storage_tx_provider
-            .storage::<BundleIdTable>()
+            .storage::<RecordedHeights>()
             .get(&BlockHeight::from(block_height))
             .unwrap()
             .unwrap();
-        assert_eq!(*latest_bundle_id, bundle_id);
+        assert_eq!(
+            *latest_recorded_block_height,
+            BlockHeight::from(recorded_block_height)
+        );
 
         service.shutdown().await.unwrap();
     }

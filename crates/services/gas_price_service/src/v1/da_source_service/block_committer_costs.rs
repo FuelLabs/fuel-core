@@ -8,11 +8,15 @@ use crate::v1::da_source_service::{
     DaBlockCosts,
 };
 use anyhow::anyhow;
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use serde::{
     Deserialize,
     Serialize,
 };
+use std::ops::Deref;
 
 #[async_trait::async_trait]
 pub trait BlockCommitterApi: Send + Sync {
@@ -22,19 +26,14 @@ pub trait BlockCommitterApi: Send + Sync {
     async fn get_costs_by_l2_block_number(
         &self,
         l2_block_number: u32,
-    ) -> DaBlockCostsResult<Option<RawDaBlockCosts>>;
-    /// Used to get the costs for a range of blocks (inclusive)
-    async fn get_cost_bundles_by_range(
-        &self,
-        range: core::ops::Range<u32>,
-    ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>>;
+    ) -> DaBlockCostsResult<Vec<RawDaBlockCosts>>;
 }
 
 /// This struct is used to denote the block committer da block costs source
 /// which receives data from the block committer (only http api for now)
 pub struct BlockCommitterDaBlockCosts<BlockCommitter> {
     client: BlockCommitter,
-    last_raw_da_block_costs: Option<RawDaBlockCosts>,
+    last_recorded_height: Option<BlockHeight>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
@@ -57,27 +56,30 @@ impl From<&RawDaBlockCosts> for DaBlockCosts {
         let RawDaBlockCosts {
             start_height,
             end_height,
-            da_block_height,
             cost_wei,
             size_bytes,
             bundle_id,
+            ..
         } = *raw_da_block_costs;
         DaBlockCosts {
             bundle_id,
             // construct a vec of l2 blocks from the start_height to the end_height
             l2_blocks: (start_height..end_height).collect(),
-            bundle_size_bytes: raw_da_block_costs.size_bytes,
-            blob_cost_wei: raw_da_block_costs.cost_wei,
+            bundle_size_bytes: size_bytes,
+            blob_cost_wei: cost_wei,
         }
     }
 }
 
 impl<BlockCommitter> BlockCommitterDaBlockCosts<BlockCommitter> {
     /// Create a new instance of the block committer da block costs source
-    pub fn new(client: BlockCommitter, last_value: Option<RawDaBlockCosts>) -> Self {
+    pub fn new(
+        client: BlockCommitter,
+        last_recorded_height: Option<BlockHeight>,
+    ) -> Self {
         Self {
             client,
-            last_raw_da_block_costs: last_value,
+            last_recorded_height,
         }
     }
 }
@@ -87,52 +89,40 @@ impl<BlockCommitter> DaBlockCostsSource for BlockCommitterDaBlockCosts<BlockComm
 where
     BlockCommitter: BlockCommitterApi,
 {
-    async fn request_da_block_cost(
-        &mut self,
-    ) -> DaBlockCostsResult<Option<DaBlockCosts>> {
-        let raw_da_block_costs = match self.last_raw_da_block_costs {
-            Some(ref last_value) => self
-                .client
-                .get_costs_by_l2_block_number(last_value.end_height + 1),
-            _ => self.client.get_latest_costs(),
+    async fn request_da_block_cost(&mut self) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
+        let raw_da_block_costs: Vec<_> =
+            match self.last_recorded_height.and_then(|x| x.succ()) {
+                Some(ref next_height) => {
+                    self.client
+                        .get_costs_by_l2_block_number(*next_height.deref())
+                        .await?
+                }
+                _ => self.client.get_latest_costs().await?.into_iter().collect(),
+            };
+
+        let da_block_costs: Vec<_> =
+            raw_da_block_costs.iter().map(|x| x.into()).collect();
+        if let Some(cost) = raw_da_block_costs.last() {
+            self.last_recorded_height = Some(BlockHeight::from(cost.end_height));
         }
-        .await?;
 
-        let Some(ref raw_da_block_costs) = raw_da_block_costs else {
-            // TODO: This is really annoying if there haven't been any costs yet. Do we need this?
-            //   Gonna return `Option::None` for now
-            // return Err(anyhow!("No response from block committer"))
-            return Ok(None)
-        };
-
-        let da_block_costs = self.last_raw_da_block_costs.iter().fold(
-            Ok(raw_da_block_costs.into()),
-            |costs: DaBlockCostsResult<DaBlockCosts>, last_value| {
-                let costs = costs.expect("Defined to be OK");
-                let blob_size_bytes = costs
-                    .bundle_size_bytes
-                    .checked_sub(last_value.size_bytes)
-                    .ok_or(anyhow!("Blob size bytes underflow"))?;
-                let blob_cost_wei = raw_da_block_costs
-                    .cost_wei
-                    .checked_sub(last_value.cost_wei)
-                    .ok_or(anyhow!("Blob cost wei underflow"))?;
-                Ok(DaBlockCosts {
-                    bundle_size_bytes: blob_size_bytes,
-                    blob_cost_wei,
-                    ..costs
-                })
-            },
-        )?;
-
-        self.last_raw_da_block_costs = Some(raw_da_block_costs.clone());
-        Ok(Some(da_block_costs))
+        Ok(da_block_costs)
     }
 
-    async fn set_last_value(&mut self, bundle_id: u32) -> DaBlockCostsResult<()> {
-        self.last_raw_da_block_costs =
-            self.client.get_costs_by_l2_block_number(bundle_id).await?;
+    async fn set_last_value(&mut self, height: BlockHeight) -> DaBlockCostsResult<()> {
+        self.last_recorded_height = Some(height);
         Ok(())
+    }
+}
+
+impl From<RawDaBlockCosts> for DaBlockCosts {
+    fn from(value: RawDaBlockCosts) -> Self {
+        Self {
+            bundle_id: value.bundle_id,
+            l2_blocks: (value.start_height..=value.end_height).collect(),
+            bundle_size_bytes: value.size_bytes,
+            blob_cost_wei: value.cost_wei,
+        }
     }
 }
 
@@ -152,22 +142,10 @@ impl BlockCommitterHttpApi {
 
 #[async_trait::async_trait]
 impl BlockCommitterApi for BlockCommitterHttpApi {
-    async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
-        if let Some(url) = &self.url {
-            let val = self.client.get(url).send().await?;
-            tracing::warn!("val: {:?}", val);
-            let response = val.json::<Option<RawDaBlockCosts>>().await?;
-            tracing::warn!("Response: {:?}", response);
-            Ok(response)
-        } else {
-            Ok(None)
-        }
-    }
-
     async fn get_costs_by_l2_block_number(
         &self,
         l2_block_number: u32,
-    ) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
+    ) -> DaBlockCostsResult<Vec<RawDaBlockCosts>> {
         if let Some(url) = &self.url {
             let val = self
                 .client
@@ -177,32 +155,21 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
             tracing::warn!("val: {:?}", val);
             let response = val.json::<Option<RawDaBlockCosts>>().await?;
             tracing::warn!("Response: {:?}", response);
-            Ok(response)
+            Ok(response.into_iter().collect())
         } else {
-            Ok(None)
+            Ok(Vec::new())
         }
     }
 
-    async fn get_cost_bundles_by_range(
-        &self,
-        range: core::ops::Range<u32>,
-    ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
-        let start = range.start;
-        let range_len = range.len();
-
+    async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
         if let Some(url) = &self.url {
-            let response = self
-                .client
-                .get(format!(
-                    "{url}/v1/costs?from_height={start}&limit={range_len}"
-                ))
-                .send()
-                .await?
-                .json::<Vec<RawDaBlockCosts>>()
-                .await?;
-            Ok(response.into_iter().map(Some).collect())
+            let val = self.client.get(url).send().await?;
+            tracing::warn!("val: {:?}", val);
+            let response = val.json::<Option<RawDaBlockCosts>>().await?;
+            tracing::warn!("Response: {:?}", response);
+            Ok(response)
         } else {
-            Ok(vec![])
+            Ok(None)
         }
     }
 }
@@ -230,7 +197,7 @@ mod tests {
         async fn get_costs_by_l2_block_number(
             &self,
             l2_block_number: u32,
-        ) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
+        ) -> DaBlockCostsResult<Vec<RawDaBlockCosts>> {
             // arbitrary logic to generate a new value
             let mut value = self.value.clone();
             if let Some(value) = &mut value {
@@ -241,13 +208,7 @@ mod tests {
                 value.cost_wei += 1;
                 value.size_bytes += 1;
             }
-            Ok(value)
-        }
-        async fn get_cost_bundles_by_range(
-            &self,
-            _: core::ops::Range<u32>,
-        ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
-            Ok(vec![self.value.clone()])
+            Ok(value.into_iter().collect())
         }
     }
 
@@ -267,7 +228,7 @@ mod tests {
     ) {
         // given
         let da_block_costs = test_da_block_costs();
-        let expected = Some((&da_block_costs).into());
+        let expected = vec![(&da_block_costs).into()];
         let mock_api = MockBlockCommitterApi::new(Some(da_block_costs));
         let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
 
@@ -285,80 +246,17 @@ mod tests {
         let mut da_block_costs = test_da_block_costs();
         let da_block_costs_len = da_block_costs.end_height - da_block_costs.start_height;
         let mock_api = MockBlockCommitterApi::new(Some(da_block_costs.clone()));
+        let latest_height = BlockHeight::new(da_block_costs.end_height);
         let mut block_committer =
-            BlockCommitterDaBlockCosts::new(mock_api, Some(da_block_costs.clone()));
+            BlockCommitterDaBlockCosts::new(mock_api, Some(latest_height));
 
         // when
         let actual = block_committer.request_da_block_cost().await.unwrap();
 
         // then
-        assert_ne!(da_block_costs_len as usize, actual.unwrap().l2_blocks.len());
-    }
-
-    // TODO: Do we need this?
-    // #[tokio::test]
-    // async fn request_da_block_cost__when_response_is_none__then_error() {
-    //     // given
-    //     let mock_api = MockBlockCommitterApi::new(None);
-    //     let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
-    //
-    //     // when
-    //     let result = block_committer.request_da_block_cost().await;
-    //
-    //     // then
-    //     assert!(result.is_err());
-    // }
-
-    struct UnderflowingMockBlockCommitterApi {
-        value: Option<RawDaBlockCosts>,
-    }
-
-    impl UnderflowingMockBlockCommitterApi {
-        fn new(value: Option<RawDaBlockCosts>) -> Self {
-            Self { value }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl BlockCommitterApi for UnderflowingMockBlockCommitterApi {
-        async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
-            Ok(self.value.clone())
-        }
-        async fn get_costs_by_l2_block_number(
-            &self,
-            l2_block_number: u32,
-        ) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
-            // arbitrary logic to generate a new value
-            let mut value = self.value.clone();
-            if let Some(value) = &mut value {
-                value.start_height = l2_block_number;
-                value.end_height = value.end_height + l2_block_number + 10;
-                value.da_block_height = value.da_block_height + 1u64.into();
-                value.cost_wei -= 1;
-                value.size_bytes -= 1;
-            }
-            Ok(value)
-        }
-        async fn get_cost_bundles_by_range(
-            &self,
-            _: core::ops::Range<u32>,
-        ) -> DaBlockCostsResult<Vec<Option<RawDaBlockCosts>>> {
-            Ok(vec![self.value.clone()])
-        }
-    }
-
-    #[tokio::test]
-    async fn request_da_block_cost__when_underflow__then_error() {
-        // given
-        let da_block_costs = test_da_block_costs();
-        let mock_api = UnderflowingMockBlockCommitterApi::new(Some(da_block_costs));
-        let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
-        let _ = block_committer.request_da_block_cost().await.unwrap();
-
-        // when
-        let result = block_committer.request_da_block_cost().await;
-
-        // then
-        assert!(result.is_err());
+        assert_ne!(
+            da_block_costs_len as usize,
+            actual.first().unwrap().l2_blocks.len()
+        );
     }
 }

@@ -9,6 +9,7 @@ pub mod service;
 #[derive(Debug, Default, Clone, Eq, Hash, PartialEq)]
 pub struct DaBlockCosts {
     pub bundle_id: u32,
+    // TODO: Should this be a range?
     pub l2_blocks: Vec<u32>,
     pub bundle_size_bytes: u32,
     pub blob_cost_wei: u128,

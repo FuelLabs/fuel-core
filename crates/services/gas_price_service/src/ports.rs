@@ -35,26 +35,33 @@ pub trait GetMetadataStorage: Send + Sync {
         -> Result<Option<UpdaterMetadata>>;
 }
 
-pub trait SetDaBundleId: Send + Sync {
-    fn set_bundle_id(&mut self, block_height: &BlockHeight, bundle_id: u32)
-        -> Result<()>;
+pub trait SetLatestRecordedHeight: Send + Sync {
+    /// For any given L2 block produced, the DA will have committed some
+    fn set_recorded_height(
+        &mut self,
+        block_height: &BlockHeight,
+        recorded_height: BlockHeight,
+    ) -> Result<()>;
 }
 
-pub trait GetDaBundleId: Send + Sync {
-    fn get_bundle_id(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
+pub trait GetLatestRecordedHeight: Send + Sync {
+    fn get_recorded_height(
+        &self,
+        block_height: &BlockHeight,
+    ) -> Result<Option<BlockHeight>>;
 }
 
 pub trait GasPriceServiceAtomicStorage
 where
     Self: 'static,
     Self: Send + Sync,
-    Self: GetMetadataStorage + GetDaBundleId,
+    Self: GetMetadataStorage + GetLatestRecordedHeight,
 {
     type Transaction<'a>: AsUnrecordedBlocks
         + SetMetadataStorage
         + GetMetadataStorage
-        + SetDaBundleId
-        + GetDaBundleId
+        + SetLatestRecordedHeight
+        + GetLatestRecordedHeight
     where
         Self: 'a;
 
