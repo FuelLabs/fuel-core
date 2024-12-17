@@ -469,9 +469,9 @@ use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::R
 
 #[test]
 fn produce_block__l1_committed_block_effects_gas_price() {
-    // let _ = tracing_subscriber::fmt()
-    //     .with_max_level(tracing::Level::DEBUG)
-    //     .try_init();
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     // set up chain with single unrecorded block

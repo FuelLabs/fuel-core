@@ -64,7 +64,7 @@ impl From<&RawDaBlockCosts> for DaBlockCosts {
         DaBlockCosts {
             bundle_id,
             // construct a vec of l2 blocks from the start_height to the end_height
-            l2_blocks: (start_height..end_height).collect(),
+            l2_blocks: (start_height..=end_height).collect(),
             bundle_size_bytes: size_bytes,
             blob_cost_wei: cost_wei,
         }
@@ -100,8 +100,12 @@ where
                 _ => self.client.get_latest_costs().await?.into_iter().collect(),
             };
 
-        let da_block_costs: Vec<_> =
-            raw_da_block_costs.iter().map(|x| x.into()).collect();
+        tracing::info!("raw_da_block_costs: {:?}", raw_da_block_costs);
+        let da_block_costs: Vec<_> = raw_da_block_costs
+            .iter()
+            .map(|raw| DaBlockCosts::from(raw))
+            .collect();
+        tracing::info!("da_block_costs: {:?}", da_block_costs);
         if let Some(cost) = raw_da_block_costs.last() {
             self.last_recorded_height = Some(BlockHeight::from(cost.end_height));
         }
