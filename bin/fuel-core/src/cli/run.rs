@@ -189,12 +189,13 @@ pub struct Command {
     #[arg(long = "native-executor-version", env)]
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
-    /// The starting gas price for the network
-    #[arg(long = "starting-exec-gas-price", default_value = "0", env)]
-    pub starting_exec_gas_price: u64,
+    /// The starting execution gas price for the network
+    #[arg(long = "starting-gas-price", default_value = "0", env)]
+    pub starting_gas_price: u64,
 
     /// The percentage change in gas price per block
     #[arg(long = "gas-price-change-percent", default_value = "0", env)]
+    // https://docs.rs/tokio/latest/tokio/time/fn.pause.html
     pub gas_price_change_percent: u16,
 
     /// The minimum allowed gas price
@@ -210,7 +211,7 @@ pub struct Command {
     pub min_da_gas_price: u64,
 
     /// P component of DA gas price calculation
-    #[arg(long = "da-p-component", default_value = "0", env)]
+    #[arg(long = "da-p-component", default_value = "1", env)]
     pub da_p_component: i64,
 
     /// D component of DA gas price calculation
@@ -323,7 +324,7 @@ impl Command {
             debug,
             utxo_validation,
             native_executor_version,
-            starting_exec_gas_price: starting_gas_price,
+            starting_gas_price,
             gas_price_change_percent,
             min_gas_price,
             gas_price_threshold_percent,
