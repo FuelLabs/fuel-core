@@ -35,7 +35,7 @@ async fn latest_gas_price_algorithm_is_compatible_with_ignition() {
     let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
     let genesis_port = "30333";
     let starting_gas_price = 987;
-    let _ = Version36FuelCoreDriver::spawn(&[
+    let old_driver = Version36FuelCoreDriver::spawn(&[
         "--service-name",
         "GenesisProducer",
         "--debug",
@@ -58,27 +58,31 @@ async fn latest_gas_price_algorithm_is_compatible_with_ignition() {
     let public_key = Keypair::from(genesis_keypair).public();
     let genesis_peer_id = PeerId::from_public_key(&public_key);
     let genesis_multiaddr = default_multiaddr(genesis_port, genesis_peer_id);
+    let temp_dir = old_driver.kill().await;
 
     // Starting node that uses latest fuel core.
     // It will connect to the genesis node and sync blocks.
     let latest_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(latest_keypair.secret().to_bytes());
-    let latest_node = LatestFuelCoreDriver::spawn(&[
-        "--service-name",
-        "LatestValidator",
-        "--debug",
-        "--poa-instant",
-        "false",
-        "--snapshot",
-        IGNITION_TESTNET_SNAPSHOT,
-        "--enable-p2p",
-        "--keypair",
-        hexed_secret.as_str(),
-        "--reserved-nodes",
-        genesis_multiaddr.as_str(),
-        "--peering-port",
-        "0",
-    ])
+    let latest_node = LatestFuelCoreDriver::spawn_with_directory(
+        temp_dir,
+        &[
+            "--service-name",
+            "LatestValidator",
+            "--debug",
+            "--poa-instant",
+            "false",
+            "--snapshot",
+            IGNITION_TESTNET_SNAPSHOT,
+            "--enable-p2p",
+            "--keypair",
+            hexed_secret.as_str(),
+            "--reserved-nodes",
+            genesis_multiaddr.as_str(),
+            "--peering-port",
+            "0",
+        ],
+    )
     .await
     .unwrap();
 
@@ -110,9 +114,6 @@ async fn latest_gas_price_algorithm_is_compatible_with_ignition() {
     else {
         panic!("Expected V1Metadata, got {:?}", metadata);
     };
-    // assert!(
-    //     matches!(metadata, UpdaterMetadata::V1(V1Metadata { new_scaled_exec_price, gas_price_factor, .. }) if new_scaled_exec_price == starting_gas_price * gas_price_factor.get())
-    // );
     assert_eq!(
         new_scaled_exec_price,
         starting_gas_price * gas_price_factor.get()

@@ -52,11 +52,16 @@ macro_rules! define_core_driver {
 
         impl $name {
             pub async fn spawn(extra_args: &[&str]) -> anyhow::Result<Self> {
-                use clap::Parser;
                 use tempfile::tempdir;
-
-                // Generate temp params
                 let db_dir = tempdir()?;
+
+                Self::spawn_with_directory(db_dir, extra_args).await
+            }
+            pub async fn spawn_with_directory(
+                db_dir: tempfile::TempDir,
+                extra_args: &[&str],
+            ) -> anyhow::Result<Self> {
+                use clap::Parser;
 
                 let mut args = vec![
                     "_IGNORED_",
@@ -103,6 +108,16 @@ define_core_driver!(
     true
 );
 
+impl Version36FuelCoreDriver {
+    pub async fn kill(self) -> tempfile::TempDir {
+        self.node
+            .send_stop_signal_and_await_shutdown()
+            .await
+            .expect("Failed to stop the node");
+        self._db_dir
+    }
+}
+
 define_core_driver!(
     latest_fuel_core_bin,
     LatestFuelService,
@@ -110,6 +125,16 @@ define_core_driver!(
     LatestFuelCoreDriver,
     true
 );
+
+impl LatestFuelCoreDriver {
+    pub async fn kill(self) -> tempfile::TempDir {
+        self.node
+            .send_stop_signal_and_await_shutdown()
+            .await
+            .expect("Failed to stop the node");
+        self._db_dir
+    }
+}
 
 pub const IGNITION_TESTNET_SNAPSHOT: &str = "./chain-configurations/ignition";
 pub const V36_TESTNET_SNAPSHOT: &str = "./chain-configurations/v36";
