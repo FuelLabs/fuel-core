@@ -57,6 +57,7 @@ use fuel_core_services::{
     RunnableService,
     Service,
     ServiceRunner,
+    State,
     StateWatcher,
 };
 use fuel_core_storage::{
@@ -139,6 +140,7 @@ where
 
     pub async fn init(
         mut self,
+        state_watcher: &StateWatcher,
     ) -> anyhow::Result<
         GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, AtomicStorage>,
     > {
@@ -155,9 +157,8 @@ where
             self.block_stream,
         );
 
-        if let Some(bundle_id) = self
-            .gas_price_db
-            .get_bundle_id(&self.gas_metadata_height.into())?
+        if let Some(bundle_id) =
+            self.gas_price_db.get_bundle_id(&self.gas_metadata_height)?
         {
             self.da_source.set_last_value(bundle_id).await?;
         }
@@ -166,9 +167,8 @@ where
             .da_poll_interval
             .map(|x| Duration::from_millis(x.into()));
         // TODO: Dupe code
-        if let Some(bundle_id) = self
-            .gas_price_db
-            .get_bundle_id(&self.gas_metadata_height.into())?
+        if let Some(bundle_id) =
+            self.gas_price_db.get_bundle_id(&self.gas_metadata_height)?
         {
             self.da_source.set_last_value(bundle_id).await?;
         }
@@ -187,13 +187,14 @@ where
             Ok(service)
         } else {
             if latest_block_height > *self.gas_metadata_height {
-                sync_gas_price_db_with_on_chain_storage(
+                sync_v1_metadata(
                     &self.settings,
-                    &mut self.algo_updater,
                     &self.on_chain_db,
                     *self.gas_metadata_height,
                     latest_block_height,
+                    &mut self.algo_updater,
                     &mut self.gas_price_db,
+                    state_watcher,
                 )?;
             }
 
@@ -230,56 +231,11 @@ where
 
     async fn into_task(
         self,
-        _state_watcher: &StateWatcher,
+        state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        UninitializedTask::init(self).await
+        UninitializedTask::init(self, state_watcher).await
     }
-}
-
-fn sync_gas_price_db_with_on_chain_storage<
-    L2DataStore,
-    L2DataStoreView,
-    SettingsProvider,
-    AtomicStorage,
->(
-    settings: &SettingsProvider,
-    updater: &mut AlgorithmUpdaterV1,
-    on_chain_db: &L2DataStoreView,
-    metadata_height: u32,
-    latest_block_height: u32,
-    persisted_data: &mut AtomicStorage,
-) -> anyhow::Result<()>
-where
-    L2DataStore: L2Data,
-    L2DataStoreView: AtomicView<LatestView = L2DataStore>,
-    SettingsProvider: GasPriceSettingsProvider,
-    AtomicStorage: GasPriceServiceAtomicStorage,
-{
-    let metadata = persisted_data
-        .get_metadata(&metadata_height.into())?
-        .ok_or(anyhow::anyhow!(
-            "Expected metadata to exist for height: {metadata_height}"
-        ))?;
-
-    // let metadata = match metadata {
-    //     UpdaterMetadata::V1(metadata) => metadata,
-    //     UpdaterMetadata::V0(metadata) => {
-    //         V1Metadata::construct_from_v0_metadata(metadata, config)?
-    //     }
-    // };
-    // let mut algo_updater = v1_algorithm_from_metadata(metadata, config);
-
-    sync_v1_metadata(
-        settings,
-        on_chain_db,
-        metadata_height,
-        latest_block_height,
-        updater,
-        persisted_data,
-    )?;
-
-    Ok(())
 }
 
 fn sync_v1_metadata<L2DataStore, L2DataStoreView, SettingsProvider, AtomicStorage>(
@@ -289,6 +245,7 @@ fn sync_v1_metadata<L2DataStore, L2DataStoreView, SettingsProvider, AtomicStorag
     latest_block_height: u32,
     updater: &mut AlgorithmUpdaterV1,
     da_storage: &mut AtomicStorage,
+    state_watcher: &StateWatcher,
 ) -> anyhow::Result<()>
 where
     L2DataStore: L2Data,
@@ -304,6 +261,12 @@ where
         latest_block_height
     );
     for height in first..=latest_block_height {
+        // allows early exit if the service is stopping
+        let state = state_watcher.borrow();
+        if state.stopping() || state.stopped() {
+            return Ok(());
+        }
+
         tracing::info!("Syncing gas price metadata for block {}", height);
         let mut tx = da_storage.begin_transaction()?;
         let block = view
