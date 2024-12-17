@@ -203,7 +203,7 @@ mod test_block_committer_http_api {
         });
 
         // then
-        assert_eq!(actual, Vec::new());
+        assert_eq!(actual.len(), 0);
     }
     #[test]
     fn get_costs_by_l2_block_number__when_url_is_some__then_returns_expected_costs() {
