@@ -22,6 +22,7 @@ use fuel_core_client::client::{
         PaginationRequest,
     },
     types::{
+        message::MessageStatus,
         RelayedTransactionStatus as ClientRelayedTransactionStatus,
         TransactionStatus,
     },
@@ -72,8 +73,14 @@ use std::{
         SocketAddr,
     },
     sync::Arc,
+    time::Duration,
 };
 use tokio::sync::oneshot::Sender;
+
+enum MessageKind {
+    Retryable { nonce: u64, amount: u64 },
+    NonRetryable { nonce: u64, amount: u64 },
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn relayer_can_download_logs() {
@@ -486,6 +493,7 @@ async fn balances_do_not_return_retryable_messages() {
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
     let eth_node = MockMiddleware::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
+    const TIMEOUT: Duration = Duration::from_secs(1);
 
     // Large enough to get all messages, but not to trigger the "query is too complex" error.
     const UNLIMITED_QUERY: i32 = 100;
@@ -496,36 +504,23 @@ async fn balances_do_not_return_retryable_messages() {
     let secret_key: SecretKey = SecretKey::random(&mut rng);
     let public_key = secret_key.public_key();
     let recipient = Input::owner(&public_key);
-    const SENDER: Address = Address::zeroed();
 
-    let retryable_data = Some(vec![1]);
     const RETRYABLE_AMOUNT: u64 = 99;
-
-    const NON_RETRYABLE_DATA: Option<Vec<u8>> = None;
+    const RETRYABLE_NONCE: u64 = 0;
     const NON_RETRYABLE_AMOUNT: u64 = 100;
-
-    let logs = vec![
-        make_message_event(
-            Nonce::from(1u64),
-            5,
-            contract_address,
-            Some(SENDER.into()),
-            Some(recipient.into()),
-            Some(NON_RETRYABLE_AMOUNT),
-            NON_RETRYABLE_DATA,
-            0,
-        ),
-        make_message_event(
-            Nonce::from(2u64),
-            5,
-            contract_address,
-            Some(SENDER.into()),
-            Some(recipient.into()),
-            Some(RETRYABLE_AMOUNT),
-            retryable_data,
-            0,
-        ),
+    const NON_RETRYABLE_NONCE: u64 = 1;
+    let messages = vec![
+        MessageKind::Retryable {
+            nonce: RETRYABLE_NONCE,
+            amount: RETRYABLE_AMOUNT,
+        },
+        MessageKind::NonRetryable {
+            nonce: NON_RETRYABLE_NONCE,
+            amount: NON_RETRYABLE_AMOUNT,
+        },
     ];
+    let logs: Vec<_> = setup_messages(&messages, &recipient, &contract_address);
+
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
@@ -566,12 +561,37 @@ async fn balances_do_not_return_retryable_messages() {
         .manually_produce_blocks(
             None,
             Mode::Blocks {
-                number_of_blocks: 100,
+                number_of_blocks: 1,
             },
         )
         .await
         .unwrap();
 
+    // Balances are processed in the off-chain worker, so we need to wait for it
+    // to process the messages before we can assert the balances.
+    let result = tokio::time::timeout(TIMEOUT, async {
+        loop {
+            let query = client
+                .balances(
+                    &recipient,
+                    PaginationRequest {
+                        cursor: None,
+                        results: UNLIMITED_QUERY,
+                        direction: PageDirection::Forward,
+                    },
+                )
+                .await
+                .unwrap();
+
+            if !query.results.is_empty() {
+                break;
+            }
+        }
+    })
+    .await;
+    if let Err(_) = result {
+        panic!("Off-chain worker didn't process balances withing timeout")
+    }
     // Then
 
     // Expect two messages to be available
@@ -590,14 +610,14 @@ async fn balances_do_not_return_retryable_messages() {
     let total_amount = query.results.iter().map(|m| m.amount).sum::<u64>();
     assert_eq!(total_amount, NON_RETRYABLE_AMOUNT + RETRYABLE_AMOUNT);
 
-    // Expect only the non-retryable message to be returned via "balance"
+    // Expect only the non-retryable message balance to be returned via "balance"
     let query = client
         .balance(&recipient, Some(&base_asset_id))
         .await
         .unwrap();
     assert_eq!(query, NON_RETRYABLE_AMOUNT);
 
-    // Expect only the non-retryable message to be returned via "balances"
+    // Expect only the non-retryable message balance to be returned via "balances"
     let query = client
         .balances(
             &recipient,
@@ -610,9 +630,50 @@ async fn balances_do_not_return_retryable_messages() {
         .await
         .unwrap();
     assert_eq!(query.results.len(), 1);
-    let total_amount = query.results.iter().map(|m| m.amount).sum::<u128>();
+    let total_amount = query
+        .results
+        .iter()
+        .map(|m| {
+            assert_eq!(m.asset_id, base_asset_id);
+            m.amount
+        })
+        .sum::<u128>();
     assert_eq!(total_amount, NON_RETRYABLE_AMOUNT as u128);
 
     srv.send_stop_signal_and_await_shutdown().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();
+}
+
+fn setup_messages(
+    messages: &[MessageKind],
+    recipient: &Address,
+    contract_address: &Bytes20,
+) -> Vec<Log> {
+    const SENDER: Address = Address::zeroed();
+
+    messages
+        .iter()
+        .map(|m| match m {
+            MessageKind::Retryable { nonce, amount } => make_message_event(
+                Nonce::from(*nonce),
+                5,
+                *contract_address,
+                Some(SENDER.into()),
+                Some((*recipient).into()),
+                Some(*amount),
+                Some(vec![1]),
+                0,
+            ),
+            MessageKind::NonRetryable { nonce, amount } => make_message_event(
+                Nonce::from(*nonce),
+                5,
+                *contract_address,
+                Some(SENDER.into()),
+                Some((*recipient).into()),
+                Some(*amount),
+                None,
+                0,
+            ),
+        })
+        .collect()
 }
