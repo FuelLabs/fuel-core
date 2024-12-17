@@ -1,16 +1,20 @@
+use fuel_core_storage::Result as StorageResult;
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_tx::Transaction,
+    fuel_types::BlockHeight,
+};
+
 use crate::{
     common::{
         updater_metadata::UpdaterMetadata,
         utils::Result,
     },
     v0::metadata::V0AlgorithmConfig,
-    v1::metadata::V1AlgorithmConfig,
-};
-use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_tx::Transaction,
-    fuel_types::BlockHeight,
+    v1::{
+        metadata::V1AlgorithmConfig,
+        uninitialized_task::fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
+    },
 };
 
 pub trait L2Data: Send + Sync {
@@ -21,10 +25,41 @@ pub trait L2Data: Send + Sync {
     ) -> StorageResult<Option<Block<Transaction>>>;
 }
 
-pub trait MetadataStorage: Send + Sync {
+pub trait SetMetadataStorage: Send + Sync {
+    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()>;
+}
+
+pub trait GetMetadataStorage: Send + Sync {
     fn get_metadata(&self, block_height: &BlockHeight)
         -> Result<Option<UpdaterMetadata>>;
-    fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> Result<()>;
+}
+
+pub trait SetDaBundleId: Send + Sync {
+    fn set_bundle_id(&mut self, block_height: &BlockHeight, bundle_id: u32)
+        -> Result<()>;
+}
+
+pub trait GetDaBundleId: Send + Sync {
+    fn get_bundle_id(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
+}
+
+pub trait GasPriceServiceAtomicStorage
+where
+    Self: 'static,
+    Self: Send + Sync,
+    Self: GetMetadataStorage + GetDaBundleId,
+{
+    type Transaction<'a>: AsUnrecordedBlocks
+        + SetMetadataStorage
+        + GetMetadataStorage
+        + SetDaBundleId
+        + GetDaBundleId
+    where
+        Self: 'a;
+
+    fn begin_transaction(&mut self) -> Result<Self::Transaction<'_>>;
+
+    fn commit_transaction(transaction: Self::Transaction<'_>) -> Result<()>;
 }
 
 /// Provides the latest block height.

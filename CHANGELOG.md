@@ -36,9 +36,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2369](https://github.com/FuelLabs/fuel-core/pull/2369): The `transaction_insertion_time_in_thread_pool_milliseconds` metric is properly collected.
 - [2413](https://github.com/FuelLabs/fuel-core/issues/2413): block production immediately errors if unable to lock the mutex.
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2389): Fix construction of reverse iterator in RocksDB.
+- [2479](https://github.com/FuelLabs/fuel-core/pull/2479): Fix an error on the last iteration of the read and write sequential opcodes on contract storage.
+- [2478](https://github.com/FuelLabs/fuel-core/pull/2478): Fix proof created by `message_receipts_proof` function by ignoring the receipts from failed transactions to match `message_outbox_root`.
 - [2485](https://github.com/FuelLabs/fuel-core/pull/2485): Hardcode the timestamp of the genesis block and version of `tai64` to avoid breaking changes for us.
 
 ### Changed
+- [2468](https://github.com/FuelLabs/fuel-core/pull/2468): Abstract unrecorded blocks concept for V1 algorithm, create new storage impl. Introduce `TransactionableStorage` trait to allow atomic changes to the storage.
 - [2295](https://github.com/FuelLabs/fuel-core/pull/2295): `CombinedDb::from_config` now respects `state_rewind_policy` with tmp RocksDB.
 - [2378](https://github.com/FuelLabs/fuel-core/pull/2378): Use cached hash of the topic instead of calculating it on each publishing gossip message.
 - [2429](https://github.com/FuelLabs/fuel-core/pull/2429): Introduce custom enum for representing result of running service tasks
