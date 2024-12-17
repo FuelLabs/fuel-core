@@ -503,8 +503,8 @@ fn produce_block__l1_committed_block_effects_gas_price() {
         bundle_id: 1,
         blocks_heights: vec![1],
         da_block_height: DaBlockHeight(100),
-        total_cost: 100,
-        total_size_bytes: 100,
+        cost_wei: 100,
+        size_bytes: 100,
     };
     mock.add_response(costs);
 
@@ -683,8 +683,8 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
         bundle_id: 1,
         blocks_heights,
         da_block_height: DaBlockHeight(100),
-        total_cost: cost,
-        total_size_bytes,
+        cost_wei: cost,
+        size_bytes: total_size_bytes,
     });
 
     let mut profits = Vec::new();
