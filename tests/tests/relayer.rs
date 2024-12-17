@@ -22,7 +22,7 @@ use fuel_core_client::client::{
         PaginationRequest,
     },
     types::{
-        message::MessageStatus,
+        CoinType,
         RelayedTransactionStatus as ClientRelayedTransactionStatus,
         TransactionStatus,
     },
