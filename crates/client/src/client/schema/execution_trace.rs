@@ -12,19 +12,18 @@ use crate::client::{
     PaginationRequest,
 };
 use fuel_core_types::{
-    fuel_tx, fuel_vm::interpreter::trace::Trigger, services::executor::{
+    fuel_tx,
+    services::executor::{
         TransactionExecutionResult,
         TransactionExecutionStatus,
-    }
+    },
 };
 use std::convert::{
     TryFrom,
     TryInto,
 };
 
-use super::tx::{
-    ProgramState,
-};
+use super::tx::ProgramState;
 
 #[allow(clippy::enum_variant_names)]
 #[derive(cynic::InlineFragments, Clone, Debug)]
@@ -150,24 +149,24 @@ impl From<(Address, PaginationRequest<String>)> for TransactionsByOwnerConnectio
 
 // mutations
 
-
 /// When to record a trace frames during execution
 #[derive(cynic::Enum, Debug, Copy, Clone, Eq, PartialEq)]
-#[cynic(
-    schema_path = "./assets/schema.sdl",
-    graphql_type = "TraceTrigger",
-)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "TraceTrigger")]
 pub enum TraceTrigger {
     /// After each instruction
     OnInstruction,
     /// After an instruction has created a receipt
     OnReceipt,
 }
-impl From<Trigger> for TraceTrigger {
-    fn from(value: Trigger) -> Self {
-        match value {
-            Trigger::OnInstruction => TraceTrigger::OnInstruction,
-            Trigger::OnReceipt => TraceTrigger::OnReceipt,
+impl From<fuel_core_types::services::executor::TraceTrigger> for TraceTrigger {
+    fn from(trigger: fuel_core_types::services::executor::TraceTrigger) -> Self {
+        match trigger {
+            fuel_core_types::services::executor::TraceTrigger::OnInstruction => {
+                TraceTrigger::OnInstruction
+            }
+            fuel_core_types::services::executor::TraceTrigger::OnReceipt => {
+                TraceTrigger::OnReceipt
+            }
         }
     }
 }

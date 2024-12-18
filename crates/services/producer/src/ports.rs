@@ -20,11 +20,11 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
-    fuel_vm::interpreter::trace::Trigger,
     services::{
         block_producer::Components,
         executor::{
             Result as ExecutorResult,
+            TraceTrigger,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -114,6 +114,6 @@ pub trait BlockExecutionTracer: Send + Sync {
     fn execution_trace(
         &self,
         block: &Block,
-        trigger: Trigger,
+        trigger: TraceTrigger,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>>;
 }

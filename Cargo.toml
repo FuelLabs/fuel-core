@@ -87,7 +87,8 @@ fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 fuel-gas-price-algorithm = { version = "0.40.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
-fuel-vm-private = { git = "https://github.com/FuelLabs/fuel-vm", branch = "dento/execution-trace", package = "fuel-vm", default-features = false }
+fuel-vm-private = { path = "../fuel-vm/fuel-vm", package = "fuel-vm", default-features = false }
+# fuel-vm-private = { git = "https://github.com/FuelLabs/fuel-vm", branch = "dento/execution-trace", package = "fuel-vm", default-features = false }
 # fuel-vm-private = { version = "0.58.2", package = "fuel-vm", default-features = false }
 
 # Common dependencies
@@ -115,6 +116,7 @@ postcard = "1.0"
 tracing-attributes = "0.1"
 tracing-subscriber = "0.3"
 serde = "1.0"
+serde-big-array = { version = "0.5", default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_with = { version = "3.4", default-features = false }
 strum = { version = "0.25" }

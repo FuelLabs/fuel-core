@@ -53,10 +53,7 @@ use fuel_core_types::{
         ContractId,
         Nonce,
     },
-    fuel_vm::interpreter::{
-        trace::Trigger,
-        Memory,
-    },
+    fuel_vm::interpreter::Memory,
     services::{
         executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,

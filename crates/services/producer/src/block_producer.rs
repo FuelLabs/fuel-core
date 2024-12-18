@@ -40,10 +40,10 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
-    fuel_vm::interpreter::trace::Trigger,
     services::{
         block_producer::Components,
         executor::{
+            TraceTrigger,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -392,7 +392,7 @@ where
     pub async fn execution_trace_block(
         &self,
         height: BlockHeight,
-        trigger: Trigger,
+        trigger: TraceTrigger,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
         let view = self.view_provider.latest_view()?;
 

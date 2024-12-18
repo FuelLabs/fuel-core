@@ -49,19 +49,25 @@ use fuel_core_types::{
     fuel_asm::{
         Instruction,
         Word,
-    }, fuel_tx::{
+    },
+    fuel_tx::{
         BlobId,
         Bytes32,
         ConsensusParameters,
         Receipt,
         Transaction,
         TxId,
-    }, fuel_types::{
+    },
+    fuel_types::{
         self,
         canonical::Serialize,
         BlockHeight,
         Nonce,
-    }, fuel_vm::interpreter::trace::Trigger, services::executor::TransactionExecutionStatus
+    },
+    services::executor::{
+        TraceTrigger,
+        TransactionExecutionStatus,
+    },
 };
 #[cfg(feature = "subscriptions")]
 use futures::{
@@ -503,11 +509,11 @@ impl FuelClient {
             .collect()
     }
 
-    /// Exectuion trace for a block
+    /// Execution trace for a block
     pub async fn execution_trace_block(
         &self,
         height: &BlockHeight,
-        trigger: Trigger
+        trigger: TraceTrigger,
     ) -> io::Result<Vec<TransactionExecutionStatus>> {
         let query: Operation<
             schema::execution_trace::ExectionTraceBlock,

@@ -60,7 +60,6 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
-    fuel_vm::interpreter::trace::Trigger,
     services::{
         block_producer::Components,
         executor::{

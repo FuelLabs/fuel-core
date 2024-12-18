@@ -5,6 +5,10 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
+    trace::{
+        TraceOnInstruction,
+        TraceOnReceipt,
+    },
 };
 use fuel_core_storage::{
     column::Column,
@@ -112,12 +116,14 @@ use fuel_core_types::{
             IntoChecked,
         },
         interpreter::{
-            trace::Frame,
+            trace::ExecutionTraceHooks,
             CheckedMetadata as CheckedMetadataTrait,
             ExecutableTransaction,
             InterpreterParams,
             Memory,
             MemoryInstance,
+            NoTrace,
+            NotSupportedEcal,
         },
         state::StateTransition,
         Backtrace as FuelBacktrace,
@@ -132,6 +138,8 @@ use fuel_core_types::{
             ExecutionResult,
             ForcedTransactionFailure,
             Result as ExecutorResult,
+            TraceFrame,
+            TraceTrigger,
             TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
@@ -256,7 +264,7 @@ pub struct ExecutionOptions {
     pub backtrace: bool,
     /// Record execution traces for each transaction with the given trigger
     #[serde(default)]
-    pub execution_trace: Option<fuel_vm::interpreter::trace::Trigger>,
+    pub execution_trace: Option<TraceTrigger>,
 }
 
 /// The executor instance performs block production and validation. Given a block, it will execute all
@@ -1256,15 +1264,45 @@ where
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
-        let (reverted, state, tx, receipts, trace_frames) = self
-            .attempt_tx_execution_with_vm(
-                checked_tx,
-                header,
-                coinbase_contract_id,
-                gas_price,
-                storage_tx,
-                memory,
-            )?;
+        let (reverted, state, tx, receipts, trace_frames) =
+            match self.options.execution_trace {
+                Some(TraceTrigger::OnInstruction) => {
+                    let (reverted, state, tx, receipts, trace) = self
+                        .attempt_tx_execution_with_vm::<_, _, TraceOnInstruction>(
+                        checked_tx,
+                        header,
+                        coinbase_contract_id,
+                        gas_price,
+                        storage_tx,
+                        memory,
+                    )?;
+                    (reverted, state, tx, receipts, trace.frames)
+                }
+                Some(TraceTrigger::OnReceipt) => {
+                    let (reverted, state, tx, receipts, trace) = self
+                        .attempt_tx_execution_with_vm::<_, _, TraceOnReceipt>(
+                            checked_tx,
+                            header,
+                            coinbase_contract_id,
+                            gas_price,
+                            storage_tx,
+                            memory,
+                        )?;
+                    (reverted, state, tx, receipts, trace.frames)
+                }
+                None => {
+                    let (reverted, state, tx, receipts, _) = self
+                        .attempt_tx_execution_with_vm::<_, _, NoTrace>(
+                            checked_tx,
+                            header,
+                            coinbase_contract_id,
+                            gas_price,
+                            storage_tx,
+                            memory,
+                        )?;
+                    (reverted, state, tx, receipts, Vec::new())
+                }
+            };
 
         self.spend_input_utxos(tx.inputs(), storage_tx, reverted, execution_data)?;
 
@@ -1466,7 +1504,7 @@ where
         tx: &Tx,
         execution_data: &mut ExecutionData,
         receipts: Vec<Receipt>,
-        execution_trace: Vec<Frame>,
+        execution_trace: Vec<TraceFrame>,
         gas_price: Word,
         reverted: bool,
         state: ProgramState,
@@ -1601,7 +1639,7 @@ where
     }
 
     #[allow(clippy::type_complexity)]
-    fn attempt_tx_execution_with_vm<Tx, T>(
+    fn attempt_tx_execution_with_vm<Tx, T, Trace>(
         &self,
         checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
@@ -1609,11 +1647,12 @@ where
         gas_price: Word,
         storage_tx: &mut TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>, Vec<Frame>)>
+    ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>, Trace)>
     where
         Tx: ExecutableTransaction + Cacheable,
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
+        Trace: ExecutionTraceHooks + Clone + Default,
     {
         let tx_id = checked_tx.id();
 
@@ -1639,16 +1678,11 @@ where
             .collect();
         let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params, None)?; // TODO: block_height argument?
 
-        let mut vm = Interpreter::with_storage(
+        let mut vm = Interpreter::<_, _, _, NotSupportedEcal, Trace>::with_storage(
             memory,
             vm_db,
             InterpreterParams::new(gas_price, &self.consensus_params),
         );
-
-        let mut trace_tmp_memory = MemoryInstance::new();
-        if let Some(trigger) = self.options.execution_trace {
-            vm = vm.with_trace_recording(trigger, &mut trace_tmp_memory);
-        }
 
         let vm_result: StateTransition<_> = vm
             .transact(ready_tx)
@@ -1659,7 +1693,7 @@ where
             .into();
         let reverted = vm_result.should_revert();
 
-        let trace_frames = vm.trace_frames().to_vec();
+        let trace = vm.trace().clone();
         let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
@@ -1681,7 +1715,7 @@ where
         }
 
         self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
-        Ok((reverted, state, tx, receipts, trace_frames))
+        Ok((reverted, state, tx, receipts.to_vec(), trace))
     }
 
     fn verify_inputs_exist_and_values_match<T>(
@@ -1986,9 +2020,9 @@ where
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace<M, T, Tx>(
+    fn log_backtrace<M, T, Tx, Ecal, Trace>(
         &self,
-        vm: &Interpreter<M, VmStorage<T>, Tx>,
+        vm: &Interpreter<M, VmStorage<T>, Tx, Ecal, Trace>,
         receipts: &[Receipt],
     ) where
         M: Memory,

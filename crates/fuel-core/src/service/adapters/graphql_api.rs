@@ -41,7 +41,6 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
-    fuel_vm::interpreter::trace::Trigger,
     services::{
         block_importer::SharedImportResult,
         executor::TransactionExecutionStatus,

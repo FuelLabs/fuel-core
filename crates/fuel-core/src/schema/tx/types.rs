@@ -80,10 +80,6 @@ use fuel_core_types::{
     fuel_types::canonical::Serialize,
     fuel_vm::{
         consts::VM_REGISTER_COUNT,
-        interpreter::trace::{
-            Frame,
-            Trigger,
-        },
         ProgramState as VmProgramState,
     },
     services::{
@@ -901,14 +897,6 @@ pub enum TraceTrigger {
     OnInstruction,
     /// After an instruction has created a receipt
     OnReceipt,
-}
-impl From<TraceTrigger> for Trigger {
-    fn from(value: TraceTrigger) -> Self {
-        match value {
-            TraceTrigger::OnInstruction => Trigger::OnInstruction,
-            TraceTrigger::OnReceipt => Trigger::OnReceipt,
-        }
-    }
 }
 
 #[derive(Union, Debug)]
