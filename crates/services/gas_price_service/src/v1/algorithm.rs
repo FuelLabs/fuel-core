@@ -3,7 +3,7 @@ use crate::common::gas_price_algorithm::{
     SharedGasPriceAlgo,
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use fuel_gas_price_algorithm::v1::AlgorithmV1;
+pub use fuel_gas_price_algorithm::v1::AlgorithmV1;
 
 impl GasPriceAlgorithm for AlgorithmV1 {
     fn next_gas_price(&self) -> u64 {
