@@ -862,25 +862,3 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
     }
     let _ = client.produce_blocks(1, None).await.unwrap();
 }
-
-#[test]
-fn inspect_dbs() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-    use fuel_core_storage::iter::IteratorOverTable;
-
-    let db_path = "/Users/jamesturner/fuel/dev-net/.dev-net-db";
-    let path = std::path::Path::new(db_path);
-    let db =
-        CombinedDatabase::open(path, 0, StateRewindPolicy::RewindFullRange, -1).unwrap();
-
-    let latest_recorded_blocks = db
-        .gas_price()
-        .iter_all::<RecordedHeights>(Some(IterDirection::Reverse));
-    tracing::info!("latest recorded blocks:");
-    for block in latest_recorded_blocks {
-        let (_, recorded_height) = block.unwrap();
-        tracing::info!("recorded height: {}", recorded_height);
-    }
-}
