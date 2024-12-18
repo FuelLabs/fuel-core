@@ -639,15 +639,16 @@ fn produce_block__l1_committed_block_affects_gas_price() {
             let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
                 .await
                 .unwrap();
-            tokio::time::sleep(Duration::from_millis(2)).await;
+            tokio::time::sleep(Duration::from_millis(20)).await;
             driver.client.produce_blocks(1, None).await.unwrap();
-            tokio::time::sleep(Duration::from_millis(2)).await;
+            tokio::time::sleep(Duration::from_millis(20)).await;
             driver.client.estimate_gas_price(0).await.unwrap().gas_price
         })
         .into();
 
     // then
     assert!(first_gas_price < new_gas_price);
+    rt.shutdown_timeout(tokio::time::Duration::from_millis(100));
 }
 
 #[test]
