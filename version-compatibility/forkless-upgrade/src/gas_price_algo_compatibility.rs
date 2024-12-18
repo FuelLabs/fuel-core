@@ -26,6 +26,7 @@ use libp2p::{
     },
     PeerId,
 };
+use std::ops::Deref;
 
 #[tokio::test]
 async fn v1_gas_price_metadata_updates_successfully_from_v0() {
