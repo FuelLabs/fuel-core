@@ -183,7 +183,7 @@ mod test_block_committer_http_api {
     #![allow(non_snake_case)]
 
     use super::*;
-    use crate::v1::da_source_service::block_committer_costs::fake_server::FakeServer;
+    use fake_server::FakeServer;
 
     #[test]
     fn get_costs_by_l2_block_number__when_url_is_none__then_returns_empty_vec() {
