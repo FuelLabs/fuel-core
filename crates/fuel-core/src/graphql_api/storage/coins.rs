@@ -50,11 +50,6 @@ pub fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> OwnedCoinKey {
 }
 
 /// The storage table for the index of coins to spend.
-
-// In the implementation of getters we use the explicit panic with the message (`expect`)
-// when the key is malformed (incorrect length). This is a bit of a code smell, but it's
-// consistent with how the `double_key!` macro works. We should consider refactoring this
-// in the future.
 pub struct CoinsToSpendIndex;
 
 impl Mappable for CoinsToSpendIndex {
