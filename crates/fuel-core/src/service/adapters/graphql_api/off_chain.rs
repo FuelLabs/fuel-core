@@ -244,7 +244,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             (IterDirection::Forward, None) => {
                 let base_asset_balance = self.base_asset_balance(base_asset_id, owner);
                 let non_base_asset_balance =
-                    self.non_base_asset_balance(owner, None, direction, base_asset_id);
+                    self.non_base_asset_balances(owner, None, direction, base_asset_id);
                 base_asset_balance
                     .chain(non_base_asset_balance)
                     .into_boxed()
@@ -252,7 +252,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             (IterDirection::Forward, Some(asset_id)) => {
                 let start = (asset_id != *base_asset_id)
                     .then_some(CoinBalancesKey::new(owner, &asset_id));
-                self.non_base_asset_balance(owner, start, direction, base_asset_id)
+                self.non_base_asset_balances(owner, start, direction, base_asset_id)
             }
             (IterDirection::Reverse, None) => {
                 self.non_base_assets_first(start, owner, base_asset_id, direction)
@@ -288,7 +288,7 @@ impl OffChainIterableKeyValueView {
         }
     }
 
-    fn non_base_asset_balance<'a>(
+    fn non_base_asset_balances<'a>(
         &'a self,
         owner: &Address,
         start: Option<CoinBalancesKey>,
@@ -329,7 +329,7 @@ impl OffChainIterableKeyValueView {
         let start = start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
         let base_asset_balance = self.base_asset_balance(base_asset_id, owner);
         let non_base_asset_balance =
-            self.non_base_asset_balance(owner, start, direction, base_asset_id);
+            self.non_base_asset_balances(owner, start, direction, base_asset_id);
         non_base_asset_balance
             .chain(base_asset_balance)
             .into_boxed()
