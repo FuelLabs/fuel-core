@@ -194,7 +194,7 @@ pub struct Command {
     pub starting_gas_price: u64,
 
     /// The percentage change in gas price per block
-    #[arg(long = "gas-price-change-percent", default_value = "2", env)]
+    #[arg(long = "gas-price-change-percent", default_value = "10", env)]
     pub gas_price_change_percent: u16,
 
     /// The minimum allowed gas price
