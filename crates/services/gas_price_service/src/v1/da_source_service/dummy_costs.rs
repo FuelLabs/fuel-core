@@ -5,6 +5,7 @@ use crate::v1::da_source_service::{
     },
     DaBlockCosts,
 };
+use fuel_core_types::fuel_types::BlockHeight;
 use std::sync::Arc;
 use tokio::sync::Notify;
 
@@ -22,13 +23,11 @@ impl DummyDaBlockCosts {
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for DummyDaBlockCosts {
-    async fn request_da_block_cost(
-        &mut self,
-    ) -> DaBlockCostsResult<Option<DaBlockCosts>> {
+    async fn request_da_block_costs(&mut self) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
         match &self.value {
             Ok(da_block_costs) => {
                 self.notifier.notify_waiters();
-                Ok(Some(da_block_costs.clone()))
+                Ok(vec![da_block_costs.clone()])
             }
             Err(err) => {
                 self.notifier.notify_waiters();
@@ -37,7 +36,7 @@ impl DaBlockCostsSource for DummyDaBlockCosts {
         }
     }
 
-    async fn set_last_value(&mut self, _bundle_id: u32) -> DaBlockCostsResult<()> {
+    async fn set_last_value(&mut self, _height: BlockHeight) -> DaBlockCostsResult<()> {
         unimplemented!("This is a dummy implementation");
     }
 }
