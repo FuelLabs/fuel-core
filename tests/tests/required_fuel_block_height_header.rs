@@ -12,7 +12,10 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
-use reqwest::header::CONTENT_TYPE;
+use reqwest::{
+    header::CONTENT_TYPE,
+    StatusCode,
+};
 
 #[tokio::test]
 async fn balance_with_block_height_header() {
@@ -55,7 +58,7 @@ async fn balance_with_block_height_header() {
 }
 
 #[tokio::test]
-async fn current_fuel_block_height_header_is_present() {
+async fn current_fuel_block_height_header_is_present_on_successful_request() {
     let query = r#"{ "query": "{ contract(id:\"0x7e2becd64cd598da59b4d1064b711661898656c6b1f4918a787156b8965dc83c\") { id bytecode } }" }"#;
 
     // setup config
@@ -79,5 +82,36 @@ async fn current_fuel_block_height_header_is_present() {
         .unwrap();
     let response = client.execute(request).await.unwrap();
 
-    println!("{:?}", response.text().await.unwrap());
+    assert!(response.status() == StatusCode::OK);
+    assert!(response.headers().contains_key("CURRENT_FUEL_BLOCK_HEIGHT"));
+}
+
+#[tokio::test]
+async fn current_fuel_block_height_header_is_present_on_failed_request() {
+    let query = r#"{ "query": "{ contract(id:\"0x7e2becd64cd598da59b4d1064b711661898656c6b1f4918a787156b8965dc83c\") { id bytecode } }" }"#;
+
+    // setup config
+    let state_config = StateConfig::default();
+    let config = Config::local_node_with_state_config(state_config);
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let url: reqwest::Url = format!("http://{}/v1/graphql", srv.bound_address)
+        .as_str()
+        .parse()
+        .unwrap();
+
+    let client = reqwest::Client::new();
+
+    let request = client
+        .post(url)
+        .body(query)
+        .header("REQUIRED_FUEL_BLOCK_HEIGHT", "100")
+        .header(CONTENT_TYPE, "application/json")
+        .build()
+        .unwrap();
+    let response = client.execute(request).await.unwrap();
+
+    assert!(response.status() == StatusCode::PRECONDITION_FAILED);
+    assert!(response.headers().contains_key("CURRENT_FUEL_BLOCK_HEIGHT"));
 }

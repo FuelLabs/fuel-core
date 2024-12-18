@@ -401,29 +401,39 @@ async fn graphql_handler(
 ) -> axum::response::Response {
     let mut request = req.0;
 
-    if let Some(require_height) = required_fuel_block_height.0 {
-        let require_height: u32 = *require_height;
+    if let Some(required_height) = required_fuel_block_height.0 {
+        let required_height: u32 = *required_height;
         request.extensions.insert(
             REQUIRED_FUEL_BLOCK_HEIGHT_HEADER.to_string(),
-            ConstValue::Number(require_height.into()),
+            ConstValue::Number(required_height.into()),
         );
     }
 
     let response = schema.execute(request).await;
+
+    let current_block_height = response
+        .extensions
+        .get(CURRENT_FUEL_BLOCK_HEIGHT_HEADER)
+        .cloned();
 
     if response.is_err() {
         if response
             .extensions
             .contains_key(REQUIRED_BLOCK_HEIGHT_CHECK_FAILED)
         {
-            return StatusCode::PRECONDITION_FAILED.into_response();
+            let mut response = StatusCode::PRECONDITION_FAILED.into_response();
+
+            if let Some(current_block_height) = current_block_height {
+                response.headers_mut().insert(
+                    CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
+                    HeaderValue::from_str(&current_block_height.to_string()).unwrap(),
+                );
+            }
+
+            return response;
         }
     }
 
-    let current_block_height = response
-        .extensions
-        .get(CURRENT_FUEL_BLOCK_HEIGHT_HEADER)
-        .cloned();
     let json_response: Json<Response> = response.into();
     let mut response = json_response.into_response();
 
