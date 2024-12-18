@@ -269,6 +269,14 @@ async fn rollback_to__should_work_with_empty_gas_price_database() -> anyhow::Res
         "true",
         "--state-rewind-duration",
         "7d",
+        "--min-da-gas-price",
+        "0",
+        "--da-p-component",
+        "0",
+        "--da-d-component",
+        "0",
+        "--max-da-gas-price-change-percent",
+        "0",
     ])
     .await?;
 

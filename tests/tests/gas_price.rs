@@ -218,6 +218,10 @@ async fn produce_block__raises_gas_price() {
     node_config.exec_gas_price_change_percent = percent;
     node_config.exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
+    node_config.da_p_component = 0;
+    node_config.da_d_component = 0;
+    node_config.max_da_gas_price_change_percent = 0;
+    node_config.min_da_gas_price = 0;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -226,7 +230,7 @@ async fn produce_block__raises_gas_price() {
     // when
     let arb_tx_count = 10;
     for i in 0..arb_tx_count {
-        let tx = arb_large_tx(189028 + i as Word, &mut rng, None);
+        let tx = arb_large_tx(18902800 + i as Word, &mut rng, None);
         let _status = client.submit(&tx).await.unwrap();
     }
     // starting gas price
@@ -263,6 +267,10 @@ async fn produce_block__lowers_gas_price() {
     node_config.exec_gas_price_change_percent = percent;
     node_config.exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
+    node_config.da_p_component = 0;
+    node_config.da_d_component = 0;
+    node_config.max_da_gas_price_change_percent = 0;
+    node_config.min_da_gas_price = 0;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -271,7 +279,7 @@ async fn produce_block__lowers_gas_price() {
     // when
     let arb_tx_count = 5;
     for i in 0..arb_tx_count {
-        let tx = arb_large_tx(189028 + i as Word, &mut rng, None);
+        let tx = arb_large_tx(18902800 + i as Word, &mut rng, None);
         let _status = client.submit(&tx).await.unwrap();
     }
     // starting gas price
@@ -289,9 +297,6 @@ async fn produce_block__lowers_gas_price() {
 
 #[tokio::test]
 async fn produce_block__raises_gas_price_with_default_parameters() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
     // given
     let args = vec![
         "--debug",
@@ -299,6 +304,18 @@ async fn produce_block__raises_gas_price_with_default_parameters() {
         "false",
         "--coinbase-recipient",
         "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "--min-da-gas-price",
+        "0",
+        "--da-p-component",
+        "0",
+        "--da-d-component",
+        "0",
+        "--starting-gas-price",
+        "1000",
+        "--gas-price-change-percent",
+        "10",
+        "--max-da-gas-price-change-percent",
+        "0",
     ];
     let driver = FuelCoreDriver::spawn(&args).await.unwrap();
 
@@ -322,21 +339,18 @@ async fn produce_block__raises_gas_price_with_default_parameters() {
     // when
     let arb_tx_count = 20;
     for _ in 0..arb_tx_count {
-        let tx = infinite_loop_tx(2_000_000, &mut rng, Some(base_asset_id));
+        let tx = infinite_loop_tx(200_000_000, &mut rng, Some(base_asset_id));
         let _status = driver.client.submit(&tx).await.unwrap();
     }
 
     // starting gas price
     let _ = driver.client.produce_blocks(1, None).await.unwrap();
-    let latest_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
-    dbg!(latest_gas_price);
 
     // updated gas price
     let _ = driver.client.produce_blocks(1, None).await.unwrap();
     let latest_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
-    dbg!(latest_gas_price);
 
-    assert_eq!(expected_gas_price + 1, latest_gas_price);
+    assert_eq!(expected_gas_price, latest_gas_price);
 }
 
 #[tokio::test]
@@ -553,7 +567,7 @@ use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::R
 use fuel_core_storage::iter::IterDirection;
 
 #[test]
-fn produce_block__l1_committed_block_effects_gas_price() {
+fn produce_block__l1_committed_block_affects_gas_price() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     // set up chain with single unrecorded block
     let mut args = vec![
@@ -563,8 +577,23 @@ fn produce_block__l1_committed_block_effects_gas_price() {
         "--min-da-gas-price",
         "100",
     ];
+
+    let mut default_args = args.clone();
+    default_args.extend([
+        "--da-p-component",
+        "0",
+        "--da-d-component",
+        "0",
+        "--starting-gas-price",
+        "0",
+        "--gas-price-change-percent",
+        "0",
+        "--max-da-gas-price-change-percent",
+        "0",
+    ]);
+
     let (first_gas_price, temp_dir) = rt.block_on(async {
-        let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+        let driver = FuelCoreDriver::spawn(&default_args).await.unwrap();
         driver.client.produce_blocks(1, None).await.unwrap();
         let first_gas_price: u64 = driver
             .client
