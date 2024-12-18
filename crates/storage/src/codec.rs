@@ -22,7 +22,7 @@ pub trait Encoder {
 }
 
 /// The trait encodes the type to the bytes and passes it to the `Encoder`,
-/// which stores it and provides a reference to it. That allows gives more
+/// which stores it and provides a reference to it. That gives more
 /// flexibility and more performant encoding, allowing the use of slices and arrays
 /// instead of vectors in some cases. Since the [`Encoder`] returns `Cow<[u8]>`,
 /// it is always possible to take ownership of the serialized value.
