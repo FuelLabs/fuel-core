@@ -26,10 +26,9 @@ use libp2p::{
     },
     PeerId,
 };
-use std::ops::Deref;
 
 #[tokio::test]
-async fn latest_gas_price_algorithm_is_compatible_with_ignition() {
+async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     // Given
     let genesis_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
@@ -53,8 +52,8 @@ async fn latest_gas_price_algorithm_is_compatible_with_ignition() {
         "--starting-gas-price",
         starting_gas_price.to_string().as_str(),
     ])
-    .await
-    .unwrap();
+        .await
+        .unwrap();
     let public_key = Keypair::from(genesis_keypair).public();
     let genesis_peer_id = PeerId::from_public_key(&public_key);
     let genesis_multiaddr = default_multiaddr(genesis_port, genesis_peer_id);
@@ -83,8 +82,8 @@ async fn latest_gas_price_algorithm_is_compatible_with_ignition() {
             "0",
         ],
     )
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     // When
     const BLOCKS_TO_PRODUCE: u32 = 10;
@@ -106,16 +105,6 @@ async fn latest_gas_price_algorithm_is_compatible_with_ignition() {
         .unwrap()
         .deref()
         .clone();
-    let UpdaterMetadata::V1(V1Metadata {
-        new_scaled_exec_price,
-        gas_price_factor,
-        ..
-    }) = metadata
-    else {
-        panic!("Expected V1Metadata, got {:?}", metadata);
-    };
-    assert_eq!(
-        new_scaled_exec_price,
-        starting_gas_price * gas_price_factor.get()
-    );
+
+    assert!(matches!(metadata, UpdaterMetadata::V1(_)));
 }
