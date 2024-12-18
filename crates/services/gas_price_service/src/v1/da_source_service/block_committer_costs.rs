@@ -71,6 +71,12 @@ impl From<&RawDaBlockCosts> for DaBlockCosts {
     }
 }
 
+impl From<RawDaBlockCosts> for DaBlockCosts {
+    fn from(value: RawDaBlockCosts) -> Self {
+        Self::from(&value)
+    }
+}
+
 impl<BlockCommitter> BlockCommitterDaBlockCosts<BlockCommitter> {
     /// Create a new instance of the block committer da block costs source
     pub fn new(
@@ -114,17 +120,6 @@ where
     async fn set_last_value(&mut self, height: BlockHeight) -> DaBlockCostsResult<()> {
         self.last_recorded_height = Some(height);
         Ok(())
-    }
-}
-
-impl From<RawDaBlockCosts> for DaBlockCosts {
-    fn from(value: RawDaBlockCosts) -> Self {
-        Self {
-            bundle_id: value.id,
-            l2_blocks: value.start_height..=value.end_height,
-            bundle_size_bytes: value.size,
-            blob_cost_wei: value.cost,
-        }
     }
 }
 

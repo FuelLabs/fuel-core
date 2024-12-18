@@ -93,6 +93,7 @@ impl TableWithBlueprint for UnrecordedBlocksTable {
     }
 }
 
+/// Used to store the latest L2 block that has been recorded on the DA chain
 pub struct RecordedHeights;
 
 impl Mappable for RecordedHeights {
