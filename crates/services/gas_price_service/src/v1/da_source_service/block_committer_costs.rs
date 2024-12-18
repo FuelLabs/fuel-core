@@ -64,7 +64,7 @@ impl From<&RawDaBlockCosts> for DaBlockCosts {
         DaBlockCosts {
             bundle_id,
             // construct a vec of l2 blocks from the start_height to the end_height
-            l2_blocks: (start_height..=end_height).collect(),
+            l2_blocks: start_height..=end_height,
             bundle_size_bytes: size_bytes,
             blob_cost_wei: cost_wei,
         }
@@ -121,7 +121,7 @@ impl From<RawDaBlockCosts> for DaBlockCosts {
     fn from(value: RawDaBlockCosts) -> Self {
         Self {
             bundle_id: value.id,
-            l2_blocks: (value.start_height..=value.end_height).collect(),
+            l2_blocks: value.start_height..=value.end_height,
             bundle_size_bytes: value.size,
             blob_cost_wei: value.cost,
         }
@@ -525,7 +525,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn request_da_block_cost__when_last_value_is_some__then_get_costs_by_seqno_is_called(
+    async fn request_da_block_cost__when_last_value_is_some__then_get_costs_by_l2_block_number_is_called(
     ) {
         // given
         let mut da_block_costs = test_da_block_costs();
@@ -539,9 +539,8 @@ mod tests {
         let actual = block_committer.request_da_block_costs().await.unwrap();
 
         // then
-        assert_ne!(
-            da_block_costs_len as usize,
-            actual.first().unwrap().l2_blocks.len()
-        );
+        let l2_blocks = actual.first().unwrap().l2_blocks.clone();
+        let range_len = l2_blocks.end() - l2_blocks.start();
+        assert_ne!(da_block_costs_len, range_len);
     }
 }

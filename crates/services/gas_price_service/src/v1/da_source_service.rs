@@ -1,16 +1,18 @@
 use crate::v1::da_source_service::service::DaBlockCostsSource;
-use std::time::Duration;
+use std::{
+    ops::RangeInclusive,
+    time::Duration,
+};
 
 pub mod block_committer_costs;
 #[cfg(test)]
 pub mod dummy_costs;
 pub mod service;
 
-#[derive(Debug, Default, Clone, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct DaBlockCosts {
     pub bundle_id: u32,
-    // TODO: Should this be a range?
-    pub l2_blocks: Vec<u32>,
+    pub l2_blocks: RangeInclusive<u32>,
     pub bundle_size_bytes: u32,
     pub blob_cost_wei: u128,
 }
@@ -34,7 +36,7 @@ mod tests {
         // given
         let expected_da_cost = DaBlockCosts {
             bundle_id: 1,
-            l2_blocks: (0..10).collect(),
+            l2_blocks: 0..=9,
             bundle_size_bytes: 1024 * 128,
             blob_cost_wei: 2,
         };

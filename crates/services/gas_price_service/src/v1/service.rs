@@ -167,16 +167,15 @@ where
 
         for da_block_costs in &self.da_block_costs_buffer {
             tracing::debug!("Updating DA block costs: {:?}", da_block_costs);
+            let l2_blocks = da_block_costs.l2_blocks.clone();
+            let end = *l2_blocks.end();
             self.algorithm_updater.update_da_record_data(
-                &da_block_costs.l2_blocks,
+                l2_blocks,
                 da_block_costs.bundle_size_bytes,
                 da_block_costs.blob_cost_wei,
                 &mut storage_tx.as_unrecorded_blocks(),
             )?;
-            latest_recorded_height = da_block_costs
-                .l2_blocks
-                .last()
-                .map(|x| BlockHeight::from(*x));
+            latest_recorded_height = Some(BlockHeight::from(end));
         }
 
         if let Some(recorded_height) = latest_recorded_height {
@@ -572,7 +571,7 @@ mod tests {
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
                     bundle_id: 1,
-                    l2_blocks: (1..2).collect(),
+                    l2_blocks: 1..=1,
                     blob_cost_wei: u128::MAX, // Very expensive to trigger a change
                     bundle_size_bytes: 3000,
                 }),
@@ -666,7 +665,7 @@ mod tests {
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
                     bundle_id: 8765,
-                    l2_blocks: (1..=recorded_block_height).collect(),
+                    l2_blocks: 1..=recorded_block_height,
                     blob_cost_wei: 9000,
                     bundle_size_bytes: 3000,
                 }),
