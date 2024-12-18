@@ -7,6 +7,7 @@ use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
+use ethers::types::Opcode;
 use fuel_core::{
     chain_config::{
         ChainConfig,
@@ -47,6 +48,7 @@ use fuel_core_types::{
     },
     fuel_tx::{
         consensus_parameters::ConsensusParametersV1,
+        AssetId,
         ConsensusParameters,
         Finalizable,
         Transaction,
@@ -68,6 +70,7 @@ use std::{
     time::Duration,
 };
 use test_helpers::fuel_core_driver::FuelCoreDriver;
+use wideint::MathOp;
 
 fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
     TransactionBuilder::script(vec![], vec![])
@@ -77,18 +80,42 @@ fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
         .into()
 }
 
+fn infinite_loop_tx<R: Rng + rand::CryptoRng>(
+    max_fee_limit: Word,
+    rng: &mut R,
+    asset_id: Option<AssetId>,
+) -> Transaction {
+    let script = vec![op::jmp(RegId::ZERO)];
+    let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
+    let mut builder = TransactionBuilder::script(script_bytes, vec![]);
+    let asset_id = asset_id.unwrap_or_else(|| *builder.get_params().base_asset_id());
+    builder
+        .max_fee_limit(max_fee_limit)
+        .script_gas_limit(800_000)
+        .add_unsigned_coin_input(
+            SecretKey::random(rng),
+            rng.gen(),
+            u32::MAX as u64,
+            asset_id,
+            Default::default(),
+        )
+        .finalize()
+        .into()
+}
+
 fn arb_large_tx<R: Rng + rand::CryptoRng>(
     max_fee_limit: Word,
     rng: &mut R,
+    asset_id: Option<AssetId>,
 ) -> Transaction {
     let mut script: Vec<_> = repeat(op::noop()).take(10_000).collect();
     script.push(op::ret(RegId::ONE));
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
     let mut builder = TransactionBuilder::script(script_bytes, vec![]);
-    let asset_id = *builder.get_params().base_asset_id();
+    let asset_id = asset_id.unwrap_or_else(|| *builder.get_params().base_asset_id());
     builder
         .max_fee_limit(max_fee_limit)
-        .script_gas_limit(22430)
+        .script_gas_limit(600_000)
         .add_unsigned_coin_input(
             SecretKey::random(rng),
             rng.gen(),
@@ -193,7 +220,7 @@ async fn produce_block__raises_gas_price() {
     // when
     let arb_tx_count = 10;
     for i in 0..arb_tx_count {
-        let tx = arb_large_tx(189028 + i as Word, &mut rng);
+        let tx = arb_large_tx(189028 + i as Word, &mut rng, None);
         let _status = client.submit(&tx).await.unwrap();
     }
     // starting gas price
@@ -238,7 +265,7 @@ async fn produce_block__lowers_gas_price() {
     // when
     let arb_tx_count = 5;
     for i in 0..arb_tx_count {
-        let tx = arb_large_tx(189028 + i as Word, &mut rng);
+        let tx = arb_large_tx(189028 + i as Word, &mut rng, None);
         let _status = client.submit(&tx).await.unwrap();
     }
     // starting gas price
@@ -252,6 +279,58 @@ async fn produce_block__lowers_gas_price() {
     let latest = client.latest_gas_price().await.unwrap();
     let actual = latest.gas_price;
     assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn produce_block__raises_gas_price_with_default_parameters() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+    // given
+    let args = vec![
+        "--debug",
+        "--poa-instant",
+        "false",
+        "--coinbase-recipient",
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+    ];
+    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+
+    let starting_gas_price = 1000;
+    let expected_default_percentage_increase = 10;
+
+    let expected_gas_price =
+        starting_gas_price * (100 + expected_default_percentage_increase) / 100;
+
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+    let base_asset_id = driver
+        .client
+        .consensus_parameters(0)
+        .await
+        .unwrap()
+        .unwrap()
+        .base_asset_id()
+        .clone();
+
+    // when
+    let arb_tx_count = 20;
+    for _ in 0..arb_tx_count {
+        let tx = infinite_loop_tx(2_000_000, &mut rng, Some(base_asset_id));
+        let _status = driver.client.submit(&tx).await.unwrap();
+    }
+
+    // starting gas price
+    let _ = driver.client.produce_blocks(1, None).await.unwrap();
+    let latest_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
+    dbg!(latest_gas_price);
+
+    // updated gas price
+    let _ = driver.client.produce_blocks(1, None).await.unwrap();
+    let latest_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
+    dbg!(latest_gas_price);
+
+    assert_eq!(expected_gas_price + 1, latest_gas_price);
 }
 
 #[tokio::test]

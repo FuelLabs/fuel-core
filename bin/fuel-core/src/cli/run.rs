@@ -190,7 +190,7 @@ pub struct Command {
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
     /// The starting execution gas price for the network
-    #[arg(long = "starting-gas-price", default_value = "0", env)]
+    #[arg(long = "starting-gas-price", default_value = "1000", env)]
     pub starting_gas_price: u64,
 
     /// The percentage change in gas price per block
