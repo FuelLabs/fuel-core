@@ -441,13 +441,13 @@ fn into_coin_id(
             IndexedCoinType::Coin => {
                 let utxo = key
                     .try_into()
-                    .map_err(|_| CoinsQueryError::IncorrectCoinKeyInIndex)?;
+                    .map_err(|_| CoinsQueryError::IncorrectCoinForeignKeyInIndex)?;
                 CoinId::Utxo(utxo)
             }
             IndexedCoinType::Message => {
                 let nonce = key
                     .try_into()
-                    .map_err(|_| CoinsQueryError::IncorrectMessageKeyInIndex)?;
+                    .map_err(|_| CoinsQueryError::IncorrectMessageForeignKeyInIndex)?;
                 CoinId::Message(nonce)
             }
         };

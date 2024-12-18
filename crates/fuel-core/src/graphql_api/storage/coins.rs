@@ -120,7 +120,7 @@ impl core::fmt::Display for CoinsToSpendIndexKey {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "retryable_flag={}, owner={}, asset_id={}, amount={}",
+            "retryable_flag={:?}, owner={:?}, asset_id={:?}, amount={:?}",
             self.retryable_flag(),
             self.owner(),
             self.asset_id(),
@@ -133,9 +133,11 @@ impl TryFrom<&CoinsToSpendIndexKey> for fuel_tx::UtxoId {
     type Error = ();
 
     fn try_from(value: &CoinsToSpendIndexKey) -> Result<Self, Self::Error> {
-        let bytes: [u8; COIN_FOREIGN_KEY_LEN] =
-            value.foreign_key_bytes().try_into().map_err(|_| ())?;
-
+        let bytes: [u8; COIN_FOREIGN_KEY_LEN] = value
+            .foreign_key_bytes()
+            .ok_or(())?
+            .try_into()
+            .map_err(|_| ())?;
         let (tx_id_bytes, output_index_bytes) = bytes.split_at(TxId::LEN);
         let tx_id = TxId::try_from(tx_id_bytes).map_err(|_| ())?;
         let output_index =
@@ -148,9 +150,11 @@ impl TryFrom<&CoinsToSpendIndexKey> for fuel_types::Nonce {
     type Error = ();
 
     fn try_from(value: &CoinsToSpendIndexKey) -> Result<Self, Self::Error> {
-        let bytes: [u8; MESSAGE_FOREIGN_KEY_LEN] =
-            value.foreign_key_bytes().try_into().map_err(|_| ())?;
-        Ok(fuel_types::Nonce::from(bytes))
+        value
+            .foreign_key_bytes()
+            .and_then(|bytes| <[u8; MESSAGE_FOREIGN_KEY_LEN]>::try_from(bytes).ok())
+            .map(fuel_types::Nonce::from)
+            .ok_or(())
     }
 }
 
@@ -201,45 +205,41 @@ impl CoinsToSpendIndexKey {
         Self(slice.into())
     }
 
-    pub fn owner(&self) -> Address {
+    pub fn owner(&self) -> Option<Address> {
         const ADDRESS_START: usize = RETRYABLE_FLAG_SIZE;
         const ADDRESS_END: usize = ADDRESS_START + Address::LEN;
-        let address: [u8; Address::LEN] = self.0[ADDRESS_START..ADDRESS_END]
-            .try_into()
-            .expect("should have correct bytes");
-        Address::new(address)
+
+        let bytes = self.0.get(ADDRESS_START..ADDRESS_END)?;
+        bytes.try_into().ok().map(Address::new)
     }
 
-    pub fn asset_id(&self) -> AssetId {
+    pub fn asset_id(&self) -> Option<AssetId> {
         const OFFSET: usize = RETRYABLE_FLAG_SIZE + Address::LEN;
         const ASSET_ID_START: usize = OFFSET;
         const ASSET_ID_END: usize = ASSET_ID_START + AssetId::LEN;
-        let asset_id: [u8; AssetId::LEN] = self.0[ASSET_ID_START..ASSET_ID_END]
-            .try_into()
-            .expect("should have correct bytes");
-        AssetId::new(asset_id)
+
+        let bytes = self.0.get(ASSET_ID_START..ASSET_ID_END)?;
+        bytes.try_into().ok().map(AssetId::new)
     }
 
-    pub fn retryable_flag(&self) -> u8 {
+    pub fn retryable_flag(&self) -> Option<u8> {
         const OFFSET: usize = 0;
-        self.0[OFFSET]
+        self.0.get(OFFSET).copied()
     }
 
-    pub fn amount(&self) -> u64 {
+    pub fn amount(&self) -> Option<u64> {
         const OFFSET: usize = RETRYABLE_FLAG_SIZE + Address::LEN + AssetId::LEN;
         const AMOUNT_START: usize = OFFSET;
         const AMOUNT_END: usize = AMOUNT_START + AMOUNT_SIZE;
-        u64::from_be_bytes(
-            self.0[AMOUNT_START..AMOUNT_END]
-                .try_into()
-                .expect("should have correct bytes"),
-        )
+
+        let bytes = self.0.get(AMOUNT_START..AMOUNT_END)?;
+        bytes.try_into().ok().map(u64::from_be_bytes)
     }
 
-    pub fn foreign_key_bytes(&self) -> &[u8] {
+    pub fn foreign_key_bytes(&self) -> Option<&[u8]> {
         const OFFSET: usize =
             RETRYABLE_FLAG_SIZE + Address::LEN + AssetId::LEN + AMOUNT_SIZE;
-        &self.0[OFFSET..]
+        self.0.get(OFFSET..)
     }
 }
 
@@ -407,12 +407,12 @@ mod test {
             ]
         );
 
-        assert_eq!(key.owner(), owner);
-        assert_eq!(key.asset_id(), asset_id);
-        assert_eq!(key.retryable_flag(), retryable_flag[0]);
-        assert_eq!(key.amount(), u64::from_be_bytes(amount));
+        assert_eq!(key.owner().unwrap(), owner);
+        assert_eq!(key.asset_id().unwrap(), asset_id);
+        assert_eq!(key.retryable_flag().unwrap(), retryable_flag[0]);
+        assert_eq!(key.amount().unwrap(), u64::from_be_bytes(amount));
         assert_eq!(
-            key.foreign_key_bytes(),
+            key.foreign_key_bytes().unwrap(),
             &merge_foreign_key_bytes::<_, _, COIN_FOREIGN_KEY_LEN>(tx_id, output_index)
         );
     }
@@ -474,11 +474,11 @@ mod test {
             ]
         );
 
-        assert_eq!(key.owner(), owner);
-        assert_eq!(key.asset_id(), base_asset_id);
-        assert_eq!(key.retryable_flag(), retryable_flag[0]);
-        assert_eq!(key.amount(), u64::from_be_bytes(amount));
-        assert_eq!(key.foreign_key_bytes(), nonce.as_ref());
+        assert_eq!(key.owner().unwrap(), owner);
+        assert_eq!(key.asset_id().unwrap(), base_asset_id);
+        assert_eq!(key.retryable_flag().unwrap(), retryable_flag[0]);
+        assert_eq!(key.amount().unwrap(), u64::from_be_bytes(amount));
+        assert_eq!(key.foreign_key_bytes().unwrap(), nonce.as_ref());
     }
 
     #[test]
@@ -538,10 +538,10 @@ mod test {
             ]
         );
 
-        assert_eq!(key.owner(), owner);
-        assert_eq!(key.asset_id(), base_asset_id);
-        assert_eq!(key.retryable_flag(), retryable_flag[0]);
-        assert_eq!(key.amount(), u64::from_be_bytes(amount));
-        assert_eq!(key.foreign_key_bytes(), nonce.as_ref());
+        assert_eq!(key.owner().unwrap(), owner);
+        assert_eq!(key.asset_id().unwrap(), base_asset_id);
+        assert_eq!(key.retryable_flag().unwrap(), retryable_flag[0]);
+        assert_eq!(key.amount().unwrap(), u64::from_be_bytes(amount));
+        assert_eq!(key.foreign_key_bytes().unwrap(), nonce.as_ref());
     }
 }

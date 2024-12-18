@@ -191,10 +191,10 @@ mod tests {
             .map(|entry| entry.expect("should read entries"))
             .map(|entry| {
                 (
-                    entry.key.owner(),
-                    entry.key.asset_id(),
-                    [entry.key.retryable_flag()],
-                    entry.key.amount(),
+                    entry.key.owner().unwrap(),
+                    entry.key.asset_id().unwrap(),
+                    [entry.key.retryable_flag().unwrap()],
+                    entry.key.amount().unwrap(),
                 )
             })
             .collect();
@@ -727,7 +727,7 @@ mod tests {
                     .entries::<CoinsToSpendIndex>(None, IterDirection::Forward)
                     .map(|entry| entry.expect("should read entries"))
                     .map(|entry|
-                            entry.key.amount(),
+                            entry.key.amount().unwrap(),
                     )
                     .collect();
 

@@ -41,6 +41,7 @@ use rand::prelude::*;
 use std::{
     cmp::Reverse,
     collections::HashSet,
+    ops::Deref,
 };
 use thiserror::Error;
 
@@ -62,10 +63,10 @@ pub enum CoinsQueryError {
     TooManyExcludedId { provided: usize, allowed: u16 },
     #[error("the query requires more coins than the max allowed coins: required ({required}) > max ({max})")]
     TooManyCoinsSelected { required: usize, max: u16 },
-    #[error("incorrect coin key found in coins to spend index")]
-    IncorrectCoinKeyInIndex,
-    #[error("incorrect message key found in messages to spend index")]
-    IncorrectMessageKeyInIndex,
+    #[error("coins to spend index entry contains wrong coin foreign key")]
+    IncorrectCoinForeignKeyInIndex,
+    #[error("coins to spend index entry contains wrong message foreign key")]
+    IncorrectMessageForeignKeyInIndex,
     #[error("error while processing the query: {0}")]
     UnexpectedInternalState(&'static str),
     #[error("both total and max must be greater than 0 (provided total: {provided_total}, provided max: {provided_max})")]
@@ -73,6 +74,8 @@ pub enum CoinsQueryError {
         provided_total: u64,
         provided_max: u16,
     },
+    #[error("coins to spend index contains incorrect key")]
+    IncorrectCoinsToSpendIndexKey,
 }
 
 #[cfg(test)]
@@ -338,10 +341,50 @@ pub async fn select_coins_to_spend(
         excluded_ids,
     )
     .await?;
+
     let retained_big_coins_iter =
         skip_big_coins_up_to_amount(selected_big_coins, dust_coins_total);
 
-    Ok((retained_big_coins_iter.chain(selected_dust_coins)).collect())
+    Ok((retained_big_coins_iter
+        .map(Into::into)
+        .chain(selected_dust_coins))
+    .collect())
+}
+
+// This is the `CoinsToSpendIndexEntry` which is guaranteed to have a key
+// which allows to properly decode the amount.
+struct CheckedCoinsToSpendIndexEntry {
+    inner: CoinsToSpendIndexEntry,
+    amount: u64,
+}
+
+impl TryFrom<CoinsToSpendIndexEntry> for CheckedCoinsToSpendIndexEntry {
+    type Error = CoinsQueryError;
+
+    fn try_from(value: CoinsToSpendIndexEntry) -> Result<Self, Self::Error> {
+        let amount = value
+            .0
+            .amount()
+            .ok_or(CoinsQueryError::IncorrectCoinsToSpendIndexKey)?;
+        Ok(Self {
+            inner: value,
+            amount,
+        })
+    }
+}
+
+impl From<CheckedCoinsToSpendIndexEntry> for CoinsToSpendIndexEntry {
+    fn from(value: CheckedCoinsToSpendIndexEntry) -> Self {
+        value.inner
+    }
+}
+
+impl Deref for CheckedCoinsToSpendIndexEntry {
+    type Target = CoinsToSpendIndexEntry;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 async fn big_coins(
@@ -349,10 +392,14 @@ async fn big_coins(
     total: u64,
     max: u16,
     excluded_ids: &ExcludedCoinIds<'_>,
-) -> Result<(u64, Vec<CoinsToSpendIndexEntry>), CoinsQueryError> {
-    select_coins_until(big_coins_stream, max, excluded_ids, |_, total_so_far| {
-        total_so_far >= total
-    })
+) -> Result<(u64, Vec<CheckedCoinsToSpendIndexEntry>), CoinsQueryError> {
+    select_coins_until(
+        big_coins_stream,
+        max,
+        excluded_ids,
+        |_, total_so_far| total_so_far >= total,
+        CheckedCoinsToSpendIndexEntry::try_from,
+    )
     .await
 }
 
@@ -367,18 +414,22 @@ async fn dust_coins(
         max_dust_count,
         excluded_ids,
         |coin, _| coin == last_big_coin,
+        Ok::<CoinsToSpendIndexEntry, CoinsQueryError>,
     )
     .await
 }
 
-async fn select_coins_until<F>(
+async fn select_coins_until<Pred, Ret, Mapper, E>(
     mut coins_stream: impl Stream<Item = StorageResult<CoinsToSpendIndexEntry>> + Unpin,
     max: u16,
     excluded_ids: &ExcludedCoinIds<'_>,
-    predicate: F,
-) -> Result<(u64, Vec<CoinsToSpendIndexEntry>), CoinsQueryError>
+    predicate: Pred,
+    mapper: Mapper,
+) -> Result<(u64, Vec<Ret>), CoinsQueryError>
 where
-    F: Fn(&CoinsToSpendIndexEntry, u64) -> bool,
+    Pred: Fn(&CoinsToSpendIndexEntry, u64) -> bool,
+    Mapper: Fn(CoinsToSpendIndexEntry) -> Result<Ret, E>,
+    E: From<CoinsQueryError>,
 {
     let mut coins_total_value: u64 = 0;
     let mut coins = Vec::with_capacity(max as usize);
@@ -388,9 +439,15 @@ where
             if coins.len() >= max as usize || predicate(&coin, coins_total_value) {
                 break;
             }
-            let amount = coin.0.amount();
+            let amount = coin
+                .0
+                .amount()
+                .ok_or(CoinsQueryError::IncorrectCoinsToSpendIndexKey)?;
             coins_total_value = coins_total_value.saturating_add(amount);
-            coins.push(coin);
+            coins.push(
+                mapper(coin)
+                    .map_err(|_| CoinsQueryError::IncorrectCoinsToSpendIndexKey)?,
+            );
         }
     }
     Ok((coins_total_value, coins))
@@ -404,13 +461,13 @@ fn is_excluded(
         IndexedCoinType::Coin => {
             let utxo = key
                 .try_into()
-                .map_err(|_| CoinsQueryError::IncorrectCoinKeyInIndex)?;
+                .map_err(|_| CoinsQueryError::IncorrectCoinForeignKeyInIndex)?;
             Ok(excluded_ids.is_coin_excluded(&utxo))
         }
         IndexedCoinType::Message => {
             let nonce = key
                 .try_into()
-                .map_err(|_| CoinsQueryError::IncorrectMessageKeyInIndex)?;
+                .map_err(|_| CoinsQueryError::IncorrectMessageForeignKeyInIndex)?;
             Ok(excluded_ids.is_message_excluded(&nonce))
         }
     }
@@ -422,12 +479,12 @@ fn max_dust_count(max: u16, big_coins_len: u16) -> u16 {
 }
 
 fn skip_big_coins_up_to_amount(
-    big_coins: impl IntoIterator<Item = CoinsToSpendIndexEntry>,
+    big_coins: impl IntoIterator<Item = CheckedCoinsToSpendIndexEntry>,
     skipped_amount: u64,
-) -> impl Iterator<Item = CoinsToSpendIndexEntry> {
+) -> impl Iterator<Item = CheckedCoinsToSpendIndexEntry> {
     let mut current_dust_coins_value = skipped_amount;
     big_coins.into_iter().skip_while(move |item| {
-        let item_amount = item.0.amount();
+        let item_amount = item.amount;
         current_dust_coins_value
             .checked_sub(item_amount)
             .map(|new_value| {
@@ -1158,6 +1215,7 @@ mod tests {
                 MAX,
                 &excluded,
                 |_, _| false,
+                Ok::<CoinsToSpendIndexEntry, CoinsQueryError>,
             )
             .await
             .expect("should select coins");
@@ -1189,6 +1247,7 @@ mod tests {
                 MAX,
                 &excluded,
                 |_, _| false,
+                Ok::<CoinsToSpendIndexEntry, CoinsQueryError>,
             )
             .await
             .expect("should select coins");
@@ -1221,6 +1280,7 @@ mod tests {
                 MAX,
                 &excluded,
                 predicate,
+                Ok::<CoinsToSpendIndexEntry, CoinsQueryError>,
             )
             .await
             .expect("should select coins");
@@ -1276,7 +1336,7 @@ mod tests {
 
             // Because we select a total of 202 (TOTAL * 2), first 3 coins should always selected (100, 100, 4).
             let expected = vec![100, 100, 4];
-            let actual: Vec<_> = results.drain(..3).collect();
+            let actual: Vec<_> = results.drain(..3).map(Option::unwrap).collect();
             assert_eq!(expected, actual);
 
             // The number of dust coins is selected randomly, so we might have:
@@ -1289,7 +1349,7 @@ mod tests {
             let expected_1: Vec<u64> = vec![];
             let expected_2: Vec<u64> = vec![2];
             let expected_3: Vec<u64> = vec![2, 3];
-            let actual: Vec<_> = std::mem::take(&mut results);
+            let actual: Vec<_> = results.drain(..).map(Option::unwrap).collect();
 
             assert!(
                 actual == expected_1 || actual == expected_2 || actual == expected_3,
@@ -1330,8 +1390,10 @@ mod tests {
             .expect("should not error");
 
             // Then
-            let results: Vec<_> =
-                result.into_iter().map(|(key, _)| key.amount()).collect();
+            let results: Vec<_> = result
+                .into_iter()
+                .map(|(key, _)| key.amount().unwrap())
+                .collect();
             assert_eq!(results, vec![10, 10]);
         }
 
