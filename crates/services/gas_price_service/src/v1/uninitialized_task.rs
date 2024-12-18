@@ -159,6 +159,7 @@ where
 
         if let Some(last_recorded_height) = self.gas_price_db.get_recorded_height()? {
             self.da_source.set_last_value(last_recorded_height).await?;
+            tracing::info!("Set last recorded height to {}", last_recorded_height);
         }
         let poll_duration = self
             .config

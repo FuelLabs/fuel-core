@@ -800,11 +800,7 @@ fn inspect_dbs() {
         .iter_all::<RecordedHeights>(Some(IterDirection::Reverse));
     tracing::info!("latest recorded blocks:");
     for block in latest_recorded_blocks {
-        let (block_height, recorded_height) = block.unwrap();
-        tracing::info!(
-            "block height: {}, recorded height: {}",
-            block_height,
-            recorded_height
-        );
+        let (_, recorded_height) = block.unwrap();
+        tracing::info!("recorded height: {}", recorded_height);
     }
 }
