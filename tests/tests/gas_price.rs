@@ -26,9 +26,13 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_gas_price_service::{
-    common::fuel_core_storage_adapter::storage::GasPriceMetadata,
+    common::fuel_core_storage_adapter::storage::{
+        GasPriceMetadata,
+        RecordedHeights,
+    },
     ports::{
         GasPriceData,
+        GetLatestRecordedHeight,
         GetMetadataStorage,
     },
     v1::{
@@ -466,6 +470,7 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
 }
 
 use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::RawDaBlockCosts;
+use fuel_core_storage::iter::IterDirection;
 
 #[test]
 fn produce_block__l1_committed_block_effects_gas_price() {
@@ -498,12 +503,12 @@ fn produce_block__l1_committed_block_effects_gas_price() {
     let mut mock = FakeServer::new();
     let url = mock.url();
     let costs = RawDaBlockCosts {
-        bundle_id: 1,
+        id: 1,
         start_height: 1,
         end_height: 1,
         da_block_height: DaBlockHeight(100),
-        cost_wei: 100,
-        size_bytes: 100,
+        cost: 100,
+        size: 100,
     };
     mock.add_response(costs);
 
@@ -678,12 +683,12 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
     let cost_gwei = gas * 1; // blob gas price 1 gwei
     let cost = cost_gwei * 1_000_000_000; // Wei
     mock.add_response(RawDaBlockCosts {
-        bundle_id: 1,
+        id: 1,
         start_height: 1,
         end_height: half_of_blocks,
         da_block_height: DaBlockHeight(100),
-        cost_wei: cost,
-        size_bytes: total_size_bytes,
+        cost,
+        size: total_size_bytes,
     });
 
     let mut profits = Vec::new();
@@ -776,4 +781,30 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
         let _status = client.submit(&tx).await.unwrap();
     }
     let _ = client.produce_blocks(1, None).await.unwrap();
+}
+
+#[test]
+fn inspect_dbs() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+    use fuel_core_storage::iter::IteratorOverTable;
+
+    let db_path = "/Users/jamesturner/fuel/dev-net/.dev-net-db";
+    let path = std::path::Path::new(db_path);
+    let db =
+        CombinedDatabase::open(path, 0, StateRewindPolicy::RewindFullRange, -1).unwrap();
+
+    let latest_recorded_blocks = db
+        .gas_price()
+        .iter_all::<RecordedHeights>(Some(IterDirection::Reverse));
+    tracing::info!("latest recorded blocks:");
+    for block in latest_recorded_blocks {
+        let (block_height, recorded_height) = block.unwrap();
+        tracing::info!(
+            "block height: {}, recorded height: {}",
+            block_height,
+            recorded_height
+        );
+    }
 }

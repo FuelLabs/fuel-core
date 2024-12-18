@@ -104,13 +104,11 @@ where
     Storage: Send + Sync,
     Storage: StorageInspect<RecordedHeights, Error = StorageError>,
 {
-    fn get_recorded_height(
-        &self,
-        block_height: &BlockHeight,
-    ) -> GasPriceResult<Option<BlockHeight>> {
+    fn get_recorded_height(&self) -> GasPriceResult<Option<BlockHeight>> {
+        const KEY: &() = &();
         let recorded_height = self
             .storage::<RecordedHeights>()
-            .get(block_height)
+            .get(KEY)
             .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?
             .map(|no| *no);
         Ok(recorded_height)
@@ -145,11 +143,11 @@ where
 {
     fn set_recorded_height(
         &mut self,
-        block_height: &BlockHeight,
         recorded_height: BlockHeight,
     ) -> GasPriceResult<()> {
+        const KEY: &() = &();
         self.storage_as_mut::<RecordedHeights>()
-            .insert(block_height, &recorded_height)
+            .insert(KEY, &recorded_height)
             .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?;
         Ok(())
     }

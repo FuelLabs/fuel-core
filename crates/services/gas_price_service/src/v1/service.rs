@@ -161,9 +161,8 @@ where
     ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
-        let prev_height = height.saturating_sub(1);
         let mut latest_recorded_height = storage_tx
-            .get_recorded_height(&BlockHeight::from(prev_height))
+            .get_recorded_height()
             .map_err(|err| anyhow!(err))?;
 
         for da_block_costs in &self.da_block_costs_buffer {
@@ -182,7 +181,7 @@ where
 
         if let Some(recorded_height) = latest_recorded_height {
             storage_tx
-                .set_recorded_height(&BlockHeight::from(height), recorded_height)
+                .set_recorded_height(recorded_height)
                 .map_err(|err| anyhow!(err))?;
         }
 
@@ -701,7 +700,7 @@ mod tests {
         let latest_recorded_block_height = service
             .storage_tx_provider
             .storage::<RecordedHeights>()
-            .get(&BlockHeight::from(block_height))
+            .get(&())
             .unwrap()
             .unwrap();
         assert_eq!(

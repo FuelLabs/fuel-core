@@ -157,10 +157,7 @@ where
             self.block_stream,
         );
 
-        if let Some(last_recorded_height) = self
-            .gas_price_db
-            .get_recorded_height(&self.gas_metadata_height)?
-        {
+        if let Some(last_recorded_height) = self.gas_price_db.get_recorded_height()? {
             self.da_source.set_last_value(last_recorded_height).await?;
         }
         let poll_duration = self

@@ -97,13 +97,13 @@ pub struct RecordedHeights;
 
 impl Mappable for RecordedHeights {
     type Key = Self::OwnedKey;
-    type OwnedKey = BlockHeight;
+    type OwnedKey = ();
     type Value = Self::OwnedValue;
     type OwnedValue = BlockHeight;
 }
 
 impl TableWithBlueprint for RecordedHeights {
-    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Blueprint = Plain<Postcard, Postcard>;
     type Column = GasPriceColumn;
 
     fn column() -> Self::Column {

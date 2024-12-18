@@ -171,10 +171,7 @@ impl GetMetadataStorage for ErroringPersistedData {
 }
 
 impl GetLatestRecordedHeight for ErroringPersistedData {
-    fn get_recorded_height(
-        &self,
-        _block_height: &BlockHeight,
-    ) -> GasPriceResult<Option<BlockHeight>> {
+    fn get_recorded_height(&self) -> GasPriceResult<Option<BlockHeight>> {
         Err(GasPriceError::CouldNotFetchDARecord(anyhow!("boo!")))
     }
 }
@@ -219,20 +216,13 @@ impl UnrecordedBlocks for UnimplementedStorageTx {
 }
 
 impl SetLatestRecordedHeight for UnimplementedStorageTx {
-    fn set_recorded_height(
-        &mut self,
-        _block_height: &BlockHeight,
-        _bundle_id: BlockHeight,
-    ) -> GasPriceResult<()> {
+    fn set_recorded_height(&mut self, _bundle_id: BlockHeight) -> GasPriceResult<()> {
         unimplemented!()
     }
 }
 
 impl GetLatestRecordedHeight for UnimplementedStorageTx {
-    fn get_recorded_height(
-        &self,
-        _block_height: &BlockHeight,
-    ) -> GasPriceResult<Option<BlockHeight>> {
+    fn get_recorded_height(&self) -> GasPriceResult<Option<BlockHeight>> {
         unimplemented!()
     }
 }
@@ -719,7 +709,7 @@ async fn uninitialized_task__init__starts_da_service_with_bundle_id_in_storage()
         FakeDABlockCost::never_returns_with_handle_to_last_height();
     let mut inner = gas_price_database_with_metadata(&original_metadata);
     let mut tx = inner.begin_transaction().unwrap();
-    tx.set_recorded_height(&block_height.into(), BlockHeight::from(recorded_height))
+    tx.set_recorded_height(BlockHeight::from(recorded_height))
         .unwrap();
     StorageTransaction::commit_transaction(tx).unwrap();
     let service = UninitializedTask::new(

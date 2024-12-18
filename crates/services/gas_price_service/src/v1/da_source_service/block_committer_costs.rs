@@ -38,7 +38,7 @@ pub struct BlockCommitterDaBlockCosts<BlockCommitter> {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default, PartialEq)]
 pub struct RawDaBlockCosts {
-    pub bundle_id: u32,
+    pub id: u32,
     /// The beginning of the range of blocks that the costs apply to
     pub start_height: u32,
     /// The end of the range of blocks that the costs apply to
@@ -46,9 +46,9 @@ pub struct RawDaBlockCosts {
     /// The DA block height of the last transaction for the range of blocks
     pub da_block_height: DaBlockHeight,
     /// cost of posting this blob (wei)
-    pub cost_wei: u128,
+    pub cost: u128,
     /// size of this blob (bytes)
-    pub size_bytes: u32,
+    pub size: u32,
 }
 
 impl From<&RawDaBlockCosts> for DaBlockCosts {
@@ -56,9 +56,9 @@ impl From<&RawDaBlockCosts> for DaBlockCosts {
         let RawDaBlockCosts {
             start_height,
             end_height,
-            cost_wei,
-            size_bytes,
-            bundle_id,
+            cost: cost_wei,
+            size: size_bytes,
+            id: bundle_id,
             ..
         } = *raw_da_block_costs;
         DaBlockCosts {
@@ -97,7 +97,7 @@ where
                         .get_costs_by_l2_block_number(*next_height.deref())
                         .await?
                 }
-                _ => self.client.get_latest_costs().await?.into_iter().collect(),
+                None => self.client.get_latest_costs().await?.into_iter().collect(),
             };
 
         tracing::info!("raw_da_block_costs: {:?}", raw_da_block_costs);
@@ -120,10 +120,10 @@ where
 impl From<RawDaBlockCosts> for DaBlockCosts {
     fn from(value: RawDaBlockCosts) -> Self {
         Self {
-            bundle_id: value.bundle_id,
+            bundle_id: value.id,
             l2_blocks: (value.start_height..=value.end_height).collect(),
-            bundle_size_bytes: value.size_bytes,
-            blob_cost_wei: value.cost_wei,
+            bundle_size_bytes: value.size,
+            blob_cost_wei: value.cost,
         }
     }
 }
@@ -151,12 +151,14 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     ) -> DaBlockCostsResult<Vec<RawDaBlockCosts>> {
         // Specific: http://localhost:8080/v1/costs?variant=specific&value=19098935&limit=5
         if let Some(url) = &self.url {
+            tracing::info!("getting costs by l2 block number");
             let formatted_url = format!("{url}/v1/costs?variant=specific&value={l2_block_number}&limit={PAGE_SIZE}");
-            let val = self.client.get(formatted_url).send().await?;
-            tracing::warn!("val: {:?}", val);
-            let response = val.json::<Vec<RawDaBlockCosts>>().await?;
-            tracing::warn!("Response: {:?}", response);
-            Ok(response)
+            tracing::info!("Formatted URL: {:?}", formatted_url);
+            let response = self.client.get(formatted_url).send().await?;
+            tracing::info!("response: {:?}", response);
+            let parsed = response.json::<Vec<RawDaBlockCosts>>().await?;
+            tracing::info!("parse: {:?}", parsed);
+            Ok(parsed)
         } else {
             Ok(vec![])
         }
@@ -165,11 +167,13 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
         // Latest: http://localhost:8080/v1/costs?variant=latest&limit=5
         if let Some(url) = &self.url {
+            tracing::info!("getting latest costs");
             let formatted_url = format!("{url}/v1/costs?variant=latest&limit=1");
+            tracing::info!("Formatted URL: {:?}", formatted_url);
             let response = self.client.get(formatted_url).send().await?;
-            tracing::warn!("val: {:?}", response);
+            tracing::info!("response: {:?}", response);
             let raw_da_block_costs = response.json::<Vec<RawDaBlockCosts>>().await?;
-            tracing::warn!("Response: {:?}", raw_da_block_costs);
+            tracing::info!("Parsed: {:?}", raw_da_block_costs);
             // only take the first element, since we are only looking for the most recent
             Ok(raw_da_block_costs.first().cloned())
         } else {
@@ -230,12 +234,12 @@ mod test_block_committer_http_api {
             current_height += 9;
             let end_height = current_height;
             let costs = RawDaBlockCosts {
-                bundle_id,
+                id: bundle_id,
                 start_height,
                 end_height,
                 da_block_height: DaBlockHeight::from(da_block_height),
-                cost_wei: 1,
-                size_bytes: 1,
+                cost: 1,
+                size: 1,
             };
             mock.add_response(costs);
         }
@@ -250,12 +254,12 @@ mod test_block_committer_http_api {
             current_height += 9;
             let end_height = current_height;
             let costs = RawDaBlockCosts {
-                bundle_id,
+                id: bundle_id,
                 start_height,
                 end_height,
                 da_block_height: DaBlockHeight::from(da_block_height),
-                cost_wei: 1,
-                size_bytes: 1,
+                cost: 1,
+                size: 1,
             };
             mock.add_response(costs.clone());
             expected.push(costs);
@@ -269,12 +273,12 @@ mod test_block_committer_http_api {
             current_height += 9;
             let end_height = current_height;
             let costs = RawDaBlockCosts {
-                bundle_id,
+                id: bundle_id,
                 start_height,
                 end_height,
                 da_block_height: DaBlockHeight::from(da_block_height),
-                cost_wei: 1,
-                size_bytes: 1,
+                cost: 1,
+                size: 1,
             };
             mock.add_response(costs);
         }
@@ -316,21 +320,21 @@ mod test_block_committer_http_api {
         // given
         let block_committer = BlockCommitterHttpApi::new(Some(url));
         let not_expected = RawDaBlockCosts {
-            bundle_id: 1,
+            id: 1,
             start_height: 1,
             end_height: 10,
             da_block_height: 1u64.into(),
-            cost_wei: 1,
-            size_bytes: 1,
+            cost: 1,
+            size: 1,
         };
         mock.add_response(not_expected);
         let expected = RawDaBlockCosts {
-            bundle_id: 2,
+            id: 2,
             start_height: 11,
             end_height: 20,
             da_block_height: 2u64.into(),
-            cost_wei: 2,
-            size_bytes: 2,
+            cost: 2,
+            size: 2,
         };
         mock.add_response(expected.clone());
 
@@ -486,8 +490,8 @@ mod tests {
                 value.end_height = value.end_height + l2_block_number + 10;
                 value.da_block_height =
                     value.da_block_height + ((l2_block_number + 1) as u64).into();
-                value.cost_wei += 1;
-                value.size_bytes += 1;
+                value.cost += 1;
+                value.size += 1;
             }
             Ok(value.into_iter().collect())
         }
@@ -495,12 +499,12 @@ mod tests {
 
     fn test_da_block_costs() -> RawDaBlockCosts {
         RawDaBlockCosts {
-            bundle_id: 1,
+            id: 1,
             start_height: 1,
             end_height: 10,
             da_block_height: 1u64.into(),
-            cost_wei: 1,
-            size_bytes: 1,
+            cost: 1,
+            size: 1,
         }
     }
 

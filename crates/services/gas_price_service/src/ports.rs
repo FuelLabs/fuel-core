@@ -37,18 +37,11 @@ pub trait GetMetadataStorage: Send + Sync {
 
 pub trait SetLatestRecordedHeight: Send + Sync {
     /// For any given L2 block produced, the DA will have committed some
-    fn set_recorded_height(
-        &mut self,
-        block_height: &BlockHeight,
-        recorded_height: BlockHeight,
-    ) -> Result<()>;
+    fn set_recorded_height(&mut self, recorded_height: BlockHeight) -> Result<()>;
 }
 
 pub trait GetLatestRecordedHeight: Send + Sync {
-    fn get_recorded_height(
-        &self,
-        block_height: &BlockHeight,
-    ) -> Result<Option<BlockHeight>>;
+    fn get_recorded_height(&self) -> Result<Option<BlockHeight>>;
 }
 
 pub trait GasPriceServiceAtomicStorage
