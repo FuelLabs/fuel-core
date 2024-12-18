@@ -1609,12 +1609,12 @@ checksum = "5b63caa9aa9397e2d9480a9b13673856c78d8ac123288526c37d7839f2a86990"
 
 [[package]]
 name = "colored"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf2150cce219b664a8a70df7a1f933836724b503f8a413af9365b4dcc4d90b8"
+checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3465,10 +3465,12 @@ dependencies = [
  "fuel-core-types 0.40.0",
  "fuel-gas-price-algorithm",
  "futures",
+ "mockito",
  "num_enum",
  "parking_lot",
  "reqwest 0.12.9",
  "serde",
+ "serde_json",
  "strum 0.25.0",
  "strum_macros 0.25.3",
  "thiserror 1.0.69",
@@ -3745,7 +3747,6 @@ dependencies = [
  "insta",
  "itertools 0.12.1",
  "k256",
- "mockito",
  "postcard",
  "pretty_assertions",
  "primitive-types",
