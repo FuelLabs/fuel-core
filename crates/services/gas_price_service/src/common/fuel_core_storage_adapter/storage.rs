@@ -27,6 +27,8 @@ use fuel_core_types::fuel_types::BlockHeight;
 pub enum GasPriceColumn {
     Metadata = 0,
     State = 1,
+    UnrecordedBlocks = 2,
+    BundleId = 3,
 }
 
 impl GasPriceColumn {
@@ -66,5 +68,48 @@ impl TableWithBlueprint for GasPriceMetadata {
 
     fn column() -> Self::Column {
         GasPriceColumn::State
+    }
+}
+
+/// The storage for all the unrecorded blocks from gas price algorithm, used for guessing the cost
+/// for future blocks to be recorded on the DA chain
+pub struct UnrecordedBlocksTable;
+
+type BlockSizeInBytes = u64;
+
+impl Mappable for UnrecordedBlocksTable {
+    type Key = Self::OwnedKey;
+    type OwnedKey = BlockHeight;
+    type Value = Self::OwnedValue;
+    type OwnedValue = BlockSizeInBytes;
+}
+
+impl TableWithBlueprint for UnrecordedBlocksTable {
+    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Column = GasPriceColumn;
+
+    fn column() -> Self::Column {
+        GasPriceColumn::UnrecordedBlocks
+    }
+}
+
+pub struct BundleIdTable;
+
+/// The sequence number or bundle id of the posted blocks.
+type BundleId = u32;
+
+impl Mappable for BundleIdTable {
+    type Key = Self::OwnedKey;
+    type OwnedKey = BlockHeight;
+    type Value = Self::OwnedValue;
+    type OwnedValue = BundleId;
+}
+
+impl TableWithBlueprint for BundleIdTable {
+    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Column = GasPriceColumn;
+
+    fn column() -> Self::Column {
+        GasPriceColumn::BundleId
     }
 }
