@@ -16,6 +16,7 @@ use crate::{
         uninitialized_task::fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
     },
 };
+use std::num::NonZeroU64;
 
 pub trait L2Data: Send + Sync {
     fn latest_height(&self) -> StorageResult<BlockHeight>;
@@ -34,26 +35,26 @@ pub trait GetMetadataStorage: Send + Sync {
         -> Result<Option<UpdaterMetadata>>;
 }
 
-pub trait SetDaBundleId: Send + Sync {
-    fn set_bundle_id(&mut self, block_height: &BlockHeight, bundle_id: u32)
-        -> Result<()>;
+pub trait SetLatestRecordedHeight: Send + Sync {
+    /// For any given L2 block produced, the DA will have committed some
+    fn set_recorded_height(&mut self, recorded_height: BlockHeight) -> Result<()>;
 }
 
-pub trait GetDaBundleId: Send + Sync {
-    fn get_bundle_id(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
+pub trait GetLatestRecordedHeight: Send + Sync {
+    fn get_recorded_height(&self) -> Result<Option<BlockHeight>>;
 }
 
 pub trait GasPriceServiceAtomicStorage
 where
     Self: 'static,
     Self: Send + Sync,
-    Self: GetMetadataStorage + GetDaBundleId,
+    Self: GetMetadataStorage + GetLatestRecordedHeight,
 {
     type Transaction<'a>: AsUnrecordedBlocks
         + SetMetadataStorage
         + GetMetadataStorage
-        + SetDaBundleId
-        + GetDaBundleId
+        + SetLatestRecordedHeight
+        + GetLatestRecordedHeight
     where
         Self: 'a;
 
@@ -89,8 +90,39 @@ impl GasPriceServiceConfig {
         })
     }
 
-    pub fn new_v1(metadata: V1AlgorithmConfig) -> Self {
-        Self::V1(metadata)
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_v1(
+        new_exec_gas_price: u64,
+        min_exec_gas_price: u64,
+        exec_gas_price_change_percent: u16,
+        l2_block_fullness_threshold_percent: u8,
+        gas_price_factor: NonZeroU64,
+        min_da_gas_price: u64,
+        max_da_gas_price_change_percent: u16,
+        da_p_component: i64,
+        da_d_component: i64,
+        normal_range_size: u16,
+        capped_range_size: u16,
+        decrease_range_size: u16,
+        block_activity_threshold: u8,
+        da_poll_interval: Option<u32>,
+    ) -> Self {
+        Self::V1(V1AlgorithmConfig {
+            new_exec_gas_price,
+            min_exec_gas_price,
+            exec_gas_price_change_percent,
+            l2_block_fullness_threshold_percent,
+            gas_price_factor,
+            min_da_gas_price,
+            max_da_gas_price_change_percent,
+            da_p_component,
+            da_d_component,
+            normal_range_size,
+            capped_range_size,
+            decrease_range_size,
+            block_activity_threshold,
+            da_poll_interval,
+        })
     }
 
     /// Extract V0AlgorithmConfig if it is of V0 version

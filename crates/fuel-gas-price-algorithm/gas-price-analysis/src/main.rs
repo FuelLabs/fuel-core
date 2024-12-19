@@ -186,9 +186,9 @@ fn print_info(results: &SimulationResults) {
         .enumerate()
         .max_by(|(_, a), (_, b)| a.cmp(b))
         .unwrap();
-    let eth = *max_da_gas_price as f64 / (10_f64).powf(18.);
+    let eth = *max_da_gas_price as f64 / (10_f64).powf(9.);
     println!(
-        "max DA gas price: {} Wei ({} ETH) at {}",
+        "max DA gas price: {} Wei ({} Gwei) at {}",
         max_da_gas_price, eth, index
     );
 
@@ -198,9 +198,9 @@ fn print_info(results: &SimulationResults) {
         .enumerate()
         .min_by(|(_, a), (_, b)| a.cmp(b))
         .unwrap();
-    let eth = *min_da_gas_price as f64 / (10_f64).powf(18.);
+    let eth = *min_da_gas_price as f64 / (10_f64).powf(9.);
     println!(
-        "min DA gas price: {} Wei ({} ETH) at {}",
+        "min DA gas price: {} Wei ({} Gwei) at {}",
         min_da_gas_price, eth, index
     );
 }
