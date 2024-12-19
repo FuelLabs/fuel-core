@@ -87,14 +87,14 @@ fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 fuel-gas-price-algorithm = { version = "0.40.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.58.2", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.59.1", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"
 async-trait = "0.1"
 cynic = { version = "3.1.0", features = ["http-reqwest"] }
 clap = "4.4"
-derivative = { version = "2" }
+derivative = { version = "2", features = ["use_core"] }
 derive_more = { version = "0.99" }
 enum-iterator = "1.2"
 hex = { version = "0.4", features = ["serde"] }

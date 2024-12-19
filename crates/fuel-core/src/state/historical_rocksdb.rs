@@ -534,9 +534,10 @@ where
         &self,
         key: &[u8],
         column: Self::Column,
+        offset: usize,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        self.db.read(key, Column::OriginalColumn(column), buf)
+        self.db.read(key, Column::OriginalColumn(column), offset, buf)
     }
 }
 
