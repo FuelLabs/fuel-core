@@ -280,7 +280,8 @@ impl GasCosts {
             GasCostsValues::V1(_)
             | GasCostsValues::V2(_)
             | GasCostsValues::V3(_)
-            | GasCostsValues::V4(_) => GasCostsVersion::V1,
+            | GasCostsValues::V4(_)
+            | GasCostsValues::V5(_) => GasCostsVersion::V1,
         }
     }
 
@@ -342,6 +343,10 @@ impl GasCosts {
 
     async fn ecr1(&self) -> U64 {
         self.0.ecr1().into()
+    }
+
+    async fn ecop(&self) -> Option<U64> {
+        self.0.ecop().ok().map(Into::into)
     }
 
     async fn eck1(&self) -> U64 {
@@ -670,6 +675,10 @@ impl GasCosts {
 
     async fn csiz(&self) -> DependentCost {
         self.0.csiz().into()
+    }
+
+    async fn epar(&self) -> Option<DependentCost> {
+        self.0.epar().ok().map(Into::into)
     }
 
     async fn ed19_dependent_cost(&self) -> DependentCost {

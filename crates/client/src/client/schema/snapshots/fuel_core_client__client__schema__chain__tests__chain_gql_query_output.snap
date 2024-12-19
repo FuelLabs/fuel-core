@@ -92,6 +92,7 @@ query ChainQuery {
         div
         divi
         eck1
+        ecop
         ecr1
         ed19
         eq
@@ -265,6 +266,17 @@ query ChainQuery {
           }
         }
         ed19DependentCost {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        epar {
           __typename
           ... on LightOperation {
             base
