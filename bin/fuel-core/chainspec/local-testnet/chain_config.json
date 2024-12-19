@@ -40,7 +40,7 @@
       },
       "chain_id": 0,
       "gas_costs": {
-        "V4": {
+        "V5": {
           "add": 2,
           "addi": 2,
           "and": 2,
@@ -126,6 +126,7 @@
           "wqmm": 6,
           "xor": 2,
           "xori": 2,
+          "ecop": 3500,
           "aloc": {
             "LightOperation": {
               "base": 2,
@@ -268,6 +269,12 @@
             "HeavyOperation": {
               "base": 5661,
               "gas_per_unit": 5776
+            }
+          },
+          "epar": {
+            "HeavyOperation": {
+              "base": 69000,
+              "gas_per_unit": 52000
             }
           },
           "contract_root": {
