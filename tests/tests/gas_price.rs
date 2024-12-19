@@ -26,12 +26,19 @@ use fuel_core_client::client::{
     FuelClient,
 };
 use fuel_core_gas_price_service::{
-    common::fuel_core_storage_adapter::storage::GasPriceMetadata,
+    common::fuel_core_storage_adapter::storage::{
+        GasPriceMetadata,
+        RecordedHeights,
+    },
     ports::{
         GasPriceData,
+        GetLatestRecordedHeight,
         GetMetadataStorage,
     },
-    v1::metadata::V1Metadata,
+    v1::{
+        da_source_service::block_committer_costs::fake_server::FakeServer,
+        metadata::V1Metadata,
+    },
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
@@ -54,7 +61,6 @@ use fuel_core_types::{
     },
     services::executor::TransactionExecutionResult,
 };
-use mockito::Matcher::Any;
 use rand::Rng;
 use std::{
     collections::HashMap,
@@ -285,24 +291,25 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     assert!(estimated >= real);
 }
 
-#[tokio::test]
-async fn estimate_gas_price__returns_min_gas_price_if_starting_gas_price_is_zero() {
-    const MIN_GAS_PRICE: u64 = 1;
-
-    // Given
-    let mut node_config = Config::local_node();
-    node_config.min_exec_gas_price = MIN_GAS_PRICE;
-    node_config.starting_exec_gas_price = 0;
-    let srv = FuelService::new_node(node_config.clone()).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
-
-    // When
-    let result = client.estimate_gas_price(10).await.unwrap();
-
-    // Then
-    let actual = result.gas_price.0;
-    assert_eq!(MIN_GAS_PRICE, actual)
-}
+// TODO: this behavior is changing with https://github.com/FuelLabs/fuel-core/pull/2501
+// #[tokio::test]
+// async fn estimate_gas_price__returns_min_gas_price_if_starting_gas_price_is_zero() {
+//     const MIN_GAS_PRICE: u64 = 1;
+//
+//     // Given
+//     let mut node_config = Config::local_node();
+//     node_config.min_exec_gas_price = MIN_GAS_PRICE;
+//     node_config.starting_exec_gas_price = 0;
+//     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
+//     let client = FuelClient::from(srv.bound_address);
+//
+//     // When
+//     let result = client.estimate_gas_price(10).await.unwrap();
+//
+//     // Then
+//     let actual = result.gas_price.0;
+//     assert_eq!(MIN_GAS_PRICE, actual)
+// }
 
 // This test passed before this PR, but doesn't now
 #[tokio::test(flavor = "multi_thread")]
@@ -464,13 +471,10 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
 }
 
 use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::RawDaBlockCosts;
+use fuel_core_storage::iter::IterDirection;
 
 #[test]
 fn produce_block__l1_committed_block_effects_gas_price() {
-    // let _ = tracing_subscriber::fmt()
-    //     .with_max_level(tracing::Level::DEBUG)
-    //     .try_init();
-
     let rt = tokio::runtime::Runtime::new().unwrap();
     // set up chain with single unrecorded block
     let mut args = vec![
@@ -500,11 +504,12 @@ fn produce_block__l1_committed_block_effects_gas_price() {
     let mut mock = FakeServer::new();
     let url = mock.url();
     let costs = RawDaBlockCosts {
-        bundle_id: 1,
-        blocks_heights: vec![1],
+        id: 1,
+        start_height: 1,
+        end_height: 1,
         da_block_height: DaBlockHeight(100),
-        total_cost: 100,
-        total_size_bytes: 100,
+        cost: 100,
+        size: 100,
     };
     mock.add_response(costs);
 
@@ -672,19 +677,19 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
     });
 
     let half_of_blocks = block_delay as u32 / 2;
-    let blocks_heights: Vec<_> = (1..half_of_blocks).collect();
-    let count = blocks_heights.len() as u128;
+    let count = half_of_blocks;
     let block_bytes = 1000;
     let total_size_bytes = block_bytes * count as u32;
     let gas = 16 * total_size_bytes as u128;
     let cost_gwei = gas * 1; // blob gas price 1 gwei
     let cost = cost_gwei * 1_000_000_000; // Wei
     mock.add_response(RawDaBlockCosts {
-        bundle_id: 1,
-        blocks_heights,
+        id: 1,
+        start_height: 1,
+        end_height: half_of_blocks,
         da_block_height: DaBlockHeight(100),
-        total_cost: cost,
-        total_size_bytes,
+        cost,
+        size: total_size_bytes,
     });
 
     let mut profits = Vec::new();
@@ -777,61 +782,4 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
         let _status = client.submit(&tx).await.unwrap();
     }
     let _ = client.produce_blocks(1, None).await.unwrap();
-}
-
-struct FakeServer {
-    server: mockito::ServerGuard,
-    responses: Arc<Mutex<(HashMap<u32, RawDaBlockCosts>, u32)>>,
-}
-
-impl FakeServer {
-    fn new() -> Self {
-        let server = mockito::Server::new();
-        let responses = Arc::new(Mutex::new((HashMap::new(), 0)));
-        let mut fake = Self { server, responses };
-        fake.init();
-        fake
-    }
-
-    pub fn init(&mut self) {
-        let shared_responses = self.responses.clone();
-        self.server
-            .mock("GET", Any)
-            .with_status(201)
-            .with_body_from_request(move |request| {
-                // take the requested number and return the corresponding response from the `responses` hashmap
-                let path = request.path();
-                let maybe_sequence_number =
-                    path.split('/').last().and_then(|x| x.parse::<u32>().ok());
-                match maybe_sequence_number {
-                    Some(sequence_number) => {
-                        let guard = shared_responses.lock().unwrap();
-                        let responses = &guard.0;
-                        let response = responses.get(&sequence_number).cloned();
-                        serde_json::to_string(&response).unwrap().into()
-                    }
-                    None => {
-                        let guard = shared_responses.lock().unwrap();
-                        let responses = &guard.0;
-                        let latest = &guard.1;
-                        let response = responses.get(latest).cloned();
-                        serde_json::to_string(&response).unwrap().into()
-                    }
-                }
-            })
-            .expect_at_least(1)
-            .create();
-    }
-
-    pub fn add_response(&mut self, costs: RawDaBlockCosts) {
-        let mut guard = self.responses.lock().unwrap();
-        let latest = guard.1;
-        let new_seq_no = latest + 1;
-        guard.0.insert(new_seq_no, costs);
-        guard.1 = new_seq_no;
-    }
-
-    fn url(&self) -> String {
-        self.server.url()
-    }
 }

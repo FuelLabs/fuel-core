@@ -21,10 +21,10 @@ use crate::{
         GasPriceData,
         GasPriceServiceAtomicStorage,
         GasPriceServiceConfig,
-        GetDaBundleId,
+        GetLatestRecordedHeight,
         GetMetadataStorage,
         L2Data,
-        SetDaBundleId,
+        SetLatestRecordedHeight,
         SetMetadataStorage,
     },
     v1::{
@@ -157,21 +157,14 @@ where
             self.block_stream,
         );
 
-        if let Some(bundle_id) =
-            self.gas_price_db.get_bundle_id(&self.gas_metadata_height)?
-        {
-            self.da_source.set_last_value(bundle_id).await?;
+        if let Some(last_recorded_height) = self.gas_price_db.get_recorded_height()? {
+            self.da_source.set_last_value(last_recorded_height).await?;
+            tracing::info!("Set last recorded height to {}", last_recorded_height);
         }
         let poll_duration = self
             .config
             .da_poll_interval
             .map(|x| Duration::from_millis(x.into()));
-        // TODO: Dupe code
-        if let Some(bundle_id) =
-            self.gas_price_db.get_bundle_id(&self.gas_metadata_height)?
-        {
-            self.da_source.set_last_value(bundle_id).await?;
-        }
         let da_service = DaSourceService::new(self.da_source, poll_duration);
         let da_service_runner = ServiceRunner::new(da_service);
         da_service_runner.start_and_await().await?;
