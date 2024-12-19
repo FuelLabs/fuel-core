@@ -22,9 +22,17 @@ impl FuelCoreDriver {
 
     pub async fn spawn_feeless(extra_args: &[&str]) -> anyhow::Result<Self> {
         let mut args = vec![
-            "--starting-exec-gas-price",
+            "--starting-gas-price",
             "0",
             "--gas-price-change-percent",
+            "0",
+            "--min-da-gas-price",
+            "0",
+            "--da-p-component",
+            "0",
+            "--da-d-component",
+            "0",
+            "--max-da-gas-price-change-percent",
             "0",
         ];
         args.extend(extra_args);
@@ -36,7 +44,7 @@ impl FuelCoreDriver {
         extra_args: &[&str],
     ) -> anyhow::Result<Self> {
         let mut args = vec![
-            "--starting-exec-gas-price",
+            "--starting-gas-price",
             "0",
             "--gas-price-change-percent",
             "0",
