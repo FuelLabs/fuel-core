@@ -132,6 +132,8 @@ impl Extension for RequiredFuelBlockHeightInner {
 
         let mut response = next.run(ctx, operation_name).await;
 
+        let current_block_height = view.latest_block_height();
+
         if let Ok(current_block_height) = current_block_height {
             let current_block_height: u32 = *current_block_height;
             response.extensions.insert(
