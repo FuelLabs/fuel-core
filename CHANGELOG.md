@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Transaction graphql endpoints use `TransactionType` instead of `fuel_tx::Transaction`.
 - [2446](https://github.com/FuelLabs/fuel-core/pull/2446): Use graphiql instead of graphql-playground due to known vulnerability and stale development.
 - [2379](https://github.com/FuelLabs/fuel-core/issues/2379): Change `kv_store::Value` to be `Arc<[u8]>` instead of `Arc<Vec<u8>>`.
+- [2510](https://github.com/FuelLabs/fuel-core/pull/2510): Upgraded `fuel-vm` to `0.59.1`. More information in the releases: [0.59.0](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.59.0) and [0.59.1](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.59.1).
 
 ## [Version 0.40.0]
 
