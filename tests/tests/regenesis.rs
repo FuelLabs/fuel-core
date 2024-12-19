@@ -69,20 +69,8 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
     const BLOCKS_QUERY: i32 = 50;
     let mut rng = StdRng::seed_from_u64(1234);
 
-    let core = FuelCoreDriver::spawn_feeless(&[
-        "--debug",
-        "--poa-instant",
-        "true",
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
-    ])
-    .await?;
+    let core =
+        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
     // Add some blocks
     produce_block_with_tx(&mut rng, &core.client).await;
     produce_block_with_tx(&mut rng, &core.client).await;
@@ -117,14 +105,6 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
         "true",
         "--snapshot",
         snapshot_dir.path().to_str().unwrap(),
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
     ])
     .await?;
 
@@ -162,14 +142,6 @@ async fn test_regenesis_old_blocks_are_preserved() -> anyhow::Result<()> {
         "true",
         "--snapshot",
         snapshot_dir.path().to_str().unwrap(),
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
     ])
     .await?;
 
@@ -235,14 +207,6 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
         "true",
         "--snapshot",
         state_config_dir.path().to_str().unwrap(),
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
     ])
     .await?;
 
@@ -294,14 +258,6 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
         "true",
         "--snapshot",
         snapshot_dir.path().to_str().unwrap(),
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
     ])
     .await?;
 
@@ -319,20 +275,8 @@ async fn test_regenesis_spent_messages_are_preserved() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
-    let core = FuelCoreDriver::spawn_feeless(&[
-        "--debug",
-        "--poa-instant",
-        "true",
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
-    ])
-    .await?;
+    let core =
+        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
 
     // Add some blocks
     let secret = SecretKey::random(&mut rng);
@@ -379,14 +323,6 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
         "true",
         "--snapshot",
         snapshot_dir.path().to_str().unwrap(),
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
     ])
     .await?;
 
@@ -407,20 +343,8 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
 #[tokio::test(flavor = "multi_thread")]
 async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
-    let core = FuelCoreDriver::spawn_feeless(&[
-        "--debug",
-        "--poa-instant",
-        "true",
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
-    ])
-    .await?;
+    let core =
+        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
     let base_asset_id = *core
         .node
         .shared
@@ -524,14 +448,6 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
         snapshot_dir.path().to_str().unwrap(),
         "--native-executor-version",
         latest_state_transition_version.as_str(),
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
         "--starting-gas-price",
         "0",
         "--gas-price-change-percent",

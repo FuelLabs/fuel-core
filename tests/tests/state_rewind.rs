@@ -72,14 +72,6 @@ async fn validate_block_at_any_height__only_transfers() -> anyhow::Result<()> {
         "true",
         "--state-rewind-duration",
         "7d",
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
     ])
     .await?;
     let node = &driver.node;
@@ -156,14 +148,6 @@ async fn rollback_existing_chain_to_target_height_and_verify(
         "true",
         "--state-rewind-duration",
         "7d",
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
     ])
     .await?;
     let node = &driver.node;
@@ -285,14 +269,6 @@ async fn rollback_to__should_work_with_empty_gas_price_database() -> anyhow::Res
         "true",
         "--state-rewind-duration",
         "7d",
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--max-da-gas-price-change-percent",
-        "0",
     ])
     .await?;
 

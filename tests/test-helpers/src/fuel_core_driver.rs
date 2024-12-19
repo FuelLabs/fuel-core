@@ -26,6 +26,14 @@ impl FuelCoreDriver {
             "0",
             "--gas-price-change-percent",
             "0",
+            "--min-da-gas-price",
+            "0",
+            "--da-p-component",
+            "0",
+            "--da-d-component",
+            "0",
+            "--max-da-gas-price-change-percent",
+            "0",
         ];
         args.extend(extra_args);
         Self::spawn_with_directory(tempdir()?, &args).await
