@@ -190,7 +190,11 @@ impl<D, M: Mappable> StorageRead<M> for VmStorage<D>
 where
     D: StorageRead<M, Error = StorageError>,
 {
-    fn read(&self, key: &M::Key, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
+    fn read(
+        &self,
+        key: &M::Key,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Self::Error> {
         StorageRead::<M>::read(&self.database, key, buf)
     }
 

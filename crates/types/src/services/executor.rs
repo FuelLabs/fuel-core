@@ -256,6 +256,18 @@ impl TransactionExecutionResult {
     }
 }
 
+/// When storage in column:key was read, it contained this value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StorageReadReplayEvent {
+    /// Column in the storage, identified by name.
+    pub column: String,
+    /// Key in the column.
+    pub key: Vec<u8>,
+    /// Value at the column:key pair. None if the key was not found.
+    pub value: Option<Vec<u8>>,
+}
+
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, derive_more::Display, derive_more::From)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
