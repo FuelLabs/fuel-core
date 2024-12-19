@@ -392,30 +392,24 @@ where
         &self,
         key: &[u8],
         column: Self::Column,
-        offset: usize,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
         if let Some(operation) = self.get_from_changes(key, column) {
             match operation {
                 WriteOperation::Insert(value) => {
                     let read = value.len();
-                    if offset.saturating_add(read) != buf.len() {
+                    if read != buf.len() {
                         return Err(crate::Error::Other(anyhow::anyhow!(
-                            "Buffer size is not equal to the value size after offset"
+                            "Buffer size is not equal to the value size"
                         )));
                     }
-                    if offset >= buf.len() {
-                        return Err(crate::Error::Other(anyhow::anyhow!(
-                            "Offset too large for the buffer"
-                        )));
-                    }
-                    buf.copy_from_slice(&value.as_ref()[offset..]);
+                    buf.copy_from_slice(value.as_ref());
                     Ok(Some(read))
                 }
                 WriteOperation::Remove => Ok(None),
             }
         } else {
-            self.storage.read(key, column, offset, buf)
+            self.storage.read(key, column, buf)
         }
     }
 }

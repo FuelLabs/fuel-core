@@ -33,9 +33,9 @@ pub mod chain;
 pub mod coins;
 pub mod contract;
 pub mod da_compressed;
-pub mod execution_trace;
 pub mod message;
 pub mod node_info;
+pub mod storage_read_replay;
 pub mod upgrades;
 
 pub mod gas_price;

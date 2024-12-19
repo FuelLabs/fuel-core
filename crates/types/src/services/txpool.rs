@@ -377,7 +377,6 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-            execution_trace: _, // Discarded, txpool doesn't use these
         } => TransactionStatus::Success {
             block_height,
             time,
@@ -391,7 +390,6 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-            execution_trace: _, // Discarded, txpool doesn't use these
         } => TransactionStatus::Failed {
             block_height,
             time,

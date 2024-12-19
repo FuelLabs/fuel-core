@@ -280,8 +280,7 @@ impl GasCosts {
             GasCostsValues::V1(_)
             | GasCostsValues::V2(_)
             | GasCostsValues::V3(_)
-            | GasCostsValues::V4(_)
-            | GasCostsValues::V5(_) => GasCostsVersion::V1,
+            | GasCostsValues::V4(_) => GasCostsVersion::V1,
         }
     }
 

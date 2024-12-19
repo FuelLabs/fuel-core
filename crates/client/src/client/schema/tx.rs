@@ -292,7 +292,6 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                 TransactionExecutionResult::Success {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
                     receipts,
-                    execution_trace: Vec::new(), // Not produced by dry-run
                     total_gas: s.total_gas.0,
                     total_fee: s.total_fee.0,
                 }
@@ -306,7 +305,6 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                 TransactionExecutionResult::Failed {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
                     receipts,
-                    execution_trace: Vec::new(), // Not produced by dry-run
                     total_gas: s.total_gas.0,
                     total_fee: s.total_fee.0,
                 }

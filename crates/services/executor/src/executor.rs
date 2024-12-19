@@ -5,10 +5,6 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
-    trace::{
-        TraceOnInstruction,
-        TraceOnReceipt,
-    },
 };
 use fuel_core_storage::{
     column::Column,
@@ -116,14 +112,11 @@ use fuel_core_types::{
             IntoChecked,
         },
         interpreter::{
-            trace::ExecutionTraceHooks,
             CheckedMetadata as CheckedMetadataTrait,
             ExecutableTransaction,
             InterpreterParams,
             Memory,
             MemoryInstance,
-            NoTrace,
-            NotSupportedEcal,
         },
         state::StateTransition,
         Backtrace as FuelBacktrace,
@@ -138,8 +131,6 @@ use fuel_core_types::{
             ExecutionResult,
             ForcedTransactionFailure,
             Result as ExecutorResult,
-            TraceFrame,
-            TraceTrigger,
             TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
@@ -262,9 +253,6 @@ pub struct ExecutionOptions {
     pub extra_tx_checks: bool,
     /// Print execution backtraces if transaction execution reverts.
     pub backtrace: bool,
-    /// Record execution traces for each transaction with the given trigger
-    #[serde(default)]
-    pub execution_trace: Option<TraceTrigger>,
 }
 
 /// The executor instance performs block production and validation. Given a block, it will execute all
@@ -340,6 +328,19 @@ where
         };
 
         Ok(UncommittedResult::new(result, changes))
+    }
+
+    pub fn record_storage_reads_for(
+        self,
+        block: &Block,
+        tx_separator_callback: &mut dyn FnMut(usize) -> (),
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+        let consensus_params_version = block.header().consensus_parameters_version;
+        let (block_executor, storage_tx) =
+            self.into_executor(consensus_params_version)?;
+        Ok(block_executor
+            .record_storage_reads_for(block, storage_tx, tx_separator_callback)?
+            .tx_status)
     }
 
     pub fn validate_without_commit(
@@ -712,6 +713,109 @@ where
             .ok_or(ExecutorError::TooManyTransactions)?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn record_storage_reads_for<D>(
+        mut self,
+        block: &Block,
+        mut block_storage_tx: StorageTransaction<D>,
+        tx_separator_callback: &mut dyn FnMut(usize) -> (),
+    ) -> ExecutorResult<ExecutionData>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
+        let mut data = ExecutionData::new();
+
+        let partial_header = PartialBlockHeader::from(block.header());
+        let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
+        let transactions = block.transactions();
+        let mut memory = MemoryInstance::new();
+
+        let (gas_price, coinbase_contract_id) =
+            Self::get_coinbase_info_from_mint_tx(transactions)?;
+
+        // self.process_l1_txs(
+        //     &mut partial_block,
+        //     coinbase_contract_id,
+        //     &mut block_storage_tx,
+        //     &mut data,
+        //     &mut memory,
+        // )?;
+
+        let block_height = *partial_block.header.height();
+        let da_block_height = partial_block.header.da_height;
+        let relayed_txs = self.get_relayed_txs(
+            block_height,
+            da_block_height,
+            &mut data,
+            &mut block_storage_tx,
+            &mut memory,
+        )?;
+
+        // self.process_relayed_txs(
+        //     relayed_txs,
+        //     block,
+        //     storage_tx,
+        //     data,
+        //     coinbase_contract_id,
+        //     memory,
+        // )?;
+
+        let consensus_parameters_version =
+            partial_block.header.consensus_parameters_version;
+        let relayed_tx_iter = relayed_txs.into_iter();
+        for (i, checked) in relayed_tx_iter.enumerate() {
+            tx_separator_callback(i);
+            let maybe_checked_transaction = MaybeCheckedTransaction::CheckedTransaction(
+                checked,
+                consensus_parameters_version,
+            );
+            let tx_id = maybe_checked_transaction.id(&self.consensus_params.chain_id());
+            match self.execute_transaction_and_commit(
+                &mut partial_block,
+                &mut block_storage_tx,
+                &mut data,
+                maybe_checked_transaction,
+                Self::RELAYED_GAS_PRICE,
+                coinbase_contract_id,
+                &mut memory,
+            ) {
+                Ok(_) => {}
+                Err(err) => {
+                    let event = ExecutorEvent::ForcedTransactionFailed {
+                        id: tx_id.into(),
+                        block_height,
+                        failure: err.to_string(),
+                    };
+                    data.events.push(event);
+                }
+            }
+        }
+
+        let processed_l1_tx_count = partial_block.transactions.len();
+
+        for (i, transaction) in
+            transactions.iter().enumerate().skip(processed_l1_tx_count)
+        {
+            tx_separator_callback(i);
+            let maybe_checked_tx =
+                MaybeCheckedTransaction::Transaction(transaction.clone());
+            self.execute_transaction_and_commit(
+                &mut partial_block,
+                &mut block_storage_tx,
+                &mut data,
+                maybe_checked_tx,
+                gas_price,
+                coinbase_contract_id,
+                &mut memory,
+            )?;
+        }
+
+        self.check_block_matches(partial_block, block, &data)?;
+
+        data.changes = block_storage_tx.into_changes();
+        Ok(data)
     }
 
     #[tracing::instrument(skip_all)]
@@ -1264,45 +1368,15 @@ where
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
-        let (reverted, state, tx, receipts, trace_frames) =
-            match self.options.execution_trace {
-                Some(TraceTrigger::OnInstruction) => {
-                    let (reverted, state, tx, receipts, trace) = self
-                        .attempt_tx_execution_with_vm::<_, _, TraceOnInstruction>(
-                        checked_tx,
-                        header,
-                        coinbase_contract_id,
-                        gas_price,
-                        storage_tx,
-                        memory,
-                    )?;
-                    (reverted, state, tx, receipts, trace.frames)
-                }
-                Some(TraceTrigger::OnReceipt) => {
-                    let (reverted, state, tx, receipts, trace) = self
-                        .attempt_tx_execution_with_vm::<_, _, TraceOnReceipt>(
-                            checked_tx,
-                            header,
-                            coinbase_contract_id,
-                            gas_price,
-                            storage_tx,
-                            memory,
-                        )?;
-                    (reverted, state, tx, receipts, trace.frames)
-                }
-                None => {
-                    let (reverted, state, tx, receipts, _) = self
-                        .attempt_tx_execution_with_vm::<_, _, NoTrace>(
-                            checked_tx,
-                            header,
-                            coinbase_contract_id,
-                            gas_price,
-                            storage_tx,
-                            memory,
-                        )?;
-                    (reverted, state, tx, receipts, Vec::new())
-                }
-            };
+        let (reverted, state, tx, receipts) = self
+            .attempt_tx_execution_with_vm::<_, _>(
+                checked_tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                storage_tx,
+                memory,
+            )?;
 
         self.spend_input_utxos(tx.inputs(), storage_tx, reverted, execution_data)?;
 
@@ -1323,7 +1397,6 @@ where
             &tx,
             execution_data,
             receipts,
-            trace_frames,
             gas_price,
             reverted,
             state,
@@ -1396,7 +1469,6 @@ where
             result: TransactionExecutionResult::Success {
                 result: None,
                 receipts: vec![],
-                execution_trace: Vec::new(),
                 total_gas: 0,
                 total_fee: 0,
             },
@@ -1504,7 +1576,6 @@ where
         tx: &Tx,
         execution_data: &mut ExecutionData,
         receipts: Vec<Receipt>,
-        execution_trace: Vec<TraceFrame>,
         gas_price: Word,
         reverted: bool,
         state: ProgramState,
@@ -1539,7 +1610,6 @@ where
             TransactionExecutionResult::Failed {
                 result: Some(state),
                 receipts,
-                execution_trace,
                 total_gas: used_gas,
                 total_fee: tx_fee,
             }
@@ -1548,7 +1618,6 @@ where
             TransactionExecutionResult::Success {
                 result: Some(state),
                 receipts,
-                execution_trace,
                 total_gas: used_gas,
                 total_fee: tx_fee,
             }
@@ -1639,7 +1708,7 @@ where
     }
 
     #[allow(clippy::type_complexity)]
-    fn attempt_tx_execution_with_vm<Tx, T, Trace>(
+    fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
         checked_tx: Checked<Tx>,
         header: &PartialBlockHeader,
@@ -1647,12 +1716,11 @@ where
         gas_price: Word,
         storage_tx: &mut TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>, Trace)>
+    ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
     where
         Tx: ExecutableTransaction + Cacheable,
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
-        Trace: ExecutionTraceHooks + Clone + Default,
     {
         let tx_id = checked_tx.id();
 
@@ -1676,9 +1744,9 @@ where
             .iter()
             .map(|input| input.predicate_gas_used())
             .collect();
-        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params, None)?; // TODO: block_height argument?
+        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
 
-        let mut vm = Interpreter::<_, _, _, NotSupportedEcal, Trace>::with_storage(
+        let mut vm = Interpreter::<_, _, _>::with_storage(
             memory,
             vm_db,
             InterpreterParams::new(gas_price, &self.consensus_params),
@@ -1693,7 +1761,6 @@ where
             .into();
         let reverted = vm_result.should_revert();
 
-        let trace = vm.trace().clone();
         let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
@@ -1715,7 +1782,7 @@ where
         }
 
         self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
-        Ok((reverted, state, tx, receipts.to_vec(), trace))
+        Ok((reverted, state, tx, receipts.to_vec()))
     }
 
     fn verify_inputs_exist_and_values_match<T>(
@@ -2020,9 +2087,9 @@ where
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace<M, T, Tx, Ecal, Trace>(
+    fn log_backtrace<M, T, Tx, Ecal>(
         &self,
-        vm: &Interpreter<M, VmStorage<T>, Tx, Ecal, Trace>,
+        vm: &Interpreter<M, VmStorage<T>, Tx, Ecal>,
         receipts: &[Receipt],
     ) where
         M: Memory,

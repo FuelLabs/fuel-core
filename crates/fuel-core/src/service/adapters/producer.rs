@@ -64,6 +64,7 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Result as ExecutorResult,
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -128,13 +129,12 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
     }
 }
 
-impl fuel_core_producer::ports::BlockExecutionTracer for ExecutorAdapter {
-    fn execution_trace(
+impl fuel_core_producer::ports::StorageReadReplayRecorder for ExecutorAdapter {
+    fn storage_read_replay(
         &self,
         block: &Block,
-        trigger: Trigger,
-    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        self.executor.execution_traces(block, trigger)
+    ) -> ExecutorResult<Vec<Vec<StorageReadReplayEvent>>> {
+        self.executor.storage_read_replay(block)
     }
 }
 

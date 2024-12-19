@@ -43,7 +43,7 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            TraceTrigger,
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -384,16 +384,15 @@ impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
     ViewProvider: HistoricalView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
-    Executor: ports::BlockExecutionTracer + 'static,
+    Executor: ports::StorageReadReplayRecorder + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
     ConsensusProvider: ConsensusParametersProvider,
 {
-    /// Re-executes an old block, getting full execution traces.
-    pub async fn execution_trace_block(
+    /// Re-executes an old block, getting the storage read events.
+    pub async fn storage_read_replay(
         &self,
         height: BlockHeight,
-        trigger: TraceTrigger,
-    ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
+    ) -> anyhow::Result<Vec<Vec<StorageReadReplayEvent>>> {
         let view = self.view_provider.latest_view()?;
 
         let block = view.get_block(&height)?;
@@ -404,7 +403,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
         let block = block.into_owned().uncompress(transactions);
 
-        Ok(self.executor.execution_trace(&block, trigger)?)
+        Ok(self.executor.storage_read_replay(&block)?)
     }
 }
 

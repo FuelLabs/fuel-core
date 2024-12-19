@@ -193,10 +193,9 @@ where
     fn read(
         &self,
         key: &M::Key,
-        offset: usize,
         buf: &mut [u8],
     ) -> Result<Option<usize>, Self::Error> {
-        StorageRead::<M>::read(&self.database, key, offset, buf)
+        StorageRead::<M>::read(&self.database, key, buf)
     }
 
     fn read_alloc(

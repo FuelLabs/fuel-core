@@ -24,7 +24,7 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Result as ExecutorResult,
-            TraceTrigger,
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -110,10 +110,9 @@ pub trait DryRunner: Send + Sync {
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>>;
 }
 
-pub trait BlockExecutionTracer: Send + Sync {
-    fn execution_trace(
+pub trait StorageReadReplayRecorder: Send + Sync {
+    fn storage_read_replay(
         &self,
         block: &Block,
-        trigger: TraceTrigger,
-    ) -> ExecutorResult<Vec<TransactionExecutionStatus>>;
+    ) -> ExecutorResult<Vec<Vec<StorageReadReplayEvent>>>;
 }

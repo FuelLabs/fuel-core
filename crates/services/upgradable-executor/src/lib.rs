@@ -7,6 +7,9 @@ pub mod config;
 pub mod error;
 pub mod executor;
 
+mod relayer_recorder;
+mod storage_access_recorder;
+
 #[cfg(feature = "wasm-executor")]
 pub mod instance;
 

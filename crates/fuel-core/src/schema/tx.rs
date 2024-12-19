@@ -76,8 +76,7 @@ use std::{
 };
 use types::{
     DryRunTransactionExecutionStatus,
-    TraceTransactionExecutionStatus,
-    TraceTrigger,
+    StorageReadReplayEvent,
     Transaction,
 };
 
@@ -338,20 +337,23 @@ impl TxMutation {
 
     /// Get execution trace for an already-executed transaction.
     #[graphql(complexity = "query_costs().dry_run + child_complexity")]
-    async fn execution_trace_block(
+    async fn storage_read_replay(
         &self,
         ctx: &Context<'_>,
         height: U32,
-        trigger: TraceTrigger,
-    ) -> async_graphql::Result<Vec<TraceTransactionExecutionStatus>> {
+    ) -> async_graphql::Result<Vec<Vec<StorageReadReplayEvent>>> {
         let block_height = height.into();
         let block_producer = ctx.data_unchecked::<BlockProducer>();
-        let status = block_producer
-            .execution_trace_block(block_height, trigger.into())
-            .await?;
-        Ok(status
+        Ok(block_producer
+            .storage_read_replay(block_height)
+            .await?
             .into_iter()
-            .map(TraceTransactionExecutionStatus)
+            .map(|items| {
+                items
+                    .into_iter()
+                    .map(StorageReadReplayEvent::from)
+                    .collect()
+            })
             .collect())
     }
 

@@ -543,7 +543,7 @@ impl Command {
                     get_peers: graphql.costs.get_peers,
                     estimate_predicates: graphql.costs.estimate_predicates,
                     dry_run: graphql.costs.dry_run,
-                    execution_trace_block: graphql.costs.execution_trace_block,
+                    storage_read_replay: graphql.costs.storage_read_replay,
                     submit: graphql.costs.submit,
                     submit_and_await: graphql.costs.submit_and_await,
                     status_change: graphql.costs.status_change,

@@ -147,10 +147,9 @@ where
         &self,
         key: &[u8],
         column: Self::Column,
-        offset: usize,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        self.inner.read(key, column, offset, buf)
+        self.inner.read(key, column, buf)
     }
 }
 
@@ -359,7 +358,6 @@ where
     fn read(
         &self,
         key: &<M as Mappable>::Key,
-        offset: usize,
         buf: &mut [u8],
     ) -> Result<Option<usize>, Self::Error> {
         let key_encoder =
@@ -367,12 +365,8 @@ where
                 key,
             );
         let key_bytes = key_encoder.as_bytes();
-        self.inner.read(
-            key_bytes.as_ref(),
-            <M as TableWithBlueprint>::column(),
-            offset,
-            buf,
-        )
+        self.inner
+            .read(key_bytes.as_ref(), <M as TableWithBlueprint>::column(), buf)
     }
 
     fn read_alloc(

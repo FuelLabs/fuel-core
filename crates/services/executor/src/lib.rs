@@ -10,7 +10,6 @@ extern crate alloc;
 pub mod executor;
 pub mod ports;
 pub mod refs;
-pub mod trace;
 
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();

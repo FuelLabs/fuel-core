@@ -78,10 +78,7 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::canonical::Serialize,
-    fuel_vm::{
-        consts::VM_REGISTER_COUNT,
-        ProgramState as VmProgramState,
-    },
+    fuel_vm::ProgramState as VmProgramState,
     services::{
         executor::{
             TransactionExecutionResult,
@@ -867,7 +864,6 @@ impl DryRunTransactionStatus {
                 receipts,
                 total_gas,
                 total_fee,
-                execution_trace: _, // Discard, as dry run doesn't support this
             } => DryRunTransactionStatus::Success(DryRunSuccessStatus {
                 result,
                 receipts,
@@ -879,58 +875,9 @@ impl DryRunTransactionStatus {
                 receipts,
                 total_gas,
                 total_fee,
-                execution_trace: _, // Discard, as dry run doesn't support this
             } => DryRunTransactionStatus::Failed(DryRunFailureStatus {
                 result,
                 receipts,
-                total_gas,
-                total_fee,
-            }),
-        }
-    }
-}
-
-/// When to record a trace frames during execution
-#[derive(Enum, Debug, Copy, Clone, Eq, PartialEq)]
-pub enum TraceTrigger {
-    /// After each instruction
-    OnInstruction,
-    /// After an instruction has created a receipt
-    OnReceipt,
-}
-
-#[derive(Union, Debug)]
-pub enum TraceTransactionStatus {
-    Success(TraceSuccessStatus),
-    Failed(TraceFailureStatus),
-}
-
-impl TraceTransactionStatus {
-    pub fn new(tx_status: TransactionExecutionResult) -> Self {
-        match tx_status {
-            TransactionExecutionResult::Success {
-                result,
-                receipts,
-                total_gas,
-                total_fee,
-                execution_trace,
-            } => TraceTransactionStatus::Success(TraceSuccessStatus {
-                result,
-                receipts,
-                execution_trace,
-                total_gas,
-                total_fee,
-            }),
-            TransactionExecutionResult::Failed {
-                result,
-                receipts,
-                execution_trace,
-                total_gas,
-                total_fee,
-            } => TraceTransactionStatus::Failed(TraceFailureStatus {
-                result,
-                receipts,
-                execution_trace,
                 total_gas,
                 total_fee,
             }),
@@ -1033,157 +980,36 @@ impl DryRunTransactionExecutionStatus {
     }
 }
 
-#[derive(Debug)]
-pub struct TraceFrame(Frame);
-
-impl From<Frame> for TraceFrame {
-    fn from(frame: Frame) -> Self {
-        Self(frame)
-    }
+pub struct StorageReadReplayEvent {
+    column: String,
+    key: HexString,
+    value: Option<HexString>,
 }
 
-#[Object]
-impl TraceFrame {
-    /// Register values
-    async fn registers(&self) -> [U64; VM_REGISTER_COUNT] {
-        self.0.registers.map(|r| r.into())
-    }
-
-    /// Changes to memory `(address, bytes)` that occurred since the last frame
-    async fn memory_diff(&self) -> Vec<TraceFrameMemoryPatch> {
-        self.0
-            .memory_diff
-            .clone()
-            .into_iter()
-            .map(|c| c.into())
-            .collect()
-    }
-
-    /// How many of the original receipts have been produced by this point
-    async fn receipt_count(&self) -> usize {
-        self.0.receipt_count
-    }
-}
-
-#[derive(Debug)]
-pub struct TraceFrameMemoryPatch {
-    start: usize,
-    bytes: Vec<u8>,
-}
-impl From<fuel_core_types::fuel_vm::interpreter::MemorySliceChange>
-    for TraceFrameMemoryPatch
+impl From<fuel_core_types::services::executor::StorageReadReplayEvent>
+    for StorageReadReplayEvent
 {
-    fn from(change: fuel_core_types::fuel_vm::interpreter::MemorySliceChange) -> Self {
+    fn from(event: fuel_core_types::services::executor::StorageReadReplayEvent) -> Self {
         Self {
-            start: change.global_start,
-            bytes: change.data,
+            column: event.column,
+            key: HexString(event.key),
+            value: event.value.map(HexString),
         }
     }
 }
 
 #[Object]
-impl TraceFrameMemoryPatch {
-    /// Start address
-    async fn start(&self) -> u32 {
-        u32::try_from(self.start).expect("Invalid memory address")
+impl StorageReadReplayEvent {
+    async fn column(&self) -> String {
+        self.column.clone()
     }
 
-    /// Bytes of data
-    async fn bytes(&self) -> HexString {
-        self.bytes.clone().into()
-    }
-}
-
-#[derive(Debug)]
-pub struct TraceSuccessStatus {
-    result: Option<VmProgramState>,
-    receipts: Vec<fuel_tx::Receipt>,
-    execution_trace: Vec<fuel_core_types::fuel_vm::interpreter::trace::Frame>,
-    total_gas: u64,
-    total_fee: u64,
-}
-
-#[Object]
-impl TraceSuccessStatus {
-    async fn program_state(&self) -> Option<ProgramState> {
-        self.result.map(Into::into)
+    async fn key(&self) -> HexString {
+        self.key.clone()
     }
 
-    async fn receipts(&self) -> Vec<Receipt> {
-        self.receipts.iter().map(Into::into).collect()
-    }
-
-    async fn execution_trace(&self) -> Vec<TraceFrame> {
-        self.execution_trace
-            .clone()
-            .into_iter()
-            .map(TraceFrame::from)
-            .collect()
-    }
-
-    async fn total_gas(&self) -> U64 {
-        self.total_gas.into()
-    }
-
-    async fn total_fee(&self) -> U64 {
-        self.total_fee.into()
-    }
-}
-
-#[derive(Debug)]
-pub struct TraceFailureStatus {
-    result: Option<VmProgramState>,
-    receipts: Vec<fuel_tx::Receipt>,
-    execution_trace: Vec<fuel_core_types::fuel_vm::interpreter::trace::Frame>,
-    total_gas: u64,
-    total_fee: u64,
-}
-
-#[Object]
-impl TraceFailureStatus {
-    async fn program_state(&self) -> Option<ProgramState> {
-        self.result.map(Into::into)
-    }
-
-    async fn reason(&self) -> String {
-        TransactionExecutionResult::reason(&self.receipts, &self.result)
-    }
-
-    async fn receipts(&self) -> Vec<Receipt> {
-        self.receipts.iter().map(Into::into).collect()
-    }
-
-    async fn execution_trace(&self) -> Vec<TraceFrame> {
-        self.execution_trace
-            .clone()
-            .into_iter()
-            .map(TraceFrame::from)
-            .collect()
-    }
-
-    async fn total_gas(&self) -> U64 {
-        self.total_gas.into()
-    }
-
-    async fn total_fee(&self) -> U64 {
-        self.total_fee.into()
-    }
-}
-
-pub struct TraceTransactionExecutionStatus(pub TransactionExecutionStatus);
-
-#[Object]
-impl TraceTransactionExecutionStatus {
-    async fn id(&self) -> TransactionId {
-        TransactionId(self.0.id)
-    }
-
-    async fn status(&self) -> TraceTransactionStatus {
-        TraceTransactionStatus::new(self.0.result.clone())
-    }
-
-    async fn receipts(&self) -> Vec<Receipt> {
-        self.0.result.receipts().iter().map(Into::into).collect()
+    async fn value(&self) -> Option<HexString> {
+        self.value.clone()
     }
 }
 

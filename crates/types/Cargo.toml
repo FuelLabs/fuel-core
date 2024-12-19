@@ -27,7 +27,6 @@ fuel-vm-private = { workspace = true, default-features = false, features = [
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }
-serde-big-array = { version = "0.5", default-features = false}
 # We force the version because 4.1.0 update leap seconds that breaks our timestamps
 tai64 = { version = "=4.0.0", features = ["serde"] }
 zeroize = "1.5"

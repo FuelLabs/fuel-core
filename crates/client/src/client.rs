@@ -65,7 +65,7 @@ use fuel_core_types::{
         Nonce,
     },
     services::executor::{
-        TraceTrigger,
+        StorageReadReplayEvent,
         TransactionExecutionStatus,
     },
 };
@@ -509,26 +509,26 @@ impl FuelClient {
             .collect()
     }
 
-    /// Execution trace for a block
-    pub async fn execution_trace_block(
+    /// Get storage read replay for a block
+    pub async fn storage_read_replay(
         &self,
         height: &BlockHeight,
-        trigger: TraceTrigger,
-    ) -> io::Result<Vec<TransactionExecutionStatus>> {
+    ) -> io::Result<Vec<Vec<StorageReadReplayEvent>>> {
         let query: Operation<
-            schema::execution_trace::ExectionTraceBlock,
-            schema::execution_trace::ExectionTraceBlockArgs,
-        > = schema::execution_trace::ExectionTraceBlock::build(
-            schema::execution_trace::ExectionTraceBlockArgs {
+            schema::storage_read_replay::StorageReadReplay,
+            schema::storage_read_replay::StorageReadReplayArgs,
+        > = schema::storage_read_replay::StorageReadReplay::build(
+            schema::storage_read_replay::StorageReadReplayArgs {
                 height: (*height).into(),
-                trigger: trigger.into(),
             },
         );
-        let tx_statuses = self.query(query).await.map(|r| r.execution_trace_block)?;
-        tx_statuses
+        Ok(self
+            .query(query)
+            .await
+            .map(|r| r.storage_read_replay)?
             .into_iter()
-            .map(|tx_status| tx_status.try_into().map_err(Into::into))
-            .collect()
+            .map(|events| events.into_iter().map(Into::into).collect())
+            .collect())
     }
 
     /// Estimate predicates for the transaction
