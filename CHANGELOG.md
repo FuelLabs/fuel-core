@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2479](https://github.com/FuelLabs/fuel-core/pull/2479): Fix an error on the last iteration of the read and write sequential opcodes on contract storage.
 - [2478](https://github.com/FuelLabs/fuel-core/pull/2478): Fix proof created by `message_receipts_proof` function by ignoring the receipts from failed transactions to match `message_outbox_root`.
 - [2485](https://github.com/FuelLabs/fuel-core/pull/2485): Hardcode the timestamp of the genesis block and version of `tai64` to avoid breaking changes for us.
+- [2511](https://github.com/FuelLabs/fuel-core/pull/2511): Fix backward compatibility of V0Metadata in gas price db.
 
 ### Changed
 - [2468](https://github.com/FuelLabs/fuel-core/pull/2468): Abstract unrecorded blocks concept for V1 algorithm, create new storage impl. Introduce `TransactionableStorage` trait to allow atomic changes to the storage.
