@@ -100,8 +100,20 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
 
     let directory_with_predefined_blocks = tempdir()?;
     std::fs::create_dir_all(directory_with_predefined_blocks.path())?;
-    let core =
-        FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
+    let core = FuelCoreDriver::spawn_feeless(&[
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--min-da-gas-price",
+        "0",
+        "--da-p-component",
+        "0",
+        "--da-d-component",
+        "0",
+        "--max-da-gas-price-change-percent",
+        "0",
+    ])
+    .await?;
 
     for _ in 0..BLOCK_TO_PRODUCE {
         produce_block_with_tx(&mut rng, &core.client).await;
@@ -134,6 +146,14 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
         "true",
         "--predefined-blocks-path",
         directory_with_predefined_blocks.path().to_str().unwrap(),
+        "--min-da-gas-price",
+        "0",
+        "--da-p-component",
+        "0",
+        "--da-d-component",
+        "0",
+        "--max-da-gas-price-change-percent",
+        "0",
     ])
     .await?;
 
