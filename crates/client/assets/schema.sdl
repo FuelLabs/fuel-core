@@ -370,6 +370,7 @@ type GasCosts {
 	div: U64!
 	divi: U64!
 	ecr1: U64!
+	ecop: U64
 	eck1: U64!
 	ed19: U64!
 	eq: U64!
@@ -452,6 +453,7 @@ type GasCosts {
 	ccp: DependentCost!
 	croo: DependentCost!
 	csiz: DependentCost!
+	epar: DependentCost
 	ed19DependentCost: DependentCost!
 	k256: DependentCost!
 	ldc: DependentCost!

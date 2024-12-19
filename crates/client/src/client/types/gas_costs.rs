@@ -63,6 +63,10 @@ impl GasCosts {
         self.0.eck1()
     }
 
+    pub fn ecop(&self) -> Option<Word> {
+        self.0.ecop().ok().map(Into::into)
+    }
+
     pub fn ecr1(&self) -> Word {
         self.0.ecr1()
     }
@@ -354,6 +358,14 @@ impl GasCosts {
         self.0.aloc().into()
     }
 
+    pub fn bsiz(&self) -> Option<DependentCost> {
+        self.0.bsiz().ok().map(Into::into)
+    }
+
+    pub fn bldd(&self) -> Option<DependentCost> {
+        self.0.bldd().ok().map(Into::into)
+    }
+
     pub fn cfe(&self) -> DependentCost {
         self.0.cfe().into()
     }
@@ -380,6 +392,10 @@ impl GasCosts {
 
     pub fn ed19(&self) -> DependentCost {
         self.0.ed19().into()
+    }
+
+    pub fn epar(&self) -> Option<DependentCost> {
+        self.0.epar().ok().map(Into::into)
     }
 
     pub fn k256(&self) -> DependentCost {

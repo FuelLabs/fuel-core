@@ -345,6 +345,10 @@ impl GasCosts {
         self.0.ecr1().into()
     }
 
+    async fn ecop(&self) -> Option<U64> {
+        self.0.ecop().ok().map(Into::into)
+    }
+
     async fn eck1(&self) -> U64 {
         self.0.eck1().into()
     }
@@ -671,6 +675,10 @@ impl GasCosts {
 
     async fn csiz(&self) -> DependentCost {
         self.0.csiz().into()
+    }
+
+    async fn epar(&self) -> Option<DependentCost> {
+        self.0.epar().ok().map(Into::into)
     }
 
     async fn ed19_dependent_cost(&self) -> DependentCost {

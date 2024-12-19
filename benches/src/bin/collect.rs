@@ -371,7 +371,7 @@ pub const GIT: &str = ""#,
     r#"";"#,
     r##"
 pub fn default_gas_costs() -> GasCostsValues {
-    GasCostsValuesV4 {"##,
+    GasCostsValuesV5 {"##,
     r##"    }.into()
 }
 "##,

@@ -230,6 +230,7 @@ pub struct GasCosts {
     pub div: U64,
     pub divi: U64,
     pub eck1: U64,
+    pub ecop: Option<U64>,
     pub ecr1: U64,
     pub ed19: U64,
     pub eq: U64,
@@ -314,6 +315,7 @@ pub struct GasCosts {
     pub croo: DependentCost,
     pub csiz: DependentCost,
     pub ed19_dependent_cost: DependentCost,
+    pub epar: Option<DependentCost>,
     pub k256: DependentCost,
     pub ldc: DependentCost,
     pub logd: DependentCost,
@@ -350,7 +352,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
     fn try_from(value: GasCosts) -> Result<Self, Self::Error> {
         match value.version {
             GasCostsVersion::V1 => Ok(fuel_core_types::fuel_tx::GasCosts::new(
-                fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV4 {
+                fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV5 {
                     add: value.add.into(),
                     addi: value.addi.into(),
                     and: value.and.into(),
@@ -364,6 +366,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     div: value.div.into(),
                     divi: value.divi.into(),
                     eck1: value.eck1.into(),
+                    ecop: value.ecop.map(Into::into).unwrap_or_default(),
                     ecr1: value.ecr1.into(),
                     eq: value.eq.into(),
                     exp: value.exp.into(),
@@ -447,6 +450,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     croo: value.croo.into(),
                     csiz: value.csiz.into(),
                     ed19: value.ed19_dependent_cost.into(),
+                    epar: value.epar.map(Into::into).unwrap_or(fuel_core_types::fuel_tx::consensus_parameters::DependentCost::free()),
                     k256: value.k256.into(),
                     ldc: value.ldc.into(),
                     logd: value.logd.into(),
