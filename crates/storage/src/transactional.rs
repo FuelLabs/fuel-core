@@ -392,7 +392,8 @@ where
         &self,
         key: &[u8],
         column: Self::Column,
-offset: usize,        buf: &mut [u8],
+        offset: usize,
+        buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
         if let Some(operation) = self.get_from_changes(key, column) {
             match operation {

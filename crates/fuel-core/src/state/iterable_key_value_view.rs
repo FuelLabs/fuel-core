@@ -70,7 +70,7 @@ where
         offset: usize,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        self.0.read(key, column, offset,buf)
+        self.0.read(key, column, offset, buf)
     }
 }
 

@@ -775,7 +775,10 @@ where
                         .map_err(|e| DatabaseError::Other(anyhow::anyhow!(e)))?;
                     StorageResult::Ok(bytes_read)
                 } else {
-                    Err(DatabaseError::Other(anyhow::anyhow!("Offset is out of bounds")).into())
+                    Err(
+                        DatabaseError::Other(anyhow::anyhow!("Offset is out of bounds"))
+                            .into(),
+                    )
                 }
             })
             .transpose()?;

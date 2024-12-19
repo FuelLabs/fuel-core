@@ -261,7 +261,12 @@ impl StorageSize<BlobData> for ReadView {
 }
 
 impl StorageRead<BlobData> for ReadView {
-    fn read(&self, key: &BlobId, offset: usize, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
+    fn read(
+        &self,
+        key: &BlobId,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Self::Error> {
         StorageRead::<BlobData>::read(self.on_chain.as_ref(), key, offset, buf)
     }
 

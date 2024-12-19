@@ -79,7 +79,12 @@ where
     M: Mappable,
     StructuredStorage<Storage>: StorageRead<M, Error = StorageError>,
 {
-    fn read(&self, key: &M::Key, offset: usize, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
+    fn read(
+        &self,
+        key: &M::Key,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Self::Error> {
         self.storage.storage::<M>().read(key, offset, buf)
     }
 

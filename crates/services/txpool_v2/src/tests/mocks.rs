@@ -133,7 +133,11 @@ impl StorageRead<BlobData> for MockDb {
         let bytes = table.blobs.get(key);
 
         let len = bytes.map(|bytes| {
-            let len = bytes.0.len().checked_sub(offset).expect("Read offset larger than value size");
+            let len = bytes
+                .0
+                .len()
+                .checked_sub(offset)
+                .expect("Read offset larger than value size");
             buf.copy_from_slice(&bytes.0.as_slice()[offset..]);
             len
         });
