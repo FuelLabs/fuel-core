@@ -84,6 +84,7 @@ pub trait RunnableService: Send {
 }
 
 /// The result of a single iteration of the service task
+#[derive(Debug)]
 pub enum TaskNextAction {
     /// Request the task to be run again
     Continue,

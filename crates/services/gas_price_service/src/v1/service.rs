@@ -106,6 +106,23 @@ where
 
         tracing::debug!("Updating gas price algorithm");
         self.apply_block_info_to_gas_algorithm(block).await?;
+
+        self.notify_da_source_service_l2_block(block)?;
+        Ok(())
+    }
+
+    fn notify_da_source_service_l2_block(&self, block: BlockInfo) -> anyhow::Result<()> {
+        tracing::debug!("Notifying the Da source service of the latest L2 block");
+        match block {
+            BlockInfo::GenesisBlock => {}
+            BlockInfo::Block { height, .. } => {
+                let mut latest_l2_block = self
+                    .latest_l2_block
+                    .lock()
+                    .map_err(|err| anyhow!("Error locking latest L2 block: {:?}", err))?;
+                *latest_l2_block = height;
+            }
+        }
         Ok(())
     }
 }
@@ -516,6 +533,7 @@ mod tests {
             algo_updater,
             da_service_runner,
             inner,
+            Arc::new(Mutex::new(0)),
         );
         let read_algo = service.next_block_algorithm();
         let mut watcher = StateWatcher::default();
@@ -604,6 +622,7 @@ mod tests {
             algo_updater,
             da_service_runner,
             inner,
+            Arc::new(Mutex::new(0)),
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -700,6 +719,7 @@ mod tests {
             algo_updater,
             da_service_runner,
             inner,
+            Arc::new(Mutex::new(0)),
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();

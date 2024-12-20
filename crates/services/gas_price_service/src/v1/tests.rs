@@ -388,6 +388,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         algo_updater,
         da_service_runner,
         inner,
+        Arc::new(Mutex::new(0u32)),
     );
 
     let read_algo = service.next_block_algorithm();
@@ -434,6 +435,7 @@ async fn run__new_l2_block_saves_old_metadata() {
         algo_updater,
         da_service_runner,
         inner,
+        Arc::new(Mutex::new(0u32)),
     );
     let mut watcher = StateWatcher::started();
 
@@ -472,7 +474,8 @@ async fn run__updates_da_service_latest_l2_height() {
 
     let config = zero_threshold_arbitrary_config();
     let inner = database();
-    let algo_updater = updater_from_config(&config);
+    let mut algo_updater = updater_from_config(&config);
+    algo_updater.l2_block_height = l2_height - 1;
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
     let da_service_runner =
@@ -484,19 +487,17 @@ async fn run__updates_da_service_latest_l2_height() {
         algo_updater,
         da_service_runner,
         inner,
+        da_service_latest_l2_block.clone(),
     );
     let mut watcher = StateWatcher::started();
 
     // when
     l2_block_sender.send(l2_block).await.unwrap();
-    service.run(&mut watcher).await;
+    let _ = service.run(&mut watcher).await;
 
     // then
     let latest_value = da_service_latest_l2_block.lock().unwrap();
     assert_eq!(*latest_value, l2_height);
-
-    // cleanup
-    service.shutdown().await.unwrap();
 }
 
 #[derive(Clone)]
