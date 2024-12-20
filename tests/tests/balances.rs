@@ -33,6 +33,9 @@ use fuel_core_types::{
     },
 };
 
+const RETRYABLE: &[u8] = &[1];
+const NON_RETRYABLE: &[u8] = &[];
+
 #[tokio::test]
 async fn balance() {
     let owner = Address::default();
@@ -55,18 +58,22 @@ async fn balance() {
             ..coin_generator.generate()
         })
         .collect(),
-        messages: vec![(owner, 60), (owner, 90)]
-            .into_iter()
-            .enumerate()
-            .map(|(nonce, (owner, amount))| MessageConfig {
-                sender: owner,
-                recipient: owner,
-                nonce: (nonce as u64).into(),
-                amount,
-                data: vec![],
-                da_height: DaBlockHeight::from(0usize),
-            })
-            .collect(),
+        messages: vec![
+            (owner, 60, NON_RETRYABLE),
+            (owner, 90, NON_RETRYABLE),
+            (owner, 200000, RETRYABLE),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(nonce, (owner, amount, data))| MessageConfig {
+            sender: owner,
+            recipient: owner,
+            nonce: (nonce as u64).into(),
+            amount,
+            data: data.to_vec(),
+            da_height: DaBlockHeight::from(0usize),
+        })
+        .collect(),
         ..Default::default()
     };
     let config = Config::local_node_with_state_config(state_config);
@@ -129,6 +136,8 @@ async fn balance() {
     client.submit_and_await_commit(&tx).await.unwrap();
 
     let balance = client.balance(&owner, Some(&asset_id)).await.unwrap();
+
+    // Note that the big (200000)  message, which is RETRYABLE is not included in the balance
     assert_eq!(balance, 449);
 }
 
@@ -136,9 +145,6 @@ async fn balance() {
 async fn balance_messages_only() {
     let owner = Address::default();
     let asset_id = AssetId::BASE;
-
-    const RETRYABLE: &[u8] = &[1];
-    const NON_RETRYABLE: &[u8] = &[];
 
     // setup config
     let state_config = StateConfig {
