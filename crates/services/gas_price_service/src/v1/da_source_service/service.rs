@@ -74,10 +74,27 @@ where
         let da_block_costs_res = self.source.request_da_block_costs().await;
         tracing::debug!("Received block costs: {:?}", da_block_costs_res);
         let da_block_costs = da_block_costs_res?;
-        for da_block_costs in da_block_costs {
+        let filtered_block_costs = self
+            .filter_costs_that_have_values_greater_than_l2_block_height(da_block_costs);
+        tracing::debug!(
+            "the latest l2 height is: {:?}",
+            *self.latest_l2_height.lock().unwrap()
+        );
+        for da_block_costs in filtered_block_costs {
+            tracing::debug!("Sending block costs: {:?}", da_block_costs);
             self.shared_state.0.send(da_block_costs)?;
         }
         Ok(())
+    }
+
+    fn filter_costs_that_have_values_greater_than_l2_block_height(
+        &self,
+        da_block_costs: Vec<DaBlockCosts>,
+    ) -> impl Iterator<Item = DaBlockCosts> {
+        let latest_l2_height = *self.latest_l2_height.lock().unwrap();
+        da_block_costs.into_iter().filter(move |da_block_costs| {
+            *da_block_costs.l2_blocks.end() < latest_l2_height
+        })
     }
 }
 
@@ -124,7 +141,6 @@ where
     /// This function polls the source according to a polling interval
     /// described by the DaBlockCostsService
     async fn run(&mut self, state_watcher: &mut StateWatcher) -> TaskNextAction {
-        tracing::debug!("111111111111111111111111111111111");
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {
