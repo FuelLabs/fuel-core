@@ -192,7 +192,7 @@ pub fn init_sub_services(
 
     tracing::debug!("da_committer_url: {:?}", config.da_committer_url);
     let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
-    let da_source = BlockCommitterDaBlockCosts::new(committer_api, None);
+    let da_source = BlockCommitterDaBlockCosts::new(committer_api);
     let v1_config = GasPriceServiceConfig::from(config.clone())
         .v1()
         .ok_or(anyhow!(

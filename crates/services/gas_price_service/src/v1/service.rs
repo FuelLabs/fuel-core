@@ -88,7 +88,7 @@ where
     /// Storage transaction provider for metadata and unrecorded blocks
     storage_tx_provider: AtomicStorage,
     /// communicates to the Da source service what the latest L2 block was
-    latest_l2_block: Arc<Mutex<u32>>,
+    latest_l2_block: Arc<Mutex<BlockHeight>>,
 }
 
 impl<L2, DA, AtomicStorage> GasPriceServiceV1<L2, DA, AtomicStorage>
@@ -120,7 +120,7 @@ where
                     .latest_l2_block
                     .lock()
                     .map_err(|err| anyhow!("Error locking latest L2 block: {:?}", err))?;
-                *latest_l2_block = height;
+                *latest_l2_block = BlockHeight::from(height);
             }
         }
         Ok(())
@@ -138,7 +138,7 @@ where
         algorithm_updater: AlgorithmUpdaterV1,
         da_source_adapter_handle: ServiceRunner<DaSourceService<DA>>,
         storage_tx_provider: AtomicStorage,
-        latest_l2_block: Arc<Mutex<u32>>,
+        latest_l2_block: Arc<Mutex<BlockHeight>>,
     ) -> Self {
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
         Self {
@@ -474,6 +474,9 @@ mod tests {
     fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
         InMemoryStorage::default().into_transaction()
     }
+    fn latest_l2_height(height: u32) -> Arc<Mutex<BlockHeight>> {
+        Arc::new(Mutex::new(BlockHeight::new(height)))
+    }
 
     #[tokio::test]
     async fn run__updates_gas_price_with_l2_block_source() {
@@ -515,7 +518,7 @@ mod tests {
             initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();
 
         let notifier = Arc::new(tokio::sync::Notify::new());
-        let latest_l2_block = Arc::new(Mutex::new(0u32));
+        let latest_l2_block = Arc::new(Mutex::new(BlockHeight::new(0)));
         let dummy_da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Err(anyhow::anyhow!("unused at the moment")),
@@ -523,9 +526,11 @@ mod tests {
             ),
             None,
             latest_l2_block,
+            None,
         );
         let da_service_runner = ServiceRunner::new(dummy_da_source);
         da_service_runner.start_and_await().await.unwrap();
+        let latest_l2_height = latest_l2_height(0);
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -533,7 +538,7 @@ mod tests {
             algo_updater,
             da_service_runner,
             inner,
-            Arc::new(Mutex::new(0)),
+            latest_l2_height,
         );
         let read_algo = service.next_block_algorithm();
         let mut watcher = StateWatcher::default();
@@ -597,7 +602,7 @@ mod tests {
         algo_updater.last_profit = 10_000;
         algo_updater.new_scaled_da_gas_price = 10_000_000;
 
-        let latest_l2_block = Arc::new(Mutex::new(block_height - 1));
+        let latest_l2_block = latest_l2_height(block_height - 1);
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
@@ -611,6 +616,7 @@ mod tests {
             ),
             Some(Duration::from_millis(1)),
             latest_l2_block.clone(),
+            None,
         );
         let mut watcher = StateWatcher::started();
         let da_service_runner = ServiceRunner::new(da_source);
@@ -696,7 +702,7 @@ mod tests {
         algo_updater.last_profit = 10_000;
         algo_updater.new_scaled_da_gas_price = 10_000_000;
 
-        let latest_l2_block = Arc::new(Mutex::new(block_height - 1));
+        let latest_l2_height = latest_l2_height(block_height - 1);
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
@@ -709,7 +715,8 @@ mod tests {
                 notifier.clone(),
             ),
             Some(Duration::from_millis(1)),
-            latest_l2_block.clone(),
+            latest_l2_height.clone(),
+            None,
         );
         let mut watcher = StateWatcher::started();
         let da_service_runner = ServiceRunner::new(da_source);
@@ -721,7 +728,7 @@ mod tests {
             algo_updater,
             da_service_runner,
             inner,
-            latest_l2_block,
+            latest_l2_height,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();

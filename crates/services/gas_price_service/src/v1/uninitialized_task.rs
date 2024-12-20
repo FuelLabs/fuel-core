@@ -160,17 +160,18 @@ where
             self.block_stream,
         );
 
-        if let Some(last_recorded_height) = self.gas_price_db.get_recorded_height()? {
-            self.da_source.set_last_value(last_recorded_height).await?;
-            tracing::info!("Set last recorded height to {}", last_recorded_height);
-        }
+        let recorded_height = self.gas_price_db.get_recorded_height()?;
         let poll_duration = self
             .config
             .da_poll_interval
             .map(|x| Duration::from_millis(x.into()));
-        let latest_l2_height = Arc::new(std::sync::Mutex::new(0));
-        let da_service =
-            DaSourceService::new(self.da_source, poll_duration, latest_l2_height.clone());
+        let latest_l2_height = Arc::new(std::sync::Mutex::new(BlockHeight::new(0)));
+        let da_service = DaSourceService::new(
+            self.da_source,
+            poll_duration,
+            latest_l2_height.clone(),
+            recorded_height,
+        );
         let da_service_runner = ServiceRunner::new(da_service);
         da_service_runner.start_and_await().await?;
 
