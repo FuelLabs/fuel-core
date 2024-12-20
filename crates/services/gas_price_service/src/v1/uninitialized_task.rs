@@ -81,7 +81,10 @@ use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     UnrecordedBlocks,
 };
-use std::time::Duration;
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 
 pub mod fuel_storage_unrecorded_blocks;
 
@@ -165,7 +168,9 @@ where
             .config
             .da_poll_interval
             .map(|x| Duration::from_millis(x.into()));
-        let da_service = DaSourceService::new(self.da_source, poll_duration);
+        let latest_l2_height = Arc::new(std::sync::Mutex::new(0));
+        let da_service =
+            DaSourceService::new(self.da_source, poll_duration, latest_l2_height.clone());
         let da_service_runner = ServiceRunner::new(da_service);
         da_service_runner.start_and_await().await?;
 
@@ -176,6 +181,7 @@ where
                 self.algo_updater,
                 da_service_runner,
                 self.gas_price_db,
+                latest_l2_height,
             );
             Ok(service)
         } else {
@@ -197,6 +203,7 @@ where
                 self.algo_updater,
                 da_service_runner,
                 self.gas_price_db,
+                latest_l2_height,
             );
             Ok(service)
         }

@@ -23,11 +23,14 @@ mod tests {
     use super::*;
     use crate::v1::da_source_service::{
         dummy_costs::DummyDaBlockCosts,
-        service::new_service,
+        service::new_da_service,
     };
     use fuel_core_services::Service;
     use std::{
-        sync::Arc,
+        sync::{
+            Arc,
+            Mutex,
+        },
         time::Duration,
     };
 
@@ -43,7 +46,12 @@ mod tests {
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_block_costs_source =
             DummyDaBlockCosts::new(Ok(expected_da_cost.clone()), notifier.clone());
-        let service = new_service(da_block_costs_source, Some(Duration::from_millis(1)));
+        let latest_l2_height = Arc::new(Mutex::new(0u32));
+        let service = new_da_service(
+            da_block_costs_source,
+            Some(Duration::from_millis(1)),
+            latest_l2_height,
+        );
         let mut shared_state = &mut service.shared.subscribe();
 
         // when
@@ -62,7 +70,12 @@ mod tests {
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_block_costs_source =
             DummyDaBlockCosts::new(Err(anyhow::anyhow!("boo!")), notifier.clone());
-        let service = new_service(da_block_costs_source, Some(Duration::from_millis(1)));
+        let latest_l2_height = Arc::new(Mutex::new(0u32));
+        let service = new_da_service(
+            da_block_costs_source,
+            Some(Duration::from_millis(1)),
+            latest_l2_height,
+        );
         let mut shared_state = &mut service.shared.subscribe();
 
         // when

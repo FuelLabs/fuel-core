@@ -5,7 +5,13 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use std::time::Duration;
+use std::{
+    sync::{
+        Arc,
+        Mutex,
+    },
+    time::Duration,
+};
 use tokio::{
     sync::broadcast::Sender,
     time::{
@@ -37,6 +43,7 @@ pub struct DaSourceService<Source> {
     poll_interval: Interval,
     source: Source,
     shared_state: SharedState,
+    latest_l2_height: Arc<Mutex<u32>>,
 }
 
 const DA_BLOCK_COSTS_CHANNEL_SIZE: usize = 16 * 1024;
@@ -46,7 +53,11 @@ impl<Source> DaSourceService<Source>
 where
     Source: DaBlockCostsSource,
 {
-    pub fn new(source: Source, poll_interval: Option<Duration>) -> Self {
+    pub fn new(
+        source: Source,
+        poll_interval: Option<Duration>,
+        latest_l2_height: Arc<Mutex<u32>>,
+    ) -> Self {
         let (sender, _) = tokio::sync::broadcast::channel(DA_BLOCK_COSTS_CHANNEL_SIZE);
         #[allow(clippy::arithmetic_side_effects)]
         Self {
@@ -55,6 +66,7 @@ where
                 poll_interval.unwrap_or(Duration::from_millis(POLLING_INTERVAL_MS)),
             ),
             source,
+            latest_l2_height,
         }
     }
 
@@ -133,9 +145,14 @@ where
     }
 }
 
-pub fn new_service<S: DaBlockCostsSource>(
+pub fn new_da_service<S: DaBlockCostsSource>(
     da_source: S,
     poll_interval: Option<Duration>,
+    latest_l2_height: Arc<Mutex<u32>>,
 ) -> ServiceRunner<DaSourceService<S>> {
-    ServiceRunner::new(DaSourceService::new(da_source, poll_interval))
+    ServiceRunner::new(DaSourceService::new(
+        da_source,
+        poll_interval,
+        latest_l2_height,
+    ))
 }

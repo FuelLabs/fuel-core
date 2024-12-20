@@ -28,8 +28,10 @@ use crate::{
     },
     v1::{
         algorithm::SharedV1Algorithm,
+        da_source_service,
         da_source_service::{
             service::{
+                new_da_service,
                 DaBlockCostsSource,
                 DaSourceService,
             },
@@ -376,8 +378,8 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
     let da_source = FakeDABlockCost::never_returns();
-    let da_source_service = DaSourceService::new(da_source, None);
-    let da_service_runner = ServiceRunner::new(da_source_service);
+    let latest_l2_height = Arc::new(Mutex::new(0u32));
+    let da_service_runner = new_da_service(da_source, None, latest_l2_height);
     da_service_runner.start_and_await().await.unwrap();
 
     let mut service = GasPriceServiceV1::new(
@@ -423,8 +425,8 @@ async fn run__new_l2_block_saves_old_metadata() {
     let algo_updater = updater_from_config(&config);
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
-    let da_source_service = DaSourceService::new(da_source, None);
-    let da_service_runner = ServiceRunner::new(da_source_service);
+    let latest_l2_height = Arc::new(Mutex::new(0u32));
+    let da_service_runner = new_da_service(da_source, None, latest_l2_height);
     da_service_runner.start_and_await().await.unwrap();
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
@@ -446,6 +448,52 @@ async fn run__new_l2_block_saves_old_metadata() {
         .unwrap()
         .is_some();
     assert!(metadata_is_some);
+
+    // cleanup
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn run__updates_da_service_latest_l2_height() {
+    // given
+    let da_service_latest_l2_block = Arc::new(Mutex::new(0u32));
+    let l2_height = 10;
+    let l2_block = BlockInfo::Block {
+        height: l2_height,
+        gas_used: 60,
+        block_gas_capacity: 100,
+        block_bytes: 100,
+        block_fees: 100,
+    };
+    let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
+    let l2_block_source = FakeL2BlockSource {
+        l2_block: l2_block_receiver,
+    };
+
+    let config = zero_threshold_arbitrary_config();
+    let inner = database();
+    let algo_updater = updater_from_config(&config);
+    let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
+    let da_source = FakeDABlockCost::never_returns();
+    let da_service_runner =
+        new_da_service(da_source, None, da_service_latest_l2_block.clone());
+    da_service_runner.start_and_await().await.unwrap();
+    let mut service = GasPriceServiceV1::new(
+        l2_block_source,
+        shared_algo,
+        algo_updater,
+        da_service_runner,
+        inner,
+    );
+    let mut watcher = StateWatcher::started();
+
+    // when
+    l2_block_sender.send(l2_block).await.unwrap();
+    service.run(&mut watcher).await;
+
+    // then
+    let latest_value = da_service_latest_l2_block.lock().unwrap();
+    assert_eq!(*latest_value, l2_height);
 
     // cleanup
     service.shutdown().await.unwrap();
@@ -691,7 +739,7 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
 }
 
 #[tokio::test]
-async fn uninitialized_task__init__starts_da_service_with_bundle_id_in_storage() {
+async fn uninitialized_task__init__starts_da_service_with_recorded_height_in_storage() {
     // given
     let block_height = 100;
     let recorded_height: u32 = 200;
