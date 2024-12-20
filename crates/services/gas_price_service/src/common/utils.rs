@@ -42,5 +42,7 @@ pub enum BlockInfo {
         block_bytes: u64,
         // The fees the block has collected
         block_fees: u64,
+        // The gas price used in the block
+        gas_price: u64,
     },
 }

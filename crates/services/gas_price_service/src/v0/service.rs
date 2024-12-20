@@ -250,6 +250,7 @@ mod tests {
             block_gas_capacity: 100,
             block_bytes: 100,
             block_fees: 100,
+            gas_price: 100,
         };
 
         let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
