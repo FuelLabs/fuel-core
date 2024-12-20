@@ -129,6 +129,7 @@
           "wqmm": 11,
           "xor": 2,
           "xori": 2,
+          "ecop": 2,
           "call": {
             "LightOperation": {
               "base": 21687,
@@ -235,6 +236,12 @@
             "HeavyOperation": {
               "base": 28484,
               "gas_per_unit": 26613
+            }
+          },
+          "epar": {
+            "HeavyOperation": {
+              "base": 2,
+              "gas_per_unit": 2
             }
           },
           "contract_root": {

@@ -44,6 +44,7 @@ pub struct GasCosts(fuel_tx::GasCosts);
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum GasCostsVersion {
     V1,
+    V2,
 }
 
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
@@ -281,6 +282,7 @@ impl GasCosts {
             | GasCostsValues::V2(_)
             | GasCostsValues::V3(_)
             | GasCostsValues::V4(_) => GasCostsVersion::V1,
+            GasCostsValues::V5(_) => GasCostsVersion::V2,
         }
     }
 
@@ -636,6 +638,10 @@ impl GasCosts {
         self.0.xori().into()
     }
 
+    async fn ecop(&self) -> Option<U64> {
+        self.0.ecop().ok().map(Into::into)
+    }
+
     async fn aloc_dependent_cost(&self) -> DependentCost {
         self.0.aloc().into()
     }
@@ -730,6 +736,10 @@ impl GasCosts {
 
     async fn swwq(&self) -> DependentCost {
         self.0.swwq().into()
+    }
+
+    async fn epar(&self) -> Option<DependentCost> {
+        self.0.epar().ok().map(Into::into)
     }
 
     // Non-opcode prices
