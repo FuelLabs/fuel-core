@@ -189,12 +189,12 @@ pub struct Command {
     #[arg(long = "native-executor-version", env)]
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
-    /// The starting gas price for the network
-    #[arg(long = "starting-exec-gas-price", default_value = "0", env)]
-    pub starting_exec_gas_price: u64,
+    /// The starting execution gas price for the network
+    #[arg(long = "starting-gas-price", default_value = "1000", env)]
+    pub starting_gas_price: u64,
 
     /// The percentage change in gas price per block
-    #[arg(long = "gas-price-change-percent", default_value = "0", env)]
+    #[arg(long = "gas-price-change-percent", default_value = "10", env)]
     pub gas_price_change_percent: u16,
 
     /// The minimum allowed gas price
@@ -206,19 +206,23 @@ pub struct Command {
     pub gas_price_threshold_percent: u8,
 
     /// Minimum DA gas price
-    #[arg(long = "min-da-gas-price", default_value = "0", env)]
+    #[arg(long = "min-da-gas-price", default_value = "10000000", env)]
     pub min_da_gas_price: u64,
 
     /// P component of DA gas price calculation
-    #[arg(long = "da-p-component", default_value = "0", env)]
+    /// **NOTE**: This is the **inverse** gain of a typical P controller.
+    /// Increasing this value will reduce gas price fluctuations.
+    #[arg(long = "da-p-component", default_value = "620090", env)]
     pub da_p_component: i64,
 
     /// D component of DA gas price calculation
-    #[arg(long = "da-d-component", default_value = "0", env)]
+    /// **NOTE**: This is the **inverse** anticipatory control factor of a typical PD controller.
+    /// Increasing this value will reduce the dampening effect of quick algorithm changes.
+    #[arg(long = "da-d-component", default_value = "3528576", env)]
     pub da_d_component: i64,
 
     /// Maximum DA gas price change percent
-    #[arg(long = "max-da-gas-price-change-percent", default_value = "0", env)]
+    #[arg(long = "max-da-gas-price-change-percent", default_value = "10", env)]
     pub max_da_gas_price_change_percent: u16,
 
     /// The URL for the DA Block Committer info
@@ -323,7 +327,7 @@ impl Command {
             debug,
             utxo_validation,
             native_executor_version,
-            starting_exec_gas_price: starting_gas_price,
+            starting_gas_price,
             gas_price_change_percent,
             min_gas_price,
             gas_price_threshold_percent,

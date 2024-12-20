@@ -448,6 +448,10 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
         snapshot_dir.path().to_str().unwrap(),
         "--native-executor-version",
         latest_state_transition_version.as_str(),
+        "--starting-gas-price",
+        "0",
+        "--gas-price-change-percent",
+        "0",
     ])
     .await?;
 
@@ -729,6 +733,18 @@ async fn starting_empty_node_with_overwritten_poa_works() -> anyhow::Result<()> 
             tmp_path.to_str().unwrap(),
             "--consensus-key",
             original_secret_key.to_string().as_str(),
+            "--min-da-gas-price",
+            "0",
+            "--da-p-component",
+            "0",
+            "--da-d-component",
+            "0",
+            "--max-da-gas-price-change-percent",
+            "0",
+            "--starting-gas-price",
+            "0",
+            "--gas-price-change-percent",
+            "0",
         ],
     )
     .await;
