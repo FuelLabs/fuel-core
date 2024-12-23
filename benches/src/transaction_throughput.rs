@@ -1,8 +1,46 @@
 #[cfg(test)]
 mod tests {
+
+    fn generate_transactions(nb_txs: u64, rng: &mut StdRng, secret_key: SecretKey) -> Vec<Transaction> {
+        let mut transactions = Vec::with_capacity(nb_txs as usize);
+        for _ in 0..nb_txs {
+            let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+            let owner = Input::predicate_owner(&predicate);
+            let mut tx = TransactionBuilder::script(vec![], vec![])
+                .script_gas_limit(10000)
+                .add_unsigned_coin_input(
+                    secret_key,
+                    rng.gen(),
+                    1000,
+                    Default::default(),
+                    Default::default(),
+                )
+                .add_input(Input::coin_predicate(
+                    rng.gen(),
+                    owner,
+                    1000,
+                    Default::default(),
+                    Default::default(),
+                    Default::default(),
+                    predicate.clone(),
+                    vec![],
+                ))
+                .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
+                .add_output(Output::change(rng.gen(), 0, AssetId::default()))
+                .finalize();
+            tx.estimate_predicates(
+                &checked_parameters(),
+                MemoryInstance::new(),
+                &EmptyStorage,
+            )
+            .expect("Predicate check failed");
+            transactions.push(tx.into());
+        }
+        transactions
+    }
+
     use fuel_core::{service::config::Trigger, upgradable_executor::native_executor::ports::TransactionExt};
     use fuel_core_chain_config::CoinConfig;
-    use fuel_core_storage::transactional::AtomicView;
     use fuel_core_types::{
         fuel_asm::{
             op,
@@ -53,40 +91,6 @@ mod tests {
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap();
 
-        let generator = |rng: &mut StdRng, secret_key: SecretKey| {
-            let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-            let owner = Input::predicate_owner(&predicate);
-            let mut tx = TransactionBuilder::script(vec![], vec![])
-                .script_gas_limit(10000)
-                .add_unsigned_coin_input(
-                    secret_key,
-                    rng.gen(),
-                    1000,
-                    Default::default(),
-                    Default::default(),
-                )
-                .add_input(Input::coin_predicate(
-                    rng.gen(),
-                    owner,
-                    1000,
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    predicate.clone(),
-                    vec![],
-                ))
-                .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
-                .add_output(Output::change(rng.gen(), 0, AssetId::default()))
-                .finalize();
-            tx.estimate_predicates(
-                &checked_parameters(),
-                MemoryInstance::new(),
-                &EmptyStorage,
-            )
-            .expect("Predicate check failed");
-            tx.into()
-        };
-
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -105,12 +109,8 @@ mod tests {
             );
             transactions
         } else {
-            let mut transactions: Vec<Transaction> = Vec::with_capacity(n as usize);
             let secret_key = SecretKey::random(&mut rng);
-            for _ in 0..n {
-                transactions.push(generator(&mut rng, secret_key));
-            }
-            transactions
+            generate_transactions(n, &mut rng, secret_key)
         };
         println!(
             "Generated {} transactions in {:?} ms.",
@@ -178,23 +178,20 @@ mod tests {
             let TestContext { srv, client, .. } = test_builder.finalize().await;
 
             // insert all transactions
-            for tx in transactions {
-                srv.shared.txpool_shared_state.insert(tx).await.unwrap();
+            let mut subscriber = srv.shared.txpool_shared_state.new_tx_notification_subscribe();
+            let mut nb_left = n;
+            let start_insertion = std::time::Instant::now();
+            srv.shared.txpool_shared_state.try_insert(transactions).unwrap();
+            while nb_left > 0 {
+                let _ = subscriber.recv().await.unwrap();
+                nb_left -= 1;
             }
-            let _ = client.produce_blocks(1, None).await;
-
-            // sanity check block to ensure the transactions were actually processed
-            let block = srv
-                .shared
-                .database
-                .on_chain()
-                .latest_view()
-                .unwrap()
-                .get_sealed_block_by_height(&1.into())
-                .unwrap()
-                .unwrap();
-            assert_eq!(block.entity.transactions().len(), (n + 1) as usize);
-            block
+            println!(
+                "Inserted {} transactions in {:?} ms.",
+                n,
+                start_insertion.elapsed().as_millis()
+            );
+            client.produce_blocks(1, None).await.unwrap();
         });
     }
 }

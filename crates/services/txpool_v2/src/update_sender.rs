@@ -65,12 +65,12 @@ impl TxStatusChange {
         block_height: &BlockHeight,
         message: TxStatusMessage,
     ) {
-        tracing::info!("Transaction {id} successfully included in block {block_height}");
+        tracing::debug!("Transaction {id} successfully included in block {block_height}");
         self.update_sender.send(TxUpdate::new(id, message));
     }
 
     pub fn send_submitted(&self, id: Bytes32, time: Tai64) {
-        tracing::info!("Transaction {id} successfully submitted to the tx pool");
+        tracing::debug!("Transaction {id} successfully submitted to the tx pool");
         let _ = self.new_tx_notification_sender.send(id);
         self.update_sender.send(TxUpdate::new(
             id,
