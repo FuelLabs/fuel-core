@@ -86,7 +86,7 @@ where
             let mut test_builder = TestSetupBuilder::new(2322);
             // setup genesis block with coins that transactions can spend
             test_builder.config_coin_inputs_from_transactions(
-                &transactions.iter().collect::<Vec<_>>(),
+                &transactions
             );
             // disable automated block production
             test_builder.trigger = Trigger::Never;
@@ -412,6 +412,8 @@ fn main() {
 }
 
 #[test]
-fn dummy() {}
+fn dummy() {
+    println!("Dummy test to make sure the tests are run");
+}
 
 fuel_core_trace::enable_tracing!();

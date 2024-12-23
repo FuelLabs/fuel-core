@@ -41,6 +41,7 @@ use std::{
 
 pub mod default_gas_costs;
 pub mod import;
+mod transaction_throughput;
 pub mod utils;
 
 pub mod db_lookup_times_utils;

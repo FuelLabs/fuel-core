@@ -100,6 +100,7 @@ pub struct TestSetupBuilder {
     pub privileged_address: Address,
     pub base_asset_id: AssetId,
     pub trigger: Trigger,
+    pub number_threads_pool_verif: usize,
     #[cfg(feature = "parallel-executor")]
     pub executor_number_of_cores: usize,
 }
@@ -108,6 +109,7 @@ impl TestSetupBuilder {
     pub fn new(seed: u64) -> TestSetupBuilder {
         Self {
             rng: StdRng::seed_from_u64(seed),
+            number_threads_pool_verif: 0,
             ..Default::default()
         }
     }
@@ -146,7 +148,7 @@ impl TestSetupBuilder {
     /// add input coins from a set of transaction to the genesis config
     pub fn config_coin_inputs_from_transactions<T>(
         &mut self,
-        transactions: &[&T],
+        transactions: &[T],
     ) -> &mut Self
     where
         T: Inputs,
@@ -241,12 +243,16 @@ impl TestSetupBuilder {
             max_pending_write_pool_requests: self.max_txs,
             max_pending_read_pool_requests: self.max_txs,
         };
+        txpool.heavy_work.number_threads_to_verify_transactions = self.number_threads_pool_verif;
+        txpool.heavy_work.size_of_verification_queue = self.max_txs;
 
         let config = Config {
             utxo_validation: self.utxo_validation,
             txpool,
             block_production: self.trigger,
             starting_gas_price: self.starting_gas_price,
+            
+            #[cfg(feature = "parallel-executor")]
             executor_number_of_cores: self.executor_number_of_cores,
             ..Config::local_node_with_configs(chain_conf, state)
         };
@@ -279,6 +285,7 @@ impl Default for TestSetupBuilder {
             privileged_address: Default::default(),
             base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
+            number_threads_pool_verif: 0,
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores: 1,
         }

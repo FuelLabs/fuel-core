@@ -125,7 +125,7 @@ async fn tx_pointer_set_from_previous_block() {
     // setup first txn which spends UTXOs from genesis
     let tx1 = script_tx(secret_key, amount, coin_utxo_id, contract_id, owner);
     // auto-configure genesis to make tx1 work
-    test_builder.config_coin_inputs_from_transactions(&[&tx1]);
+    test_builder.config_coin_inputs_from_transactions(&[tx1.clone()]);
 
     // spin up node
     let TestContext {

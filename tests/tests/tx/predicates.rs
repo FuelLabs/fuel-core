@@ -55,7 +55,7 @@ async fn transaction_with_valid_predicate_is_executed() {
 
     // create test context with predicates disabled
     let context = TestSetupBuilder::default()
-        .config_coin_inputs_from_transactions(&[&predicate_tx])
+        .config_coin_inputs_from_transactions(&[predicate_tx.clone()])
         .finalize()
         .await;
 
@@ -128,7 +128,7 @@ async fn transaction_with_invalid_predicate_is_rejected() {
 
     // create test context with predicates disabled
     let context = TestSetupBuilder::default()
-        .config_coin_inputs_from_transactions(&[&predicate_tx])
+        .config_coin_inputs_from_transactions(&[predicate_tx.clone()])
         .finalize()
         .await;
 
@@ -163,7 +163,7 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
 
     // create test context with predicates disabled
     let context = TestSetupBuilder::default()
-        .config_coin_inputs_from_transactions(&[&predicate_tx])
+        .config_coin_inputs_from_transactions(&[predicate_tx.clone()])
         .finalize()
         .await;
 

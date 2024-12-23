@@ -75,7 +75,7 @@ async fn can_upload_current_state_transition_function() {
     let mut test_builder = TestSetupBuilder::new(2322);
     let transactions =
         transactions_from_subsections(&mut test_builder.rng, subsections, amount);
-    test_builder.config_coin_inputs_from_transactions(&transactions.iter().collect_vec());
+    test_builder.config_coin_inputs_from_transactions(&transactions);
 
     let TestContext {
         client, srv: _drop, ..

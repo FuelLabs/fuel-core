@@ -60,7 +60,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
         .collect_vec();
 
     // setup genesis block with coins that transactions can spend
-    test_builder.config_coin_inputs_from_transactions(&transactions.iter().collect_vec());
+    test_builder.config_coin_inputs_from_transactions(&transactions);
 
     // spin up node
     let TestContext {
@@ -258,7 +258,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     let tx_ids: BTreeSet<_> = txs.iter().map(|tx| tx.id(&ChainId::default())).collect();
 
     // setup the genesis coins for spending
-    test_builder.config_coin_inputs_from_transactions(&txs.iter().collect_vec());
+    test_builder.config_coin_inputs_from_transactions(&txs);
     let txs: Vec<Transaction> = txs.into_iter().map(Into::into).collect_vec();
 
     let TestContext {

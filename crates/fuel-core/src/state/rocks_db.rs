@@ -279,7 +279,7 @@ where
         opts.set_max_total_wal_size(64 * 1024 * 1024);
         let cpu_number =
             i32::try_from(num_cpus::get()).expect("The number of CPU can't exceed `i32`");
-        opts.increase_parallelism(cmp::max(1, cpu_number / 2));
+        opts.increase_parallelism(cmp::max(1, cpu_number - 1));
         if let Some(capacity) = capacity {
             // Set cache size 1/3 of the capacity. Another 1/3 is
             // used by block cache and the last 1 / 3 remains for other purposes:
