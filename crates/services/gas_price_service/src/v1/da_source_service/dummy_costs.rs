@@ -34,4 +34,8 @@ impl DaBlockCostsSource for DummyDaBlockCosts {
             }
         }
     }
+
+    async fn set_last_value(&mut self, _bundle_id: u32) -> DaBlockCostsResult<()> {
+        unimplemented!("This is a dummy implementation");
+    }
 }
