@@ -51,8 +51,10 @@ impl MemoryPool {
 
     /// Gets a new raw VM memory instance from the pool.
     pub fn take_raw(&self) -> MemoryFromPool {
-        let mut pool = self.pool.lock();
-        let memory = pool.pop().unwrap_or_default();
+        let memory = {
+            let mut pool = self.pool.lock();
+            pool.pop().unwrap_or_default()
+        };
 
         MemoryFromPool {
             pool: self.clone(),

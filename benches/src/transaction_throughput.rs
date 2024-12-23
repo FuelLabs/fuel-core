@@ -1,7 +1,11 @@
 #[cfg(test)]
 mod tests {
 
-    fn generate_transactions(nb_txs: u64, rng: &mut StdRng, secret_key: SecretKey) -> Vec<Transaction> {
+    fn generate_transactions(
+        nb_txs: u64,
+        rng: &mut StdRng,
+        secret_key: SecretKey,
+    ) -> Vec<Transaction> {
         let mut transactions = Vec::with_capacity(nb_txs as usize);
         for _ in 0..nb_txs {
             let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
@@ -39,7 +43,10 @@ mod tests {
         transactions
     }
 
-    use fuel_core::{service::config::Trigger, upgradable_executor::native_executor::ports::TransactionExt};
+    use fuel_core::{
+        service::config::Trigger,
+        upgradable_executor::native_executor::ports::TransactionExt,
+    };
     use fuel_core_chain_config::CoinConfig;
     use fuel_core_types::{
         fuel_asm::{
@@ -48,7 +55,16 @@ mod tests {
         },
         fuel_crypto::*,
         fuel_tx::{
-            input::coin::{CoinPredicate, CoinSigned}, AssetId, Finalizable, Input, Output, Transaction, TransactionBuilder
+            input::coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            AssetId,
+            Finalizable,
+            Input,
+            Output,
+            Transaction,
+            TransactionBuilder,
         },
         fuel_vm::{
             checked_transaction::{
@@ -76,15 +92,15 @@ mod tests {
     #[test]
     fn test_txs() {
         let n = std::env::var("BENCH_TXS_NUMBER")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap();
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap();
 
         let use_txs_file = std::env::var("USE_TXS_FILE")
-        .ok()
-        .and_then(|s| s.parse::<bool>().ok())
-        .unwrap_or(false);
-    
+            .ok()
+            .and_then(|s| s.parse::<bool>().ok())
+            .unwrap_or(false);
+
         #[cfg(feature = "parallel-executor")]
         let number_of_cores = std::env::var("FUEL_BENCH_CORES")
             .ok()
@@ -101,7 +117,10 @@ mod tests {
 
         let start_transaction_generation = std::time::Instant::now();
         let transactions = if use_txs_file {
-            let transactions: Vec<Transaction> = serde_json::from_reader(std::fs::File::open("transactions.json").unwrap()).unwrap();
+            let transactions: Vec<Transaction> = serde_json::from_reader(
+                std::fs::File::open("transactions.json").unwrap(),
+            )
+            .unwrap();
             println!(
                 "Loaded {} transactions in {:?} ms.",
                 transactions.len(),
@@ -119,7 +138,6 @@ mod tests {
         );
         // serde_json::to_writer(std::fs::File::create("transactions.json").unwrap(), &transactions)
         // .unwrap();
-
 
         let mut test_builder = TestSetupBuilder::new(2322);
         // setup genesis block with coins that transactions can spend
@@ -178,10 +196,16 @@ mod tests {
             let TestContext { srv, client, .. } = test_builder.finalize().await;
 
             // insert all transactions
-            let mut subscriber = srv.shared.txpool_shared_state.new_tx_notification_subscribe();
+            let mut subscriber = srv
+                .shared
+                .txpool_shared_state
+                .new_tx_notification_subscribe();
             let mut nb_left = n;
             let start_insertion = std::time::Instant::now();
-            srv.shared.txpool_shared_state.try_insert(transactions).unwrap();
+            srv.shared
+                .txpool_shared_state
+                .try_insert(transactions)
+                .unwrap();
             while nb_left > 0 {
                 let _ = subscriber.recv().await.unwrap();
                 nb_left -= 1;

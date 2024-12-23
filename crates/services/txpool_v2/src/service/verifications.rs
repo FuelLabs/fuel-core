@@ -12,6 +12,7 @@ use crate::{
         TxPool,
     },
 };
+// use fuel_core_types::fuel_tx::UniqueIdentifier;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
@@ -142,9 +143,15 @@ impl UnverifiedTx {
             return Err(Error::MintIsDisallowed);
         }
 
+        // let start_time = tokio::time::Instant::now();
         let tx = self
             .0
             .into_checked_basic(current_height, consensus_params)?;
+        // tracing::info!(
+        //     "Transaction (id: {}) basic verification took: {} micros seconds",
+        //     tx.transaction().id(&consensus_params.chain_id()),
+        //     start_time.elapsed().as_micros()
+        // );
 
         Ok(BasicVerifiedTx(tx.into()))
     }
@@ -165,6 +172,7 @@ impl BasicVerifiedTx {
                 minimal_gas_price,
             });
         }
+
         Ok(GasPriceVerifiedTx(self.0))
     }
 }
@@ -180,11 +188,26 @@ impl GasPriceVerifiedTx {
         View: TxPoolPersistentStorage,
     {
         let pool_tx = checked_tx_into_pool(self.0, metadata)?;
+        // let tx_id = pool_tx.id();
 
-        let transaction = pool
-            .read()
-            .can_insert_transaction(Arc::new(pool_tx), view)?
+        // let start_time = tokio::time::Instant::now();
+        let read_lock = pool
+        .read();
+        // tracing::info!(
+        //     "Transaction (id: {}) waiting for read lock took: {} micros seconds",
+        //     tx_id,
+        //     start_time.elapsed().as_micros()
+        // );
+        // let start_time = tokio::time::Instant::now();
+        let transaction = 
+            read_lock.can_insert_transaction(Arc::new(pool_tx), view)?
             .into_transaction();
+        // tracing::info!(
+        //     "Transaction (id: {}) verify insert pool took: {} micros seconds",
+        //     tx_id,
+        //     start_time.elapsed().as_micros()
+        // );
+
         // SAFETY: We created the arc just above and it's not shared.
         let transaction =
             Arc::try_unwrap(transaction).expect("We only the owner of the `Arc`; qed");
@@ -208,10 +231,22 @@ impl InputDependenciesVerifiedTx {
         let mut tx = self.0;
 
         if utxo_validation {
+            // let start_time = tokio::time::Instant::now();
             tx = tx.check_signatures(&consensus_params.chain_id())?;
+            // tracing::info!(
+            //     "Transaction (id: {}) signature verification took: {} micros seconds",
+            //     tx.transaction().id(&consensus_params.chain_id()),
+            //     start_time.elapsed().as_micros()
+            // );
 
+            // let start_time = tokio::time::Instant::now();
             let parameters = CheckPredicateParams::from(consensus_params);
             tx = tx.check_predicates(&parameters, memory, view)?;
+            // tracing::info!(
+            //     "Transaction (id: {}) predicates verification took: {} micros seconds",
+            //     tx.transaction().id(&consensus_params.chain_id()),
+            //     start_time.elapsed().as_micros()
+            // );
 
             debug_assert!(tx.checks().contains(Checks::all()));
         }

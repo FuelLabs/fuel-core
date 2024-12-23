@@ -85,9 +85,7 @@ where
 
             let mut test_builder = TestSetupBuilder::new(2322);
             // setup genesis block with coins that transactions can spend
-            test_builder.config_coin_inputs_from_transactions(
-                &transactions
-            );
+            test_builder.config_coin_inputs_from_transactions(&transactions);
             // disable automated block production
             test_builder.trigger = Trigger::Never;
             test_builder.utxo_validation = true;

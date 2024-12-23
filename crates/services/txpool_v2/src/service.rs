@@ -403,12 +403,14 @@ where
             //  (see https://github.com/FuelLabs/fuel-vm/issues/831)
             let transaction = Arc::unwrap_or_clone(transaction);
 
+            // let start_time = tokio::time::Instant::now();
             let result = verification.perform_all_verifications(
                 transaction,
                 &pool,
                 current_height,
                 utxo_validation,
             );
+            // tracing::info!("Transaction (id: {}) took {} micros seconds to verify", &tx_id, start_time.elapsed().as_micros());
 
             if metrics {
                 txpool_metrics()
@@ -432,6 +434,7 @@ where
 
             let tx = Arc::new(checked_tx);
 
+            // let start_time = tokio::time::Instant::now();
             let result = {
                 let mut pool = pool.write();
                 let result = verification.persistent_storage_provider.latest_view();
@@ -441,6 +444,7 @@ where
                     Err(err) => Err(Error::Database(format!("{:?}", err))),
                 }
             };
+            // tracing::info!("Transaction (id: {}) took {} micros seconds to insert into the pool", &tx_id, start_time.elapsed().as_micros());
 
             let removed_txs = match result {
                 Ok(removed_txs) => {
