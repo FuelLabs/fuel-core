@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2233](https://github.com/FuelLabs/fuel-core/pull/2233): Introduce a new column `modification_history_v2` for storing the modification history in the historical rocksDB. Keys in this column are stored in big endian order. Changed the behaviour of the historical rocksDB to write changes for new block heights to the new column, and to perform lookup of values from the `modification_history_v2` table first, and then from the `modification_history` table, performing a migration upon access if necessary.
 
 #### Breaking
+- [2438](https://github.com/FuelLabs/fuel-core/pull/2438): Updated `fuel-vm` to `0.59.1` release. Check [release notes](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.59.0) for more details.
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2258): Updated the `messageProof` GraphQL schema to return a non-nullable `MessageProof`.
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Transaction graphql endpoints use `TransactionType` instead of `fuel_tx::Transaction`.
 - [2446](https://github.com/FuelLabs/fuel-core/pull/2446): Use graphiql instead of graphql-playground due to known vulnerability and stale development.
