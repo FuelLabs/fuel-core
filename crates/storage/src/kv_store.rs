@@ -1,9 +1,6 @@
 //! The module provides plain abstract definition of the key-value store.
 
-use crate::{
-    Error as StorageError,
-    Result as StorageResult,
-};
+use crate::Result as StorageResult;
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -72,20 +69,21 @@ pub trait KeyValueInspect {
     ) -> StorageResult<Option<usize>> {
         self.get(key, column)?
             .map(|value| {
-                if let Some(read) = value.len().checked_sub(offset) {
-                    if read != buf.len() {
-                        return Err(StorageError::Other(anyhow::anyhow!(
-                            "Buffer size is not equal to the value size"
-                        )));
-                    };
-                    // SAFETY: offset is guaranteed to be less or equal to value.len() by the if let check above
-                    buf.copy_from_slice(value[offset..].as_ref());
-                    Ok(buf.len())
-                } else {
-                    Err(StorageError::Other(anyhow::anyhow!(
-                        "Offset is out of bounds"
-                    )))
+                let bytes_len = value.as_ref().len();
+                let start = offset;
+                let end = offset.saturating_add(buf.len());
+
+                if end > bytes_len {
+                    return Err(anyhow::anyhow!(
+                        "Offset `{offset}` is out of bounds `{bytes_len}` for key `{:?}`",
+                        key
+                    )
+                    .into());
                 }
+
+                let starting_from_offset = &value.as_ref()[start..end];
+                buf[..].copy_from_slice(starting_from_offset);
+                Ok(buf.len())
             })
             .transpose()
     }
