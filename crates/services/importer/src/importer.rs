@@ -334,9 +334,6 @@ where
         let expected_block_root = database.latest_block_root()?;
 
         let start = Instant::now();
-
-        #[cfg(feature = "test-helpers")]
-        let changes_clone = changes.clone();
         let mut db_after_execution = database.storage_transaction(changes);
         let actual_block_root = db_after_execution.latest_block_root()?;
         if actual_block_root != expected_block_root {
@@ -363,8 +360,6 @@ where
 
         let result = ImporterResult {
             shared_result: Arc::new(Awaiter::new(result, permit)),
-            #[cfg(feature = "test-helpers")]
-            changes: Arc::new(changes_clone),
         };
         let _ = self.broadcast.send(result);
 
@@ -477,6 +472,7 @@ where
         verifier: Arc<V>,
         sealed_block: SealedBlock,
     ) -> Result<UncommittedResult<Changes>, Error> {
+        let start = tokio::time::Instant::now();
         let consensus = sealed_block.consensus;
         let block = sealed_block.entity;
         let sealed_block_id = block.id();
@@ -485,6 +481,10 @@ where
         if let Err(err) = result_of_verification {
             return Err(Error::FailedVerification(err))
         }
+        tracing::info!(
+            "Verification of the block fields took: {}ms",
+            start.elapsed().as_millis()
+        );
 
         // The current code has a separate function X to process `StateConfig`.
         // It is not possible to execute it via `Executor`.
@@ -493,10 +493,15 @@ where
             return Err(Error::ExecuteGenesis)
         }
 
+        let start_validate = tokio::time::Instant::now();
         let (ValidationResult { tx_status, events }, changes) = executor
             .validate(&block)
             .map_err(Error::FailedExecution)?
             .into();
+        tracing::info!(
+            "Validation of the block took: {}ms",
+            start_validate.elapsed().as_millis()
+        );
 
         let actual_block_id = block.id();
         if actual_block_id != sealed_block_id {
@@ -511,7 +516,10 @@ where
         };
         let import_result =
             ImportResult::new_from_network(sealed_block, tx_status, events);
-
+        tracing::info!(
+            "Verification and execution of the block took: {}ms",
+            start.elapsed().as_millis()
+        );
         Ok(Uncommitted::new(import_result, changes))
     }
 }
