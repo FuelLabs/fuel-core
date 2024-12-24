@@ -12,9 +12,9 @@ use crate::{
     },
     ports::{
         GasPriceServiceAtomicStorage,
-        GetDaBundleId,
+        GetLatestRecordedHeight,
         GetMetadataStorage,
-        SetDaBundleId,
+        SetLatestRecordedHeight,
         SetMetadataStorage,
     },
     v0::metadata::V0Metadata,
@@ -45,6 +45,8 @@ use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
+    Service,
+    ServiceRunner,
     StateWatcher,
     TaskNextAction,
 };
@@ -61,7 +63,11 @@ use futures::FutureExt;
 use tokio::sync::broadcast::Receiver;
 
 /// The service that updates the gas price algorithm.
-pub struct GasPriceServiceV1<L2, DA, StorageTxProvider> {
+pub struct GasPriceServiceV1<L2, DA, AtomicStorage>
+where
+    DA: DaBlockCostsSource + 'static,
+    AtomicStorage: GasPriceServiceAtomicStorage,
+{
     /// The algorithm that can be used in the next block
     shared_algo: SharedV1Algorithm,
     /// The L2 block source
@@ -69,13 +75,13 @@ pub struct GasPriceServiceV1<L2, DA, StorageTxProvider> {
     /// The algorithm updater
     algorithm_updater: AlgorithmUpdaterV1,
     /// the da source adapter handle
-    da_source_adapter_handle: DaSourceService<DA>,
+    da_source_adapter_handle: ServiceRunner<DaSourceService<DA>>,
     /// The da source channel
     da_source_channel: Receiver<DaBlockCosts>,
     /// Buffer of block costs from the DA chain
     da_block_costs_buffer: Vec<DaBlockCosts>,
     /// Storage transaction provider for metadata and unrecorded blocks
-    storage_tx_provider: StorageTxProvider,
+    storage_tx_provider: AtomicStorage,
 }
 
 impl<L2, DA, AtomicStorage> GasPriceServiceV1<L2, DA, AtomicStorage>
@@ -106,11 +112,10 @@ where
         l2_block_source: L2,
         shared_algo: SharedV1Algorithm,
         algorithm_updater: AlgorithmUpdaterV1,
-        da_source_adapter_handle: DaSourceService<DA>,
+        da_source_adapter_handle: ServiceRunner<DaSourceService<DA>>,
         storage_tx_provider: AtomicStorage,
     ) -> Self {
-        let da_source_channel =
-            da_source_adapter_handle.shared_data().clone().subscribe();
+        let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
         Self {
             shared_algo,
             l2_block_source,
@@ -156,43 +161,47 @@ where
     ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
-        let prev_height = height.saturating_sub(1);
-        let mut bundle_id = storage_tx
-            .get_bundle_id(&BlockHeight::from(prev_height))
+        let mut latest_recorded_height = storage_tx
+            .get_recorded_height()
             .map_err(|err| anyhow!(err))?;
 
         for da_block_costs in &self.da_block_costs_buffer {
             tracing::debug!("Updating DA block costs: {:?}", da_block_costs);
+            let l2_blocks = da_block_costs.l2_blocks.clone();
+            let end = *l2_blocks.end();
             self.algorithm_updater.update_da_record_data(
-                &da_block_costs.l2_blocks,
+                l2_blocks,
                 da_block_costs.bundle_size_bytes,
                 da_block_costs.blob_cost_wei,
                 &mut storage_tx.as_unrecorded_blocks(),
             )?;
-            bundle_id = Some(da_block_costs.bundle_id);
+            latest_recorded_height = Some(BlockHeight::from(end));
         }
 
-        if let Some(bundle_id) = bundle_id {
+        if let Some(recorded_height) = latest_recorded_height {
             storage_tx
-                .set_bundle_id(&BlockHeight::from(height), bundle_id)
+                .set_recorded_height(recorded_height)
                 .map_err(|err| anyhow!(err))?;
         }
 
+        let fee_in_wei = u128::from(block_fees).saturating_mul(1_000_000_000);
         self.algorithm_updater.update_l2_block_data(
             height,
             gas_used,
             capacity,
             block_bytes,
-            block_fees as u128,
+            fee_in_wei,
             &mut storage_tx.as_unrecorded_blocks(),
         )?;
 
         let metadata = self.algorithm_updater.clone().into();
+        tracing::info!("Setting metadata: {:?}", metadata);
         storage_tx
             .set_metadata(&metadata)
             .map_err(|err| anyhow!(err))?;
         AtomicStorage::commit_transaction(storage_tx)?;
         let new_algo = self.algorithm_updater.algorithm();
+        tracing::info!("Updating gas price: {}", &new_algo.calculate());
         self.shared_algo.update(new_algo).await;
         // Clear the buffer after committing changes
         self.da_block_costs_buffer.clear();
@@ -249,7 +258,7 @@ where
                 TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
-                tracing::debug!("Received L2 block result: {:?}", l2_block_res);
+                tracing::info!("Received L2 block result: {:?}", l2_block_res);
                 let res = self.commit_block_data_to_algorithm(l2_block_res).await;
                 TaskNextAction::always_continue(res)
             }
@@ -277,7 +286,7 @@ where
         }
 
         // run shutdown hooks for internal services
-        self.da_source_adapter_handle.shutdown().await?;
+        self.da_source_adapter_handle.stop_and_await().await?;
 
         Ok(())
     }
@@ -340,6 +349,8 @@ mod tests {
 
     use fuel_core_services::{
         RunnableTask,
+        Service,
+        ServiceRunner,
         StateWatcher,
     };
     use fuel_core_storage::{
@@ -356,9 +367,9 @@ mod tests {
     use crate::{
         common::{
             fuel_core_storage_adapter::storage::{
-                BundleIdTable,
                 GasPriceColumn,
                 GasPriceColumn::UnrecordedBlocks,
+                RecordedHeights,
                 UnrecordedBlocksTable,
             },
             gas_price_algorithm::SharedGasPriceAlgo,
@@ -431,6 +442,7 @@ mod tests {
             Ok(metadata)
         }
     }
+
     fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
         InMemoryStorage::default().into_transaction()
     }
@@ -468,6 +480,7 @@ mod tests {
             capped_range_size: 100,
             decrease_range_size: 4,
             block_activity_threshold: 20,
+            da_poll_interval: None,
         };
         let inner = database();
         let (algo_updater, shared_algo) =
@@ -481,12 +494,14 @@ mod tests {
             ),
             None,
         );
+        let da_service_runner = ServiceRunner::new(dummy_da_source);
+        da_service_runner.start_and_await().await.unwrap();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
             shared_algo,
             algo_updater,
-            dummy_da_source,
+            da_service_runner,
             inner,
         );
         let read_algo = service.next_block_algorithm();
@@ -536,6 +551,7 @@ mod tests {
             capped_range_size: 100,
             decrease_range_size: 4,
             block_activity_threshold: 20,
+            da_poll_interval: None,
         };
         let mut inner = database();
         let mut tx = inner.write_transaction();
@@ -555,8 +571,8 @@ mod tests {
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
                     bundle_id: 1,
-                    l2_blocks: (1..2).collect(),
-                    blob_cost_wei: 9000,
+                    l2_blocks: 1..=1,
+                    blob_cost_wei: u128::MAX, // Very expensive to trigger a change
                     bundle_size_bytes: 3000,
                 }),
                 notifier.clone(),
@@ -564,33 +580,26 @@ mod tests {
             Some(Duration::from_millis(1)),
         );
         let mut watcher = StateWatcher::started();
+        let da_service_runner = ServiceRunner::new(da_source);
+        da_service_runner.start_and_await().await.unwrap();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
             shared_algo,
             algo_updater,
-            da_source,
+            da_service_runner,
             inner,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
 
-        // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
-        // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
-        // here we mimic that behaviour by running the da block cost service.
-        let mut da_source_watcher = StateWatcher::started();
-        service
-            .da_source_adapter_handle
-            .run(&mut da_source_watcher)
-            .await;
-
         service.run(&mut watcher).await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(3)).await;
         l2_block_sender.send(l2_block_2).await.unwrap();
 
         // when
         service.run(&mut watcher).await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(3)).await;
         service.shutdown().await.unwrap();
 
         // then
@@ -613,15 +622,16 @@ mod tests {
             capped_range_size: 100,
             decrease_range_size: 4,
             block_activity_threshold: 20,
+            da_poll_interval: None,
         }
     }
 
     #[tokio::test]
-    async fn run__responses_from_da_service_update_bundle_id_in_storage() {
+    async fn run__responses_from_da_service_update_recorded_height_in_storage() {
         // given
-        let bundle_id = 1234;
-        let block_height = 2;
-        let l2_block_2 = BlockInfo::Block {
+        let recorded_block_height = 100;
+        let block_height = 200;
+        let l2_block = BlockInfo::Block {
             height: block_height,
             gas_used: 60,
             block_gas_capacity: 100,
@@ -654,8 +664,8 @@ mod tests {
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
-                    bundle_id,
-                    l2_blocks: (1..2).collect(),
+                    bundle_id: 8765,
+                    l2_blocks: 1..=recorded_block_height,
                     blob_cost_wei: 9000,
                     bundle_size_bytes: 3000,
                 }),
@@ -664,42 +674,38 @@ mod tests {
             Some(Duration::from_millis(1)),
         );
         let mut watcher = StateWatcher::started();
+        let da_service_runner = ServiceRunner::new(da_source);
+        da_service_runner.start_and_await().await.unwrap();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
             shared_algo,
             algo_updater,
-            da_source,
+            da_service_runner,
             inner,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
 
-        // the RunnableTask depends on the handle passed to it for the da block cost source to already be running,
-        // which is the responsibility of the UninitializedTask in the `into_task` method of the RunnableService
-        // here we mimic that behaviour by running the da block cost service.
-        let mut da_source_watcher = StateWatcher::started();
-        service
-            .da_source_adapter_handle
-            .run(&mut da_source_watcher)
-            .await;
-
         service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
-        l2_block_sender.send(l2_block_2).await.unwrap();
+        l2_block_sender.send(l2_block).await.unwrap();
 
         // when
         service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // then
-        let latest_bundle_id = service
+        let latest_recorded_block_height = service
             .storage_tx_provider
-            .storage::<BundleIdTable>()
-            .get(&BlockHeight::from(block_height))
+            .storage::<RecordedHeights>()
+            .get(&())
             .unwrap()
             .unwrap();
-        assert_eq!(*latest_bundle_id, bundle_id);
+        assert_eq!(
+            *latest_recorded_block_height,
+            BlockHeight::from(recorded_block_height)
+        );
 
         service.shutdown().await.unwrap();
     }

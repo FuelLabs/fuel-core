@@ -3,7 +3,10 @@ use std::{
     cmp::max,
     collections::BTreeMap,
     num::NonZeroU64,
-    ops::Div,
+    ops::{
+        Div,
+        RangeInclusive,
+    },
 };
 
 #[cfg(test)]
@@ -269,9 +272,9 @@ impl L2ActivityTracker {
     }
 
     pub fn safety_mode(&self) -> DAGasPriceSafetyMode {
-        if self.chain_activity > self.capped_activity_threshold {
+        if self.chain_activity >= self.capped_activity_threshold {
             DAGasPriceSafetyMode::Normal
-        } else if self.chain_activity > self.decrease_activity_threshold {
+        } else if self.chain_activity >= self.decrease_activity_threshold {
             DAGasPriceSafetyMode::Capped
         } else {
             DAGasPriceSafetyMode::AlwaysDecrease
@@ -279,7 +282,15 @@ impl L2ActivityTracker {
     }
 
     pub fn update(&mut self, block_usage: ClampedPercentage) {
+        tracing::info!("Block usage: {:?}", block_usage);
+        tracing::info!("Chain activity: {}", self.chain_activity);
+        tracing::info!("threshold: {:?}", self.block_activity_threshold);
         if block_usage < self.block_activity_threshold {
+            tracing::info!(
+                "Decreasing activity {:?} < {:?}",
+                block_usage,
+                self.block_activity_threshold
+            );
             self.chain_activity = self.chain_activity.saturating_sub(1);
         } else {
             self.chain_activity =
@@ -341,7 +352,7 @@ impl core::ops::Deref for ClampedPercentage {
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data<U: UnrecordedBlocks>(
         &mut self,
-        heights: &[u32],
+        heights: RangeInclusive<u32>,
         recorded_bytes: u32,
         recording_cost: u128,
         unrecorded_blocks: &mut U,
@@ -382,6 +393,7 @@ impl AlgorithmUpdaterV1 {
             let rewards = self.clamped_rewards_as_i128();
 
             // costs
+            tracing::info!("Block bytes: {}", block_bytes);
             self.update_projected_da_cost(block_bytes);
             let projected_total_da_cost = self.clamped_projected_cost_as_i128();
 
@@ -414,7 +426,9 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn update_da_rewards(&mut self, fee_wei: u128) {
+        tracing::info!("Fee: {}", fee_wei);
         let block_da_reward = self.da_portion_of_fee(fee_wei);
+        tracing::info!("DA reward: {}", block_da_reward);
         self.total_da_rewards_excess =
             self.total_da_rewards_excess.saturating_add(block_da_reward);
     }
@@ -462,7 +476,7 @@ impl AlgorithmUpdaterV1 {
             .unwrap_or(threshold);
 
         match fullness_percent.cmp(&threshold) {
-            std::cmp::Ordering::Greater => {
+            std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => {
                 let change_amount = self.exec_change(scaled_exec_gas_price);
                 scaled_exec_gas_price =
                     scaled_exec_gas_price.saturating_add(change_amount);
@@ -472,7 +486,6 @@ impl AlgorithmUpdaterV1 {
                 scaled_exec_gas_price =
                     scaled_exec_gas_price.saturating_sub(change_amount);
             }
-            std::cmp::Ordering::Equal => {}
         }
         self.new_scaled_exec_price =
             max(self.min_scaled_exec_gas_price(), scaled_exec_gas_price);
@@ -486,18 +499,27 @@ impl AlgorithmUpdaterV1 {
     fn update_da_gas_price(&mut self) {
         let p = self.p();
         let d = self.d();
-        let maybe_da_change = self.da_change(p, d);
-        let da_change = self.da_change_accounting_for_activity(maybe_da_change);
+        let maybe_scaled_da_change = self.da_change(p, d);
+        let scaled_da_change =
+            self.da_change_accounting_for_activity(maybe_scaled_da_change);
         let maybe_new_scaled_da_gas_price = i128::from(self.new_scaled_da_gas_price)
-            .checked_add(da_change)
+            .checked_add(scaled_da_change)
             .and_then(|x| u64::try_from(x).ok())
             .unwrap_or_else(|| {
-                if da_change.is_positive() {
+                if scaled_da_change.is_positive() {
                     u64::MAX
                 } else {
                     0u64
                 }
             });
+        tracing::info!("Profit: {}", self.last_profit);
+        tracing::info!(
+            "DA gas price change: p: {}, d: {}, change: {}, new: {}",
+            p,
+            d,
+            scaled_da_change,
+            maybe_new_scaled_da_gas_price
+        );
         self.new_scaled_da_gas_price = max(
             self.min_scaled_da_gas_price(),
             maybe_new_scaled_da_gas_price,
@@ -510,6 +532,7 @@ impl AlgorithmUpdaterV1 {
                 DAGasPriceSafetyMode::Normal => maybe_da_change,
                 DAGasPriceSafetyMode::Capped => 0,
                 DAGasPriceSafetyMode::AlwaysDecrease => {
+                    tracing::info!("Activity is low, decreasing DA gas price");
                     self.max_change().saturating_mul(-1)
                 }
             }
@@ -539,10 +562,12 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn da_change(&self, p: i128, d: i128) -> i128 {
-        let pd_change = p.saturating_add(d);
+        let scaled_pd_change = p
+            .saturating_add(d)
+            .saturating_mul(self.gas_price_factor.get() as i128);
         let max_change = self.max_change();
-        let clamped_change = pd_change.saturating_abs().min(max_change);
-        pd_change.signum().saturating_mul(clamped_change)
+        let clamped_change = scaled_pd_change.saturating_abs().min(max_change);
+        scaled_pd_change.signum().saturating_mul(clamped_change)
     }
 
     // Should always be positive
@@ -562,7 +587,7 @@ impl AlgorithmUpdaterV1 {
 
     fn da_block_update<U: UnrecordedBlocks>(
         &mut self,
-        heights: &[u32],
+        heights: RangeInclusive<u32>,
         recorded_bytes: u128,
         recording_cost: u128,
         unrecorded_blocks: &mut U,
@@ -591,13 +616,13 @@ impl AlgorithmUpdaterV1 {
     // Always remove the blocks from the unrecorded blocks so they don't build up indefinitely
     fn update_unrecorded_block_bytes<U: UnrecordedBlocks>(
         &mut self,
-        heights: &[u32],
+        heights: RangeInclusive<u32>,
         unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
         let mut total: u128 = 0;
         for expected_height in heights {
             let maybe_bytes = unrecorded_blocks
-                .remove(expected_height)
+                .remove(&expected_height)
                 .map_err(Error::CouldNotRemoveUnrecordedBlock)?;
 
             if let Some(bytes) = maybe_bytes {

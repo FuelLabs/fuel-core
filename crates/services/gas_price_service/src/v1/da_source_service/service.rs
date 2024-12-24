@@ -16,6 +16,7 @@ use tokio::{
 
 use crate::v1::da_source_service::DaBlockCosts;
 pub use anyhow::Result;
+use fuel_core_types::fuel_types::BlockHeight;
 
 #[derive(Clone)]
 pub struct SharedState(Sender<DaBlockCosts>);
@@ -58,8 +59,12 @@ where
     }
 
     async fn process_block_costs(&mut self) -> Result<()> {
-        let da_block_costs = self.source.request_da_block_cost().await?;
-        self.shared_state.0.send(da_block_costs)?;
+        let da_block_costs_res = self.source.request_da_block_costs().await;
+        tracing::debug!("Received block costs: {:?}", da_block_costs_res);
+        let da_block_costs = da_block_costs_res?;
+        for da_block_costs in da_block_costs {
+            self.shared_state.0.send(da_block_costs)?;
+        }
         Ok(())
     }
 }
@@ -68,8 +73,8 @@ where
 /// da block costs in a way they see fit
 #[async_trait::async_trait]
 pub trait DaBlockCostsSource: Send + Sync {
-    async fn request_da_block_cost(&mut self) -> Result<DaBlockCosts>;
-    async fn set_last_value(&mut self, bundle_id: u32) -> Result<()>;
+    async fn request_da_block_costs(&mut self) -> Result<Vec<DaBlockCosts>>;
+    async fn set_last_value(&mut self, block_height: BlockHeight) -> Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -107,12 +112,14 @@ where
     /// This function polls the source according to a polling interval
     /// described by the DaBlockCostsService
     async fn run(&mut self, state_watcher: &mut StateWatcher) -> TaskNextAction {
+        tracing::debug!("111111111111111111111111111111111");
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {
                 TaskNextAction::Stop
             }
             _ = self.poll_interval.tick() => {
+                tracing::debug!("Polling DaSourceService for block costs");
                 let da_block_costs_res = self.process_block_costs().await;
                 TaskNextAction::always_continue(da_block_costs_res)
             }
