@@ -392,6 +392,7 @@ where
         &self,
         key: &[u8],
         column: Self::Column,
+        offset: usize,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
         if let Some(operation) = self.get_from_changes(key, column) {
@@ -409,7 +410,7 @@ where
                 WriteOperation::Remove => Ok(None),
             }
         } else {
-            self.storage.read(key, column, buf)
+            self.storage.read(key, column, offset, buf)
         }
     }
 }
