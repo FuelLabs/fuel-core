@@ -777,13 +777,19 @@ async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
         empty_block_stream(),
         gas_price_db,
         FakeDABlockCost::never_returns(),
-        onchain_db,
+        onchain_db.clone(),
     )
     .unwrap();
 
     // when
-    service.init(&StateWatcher::started()).await.unwrap();
+    let gas_price_service = service.init(&StateWatcher::started()).await.unwrap();
 
     // then
-    // no panic
+    // sleep to allow the service to sync
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let on_chain_height = u32::from(onchain_db.height);
+    let algo_updater_height = gas_price_service.algorithm_updater().l2_block_height;
+
+    assert_eq!(on_chain_height, algo_updater_height);
 }
