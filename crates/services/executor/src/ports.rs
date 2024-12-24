@@ -5,13 +5,17 @@ use fuel_core_types::{
     },
     fuel_tx::{
         self,
+        field::Expiration,
         Chargeable,
         ConsensusParameters,
         Transaction,
         TxId,
         UniqueIdentifier,
     },
-    fuel_types::ChainId,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     fuel_vm::checked_transaction::CheckedTransaction,
     services::{
         executor::{
@@ -63,6 +67,51 @@ impl MaybeCheckedTransaction {
                 _,
             ) => tx.id(),
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
+        }
+    }
+
+    pub fn expiration(&self) -> BlockHeight {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Script(tx),
+                _,
+            ) => tx.transaction().expiration(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Create(tx),
+                _,
+            ) => tx.transaction().expiration(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Mint(_),
+                _,
+            ) => u32::MAX.into(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Upgrade(tx),
+                _,
+            ) => tx.transaction().expiration(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Upload(tx),
+                _,
+            ) => tx.transaction().expiration(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Blob(tx),
+                _,
+            ) => tx.transaction().expiration(),
+            MaybeCheckedTransaction::Transaction(Transaction::Script(tx)) => {
+                tx.expiration()
+            }
+            MaybeCheckedTransaction::Transaction(Transaction::Create(tx)) => {
+                tx.expiration()
+            }
+            MaybeCheckedTransaction::Transaction(Transaction::Mint(_)) => u32::MAX.into(),
+            MaybeCheckedTransaction::Transaction(Transaction::Upgrade(tx)) => {
+                tx.expiration()
+            }
+            MaybeCheckedTransaction::Transaction(Transaction::Upload(tx)) => {
+                tx.expiration()
+            }
+            MaybeCheckedTransaction::Transaction(Transaction::Blob(tx)) => {
+                tx.expiration()
+            }
         }
     }
 }

@@ -1,15 +1,31 @@
 use fuel_core_services::Service as ServiceTrait;
 use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        consensus::Sealed,
+    },
     fuel_tx::UniqueIdentifier,
     fuel_types::ChainId,
-    services::txpool::TransactionStatus,
+    services::{
+        block_importer::ImportResult,
+        txpool::TransactionStatus,
+    },
 };
-use std::time::Duration;
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 use tokio_stream::StreamExt;
 
 use crate::{
     config::Config,
-    tests::universe::TestPoolUniverse,
+    tests::{
+        mocks::MockImporter,
+        universe::{
+            TestPoolUniverse,
+            DEFAULT_EXPIRATION_HEIGHT,
+        },
+    },
     tx_status_stream::TxStatusMessage,
 };
 
@@ -232,6 +248,89 @@ async fn test_prune_transactions_the_oldest() {
     assert!(out[1].is_none(), "Tx2 should be pruned");
     assert!(out[2].is_none(), "Tx3 should be pruned");
     assert!(out[3].is_some(), "Tx4 should exist");
+
+    service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test]
+async fn prune_expired_transactions() {
+    let mut universe = TestPoolUniverse::default();
+    let (sender, receiver) = tokio::sync::mpsc::channel(10);
+
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 20);
+    let tx3 = universe.build_script_transaction(None, None, 30);
+
+    let service =
+        universe.build_service(None, Some(MockImporter::with_block_provider(receiver)));
+    service.start_and_await().await.unwrap();
+
+    // Given
+    let expiration_block = Sealed {
+        entity: {
+            let mut block = Block::default();
+            let header = block.header_mut();
+            header.set_block_height(DEFAULT_EXPIRATION_HEIGHT);
+            block
+        },
+        consensus: Default::default(),
+    };
+    let ids = vec![
+        tx1.id(&Default::default()),
+        tx2.id(&Default::default()),
+        tx3.id(&Default::default()),
+    ];
+    service
+        .shared
+        .try_insert(vec![tx1.clone(), tx2.clone(), tx3.clone()])
+        .unwrap();
+
+    universe
+        .waiting_txs_insertion(service.shared.new_tx_notification_subscribe(), ids)
+        .await;
+
+    assert_eq!(
+        service
+            .shared
+            .find(vec![
+                tx1.id(&Default::default()),
+                tx2.id(&Default::default()),
+                tx3.id(&Default::default()),
+            ])
+            .await
+            .unwrap()
+            .iter()
+            .filter(|x| x.is_some())
+            .count(),
+        3
+    );
+
+    // When
+    sender
+        .send(Arc::new(ImportResult::new_from_local(
+            expiration_block,
+            vec![],
+            vec![],
+        )))
+        .await
+        .unwrap();
+
+    // Then
+    assert_eq!(
+        service
+            .shared
+            .find(vec![
+                tx1.id(&Default::default()),
+                tx2.id(&Default::default()),
+                tx3.id(&Default::default()),
+            ])
+            .await
+            .unwrap()
+            .iter()
+            .filter(|x| x.is_some())
+            .count(),
+        0
+    );
 
     service.stop_and_await().await.unwrap();
 }
