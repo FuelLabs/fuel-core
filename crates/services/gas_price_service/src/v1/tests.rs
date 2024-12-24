@@ -742,6 +742,9 @@ fn arb_block() -> Block<Transaction> {
 
 #[tokio::test]
 async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init();
     // given
     let metadata_height = 100;
     let l2_height = 200;
