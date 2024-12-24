@@ -44,7 +44,7 @@ expression: json
       },
       "chain_id": 0,
       "gas_costs": {
-        "V4": {
+        "V5": {
           "add": 1,
           "addi": 1,
           "and": 1,
@@ -130,6 +130,7 @@ expression: json
           "wqmm": 3,
           "xor": 1,
           "xori": 1,
+          "ecop": 3500,
           "aloc": {
             "LightOperation": {
               "base": 2,
@@ -272,6 +273,12 @@ expression: json
             "LightOperation": {
               "base": 44,
               "units_per_gas": 5
+            }
+          },
+          "epar": {
+            "HeavyOperation": {
+              "base": 69000,
+              "gas_per_unit": 52000
             }
           },
           "contract_root": {
