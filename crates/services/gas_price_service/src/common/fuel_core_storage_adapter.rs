@@ -1,40 +1,49 @@
-use crate::common::utils::{
-    BlockInfo,
-    Error as GasPriceError,
-    Result as GasPriceResult,
-};
-use anyhow::anyhow;
-use fuel_core_types::fuel_types::BlockHeight;
-
 use crate::{
     common::{
         fuel_core_storage_adapter::storage::{
+            BundleIdTable,
             GasPriceColumn,
             GasPriceMetadata,
         },
         updater_metadata::UpdaterMetadata,
+        utils::{
+            BlockInfo,
+            Error as GasPriceError,
+            Result as GasPriceResult,
+        },
     },
-    ports::MetadataStorage,
+    ports::{
+        GasPriceServiceAtomicStorage,
+        GetDaBundleId,
+        GetMetadataStorage,
+        SetDaBundleId,
+        SetMetadataStorage,
+    },
 };
+use anyhow::anyhow;
+use core::cmp::min;
 use fuel_core_storage::{
     codec::{
         postcard::Postcard,
         Encode,
     },
     kv_store::KeyValueInspect,
-    structured_storage::StructuredStorage,
     transactional::{
         Modifiable,
+        StorageTransaction,
         WriteTransaction,
     },
+    Error as StorageError,
     StorageAsMut,
     StorageAsRef,
+    StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
         header::ConsensusParametersVersion,
     },
+    fuel_merkle::storage::StorageMutate,
     fuel_tx::{
         field::{
             MintAmount,
@@ -42,32 +51,21 @@ use fuel_core_types::{
         },
         Transaction,
     },
+    fuel_types::BlockHeight,
 };
-use std::cmp::min;
 
 #[cfg(test)]
 mod metadata_tests;
 
 pub mod storage;
 
-impl<Storage> MetadataStorage for StructuredStorage<Storage>
+impl<Storage> SetMetadataStorage for Storage
 where
-    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable,
     Storage: Send + Sync,
+    Storage: Modifiable,
+    for<'a> StorageTransaction<&'a mut Storage>:
+        StorageMutate<GasPriceMetadata, Error = StorageError>,
 {
-    fn get_metadata(
-        &self,
-        block_height: &BlockHeight,
-    ) -> GasPriceResult<Option<UpdaterMetadata>> {
-        let metadata = self
-            .storage::<GasPriceMetadata>()
-            .get(block_height)
-            .map_err(|err| GasPriceError::CouldNotFetchMetadata {
-                source_error: err.into(),
-            })?;
-        Ok(metadata.map(|inner| inner.into_owned()))
-    }
-
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
         let block_height = metadata.l2_block_height();
         let mut tx = self.write_transaction();
@@ -82,11 +80,84 @@ where
     }
 }
 
+impl<Storage> GetMetadataStorage for Storage
+where
+    Storage: Send + Sync,
+    Storage: StorageInspect<GasPriceMetadata, Error = StorageError>,
+{
+    fn get_metadata(
+        &self,
+        block_height: &BlockHeight,
+    ) -> GasPriceResult<Option<UpdaterMetadata>> {
+        let metadata = self
+            .storage::<GasPriceMetadata>()
+            .get(block_height)
+            .map_err(|err| GasPriceError::CouldNotFetchMetadata {
+                source_error: err.into(),
+            })?;
+        Ok(metadata.map(|inner| inner.into_owned()))
+    }
+}
+
+impl<Storage> GetDaBundleId for Storage
+where
+    Storage: Send + Sync,
+    Storage: StorageInspect<BundleIdTable, Error = StorageError>,
+{
+    fn get_bundle_id(&self, block_height: &BlockHeight) -> GasPriceResult<Option<u32>> {
+        let bundle_id = self
+            .storage::<BundleIdTable>()
+            .get(block_height)
+            .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?
+            .map(|no| *no);
+        Ok(bundle_id)
+    }
+}
+
+impl<Storage> GasPriceServiceAtomicStorage for Storage
+where
+    Storage: 'static,
+    Storage: GetMetadataStorage + GetDaBundleId,
+    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
+{
+    type Transaction<'a> = StorageTransaction<&'a mut Storage> where Self: 'a;
+
+    fn begin_transaction(&mut self) -> GasPriceResult<Self::Transaction<'_>> {
+        let tx = self.write_transaction();
+        Ok(tx)
+    }
+
+    fn commit_transaction(transaction: Self::Transaction<'_>) -> GasPriceResult<()> {
+        transaction
+            .commit()
+            .map_err(|err| GasPriceError::CouldNotCommit(err.into()))?;
+        Ok(())
+    }
+}
+
+impl<Storage> SetDaBundleId for Storage
+where
+    Storage: Send + Sync,
+    Storage: StorageMutate<BundleIdTable, Error = StorageError>,
+{
+    fn set_bundle_id(
+        &mut self,
+        block_height: &BlockHeight,
+        bundle_id: u32,
+    ) -> GasPriceResult<()> {
+        self.storage_as_mut::<BundleIdTable>()
+            .insert(block_height, &bundle_id)
+            .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GasPriceSettings {
     pub gas_price_factor: u64,
     pub block_gas_limit: u64,
 }
+
 pub trait GasPriceSettingsProvider: Send + Sync + Clone {
     fn settings(
         &self,

@@ -32,10 +32,7 @@ impl SharedState {
 
 /// This struct houses the shared_state, polling interval
 /// and a source, which does the actual fetching of the data
-pub struct DaSourceService<Source>
-where
-    Source: DaBlockCostsSource,
-{
+pub struct DaSourceService<Source> {
     poll_interval: Interval,
     source: Source,
     shared_state: SharedState,
@@ -72,6 +69,7 @@ where
 #[async_trait::async_trait]
 pub trait DaBlockCostsSource: Send + Sync {
     async fn request_da_block_cost(&mut self) -> Result<DaBlockCosts>;
+    async fn set_last_value(&mut self, bundle_id: u32) -> Result<()>;
 }
 
 #[async_trait::async_trait]
