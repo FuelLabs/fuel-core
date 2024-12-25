@@ -170,7 +170,7 @@ pub const fn max_tx_count() -> u16 {
 }
 #[cfg(feature = "test-helpers")]
 pub const fn max_tx_count() -> u16 {
-    1024
+    10240
 }
 
 pub struct OnceTransactionsSource {
