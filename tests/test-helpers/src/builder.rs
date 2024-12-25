@@ -99,6 +99,7 @@ pub struct TestSetupBuilder {
     pub privileged_address: Address,
     pub base_asset_id: AssetId,
     pub trigger: Trigger,
+    pub max_txs: usize,
 }
 
 impl TestSetupBuilder {
@@ -231,9 +232,18 @@ impl TestSetupBuilder {
             ..StateConfig::default()
         };
 
+        let mut txpool = fuel_core_txpool::config::Config::default();
+        txpool.pool_limits.max_txs = self.max_txs;
+        txpool.max_tx_update_subscriptions = self.max_txs;
+        txpool.service_channel_limits = fuel_core_txpool::config::ServiceChannelLimits {
+            max_pending_write_pool_requests: self.max_txs,
+            max_pending_read_pool_requests: self.max_txs,
+        };
+        txpool.heavy_work.size_of_verification_queue = self.max_txs;
+
         let config = Config {
             utxo_validation: self.utxo_validation,
-            txpool: fuel_core_txpool::config::Config::default(),
+            txpool,
             block_production: self.trigger,
             starting_gas_price: self.starting_gas_price,
             ..Config::local_node_with_configs(chain_conf, state)
@@ -265,6 +275,7 @@ impl Default for TestSetupBuilder {
             privileged_address: Default::default(),
             base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
+            max_txs: 100000,
         }
     }
 }
