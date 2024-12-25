@@ -84,10 +84,10 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     let public_key = Keypair::from(genesis_keypair).public();
     let genesis_peer_id = PeerId::from_public_key(&public_key);
     let genesis_multiaddr = default_multiaddr(genesis_port, genesis_peer_id);
+    drop(view);
     let temp_dir = old_driver.kill().await;
 
     // Starting node that uses latest fuel core.
-    // When
     let latest_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(latest_keypair.secret().to_bytes());
     let latest_node = LatestFuelCoreDriver::spawn_with_directory(
@@ -112,6 +112,15 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     .await
     .unwrap();
 
+    // When
+    const BLOCKS_TO_PRODUCE: u32 = 1;
+    latest_node
+        .client
+        .produce_blocks(BLOCKS_TO_PRODUCE, None)
+        .await
+        .unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
     // Then
     let db = &latest_node.node.shared.database;
     let latest_height = db.gas_price().latest_height().unwrap();
@@ -126,8 +135,12 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     )
     .unwrap();
 
-    assert_eq!(v0_metadata.l2_block_height, v1_metadata.l2_block_height);
     assert_eq!(
+        v0_metadata.l2_block_height + BLOCKS_TO_PRODUCE,
+        v1_metadata.l2_block_height
+    );
+    // Assert that v1 behaves differently from v0.
+    assert_ne!(
         v0_metadata.new_exec_price,
         v1_metadata.new_scaled_exec_price * v1_metadata.gas_price_factor.get()
     );
