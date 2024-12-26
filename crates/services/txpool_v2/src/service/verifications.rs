@@ -191,16 +191,15 @@ impl GasPriceVerifiedTx {
         // let tx_id = pool_tx.id();
 
         // let start_time = tokio::time::Instant::now();
-        let read_lock = pool
-        .read();
+        let read_lock = pool.read();
         // tracing::info!(
         //     "Transaction (id: {}) waiting for read lock took: {} micros seconds",
         //     tx_id,
         //     start_time.elapsed().as_micros()
         // );
         // let start_time = tokio::time::Instant::now();
-        let transaction = 
-            read_lock.can_insert_transaction(Arc::new(pool_tx), view)?
+        let transaction = read_lock
+            .can_insert_transaction(Arc::new(pool_tx), view)?
             .into_transaction();
         // tracing::info!(
         //     "Transaction (id: {}) verify insert pool took: {} micros seconds",

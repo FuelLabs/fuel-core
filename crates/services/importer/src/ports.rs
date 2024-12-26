@@ -85,7 +85,7 @@ pub trait DatabaseTransaction {
         &mut self,
         chain_id: &ChainId,
         block: &SealedBlock,
-    ) -> StorageResult<bool>;
+    ) -> StorageResult<()>;
 
     /// Commits the changes to the underlying storage.
     fn commit(self) -> StorageResult<()>;
@@ -134,27 +134,59 @@ where
         &mut self,
         chain_id: &ChainId,
         block: &SealedBlock,
-    ) -> StorageResult<bool> {
+    ) -> StorageResult<()> {
+        // Replace all with insert
+        let start = tokio::time::Instant::now();
         let mut storage = self.write_transaction();
+        tracing::info!(
+            "Taking transaction in store_new_block took {} milliseconds",
+            start.elapsed().as_millis()
+        );
         let height = block.entity.header().height();
-        let mut found = storage
+        // Compress is really doing recomputation of id ? it shouldn't.
+        // Should be fast
+        let start = tokio::time::Instant::now();
+        let compressed_block = block.entity.compress(chain_id);
+        tracing::info!(
+            "Compress in store_new_block took {} milliseconds",
+            start.elapsed().as_millis()
+        );
+        let start = tokio::time::Instant::now();
+        storage
             .storage_as_mut::<FuelBlocks>()
-            .replace(height, &block.entity.compress(chain_id))?
-            .is_some();
-        found |= storage
+            .insert(height, &compressed_block)?;
+        tracing::info!(
+            "Insert block in store_new_block took {} milliseconds (including compress)",
+            start.elapsed().as_millis()
+        );
+        let start = tokio::time::Instant::now();
+        storage
             .storage_as_mut::<SealedBlockConsensus>()
-            .replace(height, &block.consensus)?
-            .is_some();
+            .insert(height, &block.consensus)?;
+        tracing::info!(
+            "Insert consensus in store_new_block took {} milliseconds",
+            start.elapsed().as_millis()
+        );
 
         // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576
+        let start = tokio::time::Instant::now();
         for tx in block.entity.transactions() {
-            found |= storage
+            // Maybe a debug insert
+            storage
                 .storage_as_mut::<Transactions>()
-                .replace(&tx.id(chain_id), tx)?
-                .is_some();
+                .insert(&tx.id(chain_id), tx)?;
         }
+        tracing::info!(
+            "Insert transactions in store_new_block took {} milliseconds",
+            start.elapsed().as_millis()
+        );
+        let start = tokio::time::Instant::now();
         storage.commit()?;
-        Ok(!found)
+        tracing::info!(
+            "Commit in store_new_block took {} milliseconds",
+            start.elapsed().as_millis()
+        );
+        Ok(())
     }
 
     fn commit(self) -> StorageResult<()> {

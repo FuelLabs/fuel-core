@@ -333,9 +333,18 @@ where
         // execution without block itself.
         let expected_block_root = database.latest_block_root()?;
 
-        let start = Instant::now();
+        let start_db = Instant::now();
         let mut db_after_execution = database.storage_transaction(changes);
+        tracing::info!(
+            "Creating a transaction for the block took: {}ms",
+            start_db.elapsed().as_millis()
+        );
+        let start = Instant::now();
         let actual_block_root = db_after_execution.latest_block_root()?;
+        tracing::info!(
+            "Getting the latest block root took: {}ms",
+            start.elapsed().as_millis()
+        );
         if actual_block_root != expected_block_root {
             return Err(Error::InvalidDatabaseStateAfterExecution(
                 expected_block_root,
@@ -343,14 +352,17 @@ where
             ))
         }
 
-        if !db_after_execution.store_new_block(&self.chain_id, &result.sealed_block)? {
-            return Err(Error::NotUnique(expected_next_height))
-        }
+        db_after_execution.store_new_block(&self.chain_id, &result.sealed_block)?;
+        let start = Instant::now();
 
         db_after_execution.commit()?;
         tracing::info!(
-            "Commiting to the database took: {}ms",
+            "Commiting the block to the database took: {}ms",
             start.elapsed().as_millis()
+        );
+        tracing::info!(
+            "Commiting to the database took: {}ms",
+            start_db.elapsed().as_millis()
         );
 
         if self.metrics {

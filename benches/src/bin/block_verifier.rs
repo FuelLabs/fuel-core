@@ -1,4 +1,7 @@
-use fuel_core::service::config::Trigger;
+use fuel_core::{
+    service::config::Trigger,
+    state::historical_rocksdb::StateRewindPolicy,
+};
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_types::blockchain::{
     block::Block,
@@ -22,7 +25,6 @@ fn read_coins() -> Vec<CoinConfig> {
     let coins: Vec<CoinConfig> = bincode::deserialize_from(file).unwrap();
     coins
 }
-
 
 fn main() {
     #[cfg(feature = "parallel-executor")]
@@ -49,6 +51,7 @@ fn main() {
     test_builder.gas_limit = Some(10_000_000_000);
     test_builder.block_size_limit = Some(1_000_000_000_000);
     test_builder.max_txs = n as usize;
+    test_builder.state_rewind_policy = Some(StateRewindPolicy::NoRewind);
     #[cfg(feature = "parallel-executor")]
     {
         test_builder.number_threads_pool_verif = number_of_cores;

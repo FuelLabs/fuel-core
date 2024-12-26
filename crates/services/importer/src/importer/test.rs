@@ -121,7 +121,7 @@ where
         db.expect_latest_block_root()
             .returning(move || height().map(|v| v.map(u32_to_merkle_root)));
         db.expect_store_new_block()
-            .returning(move |_, _| store_block());
+            .returning(move |_, _| store_block().map(|_| ()));
         db.expect_commit().times(commits).returning(|| Ok(()));
         db
     }

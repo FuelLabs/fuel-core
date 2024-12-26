@@ -13,6 +13,7 @@ use fuel_core::{
         DbType,
         FuelService,
     },
+    state::historical_rocksdb::StateRewindPolicy,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
@@ -103,6 +104,7 @@ pub struct TestSetupBuilder {
     pub number_threads_pool_verif: usize,
     #[cfg(feature = "parallel-executor")]
     pub executor_number_of_cores: usize,
+    pub state_rewind_policy: Option<StateRewindPolicy>,
 }
 
 impl TestSetupBuilder {
@@ -243,19 +245,24 @@ impl TestSetupBuilder {
             max_pending_write_pool_requests: self.max_txs,
             max_pending_read_pool_requests: self.max_txs,
         };
-        txpool.heavy_work.number_threads_to_verify_transactions = self.number_threads_pool_verif;
+        txpool.heavy_work.number_threads_to_verify_transactions =
+            self.number_threads_pool_verif;
         txpool.heavy_work.size_of_verification_queue = self.max_txs;
 
-        let config = Config {
+        let mut config = Config {
             utxo_validation: self.utxo_validation,
             txpool,
             block_production: self.trigger,
             starting_gas_price: self.starting_gas_price,
-            
+
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores: self.executor_number_of_cores,
             ..Config::local_node_with_configs(chain_conf, state)
         };
+
+        if let Some(policy) = self.state_rewind_policy {
+            config.combined_db_config.state_rewind_policy = policy;
+        }
 
         assert_eq!(config.combined_db_config.database_type, DbType::RocksDb);
 
@@ -288,6 +295,7 @@ impl Default for TestSetupBuilder {
             number_threads_pool_verif: 0,
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores: 1,
+            state_rewind_policy: None,
         }
     }
 }

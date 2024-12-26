@@ -580,12 +580,23 @@ where
         let mut storage_transaction =
             StorageTransaction::transaction(&self.db, ConflictPolicy::Overwrite, changes);
 
+        let start = std::time::Instant::now();
         if let Some(height) = height {
             self.store_modifications_history(&mut storage_transaction, &height)?;
         }
+        tracing::info!(
+            "Store modifications history in commit_changes took {} milliseconds",
+            start.elapsed().as_millis()
+        );
 
+        let start = std::time::Instant::now();
         self.db
             .commit_changes(&storage_transaction.into_changes())?;
+
+        tracing::info!(
+            "Commit to rocksdb in commit_changes took {} milliseconds",
+            start.elapsed().as_millis()
+        );
 
         Ok(())
     }
