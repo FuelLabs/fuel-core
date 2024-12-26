@@ -185,7 +185,7 @@ pub fn run(c: &mut Criterion) {
 
     // ec pairing
     let mut bench_epar = c.benchmark_group("epar");
-    for i in vec![1, 2, 4, 8, 16, 32, 64, 128, 256, 512] {
+    for i in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] {
         let mut points_bytearray = Vec::new();
         for _ in 0u32..i {
             points_bytearray.extend(
