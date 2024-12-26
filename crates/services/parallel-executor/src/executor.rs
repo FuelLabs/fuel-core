@@ -43,7 +43,12 @@ use fuel_core_types::{
         input::coin::{
             CoinPredicate,
             CoinSigned,
-        }, ConsensusParameters, Input, Transaction, TxId, TxPointer, UniqueIdentifier
+        },
+        ConsensusParameters,
+        Input,
+        Transaction,
+        TxId,
+        TxPointer,
     },
     fuel_types::BlockHeight,
     fuel_vm::interpreter::MemoryInstance,
@@ -685,7 +690,6 @@ where
         );
 
         let current_height = *total_partial_block.header.height();
-        // TODO: All extends outside of the async afterwards to avoid mutexes
         let (_, handlers) = uncommitted_results.into_iter().fold(
             (0, Vec::new()),
             |(tx_idx, mut futures), part| {
@@ -753,7 +757,7 @@ where
                     let mut changes_storage_tx = StorageTransaction::transaction(
                         &dummy_view,
                         ConflictPolicy::Overwrite,
-                        Changes::default(),
+                        execution_data.changes.clone(),
                     );
 
                     let iter = ChangesIterator::<Column>::new(&execution_data.changes);
@@ -826,7 +830,11 @@ where
 
                     let shifted_changes = changes_storage_tx.into_changes();
 
-                    Ok::<(Changes, ExecutionData, Vec<Transaction>), ExecutorError>((shifted_changes, execution_data, part_block.transactions))
+                    Ok::<(Changes, ExecutionData, Vec<Transaction>), ExecutorError>((
+                        shifted_changes,
+                        execution_data,
+                        part_block.transactions,
+                    ))
                 }));
                 (new_tx_idx, futures)
             },
@@ -838,15 +846,19 @@ where
             futures::future::join_all(handlers).await
         });
 
-                            tracing::info!(
-                        "Setting correct pointers took: {}ms",
-                        start.elapsed().as_millis()
-                    );
+        tracing::info!(
+            "Setting correct pointers took: {}ms",
+            start.elapsed().as_millis()
+        );
 
         for part in results {
-            let (shifted_changes, execution_data, transactions) = part.map_err(|e| {
-                ExecutorError::Other(format!("Unable to join one of the executors {e}"))
-            })??;
+            let start = tokio::time::Instant::now();
+            let (shifted_changes, execution_data, transactions) =
+                part.map_err(|e| {
+                    ExecutorError::Other(format!(
+                        "Unable to join one of the executors {e}"
+                    ))
+                })??;
 
             total_data.coinbase = total_data
                 .coinbase
@@ -864,23 +876,10 @@ where
                 .used_size
                 .checked_add(execution_data.used_size)
                 .ok_or(ExecutorError::TxSizeOverflow)?;
-            let start_time = tokio::time::Instant::now();
-            let mut final_storage_tx = StorageTransaction::transaction(
-                &view,
-                ConflictPolicy::Overwrite,
-                execution_data.changes,
-            );
-            final_storage_tx.commit_changes(shifted_changes)?;
-            tracing::info!(
-                "Committing changes to final storage took: {}ms",
-                start_time.elapsed().as_millis()
-            );
-
-            let part_changes = final_storage_tx.into_changes();
 
             // If `part_changes` to the database gas conflicts, `commit_changes` should fail.
             let start_time = tokio::time::Instant::now();
-            total_changes.commit_changes(part_changes)?;
+            total_changes.commit_changes(shifted_changes)?;
             tracing::info!(
                 "Committing changes to total storage took: {}ms",
                 start_time.elapsed().as_millis()
@@ -893,13 +892,15 @@ where
                 .extend(execution_data.skipped_transactions);
             total_data.message_ids.extend(execution_data.message_ids);
 
-            total_partial_block
-                .transactions
-                .extend(transactions);
+            total_partial_block.transactions.extend(transactions);
             total_data.tx_count = u32::try_from(total_partial_block.transactions.len())
                 .map_err(|_| {
                 ExecutorError::BlockHeaderError(BlockHeaderError::TooManyTransactions)
             })?;
+            tracing::info!(
+                "Adding in global vec took: {}ms",
+                start.elapsed().as_millis()
+            );
         }
 
         let block_executor = native_executor::executor::BlockExecutor::new(
@@ -931,11 +932,6 @@ where
             used_size,
             ..
         } = total_data;
-
-        tracing::info!(
-            "Cached tx id2 = {:?}",
-            total_partial_block.transactions[0].cached_id()
-        );
 
         let start_time = tokio::time::Instant::now();
 

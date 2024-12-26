@@ -1310,8 +1310,6 @@ mod tests {
             .transaction()
             .clone()
             .into();
-        let chain_id = ConsensusParameters::default().chain_id();
-        let transaction_id = tx.id(&chain_id);
 
         let mut producer = create_executor(Default::default(), Default::default());
 
@@ -1322,22 +1320,29 @@ mod tests {
         *block.transactions_mut() = vec![tx];
         block.header_mut().recalculate_metadata();
 
-        let ProductionResult { mut block, .. } =
-            producer.produce_and_commit(block.into()).unwrap();
+        let ProductionResult {
+            block: mut incorrect_block,
+            ..
+        } = producer.produce_and_commit(block.into()).unwrap();
 
         // modify change amount
-        if let Transaction::Script(script) = &mut block.transactions_mut()[0] {
+        if let Transaction::Script(script) = &mut incorrect_block.transactions_mut()[0] {
             if let Output::Change { amount, .. } = &mut script.outputs_mut()[0] {
                 *amount = fake_output_amount
             }
         }
 
         // then
-        let err = verifier.validate_and_commit(&block).unwrap_err();
-        assert_eq!(
-            err,
-            ExecutorError::InvalidTransactionOutcome { transaction_id }
+        // Update the tx merkle root
+        let block = PartialFuelBlock::new(
+            incorrect_block.header().into(),
+            incorrect_block.transactions().to_vec(),
         );
+        let block = block
+            .generate(&[], incorrect_block.header().application().event_inbox_root)
+            .unwrap();
+        let err = verifier.validate_and_commit(&block).unwrap_err();
+        assert_eq!(err, ExecutorError::BlockMismatch);
     }
 
     // corrupt the merkle sum tree commitment from a produced block and verify that the
@@ -2366,14 +2371,17 @@ mod tests {
             }
         }
 
-        let err = producer.validate(&second_block).unwrap_err();
-
-        assert_eq!(
-            err,
-            ExecutorError::InvalidTransactionOutcome {
-                transaction_id: tx_id
-            }
+        // Update the tx merkle root
+        let block = PartialFuelBlock::new(
+            second_block.header().into(),
+            second_block.transactions().to_vec(),
         );
+        let block = block
+            .generate(&[], second_block.header().application().event_inbox_root)
+            .unwrap();
+        let err = producer.validate(&block).unwrap_err();
+
+        assert_eq!(err, ExecutorError::BlockMismatch);
     }
 
     #[test]
