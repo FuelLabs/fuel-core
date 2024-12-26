@@ -16,8 +16,9 @@ use crate::{
     },
     ports::{
         GasPriceData,
+        GetMetadataStorage,
         L2Data,
-        MetadataStorage,
+        SetMetadataStorage,
     },
     v0::{
         metadata::{
@@ -86,30 +87,34 @@ impl FakeMetadata {
     }
 }
 
-impl MetadataStorage for FakeMetadata {
-    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
-        let metadata = self.inner.lock().unwrap().clone();
-        Ok(metadata)
-    }
-
+impl SetMetadataStorage for FakeMetadata {
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
         *self.inner.lock().unwrap() = Some(metadata.clone());
         Ok(())
     }
 }
 
+impl GetMetadataStorage for FakeMetadata {
+    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
+        let metadata = self.inner.lock().unwrap().clone();
+        Ok(metadata)
+    }
+}
+
 struct ErroringMetadata;
 
-impl MetadataStorage for ErroringMetadata {
-    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
-        Err(GasPriceError::CouldNotFetchMetadata {
-            source_error: anyhow!("boo!"),
-        })
-    }
-
+impl SetMetadataStorage for ErroringMetadata {
     fn set_metadata(&mut self, _: &UpdaterMetadata) -> GasPriceResult<()> {
         Err(GasPriceError::CouldNotSetMetadata {
             block_height: Default::default(),
+            source_error: anyhow!("boo!"),
+        })
+    }
+}
+
+impl GetMetadataStorage for ErroringMetadata {
+    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
+        Err(GasPriceError::CouldNotFetchMetadata {
             source_error: anyhow!("boo!"),
         })
     }
@@ -128,6 +133,9 @@ fn arbitrary_metadata() -> V0Metadata {
     V0Metadata {
         new_exec_price: 100,
         l2_block_height: 0,
+        _min_exec_gas_price: 0,
+        _exec_gas_price_change_percent: 0,
+        _l2_block_fullness_threshold_percent: 0,
     }
 }
 
@@ -334,6 +342,7 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let V0Metadata {
         new_exec_price,
         l2_block_height,
+        ..
     } = original_metadata;
     let UninitializedTask { algo_updater, .. } = service;
     assert_eq!(algo_updater.new_exec_price, new_exec_price);
