@@ -41,7 +41,7 @@ exclude = ["version-compatibility"]
 
 [profile.release]
 codegen-units = 1
-lto = "fat"
+lto = "thin"
 panic = "unwind"
 
 [workspace.package]

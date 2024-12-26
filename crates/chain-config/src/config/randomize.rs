@@ -206,7 +206,7 @@ impl Randomize for CompressedBlock {
 
         Self::test(
             PartialBlockHeader::default()
-                .generate(&[tx1, tx2], &[], rng.gen())
+                .generate(&[tx1, tx2], None, &[], rng.gen())
                 .expect("The header is valid"),
             tx_ids,
         )

@@ -291,6 +291,7 @@ pub fn create_genesis_block(config: &Config) -> Block {
             },
         },
         transactions_ids,
+        None,
         message_ids,
         events,
     )

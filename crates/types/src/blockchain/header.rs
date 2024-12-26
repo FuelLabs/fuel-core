@@ -19,6 +19,7 @@ use crate::{
         MessageId,
     },
 };
+use alloc::vec::Vec;
 use tai64::Tai64;
 
 /// Version-able block header type
@@ -388,7 +389,8 @@ impl BlockHeader {
     /// Validate the transactions match the header.
     pub fn validate_transactions(&self, transactions: &[Transaction]) -> bool {
         // Generate the transaction merkle root.
-        let transactions_root = generate_txns_root(transactions);
+        // TODO: Find a way to inject the precomputed hashes.
+        let transactions_root = generate_txns_root(transactions, None);
 
         transactions_root == self.application().transactions_root
             && transactions.len() == self.application().transactions_count as usize
@@ -422,21 +424,36 @@ impl PartialBlockHeader {
     pub fn generate(
         self,
         transactions: &[Transaction],
+        precomputed_hashes: Option<Vec<Bytes32>>,
         outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
     ) -> Result<BlockHeader, BlockHeaderError> {
+        #[cfg(feature = "std")]
+        let start_time = std::time::Instant::now();
         // Generate the transaction merkle root.
-        let transactions_root = generate_txns_root(transactions);
+        let transactions_root = generate_txns_root(transactions, precomputed_hashes);
+        #[cfg(feature = "std")]
+        tracing::info!(
+            "Generated transactions root in {:?}ms",
+            start_time.elapsed().as_millis()
+        );
 
+        #[cfg(feature = "std")]
+        let start_time = std::time::Instant::now();
         // Generate the message merkle root.
         let message_outbox_root = outbox_message_ids
             .iter()
             .fold(MerkleRootCalculator::new(), |mut tree, id| {
-                tree.push(id.as_ref());
+                tree.push(id.as_ref(), None);
                 tree
             })
             .root()
             .into();
+        #[cfg(feature = "std")]
+        tracing::info!(
+            "Generated message outbox root in {:?}ms",
+            start_time.elapsed().as_millis()
+        );
 
         let application = ApplicationHeader {
             da_height: self.application.da_height,
@@ -476,13 +493,25 @@ impl PartialBlockHeader {
     }
 }
 
-fn generate_txns_root(transactions: &[Transaction]) -> Bytes32 {
-    let transaction_ids = transactions.iter().map(|tx| tx.to_bytes());
+fn generate_txns_root(
+    transactions: &[Transaction],
+    precomputed_hashes: Option<Vec<Bytes32>>,
+) -> Bytes32 {
     // Generate the transaction merkle root.
     let mut transaction_tree =
         fuel_merkle::binary::root_calculator::MerkleRootCalculator::new();
-    for id in transaction_ids {
-        transaction_tree.push(id.as_ref());
+    match precomputed_hashes {
+        Some(hashes) => {
+            for hash in hashes {
+                transaction_tree.push(&[], Some(*hash));
+            }
+        }
+        None => {
+            let transaction_ids = transactions.iter().map(|tx| tx.to_bytes());
+            for id in transaction_ids {
+                transaction_tree.push(&id.as_ref(), None);
+            }
+        }
     }
     transaction_tree.root().into()
 }

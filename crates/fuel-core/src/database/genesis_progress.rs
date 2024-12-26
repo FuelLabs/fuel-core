@@ -109,7 +109,7 @@ impl GenesisDatabase {
         let mut root_calculator = MerkleRootCalculator::new();
         for coin in coins {
             let (utxo_id, coin) = coin?;
-            root_calculator.push(coin.uncompress(utxo_id).root()?.as_slice());
+            root_calculator.push(coin.uncompress(utxo_id).root()?.as_slice(), None);
         }
 
         Ok(root_calculator.root())
@@ -121,7 +121,7 @@ impl GenesisDatabase {
         let mut root_calculator = MerkleRootCalculator::new();
         for message in messages {
             let (_, message) = message?;
-            root_calculator.push(message.root()?.as_slice());
+            root_calculator.push(message.root()?.as_slice(), None);
         }
 
         Ok(root_calculator.root())
@@ -134,7 +134,7 @@ impl GenesisDatabase {
         for contract in contracts {
             let (contract_id, _) = contract?;
             let root = ContractRef::new(self, contract_id).root()?;
-            root_calculator.push(root.as_slice());
+            root_calculator.push(root.as_slice(), None);
         }
 
         Ok(root_calculator.root())
@@ -146,7 +146,7 @@ impl GenesisDatabase {
         let mut root_calculator = MerkleRootCalculator::new();
         for tx in txs {
             let (tx_id, _) = tx?;
-            root_calculator.push(tx_id.as_slice());
+            root_calculator.push(tx_id.as_slice(), None);
         }
 
         Ok(root_calculator.root())

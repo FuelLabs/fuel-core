@@ -39,6 +39,7 @@ use fuel_core_types::{
         },
         header::BlockHeaderError,
     },
+    fuel_merkle::binary::leaf_sum,
     fuel_tx::{
         input::coin::{
             CoinPredicate,
@@ -50,7 +51,10 @@ use fuel_core_types::{
         TxId,
         TxPointer,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        canonical::Serialize,
+        BlockHeight,
+    },
     fuel_vm::interpreter::MemoryInstance,
     services::{
         block_producer::Components,
@@ -101,7 +105,6 @@ use tokio::runtime::Runtime;
 #[cfg(feature = "wasm-executor")]
 use fuel_core_upgradable_executor::error::UpgradableError;
 
-#[cfg(feature = "wasm-executor")]
 use fuel_core_types::fuel_types::Bytes32;
 
 pub struct Executor<S, R> {
@@ -681,6 +684,8 @@ where
             event_inbox_root: ExecutionData::default_event_inbox_root(),
         };
 
+        let mut total_tx_hashes = Vec::with_capacity(txs_count);
+
         total_data.skipped_transactions.extend(skipped_txs);
 
         let mut total_changes = StorageTransaction::transaction(
@@ -701,6 +706,8 @@ where
                         partial_block: mut part_block,
                         mut execution_data,
                     } = part;
+
+                    let mut tx_root_leaf_hashes = vec![];
 
                     // debug_assert_eq!(part_block.header, total_partial_block.header);
 
@@ -751,6 +758,7 @@ where
                                 }
                             }
                         }
+                        tx_root_leaf_hashes.push(leaf_sum(&tx.to_bytes()).into());
                     }
 
                     let dummy_view = InMemoryStorage::default();
@@ -830,10 +838,14 @@ where
 
                     let shifted_changes = changes_storage_tx.into_changes();
 
-                    Ok::<(Changes, ExecutionData, Vec<Transaction>), ExecutorError>((
+                    Ok::<
+                        (Changes, ExecutionData, Vec<Transaction>, Vec<Bytes32>),
+                        ExecutorError,
+                    >((
                         shifted_changes,
                         execution_data,
                         part_block.transactions,
+                        tx_root_leaf_hashes,
                     ))
                 }));
                 (new_tx_idx, futures)
@@ -847,19 +859,20 @@ where
         });
 
         tracing::info!(
-            "Setting correct pointers took: {}ms",
+            "Setting correct pointers and tx hash for Merkle root took: {}ms",
             start.elapsed().as_millis()
         );
 
         for part in results {
             let start = tokio::time::Instant::now();
-            let (shifted_changes, execution_data, transactions) =
+            let (shifted_changes, execution_data, transactions, tx_leaf_hashes) =
                 part.map_err(|e| {
                     ExecutorError::Other(format!(
                         "Unable to join one of the executors {e}"
                     ))
                 })??;
 
+            total_tx_hashes.extend(tx_leaf_hashes);
             total_data.coinbase = total_data
                 .coinbase
                 .checked_add(execution_data.coinbase)
@@ -917,6 +930,10 @@ where
             &mut total_data,
             &mut memory,
         )?;
+        // Make hash of mint
+        let mint_hash =
+            leaf_sum(&total_partial_block.transactions.last().unwrap().to_bytes());
+        total_tx_hashes.push(mint_hash.into());
 
         total_data.changes = total_changes.into_changes();
 
@@ -936,7 +953,7 @@ where
         let start_time = tokio::time::Instant::now();
 
         let block = total_partial_block
-            .generate(&message_ids[..], event_inbox_root)
+            .generate(&message_ids[..], event_inbox_root, Some(total_tx_hashes))
             .map_err(ExecutorError::BlockHeaderError)?;
 
         let finalized_block_id = block.id();
@@ -1128,7 +1145,7 @@ mod tests {
             )
             .into()],
         )
-        .generate(&[], ExecutionData::default_event_inbox_root())
+        .generate(&[], ExecutionData::default_event_inbox_root(), None)
         .unwrap();
         let mut tx = storage.write_transaction();
         tx.storage_as_mut::<FuelBlocks>()
@@ -1165,7 +1182,7 @@ mod tests {
             },
             transactions,
         )
-        .generate(&[], ExecutionData::default_event_inbox_root())
+        .generate(&[], ExecutionData::default_event_inbox_root(), None)
         .unwrap()
     }
 

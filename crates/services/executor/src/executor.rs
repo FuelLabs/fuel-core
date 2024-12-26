@@ -381,7 +381,7 @@ where
         } = execution_data;
 
         let block = partial_block
-            .generate(&message_ids[..], event_inbox_root)
+            .generate(&message_ids[..], event_inbox_root, None)
             .map_err(ExecutorError::BlockHeaderError)?;
 
         let finalized_block_id = block.id();
@@ -962,7 +962,7 @@ impl<R> BlockExecutor<R> {
             })?;
 
         let new_block = new_partial_block
-            .generate(&message_ids[..], *event_inbox_root)
+            .generate(&message_ids[..], *event_inbox_root, None)
             .map_err(ExecutorError::BlockHeaderError)?;
         if new_block.header() != old_block.header() {
             tracing::info!(
@@ -1017,7 +1017,7 @@ where
                 .get_events(&da_height)
                 .map_err(|err| ExecutorError::RelayerError(err.to_string()))?;
             for event in events {
-                root_calculator.push(event.hash().as_ref());
+                root_calculator.push(event.hash().as_ref(), None);
                 match event {
                     Event::Message(message) => {
                         if message.da_height() != da_height {

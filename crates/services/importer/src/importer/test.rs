@@ -18,9 +18,15 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block, consensus::Consensus, header::ConsensusParametersVersion, SealedBlock
+        block::Block,
+        consensus::Consensus,
+        header::ConsensusParametersVersion,
+        SealedBlock,
     },
-    fuel_types::{BlockHeight, ChainId},
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::{
         block_importer::{
             ImportResult,

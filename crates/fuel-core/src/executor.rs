@@ -1339,7 +1339,11 @@ mod tests {
             incorrect_block.transactions().to_vec(),
         );
         let block = block
-            .generate(&[], incorrect_block.header().application().event_inbox_root)
+            .generate(
+                &[],
+                incorrect_block.header().application().event_inbox_root,
+                None,
+            )
             .unwrap();
         let err = verifier.validate_and_commit(&block).unwrap_err();
         assert_eq!(err, ExecutorError::BlockMismatch);
@@ -2377,7 +2381,11 @@ mod tests {
             second_block.transactions().to_vec(),
         );
         let block = block
-            .generate(&[], second_block.header().application().event_inbox_root)
+            .generate(
+                &[],
+                second_block.header().application().event_inbox_root,
+                None,
+            )
             .unwrap();
         let err = producer.validate(&block).unwrap_err();
 
@@ -3586,14 +3594,14 @@ mod tests {
                 let mut message = Message::default();
                 message.set_da_height(da_height.into());
                 message.set_nonce(da_height.into());
-                root_calculator.push(message.message_id().as_ref());
+                root_calculator.push(message.message_id().as_ref(), None);
                 // transaction
                 let mut transaction = RelayedTransaction::default();
                 transaction.set_nonce(da_height.into());
                 transaction.set_da_height(da_height.into());
                 transaction.set_max_gas(da_height);
                 transaction.set_serialized_transaction(da_height.to_be_bytes().to_vec());
-                root_calculator.push(Bytes32::from(transaction.id()).as_ref());
+                root_calculator.push(Bytes32::from(transaction.id()).as_ref(), None);
                 // add events to relayer
                 add_events_to_relayer(
                     &mut relayer_db,

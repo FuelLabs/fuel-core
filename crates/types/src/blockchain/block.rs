@@ -93,12 +93,14 @@ impl Block<Transaction> {
     pub fn new(
         header: PartialBlockHeader,
         transactions: Vec<Transaction>,
+        precomputed_txs_hashes: Option<Vec<Bytes32>>,
         outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
     ) -> Result<Self, BlockHeaderError> {
         let inner = BlockV1 {
             header: header.generate(
                 &transactions,
+                precomputed_txs_hashes,
                 outbox_message_ids,
                 event_inbox_root,
             )?,
@@ -243,10 +245,12 @@ impl PartialFuelBlock {
         self,
         outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
+        precomputed_txs_hashes: Option<Vec<Bytes32>>,
     ) -> Result<Block, BlockHeaderError> {
         Block::new(
             self.header,
             self.transactions,
+            precomputed_txs_hashes,
             outbox_message_ids,
             event_inbox_root,
         )

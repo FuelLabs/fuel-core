@@ -65,7 +65,7 @@ fn generate_bench_block(
     let txs = generate_bench_transactions(tx_count);
     let block = PartialFuelBlock::new(header, txs);
     block
-        .generate(&[], Default::default())
+        .generate(&[], Default::default(), None)
         .map_err(|err| anyhow!(err))
 }
 

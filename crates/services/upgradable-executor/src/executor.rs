@@ -1093,7 +1093,7 @@ mod test {
             )
             .into()],
         )
-        .generate(&[], ExecutionData::default_event_inbox_root())
+        .generate(&[], ExecutionData::default_event_inbox_root(), None)
         .unwrap()
     }
 

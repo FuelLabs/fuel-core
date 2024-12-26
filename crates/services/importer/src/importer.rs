@@ -26,7 +26,10 @@ use fuel_core_types::{
         SealedBlock,
     },
     fuel_tx::{
-        field::MintGasPrice, Cacheable, Transaction, ValidityError
+        field::MintGasPrice,
+        Cacheable,
+        Transaction,
+        ValidityError,
     },
     fuel_types::{
         BlockHeight,
@@ -559,22 +562,35 @@ where
                 let start = Instant::now();
                 let chain_id = {
                     let guard = self
-                    .database
-                    .try_lock()
-                    .expect("Semaphore prevents concurrent access to the database");
+                        .database
+                        .try_lock()
+                        .expect("Semaphore prevents concurrent access to the database");
                     let database = guard.deref();
-                    let chain_id = database.chain_id(&sealed_block.entity.header().consensus_parameters_version);
+                    let chain_id = database.chain_id(
+                        &sealed_block.entity.header().consensus_parameters_version,
+                    );
                     match chain_id {
                         Ok(Some(chain_id)) => chain_id,
                         Ok(None) => {
-                            return (Err(Error::StorageError(not_found!("ChainID"))), start.elapsed().as_secs_f64())
+                            return (
+                                Err(Error::StorageError(not_found!("ChainID"))),
+                                start.elapsed().as_secs_f64(),
+                            )
                         }
-                        Err(err) => return (Err(Error::StorageError(err)), start.elapsed().as_secs_f64()),
+                        Err(err) => {
+                            return (
+                                Err(Error::StorageError(err)),
+                                start.elapsed().as_secs_f64(),
+                            )
+                        }
                     }
                 };
                 for tx in sealed_block.entity.transactions_mut() {
                     if let Err(err) = tx.precompute(&chain_id) {
-                        return (Err(Error::InvalidTransaction(err)), start.elapsed().as_secs_f64())
+                        return (
+                            Err(Error::InvalidTransaction(err)),
+                            start.elapsed().as_secs_f64(),
+                        )
                     };
                 }
                 let result = Self::verify_and_execute_block_inner(
