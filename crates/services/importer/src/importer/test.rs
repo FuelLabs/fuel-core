@@ -18,11 +18,9 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block,
-        consensus::Consensus,
-        SealedBlock,
+        block::Block, consensus::Consensus, header::ConsensusParametersVersion, SealedBlock
     },
-    fuel_types::BlockHeight,
+    fuel_types::{BlockHeight, ChainId},
     services::{
         block_importer::{
             ImportResult,
@@ -58,6 +56,11 @@ mockall::mock! {
         fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
 
         fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
+
+        fn chain_id(
+            &self,
+            consensus_parameters_version: &ConsensusParametersVersion,
+        ) -> StorageResult<Option<ChainId>>;
     }
 }
 

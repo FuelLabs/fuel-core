@@ -26,8 +26,7 @@ use fuel_core_types::{
         SealedBlock,
     },
     fuel_tx::{
-        field::MintGasPrice,
-        Transaction,
+        field::MintGasPrice, Cacheable, Transaction, ValidityError
     },
     fuel_types::{
         BlockHeight,
@@ -94,6 +93,8 @@ pub enum Error {
     FailedVerification(anyhow::Error),
     #[display(fmt = "The execution of the block failed: {_0}.")]
     FailedExecution(executor::Error),
+    #[display(fmt = "The transaction is not valid: {_0}.")]
+    InvalidTransaction(ValidityError),
     #[display(fmt = "It is not possible to execute the genesis block.")]
     ExecuteGenesis,
     #[display(fmt = "The database already contains the data at the height {_0}.")]
@@ -546,7 +547,7 @@ where
     /// It is a combination of the [`Importer::verify_and_execute_block`] and [`Importer::commit_result`].
     pub async fn execute_and_commit(
         &self,
-        sealed_block: SealedBlock,
+        mut sealed_block: SealedBlock,
     ) -> Result<(), Error> {
         let start = Instant::now();
         let _guard = self.lock()?;
@@ -556,6 +557,26 @@ where
         let (result, execute_time) = self
             .async_run(|| {
                 let start = Instant::now();
+                let chain_id = {
+                    let guard = self
+                    .database
+                    .try_lock()
+                    .expect("Semaphore prevents concurrent access to the database");
+                    let database = guard.deref();
+                    let chain_id = database.chain_id(&sealed_block.entity.header().consensus_parameters_version);
+                    match chain_id {
+                        Ok(Some(chain_id)) => chain_id,
+                        Ok(None) => {
+                            return (Err(Error::StorageError(not_found!("ChainID"))), start.elapsed().as_secs_f64())
+                        }
+                        Err(err) => return (Err(Error::StorageError(err)), start.elapsed().as_secs_f64()),
+                    }
+                };
+                for tx in sealed_block.entity.transactions_mut() {
+                    if let Err(err) = tx.precompute(&chain_id) {
+                        return (Err(Error::InvalidTransaction(err)), start.elapsed().as_secs_f64())
+                    };
+                }
                 let result = Self::verify_and_execute_block_inner(
                     executor,
                     verifier,

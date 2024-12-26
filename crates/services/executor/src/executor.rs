@@ -938,6 +938,7 @@ impl<R> BlockExecutor<R> {
             ..
         } = &data;
 
+        // TODO: Only need block id
         new_partial_block
             .transactions
             .iter()

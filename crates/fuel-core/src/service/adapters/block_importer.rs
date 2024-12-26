@@ -25,6 +25,7 @@ use fuel_core_storage::{
             DenseMetadataKey,
             FuelBlockMerkleMetadata,
         },
+        ConsensusParametersVersions,
         FuelBlocks,
     },
     transactional::Changes,
@@ -40,6 +41,7 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
+        header::ConsensusParametersVersion,
         SealedBlock,
     },
     fuel_tx::Bytes32,
@@ -103,6 +105,16 @@ impl ImporterDatabase for Database {
             .storage_as_ref::<FuelBlockMerkleMetadata>()
             .get(&DenseMetadataKey::Latest)?
             .map(|cow| *cow.root()))
+    }
+
+    fn chain_id(
+        &self,
+        consensus_parameters_version: &ConsensusParametersVersion,
+    ) -> StorageResult<Option<ChainId>> {
+        Ok(self
+            .storage_as_ref::<ConsensusParametersVersions>()
+            .get(consensus_parameters_version)?
+            .map(|cow| cow.chain_id()))
     }
 }
 

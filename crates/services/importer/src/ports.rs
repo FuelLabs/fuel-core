@@ -26,6 +26,7 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::Consensus,
+        header::ConsensusParametersVersion,
         SealedBlock,
     },
     fuel_tx::UniqueIdentifier,
@@ -68,6 +69,12 @@ pub trait ImporterDatabase: Send + Sync {
 
     /// Returns the latest block root.
     fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
+
+    /// Returns chain id.
+    fn chain_id(
+        &self,
+        consensus_parameters_version: &ConsensusParametersVersion,
+    ) -> StorageResult<Option<ChainId>>;
 }
 
 /// The port of the storage transaction required by the importer.
