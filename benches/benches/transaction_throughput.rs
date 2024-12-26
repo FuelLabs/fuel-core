@@ -1,4 +1,5 @@
 //! Tests throughput of various transaction types
+//! `cargo bench --bench transaction_throughput -p fuel-core-benches`
 
 use criterion::{
     criterion_group,
