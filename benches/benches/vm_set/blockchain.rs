@@ -553,7 +553,7 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::bhsh(RegId::HP, 0x11))
             .prepend_prepare_script(vec![
                 // Store number of bytes we want to alloc for the future result
-                op::movi(0x10, 0x20),
+                op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
                 // Allocate space for the future result
                 op::aloc(0x10),
                 // Add block height to 0x11
