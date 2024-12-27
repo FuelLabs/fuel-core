@@ -57,7 +57,10 @@ pub fn make_u256(reg: u8, v: U256) -> Vec<Instruction> {
 }
 
 pub fn arb_dependent_cost_values() -> Vec<u32> {
-    let mut linear = vec![1, 10, 100, 1000, 10_000];
+    let mut linear = vec![
+        1, 10, 100, 1000, 10_000, 100_000, 200_000, 1_000_000, 4_500_000, 17_700_000,
+        27_800_000, 31_400_000, 50_000_000, 62_914_560,
+    ];
     let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
         .take(5)
         .map(|f| f as u32)
