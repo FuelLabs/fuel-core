@@ -132,10 +132,10 @@ fn arbitrary_config() -> V0AlgorithmConfig {
 fn arbitrary_metadata() -> V0Metadata {
     V0Metadata {
         new_exec_price: 100,
-        min_exec_gas_price: 0,
-        exec_gas_price_change_percent: 0,
         l2_block_height: 0,
-        l2_block_fullness_threshold_percent: 0,
+        _min_exec_gas_price: 0,
+        _exec_gas_price_change_percent: 0,
+        _l2_block_fullness_threshold_percent: 0,
     }
 }
 

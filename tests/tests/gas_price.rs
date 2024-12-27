@@ -7,6 +7,7 @@ use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
+use ethers::types::Opcode;
 use fuel_core::{
     chain_config::{
         ChainConfig,
@@ -54,6 +55,7 @@ use fuel_core_types::{
     },
     fuel_tx::{
         consensus_parameters::ConsensusParametersV1,
+        AssetId,
         ConsensusParameters,
         Finalizable,
         Transaction,
@@ -74,6 +76,7 @@ use std::{
     time::Duration,
 };
 use test_helpers::fuel_core_driver::FuelCoreDriver;
+use wideint::MathOp;
 
 fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
     TransactionBuilder::script(vec![], vec![])
@@ -83,18 +86,42 @@ fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
         .into()
 }
 
+fn infinite_loop_tx<R: Rng + rand::CryptoRng>(
+    max_fee_limit: Word,
+    rng: &mut R,
+    asset_id: Option<AssetId>,
+) -> Transaction {
+    let script = vec![op::jmp(RegId::ZERO)];
+    let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
+    let mut builder = TransactionBuilder::script(script_bytes, vec![]);
+    let asset_id = asset_id.unwrap_or_else(|| *builder.get_params().base_asset_id());
+    builder
+        .max_fee_limit(max_fee_limit)
+        .script_gas_limit(800_000)
+        .add_unsigned_coin_input(
+            SecretKey::random(rng),
+            rng.gen(),
+            u32::MAX as u64,
+            asset_id,
+            Default::default(),
+        )
+        .finalize()
+        .into()
+}
+
 fn arb_large_tx<R: Rng + rand::CryptoRng>(
     max_fee_limit: Word,
     rng: &mut R,
+    asset_id: Option<AssetId>,
 ) -> Transaction {
     let mut script: Vec<_> = repeat(op::noop()).take(10_000).collect();
     script.push(op::ret(RegId::ONE));
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
     let mut builder = TransactionBuilder::script(script_bytes, vec![]);
-    let asset_id = *builder.get_params().base_asset_id();
+    let asset_id = asset_id.unwrap_or_else(|| *builder.get_params().base_asset_id());
     builder
         .max_fee_limit(max_fee_limit)
-        .script_gas_limit(22430)
+        .script_gas_limit(600_000)
         .add_unsigned_coin_input(
             SecretKey::random(rng),
             rng.gen(),
@@ -191,6 +218,10 @@ async fn produce_block__raises_gas_price() {
     node_config.exec_gas_price_change_percent = percent;
     node_config.exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
+    node_config.da_p_component = 0;
+    node_config.da_d_component = 0;
+    node_config.max_da_gas_price_change_percent = 0;
+    node_config.min_da_gas_price = 0;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -199,7 +230,7 @@ async fn produce_block__raises_gas_price() {
     // when
     let arb_tx_count = 10;
     for i in 0..arb_tx_count {
-        let tx = arb_large_tx(189028 + i as Word, &mut rng);
+        let tx = arb_large_tx(18902800 + i as Word, &mut rng, None);
         let _status = client.submit(&tx).await.unwrap();
     }
     // starting gas price
@@ -236,6 +267,10 @@ async fn produce_block__lowers_gas_price() {
     node_config.exec_gas_price_change_percent = percent;
     node_config.exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
+    node_config.da_p_component = 0;
+    node_config.da_d_component = 0;
+    node_config.max_da_gas_price_change_percent = 0;
+    node_config.min_da_gas_price = 0;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -244,7 +279,7 @@ async fn produce_block__lowers_gas_price() {
     // when
     let arb_tx_count = 5;
     for i in 0..arb_tx_count {
-        let tx = arb_large_tx(189028 + i as Word, &mut rng);
+        let tx = arb_large_tx(18902800 + i as Word, &mut rng, None);
         let _status = client.submit(&tx).await.unwrap();
     }
     // starting gas price
@@ -258,6 +293,64 @@ async fn produce_block__lowers_gas_price() {
     let latest = client.latest_gas_price().await.unwrap();
     let actual = latest.gas_price;
     assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn produce_block__raises_gas_price_with_default_parameters() {
+    // given
+    let args = vec![
+        "--debug",
+        "--poa-instant",
+        "false",
+        "--coinbase-recipient",
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "--min-da-gas-price",
+        "0",
+        "--da-p-component",
+        "0",
+        "--da-d-component",
+        "0",
+        "--starting-gas-price",
+        "1000",
+        "--gas-price-change-percent",
+        "10",
+        "--max-da-gas-price-change-percent",
+        "0",
+    ];
+    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+
+    let starting_gas_price = 1000;
+    let expected_default_percentage_increase = 10;
+
+    let expected_gas_price =
+        starting_gas_price * (100 + expected_default_percentage_increase) / 100;
+
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+    let base_asset_id = driver
+        .client
+        .consensus_parameters(0)
+        .await
+        .unwrap()
+        .unwrap()
+        .base_asset_id()
+        .clone();
+
+    // when
+    let arb_tx_count = 20;
+    for _ in 0..arb_tx_count {
+        let tx = infinite_loop_tx(200_000_000, &mut rng, Some(base_asset_id));
+        let _status = driver.client.submit(&tx).await.unwrap();
+    }
+
+    // starting gas price
+    let _ = driver.client.produce_blocks(1, None).await.unwrap();
+
+    // updated gas price
+    let _ = driver.client.produce_blocks(1, None).await.unwrap();
+    let latest_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
+
+    assert_eq!(expected_gas_price, latest_gas_price);
 }
 
 #[tokio::test]
@@ -319,7 +412,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
         "--debug",
         "--poa-instant",
         "true",
-        "--starting-exec-gas-price",
+        "--starting-gas-price",
         "1000",
         "--gas-price-change-percent",
         "100",
@@ -474,10 +567,7 @@ use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::R
 use fuel_core_storage::iter::IterDirection;
 
 #[test]
-fn produce_block__l1_committed_block_effects_gas_price() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .try_init();
+fn produce_block__l1_committed_block_affects_gas_price() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     // set up chain with single unrecorded block
     let mut args = vec![
@@ -487,8 +577,23 @@ fn produce_block__l1_committed_block_effects_gas_price() {
         "--min-da-gas-price",
         "100",
     ];
+
+    let mut default_args = args.clone();
+    default_args.extend([
+        "--da-p-component",
+        "0",
+        "--da-d-component",
+        "0",
+        "--starting-gas-price",
+        "0",
+        "--gas-price-change-percent",
+        "0",
+        "--max-da-gas-price-change-percent",
+        "0",
+    ]);
+
     let (first_gas_price, temp_dir) = rt.block_on(async {
-        let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+        let driver = FuelCoreDriver::spawn(&default_args).await.unwrap();
         driver.client.produce_blocks(1, None).await.unwrap();
         let first_gas_price: u64 = driver
             .client
@@ -534,20 +639,21 @@ fn produce_block__l1_committed_block_effects_gas_price() {
             let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
                 .await
                 .unwrap();
-            tokio::time::sleep(Duration::from_millis(2)).await;
+            tokio::time::sleep(Duration::from_millis(20)).await;
             // Won't accept DA costs until l2_height is > 1
             driver.client.produce_blocks(1, None).await.unwrap();
             // Wait for DaBlockCosts to be accepted
             tokio::time::sleep(Duration::from_millis(2)).await;
             // Produce new block to update gas price
             driver.client.produce_blocks(1, None).await.unwrap();
-            tokio::time::sleep(Duration::from_millis(2)).await;
+            tokio::time::sleep(Duration::from_millis(20)).await;
             driver.client.estimate_gas_price(0).await.unwrap().gas_price
         })
         .into();
 
     // then
     assert!(first_gas_price < new_gas_price);
+    rt.shutdown_timeout(tokio::time::Duration::from_millis(100));
 }
 
 #[test]
