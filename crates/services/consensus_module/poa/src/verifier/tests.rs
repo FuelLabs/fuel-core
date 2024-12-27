@@ -38,7 +38,7 @@ fn correct() -> Input {
         },
     };
     let block_header = partial_header
-        .generate(&txs, &[], Default::default())
+        .generate(&txs, None, &[], Default::default())
         .unwrap();
 
     Input {
@@ -116,5 +116,5 @@ fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
     b.header_mut().set_consensus_header(ch);
     b.header_mut().set_application_header(ah);
     *b.transactions_mut() = txs;
-    verify_block_fields(&d, &b)
+    verify_block_fields(&d, &b, true)
 }

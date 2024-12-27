@@ -53,6 +53,7 @@ where
         &self,
         consensus: &Consensus,
         block: &Block,
+        verify_transactions_root: bool,
     ) -> anyhow::Result<()> {
         match consensus {
             Consensus::Genesis(_) => {
@@ -66,7 +67,11 @@ where
             }
             Consensus::PoA(_) => {
                 let view = self.view_provider.latest_view()?;
-                fuel_core_poa::verifier::verify_block_fields(&view, block)
+                fuel_core_poa::verifier::verify_block_fields(
+                    &view,
+                    block,
+                    verify_transactions_root,
+                )
             }
             _ => Err(anyhow::anyhow!("Unsupported consensus: {:?}", consensus)),
         }

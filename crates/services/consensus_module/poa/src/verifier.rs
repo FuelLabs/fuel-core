@@ -43,6 +43,7 @@ pub fn verify_consensus(
 pub fn verify_block_fields<D: Database>(
     database: &D,
     block: &Block,
+    verify_transactions_root: bool,
 ) -> anyhow::Result<()> {
     let height = *block.header().height();
     ensure!(
@@ -75,10 +76,12 @@ pub fn verify_block_fields<D: Database>(
         "The application hash mismatch."
     );
 
-    ensure!(
-        header.validate_transactions(block.transactions()),
-        "The transactions don't match header."
-    );
+    if verify_transactions_root {
+        ensure!(
+            header.validate_transactions(block.transactions()),
+            "The transactions don't match header."
+        );
+    }
 
     Ok(())
 }

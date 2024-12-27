@@ -88,8 +88,13 @@ impl BlockVerifier for VerifierAdapter {
         &self,
         consensus: &Consensus,
         block: &Block,
+        verify_transactions_root: bool,
     ) -> anyhow::Result<()> {
-        self.block_verifier.verify_block_fields(consensus, block)
+        self.block_verifier.verify_block_fields(
+            consensus,
+            block,
+            verify_transactions_root,
+        )
     }
 }
 

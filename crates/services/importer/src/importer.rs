@@ -493,7 +493,8 @@ where
         let block = sealed_block.entity;
         let sealed_block_id = block.id();
 
-        let result_of_verification = verifier.verify_block_fields(&consensus, &block);
+        let result_of_verification =
+            verifier.verify_block_fields(&consensus, &block, false);
         if let Err(err) = result_of_verification {
             return Err(Error::FailedVerification(err))
         }

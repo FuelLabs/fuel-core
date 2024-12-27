@@ -110,6 +110,7 @@ pub trait BlockVerifier: Send + Sync {
         &self,
         consensus: &Consensus,
         block: &Block,
+        verify_transactions_root: bool,
     ) -> anyhow::Result<()>;
 }
 
