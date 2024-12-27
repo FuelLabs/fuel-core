@@ -55,7 +55,13 @@ use fuel_core_types::{
         canonical::Serialize,
         BlockHeight,
     },
-    fuel_vm::interpreter::MemoryInstance,
+    fuel_vm::{
+        checked_transaction::{
+            Checked,
+            IntoChecked,
+        },
+        interpreter::MemoryInstance,
+    },
     services::{
         block_producer::Components,
         executor::{
@@ -69,8 +75,6 @@ use fuel_core_types::{
         Uncommitted,
     },
 };
-#[cfg(debug_assertions)]
-use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 use fuel_core_upgradable_executor::{
     executor::Executor as UpgradableExecutor,
     native_executor::{
@@ -83,6 +87,7 @@ use fuel_core_upgradable_executor::{
             OnceTransactionsSource,
         },
         ports::{
+            MaybeCheckedTransaction,
             RelayerPort,
             TransactionExt,
             TransactionsSource,
@@ -384,13 +389,18 @@ where
 
             return executor.produce_without_commit_with_source(new_small_block)
         }
-        self.produce_inner_without_da(components, consensus_parameters)
+        self.produce_inner_without_da(
+            components,
+            consensus_parameters,
+            consensus_parameters_version,
+        )
     }
 
     fn produce_inner_without_da<TxSource>(
         &self,
         components: Components<TxSource>,
         consensus_parameters: Cow<ConsensusParameters>,
+        consensus_parameters_version: u32,
     ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -422,12 +432,101 @@ where
             gas_price,
         } = components;
 
+        // TODO: Try to take parts to avoid the chunks afterwards.
         let txs =
             transactions_source.next(block_gas_limit, max_tx_number, block_size_limit);
+        let txs_len = txs.len();
 
         let chain_id = consensus_parameters.chain_id();
+        
+        // Precompute all transactions in all of the cores to avoid recomputing them when asking id.
+        let tx_per_core = txs_len.checked_div(self.number_of_cores.get()).ok_or(
+            ExecutorError::Other("The number of cores is 0.".to_string()),
+        )?;
+        let block_height = *header_to_produce.height();
         let consensus_parameters = consensus_parameters.into_owned();
+
+        let start = Instant::now();
+        let handlers = txs
+            .chunks(tx_per_core)
+            .map(|txs| {
+                // TODO: try to remove this clone
+                let txs = txs.to_vec();
+                runtime.spawn({
+                    // TODO: try to remove this clone
+                    let consensus_parameters = consensus_parameters.clone();
+                    async move {
+                    let mut checked_txs: Vec<MaybeCheckedTransaction> =
+                        Vec::with_capacity(tx_per_core);
+                    for tx in txs {
+                        match tx {
+                            MaybeCheckedTransaction::Transaction(tx) => {
+                                // Not doing into_checked to check signature and predicates 
+                                // because it's already done in executor when calling `dry_run`
+                                checked_txs.push(
+                                    MaybeCheckedTransaction::CheckedTransaction(
+                                        tx.into_checked_basic(
+                                            block_height,
+                                            &consensus_parameters,
+                                        )?.into(),
+                                        consensus_parameters_version,
+                                    ),
+                                )
+                            }
+                            MaybeCheckedTransaction::CheckedTransaction(
+                                checked_tx,
+                                checked_version,
+                            ) => {
+                                if consensus_parameters_version == checked_version {
+                                    checked_txs.push(
+                                        MaybeCheckedTransaction::CheckedTransaction(
+                                            checked_tx,
+                                            checked_version,
+                                        ),
+                                    )
+                                } else {
+                                    let checked_tx: Checked<Transaction> =
+                                        checked_tx.into();
+                                    let (tx, _) = checked_tx.into();
+                                    checked_txs.push(
+                                        MaybeCheckedTransaction::CheckedTransaction(
+                                            tx.into_checked_basic(
+                                                block_height,
+                                                &consensus_parameters,
+                                            )?
+                                            .into(),
+                                            consensus_parameters_version,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Ok::<Vec<MaybeCheckedTransaction>, ExecutorError>(checked_txs)
+                }})
+            })
+            .collect::<Vec<_>>();
+        tracing::info!(
+            "Building thread for checking transactions took: {}ms",
+            start.elapsed().as_millis()
+        );
+        let start = Instant::now();
+        let results = futures::executor::block_on(async move {
+            futures::future::join_all(handlers).await
+        });
+        tracing::info!(
+            "Checking transactions took: {}ms",
+            start.elapsed().as_millis()
+        );
+        let mut txs = Vec::with_capacity(txs_len);
+        for result in results {
+            let part = result.map_err(|e| {
+                ExecutorError::Other(format!("Unable to join one of the executors {e}"))
+            })??;
+            txs.extend(part);
+        }
         // TODO: Use reference for `consensus_parameters`.
+        let start = Instant::now();
         let mut splitter = DependencySplitter::new(consensus_parameters.clone());
 
         let mut skipped_transactions_ids = vec![];
@@ -449,6 +548,10 @@ where
                 skipped_transactions_ids.push((tx_id, e));
             }
         }
+        tracing::info!(
+            "Processing transactions took: {}ms",
+            start.elapsed().as_millis()
+        );
 
         let start = Instant::now();
         let buckets = splitter.split_equally(self.number_of_cores);
@@ -623,8 +726,11 @@ where
                 consensus_parameters_version,
             ))?;
 
-        let executed_block_result =
-            self.produce_inner_without_da(components, consensus_parameters)?;
+        let executed_block_result = self.produce_inner_without_da(
+            components,
+            consensus_parameters,
+            consensus_parameters_version,
+        )?;
 
         if let Some((_, error)) =
             executed_block_result.result().skipped_transactions.first()

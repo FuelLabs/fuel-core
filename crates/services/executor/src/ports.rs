@@ -36,8 +36,7 @@ use fuel_core_types::fuel_tx::{
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug)]
-#[cfg_attr(debug_assertions, derive(Clone))]
+#[derive(Debug, Clone)]
 pub enum MaybeCheckedTransaction {
     CheckedTransaction(CheckedTransaction, ConsensusParametersVersion),
     Transaction(fuel_tx::Transaction),

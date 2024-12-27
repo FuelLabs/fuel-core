@@ -24,12 +24,15 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::Block,
+        block::{
+            Block,
+            BlockV1,
+        },
         consensus::Consensus,
         header::ConsensusParametersVersion,
         SealedBlock,
     },
-    fuel_tx::UniqueIdentifier,
+    fuel_tx::TxId,
     fuel_types::{
         BlockHeight,
         ChainId,
@@ -90,8 +93,8 @@ pub trait DatabaseTransaction {
     //  the block should have `cached_id`. We need to guarantee that from the Rust-type system.
     fn store_new_block(
         &mut self,
-        chain_id: &ChainId,
         block: &SealedBlock,
+        tx_ids: Vec<TxId>,
     ) -> StorageResult<()>;
 
     /// Commits the changes to the underlying storage.
@@ -140,8 +143,8 @@ where
 
     fn store_new_block(
         &mut self,
-        chain_id: &ChainId,
         block: &SealedBlock,
+        tx_ids: Vec<TxId>,
     ) -> StorageResult<()> {
         // Replace all with insert
         let start = tokio::time::Instant::now();
@@ -154,7 +157,13 @@ where
         // Compress is really doing recomputation of id ? it shouldn't.
         // Should be fast
         let start = tokio::time::Instant::now();
-        let compressed_block = block.entity.compress(chain_id);
+        let compressed_block = {
+            let new_inner = BlockV1 {
+                header: block.entity.header().clone(),
+                transactions: tx_ids.clone(),
+            };
+            Block::V1(new_inner)
+        };
         tracing::info!(
             "Compress in store_new_block took {} milliseconds",
             start.elapsed().as_millis()
@@ -178,11 +187,11 @@ where
 
         // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576
         let start = tokio::time::Instant::now();
-        for tx in block.entity.transactions() {
+        for (tx, tx_id) in block.entity.transactions().iter().zip(tx_ids.iter()) {
             // Maybe a debug insert
             storage
                 .storage_as_mut::<Transactions>()
-                .insert(&tx.id(chain_id), tx)?;
+                .insert(&tx_id, tx)?;
         }
         tracing::info!(
             "Insert transactions in store_new_block took {} milliseconds",

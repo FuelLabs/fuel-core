@@ -54,9 +54,9 @@ impl<T: Default> Default for Block<T> {
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct BlockV1<TransactionRepresentation = Transaction> {
     /// Generated complete header.
-    header: BlockHeader,
+    pub header: BlockHeader,
     /// Executed transactions.
-    transactions: Vec<TransactionRepresentation>,
+    pub transactions: Vec<TransactionRepresentation>,
 }
 
 /// Fuel `Block` with transactions represented by their id only.

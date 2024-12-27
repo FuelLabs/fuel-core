@@ -27,7 +27,6 @@ use fuel_core_types::{
     },
     fuel_tx::{
         field::MintGasPrice,
-        Cacheable,
         Transaction,
         ValidityError,
     },
@@ -128,7 +127,7 @@ pub struct Importer<D, E, V> {
     database: Mutex<D>,
     executor: Arc<E>,
     verifier: Arc<V>,
-    chain_id: ChainId,
+    _chain_id: ChainId,
     broadcast: broadcast::Sender<ImporterResult>,
     guard: Semaphore,
     /// The semaphore tracks the number of unprocessed `SharedImportResult`.
@@ -163,7 +162,7 @@ impl<D, E, V> Importer<D, E, V> {
             database: Mutex::new(database),
             executor: Arc::new(executor),
             verifier: Arc::new(verifier),
-            chain_id,
+            _chain_id: chain_id,
             broadcast,
             active_import_results: Arc::new(Semaphore::new(max_block_notify_buffer)),
             guard: Semaphore::new(1),
@@ -356,7 +355,10 @@ where
             ))
         }
 
-        db_after_execution.store_new_block(&self.chain_id, &result.sealed_block)?;
+        db_after_execution.store_new_block(
+            &result.sealed_block,
+            result.tx_status.iter().map(|res| res.id).collect(),
+        )?;
         let start = Instant::now();
 
         db_after_execution.commit()?;
@@ -551,7 +553,7 @@ where
     /// It is a combination of the [`Importer::verify_and_execute_block`] and [`Importer::commit_result`].
     pub async fn execute_and_commit(
         &self,
-        mut sealed_block: SealedBlock,
+        sealed_block: SealedBlock,
     ) -> Result<(), Error> {
         let start = Instant::now();
         let _guard = self.lock()?;
@@ -561,39 +563,6 @@ where
         let (result, execute_time) = self
             .async_run(|| {
                 let start = Instant::now();
-                let chain_id = {
-                    let guard = self
-                        .database
-                        .try_lock()
-                        .expect("Semaphore prevents concurrent access to the database");
-                    let database = guard.deref();
-                    let chain_id = database.chain_id(
-                        &sealed_block.entity.header().consensus_parameters_version,
-                    );
-                    match chain_id {
-                        Ok(Some(chain_id)) => chain_id,
-                        Ok(None) => {
-                            return (
-                                Err(Error::StorageError(not_found!("ChainID"))),
-                                start.elapsed().as_secs_f64(),
-                            )
-                        }
-                        Err(err) => {
-                            return (
-                                Err(Error::StorageError(err)),
-                                start.elapsed().as_secs_f64(),
-                            )
-                        }
-                    }
-                };
-                for tx in sealed_block.entity.transactions_mut() {
-                    if let Err(err) = tx.precompute(&chain_id) {
-                        return (
-                            Err(Error::InvalidTransaction(err)),
-                            start.elapsed().as_secs_f64(),
-                        )
-                    };
-                }
                 let result = Self::verify_and_execute_block_inner(
                     executor,
                     verifier,
