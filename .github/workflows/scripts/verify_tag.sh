@@ -23,7 +23,7 @@ if [ -z "$MANIFEST" ]; then
     exit 1
 fi
 
-# strip preceeding 'v' if it exists on tag
+# strip preceding 'v' if it exists on tag
 REF=${REF/#v}
 TOML_VERSION=$(cat $MANIFEST | dasel -r toml 'workspace.package.version')
 
