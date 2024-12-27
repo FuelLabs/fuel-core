@@ -197,11 +197,11 @@ where
     where
         T: KeyValueInspect<Column = Column<Description>>,
     {
-        let modifications_history_migration_in_progress = self.is_migration_in_progress();
-
         if self.state_rewind_policy == StateRewindPolicy::NoRewind {
             return Ok(());
         }
+
+        let modifications_history_migration_in_progress = self.is_migration_in_progress();
         let height_u64 = height.as_u64();
 
         let reverse_changes =
@@ -577,26 +577,44 @@ where
         height: Option<Description::Height>,
         changes: Changes,
     ) -> StorageResult<()> {
-        let mut storage_transaction =
-            StorageTransaction::transaction(&self.db, ConflictPolicy::Overwrite, changes);
-
-        let start = std::time::Instant::now();
-        if let Some(height) = height {
-            self.store_modifications_history(&mut storage_transaction, &height)?;
+        // TODO: Maybe too much optimized for not really better performance try to remove 
+        // the changes at the end.
+        if self.state_rewind_policy == StateRewindPolicy::NoRewind {
+            let start = std::time::Instant::now();
+            self.db.commit_changes(&changes)?;
+            tracing::info!(
+                "Commit to rocksdb in commit_changes1 took {} milliseconds",
+                start.elapsed().as_millis()
+            );
+            return Ok(());
         }
-        tracing::info!(
-            "Store modifications history in commit_changes took {} milliseconds",
-            start.elapsed().as_millis()
-        );
-
-        let start = std::time::Instant::now();
-        self.db
-            .commit_changes(&storage_transaction.into_changes())?;
-
-        tracing::info!(
-            "Commit to rocksdb in commit_changes took {} milliseconds",
-            start.elapsed().as_millis()
-        );
+        if let Some(height) = height {
+            let start = std::time::Instant::now();
+            let mut storage_transaction = StorageTransaction::transaction(
+                &self.db,
+                ConflictPolicy::Overwrite,
+                changes,
+            );
+            self.store_modifications_history(&mut storage_transaction, &height)?;
+            tracing::info!(
+                "Transaction and Store modifications history in commit_changes took {} milliseconds",
+                start.elapsed().as_millis()
+            );
+            let start = std::time::Instant::now();
+            self.db
+                .commit_changes(&storage_transaction.into_changes())?;
+            tracing::info!(
+                "Commit to rocksdb in commit_changes2 took {} milliseconds",
+                start.elapsed().as_millis()
+            );
+        } else {
+            let start = std::time::Instant::now();
+            self.db.commit_changes(&changes)?;
+            tracing::info!(
+                "Commit to rocksdb in commit_changes3 took {} milliseconds",
+                start.elapsed().as_millis()
+            );
+        }
 
         Ok(())
     }

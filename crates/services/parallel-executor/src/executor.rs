@@ -438,7 +438,7 @@ where
         let txs_len = txs.len();
 
         let chain_id = consensus_parameters.chain_id();
-        
+
         // Precompute all transactions in all of the cores to avoid recomputing them when asking id.
         let tx_per_core = txs_len.checked_div(self.number_of_cores.get()).ok_or(
             ExecutorError::Other("The number of cores is 0.".to_string()),
@@ -456,38 +456,13 @@ where
                     // TODO: try to remove this clone
                     let consensus_parameters = consensus_parameters.clone();
                     async move {
-                    let mut checked_txs: Vec<MaybeCheckedTransaction> =
-                        Vec::with_capacity(tx_per_core);
-                    for tx in txs {
-                        match tx {
-                            MaybeCheckedTransaction::Transaction(tx) => {
-                                // Not doing into_checked to check signature and predicates 
-                                // because it's already done in executor when calling `dry_run`
-                                checked_txs.push(
-                                    MaybeCheckedTransaction::CheckedTransaction(
-                                        tx.into_checked_basic(
-                                            block_height,
-                                            &consensus_parameters,
-                                        )?.into(),
-                                        consensus_parameters_version,
-                                    ),
-                                )
-                            }
-                            MaybeCheckedTransaction::CheckedTransaction(
-                                checked_tx,
-                                checked_version,
-                            ) => {
-                                if consensus_parameters_version == checked_version {
-                                    checked_txs.push(
-                                        MaybeCheckedTransaction::CheckedTransaction(
-                                            checked_tx,
-                                            checked_version,
-                                        ),
-                                    )
-                                } else {
-                                    let checked_tx: Checked<Transaction> =
-                                        checked_tx.into();
-                                    let (tx, _) = checked_tx.into();
+                        let mut checked_txs: Vec<MaybeCheckedTransaction> =
+                            Vec::with_capacity(tx_per_core);
+                        for tx in txs {
+                            match tx {
+                                MaybeCheckedTransaction::Transaction(tx) => {
+                                    // Not doing into_checked to check signature and predicates
+                                    // because it's already done in executor when calling `dry_run`
                                     checked_txs.push(
                                         MaybeCheckedTransaction::CheckedTransaction(
                                             tx.into_checked_basic(
@@ -499,11 +474,38 @@ where
                                         ),
                                     )
                                 }
+                                MaybeCheckedTransaction::CheckedTransaction(
+                                    checked_tx,
+                                    checked_version,
+                                ) => {
+                                    if consensus_parameters_version == checked_version {
+                                        checked_txs.push(
+                                            MaybeCheckedTransaction::CheckedTransaction(
+                                                checked_tx,
+                                                checked_version,
+                                            ),
+                                        )
+                                    } else {
+                                        let checked_tx: Checked<Transaction> =
+                                            checked_tx.into();
+                                        let (tx, _) = checked_tx.into();
+                                        checked_txs.push(
+                                            MaybeCheckedTransaction::CheckedTransaction(
+                                                tx.into_checked_basic(
+                                                    block_height,
+                                                    &consensus_parameters,
+                                                )?
+                                                .into(),
+                                                consensus_parameters_version,
+                                            ),
+                                        )
+                                    }
+                                }
                             }
                         }
+                        Ok::<Vec<MaybeCheckedTransaction>, ExecutorError>(checked_txs)
                     }
-                    Ok::<Vec<MaybeCheckedTransaction>, ExecutorError>(checked_txs)
-                }})
+                })
             })
             .collect::<Vec<_>>();
         tracing::info!(

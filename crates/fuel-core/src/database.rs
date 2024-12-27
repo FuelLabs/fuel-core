@@ -425,10 +425,15 @@ where
     for<'a> StorageTransaction<&'a &'a mut Database<Description>>:
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
 {
+    let start_time = std::time::Instant::now();
     // Gets the all new heights from the `changes`
     let iterator = ChangesIterator::<Description::Column>::new(&changes);
     let new_heights = heights_lookup(&iterator)?;
-
+    tracing::info!(
+        "Getting heights took {} milliseconds",
+        start_time.elapsed().as_millis()
+    );
+    let start_time = std::time::Instant::now();
     // Changes for each block should be committed separately.
     // If we have more than one height, it means we are mixing commits
     // for several heights in one batch - return error in this case.
@@ -498,6 +503,10 @@ where
     } else {
         changes
     };
+    tracing::info!(
+        "Getting update changes took {} milliseconds",
+        start_time.elapsed().as_millis()
+    );
 
     // Atomically commit the changes to the database, and to the mutex-protected field.
     let mut guard = database.stage.height.lock();
