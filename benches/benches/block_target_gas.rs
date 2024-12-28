@@ -1,10 +1,10 @@
 use block_target_gas_set::{
-    alu::run_alu,
-    contract::run_contract,
-    crypto::run_crypto,
-    flow::run_flow,
+    // alu::run_alu,
+    // contract::run_contract,
+    // crypto::run_crypto,
+    // flow::run_flow,
     memory::run_memory,
-    other::run_other,
+    // other::run_other,
 };
 use criterion::{
     criterion_group,
@@ -456,17 +456,17 @@ fn run_with_service_with_extra_inputs(
 fn block_target_gas(c: &mut Criterion) {
     let mut group = c.benchmark_group("block target estimation");
 
-    run_alu(&mut group);
+    // run_alu(&mut group);
 
-    run_contract(&mut group);
+    // run_contract(&mut group);
 
-    run_crypto(&mut group);
+    // run_crypto(&mut group);
 
-    run_flow(&mut group);
+    // run_flow(&mut group);
 
     run_memory(&mut group);
 
-    run_other(&mut group);
+    // run_other(&mut group);
 
     group.finish();
 }
