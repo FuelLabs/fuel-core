@@ -213,6 +213,8 @@ pub fn run_memory(group: &mut BenchmarkGroup<WallTime>) {
         let id = format!("memory/meq opcode {:?}", i);
         let mut script = set_full_word(0x13, i as u64);
         script.extend(vec![
+            op::movi(0x11, i),
+            op::aloc(0x11),
             op::meq(0x10, RegId::ZERO, RegId::ZERO, 0x13),
             op::jmpb(RegId::ZERO, 0),
         ]);
