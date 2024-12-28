@@ -263,8 +263,9 @@ impl TestSetupBuilder {
         if let Some(policy) = self.state_rewind_policy {
             config.combined_db_config.state_rewind_policy = policy;
         }
-
-        assert_eq!(config.combined_db_config.database_type, DbType::RocksDb);
+        config.combined_db_config.max_database_cache_size = None;
+        config.combined_db_config.max_fds = 1024 * 1024 * 1024;
+        config.combined_db_config.database_type = DbType::RocksDb;
 
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);

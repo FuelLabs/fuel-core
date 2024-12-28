@@ -1162,6 +1162,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
+name = "bitcoin-io"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b47c4ab7a93edb0c7198c5535ed9b52b63095f4e9b45279c6736cec4b856baf"
+
+[[package]]
+name = "bitcoin_hashes"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb18c03d0db0247e147a21a6faafd5a7eb851c743db062de72018b6b7e8e4d16"
+dependencies = [
+ "bitcoin-io",
+ "hex-conservative",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3140,7 +3156,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.58.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#806be95fe23e51127a7ee0fec674e3d3cb492691"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#2a2b241ad812a33a2577ec4a0d26098fe04f2ecd"
 dependencies = [
  "bitflags 2.6.0",
  "fuel-types 0.58.2",
@@ -3151,7 +3167,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.58.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#806be95fe23e51127a7ee0fec674e3d3cb492691"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#2a2b241ad812a33a2577ec4a0d26098fe04f2ecd"
 dependencies = [
  "fuel-derive 0.58.2",
  "fuel-types 0.58.2",
@@ -3882,7 +3898,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.58.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#806be95fe23e51127a7ee0fec674e3d3cb492691"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#2a2b241ad812a33a2577ec4a0d26098fe04f2ecd"
 dependencies = [
  "coins-bip32",
  "coins-bip39",
@@ -3890,7 +3906,6 @@ dependencies = [
  "ed25519-dalek",
  "fuel-types 0.58.2",
  "k256",
- "lazy_static",
  "p256",
  "rand",
  "secp256k1",
@@ -3914,7 +3929,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.58.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#806be95fe23e51127a7ee0fec674e3d3cb492691"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#2a2b241ad812a33a2577ec4a0d26098fe04f2ecd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3951,7 +3966,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.58.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#806be95fe23e51127a7ee0fec674e3d3cb492691"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#2a2b241ad812a33a2577ec4a0d26098fe04f2ecd"
 dependencies = [
  "derive_more 0.99.18",
  "digest 0.10.7",
@@ -3971,7 +3986,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.58.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#806be95fe23e51127a7ee0fec674e3d3cb492691"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#2a2b241ad812a33a2577ec4a0d26098fe04f2ecd"
 
 [[package]]
 name = "fuel-tx"
@@ -3998,7 +4013,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.58.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#806be95fe23e51127a7ee0fec674e3d3cb492691"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#2a2b241ad812a33a2577ec4a0d26098fe04f2ecd"
 dependencies = [
  "bitflags 2.6.0",
  "derivative",
@@ -4031,7 +4046,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.58.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#806be95fe23e51127a7ee0fec674e3d3cb492691"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#2a2b241ad812a33a2577ec4a0d26098fe04f2ecd"
 dependencies = [
  "fuel-derive 0.58.2",
  "hex",
@@ -4073,7 +4088,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.58.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#806be95fe23e51127a7ee0fec674e3d3cb492691"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/big-blocks#2a2b241ad812a33a2577ec4a0d26098fe04f2ecd"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4533,6 +4548,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "hex-conservative"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5313b072ce3c597065a808dbf612c4c8e8590bdbf8b579508bf7a762c5eae6cd"
+dependencies = [
+ "arrayvec",
 ]
 
 [[package]]
@@ -8423,10 +8447,11 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.29.1"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9465315bc9d4566e1724f0fffcbcc446268cb522e60f9a27bcded6b19c108113"
+checksum = "b50c5943d326858130af85e049f2661ba3c78b26589b8ab98e65e80ae44a1252"
 dependencies = [
+ "bitcoin_hashes",
  "rand",
  "secp256k1-sys",
 ]

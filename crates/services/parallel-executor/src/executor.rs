@@ -520,34 +520,31 @@ where
             "Checking transactions took: {}ms",
             start.elapsed().as_millis()
         );
-        let mut txs = Vec::with_capacity(txs_len);
-        for result in results {
-            let part = result.map_err(|e| {
-                ExecutorError::Other(format!("Unable to join one of the executors {e}"))
-            })??;
-            txs.extend(part);
-        }
         // TODO: Use reference for `consensus_parameters`.
         let start = Instant::now();
         let mut splitter = DependencySplitter::new(consensus_parameters.clone());
 
         let mut skipped_transactions_ids = vec![];
 
-        for tx in txs {
-            #[cfg(debug_assertions)]
-            {
+        for result in results {
+            let txs = result.unwrap()?;
+
+            for tx in txs {
+                #[cfg(debug_assertions)]
+                {
+                    let tx_id = tx.id(&chain_id);
+                    saved_txs.insert(tx_id, tx.clone());
+                }
+                if tx.is_mint() {
+                    return Err(ExecutorError::MintIsNotLastTransaction);
+                }
                 let tx_id = tx.id(&chain_id);
-                saved_txs.insert(tx_id, tx.clone());
-            }
-            if tx.is_mint() {
-                return Err(ExecutorError::MintIsNotLastTransaction);
-            }
-            let tx_id = tx.id(&chain_id);
 
-            let result = splitter.process(tx, tx_id);
+                let result = splitter.process(tx, tx_id);
 
-            if let Err(e) = result {
-                skipped_transactions_ids.push((tx_id, e));
+                if let Err(e) = result {
+                    skipped_transactions_ids.push((tx_id, e));
+                }
             }
         }
         tracing::info!(
@@ -567,6 +564,7 @@ where
         let handlers = buckets
             .into_iter()
             .map(|txs| {
+                tracing::info!("Number of transactions in the bucket: {:?}", txs.len());
                 let part_of_the_block = Components {
                     header_to_produce,
                     transactions_source: OnceTransactionsSource::new_maybe_checked(txs),

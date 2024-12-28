@@ -119,7 +119,7 @@ impl Config {
 
         let combined_db_config = CombinedDatabaseConfig {
             // Set the cache for tests = 10MB
-            max_database_cache_size: 10 * 1024 * 1024,
+            max_database_cache_size: Some(10 * 1024 * 1024),
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,
