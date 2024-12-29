@@ -79,14 +79,14 @@ where
 }
 
 fn vm(c: &mut Criterion) {
-    // alu::run(c);
+    alu::run(c);
     // crypto::run(c);
     // flow::run(c);
     mem::run(c);
     // blockchain::run(c);
     // contract_root(c);
     // state_root(c);
-    // vm_initialization(c);
+    vm_initialization(c);
 }
 
 criterion_group!(benches, vm);
