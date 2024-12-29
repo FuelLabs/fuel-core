@@ -30,12 +30,15 @@ mod tests;
 #[derive(Debug)]
 /// Receives the next gas price algorithm via a shared `BlockGasPriceAlgo` instance
 pub struct FuelGasPriceProvider<A> {
+    // // Scale the gas price down by this factor, for e.g. Wei to Gwei
+    // scaling_factor: u64,
     algorithm: SharedGasPriceAlgo<A>,
 }
 
 impl<A> Clone for FuelGasPriceProvider<A> {
     fn clone(&self) -> Self {
         Self {
+            // scaling_factor: self.scaling_factor,
             algorithm: self.algorithm.clone(),
         }
     }
@@ -43,7 +46,11 @@ impl<A> Clone for FuelGasPriceProvider<A> {
 
 impl<A> FuelGasPriceProvider<A> {
     pub fn new(algorithm: SharedGasPriceAlgo<A>) -> Self {
-        Self { algorithm }
+        Self {
+            // // Default scaling factor is 1_000_000_000, to convert Wei to Gwei
+            // scaling_factor: 1_000_000_000,
+            algorithm,
+        }
     }
 }
 
@@ -53,6 +60,10 @@ where
 {
     fn next_gas_price(&self) -> u64 {
         self.algorithm.next_gas_price()
+    }
+
+    async fn get_worst_case_gas_price(&self, height: BlockHeight) -> u64 {
+        self.algorithm.worst_case_gas_price(height).await
     }
 }
 
@@ -81,6 +92,6 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
-        Some(self.algorithm.worst_case_gas_price(height).await)
+        Some(self.get_worst_case_gas_price(height).await)
     }
 }
