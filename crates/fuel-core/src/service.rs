@@ -467,19 +467,17 @@ impl RunnableTask for Task {
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
-    use std::{
-        thread::sleep,
-        time::Duration,
-    };
-
-    use fuel_core_services::State;
-
     use crate::{
         service::{
             Config,
             FuelService,
         },
         ShutdownListener,
+    };
+    use fuel_core_services::State;
+    use std::{
+        thread::sleep,
+        time::Duration,
     };
 
     #[tokio::test]

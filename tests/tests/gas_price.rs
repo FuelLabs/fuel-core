@@ -724,21 +724,7 @@ fn run__if_metadata_is_behind_l2_then_will_catch_up() {
     // });
 }
 
-#[test]
-fn produce_block__algorithm_recovers_from_divergent_profit() {
-    _produce_block__algorithm_recovers_from_divergent_profit(110);
-}
-
-fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
-
-    // given
-    let mut mock = FakeServer::new();
-    let url = mock.url();
-    let rt = tokio::runtime::Runtime::new().unwrap();
+fn node_config_with_da_committer_url(url: &str) -> Config {
     let block_gas_limit = 3_000_000;
     let chain_config = ChainConfig {
         consensus_parameters: ConsensusParameters::V1(ConsensusParametersV1 {
@@ -754,13 +740,29 @@ fn _produce_block__algorithm_recovers_from_divergent_profit(block_delay: usize) 
     node_config.min_da_gas_price = starting_gas_price;
     node_config.max_da_gas_price_change_percent = 15;
     node_config.block_production = Trigger::Never;
-    node_config.da_committer_url = Some(url.clone());
+    node_config.da_committer_url = Some(url.to_string());
     node_config.da_poll_interval = Some(100);
     node_config.da_p_component = 224_000;
     node_config.da_d_component = 2_690_000;
     // node_config.da_p_component = 1;
     // node_config.da_d_component = 10;
     node_config.block_activity_threshold = 0;
+    node_config
+}
+
+#[test]
+fn produce_block__algorithm_recovers_from_divergent_profit() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+    // given
+    let mut mock = FakeServer::new();
+    let url = mock.url();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let node_config = node_config_with_da_committer_url(&url);
+    let block_delay = 110;
 
     let (srv, client) = rt.block_on(async {
         let srv = FuelService::new_node(node_config.clone()).await.unwrap();
@@ -891,4 +893,81 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
         let _status = client.submit(&tx).await.unwrap();
     }
     let _ = client.produce_blocks(1, None).await.unwrap();
+}
+
+#[test]
+fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::ERROR)
+        .try_init();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+    // given
+    let mut mock = FakeServer::new();
+    let url = mock.url();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let node_config = node_config_with_da_committer_url(&url);
+    let l2_blocks = 1000;
+    let da_blocks = l2_blocks / 2;
+
+    let (srv, client) = rt.block_on(async {
+        let srv = FuelService::new_node(node_config.clone()).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        for _b in 0..l2_blocks {
+            produce_a_block(&client, &mut rng).await;
+        }
+        let _ = client.produce_blocks(1, None).await.unwrap();
+
+        let height = srv.shared.database.gas_price().latest_height().unwrap();
+        let metadata = srv
+            .shared
+            .database
+            .gas_price()
+            .get_metadata(&height)
+            .unwrap()
+            .and_then(|x| x.v1().cloned())
+            .unwrap();
+        tracing::info!("metadata: {:?}", metadata);
+        assert_eq!(metadata.latest_known_total_da_cost_excess, 0);
+        (srv, client)
+    });
+
+    // Add multiple cost responses that add up to `da_cost`
+    let blob_count = 5;
+    let mut total_cost = 0;
+    for i in 0..blob_count {
+        let blob_size = da_blocks / blob_count;
+        let cost = rng.gen_range(10_000_000..100_000_000);
+        let costs = RawDaBlockCosts {
+            id: i + 1,
+            start_height: blob_size * i + 1,
+            end_height: blob_size * i + blob_size,
+            da_block_height: DaBlockHeight(999999999 + i as u64),
+            cost,
+            size: 100,
+        };
+        total_cost += cost;
+        mock.add_response(costs);
+
+        rt.block_on(async {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            // when
+            let _ = client.produce_blocks(1, None).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(100)).await;
+
+            let height = srv.shared.database.gas_price().latest_height().unwrap();
+            let metadata = srv
+                .shared
+                .database
+                .gas_price()
+                .get_metadata(&height)
+                .unwrap()
+                .and_then(|x| x.v1().cloned())
+                .unwrap();
+
+            // then
+            assert_eq!(metadata.latest_known_total_da_cost_excess, total_cost);
+        });
+    }
 }

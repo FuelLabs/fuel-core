@@ -263,7 +263,7 @@ where
                 TaskNextAction::always_continue(res)
             }
             da_block_costs_res = self.da_source_channel.recv() => {
-                tracing::debug!("Received DA block costs: {:?}", da_block_costs_res);
+                tracing::error!("Received DA block costs: {:?}", da_block_costs_res);
                 match da_block_costs_res {
                     Ok(da_block_costs) => {
                         self.da_block_costs_buffer.push(da_block_costs);
@@ -369,6 +369,7 @@ mod tests {
             fuel_core_storage_adapter::storage::{
                 GasPriceColumn,
                 GasPriceColumn::UnrecordedBlocks,
+                GasPriceMetadata,
                 RecordedHeights,
                 UnrecordedBlocksTable,
             },
@@ -393,6 +394,7 @@ mod tests {
             metadata::{
                 updater_from_config,
                 V1AlgorithmConfig,
+                V1Metadata,
             },
             service::{
                 initialize_algorithm,
@@ -706,6 +708,89 @@ mod tests {
             *latest_recorded_block_height,
             BlockHeight::from(recorded_block_height)
         );
+
+        service.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn run__stores_correct_amount_for_costs() {
+        // given
+        let recorded_block_height = 100;
+        let block_height = 200;
+        let l2_block = BlockInfo::Block {
+            height: block_height,
+            gas_used: 60,
+            block_gas_capacity: 100,
+            block_bytes: 100,
+            block_fees: 100,
+        };
+
+        let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
+        let l2_block_source = FakeL2BlockSource {
+            l2_block: l2_block_receiver,
+        };
+
+        let metadata_storage = FakeMetadata::empty();
+        // Configured so exec gas price doesn't change, only da gas price
+        let config = arbitrary_v1_algorithm_config();
+        let mut inner = database();
+        let mut tx = inner.write_transaction();
+        tx.storage_as_mut::<UnrecordedBlocksTable>()
+            .insert(&BlockHeight::from(1), &100)
+            .unwrap();
+        tx.commit().unwrap();
+        let mut algo_updater = updater_from_config(&config);
+        let shared_algo =
+            SharedGasPriceAlgo::new_with_algorithm(algo_updater.algorithm());
+        algo_updater.l2_block_height = block_height - 1;
+        algo_updater.last_profit = 10_000;
+        algo_updater.new_scaled_da_gas_price = 10_000_000;
+
+        let notifier = Arc::new(tokio::sync::Notify::new());
+        let blob_cost_wei = 9000;
+        let da_source = DaSourceService::new(
+            DummyDaBlockCosts::new(
+                Ok(DaBlockCosts {
+                    bundle_id: 8765,
+                    l2_blocks: 1..=recorded_block_height,
+                    blob_cost_wei,
+                    bundle_size_bytes: 3000,
+                }),
+                notifier.clone(),
+            ),
+            Some(Duration::from_millis(1)),
+        );
+        let mut watcher = StateWatcher::started();
+        let da_service_runner = ServiceRunner::new(da_source);
+        da_service_runner.start_and_await().await.unwrap();
+
+        let mut service = GasPriceServiceV1::new(
+            l2_block_source,
+            shared_algo,
+            algo_updater,
+            da_service_runner,
+            inner,
+        );
+        let read_algo = service.next_block_algorithm();
+        let initial_price = read_algo.next_gas_price();
+
+        service.run(&mut watcher).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        l2_block_sender.send(l2_block).await.unwrap();
+
+        // when
+        service.run(&mut watcher).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // then
+        let metadata: V1Metadata = service
+            .storage_tx_provider
+            .storage::<GasPriceMetadata>()
+            .get(&block_height.into())
+            .unwrap()
+            .and_then(|x| x.v1().cloned())
+            .unwrap();
+        assert_eq!(metadata.latest_known_total_da_cost_excess, blob_cost_wei);
 
         service.shutdown().await.unwrap();
     }
