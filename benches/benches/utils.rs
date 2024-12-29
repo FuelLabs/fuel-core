@@ -65,8 +65,11 @@ pub fn arb_dependent_cost_values() -> Vec<u32> {
         .take(5)
         .map(|f| f as u32)
         .collect::<Vec<_>>();
-    l.sort_unstable();
     linear.extend(l);
+
+    linear.sort_unstable();
+    linear.dedup();
+
     linear
 }
 
