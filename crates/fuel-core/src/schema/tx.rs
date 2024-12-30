@@ -1,4 +1,7 @@
-use super::scalars::U64;
+use super::scalars::{
+    U32,
+    U64,
+};
 use crate::{
     fuel_core_graphql_api::{
         api_service::{
@@ -73,6 +76,7 @@ use std::{
 };
 use types::{
     DryRunTransactionExecutionStatus,
+    StorageReadReplayEvent,
     Transaction,
 };
 
@@ -329,6 +333,28 @@ impl TxMutation {
             .collect();
 
         Ok(tx_statuses)
+    }
+
+    /// Get execution trace for an already-executed transaction.
+    #[graphql(complexity = "query_costs().dry_run + child_complexity")]
+    async fn storage_read_replay(
+        &self,
+        ctx: &Context<'_>,
+        height: U32,
+    ) -> async_graphql::Result<Vec<Vec<StorageReadReplayEvent>>> {
+        let block_height = height.into();
+        let block_producer = ctx.data_unchecked::<BlockProducer>();
+        Ok(block_producer
+            .storage_read_replay(block_height)
+            .await?
+            .into_iter()
+            .map(|items| {
+                items
+                    .into_iter()
+                    .map(StorageReadReplayEvent::from)
+                    .collect()
+            })
+            .collect())
     }
 
     /// Submits transaction to the `TxPool`.
