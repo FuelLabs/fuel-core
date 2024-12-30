@@ -89,7 +89,7 @@ fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 fuel-gas-price-algorithm = { version = "0.40.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.58.2", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.59.1", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"
