@@ -151,6 +151,7 @@ impl GetMetadataStorage for FakeMetadata {
     }
 }
 
+#[derive(Clone)]
 struct ErroringPersistedData;
 
 impl SetMetadataStorage for ErroringPersistedData {

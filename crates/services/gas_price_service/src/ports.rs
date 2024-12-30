@@ -44,7 +44,7 @@ pub trait GetLatestRecordedHeight: Send + Sync {
     fn get_recorded_height(&self) -> Result<Option<BlockHeight>>;
 }
 
-pub trait GasPriceServiceAtomicStorage
+pub trait GasPriceServiceAtomicStorage: Clone
 where
     Self: 'static,
     Self: Send + Sync,
