@@ -4,6 +4,7 @@
 #![deny(warnings)]
 
 pub mod config;
-mod dependency_splitter;
+// Remove after benches
+pub mod dependency_splitter;
 pub mod executor;
 mod one_core_tx_source;

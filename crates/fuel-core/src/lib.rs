@@ -29,6 +29,9 @@ pub use fuel_core_txpool as txpool;
 pub use fuel_core_types as types;
 #[doc(no_inline)]
 pub use fuel_core_upgradable_executor as upgradable_executor;
+#[cfg(feature = "parallel-executor")]
+#[doc(no_inline)]
+pub use fuel_core_parallel_executor as parallel_executor;
 
 pub mod coins_query;
 pub mod combined_database;
