@@ -612,9 +612,9 @@ fn produce_block__l1_committed_block_affects_gas_price() {
     let mut mock = FakeServer::new();
     let url = mock.url();
     let costs = RawDaBlockCosts {
-        id: 1,
-        start_height: 1,
-        end_height: 1,
+        id: 2,
+        start_height: 2,
+        end_height: 2,
         da_block_height: DaBlockHeight(100),
         cost: 100,
         size: 100,
@@ -634,7 +634,7 @@ fn produce_block__l1_committed_block_affects_gas_price() {
     ]);
 
     // when
-    let new_gas_price = rt
+    let new_gas_price: u64 = rt
         .block_on(async {
             let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
                 .await
