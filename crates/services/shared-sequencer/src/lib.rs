@@ -19,10 +19,7 @@ use cosmrs::{
     Coin,
     Denom,
 };
-use error::{
-    CosmosError,
-    PostBlobError,
-};
+use error::PostBlobError;
 use fuel_sequencer_proto::protos::fuelsequencer::sequencing::v1::MsgPostBlob;
 use http_api::{
     AccountMetadata,
@@ -264,23 +261,5 @@ impl Client {
             signatures: vec![signature_bytes.to_vec()],
         }
         .to_bytes()?)
-    }
-
-    /// Return all blob messages in the given blob
-    pub async fn read_block_msgs(&self, height: u32) -> anyhow::Result<Vec<MsgPostBlob>> {
-        let mut result = Vec::new();
-
-        let block = self.tendermint()?.block(height).await?;
-
-        for item in block.block.data.iter().skip(1) {
-            let tx = cosmrs::Tx::from_bytes(item).map_err(CosmosError)?;
-            for msg in tx.body.messages.iter() {
-                if msg.type_url == "/fuelsequencer.sequencing.v1.MsgPostBlob" {
-                    let msg: MsgPostBlob = prost::Message::decode(msg.value.as_slice())?;
-                    result.push(msg);
-                }
-            }
-        }
-        Ok(result)
     }
 }
