@@ -52,6 +52,7 @@ impl<T: Default> Default for Block<T> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+// TODO: Decide how to not make fields public
 pub struct BlockV1<TransactionRepresentation = Transaction> {
     /// Generated complete header.
     pub header: BlockHeader,

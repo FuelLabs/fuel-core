@@ -353,8 +353,7 @@ where
         )
         .commit()?;
 
-        self.db
-            .commit_changes(&storage_transaction.into_changes())?;
+        self.db.commit_changes(storage_transaction.into_changes())?;
 
         Ok(())
     }
@@ -577,11 +576,11 @@ where
         height: Option<Description::Height>,
         changes: Changes,
     ) -> StorageResult<()> {
-        // TODO: Maybe too much optimized for not really better performance try to remove 
+        // TODO: Maybe too much optimized for not really better performance try to remove
         // the changes at the end.
         if self.state_rewind_policy == StateRewindPolicy::NoRewind {
             let start = std::time::Instant::now();
-            self.db.commit_changes(&changes)?;
+            self.db.commit_changes(changes)?;
             tracing::info!(
                 "Commit to rocksdb in commit_changes1 took {} milliseconds",
                 start.elapsed().as_millis()
@@ -601,15 +600,14 @@ where
                 start.elapsed().as_millis()
             );
             let start = std::time::Instant::now();
-            self.db
-                .commit_changes(&storage_transaction.into_changes())?;
+            self.db.commit_changes(storage_transaction.into_changes())?;
             tracing::info!(
                 "Commit to rocksdb in commit_changes2 took {} milliseconds",
                 start.elapsed().as_millis()
             );
         } else {
             let start = std::time::Instant::now();
-            self.db.commit_changes(&changes)?;
+            self.db.commit_changes(changes)?;
             tracing::info!(
                 "Commit to rocksdb in commit_changes3 took {} milliseconds",
                 start.elapsed().as_millis()

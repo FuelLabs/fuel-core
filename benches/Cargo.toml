@@ -48,6 +48,7 @@ strum_macros = { workspace = true }
 test-helpers = { path = "../tests/test-helpers", default-features = false }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full", "rt-multi-thread"] }
+tracing = { workspace = true }
 
 [[bench]]
 harness = false

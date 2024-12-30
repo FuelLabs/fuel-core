@@ -125,13 +125,20 @@ where
     Description: DatabaseDescription,
 {
     pub fn default_open_temp(capacity: Option<usize>) -> DatabaseResult<Self> {
+        Self::default_open_temp_with_params(capacity, 512)
+    }
+
+    pub fn default_open_temp_with_params(
+        capacity: Option<usize>,
+        max_fds: i32,
+    ) -> DatabaseResult<Self> {
         let tmp_dir = TempDir::new().unwrap();
         let path = tmp_dir.path();
         let result = Self::open(
             path,
             enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
             capacity,
-            512,
+            max_fds,
         );
         let mut db = result?;
 
@@ -813,11 +820,11 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn commit_changes(&self, changes: &Changes) -> StorageResult<()> {
+    pub fn commit_changes(&self, changes: Changes) -> StorageResult<()> {
         let instant = std::time::Instant::now();
         let mut batch = WriteBatch::default();
 
-        for (column, ops) in changes {
+        for (column, ops) in changes.iter() {
             let cf = self.cf_u32(*column);
             let column_metrics = self.metrics.columns_write_statistic.get(column);
             for (key, op) in ops {
@@ -843,6 +850,11 @@ where
             u64::try_from(instant.elapsed().as_nanos())
                 .expect("The commit shouldn't take longer than `u64`"),
         );
+
+        // Deallocate all changes in a separate thread since it can be expensive.
+        std::thread::spawn(move || {
+            drop(changes);
+        });
 
         Ok(())
     }
@@ -880,7 +892,7 @@ pub mod test_helpers {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(&changes)?;
+            self.commit_changes(changes)?;
 
             Ok(len)
         }
@@ -889,7 +901,7 @@ pub mod test_helpers {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(&changes)?;
+            self.commit_changes(changes)?;
             Ok(())
         }
     }

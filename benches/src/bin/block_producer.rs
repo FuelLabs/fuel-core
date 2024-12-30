@@ -1,21 +1,42 @@
-fn generate_transactions(
-    nb_txs: u64,
-    rng: &mut StdRng,
-    secret_key: SecretKey,
-) -> Vec<Transaction> {
+fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
     let mut transactions = Vec::with_capacity(nb_txs as usize);
     for _ in 0..nb_txs {
-        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+        let ed19_secret = ed25519_dalek::SigningKey::generate(rng);
+        let public = ed19_secret.verifying_key();
+
+        let message = b"The gift of words is the gift of deception and illusion.";
+        let message = Message::new(message);
+
+        let signature = ed19_secret.sign(&*message).to_bytes();
+
+        let predicate = vec![
+            op::gm_args(0x20, GMArgs::GetVerifyingPredicate),
+            op::gtf_args(0x20, 0x20, GTFArgs::InputCoinPredicateData),
+            op::addi(0x21, 0x20, PublicKey::LEN as Immediate12),
+            op::addi(0x22, 0x21, signature.len() as Immediate12),
+            op::movi(0x24, message.as_ref().len() as Immediate18),
+            op::ed19(0x20, 0x21, 0x22, 0x24),
+            op::eq(0x12, RegId::ERR, RegId::ONE),
+            op::ret(0x12),
+        ]
+        .into_iter()
+        .collect::<Vec<u8>>();
         let owner = Input::predicate_owner(&predicate);
+
+        let predicate_data: Vec<u8> = public
+            .to_bytes()
+            .iter()
+            .copied()
+            .chain(
+                signature
+                    .iter()
+                    .copied()
+                    .chain(message.as_ref().iter().copied()),
+            )
+            .collect();
+
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .script_gas_limit(10000)
-            .add_unsigned_coin_input(
-                secret_key,
-                rng.gen(),
-                1000,
-                Default::default(),
-                Default::default(),
-            )
             .add_input(Input::coin_predicate(
                 rng.gen(),
                 owner,
@@ -24,10 +45,9 @@ fn generate_transactions(
                 Default::default(),
                 Default::default(),
                 predicate.clone(),
-                vec![],
+                predicate_data.clone(),
             ))
             .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
-            .add_output(Output::change(rng.gen(), 0, AssetId::default()))
             .finalize();
         tx.estimate_predicates(
             &checked_parameters(),
@@ -49,9 +69,14 @@ use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_asm::{
         op,
+        GMArgs,
+        GTFArgs,
         RegId,
     },
-    fuel_crypto::*,
+    fuel_crypto::{
+        coins_bip32::ecdsa::signature::Signer,
+        *,
+    },
     fuel_tx::{
         input::coin::{
             CoinPredicate,
@@ -63,6 +88,10 @@ use fuel_core_types::{
         Output,
         Transaction,
         TransactionBuilder,
+    },
+    fuel_types::{
+        Immediate12,
+        Immediate18,
     },
     fuel_vm::{
         checked_transaction::{
@@ -110,9 +139,8 @@ fn main() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     let start_transaction_generation = std::time::Instant::now();
-    let secret_key = SecretKey::random(&mut rng);
-    let transactions = generate_transactions(n, &mut rng, secret_key);
-    println!(
+    let transactions = generate_transactions(n, &mut rng);
+    tracing::info!(
         "Generated {} transactions in {:?} ms.",
         n,
         start_transaction_generation.elapsed().as_millis()
@@ -164,8 +192,8 @@ fn main() {
     // disable automated block production
     test_builder.trigger = Trigger::Never;
     test_builder.utxo_validation = true;
-    test_builder.gas_limit = Some(10_000_000_000);
-    test_builder.block_size_limit = Some(1_000_000_000_000);
+    test_builder.gas_limit = Some(10_000_000_000_000);
+    test_builder.block_size_limit = Some(1_000_000_000_000_000);
     test_builder.max_txs = transactions.len();
     #[cfg(feature = "parallel-executor")]
     {
@@ -193,7 +221,7 @@ fn main() {
             let _ = subscriber.recv().await.unwrap();
             nb_left -= 1;
         }
-        println!(
+        tracing::info!(
             "Inserted {} transactions in {:?} ms.",
             n,
             start_insertion.elapsed().as_millis()

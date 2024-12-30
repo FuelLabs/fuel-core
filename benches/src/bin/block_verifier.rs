@@ -14,14 +14,16 @@ use test_helpers::builder::{
 
 fn read_block() -> Sealed<Block> {
     // Get it from the file block.bin (bincode encoded)
-    let file = std::fs::File::open("block.bin").unwrap();
+    let file =
+        std::fs::File::open("/Users/green/fuel/fuel-core/benches/block.bin").unwrap();
     let block: Sealed<Block> = bincode::deserialize_from(file).unwrap();
     block
 }
 
 fn read_coins() -> Vec<CoinConfig> {
     // Get it from the file coins.bin (bincode encoded)
-    let file = std::fs::File::open("coins.bin").unwrap();
+    let file =
+        std::fs::File::open("/Users/green/fuel/fuel-core/benches/coins.bin").unwrap();
     let coins: Vec<CoinConfig> = bincode::deserialize_from(file).unwrap();
     coins
 }
@@ -48,8 +50,8 @@ fn main() {
     let mut test_builder = TestSetupBuilder::new(2322);
     test_builder.trigger = Trigger::Never;
     test_builder.utxo_validation = true;
-    test_builder.gas_limit = Some(10_000_000_000);
-    test_builder.block_size_limit = Some(1_000_000_000_000);
+    test_builder.gas_limit = Some(10_000_000_000_000);
+    test_builder.block_size_limit = Some(1_000_000_000_000_000);
     test_builder.max_txs = n as usize;
     test_builder.state_rewind_policy = Some(StateRewindPolicy::NoRewind);
     #[cfg(feature = "parallel-executor")]
