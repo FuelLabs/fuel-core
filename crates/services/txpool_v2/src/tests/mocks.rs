@@ -132,12 +132,21 @@ impl StorageRead<BlobData> for MockDb {
         let table = self.data.lock().unwrap();
         let bytes = table.blobs.get(key);
 
-        let len = bytes.map(|bytes| {
-            assert!(offset < bytes.0.len());
-            buf.copy_from_slice(&bytes.0.as_slice()[offset..]);
-            bytes.0.len()
-        });
-        Ok(len)
+        bytes
+            .map(|bytes| {
+                let bytes_len = bytes.as_ref().len();
+                let start = offset;
+                let end = offset.saturating_add(buf.len());
+
+                if end > bytes_len {
+                    return Err(());
+                }
+
+                let starting_from_offset = &bytes.as_ref()[start..end];
+                buf[..].copy_from_slice(starting_from_offset);
+                Ok(buf.len())
+            })
+            .transpose()
     }
 
     fn read_alloc(

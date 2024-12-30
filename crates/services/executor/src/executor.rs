@@ -1744,7 +1744,12 @@ where
             .iter()
             .map(|input| input.predicate_gas_used())
             .collect();
-        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
+        let ready_tx = checked_tx.into_ready(
+            gas_price,
+            gas_costs,
+            fee_params,
+            Some(*header.height()),
+        )?;
 
         let mut vm = Interpreter::<_, _, _>::with_storage(
             memory,
