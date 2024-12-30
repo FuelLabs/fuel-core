@@ -182,6 +182,13 @@ where
             storage_tx
                 .set_recorded_height(recorded_height)
                 .map_err(|err| anyhow!(err))?;
+        } else {
+            // we default to the l2 block height
+            // this is done so that we poll the da with a specific height
+            // to avoid initial loss
+            storage_tx
+                .set_recorded_height(height.into())
+                .map_err(|err| anyhow!(err))?;
         }
 
         let fee_in_wei = u128::from(block_fees).saturating_mul(1_000_000_000);
