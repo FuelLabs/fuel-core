@@ -15,7 +15,7 @@ use test_helpers::builder::{
 fn read_block() -> Sealed<Block> {
     // Get it from the file block.bin (bincode encoded)
     let file =
-        std::fs::File::open("/Users/green/fuel/fuel-core/benches/block.bin").unwrap();
+        std::fs::File::open("block.bin").unwrap();
     let block: Sealed<Block> = bincode::deserialize_from(file).unwrap();
     block
 }
@@ -23,7 +23,7 @@ fn read_block() -> Sealed<Block> {
 fn read_coins() -> Vec<CoinConfig> {
     // Get it from the file coins.bin (bincode encoded)
     let file =
-        std::fs::File::open("/Users/green/fuel/fuel-core/benches/coins.bin").unwrap();
+        std::fs::File::open("coins.bin").unwrap();
     let coins: Vec<CoinConfig> = bincode::deserialize_from(file).unwrap();
     coins
 }
