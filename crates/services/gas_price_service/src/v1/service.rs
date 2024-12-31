@@ -382,6 +382,7 @@ mod tests {
             },
         },
         ports::{
+            GetLatestRecordedHeight,
             GetMetadataStorage,
             SetMetadataStorage,
         },

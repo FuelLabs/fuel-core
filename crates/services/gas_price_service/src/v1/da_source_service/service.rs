@@ -112,7 +112,6 @@ where
     /// This function polls the source according to a polling interval
     /// described by the DaBlockCostsService
     async fn run(&mut self, state_watcher: &mut StateWatcher) -> TaskNextAction {
-        tracing::debug!("111111111111111111111111111111111");
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {

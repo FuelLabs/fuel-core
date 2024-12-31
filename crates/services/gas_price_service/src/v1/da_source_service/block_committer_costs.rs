@@ -20,8 +20,6 @@ use std::ops::Deref;
 
 #[async_trait::async_trait]
 pub trait BlockCommitterApi: Send + Sync {
-    /// Used on first run to get the latest costs and seqno
-    async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>>;
     /// Used to get the costs for a specific seqno
     async fn get_costs_by_l2_block_number(
         &self,
@@ -103,7 +101,10 @@ where
                         .get_costs_by_l2_block_number(*next_height.deref())
                         .await?
                 }
-                None => self.client.get_latest_costs().await?.into_iter().collect(),
+                None => {
+                    // prevent calling the latest endpoint
+                    return Err(anyhow!("last_recorded_height is None"));
+                }
             };
 
         tracing::info!("raw_da_block_costs: {:?}", raw_da_block_costs);
@@ -156,23 +157,6 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
             Ok(parsed)
         } else {
             Ok(vec![])
-        }
-    }
-
-    async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
-        // Latest: http://localhost:8080/v1/costs?variant=latest&limit=5
-        if let Some(url) = &self.url {
-            tracing::info!("getting latest costs");
-            let formatted_url = format!("{url}/v1/costs?variant=latest&limit=1");
-            tracing::info!("Formatted URL: {:?}", formatted_url);
-            let response = self.client.get(formatted_url).send().await?;
-            tracing::info!("response: {:?}", response);
-            let raw_da_block_costs = response.json::<Vec<RawDaBlockCosts>>().await?;
-            tracing::info!("Parsed: {:?}", raw_da_block_costs);
-            // only take the first element, since we are only looking for the most recent
-            Ok(raw_da_block_costs.first().cloned())
-        } else {
-            Ok(None)
         }
     }
 }
@@ -289,56 +273,6 @@ mod test_block_committer_http_api {
 
         // then
         assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn get_latest_costs__when_url_is_none__then_returns_none() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-
-        // given
-        let block_committer = BlockCommitterHttpApi::new(None);
-
-        // when
-        let actual =
-            rt.block_on(async { block_committer.get_latest_costs().await.unwrap() });
-
-        // then
-        assert_eq!(actual, None);
-    }
-
-    #[test]
-    fn get_latest_costs__when_url_is_some__then_returns_expected_costs() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let mut mock = FakeServer::new();
-        let url = mock.url();
-
-        // given
-        let block_committer = BlockCommitterHttpApi::new(Some(url));
-        let not_expected = RawDaBlockCosts {
-            id: 1,
-            start_height: 1,
-            end_height: 10,
-            da_block_height: 1u64.into(),
-            cost: 1,
-            size: 1,
-        };
-        mock.add_response(not_expected);
-        let expected = RawDaBlockCosts {
-            id: 2,
-            start_height: 11,
-            end_height: 20,
-            da_block_height: 2u64.into(),
-            cost: 2,
-            size: 2,
-        };
-        mock.add_response(expected.clone());
-
-        // when
-        let actual =
-            rt.block_on(async { block_committer.get_latest_costs().await.unwrap() });
-
-        // then
-        assert_eq!(actual, Some(expected));
     }
 }
 #[cfg(any(test, feature = "test-helpers"))]
@@ -471,9 +405,6 @@ mod tests {
 
     #[async_trait::async_trait]
     impl BlockCommitterApi for MockBlockCommitterApi {
-        async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
-            Ok(self.value.clone())
-        }
         async fn get_costs_by_l2_block_number(
             &self,
             l2_block_number: u32,
@@ -504,19 +435,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn request_da_block_cost__when_last_value_is_none__then_get_latest_costs_is_called(
-    ) {
+    async fn request_da_block_cost__when_last_value_is_none__then_error_is_thrown() {
         // given
         let da_block_costs = test_da_block_costs();
-        let expected = vec![(&da_block_costs).into()];
         let mock_api = MockBlockCommitterApi::new(Some(da_block_costs));
         let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
 
         // when
-        let actual = block_committer.request_da_block_costs().await.unwrap();
+        let actual = block_committer.request_da_block_costs().await;
 
         // then
-        assert_eq!(actual, expected);
+        assert!(actual.is_err());
     }
 
     #[tokio::test]
