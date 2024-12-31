@@ -3,10 +3,7 @@ use std::{
     cmp::max,
     collections::BTreeMap,
     num::NonZeroU64,
-    ops::{
-        Div,
-        RangeInclusive,
-    },
+    ops::Div,
 };
 
 #[cfg(test)]
@@ -352,7 +349,7 @@ impl core::ops::Deref for ClampedPercentage {
 impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data<U: UnrecordedBlocks>(
         &mut self,
-        heights: RangeInclusive<u32>,
+        heights: &[u32],
         recorded_bytes: u32,
         recording_cost: u128,
         unrecorded_blocks: &mut U,
@@ -587,7 +584,7 @@ impl AlgorithmUpdaterV1 {
 
     fn da_block_update<U: UnrecordedBlocks>(
         &mut self,
-        heights: RangeInclusive<u32>,
+        heights: &[u32],
         recorded_bytes: u128,
         recording_cost: u128,
         unrecorded_blocks: &mut U,
@@ -616,7 +613,7 @@ impl AlgorithmUpdaterV1 {
     // Always remove the blocks from the unrecorded blocks so they don't build up indefinitely
     fn update_unrecorded_block_bytes<U: UnrecordedBlocks>(
         &mut self,
-        heights: RangeInclusive<u32>,
+        heights: &[u32],
         unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
         let mut total: u128 = 0;
