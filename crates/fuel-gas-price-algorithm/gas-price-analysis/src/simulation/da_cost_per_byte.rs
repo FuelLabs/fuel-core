@@ -10,24 +10,7 @@ use serde_reflection::{
 };
 use std::iter;
 
-const PREDEFINED_CSV_COLUMNS: &[&str] = &[
-    "block_number",
-    "excess_blob_gas",
-    "blob_gas_used",
-    "blob_fee_wei",
-    "blob_fee_wei_for_1_blob",
-    "blob_fee_wei_for_2_blobs",
-    "blob_fee_wei_for_3_blobs",
-];
 const PREDEFINED_L2_BLOCKS_PER_L1_BLOCK: usize = 12;
-
-const PREDEFINED_2_CSV_COLUMNS: &[&str] = &[
-    "L1_block_number",
-    "L1_blob_fee_wei",
-    "L2_block_number",
-    "L2_fulness",
-    "L2_size",
-];
 
 pub fn get_da_cost_per_byte_from_source(
     source: Source,
@@ -39,7 +22,8 @@ pub fn get_da_cost_per_byte_from_source(
             file_path,
             sample_size,
         } => {
-            let original = get_costs_from_csv_file(&file_path, sample_size);
+            let original =
+                get_costs_from_csv_file::<PredefinedRecord>(&file_path, sample_size);
             original
                 .into_iter()
                 .flat_map(|x| iter::repeat(x).take(update_period))
@@ -49,7 +33,7 @@ pub fn get_da_cost_per_byte_from_source(
             file_path,
             l2_blocks_per_blob,
         } => {
-            let original = get_costs_from_csv_file(&file_path, None);
+            let original = get_costs_from_csv_file::<Predefined2Record>(&file_path, None);
             todo!()
         }
     }
@@ -109,26 +93,28 @@ where
     fields.iter().map(|f| f.name.clone()).collect()
 }
 
-fn get_costs_from_csv_file(file_path: &str, sample_size: Option<usize>) -> Vec<u64> {
+fn get_costs_from_csv_file<T>(file_path: &str, sample_size: Option<usize>) -> Vec<u64>
+where
+    T: serde::de::DeserializeOwned + HasBlobFee,
+{
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_path(file_path)
         .unwrap();
     let mut costs = vec![];
 
-    let headers =
-        csv::StringRecord::from(fields_of_struct_in_order::<PredefinedRecord>());
+    let headers = csv::StringRecord::from(fields_of_struct_in_order::<T>());
 
     let mut max_cost = 0;
-    for record in rdr.records().skip(1) {
+    for record in rdr.records() {
         if let Some(size) = sample_size {
             if costs.len() >= size / PREDEFINED_L2_BLOCKS_PER_L1_BLOCK {
                 break;
             }
         };
-        let record: PredefinedRecord =
-            record.unwrap().deserialize(Some(&headers)).unwrap();
-        let cost = record.blob_fee_wei;
+        let record: T = record.unwrap().deserialize(Some(&headers)).unwrap();
+        let cost = record.blob_fee_wei();
+        dbg!(&cost);
         if cost > max_cost {
             max_cost = cost;
         }
