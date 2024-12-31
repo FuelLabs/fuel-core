@@ -104,22 +104,21 @@ mod arc_gas_price_estimate_tests {
 
         // when
         let target_height = starting_height.saturating_add(block_horizon);
-        let actual = subject
+        let estimated = subject
             .worst_case_gas_price(target_height.into())
             .await
             .unwrap();
 
         // then
-        let mut expected = gas_price;
+        let mut actual = gas_price;
 
         for _ in 0..block_horizon {
-            let change_amount = expected
-                .saturating_mul(percentage as u64)
-                .saturating_div(100);
-            expected = expected.saturating_add(change_amount);
+            let change_amount =
+                actual.saturating_mul(percentage as u64).saturating_div(100);
+            actual = actual.saturating_add(change_amount);
         }
 
-        assert!(actual >= expected);
+        assert!(estimated >= actual);
     }
 
     proptest! {
@@ -164,9 +163,14 @@ mod arc_gas_price_estimate_tests {
     }
 }
 
+/// Allows communication from other service with more recent gas price data
+/// `Height` refers to the height of the block at which the gas price was last updated
+/// `GasPrice` refers to the gas price at the last updated block
 #[allow(dead_code)]
 pub struct ArcGasPriceEstimate<Height, GasPrice> {
+    /// Shared state of latest gas price data
     inner: Arc<parking_lot::RwLock<(Height, GasPrice)>>,
+    /// The max percentage the gas price can increase per block
     percentage: u16,
 }
 
@@ -216,7 +220,7 @@ impl GasPriceEstimate for ArcGasPriceEstimate<u32, u64> {
 
 #[allow(clippy::cast_possible_truncation)]
 pub(crate) fn cumulative_percentage_change(
-    best_gas_price: u64,
+    start_gas_price: u64,
     best_height: u32,
     percentage: u64,
     target_height: u32,
@@ -224,8 +228,12 @@ pub(crate) fn cumulative_percentage_change(
     let blocks = target_height.saturating_sub(best_height) as f64;
     let percentage_as_decimal = percentage as f64 / 100.0;
     let multiple = (1.0f64 + percentage_as_decimal).powf(blocks);
-    let mut approx = best_gas_price as f64 * multiple;
-    // account for rounding errors and take a slightly higher value
+    let mut approx = start_gas_price as f64 * multiple;
+    // Account for rounding errors and take a slightly higher value
+    // Around the `ROUNDING_ERROR_CUTOFF` the rounding errors will cause the estimate to be too low.
+    // We increase by `ROUNDING_ERROR_COMPENSATION` to account for this.
+    // This is an unlikely situation in practice, but we want to guarantee that the actual
+    // gas price is always equal or less than the estimate given here
     const ROUNDING_ERROR_CUTOFF: f64 = 16948547188989277.0;
     if approx > ROUNDING_ERROR_CUTOFF {
         const ROUNDING_ERROR_COMPENSATION: f64 = 2000.0;
