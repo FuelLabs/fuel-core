@@ -74,8 +74,8 @@ tokio = { workspace = true, features = [
 ] }
 
 [dev-dependencies]
-pretty_assertions = "1.4"
 fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
+pretty_assertions = "1.4"
 proptest = { workspace = true }
 tracing = { workspace = true }
 
