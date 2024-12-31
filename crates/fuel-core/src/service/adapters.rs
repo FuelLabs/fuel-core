@@ -190,22 +190,16 @@ impl<Height, GasPrice> ArcGasPriceEstimate<Height, GasPrice> {
     }
 }
 
-impl<Height: Copy, GasPrice> ArcGasPriceEstimate<Height, GasPrice> {
-    pub fn get_height(&self) -> Height {
-        self.inner.read().0
-    }
-}
-impl<Height, GasPrice: Copy> ArcGasPriceEstimate<Height, GasPrice> {
-    pub fn get_gas_price(&self) -> GasPrice {
-        self.inner.read().1
+impl<Height: Copy, GasPrice: Copy> ArcGasPriceEstimate<Height, GasPrice> {
+    fn get_height_and_gas_price(&self) -> (Height, GasPrice) {
+        *self.inner.read()
     }
 }
 
 #[async_trait::async_trait]
 impl GasPriceEstimate for ArcGasPriceEstimate<u32, u64> {
     async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
-        let best_gas_price = self.get_gas_price();
-        let best_height = self.get_height();
+        let (best_height, best_gas_price) = self.get_height_and_gas_price();
         let percentage = self.percentage;
 
         let worst = cumulative_percentage_change(
