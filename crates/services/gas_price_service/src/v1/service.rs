@@ -62,12 +62,35 @@ use std::{
 };
 use tokio::sync::broadcast::Receiver;
 
+#[derive(Debug, Clone)]
+pub struct LatestGasPrice<Height, GasPrice> {
+    inner: Arc<parking_lot::RwLock<(Height, GasPrice)>>,
+}
+
+impl<Height, GasPrice> LatestGasPrice<Height, GasPrice> {
+    pub fn new(height: Height, price: GasPrice) -> Self {
+        let pair = (height, price);
+        let inner = Arc::new(parking_lot::RwLock::new(pair));
+        Self { inner }
+    }
+
+    pub fn set(&mut self, height: Height, price: GasPrice) {
+        *self.inner.write() = (height, price);
+    }
+}
+
+impl<Height: Copy, GasPrice: Copy> LatestGasPrice<Height, GasPrice> {
+    pub fn get(&self) -> (Height, GasPrice) {
+        *self.inner.read()
+    }
+}
+
 /// The service that updates the gas price algorithm.
 pub struct GasPriceServiceV1<L2, DA, StorageTxProvider> {
     /// The algorithm that can be used in the next block
     shared_algo: SharedV1Algorithm,
     /// The latest gas price
-    latest_gas_price: Arc<parking_lot::RwLock<(u32, u64)>>,
+    latest_gas_price: LatestGasPrice<u32, u64>,
     /// The L2 block source
     l2_block_source: L2,
     /// The algorithm updater
@@ -83,7 +106,7 @@ pub struct GasPriceServiceV1<L2, DA, StorageTxProvider> {
 }
 
 impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider> {
-    pub(crate) fn update_latest_gas_price(&self, block_info: &BlockInfo) {
+    pub(crate) fn update_latest_gas_price(&mut self, block_info: &BlockInfo) {
         match block_info {
             BlockInfo::GenesisBlock => {
                 // do nothing
@@ -91,8 +114,7 @@ impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider> {
             BlockInfo::Block {
                 height, gas_price, ..
             } => {
-                let mut latest_gas_price = self.latest_gas_price.write();
-                *latest_gas_price = (*height, *gas_price);
+                self.latest_gas_price.set(*height, *gas_price);
             }
         }
     }
@@ -126,7 +148,7 @@ where
     pub fn new(
         l2_block_source: L2,
         shared_algo: SharedV1Algorithm,
-        latest_gas_price: Arc<parking_lot::RwLock<(u32, u64)>>,
+        latest_gas_price: LatestGasPrice<u32, u64>,
         algorithm_updater: AlgorithmUpdaterV1,
         da_source_adapter_handle: DaSourceService<DA>,
         storage_tx_provider: AtomicStorage,
@@ -368,6 +390,7 @@ mod tests {
     };
     use fuel_core_storage::{
         structured_storage::test::InMemoryStorage,
+        tables::merkle::DenseMetadataKey::Latest,
         transactional::{
             IntoTransaction,
             StorageTransaction,
@@ -410,6 +433,7 @@ mod tests {
             service::{
                 initialize_algorithm,
                 GasPriceServiceV1,
+                LatestGasPrice,
             },
             uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
         },
@@ -506,7 +530,7 @@ mod tests {
             ),
             None,
         );
-        let latest_gas_price = Arc::new(parking_lot::RwLock::new((0, 0)));
+        let latest_gas_price = LatestGasPrice::new(0, 0);
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -592,7 +616,7 @@ mod tests {
             Some(Duration::from_millis(1)),
         );
         let mut watcher = StateWatcher::started();
-        let latest_gas_price = Arc::new(parking_lot::RwLock::new((0, 0)));
+        let latest_gas_price = LatestGasPrice::new(0, 0);
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -695,7 +719,7 @@ mod tests {
             Some(Duration::from_millis(1)),
         );
         let mut watcher = StateWatcher::started();
-        let latest_gas_price = Arc::new(parking_lot::RwLock::new((0, 0)));
+        let latest_gas_price = LatestGasPrice::new(0, 0);
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,

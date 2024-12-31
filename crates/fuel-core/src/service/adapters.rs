@@ -17,6 +17,7 @@ use fuel_core_consensus_module::{
     RelayerConsensusConfig,
 };
 use fuel_core_executor::executor::OnceTransactionsSource;
+use fuel_core_gas_price_service::v1::service::LatestGasPrice;
 use fuel_core_importer::ImporterResult;
 use fuel_core_poa::{
     ports::BlockSigner,
@@ -169,7 +170,7 @@ mod arc_gas_price_estimate_tests {
 #[allow(dead_code)]
 pub struct ArcGasPriceEstimate<Height, GasPrice> {
     /// Shared state of latest gas price data
-    inner: Arc<parking_lot::RwLock<(Height, GasPrice)>>,
+    latest_gas_price: LatestGasPrice<Height, GasPrice>,
     /// The max percentage the gas price can increase per block
     percentage: u16,
 }
@@ -177,22 +178,27 @@ pub struct ArcGasPriceEstimate<Height, GasPrice> {
 impl<Height, GasPrice> ArcGasPriceEstimate<Height, GasPrice> {
     #[cfg(test)]
     pub fn new(height: Height, price: GasPrice, percentage: u16) -> Self {
-        let pair = (height, price);
-        let inner = Arc::new(parking_lot::RwLock::new(pair));
-        Self { inner, percentage }
+        let latest_gas_price = LatestGasPrice::new(height, price);
+        Self {
+            latest_gas_price,
+            percentage,
+        }
     }
 
     pub fn new_from_inner(
-        inner: Arc<parking_lot::RwLock<(Height, GasPrice)>>,
+        inner: LatestGasPrice<Height, GasPrice>,
         percentage: u16,
     ) -> Self {
-        Self { inner, percentage }
+        Self {
+            latest_gas_price: inner,
+            percentage,
+        }
     }
 }
 
 impl<Height: Copy, GasPrice: Copy> ArcGasPriceEstimate<Height, GasPrice> {
     fn get_height_and_gas_price(&self) -> (Height, GasPrice) {
-        *self.inner.read()
+        self.latest_gas_price.get()
     }
 }
 

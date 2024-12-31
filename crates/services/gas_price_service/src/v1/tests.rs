@@ -43,6 +43,7 @@ use crate::{
         service::{
             initialize_algorithm,
             GasPriceServiceV1,
+            LatestGasPrice,
         },
         uninitialized_task::{
             fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
@@ -370,7 +371,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
-    let latest_gas_price = Arc::new(parking_lot::RwLock::new((0, 0)));
+    let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -417,7 +418,7 @@ async fn run__new_l2_block_saves_old_metadata() {
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
-    let latest_gas_price = Arc::new(parking_lot::RwLock::new((0, 0)));
+    let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -468,7 +469,7 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
-    let latest_gas_price = Arc::new(parking_lot::RwLock::new((0, 0)));
+    let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -485,7 +486,7 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
 
     // then
     let expected = (height, gas_price);
-    let actual = *latest_gas_price.read();
+    let actual = latest_gas_price.get();
     assert_eq!(expected, actual);
 
     // cleanup

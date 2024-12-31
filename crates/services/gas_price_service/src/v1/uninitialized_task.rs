@@ -43,6 +43,7 @@ use crate::{
         service::{
             initialize_algorithm,
             GasPriceServiceV1,
+            LatestGasPrice,
         },
         uninitialized_task::fuel_storage_unrecorded_blocks::{
             AsUnrecordedBlocks,
@@ -91,7 +92,7 @@ pub struct UninitializedTask<L2DataStoreView, GasPriceStore, DA, SettingsProvide
     pub on_chain_db: L2DataStoreView,
     pub block_stream: BoxStream<SharedImportResult>,
     pub(crate) shared_algo: SharedV1Algorithm,
-    pub(crate) latest_gas_price: Arc<parking_lot::RwLock<(u32, u64)>>,
+    pub(crate) latest_gas_price: LatestGasPrice<u32, u64>,
     pub(crate) algo_updater: AlgorithmUpdaterV1,
     pub(crate) da_source: DA,
 }
@@ -133,10 +134,7 @@ where
         let (algo_updater, shared_algo) =
             initialize_algorithm(&config, latest_block_height, &gas_price_db)?;
 
-        let latest_gas_price = Arc::new(parking_lot::RwLock::new((
-            latest_block_height,
-            latest_gas_price,
-        )));
+        let latest_gas_price = LatestGasPrice::new(latest_block_height, latest_gas_price);
 
         let task = Self {
             config,
@@ -239,7 +237,7 @@ where
     SettingsProvider: GasPriceSettingsProvider + 'static,
 {
     const NAME: &'static str = "GasPriceServiceV1";
-    type SharedData = (SharedV1Algorithm, Arc<parking_lot::RwLock<(u32, u64)>>);
+    type SharedData = (SharedV1Algorithm, LatestGasPrice<u32, u64>);
     type Task = GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, AtomicStorage>;
     type TaskParams = ();
 
