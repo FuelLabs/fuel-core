@@ -101,10 +101,6 @@ where
         self.apply_block_info_to_gas_algorithm(block).await?;
         Ok(())
     }
-
-    fn storage(&self) -> AtomicStorage {
-        self.storage_tx_provider.clone()
-    }
 }
 
 impl<L2, DA, AtomicStorage> GasPriceServiceV1<L2, DA, AtomicStorage>
@@ -185,13 +181,6 @@ where
         if let Some(recorded_height) = latest_recorded_height {
             storage_tx
                 .set_recorded_height(recorded_height)
-                .map_err(|err| anyhow!(err))?;
-        } else {
-            // we default to the l2 block height
-            // this is done so that we poll the da with a specific height
-            // to avoid initial loss
-            storage_tx
-                .set_recorded_height(height.into())
                 .map_err(|err| anyhow!(err))?;
         }
 
@@ -805,77 +794,5 @@ mod tests {
         assert_eq!(metadata.latest_known_total_da_cost_excess, blob_cost_wei);
 
         service.shutdown().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn run__stores_l2_height_as_recorded_if_previous_doesnt_exist() {
-        // given
-        let block_height = 1;
-        let l2_block = BlockInfo::Block {
-            height: block_height,
-            gas_used: 60,
-            block_gas_capacity: 100,
-            block_bytes: 100,
-            block_fees: 100,
-        };
-
-        let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
-        let l2_block_source = FakeL2BlockSource {
-            l2_block: l2_block_receiver,
-        };
-
-        let metadata_storage = FakeMetadata::empty();
-        let l2_block_height = 0;
-        let config = V1AlgorithmConfig {
-            new_exec_gas_price: 100,
-            min_exec_gas_price: 50,
-            exec_gas_price_change_percent: 20,
-            l2_block_fullness_threshold_percent: 20,
-            gas_price_factor: NonZeroU64::new(10).unwrap(),
-            min_da_gas_price: 10,
-            max_da_gas_price_change_percent: 20,
-            da_p_component: 4,
-            da_d_component: 2,
-            normal_range_size: 10,
-            capped_range_size: 100,
-            decrease_range_size: 4,
-            block_activity_threshold: 20,
-            da_poll_interval: None,
-        };
-        let inner = database();
-        let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();
-
-        let notifier = Arc::new(tokio::sync::Notify::new());
-        let dummy_da_source = DaSourceService::new(
-            DummyDaBlockCosts::new(
-                Err(anyhow::anyhow!("unused at the moment")),
-                notifier.clone(),
-            ),
-            None,
-        );
-        let da_service_runner = ServiceRunner::new(dummy_da_source);
-        da_service_runner.start_and_await().await.unwrap();
-
-        let mut service = GasPriceServiceV1::new(
-            l2_block_source,
-            shared_algo,
-            algo_updater,
-            da_service_runner,
-            inner,
-        );
-        let read_algo = service.next_block_algorithm();
-        let mut watcher = StateWatcher::started();
-        let initial_price = read_algo.next_gas_price();
-
-        // when
-        l2_block_sender.send(l2_block).await.unwrap();
-        service.run(&mut watcher).await;
-        let storage_provider = service.storage_tx_provider().clone();
-        service.shutdown().await.unwrap();
-
-        // then
-        let recorded_height = storage_provider.get_recorded_height().unwrap().unwrap();
-        assert_eq!(recorded_height, BlockHeight::from(block_height));
     }
 }
