@@ -66,14 +66,29 @@ enum Mode {
 
 #[derive(Subcommand)]
 enum Source {
+    /// Generate arbitrary blocks
     Generated {
+        /// Number of blocks to generate
         size: usize,
     },
+    /// Use predefined L2 block data from file (legacy format)
     Predefined {
+        /// Path to the file containing predefined blocks (.csv file with the following
+        /// columns: block_number, excess_blob_gas, blob_gas_used, blob_fee_wei,
+        /// blob_fee_wei_for_1_blob, blob_fee_wei_for_2_blobs, blob_fee_wei_for_3_blobs)
         file_path: String,
-        /// The number of L2 blocks to include from source
+        /// The number of blocks to include from source
         #[arg(short, long)]
         sample_size: Option<usize>,
+    },
+    /// Use predefined L1 and L2 block data from a file
+    Predefined2 {
+        /// Path to the file containing predefined blocks (.csv file with the following
+        /// columns: L1_block_number, L1_blob_fee_wei, L2_block_number, L2_fulness, L2_size)
+        file_path: String,
+        /// The number of L2 blocks per single L1 blob
+        #[arg(short, long)]
+        l2_blocks_per_blob: u16,
     },
 }
 
