@@ -33,6 +33,7 @@ fuel-core = { path = "../crates/fuel-core", default-features = false, features =
   "wasm-executor",
   "test-helpers",
 ] }
+fuel-core-benches = { path = "../benches" }
 fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-compression = { path = "../crates/compression" }

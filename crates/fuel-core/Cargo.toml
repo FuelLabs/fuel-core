@@ -71,7 +71,11 @@ uuid = { version = "1.1", features = ["v4"] }
 [dev-dependencies]
 assert_matches = "1.5"
 fuel-core = { path = ".", features = ["smt", "test-helpers"] }
-fuel-core-executor = { workspace = true, features = ["std", "test-helpers", "limited-tx-count"] }
+fuel-core-executor = { workspace = true, features = [
+  "std",
+  "test-helpers",
+  "limited-tx-count",
+] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "./../trace" }
