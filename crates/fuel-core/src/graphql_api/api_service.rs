@@ -33,12 +33,10 @@ use async_graphql::{
     Request,
     Response,
 };
-use async_graphql_value::ConstValue;
 use axum::{
     extract::{
         DefaultBodyLimit,
         Extension,
-        FromRequest,
     },
     http::{
         header::{
@@ -47,7 +45,6 @@ use axum::{
             ACCESS_CONTROL_ALLOW_ORIGIN,
         },
         HeaderValue,
-        StatusCode,
     },
     response::{
         sse::Event,
@@ -83,7 +80,6 @@ use std::{
     pin::Pin,
     sync::Arc,
 };
-use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::{
@@ -92,10 +88,8 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-pub(crate) const REQUIRED_BLOCK_HEIGHT_CHECK_FAILED: &str =
-    "REQUIRED_BLOCK_HEIGHT_CHECK_FAILED";
-pub(crate) const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "REQUIRED_FUEL_BLOCK_HEIGHT";
-pub(crate) const CURRENT_FUEL_BLOCK_HEIGHT_HEADER: &str = "CURRENT_FUEL_BLOCK_HEIGHT";
+pub(crate) const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "required_fuel_block_height";
+pub(crate) const CURRENT_FUEL_BLOCK_HEIGHT_HEADER: &str = "current_fuel_block_height";
 
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
@@ -361,103 +355,20 @@ async fn health() -> Json<serde_json::Value> {
     Json(json!({ "up": true }))
 }
 
-/// Optional value which is set via the REQUIRED_FUEL_BLOCK_HEIGHT_HEADER header.
-/// When present, it is used to check whether the current block height is lower
-/// than the current fuel block height. Requests that do not meet this
-/// condition fail with a 412 `Precondition Failed` status code.
-#[derive(Clone)]
-pub(crate) struct RequiredHeight(pub(crate) Option<BlockHeight>);
-
-#[async_trait::async_trait]
-impl<Body> FromRequest<Body> for RequiredHeight
-where
-    Body: Send,
-{
-    type Rejection = (StatusCode, String);
-
-    async fn from_request(
-        req: &mut axum::extract::RequestParts<Body>,
-    ) -> Result<Self, Self::Rejection> {
-        let required_fuel_block_height = req
-            .headers()
-            .get(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER)
-            .map(|value| value.to_str())
-            .transpose()
-            .map_err(|_| (StatusCode::BAD_REQUEST, "Header Malformed".to_string()))?
-            .map(|value| value.parse::<u32>())
-            .transpose()
-            .map_err(|_| (StatusCode::BAD_REQUEST, "Header Malformed".to_string()))?;
-
-        Ok(RequiredHeight(
-            required_fuel_block_height.map(BlockHeight::new),
-        ))
-    }
-}
-
 async fn graphql_handler(
-    required_fuel_block_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
-) -> axum::response::Response {
-    let mut request = req.0;
+) -> Json<Response> {
+    let response = schema.execute(req.0).await;
 
-    if let Some(required_height) = required_fuel_block_height.0 {
-        let required_height: u32 = *required_height;
-        request.extensions.insert(
-            REQUIRED_FUEL_BLOCK_HEIGHT_HEADER.to_string(),
-            ConstValue::Number(required_height.into()),
-        );
-    }
-
-    let response = schema.execute(request).await;
-
-    let current_block_height = response
-        .extensions
-        .get(CURRENT_FUEL_BLOCK_HEIGHT_HEADER)
-        .cloned();
-
-    if response.is_err() {
-        if response
-            .extensions
-            .contains_key(REQUIRED_BLOCK_HEIGHT_CHECK_FAILED)
-        {
-            let mut response = StatusCode::PRECONDITION_FAILED.into_response();
-
-            if let Some(current_block_height) = current_block_height {
-                response.headers_mut().insert(
-                    CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
-                    HeaderValue::from_str(&current_block_height.to_string()).unwrap(),
-                );
-            }
-
-            return response;
-        }
-    }
-
-    let json_response: Json<Response> = response.into();
-    let mut response = json_response.into_response();
-
-    if let Some(current_block_height) = current_block_height {
-        response.headers_mut().insert(
-            CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
-            HeaderValue::from_str(&current_block_height.to_string()).unwrap(),
-        );
-    }
-
-    response
+    response.into()
 }
 
 async fn graphql_subscription_handler(
-    required_fuel_block_height: RequiredHeight,
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
-    let current_fuel_block_height_data: Arc<Mutex<Option<BlockHeight>>> =
-        Arc::new(Mutex::new(None));
-    let request = req
-        .0
-        .data(required_fuel_block_height)
-        .data(current_fuel_block_height_data);
+    let request = req.0;
     let stream = schema
         .execute_stream(request)
         .map(|r| Event::default().json_data(r));

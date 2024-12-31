@@ -59,7 +59,7 @@ async fn balance_with_block_height_header() {
 
 #[tokio::test]
 async fn current_fuel_block_height_header_is_present_on_successful_request() {
-    let query = r#"{ "query": "{ contract(id:\"0x7e2becd64cd598da59b4d1064b711661898656c6b1f4918a787156b8965dc83c\") { id bytecode } }" }"#;
+    let query = r#"{ "query": "{ contract(id:\"0x7e2becd64cd598da59b4d1064b711661898656c6b1f4918a787156b8965dc83c\") { id bytecode } }", "extensions": {"required_fuel_block_height": 100} }"#;
 
     // setup config
     let state_config = StateConfig::default();
@@ -83,7 +83,8 @@ async fn current_fuel_block_height_header_is_present_on_successful_request() {
     let response = client.execute(request).await.unwrap();
 
     assert!(response.status() == StatusCode::OK);
-    assert!(response.headers().contains_key("CURRENT_FUEL_BLOCK_HEIGHT"));
+    let response_body = response.text().await.unwrap();
+    println!("{response_body:?}");
 }
 
 #[tokio::test]

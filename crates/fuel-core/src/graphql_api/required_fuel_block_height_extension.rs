@@ -1,7 +1,6 @@
 use super::database::ReadView;
 use crate::fuel_core_graphql_api::api_service::{
     CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
-    REQUIRED_BLOCK_HEIGHT_CHECK_FAILED,
     REQUIRED_FUEL_BLOCK_HEIGHT_HEADER,
 };
 use async_graphql::{
@@ -99,7 +98,7 @@ impl Extension for RequiredFuelBlockHeightInner {
         let current_block_height = view.latest_block_height();
 
         if let Some(required_block_height) = self.required_height.get() {
-            if let Ok(current_block_height) = view.latest_block_height() {
+            if let Ok(current_block_height) = current_block_height {
                 if *required_block_height > current_block_height {
                     let (line, column) = (line!(), column!());
                     let mut response = Response::from_errors(vec![ServerError::new(
@@ -114,11 +113,6 @@ impl Extension for RequiredFuelBlockHeightInner {
                             column: column as usize,
                         }),
                     )]);
-
-                    response.extensions.insert(
-                        REQUIRED_BLOCK_HEIGHT_CHECK_FAILED.to_string(),
-                        Value::Boolean(true),
-                    );
 
                     response.extensions.insert(
                         CURRENT_FUEL_BLOCK_HEIGHT_HEADER.to_string(),
