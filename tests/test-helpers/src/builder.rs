@@ -99,6 +99,9 @@ pub struct TestSetupBuilder {
     pub privileged_address: Address,
     pub base_asset_id: AssetId,
     pub trigger: Trigger,
+    pub max_fds: i32,
+    pub max_database_cache_size: Option<usize>,
+    pub database_type: DbType,
 }
 
 impl TestSetupBuilder {
@@ -238,9 +241,9 @@ impl TestSetupBuilder {
             starting_gas_price: self.starting_gas_price,
             ..Config::local_node_with_configs(chain_conf, state)
         };
-        config.combined_db_config.max_database_cache_size = Some(16 * 1024 * 1024 * 1024);
-        config.combined_db_config.max_fds = -1;
-        config.combined_db_config.database_type = DbType::RocksDb;
+        config.combined_db_config.max_database_cache_size = self.max_database_cache_size;
+        config.combined_db_config.max_fds = self.max_fds;
+        config.combined_db_config.database_type = self.database_type;
 
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
@@ -263,10 +266,13 @@ impl Default for TestSetupBuilder {
             gas_limit: None,
             block_size_limit: None,
             starting_block: None,
+            max_database_cache_size: None,
+            database_type: DbType::RocksDb,
             utxo_validation: true,
             privileged_address: Default::default(),
             base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
+            max_fds: 512,
         }
     }
 }

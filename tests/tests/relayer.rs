@@ -15,6 +15,7 @@ use fuel_core::{
         Config,
         FuelService,
     },
+    state::rocks_db::DatabaseConfig,
 };
 use fuel_core_client::client::{
     pagination::{
@@ -332,10 +333,12 @@ async fn can_restart_node_with_relayer_data() {
         // Given
         let database = CombinedDatabase::open(
             tmp_dir.path(),
-            capacity,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: Some(capacity),
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
 
@@ -357,10 +360,12 @@ async fn can_restart_node_with_relayer_data() {
         // When
         let database = CombinedDatabase::open(
             tmp_dir.path(),
-            capacity,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: Some(capacity),
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let service = FuelService::from_combined_database(database, config)

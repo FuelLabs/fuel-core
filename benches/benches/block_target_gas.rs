@@ -266,8 +266,12 @@ fn service_with_many_contracts(
         .build()
         .unwrap();
     let _drop = rt.enter();
-    let mut database = Database::rocksdb_temp(None, StateRewindPolicy::NoRewind, -1)
-        .expect("Failed to create database");
+    let mut database = Database::rocksdb_temp(
+        Some(16 * 1024 * 1024 * 1024),
+        StateRewindPolicy::NoRewind,
+        -1,
+    )
+    .expect("Failed to create database");
 
     let mut chain_config = ChainConfig::local_testnet();
 
