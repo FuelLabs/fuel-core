@@ -161,10 +161,10 @@ async fn main() -> anyhow::Result<()> {
             } = l1_l2_block_data_from_source(source, CAPACITY, UPDATE_PERIOD);
 
             println!(
-                "Running simulation with P: {}, D: {}, {} blocks and {} da_finalization_period",
+                "Running simulation with P: {}, D: {}, {} L2 blocks and {} da_finalization_period",
                 prettify_number(p),
                 prettify_number(d),
-                prettify_number(da_cost_per_byte.len()),
+                prettify_number(fullness_and_bytes.len()),
                 prettify_number(da_finalization_period)
             );
             let simulator = Simulator::new(da_cost_per_byte);
@@ -183,8 +183,8 @@ async fn main() -> anyhow::Result<()> {
                 fullness_and_bytes,
             } = l1_l2_block_data_from_source(source, CAPACITY, UPDATE_PERIOD);
             println!(
-                "Running optimization with {iterations} iterations and {} blocks",
-                da_cost_per_byte.len()
+                "Running optimization with {iterations} iterations and {} L2 blocks",
+                fullness_and_bytes.len()
             );
             let simulator = Simulator::new(da_cost_per_byte);
             let (results, (p, d)) = naive_optimisation(
