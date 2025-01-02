@@ -76,6 +76,7 @@ impl BenchDb {
             None,
             Default::default(),
             -1,
+            Default::default(),
         )
         .unwrap();
         let db = Arc::new(db);
