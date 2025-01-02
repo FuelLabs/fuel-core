@@ -8,7 +8,7 @@ pub fn default_gas_costs() -> GasCostsValues {
         andi: 2,
         bal: 274,
         bhei: 2,
-        bhsh: 2,
+        bhsh: 32,
         burn: 7566,
         cb: 2,
         cfsi: 2,
@@ -90,12 +90,10 @@ pub fn default_gas_costs() -> GasCostsValues {
         wqmm: 6,
         xor: 2,
         xori: 2,
-        // TODO: Change to correct values
-        ecop: 2,
-        // TODO: Change to correct values
+        ecop: 3500,
         epar: DependentCost::HeavyOperation {
-            base: 2,
-            gas_per_unit: 2,
+            base: 69000,
+            gas_per_unit: 52000,
         },
         aloc: DependentCost::LightOperation {
             base: 2,

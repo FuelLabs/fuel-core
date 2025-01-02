@@ -148,10 +148,17 @@ impl VmBench {
     pub fn new(instruction: Instruction) -> Self {
         let mut consensus_params = ConsensusParameters::default();
         consensus_params.set_tx_params(
-            TxParameters::default().with_max_gas_per_tx(LARGE_GAS_LIMIT + 1),
+            TxParameters::default()
+                .with_max_gas_per_tx(LARGE_GAS_LIMIT + 1)
+                .with_max_size(64 * 1024 * 1024),
         );
         consensus_params.set_fee_params(FeeParameters::default().with_gas_per_byte(0));
         consensus_params.set_gas_costs(GasCosts::free());
+        consensus_params.set_script_params(
+            ScriptParameters::default()
+                .with_max_script_length(64 * 1024 * 1024)
+                .with_max_script_data_length(64 * 1024 * 1024),
+        );
 
         Self {
             params: consensus_params,
