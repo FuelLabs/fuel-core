@@ -5,6 +5,7 @@ use fuel_core::{
         Config,
         FuelService,
     },
+    state::rocks_db::DatabaseConfig,
     types::fuel_tx::Transaction,
 };
 use fuel_core_client::client::FuelClient;
