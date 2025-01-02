@@ -41,6 +41,11 @@ exclude = ["version-compatibility"]
 [profile.release]
 codegen-units = 1
 lto = "fat"
+# The difference in performance for "fat" and "thin" is small,
+# but "thin" LTO is much faster to compile.
+# If you play with benchamrks or flamegraph, it is better to use "thin"
+# To speedup iterations between compialtion.
+#lto = "thin"
 panic = "unwind"
 
 [workspace.package]

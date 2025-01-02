@@ -164,11 +164,11 @@ use alloc::{
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
-#[cfg(not(feature = "test-helpers"))]
+#[cfg(not(feature = "limited-tx-count"))]
 pub const fn max_tx_count() -> u16 {
     u16::MAX.saturating_sub(1)
 }
-#[cfg(feature = "test-helpers")]
+#[cfg(feature = "limited-tx-count")]
 pub const fn max_tx_count() -> u16 {
     1024
 }
