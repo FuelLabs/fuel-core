@@ -94,43 +94,122 @@ enum Source {
     },
 }
 
+fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u32)> {
+    let mut rng = StdRng::seed_from_u64(888);
+
+    let fullness_noise: Vec<_> = std::iter::repeat(())
+        .take(size)
+        .map(|_| rng.gen_range(-0.5..0.5))
+        // .map(|val| val * capacity as f64)
+        .collect();
+
+    const ROUGH_GAS_TO_BYTE_RATIO: f64 = 0.01;
+    let bytes_scale: Vec<_> = std::iter::repeat(())
+        .take(size)
+        .map(|_| rng.gen_range(0.5..1.0))
+        .map(|x| x * ROUGH_GAS_TO_BYTE_RATIO)
+        .collect();
+
+    (0usize..size)
+        .map(|val| val as f64)
+        .map(noisy_fullness)
+        .map(|signal| (0.01 * signal + 0.01) * capacity as f64) // Scale and shift so it's between 0 and capacity
+        .zip(fullness_noise)
+        .map(|(fullness, noise)| fullness + noise)
+        .map(|x| f64::min(x, capacity as f64))
+        .map(|x| f64::max(x, 5.0))
+        .zip(bytes_scale)
+        .map(|(fullness, bytes_scale)| {
+            let bytes = fullness * bytes_scale;
+            (fullness, bytes)
+        })
+        .map(|(fullness, bytes)| (fullness as u64, std::cmp::max(bytes as u32, 1)))
+        .collect()
+}
+
+// Naive Fourier series
+fn gen_noisy_signal(input: f64, components: &[f64]) -> f64 {
+    components
+        .iter()
+        .fold(0f64, |acc, &c| acc + f64::sin(input / c))
+        / components.len() as f64
+}
+
+fn noisy_fullness<T: TryInto<f64>>(input: T) -> f64
+where
+    <T as TryInto<f64>>::Error: core::fmt::Debug,
+{
+    const COMPONENTS: &[f64] = &[-30.0, 40.0, 700.0, -340.0, 400.0];
+    let input = input.try_into().unwrap();
+    gen_noisy_signal(input, COMPONENTS)
+}
+
+struct L1FullnessData {
+    da_cost_per_byte: Vec<u64>,
+    fullness_and_bytes: Vec<(u64, u32)>,
+}
+
+fn fulness_and_bytes_from_source(
+    source: Source,
+    capacity: u64,
+    update_period: usize,
+) -> L1FullnessData {
+    let da_cost_per_byte = get_da_cost_per_byte_from_source(source, update_period);
+    let size = da_cost_per_byte.len();
+    L1FullnessData {
+        da_cost_per_byte,
+        fullness_and_bytes: fullness_and_bytes_per_block(size, capacity),
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Arg::parse();
 
     const UPDATE_PERIOD: usize = 12;
+    const CAPACITY: u64 = 30_000_000;
 
     let da_finalization_period = args.da_finalization_period;
 
     let (results, (p_comp, d_comp)) = match args.mode {
         Mode::WithValues { p, d, source } => {
-            let da_cost_per_byte =
-                get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
-            let size = da_cost_per_byte.len();
+            let L1FullnessData {
+                da_cost_per_byte,
+                fullness_and_bytes,
+            } = fulness_and_bytes_from_source(source, CAPACITY, UPDATE_PERIOD);
+
             println!(
                 "Running simulation with P: {}, D: {}, {} blocks and {} da_finalization_period",
                 prettify_number(p),
                 prettify_number(d),
-                prettify_number(size),
+                prettify_number(da_cost_per_byte.len()),
                 prettify_number(da_finalization_period)
             );
             let simulator = Simulator::new(da_cost_per_byte);
-            let result =
-                simulator.run_simulation(p, d, UPDATE_PERIOD, da_finalization_period);
+            let result = simulator.run_simulation(
+                p,
+                d,
+                UPDATE_PERIOD,
+                &fullness_and_bytes,
+                da_finalization_period,
+            );
             (result, (p, d))
         }
         Mode::Optimization { iterations, source } => {
-            let da_cost_per_byte =
-                get_da_cost_per_byte_from_source(source, UPDATE_PERIOD);
-            let size = da_cost_per_byte.len();
+            let L1FullnessData {
+                da_cost_per_byte,
+                fullness_and_bytes,
+            } = fulness_and_bytes_from_source(source, CAPACITY, UPDATE_PERIOD);
             println!(
-                "Running optimization with {iterations} iterations and {size} blocks"
+                "Running optimization with {iterations} iterations and {} blocks",
+                da_cost_per_byte.len()
             );
             let simulator = Simulator::new(da_cost_per_byte);
             let (results, (p, d)) = naive_optimisation(
                 &simulator,
                 iterations as usize,
                 UPDATE_PERIOD,
+                &fullness_and_bytes,
                 da_finalization_period,
             )
             .await;

@@ -52,13 +52,14 @@ impl Simulator {
         da_p_component: i64,
         da_d_component: i64,
         update_period: usize,
+        fullness_and_bytes: &[(u64, u32)],
         da_finalization_rate: usize,
     ) -> SimulationResults {
         let capacity = 30_000_000;
         let gas_per_byte = 63;
         let max_block_bytes = capacity / gas_per_byte;
         let size = self.da_cost_per_byte.len();
-        let fullness_and_bytes = fullness_and_bytes_per_block(size, capacity);
+
         let l2_blocks = fullness_and_bytes.clone().into_iter();
         let da_blocks = self.calculate_da_blocks(
             update_period,
@@ -69,8 +70,8 @@ impl Simulator {
         let blocks = l2_blocks
             .zip(da_blocks.iter())
             .map(|((fullness, bytes), maybe_da_block)| BlockData {
-                fullness,
-                bytes,
+                fullness: *fullness,
+                bytes: *bytes,
                 maybe_da_bundle: maybe_da_block.clone(),
             })
             .enumerate();
@@ -127,7 +128,7 @@ impl Simulator {
         &self,
         capacity: u64,
         max_block_bytes: u64,
-        fullness_and_bytes: Vec<(u64, u32)>,
+        fullness_and_bytes: &[(u64, u32)],
         blocks: impl Iterator<Item = (usize, BlockData)>,
         mut updater: AlgorithmUpdaterV1,
     ) -> SimulationResults {
@@ -266,54 +267,4 @@ impl Simulator {
         });
         l2_blocks_with_no_da_blocks.chain(da_block_ranges).collect()
     }
-}
-
-// Naive Fourier series
-fn gen_noisy_signal(input: f64, components: &[f64]) -> f64 {
-    components
-        .iter()
-        .fold(0f64, |acc, &c| acc + f64::sin(input / c))
-        / components.len() as f64
-}
-
-fn noisy_fullness<T: TryInto<f64>>(input: T) -> f64
-where
-    <T as TryInto<f64>>::Error: core::fmt::Debug,
-{
-    const COMPONENTS: &[f64] = &[-30.0, 40.0, 700.0, -340.0, 400.0];
-    let input = input.try_into().unwrap();
-    gen_noisy_signal(input, COMPONENTS)
-}
-
-fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u32)> {
-    let mut rng = StdRng::seed_from_u64(888);
-
-    let fullness_noise: Vec<_> = std::iter::repeat(())
-        .take(size)
-        .map(|_| rng.gen_range(-0.5..0.5))
-        // .map(|val| val * capacity as f64)
-        .collect();
-
-    const ROUGH_GAS_TO_BYTE_RATIO: f64 = 0.01;
-    let bytes_scale: Vec<_> = std::iter::repeat(())
-        .take(size)
-        .map(|_| rng.gen_range(0.5..1.0))
-        .map(|x| x * ROUGH_GAS_TO_BYTE_RATIO)
-        .collect();
-
-    (0usize..size)
-        .map(|val| val as f64)
-        .map(noisy_fullness)
-        .map(|signal| (0.01 * signal + 0.01) * capacity as f64) // Scale and shift so it's between 0 and capacity
-        .zip(fullness_noise)
-        .map(|(fullness, noise)| fullness + noise)
-        .map(|x| f64::min(x, capacity as f64))
-        .map(|x| f64::max(x, 5.0))
-        .zip(bytes_scale)
-        .map(|(fullness, bytes_scale)| {
-            let bytes = fullness * bytes_scale;
-            (fullness, bytes)
-        })
-        .map(|(fullness, bytes)| (fullness as u64, std::cmp::max(bytes as u32, 1)))
-        .collect()
 }

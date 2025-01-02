@@ -16,15 +16,23 @@ pub async fn naive_optimisation(
     simulator: &Simulator,
     iterations: usize,
     update_period: usize,
+    fullness_and_bytes: &[(u64, u32)],
     da_recording_rate: usize,
 ) -> (SimulationResults, (i64, i64)) {
     let tasks = da_pid_factors(iterations)
         .into_iter()
         .map(|(p, d)| {
+            let cloned_fullness_and_bytes = fullness_and_bytes.to_vec();
             let new_simulator = simulator.clone();
             let f = move || {
                 (
-                    new_simulator.run_simulation(p, d, update_period, da_recording_rate),
+                    new_simulator.run_simulation(
+                        p,
+                        d,
+                        update_period,
+                        &cloned_fullness_and_bytes,
+                        da_recording_rate,
+                    ),
                     (p, d),
                 )
             };
