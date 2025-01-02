@@ -255,6 +255,8 @@ impl Simulator {
                 }
             })
         });
-        l2_blocks_with_no_da_blocks.chain(da_block_ranges).collect()
+        let x = l2_blocks_with_no_da_blocks.chain(da_block_ranges).collect();
+        dbg!(&x);
+        x
     }
 }

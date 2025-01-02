@@ -21,7 +21,10 @@ pub fn get_da_cost_per_byte_from_source(
     update_period: usize,
 ) -> Vec<u64> {
     match source {
-        Source::Generated { size } => arbitrary_cost_per_byte(*size, update_period),
+        Source::Generated { size } => arbitrary_cost_per_byte(*size, update_period)
+            .into_iter()
+            .flat_map(|x| iter::repeat(x).take(update_period))
+            .collect(),
         Source::Predefined {
             file_path,
             sample_size,
@@ -29,7 +32,10 @@ pub fn get_da_cost_per_byte_from_source(
             file_path,
             *sample_size,
             PREDEFINED_L2_BLOCKS_PER_L1_BLOCK,
-        ),
+        )
+        .into_iter()
+        .flat_map(|x| iter::repeat(x).take(update_period))
+        .collect(),
         Source::Predefined2 {
             file_path,
             l2_blocks_per_blob,
@@ -37,11 +43,11 @@ pub fn get_da_cost_per_byte_from_source(
             file_path,
             None,
             *l2_blocks_per_blob,
-        ),
+        )
+        .into_iter()
+        .flat_map(|x| iter::repeat(x).take(*l2_blocks_per_blob))
+        .collect(),
     }
-    .into_iter()
-    .flat_map(|x| iter::repeat(x).take(update_period))
-    .collect()
 }
 
 // This function is used to read the CSV file and extract the blob fee from it.

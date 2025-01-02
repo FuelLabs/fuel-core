@@ -124,7 +124,7 @@ struct L1L2BlockData {
 }
 
 fn l1_l2_block_data_from_source(
-    source: Source,
+    source: &Source,
     capacity: u64,
     update_period: usize,
 ) -> L1L2BlockData {
@@ -158,7 +158,7 @@ async fn main() -> anyhow::Result<()> {
             let L1L2BlockData {
                 da_cost_per_byte,
                 fullness_and_bytes,
-            } = l1_l2_block_data_from_source(source, CAPACITY, UPDATE_PERIOD);
+            } = l1_l2_block_data_from_source(&source, CAPACITY, UPDATE_PERIOD);
 
             println!(
                 "Running simulation with P: {}, D: {}, {} L2 blocks and {} da_finalization_period",
@@ -168,10 +168,18 @@ async fn main() -> anyhow::Result<()> {
                 prettify_number(da_finalization_period)
             );
             let simulator = Simulator::new(da_cost_per_byte);
+
+            let update_period = match source {
+                Source::Generated { .. } | Source::Predefined { .. } => UPDATE_PERIOD,
+                Source::Predefined2 {
+                    l2_blocks_per_blob, ..
+                } => l2_blocks_per_blob,
+            };
+
             let result = simulator.run_simulation(
                 p,
                 d,
-                UPDATE_PERIOD,
+                update_period,
                 &fullness_and_bytes,
                 da_finalization_period,
             );
@@ -181,7 +189,7 @@ async fn main() -> anyhow::Result<()> {
             let L1L2BlockData {
                 da_cost_per_byte,
                 fullness_and_bytes,
-            } = l1_l2_block_data_from_source(source, CAPACITY, UPDATE_PERIOD);
+            } = l1_l2_block_data_from_source(&source, CAPACITY, UPDATE_PERIOD);
             println!(
                 "Running optimization with {iterations} iterations and {} L2 blocks",
                 fullness_and_bytes.len()
