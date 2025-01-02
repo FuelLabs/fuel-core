@@ -76,7 +76,7 @@ async fn can_restart_node_with_transactions() {
             tmp_dir.path(),
             Default::default(),
             DatabaseConfig {
-                capacity,
+                capacity: Some(capacity),
                 max_fds: 512,
                 columns_policy: Default::default(),
             },
@@ -102,7 +102,7 @@ async fn can_restart_node_with_transactions() {
             tmp_dir.path(),
             Default::default(),
             DatabaseConfig {
-                capacity,
+                capacity: Some(capacity),
                 max_fds: 512,
                 columns_policy: Default::default(),
             },
