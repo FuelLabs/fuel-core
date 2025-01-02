@@ -12,7 +12,6 @@ use super::rocks_db_key_iterator::{
     ExtractItem,
     RocksDBKeyIterator,
 };
-use clap::ValueEnum;
 use fuel_core_metrics::core_metrics::DatabaseMetrics;
 use fuel_core_storage::{
     iter::{
@@ -64,11 +63,6 @@ use std::{
         Mutex,
     },
 };
-use strum::{
-    Display,
-    EnumString,
-    EnumVariantNames,
-};
 use tempfile::TempDir;
 
 type DB = DBWithThreadMode<MultiThreaded>;
@@ -102,19 +96,7 @@ impl Drop for DropResources {
     }
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Default,
-    Debug,
-    Display,
-    Eq,
-    PartialEq,
-    EnumString,
-    EnumVariantNames,
-    ValueEnum,
-)]
-#[strum(serialize_all = "kebab_case")]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 /// Defined behaviour for opening the columns of the database.
 pub enum ColumnsPolicy {
     #[cfg_attr(not(feature = "rocksdb-production"), default)]
@@ -126,11 +108,22 @@ pub enum ColumnsPolicy {
 }
 
 /// Configuration to create a database
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct DatabaseConfig {
-    pub capacity: Option<usize>,
+    pub cache_capacity: Option<usize>,
     pub max_fds: i32,
     pub columns_policy: ColumnsPolicy,
+}
+
+#[cfg(feature = "test-helpers")]
+impl DatabaseConfig {
+    pub fn config_for_tests() -> Self {
+        Self {
+            cache_capacity: None,
+            max_fds: 512,
+            columns_policy: ColumnsPolicy::Lazy,
+        }
+    }
 }
 
 pub struct RocksDb<Description> {
@@ -164,7 +157,7 @@ where
 {
     pub fn default_open_temp(capacity: Option<usize>) -> DatabaseResult<Self> {
         Self::default_open_temp_with_params(DatabaseConfig {
-            capacity,
+            cache_capacity: capacity,
             max_fds: 512,
             columns_policy: Default::default(),
         })
@@ -295,7 +288,7 @@ where
         // See https://github.com/facebook/rocksdb/blob/a1523efcdf2f0e8133b9a9f6e170a0dad49f928f/include/rocksdb/table.h#L246-L271 for details on what the format versions are/do.
         block_opts.set_format_version(5);
 
-        if let Some(capacity) = database_config.capacity {
+        if let Some(capacity) = database_config.cache_capacity {
             // Set cache size 1/3 of the capacity as recommended by
             // https://github.com/facebook/rocksdb/wiki/Setup-Options-and-Basic-Tuning#block-cache-size
             let block_cache_size = capacity / 3;
@@ -319,7 +312,7 @@ where
         let cpu_number =
             i32::try_from(num_cpus::get()).expect("The number of CPU can't exceed `i32`");
         opts.increase_parallelism(cmp::max(1, cpu_number / 2));
-        if let Some(capacity) = database_config.capacity {
+        if let Some(capacity) = database_config.cache_capacity {
             // Set cache size 1/3 of the capacity. Another 1/3 is
             // used by block cache and the last 1 / 3 remains for other purposes:
             //
@@ -979,15 +972,8 @@ mod tests {
     fn create_db() -> (RocksDb<OnChain>, TempDir) {
         let tmp_dir = TempDir::new().unwrap();
         (
-            RocksDb::default_open(
-                tmp_dir.path(),
-                DatabaseConfig {
-                    capacity: None,
-                    max_fds: 512,
-                    columns_policy: ColumnsPolicy::Lazy,
-                },
-            )
-            .unwrap(),
+            RocksDb::default_open(tmp_dir.path(), DatabaseConfig::config_for_tests())
+                .unwrap(),
             tmp_dir,
         )
     }
@@ -1002,11 +988,7 @@ mod tests {
         let database_with_old_columns = RocksDb::<OnChain>::open(
             tmp_dir.path(),
             old_columns.clone(),
-            DatabaseConfig {
-                capacity: None,
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .expect("Failed to open database with old columns");
         drop(database_with_old_columns);
@@ -1018,11 +1000,7 @@ mod tests {
         let database_with_new_columns = RocksDb::<OnChain>::open(
             tmp_dir.path(),
             new_columns,
-            DatabaseConfig {
-                capacity: None,
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .map(|_| ());
 
@@ -1196,11 +1174,7 @@ mod tests {
         let result = RocksDb::<OnChain>::open(
             tmp_dir.path(),
             columns,
-            DatabaseConfig {
-                capacity: None,
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         );
 
         // Then
@@ -1219,11 +1193,7 @@ mod tests {
             tmp_dir.path(),
             old_columns.clone(),
             false,
-            DatabaseConfig {
-                capacity: None,
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .map(|_| ());
 
@@ -1244,11 +1214,7 @@ mod tests {
             tmp_dir.path(),
             secondary_temp.path(),
             old_columns.clone(),
-            DatabaseConfig {
-                capacity: None,
-                max_fds: 512,
-                columns_policy: ColumnsPolicy::Lazy,
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .map(|_| ());
 
@@ -1343,11 +1309,7 @@ mod tests {
         let open_with_part_of_columns = RocksDb::<OnChain>::open(
             tmp_dir.path(),
             part_of_columns,
-            DatabaseConfig {
-                capacity: None,
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         );
 
         // Then

@@ -104,6 +104,8 @@ impl Config {
 
     #[cfg(feature = "test-helpers")]
     pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
+        use crate::state::rocks_db::DatabaseConfig;
+
         let block_importer = fuel_core_importer::Config::new(false);
         let latest_block = snapshot_reader.last_block_config();
         // In tests, we always want to use the native executor as a default configuration.
@@ -117,10 +119,13 @@ impl Config {
 
         let combined_db_config = CombinedDatabaseConfig {
             // Set the cache for tests = 10MB
-            max_database_cache_size: Some(10 * 1024 * 1024),
-            database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
-            columns_policy: Default::default(),
+            database_config: DatabaseConfig {
+                cache_capacity: Some(10 * 1024 * 1024),
+                columns_policy: Default::default(),
+                max_fds: 512,
+            },
+            database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,
             #[cfg(not(feature = "rocksdb"))]
@@ -128,8 +133,6 @@ impl Config {
             #[cfg(feature = "rocksdb")]
             state_rewind_policy:
                 crate::state::historical_rocksdb::StateRewindPolicy::RewindFullRange,
-            #[cfg(feature = "rocksdb")]
-            max_fds: 512,
         };
         let starting_gas_price = 0;
         let gas_price_change_percent = 0;

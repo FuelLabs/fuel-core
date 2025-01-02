@@ -94,8 +94,11 @@ where
             test_builder.gas_limit = Some(10_000_000_000);
             test_builder.block_size_limit = Some(1_000_000_000_000);
             test_builder.database_type = DbType::RocksDb;
-            test_builder.max_database_cache_size = Some(16 * 1024 * 1024 * 1024);
-            test_builder.max_fds = -1;
+            test_builder.database_config = DatabaseConfig {
+                cache_capacity: Some(16 * 1024 * 1024 * 1024),
+                max_fds: -1,
+                columns_policy: Default::default(),
+            };
 
             // spin up node
             let transactions: Vec<Transaction> =

@@ -46,7 +46,7 @@ pub fn open_rocks_db<Description: DatabaseDescription>(
     let db = RocksDb::default_open(
         path,
         DatabaseConfig {
-            capacity: Some(16 * 1024 * 1024 * 1024),
+            cache_capacity: Some(16 * 1024 * 1024 * 1024),
             max_fds: -1,
             columns_policy: ColumnsPolicy::OnCreation,
         },

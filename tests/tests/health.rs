@@ -32,11 +32,7 @@ async fn can_restart_node() {
         let database = Database::open_rocksdb(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                capacity: None,
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let first_startup = FuelService::from_database(database, Config::local_node())
@@ -52,11 +48,7 @@ async fn can_restart_node() {
         let database = Database::open_rocksdb(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                capacity: None,
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let _second_startup = FuelService::from_database(database, Config::local_node())
@@ -76,7 +68,7 @@ async fn can_restart_node_with_transactions() {
             tmp_dir.path(),
             Default::default(),
             DatabaseConfig {
-                capacity: Some(capacity),
+                cache_capacity: Some(capacity),
                 max_fds: 512,
                 columns_policy: Default::default(),
             },
@@ -102,7 +94,7 @@ async fn can_restart_node_with_transactions() {
             tmp_dir.path(),
             Default::default(),
             DatabaseConfig {
-                capacity: Some(capacity),
+                cache_capacity: Some(capacity),
                 max_fds: 512,
                 columns_policy: Default::default(),
             },

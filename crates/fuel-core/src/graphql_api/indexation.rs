@@ -356,11 +356,7 @@ mod tests {
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                capacity: Default::default(),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -420,11 +416,7 @@ mod tests {
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                capacity: Default::default(),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -499,11 +491,7 @@ mod tests {
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                capacity: Default::default(),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -614,11 +602,7 @@ mod tests {
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                capacity: Default::default(),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -655,11 +639,7 @@ mod tests {
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                capacity: Default::default(),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -700,11 +680,7 @@ mod tests {
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                capacity: Default::default(),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let mut tx = db.write_transaction();

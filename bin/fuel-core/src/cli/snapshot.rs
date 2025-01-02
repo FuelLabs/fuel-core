@@ -217,7 +217,7 @@ fn open_db(
         path,
         StateRewindPolicy::NoRewind,
         DatabaseConfig {
-            capacity: Some(capacity.unwrap_or(1024 * 1024 * 1024)),
+            cache_capacity: Some(capacity.unwrap_or(1024 * 1024 * 1024)),
             max_fds,
             columns_policy: ColumnsPolicy::OnCreation,
         },

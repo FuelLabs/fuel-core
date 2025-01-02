@@ -56,7 +56,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         path,
         StateRewindPolicy::RewindFullRange,
         DatabaseConfig {
-            capacity: Some(64 * 1024 * 1024),
+            cache_capacity: Some(64 * 1024 * 1024),
             max_fds: command.rocksdb_max_fds,
             columns_policy: Default::default(),
         },

@@ -258,16 +258,11 @@ where
 
     #[cfg(feature = "rocksdb")]
     pub fn rocksdb_temp(
-        max_database_cache_size: impl Into<Option<usize>>,
         state_rewind_policy: StateRewindPolicy,
-        max_fds: i32,
+        database_config: DatabaseConfig,
     ) -> Result<Self> {
         let db = RocksDb::<Historical<Description>>::default_open_temp_with_params(
-            DatabaseConfig {
-                capacity: max_database_cache_size.into(),
-                max_fds,
-                columns_policy: Default::default(),
-            },
+            database_config,
         )?;
         let historical_db = HistoricalRocksDB::new(db, state_rewind_policy)?;
         let data = Arc::new(historical_db);
@@ -290,8 +285,15 @@ where
         }
         #[cfg(feature = "rocksdb")]
         {
-            Self::rocksdb_temp(None, StateRewindPolicy::NoRewind, 512)
-                .expect("Failed to create a temporary database")
+            Self::rocksdb_temp(
+                StateRewindPolicy::NoRewind,
+                DatabaseConfig {
+                    cache_capacity: None,
+                    max_fds: 512,
+                    columns_policy: Default::default(),
+                },
+            )
+            .expect("Failed to create a temporary database")
         }
     }
 }
@@ -1120,11 +1122,7 @@ mod tests {
         let db = Database::<OnChain>::open_rocksdb(
             temp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                capacity: Some(1024 * 1024 * 1024),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         // rocks db fails
