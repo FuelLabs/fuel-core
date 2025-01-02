@@ -1,40 +1,26 @@
-use std::{
-    ops::Range,
-    path::{
-        Path,
-        PathBuf,
-    },
-};
+use std::path::PathBuf;
 
-use plotters::prelude::*;
-use rand::{
-    rngs::StdRng,
-    Rng,
-    SeedableRng,
+use layer1::BlockCommitterDataFetcher;
+use layer2::{
+    GetHeight,
+    TotalGas,
 };
-
-use plotters::coord::Shift;
 use reqwest::{
     header::{
         HeaderMap,
         CONTENT_TYPE,
     },
-    Response,
     Url,
 };
 
 use clap::{
-    ArgGroup,
     Args,
     Parser,
-    Subcommand,
 };
 
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use serde_json;
+pub mod client_ext;
+mod layer1;
+mod layer2;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -96,99 +82,45 @@ async fn main() -> anyhow::Result<()> {
         BlockCommitterDataFetcher::new(block_committer_endpoint, 10)?;
 
     let block_costs =
-        fetch_block_committer_data(&block_committer_data_fetcher, block_range).await?;
+        layer1::fetch_block_committer_data(&block_committer_data_fetcher, block_range)
+            .await?;
 
     println!("{:?}", block_costs);
-    Ok(())
-}
-
-async fn fetch_block_committer_data(
-    data_fetcher: &BlockCommitterDataFetcher,
-    blocks: Range<u64>,
-) -> Result<Vec<BlockCommitterCosts>, anyhow::Error> {
-    let mut block_costs = vec![];
-    let mut current_block_height = blocks.start;
-    while current_block_height < blocks.end {
-        let Ok(mut costs) = data_fetcher.fetch_blob_data(current_block_height).await
-        else {
-            Err(anyhow::anyhow!(
-                "Could not fetch data for block {}",
-                current_block_height
-            ))?
-        };
-
-        if costs.is_empty() {
-            // Might be that the block committer doesn't have data for the block, in which case we return prematurely.
-            // If this happen, we should increase the value of results returned by the block committer in the query.
-            break;
+    match l2_block_data_source {
+        L2BlockDataSource {
+            db_path: Some(db_path),
+            sentry_node_endpoint: None,
+        } => {
+            todo!();
         }
+        L2BlockDataSource {
+            db_path: None,
+            sentry_node_endpoint: Some(sentry_node_endpoint),
+        } => {
+            println!(
+                "Retrieving L2 data from sentry node: {}",
+                sentry_node_endpoint
+            );
+            let sentry_node_client = layer2::BlockFetcher::new(sentry_node_endpoint)?;
+            let blocks_range =
+                start_block_included.try_into()?..end_block_excluded.try_into()?;
 
-        // Block committer will return the data for the block in the next batch, hence we don't increment the height of the last
-        // block.
-        current_block_height = costs.last().unwrap().end_height;
-        block_costs.append(&mut costs);
-    }
+            let blocks_with_gas_consumed =
+                layer2::get_gas_consumed(&sentry_node_client, blocks_range, 5000).await?;
 
-    Ok(block_costs)
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct BlockCommitterCosts {
-    /// The cost of the block, supposedly in Wei but need to check
-    cost: u128,
-    size: u64,
-    da_block_height: u64,
-    start_height: u64,
-    end_height: u64,
-}
-
-struct BlockCommitterDataFetcher {
-    client: reqwest::Client,
-    endpoint: Url,
-    num_responses: usize,
-}
-
-impl BlockCommitterDataFetcher {
-    fn new(endpoint: Url, num_responses: usize) -> Result<Self, anyhow::Error> {
-        let mut content_type_json_header = HeaderMap::new();
-        content_type_json_header.insert(
-            CONTENT_TYPE,
-            "application/json"
-                .parse()
-                .expect("Content-Type header value is valid"),
-        );
-        let client = reqwest::ClientBuilder::new()
-            .default_headers(content_type_json_header)
-            .build()?;
-        Ok(Self {
-            client,
-            endpoint,
-            num_responses,
-        })
-    }
-
-    // Todo: Better error type
-    async fn fetch_blob_data(
-        &self,
-        from_height: u64,
-    ) -> Result<Vec<BlockCommitterCosts>, anyhow::Error> {
-        let query = self.endpoint.join("v1/costs")?.join(&format!(
-            "?from_height={}&limit={}",
-            from_height, self.num_responses
-        ))?;
-
-        println!("Query: {}", query.as_str());
-
-        let response = self.client.get(query).send().await?;
-        if !response.status().is_success() {
+            for (block_height, block_size, gas_consumed) in blocks_with_gas_consumed {
+                println!(
+                    "Block Height: {}, Block Size: {}, Gas Consumed: {}",
+                    *block_height, block_size, gas_consumed
+                );
+            }
+        }
+        _ => {
             return Err(anyhow::anyhow!(
-                "Failed to fetch data from block committer: {}",
-                response.status(),
-            )
-            .into());
+                "Either db-path or sentry-node-endpoint must be provided"
+            ));
         }
+    };
 
-        let block_committer_costs = response.json::<Vec<BlockCommitterCosts>>().await?;
-        Ok(block_committer_costs)
-    }
+    Ok(())
 }

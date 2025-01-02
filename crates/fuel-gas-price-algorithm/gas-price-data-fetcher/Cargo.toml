@@ -19,3 +19,15 @@ serde = { version = "1.0.209", features = ["derive"] }
 tokio = { version = "1.40.0", features = ["macros", "rt", "rt-multi-thread"] }
 reqwest = { version = "0.12.11", features = ["json"] }
 serde_json = { version = "1.0.134" }
+fuel-core-client = { version = "0.40.2"}
+fuel-core-types = { version = "0.40.2"}
+postcard = { version = "1.0" }
+
+async-trait = "0.1"
+cynic = { version = "2.2", features = ["http-reqwest"] }
+itertools = { version = "0.13" }
+
+
+[build-dependencies]
+fuel-core-client = { version = "0.40.2"}
+
