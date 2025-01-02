@@ -79,9 +79,11 @@ impl BalanceQuery {
         Ok(balance)
     }
 
-    // TODO: This API should be migrated to the indexer for better support and
-    //  discontinued within fuel-core.
-    #[graphql(complexity = "query_costs().balance_query")]
+    #[graphql(
+        complexity = "query_costs().balance_query + query_costs().storage_iterator \
+        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
+        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity"
+    )]
     async fn balances(
         &self,
         ctx: &Context<'_>,
@@ -92,18 +94,21 @@ impl BalanceQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
-        if before.is_some() || after.is_some() {
-            return Err(anyhow!("pagination is not yet supported").into())
-        }
         let query = ctx.read_view()?;
+        if !query.balances_enabled && (before.is_some() || after.is_some()) {
+            return Err(anyhow!(
+                "Can not use pagination when balances indexation is not available"
+            )
+            .into())
+        }
         let base_asset_id = *ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params()
             .base_asset_id();
         let owner = filter.owner.into();
-        crate::schema::query_pagination(after, before, first, last, |_, direction| {
+        crate::schema::query_pagination(after, before, first, last, |start, direction| {
             Ok(query
-                .balances(&owner, direction, &base_asset_id)
+                .balances(&owner, (*start).map(Into::into), direction, &base_asset_id)
                 .map(|result| {
                     result.map(|balance| (balance.asset_id.into(), balance.into()))
                 }))
