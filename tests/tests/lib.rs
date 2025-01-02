@@ -48,6 +48,8 @@ mod regenesis;
 #[cfg(not(feature = "only-p2p"))]
 mod relayer;
 #[cfg(not(feature = "only-p2p"))]
+mod required_fuel_block_height_header;
+#[cfg(not(feature = "only-p2p"))]
 mod snapshot;
 #[cfg(not(feature = "only-p2p"))]
 mod state_rewind;
