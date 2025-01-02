@@ -3,16 +3,14 @@ use super::{
     peer_ids_set_from,
 };
 use crate::peer_manager::ConnectionState;
+use fuel_core_services::seqlock::SeqLock;
 use libp2p::{
     Multiaddr,
     PeerId,
 };
 use std::{
     collections::HashSet,
-    sync::{
-        Arc,
-        RwLock,
-    },
+    sync::Arc,
 };
 
 /// A `ConnectionTracker` allows either Reserved Peers or other peers if there is an available slot.
@@ -20,13 +18,13 @@ use std::{
 #[derive(Debug, Clone)]
 pub(crate) struct ConnectionTracker {
     reserved_nodes: HashSet<PeerId>,
-    connection_state: Option<Arc<RwLock<ConnectionState>>>,
+    connection_state: Option<Arc<SeqLock<ConnectionState>>>,
 }
 
 impl ConnectionTracker {
     pub(crate) fn new(
         reserved_nodes: &[Multiaddr],
-        connection_state: Option<Arc<RwLock<ConnectionState>>>,
+        connection_state: Option<Arc<SeqLock<ConnectionState>>>,
     ) -> Self {
         Self {
             reserved_nodes: peer_ids_set_from(reserved_nodes),
@@ -42,9 +40,7 @@ impl Approver for ConnectionTracker {
         }
 
         if let Some(connection_state) = &self.connection_state {
-            if let Ok(connection_state) = connection_state.read() {
-                return connection_state.available_slot()
-            }
+            return connection_state.read().available_slot();
         }
 
         false

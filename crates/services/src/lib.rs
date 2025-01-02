@@ -6,6 +6,7 @@
 #![deny(warnings)]
 
 mod async_processor;
+pub mod seqlock;
 mod service;
 mod state;
 mod sync;
