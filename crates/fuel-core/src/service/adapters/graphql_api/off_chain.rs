@@ -302,16 +302,22 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             .collect();
 
         CoinsToSpendIndexIter {
-            big_coins_iter: self.iter_all_filtered::<CoinsToSpendIndex, _>(
-                Some(&prefix),
-                None,
-                Some(IterDirection::Reverse),
-            ),
-            dust_coins_iter: self.iter_all_filtered::<CoinsToSpendIndex, _>(
-                Some(&prefix),
-                None,
-                Some(IterDirection::Forward),
-            ),
+            big_coins_iter: self
+                .iter_all_filtered::<CoinsToSpendIndex, _>(
+                    Some(&prefix),
+                    None,
+                    Some(IterDirection::Reverse),
+                )
+                .map(|result| result.map(|(key, _)| key))
+                .into_boxed(),
+            dust_coins_iter: self
+                .iter_all_filtered::<CoinsToSpendIndex, _>(
+                    Some(&prefix),
+                    None,
+                    Some(IterDirection::Forward),
+                )
+                .map(|result| result.map(|(key, _)| key))
+                .into_boxed(),
         }
     }
 }

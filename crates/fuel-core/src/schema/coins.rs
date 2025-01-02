@@ -10,15 +10,12 @@ use crate::{
     },
     fuel_core_graphql_api::{
         query_costs,
+        storage::coins::CoinsToSpendIndexKey,
         IntoApiResult,
     },
     graphql_api::{
         api_service::ConsensusProvider,
         database::ReadView,
-        storage::coins::{
-            CoinsToSpendIndexEntry,
-            IndexedCoinType,
-        },
     },
     query::asset_query::AssetSpendTarget,
     schema::{
@@ -412,7 +409,7 @@ async fn coins_to_spend_with_cache(
         .await?;
 
         let mut coins_per_asset = Vec::with_capacity(selected_coins.len());
-        for coin_or_message_id in into_coin_id(&selected_coins)? {
+        for coin_or_message_id in into_coin_id(&selected_coins) {
             let coin_type = match coin_or_message_id {
                 coins::CoinId::Utxo(utxo_id) => {
                     db.coin(utxo_id).map(|coin| CoinType::Coin(coin.into()))?
@@ -432,26 +429,14 @@ async fn coins_to_spend_with_cache(
     Ok(all_coins)
 }
 
-fn into_coin_id(
-    selected: &[CoinsToSpendIndexEntry],
-) -> Result<Vec<CoinId>, CoinsQueryError> {
+fn into_coin_id(selected: &[CoinsToSpendIndexKey]) -> Vec<CoinId> {
     let mut coins = Vec::with_capacity(selected.len());
-    for (key, coin_type) in selected {
-        let coin = match coin_type {
-            IndexedCoinType::Coin => {
-                let utxo = key
-                    .try_into()
-                    .map_err(|_| CoinsQueryError::IncorrectCoinForeignKeyInIndex)?;
-                CoinId::Utxo(utxo)
-            }
-            IndexedCoinType::Message => {
-                let nonce = key
-                    .try_into()
-                    .map_err(|_| CoinsQueryError::IncorrectMessageForeignKeyInIndex)?;
-                CoinId::Message(nonce)
-            }
+    for coin in selected {
+        let coin = match coin {
+            CoinsToSpendIndexKey::Coin { utxo_id, .. } => CoinId::Utxo(*utxo_id),
+            CoinsToSpendIndexKey::Message { nonce, .. } => CoinId::Message(*nonce),
         };
         coins.push(coin);
     }
-    Ok(coins)
+    coins
 }
