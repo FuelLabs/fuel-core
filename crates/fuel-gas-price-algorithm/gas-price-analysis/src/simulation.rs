@@ -30,6 +30,7 @@ pub struct Simulator {
 
 // (usize, ((u64, u64), &'a Option<(Range<u32>, u128)
 struct BlockData {
+    height: u64,
     fullness: u64,
     bytes: u32,
     maybe_da_bundle: Option<Bundle>,
@@ -62,24 +63,23 @@ impl Simulator {
         let da_blocks =
             self.calculate_da_blocks(update_period, da_finalization_rate, l2_blocks);
 
-        let blocks = l2_blocks
-            .iter()
-            .zip(da_blocks.iter())
-            .map(
-                |(
-                    L2BlockData {
-                        fullness,
-                        size,
-                        height,
-                    },
-                    maybe_da_block,
-                )| BlockData {
-                    fullness: *fullness,
-                    bytes: *size,
-                    maybe_da_bundle: maybe_da_block.clone(),
+        dbg!(&da_blocks);
+
+        let blocks = l2_blocks.iter().zip(da_blocks.iter()).map(
+            |(
+                L2BlockData {
+                    fullness,
+                    size,
+                    height,
                 },
-            )
-            .enumerate();
+                maybe_da_block,
+            )| BlockData {
+                height: *height,
+                fullness: *fullness,
+                bytes: *size,
+                maybe_da_bundle: maybe_da_block.clone(),
+            },
+        );
 
         let updater = self.build_updater(da_p_component, da_d_component);
 
@@ -128,7 +128,7 @@ impl Simulator {
         capacity: u64,
         max_block_bytes: u64,
         fullness_and_bytes: &[L2BlockData],
-        blocks: impl Iterator<Item = (usize, BlockData)>,
+        blocks: impl Iterator<Item = BlockData>,
         mut updater: AlgorithmUpdaterV1,
     ) -> SimulationResults {
         let mut gas_prices = vec![];
@@ -139,13 +139,14 @@ impl Simulator {
         let mut actual_costs = vec![];
         let mut pessimistic_costs = vec![];
         let mut unrecorded_blocks = BTreeMap::new();
-        for (index, block_data) in blocks {
+        for block_data in blocks {
             let BlockData {
                 fullness,
                 bytes,
                 maybe_da_bundle,
+                height,
             } = block_data;
-            let height = index as u32 + 1;
+            let height = height as u32 + 1;
             exec_gas_prices.push(updater.new_scaled_exec_price);
             da_gas_prices.push(updater.new_scaled_da_gas_price);
             let gas_price = updater.algorithm().calculate();
@@ -236,23 +237,13 @@ impl Simulator {
         let (_, da_blocks) = fullness_and_bytes
             .iter()
             .zip(self.da_cost_per_byte.iter())
-            .enumerate()
             .fold(
                 (vec![], vec![]),
                 |(mut delayed, mut recorded),
-                 (
-                    index,
-                    (
-                        L2BlockData {
-                            fullness,
-                            size,
-                            height,
-                        },
-                        cost_per_byte,
-                    ),
-                )| {
+
+                 (L2BlockData { size, height, .. }, cost_per_byte)| {
                     let total_cost = *size as u64 * cost_per_byte;
-                    let height = index as u32 + 1;
+                    let height = *height as u32 + 1;
                     let converted = (height, size, total_cost);
                     delayed.push(converted);
                     if delayed.len() == da_recording_rate {

@@ -45,6 +45,10 @@ impl Predefined2Record {
     pub(super) fn l2_size(&self) -> u64 {
         self.l2_size
     }
+
+    pub(super) fn l2_block_number(&self) -> u64 {
+        self.l2_block_number
+    }
 }
 
 impl HasBlobFee for Predefined2Record {
@@ -56,7 +60,7 @@ impl HasBlobFee for Predefined2Record {
 pub(super) fn arb_l2_fullness_and_bytes_per_block(
     size: usize,
     capacity: u64,
-) -> Vec<(u64, u32)> {
+) -> Vec<(u64, u32, u64)> {
     let mut rng = StdRng::seed_from_u64(888);
 
     let fullness_noise: Vec<_> = std::iter::repeat(())
@@ -86,6 +90,7 @@ pub(super) fn arb_l2_fullness_and_bytes_per_block(
             (fullness, bytes)
         })
         .map(|(fullness, bytes)| (fullness as u64, std::cmp::max(bytes as u32, 1)))
+        .enumerate().map(|(height, (fullness, bytes))| (fullness, bytes, height as u64))
         .collect()
 }
 

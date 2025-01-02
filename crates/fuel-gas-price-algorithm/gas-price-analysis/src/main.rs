@@ -101,7 +101,7 @@ enum Source {
     },
 }
 
-fn get_l2_costs_from_csv_file<P: AsRef<Path>>(file_path: P) -> Vec<(u64, u32)> {
+fn get_l2_costs_from_csv_file<P: AsRef<Path>>(file_path: P) -> Vec<(u64, u32, u64)> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_path(file_path)
@@ -113,17 +113,22 @@ fn get_l2_costs_from_csv_file<P: AsRef<Path>>(file_path: P) -> Vec<(u64, u32)> {
         .map(|record| {
             let record: Predefined2Record =
                 record.unwrap().deserialize(Some(&headers)).unwrap();
-            (record.l2_fullness(), record.l2_size() as u32)
+            (
+                record.l2_fullness(),
+                record.l2_size() as u32,
+                record.l2_block_number(),
+            )
         })
         .collect()
 }
 
 // TODO[RC]: Rename, to be more descriptive (not confusing with L1L2BlockData and BlockData)
-#[derive(Clone)]
+// TODO[RC]: Into `BlockData` instead of manual mapping in `run_simulation()`
+#[derive(Debug, Clone)]
 struct L2BlockData {
+    height: u64,
     fullness: u64,
     size: u32,
-    height: usize,
 }
 
 // TODO[RC]: Rename, to be more descriptive (not confusing with L2BlockData and BlockData)
@@ -147,10 +152,10 @@ fn l1_l2_block_data_from_source(
         Source::Predefined2 { file_path, .. } => get_l2_costs_from_csv_file(file_path),
     }
     .iter()
-    .map(|(fullness, size)| L2BlockData {
+    .map(|(fullness, size, height)| L2BlockData {
         fullness: *fullness,
         size: *size,
-        height: 100000,
+        height: *height,
     })
     .collect();
 
@@ -175,6 +180,8 @@ async fn main() -> anyhow::Result<()> {
                 da_cost_per_byte,
                 fullness_and_bytes,
             } = l1_l2_block_data_from_source(&source, CAPACITY, UPDATE_PERIOD);
+
+            dbg!(&fullness_and_bytes);
 
             println!(
                 "Running simulation with P: {}, D: {}, {} L2 blocks and {} da_finalization_period",
