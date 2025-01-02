@@ -63,7 +63,7 @@ harness = false
 name = "vm"
 
 [features]
-default = ["fuel-core/rocksdb"]
+default = ["fuel-core/rocksdb", "fuel-core/rocksdb-production"]
 
 [[bench]]
 harness = false
