@@ -6,6 +6,12 @@ use crate::{
 };
 use fuel_core_types::blockchain::consensus::Genesis;
 
+use self::{
+    connection_tracker::ConnectionTracker,
+    fuel_authenticated::FuelAuthenticated,
+    fuel_upgrade::Checksum,
+};
+use fuel_core_services::seqlock::SeqLock;
 use libp2p::{
     gossipsub,
     identity::{
@@ -22,17 +28,8 @@ use std::{
         IpAddr,
         Ipv4Addr,
     },
-    sync::{
-        Arc,
-        RwLock,
-    },
+    sync::Arc,
     time::Duration,
-};
-
-use self::{
-    connection_tracker::ConnectionTracker,
-    fuel_authenticated::FuelAuthenticated,
-    fuel_upgrade::Checksum,
 };
 mod connection_tracker;
 mod fuel_authenticated;
@@ -260,7 +257,7 @@ pub(crate) fn build_transport_function(
     p2p_config: &Config,
 ) -> (
     impl FnOnce(&Keypair) -> Result<FuelAuthenticated<ConnectionTracker>, ()> + '_,
-    Arc<RwLock<ConnectionState>>,
+    Arc<SeqLock<ConnectionState>>,
 ) {
     let connection_state = ConnectionState::new();
     let kept_connection_state = connection_state.clone();

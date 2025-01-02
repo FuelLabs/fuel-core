@@ -1,3 +1,8 @@
+use crate::{
+    gossipsub_config::GRAYLIST_THRESHOLD,
+    peer_manager::heartbeat_data::HeartbeatData,
+};
+use fuel_core_services::seqlock::SeqLock;
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::peer_reputation::{
@@ -18,19 +23,11 @@ use std::{
         HashMap,
         HashSet,
     },
-    sync::{
-        Arc,
-        RwLock,
-    },
+    sync::Arc,
 };
 use tracing::{
     debug,
     info,
-};
-
-use crate::{
-    gossipsub_config::GRAYLIST_THRESHOLD,
-    peer_manager::heartbeat_data::HeartbeatData,
 };
 
 pub mod heartbeat_data;
@@ -65,7 +62,7 @@ pub struct PeerManager {
     non_reserved_connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_peers: HashSet<PeerId>,
-    connection_state: Arc<RwLock<ConnectionState>>,
+    connection_state: Arc<SeqLock<ConnectionState>>,
     max_non_reserved_peers: usize,
     reserved_peers_updates: tokio::sync::broadcast::Sender<usize>,
 }
@@ -74,7 +71,7 @@ impl PeerManager {
     pub fn new(
         reserved_peers_updates: tokio::sync::broadcast::Sender<usize>,
         reserved_peers: HashSet<PeerId>,
-        connection_state: Arc<RwLock<ConnectionState>>,
+        connection_state: Arc<SeqLock<ConnectionState>>,
         max_non_reserved_peers: usize,
     ) -> Self {
         Self {
@@ -210,9 +207,9 @@ impl PeerManager {
             {
                 // since all the slots were full prior to this disconnect
                 // let's allow new peer non-reserved peers connections
-                if let Ok(mut connection_state) = self.connection_state.write() {
-                    connection_state.allow_new_peers();
-                }
+                self.connection_state.write(|data| {
+                    data.allow_new_peers();
+                });
             }
 
             false
@@ -258,9 +255,9 @@ impl PeerManager {
                 == self.max_non_reserved_peers
             {
                 // this is the last non-reserved peer allowed
-                if let Ok(mut connection_state) = self.connection_state.write() {
-                    connection_state.deny_new_peers();
-                }
+                self.connection_state.write(|data| {
+                    data.deny_new_peers();
+                });
             }
 
             self.non_reserved_connected_peers
@@ -313,8 +310,8 @@ pub struct ConnectionState {
 }
 
 impl ConnectionState {
-    pub fn new() -> Arc<RwLock<Self>> {
-        Arc::new(RwLock::new(Self {
+    pub fn new() -> Arc<SeqLock<Self>> {
+        Arc::new(SeqLock::new(Self {
             peers_allowed: true,
         }))
     }
