@@ -1,8 +1,9 @@
+use std::path::Path;
+
 use crate::{
     charts::draw_chart,
     simulation::da_cost_per_byte::get_da_cost_per_byte_from_source,
 };
-use plotters::prelude::*;
 use rand::{
     rngs::StdRng,
     Rng,
@@ -10,6 +11,11 @@ use rand::{
 };
 
 use plotters::coord::Shift;
+use serde_reflection::{
+    Samples,
+    Tracer,
+    TracerConfig,
+};
 
 use crate::{
     optimisation::naive_optimisation,
@@ -94,7 +100,61 @@ enum Source {
     },
 }
 
-fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u32)> {
+trait HasBlobFee {
+    fn blob_fee_wei(&self) -> u64;
+}
+#[allow(dead_code)]
+#[derive(Debug, serde::Deserialize, Default, serde::Serialize)]
+struct PredefinedRecord {
+    block_number: u64,
+    excess_blob_gas: u64,
+    blob_gas_used: u64,
+    blob_fee_wei: u64,
+    blob_fee_wei_for_1_blob: u64,
+    blob_fee_wei_for_2_blobs: u64,
+    blob_fee_wei_for_3_blobs: u64,
+}
+
+impl HasBlobFee for PredefinedRecord {
+    fn blob_fee_wei(&self) -> u64 {
+        self.blob_fee_wei
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, serde::Deserialize)]
+struct Predefined2Record {
+    l1_block_number: u64,
+    l1_blob_fee_wei: u64,
+    l2_block_number: u64,
+    l2_fullness: u64,
+    l2_size: u64,
+}
+
+impl HasBlobFee for Predefined2Record {
+    fn blob_fee_wei(&self) -> u64 {
+        self.l1_blob_fee_wei
+    }
+}
+
+fn fields_of_struct_in_order<T>() -> Vec<String>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let mut tracer = Tracer::new(TracerConfig::default());
+    let samples = Samples::new();
+    tracer.trace_type::<T>(&samples).unwrap();
+    let type_name = std::any::type_name::<T>().split("::").last().unwrap();
+    let registry = tracer.registry().unwrap();
+    let Some(serde_reflection::ContainerFormat::Struct(fields)) = registry.get(type_name)
+    else {
+        panic!("No fields?")
+    };
+
+    fields.iter().map(|f| f.name.clone()).collect()
+}
+
+fn arb_l2_fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u32)> {
     let mut rng = StdRng::seed_from_u64(888);
 
     let fullness_noise: Vec<_> = std::iter::repeat(())
@@ -144,21 +204,48 @@ where
     gen_noisy_signal(input, COMPONENTS)
 }
 
-struct L1FullnessData {
+fn get_l2_costs_from_csv_file<P: AsRef<Path>>(file_path: P) -> Vec<(u64, u32)> {
+    let mut rdr = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .from_path(file_path)
+        .unwrap();
+    let headers =
+        csv::StringRecord::from(fields_of_struct_in_order::<Predefined2Record>());
+
+    rdr.records()
+        .map(|record| {
+            let record: Predefined2Record =
+                record.unwrap().deserialize(Some(&headers)).unwrap();
+            (record.l2_fullness, record.l2_size as u32)
+        })
+        .collect()
+}
+
+struct L1L2BlockData {
     da_cost_per_byte: Vec<u64>,
     fullness_and_bytes: Vec<(u64, u32)>,
 }
 
-fn fulness_and_bytes_from_source(
+fn l1_l2_block_data_from_source(
     source: Source,
     capacity: u64,
     update_period: usize,
-) -> L1FullnessData {
-    let da_cost_per_byte = get_da_cost_per_byte_from_source(source, update_period);
+) -> L1L2BlockData {
+    let da_cost_per_byte = get_da_cost_per_byte_from_source(&source, update_period);
     let size = da_cost_per_byte.len();
-    L1FullnessData {
+
+    let fullness_and_bytes = match source {
+        Source::Generated { .. } | Source::Predefined { .. } => {
+            arb_l2_fullness_and_bytes_per_block(size, capacity)
+        }
+        Source::Predefined2 { file_path, .. } => get_l2_costs_from_csv_file(file_path),
+    };
+
+    dbg!(&fullness_and_bytes);
+
+    L1L2BlockData {
         da_cost_per_byte,
-        fullness_and_bytes: fullness_and_bytes_per_block(size, capacity),
+        fullness_and_bytes,
     }
 }
 
@@ -173,10 +260,10 @@ async fn main() -> anyhow::Result<()> {
 
     let (results, (p_comp, d_comp)) = match args.mode {
         Mode::WithValues { p, d, source } => {
-            let L1FullnessData {
+            let L1L2BlockData {
                 da_cost_per_byte,
                 fullness_and_bytes,
-            } = fulness_and_bytes_from_source(source, CAPACITY, UPDATE_PERIOD);
+            } = l1_l2_block_data_from_source(source, CAPACITY, UPDATE_PERIOD);
 
             println!(
                 "Running simulation with P: {}, D: {}, {} blocks and {} da_finalization_period",
@@ -196,10 +283,10 @@ async fn main() -> anyhow::Result<()> {
             (result, (p, d))
         }
         Mode::Optimization { iterations, source } => {
-            let L1FullnessData {
+            let L1L2BlockData {
                 da_cost_per_byte,
                 fullness_and_bytes,
-            } = fulness_and_bytes_from_source(source, CAPACITY, UPDATE_PERIOD);
+            } = l1_l2_block_data_from_source(source, CAPACITY, UPDATE_PERIOD);
             println!(
                 "Running optimization with {iterations} iterations and {} blocks",
                 da_cost_per_byte.len()

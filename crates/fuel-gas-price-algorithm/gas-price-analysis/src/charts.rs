@@ -1,3 +1,17 @@
+use plotters::{
+    chart::ChartBuilder,
+    prelude::{
+        BitMapBackend,
+        DrawingArea,
+        IntoDrawingArea,
+        PathElement,
+    },
+    series::LineSeries,
+    style::{
+        Color, IntoFont, RGBColor, BLACK, BLUE, RED, WHITE
+    },
+};
+
 use super::*;
 use std::{
     fs,
