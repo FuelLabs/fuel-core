@@ -27,7 +27,7 @@ pub enum Error {
 
 // TODO: separate exec gas price and DA gas price into newtypes for clarity
 //   https://github.com/FuelLabs/fuel-core/issues/2382
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct AlgorithmV1 {
     /// The gas price for to cover the execution of the next block
     new_exec_price: u64,
