@@ -342,7 +342,7 @@ async fn can_restart_node_with_relayer_data() {
             tmp_dir.path(),
             Default::default(),
             DatabaseConfig {
-                capacity: Some(capacity),
+                cache_capacity: Some(capacity),
                 max_fds: 512,
                 columns_policy: Default::default(),
             },
@@ -369,7 +369,7 @@ async fn can_restart_node_with_relayer_data() {
             tmp_dir.path(),
             Default::default(),
             DatabaseConfig {
-                capacity: Some(capacity),
+                cache_capacity: Some(capacity),
                 max_fds: 512,
                 columns_policy: Default::default(),
             },
