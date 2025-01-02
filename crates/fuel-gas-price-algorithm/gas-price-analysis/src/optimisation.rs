@@ -16,7 +16,7 @@ pub async fn naive_optimisation(
     simulator: &Simulator,
     iterations: usize,
     update_period: usize,
-    fullness_and_bytes: &[(u64, u32)],
+    fullness_and_bytes: &[L2BlockData],
     da_recording_rate: usize,
 ) -> (SimulationResults, (i64, i64)) {
     let tasks = da_pid_factors(iterations)

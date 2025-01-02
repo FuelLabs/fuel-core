@@ -52,7 +52,7 @@ impl Simulator {
         da_p_component: i64,
         da_d_component: i64,
         update_period: usize,
-        l2_blocks: &[(u64, u32)],
+        l2_blocks: &[L2BlockData],
         da_finalization_rate: usize,
     ) -> SimulationResults {
         let capacity = 30_000_000;
@@ -65,11 +65,20 @@ impl Simulator {
         let blocks = l2_blocks
             .iter()
             .zip(da_blocks.iter())
-            .map(|((fullness, bytes), maybe_da_block)| BlockData {
-                fullness: *fullness,
-                bytes: *bytes,
-                maybe_da_bundle: maybe_da_block.clone(),
-            })
+            .map(
+                |(
+                    L2BlockData {
+                        fullness,
+                        size,
+                        height,
+                    },
+                    maybe_da_block,
+                )| BlockData {
+                    fullness: *fullness,
+                    bytes: *size,
+                    maybe_da_bundle: maybe_da_block.clone(),
+                },
+            )
             .enumerate();
 
         let updater = self.build_updater(da_p_component, da_d_component);
@@ -118,7 +127,7 @@ impl Simulator {
         &self,
         capacity: u64,
         max_block_bytes: u64,
-        fullness_and_bytes: &[(u64, u32)],
+        fullness_and_bytes: &[L2BlockData],
         blocks: impl Iterator<Item = (usize, BlockData)>,
         mut updater: AlgorithmUpdaterV1,
     ) -> SimulationResults {
@@ -178,8 +187,10 @@ impl Simulator {
                 }
             }
         }
-        let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) =
-            fullness_and_bytes.iter().cloned().unzip();
+        let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) = fullness_and_bytes
+            .iter()
+            .map(|l2_block_data| (l2_block_data.fullness, l2_block_data.size))
+            .unzip();
         let fullness: Vec<_> = fullness_without_capacity
             .iter()
             .map(|&fullness| (fullness, capacity))
@@ -218,7 +229,7 @@ impl Simulator {
         &self,
         da_recording_rate: usize,
         da_finalization_rate: usize,
-        fullness_and_bytes: &[(u64, u32)],
+        fullness_and_bytes: &[L2BlockData],
     ) -> Vec<Option<Bundle>> {
         let l2_blocks_with_no_da_blocks =
             std::iter::repeat(None).take(da_finalization_rate);
@@ -229,10 +240,20 @@ impl Simulator {
             .fold(
                 (vec![], vec![]),
                 |(mut delayed, mut recorded),
-                 (index, ((_fullness, bytes), cost_per_byte))| {
-                    let total_cost = *bytes as u64 * cost_per_byte;
+                 (
+                    index,
+                    (
+                        L2BlockData {
+                            fullness,
+                            size,
+                            height,
+                        },
+                        cost_per_byte,
+                    ),
+                )| {
+                    let total_cost = *size as u64 * cost_per_byte;
                     let height = index as u32 + 1;
-                    let converted = (height, bytes, total_cost);
+                    let converted = (height, size, total_cost);
                     delayed.push(converted);
                     if delayed.len() == da_recording_rate {
                         recorded.push(Some(delayed));

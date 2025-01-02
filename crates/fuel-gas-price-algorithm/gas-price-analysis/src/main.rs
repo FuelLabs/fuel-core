@@ -118,9 +118,18 @@ fn get_l2_costs_from_csv_file<P: AsRef<Path>>(file_path: P) -> Vec<(u64, u32)> {
         .collect()
 }
 
+// TODO[RC]: Rename, to be more descriptive (not confusing with L1L2BlockData and BlockData)
+#[derive(Clone)]
+struct L2BlockData {
+    fullness: u64,
+    size: u32,
+    height: usize,
+}
+
+// TODO[RC]: Rename, to be more descriptive (not confusing with L2BlockData and BlockData)
 struct L1L2BlockData {
     da_cost_per_byte: Vec<u64>,
-    fullness_and_bytes: Vec<(u64, u32)>,
+    fullness_and_bytes: Vec<L2BlockData>,
 }
 
 fn l1_l2_block_data_from_source(
@@ -136,7 +145,14 @@ fn l1_l2_block_data_from_source(
             arb_l2_fullness_and_bytes_per_block(size, capacity)
         }
         Source::Predefined2 { file_path, .. } => get_l2_costs_from_csv_file(file_path),
-    };
+    }
+    .iter()
+    .map(|(fullness, size)| L2BlockData {
+        fullness: *fullness,
+        size: *size,
+        height: 100000,
+    })
+    .collect();
 
     L1L2BlockData {
         da_cost_per_byte,
