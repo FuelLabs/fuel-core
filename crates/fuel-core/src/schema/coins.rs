@@ -1,13 +1,25 @@
+use std::collections::HashSet;
+
 use crate::{
     coins_query::{
         random_improve,
+        select_coins_to_spend,
+        CoinsQueryError,
+        ExcludedCoinIds,
         SpendQuery,
     },
     fuel_core_graphql_api::{
         query_costs,
         IntoApiResult,
     },
-    graphql_api::api_service::ConsensusProvider,
+    graphql_api::{
+        api_service::ConsensusProvider,
+        database::ReadView,
+        storage::coins::{
+            CoinsToSpendIndexEntry,
+            IndexedCoinType,
+        },
+    },
     query::asset_query::AssetSpendTarget,
     schema::{
         scalars::{
@@ -30,14 +42,18 @@ use async_graphql::{
     Context,
 };
 use fuel_core_types::{
-    entities::{
-        coins,
-        coins::{
-            coin::Coin as CoinModel,
-            message_coin::MessageCoin as MessageCoinModel,
+    entities::coins::{
+        self,
+        coin::Coin as CoinModel,
+        message_coin::{
+            self,
+            MessageCoin as MessageCoinModel,
         },
+        CoinId,
     },
-    fuel_tx,
+    fuel_tx::{
+        self,
+    },
 };
 use itertools::Itertools;
 use tokio_stream::StreamExt;
@@ -70,6 +86,12 @@ impl Coin {
     /// TxPointer - the index of the transaction that created this coin
     async fn tx_created_idx(&self) -> U16 {
         self.0.tx_pointer.tx_index().into()
+    }
+}
+
+impl From<CoinModel> for Coin {
+    fn from(value: CoinModel) -> Self {
+        Coin(value)
     }
 }
 
@@ -108,6 +130,12 @@ impl MessageCoin {
     }
 }
 
+impl From<MessageCoinModel> for MessageCoin {
+    fn from(value: MessageCoinModel) -> Self {
+        MessageCoin(value)
+    }
+}
+
 /// The schema analog of the [`coins::CoinType`].
 #[derive(async_graphql::Union)]
 pub enum CoinType {
@@ -115,6 +143,15 @@ pub enum CoinType {
     Coin(Coin),
     /// The bridged coin from the DA layer.
     MessageCoin(MessageCoin),
+}
+
+impl From<coins::CoinType> for CoinType {
+    fn from(value: coins::CoinType) -> Self {
+        match value {
+            coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
+            coins::CoinType::MessageCoin(coin) => CoinType::MessageCoin(coin.into()),
+        }
+    }
 }
 
 #[derive(async_graphql::InputObject)]
@@ -225,6 +262,27 @@ impl CoinQuery {
             .latest_consensus_params();
         let max_input = params.tx_params().max_inputs();
 
+        let excluded_id_count = excluded_ids.as_ref().map_or(0, |exclude| {
+            exclude.utxos.len().saturating_add(exclude.messages.len())
+        });
+        if excluded_id_count > max_input as usize {
+            return Err(CoinsQueryError::TooManyExcludedId {
+                provided: excluded_id_count,
+                allowed: max_input,
+            }
+            .into());
+        }
+
+        let mut duplicate_checker = HashSet::with_capacity(query_per_asset.len());
+        for query in &query_per_asset {
+            let asset_id: fuel_tx::AssetId = query.asset_id.into();
+            if !duplicate_checker.insert(asset_id) {
+                return Err(CoinsQueryError::DuplicateAssets(asset_id).into());
+            }
+        }
+
+        let owner: fuel_tx::Address = owner.0;
+
         // `coins_to_spend` exists to help select inputs for the transactions.
         // It doesn't make sense to allow the user to request more than the maximum number
         // of inputs.
@@ -233,75 +291,167 @@ impl CoinQuery {
         //  https://github.com/FuelLabs/fuel-core/issues/2343
         query_per_asset.truncate(max_input as usize);
 
-        let owner: fuel_tx::Address = owner.0;
-        let query_per_asset = query_per_asset
-            .into_iter()
-            .map(|e| {
-                AssetSpendTarget::new(
-                    e.asset_id.0,
-                    e.amount.0,
-                    e.max
-                        .and_then(|max| u16::try_from(max.0).ok())
-                        .unwrap_or(max_input)
-                        .min(max_input),
-                )
-            })
-            .collect_vec();
-        let excluded_ids: Option<Vec<_>> = excluded_ids.map(|exclude| {
-            let utxos = exclude
-                .utxos
-                .into_iter()
-                .map(|utxo| coins::CoinId::Utxo(utxo.into()));
-            let messages = exclude
-                .messages
-                .into_iter()
-                .map(|message| coins::CoinId::Message(message.into()));
-            utxos.chain(messages).collect()
-        });
-
-        let base_asset_id = params.base_asset_id();
-        let spend_query =
-            SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
-
-        let query = ctx.read_view()?;
-
-        let coins = random_improve(query.as_ref(), &spend_query)
-            .await?
-            .into_iter()
-            .map(|coins| {
-                coins
-                    .into_iter()
-                    .map(|coin| match coin {
-                        coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
-                        coins::CoinType::MessageCoin(coin) => {
-                            CoinType::MessageCoin(coin.into())
-                        }
-                    })
-                    .collect_vec()
-            })
-            .collect();
-
-        Ok(coins)
-    }
-}
-
-impl From<CoinModel> for Coin {
-    fn from(value: CoinModel) -> Self {
-        Coin(value)
-    }
-}
-
-impl From<MessageCoinModel> for MessageCoin {
-    fn from(value: MessageCoinModel) -> Self {
-        MessageCoin(value)
-    }
-}
-
-impl From<coins::CoinType> for CoinType {
-    fn from(value: coins::CoinType) -> Self {
-        match value {
-            coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
-            coins::CoinType::MessageCoin(coin) => CoinType::MessageCoin(coin.into()),
+        let read_view = ctx.read_view()?;
+        let indexation_available = read_view.coins_to_spend_indexation_enabled;
+        if indexation_available {
+            coins_to_spend_with_cache(
+                owner,
+                query_per_asset,
+                excluded_ids,
+                max_input,
+                read_view.as_ref(),
+            )
+            .await
+        } else {
+            let base_asset_id = params.base_asset_id();
+            coins_to_spend_without_cache(
+                owner,
+                query_per_asset,
+                excluded_ids,
+                max_input,
+                base_asset_id,
+                read_view.as_ref(),
+            )
+            .await
         }
     }
+}
+
+async fn coins_to_spend_without_cache(
+    owner: fuel_tx::Address,
+    query_per_asset: Vec<SpendQueryElementInput>,
+    excluded_ids: Option<ExcludeInput>,
+    max_input: u16,
+    base_asset_id: &fuel_tx::AssetId,
+    db: &ReadView,
+) -> async_graphql::Result<Vec<Vec<CoinType>>> {
+    let query_per_asset = query_per_asset
+        .into_iter()
+        .map(|e| {
+            AssetSpendTarget::new(
+                e.asset_id.0,
+                e.amount.0,
+                e.max
+                    .and_then(|max| u16::try_from(max.0).ok())
+                    .unwrap_or(max_input)
+                    .min(max_input),
+            )
+        })
+        .collect_vec();
+    let excluded_ids: Option<Vec<_>> = excluded_ids.map(|exclude| {
+        let utxos = exclude
+            .utxos
+            .into_iter()
+            .map(|utxo| coins::CoinId::Utxo(utxo.into()));
+        let messages = exclude
+            .messages
+            .into_iter()
+            .map(|message| coins::CoinId::Message(message.into()));
+        utxos.chain(messages).collect()
+    });
+
+    let spend_query =
+        SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
+
+    let all_coins = random_improve(db, &spend_query)
+        .await?
+        .into_iter()
+        .map(|coins| {
+            coins
+                .into_iter()
+                .map(|coin| match coin {
+                    coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
+                    coins::CoinType::MessageCoin(coin) => {
+                        CoinType::MessageCoin(coin.into())
+                    }
+                })
+                .collect_vec()
+        })
+        .collect();
+
+    Ok(all_coins)
+}
+
+async fn coins_to_spend_with_cache(
+    owner: fuel_tx::Address,
+    query_per_asset: Vec<SpendQueryElementInput>,
+    excluded_ids: Option<ExcludeInput>,
+    max_input: u16,
+    db: &ReadView,
+) -> async_graphql::Result<Vec<Vec<CoinType>>> {
+    let mut all_coins = Vec::with_capacity(query_per_asset.len());
+
+    let excluded = ExcludedCoinIds::new(
+        excluded_ids
+            .iter()
+            .flat_map(|exclude| exclude.utxos.iter())
+            .map(|utxo_id| &utxo_id.0),
+        excluded_ids
+            .iter()
+            .flat_map(|exclude| exclude.messages.iter())
+            .map(|nonce| &nonce.0),
+    );
+
+    for asset in query_per_asset {
+        let asset_id = asset.asset_id.0;
+        let total_amount = asset.amount.0;
+        let max = asset
+            .max
+            .and_then(|max| u16::try_from(max.0).ok())
+            .unwrap_or(max_input)
+            .min(max_input);
+
+        let selected_coins = select_coins_to_spend(
+            db.off_chain.coins_to_spend_index(&owner, &asset_id),
+            total_amount,
+            max,
+            &asset_id,
+            &excluded,
+            db.batch_size,
+        )
+        .await?;
+
+        let mut coins_per_asset = Vec::with_capacity(selected_coins.len());
+        for coin_or_message_id in into_coin_id(&selected_coins)? {
+            let coin_type = match coin_or_message_id {
+                coins::CoinId::Utxo(utxo_id) => {
+                    db.coin(utxo_id).map(|coin| CoinType::Coin(coin.into()))?
+                }
+                coins::CoinId::Message(nonce) => {
+                    let message = db.message(&nonce)?;
+                    let message_coin: message_coin::MessageCoin = message.try_into()?;
+                    CoinType::MessageCoin(message_coin.into())
+                }
+            };
+
+            coins_per_asset.push(coin_type);
+        }
+
+        all_coins.push(coins_per_asset);
+    }
+    Ok(all_coins)
+}
+
+fn into_coin_id(
+    selected: &[CoinsToSpendIndexEntry],
+) -> Result<Vec<CoinId>, CoinsQueryError> {
+    let mut coins = Vec::with_capacity(selected.len());
+    for (key, coin_type) in selected {
+        let coin = match coin_type {
+            IndexedCoinType::Coin => {
+                let utxo = key
+                    .try_into()
+                    .map_err(|_| CoinsQueryError::IncorrectCoinForeignKeyInIndex)?;
+                CoinId::Utxo(utxo)
+            }
+            IndexedCoinType::Message => {
+                let nonce = key
+                    .try_into()
+                    .map_err(|_| CoinsQueryError::IncorrectMessageForeignKeyInIndex)?;
+                CoinId::Message(nonce)
+            }
+        };
+        coins.push(coin);
+    }
+    Ok(coins)
 }
