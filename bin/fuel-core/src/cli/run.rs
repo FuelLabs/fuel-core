@@ -85,8 +85,6 @@ use tracing::{
 #[cfg(feature = "rocksdb")]
 use fuel_core::state::historical_rocksdb::StateRewindPolicy;
 
-use super::DEFAULT_DATABASE_CACHE_SIZE;
-
 #[cfg(feature = "p2p")]
 mod p2p;
 
@@ -105,12 +103,8 @@ pub struct Command {
     pub service_name: String,
 
     /// The maximum database cache size in bytes.
-    #[arg(
-        long = "max-database-cache-size",
-        default_value_t = DEFAULT_DATABASE_CACHE_SIZE,
-        env
-    )]
-    pub max_database_cache_size: usize,
+    #[arg(long = "max-database-cache-size", env)]
+    pub max_database_cache_size: Option<usize>,
 
     #[clap(
         name = "DB_PATH",

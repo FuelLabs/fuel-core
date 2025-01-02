@@ -231,14 +231,16 @@ impl TestSetupBuilder {
             ..StateConfig::default()
         };
 
-        let config = Config {
+        let mut config = Config {
             utxo_validation: self.utxo_validation,
             txpool: fuel_core_txpool::config::Config::default(),
             block_production: self.trigger,
             starting_gas_price: self.starting_gas_price,
             ..Config::local_node_with_configs(chain_conf, state)
         };
-        assert_eq!(config.combined_db_config.database_type, DbType::RocksDb);
+        config.combined_db_config.max_database_cache_size = Some(16 * 1024 * 1024 * 1024);
+        config.combined_db_config.max_fds = -1;
+        config.combined_db_config.database_type = DbType::RocksDb;
 
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);

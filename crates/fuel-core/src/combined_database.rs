@@ -36,7 +36,7 @@ use std::path::PathBuf;
 pub struct CombinedDatabaseConfig {
     pub database_path: PathBuf,
     pub database_type: DbType,
-    pub max_database_cache_size: usize,
+    pub max_database_cache_size: Option<usize>,
     #[cfg(feature = "rocksdb")]
     pub state_rewind_policy: StateRewindPolicy,
     #[cfg(feature = "rocksdb")]
@@ -79,7 +79,7 @@ impl CombinedDatabase {
     #[cfg(feature = "rocksdb")]
     pub fn open(
         path: &std::path::Path,
-        capacity: usize,
+        capacity: impl Into<Option<usize>>,
         state_rewind_policy: StateRewindPolicy,
         max_fds: i32,
     ) -> crate::database::Result<Self> {
@@ -88,6 +88,7 @@ impl CombinedDatabase {
             -1 => -1,
             _ => max_fds.saturating_div(4),
         };
+        let capacity = capacity.into();
         // TODO: Use different cache sizes for different databases
         let on_chain =
             Database::open_rocksdb(path, capacity, state_rewind_policy, max_fds)?;
@@ -108,11 +109,14 @@ impl CombinedDatabase {
     /// A test-only temporary rocksdb database with given rewind policy.
     #[cfg(feature = "rocksdb")]
     pub fn temp_database_with_state_rewind_policy(
+        max_database_cache_size: impl Into<Option<usize>>,
         state_rewind_policy: StateRewindPolicy,
+        max_fds: i32,
     ) -> DatabaseResult<Self> {
+        let capacity = max_database_cache_size.into();
         Ok(Self {
-            on_chain: Database::rocksdb_temp(state_rewind_policy)?,
-            off_chain: Database::rocksdb_temp(state_rewind_policy)?,
+            on_chain: Database::rocksdb_temp(capacity, state_rewind_policy, max_fds)?,
+            off_chain: Database::rocksdb_temp(capacity, state_rewind_policy, max_fds)?,
             relayer: Default::default(),
             gas_price: Default::default(),
         })
@@ -128,11 +132,13 @@ impl CombinedDatabase {
                         "No RocksDB path configured, initializing database with a tmp directory"
                     );
                     CombinedDatabase::temp_database_with_state_rewind_policy(
+                        config.max_database_cache_size,
                         config.state_rewind_policy,
+                        config.max_fds,
                     )?
                 } else {
                     tracing::info!(
-                        "Opening database {:?} with cache size \"{}\" and state rewind policy \"{:?}\"",
+                        "Opening database {:?} with cache size \"{:?}\" and state rewind policy \"{:?}\"",
                         config.database_path,
                         config.max_database_cache_size,
                         config.state_rewind_policy,

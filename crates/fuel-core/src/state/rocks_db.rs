@@ -126,13 +126,20 @@ where
     Description: DatabaseDescription,
 {
     pub fn default_open_temp(capacity: Option<usize>) -> DatabaseResult<Self> {
+        Self::default_open_temp_with_params(capacity, 512)
+    }
+
+    pub fn default_open_temp_with_params(
+        capacity: Option<usize>,
+        max_fds: i32,
+    ) -> DatabaseResult<Self> {
         let tmp_dir = TempDir::new().unwrap();
         let path = tmp_dir.path();
         let result = Self::open(
             path,
             enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
             capacity,
-            512,
+            max_fds,
         );
         let mut db = result?;
 
