@@ -310,7 +310,7 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                 }
             }
             DryRunTransactionStatus::Unknown => {
-                return Err(Self::Error::UnknownVariant("DryRuynTxStatus"))
+                return Err(Self::Error::UnknownVariant("DryRunTransactionStatus"))
             }
         })
     }
