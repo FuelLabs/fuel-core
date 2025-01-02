@@ -7,13 +7,12 @@ async fn estimate_gas_price__happy_path() {
     let next_height = 432.into();
     let price = 33;
     let algo = StaticAlgorithm::new(price);
-    let gas_price_provider = build_provider(algo.clone());
+    let gas_price_provider = build_provider(algo);
 
     // when
     let expected_price = algo.worst_case_gas_price(next_height);
     let actual_price = gas_price_provider
         .worst_case_gas_price(next_height)
-        .await
         .unwrap();
 
     // then

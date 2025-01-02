@@ -101,7 +101,6 @@ impl EstimateGasPriceQuery {
         let gas_price_provider = ctx.data_unchecked::<GasPriceProvider>();
         let gas_price = gas_price_provider
             .worst_case_gas_price(target_block.into())
-            .await
             .ok_or(async_graphql::Error::new(format!(
                 "Failed to estimate gas price for block, algorithm not yet set: {target_block:?}"
             )))?;

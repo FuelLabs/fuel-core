@@ -14,7 +14,7 @@ pub enum Error {
     SkippedL2Block { expected: u32, got: u32 },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub struct AlgorithmV0 {
     /// The gas price for to cover the execution of the next block
     new_exec_price: u64,
