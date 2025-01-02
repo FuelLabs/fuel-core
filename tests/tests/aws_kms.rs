@@ -1,7 +1,4 @@
-use fuel_core::{
-    combined_database::CombinedDatabase,
-    state::rocks_db::ColumnsPolicy,
-};
+use fuel_core::combined_database::CombinedDatabase;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::blockchain::consensus::Consensus;
 use test_helpers::fuel_core_driver::FuelCoreDriver;
@@ -55,7 +52,7 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
         1024 * 1024,
         Default::default(),
         512,
-        ColumnsPolicy::Lazy,
+        Default::default(),
     )
     .unwrap();
 

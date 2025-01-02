@@ -137,11 +137,7 @@ where
     Description: DatabaseDescription,
 {
     pub fn default_open_temp(capacity: Option<usize>) -> DatabaseResult<Self> {
-        if cfg!(feature = "rocksdb-production") {
-            Self::default_open_temp_with_params(capacity, 512, ColumnsPolicy::OnCreation)
-        } else {
-            Self::default_open_temp_with_params(capacity, 512, ColumnsPolicy::Lazy)
-        }
+        Self::default_open_temp_with_params(capacity, 512, Default::default())
     }
 
     pub fn default_open_temp_with_params(
@@ -998,7 +994,7 @@ mod tests {
             old_columns.clone(),
             None,
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .expect("Failed to open database with old columns");
         drop(database_with_old_columns);
@@ -1012,7 +1008,7 @@ mod tests {
             new_columns,
             None,
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .map(|_| ());
 
@@ -1188,7 +1184,7 @@ mod tests {
             columns,
             None,
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         );
 
         // Then
@@ -1209,7 +1205,7 @@ mod tests {
             None,
             false,
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .map(|_| ());
 
@@ -1232,7 +1228,7 @@ mod tests {
             old_columns.clone(),
             None,
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .map(|_| ());
 
@@ -1329,7 +1325,7 @@ mod tests {
             part_of_columns,
             None,
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         );
 
         // Then

@@ -238,7 +238,6 @@ mod tests {
                 MessageBalances,
             },
         },
-        state::rocks_db::ColumnsPolicy,
     };
 
     impl PartialEq for IndexationError {
@@ -358,7 +357,7 @@ mod tests {
             None,
             Default::default(),
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -420,7 +419,7 @@ mod tests {
             None,
             Default::default(),
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -497,7 +496,7 @@ mod tests {
             None,
             Default::default(),
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -610,7 +609,7 @@ mod tests {
             None,
             Default::default(),
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -649,7 +648,7 @@ mod tests {
             None,
             Default::default(),
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -692,7 +691,7 @@ mod tests {
             None,
             Default::default(),
             512,
-            ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .unwrap();
         let mut tx = db.write_transaction();

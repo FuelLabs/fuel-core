@@ -265,10 +265,7 @@ where
         let db = RocksDb::<Historical<Description>>::default_open_temp_with_params(
             max_database_cache_size.into(),
             max_fds,
-            #[cfg(feature = "rocksdb-production")]
-            crate::state::rocks_db::ColumnsPolicy::Lazy,
-            #[cfg(not(feature = "rocksdb-production"))]
-            crate::state::rocks_db::ColumnsPolicy::OnCreation,
+            Default::default(),
         )?;
         let historical_db = HistoricalRocksDB::new(db, state_rewind_policy)?;
         let data = Arc::new(historical_db);
@@ -1123,7 +1120,7 @@ mod tests {
             1024 * 1024 * 1024,
             Default::default(),
             512,
-            crate::state::rocks_db::ColumnsPolicy::Lazy,
+            Default::default(),
         )
         .unwrap();
         // rocks db fails

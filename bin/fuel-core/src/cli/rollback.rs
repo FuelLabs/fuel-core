@@ -3,10 +3,7 @@ use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
     combined_database::CombinedDatabase,
-    state::{
-        historical_rocksdb::StateRewindPolicy,
-        rocks_db::ColumnsPolicy,
-    },
+    state::historical_rocksdb::StateRewindPolicy,
 };
 use rlimit::{
     getrlimit,
@@ -57,10 +54,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         64 * 1024 * 1024,
         StateRewindPolicy::RewindFullRange,
         command.rocksdb_max_fds,
-        #[cfg(feature = "production")]
-        ColumnsPolicy::OnCreation,
-        #[cfg(not(feature = "production"))]
-        ColumnsPolicy::Lazy,
+        Default::default(),
     )
     .map_err(Into::<anyhow::Error>::into)
     .context(format!("failed to open combined database at path {path:?}"))?;
