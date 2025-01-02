@@ -63,8 +63,6 @@ impl Simulator {
         let da_blocks =
             self.calculate_da_blocks(update_period, da_finalization_rate, l2_blocks);
 
-        dbg!(&da_blocks);
-
         let blocks = l2_blocks.iter().zip(da_blocks.iter()).map(
             |(
                 L2BlockData {
@@ -81,7 +79,14 @@ impl Simulator {
             },
         );
 
-        let updater = self.build_updater(da_p_component, da_d_component);
+        let updater = self.build_updater(
+            da_p_component,
+            da_d_component,
+            l2_blocks
+                .first()
+                .expect("should have at least 1 l2 block")
+                .height as u32,
+        );
 
         self.execute_simulation(capacity, max_block_bytes, l2_blocks, blocks, updater)
     }
@@ -90,6 +95,7 @@ impl Simulator {
         &self,
         da_p_component: i64,
         da_d_component: i64,
+        l2_block_height: u32,
     ) -> AlgorithmUpdaterV1 {
         // Scales the gas price internally, value is arbitrary
         let gas_price_factor = 100;
@@ -102,7 +108,7 @@ impl Simulator {
             // Change to adjust where the da gas price starts on block 0
             new_scaled_da_gas_price: 10_000_000 * gas_price_factor,
             gas_price_factor: NonZeroU64::new(gas_price_factor).unwrap(),
-            l2_block_height: 0,
+            l2_block_height,
             // Choose the ideal fullness percentage for the L2 block
             l2_block_fullness_threshold_percent: 50u8.into(),
             // Increase to make the exec price change faster
