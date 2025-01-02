@@ -1,5 +1,5 @@
 //! A simple implementation of a sequential lock.
-//! More details: https://docs.kernel.org/locking/seqlock.html
+//! More details: <https://docs.kernel.org/locking/seqlock.html>
 //! Optimized for occasional writes and frequent reads
 
 use std::{
