@@ -310,6 +310,9 @@ where
         block_opts.set_block_size(16 * 1024);
 
         let mut opts = Options::default();
+        if columns_policy == ColumnsPolicy::OnCreation {
+            opts.create_if_missing(true);
+        }
         opts.set_compression_type(DBCompressionType::Lz4);
         // TODO: Make it customizable https://github.com/FuelLabs/fuel-core/issues/1666
         opts.set_max_total_wal_size(64 * 1024 * 1024);
@@ -343,10 +346,7 @@ where
             }
         }
 
-        if columns_policy == ColumnsPolicy::OnCreation
-            || (columns_policy == ColumnsPolicy::Lazy
-                && cf_descriptors_to_open.is_empty())
-        {
+        if columns_policy == ColumnsPolicy::Lazy && cf_descriptors_to_open.is_empty() {
             opts.create_if_missing(true);
         }
 
@@ -469,6 +469,7 @@ where
     fn cf_u32(&self, column: u32) -> Arc<BoundColumnFamily> {
         let family = self.db.cf_handle(&Self::col_name(column));
 
+        dbg!("inside");
         match family {
             None => {
                 if let Some(create_family) = &self.create_family {
@@ -1228,7 +1229,7 @@ mod tests {
             old_columns.clone(),
             None,
             512,
-            Default::default(),
+            ColumnsPolicy::Lazy,
         )
         .map(|_| ());
 
