@@ -59,6 +59,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2446](https://github.com/FuelLabs/fuel-core/pull/2446): Use graphiql instead of graphql-playground due to known vulnerability and stale development.
 - [2379](https://github.com/FuelLabs/fuel-core/issues/2379): Change `kv_store::Value` to be `Arc<[u8]>` instead of `Arc<Vec<u8>>`.
 
+## [Version 0.40.2]
+
+### Fixed
+
+- [2476](https://github.com/FuelLabs/fuel-core/pull/2476): Hardcode the timestamp of the genesis block.
+
+## [Version 0.40.1]
+
+### Added
+
+- [2450](https://github.com/FuelLabs/fuel-core/pull/2450): Added support for posting blocks to the shared sequencer.
+
 ## [Version 0.40.0]
 
 ### Added
