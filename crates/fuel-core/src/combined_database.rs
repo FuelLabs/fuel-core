@@ -1,7 +1,10 @@
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::StateRewindPolicy,
-    rocks_db::ColumnsPolicy,
+    rocks_db::{
+        ColumnsPolicy,
+        DatabaseConfig,
+    },
 };
 
 use crate::{
@@ -85,45 +88,48 @@ impl CombinedDatabase {
     #[cfg(feature = "rocksdb")]
     pub fn open(
         path: &std::path::Path,
-        capacity: impl Into<Option<usize>>,
         state_rewind_policy: StateRewindPolicy,
-        max_fds: i32,
-        columns_policy: ColumnsPolicy,
+        database_config: DatabaseConfig,
     ) -> crate::database::Result<Self> {
         // Split the fds in equitable manner between the databases
-        let max_fds = match max_fds {
+
+        let max_fds = match database_config.max_fds {
             -1 => -1,
-            _ => max_fds.saturating_div(4),
+            _ => database_config.max_fds.saturating_div(4),
         };
-        let capacity = capacity.into();
+
         // TODO: Use different cache sizes for different databases
         let on_chain = Database::open_rocksdb(
             path,
-            capacity,
             state_rewind_policy,
-            max_fds,
-            columns_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
         )?;
         let off_chain = Database::open_rocksdb(
             path,
-            capacity,
             state_rewind_policy,
-            max_fds,
-            columns_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
         )?;
         let relayer = Database::open_rocksdb(
             path,
-            capacity,
             StateRewindPolicy::NoRewind,
-            max_fds,
-            columns_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
         )?;
         let gas_price = Database::open_rocksdb(
             path,
-            capacity,
             state_rewind_policy,
-            max_fds,
-            columns_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
         )?;
         Ok(Self {
             on_chain,
@@ -172,10 +178,12 @@ impl CombinedDatabase {
                     );
                     CombinedDatabase::open(
                         &config.database_path,
-                        config.max_database_cache_size,
                         config.state_rewind_policy,
-                        config.max_fds,
-                        config.columns_policy,
+                        DatabaseConfig {
+                            columns_policy: config.columns_policy,
+                            max_fds: config.max_fds,
+                            capacity: config.max_database_cache_size,
+                        },
                     )?
                 }
             }

@@ -20,7 +20,10 @@ use fuel_core::{
         GenesisDatabase,
     },
     service::Config,
-    state::historical_rocksdb::HistoricalRocksDB,
+    state::{
+        historical_rocksdb::HistoricalRocksDB,
+        rocks_db::DatabaseConfig,
+    },
 };
 use fuel_core_benches::*;
 use fuel_core_storage::{
@@ -73,10 +76,12 @@ impl BenchDb {
 
         let db = HistoricalRocksDB::<OnChain>::default_open(
             tmp_dir.path(),
-            None,
             Default::default(),
-            -1,
-            Default::default(),
+            DatabaseConfig {
+                capacity: None,
+                max_fds: -1,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let db = Arc::new(db);

@@ -34,6 +34,7 @@ use fuel_core::{
         RelayerConsensusConfig,
         VMConfig,
     },
+    state::rocks_db::ColumnsPolicy,
     txpool::config::{
         BlackList,
         Config as TxPoolConfig,
@@ -123,6 +124,20 @@ pub struct Command {
         env
     )]
     pub database_type: DbType,
+
+    #[cfg(feature = "rocksdb")]
+    /// Define policy to apply to create columns
+    ///
+    /// If `Lazy`, columns will be created when an insertion happens
+    /// If `OnCreation`, columns will be created when opening DB.
+    /// When running a node in production we advise to use `OnCreation`
+    #[clap(
+        long = "rocksdb-columns-policy",
+        env,
+        value_enum,
+        default_value_t = ColumnsPolicy::default()
+    )]
+    pub rocks_db_columns_policy: ColumnsPolicy,
 
     #[cfg(feature = "rocksdb")]
     /// Defines a specific number of file descriptors that RocksDB can use.
@@ -282,6 +297,8 @@ impl Command {
             max_database_cache_size,
             database_path,
             database_type,
+            #[cfg(feature = "rocksdb")]
+            rocks_db_columns_policy,
             #[cfg(feature = "rocksdb")]
             rocksdb_max_fds,
             #[cfg(feature = "rocksdb")]

@@ -30,10 +30,12 @@ async fn can_restart_node() {
     {
         let database = Database::open_rocksdb(
             tmp_dir.path(),
-            None,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: None,
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let first_startup = FuelService::from_database(database, Config::local_node())
@@ -48,10 +50,12 @@ async fn can_restart_node() {
     {
         let database = Database::open_rocksdb(
             tmp_dir.path(),
-            None,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: None,
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let _second_startup = FuelService::from_database(database, Config::local_node())
@@ -69,10 +73,12 @@ async fn can_restart_node_with_transactions() {
         // Given
         let database = CombinedDatabase::open(
             tmp_dir.path(),
-            capacity,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity,
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
@@ -93,10 +99,12 @@ async fn can_restart_node_with_transactions() {
         // When
         let database = CombinedDatabase::open(
             tmp_dir.path(),
-            capacity,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity,
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())

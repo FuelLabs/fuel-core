@@ -238,6 +238,7 @@ mod tests {
                 MessageBalances,
             },
         },
+        state::rocks_db::DatabaseConfig,
     };
 
     impl PartialEq for IndexationError {
@@ -354,10 +355,12 @@ mod tests {
         let tmp_dir = TempDir::new().unwrap();
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
-            None,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: Default::default(),
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -416,10 +419,12 @@ mod tests {
         let tmp_dir = TempDir::new().unwrap();
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
-            None,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: Default::default(),
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -493,10 +498,12 @@ mod tests {
         let tmp_dir = TempDir::new().unwrap();
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
-            None,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: Default::default(),
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -606,10 +613,12 @@ mod tests {
         let tmp_dir = TempDir::new().unwrap();
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
-            None,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: Default::default(),
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -645,10 +654,12 @@ mod tests {
         let tmp_dir = TempDir::new().unwrap();
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
-            None,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: Default::default(),
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let mut tx = db.write_transaction();
@@ -688,10 +699,12 @@ mod tests {
         let tmp_dir = TempDir::new().unwrap();
         let mut db: Database<OffChain> = Database::open_rocksdb(
             tmp_dir.path(),
-            None,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: Default::default(),
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         let mut tx = db.write_transaction();

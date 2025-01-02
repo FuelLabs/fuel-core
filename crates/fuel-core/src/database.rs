@@ -78,7 +78,10 @@ use crate::state::{
         HistoricalRocksDB,
         StateRewindPolicy,
     },
-    rocks_db::RocksDb,
+    rocks_db::{
+        DatabaseConfig,
+        RocksDb,
+    },
 };
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -201,18 +204,15 @@ where
     #[cfg(feature = "rocksdb")]
     pub fn open_rocksdb(
         path: &Path,
-        capacity: impl Into<Option<usize>>,
         state_rewind_policy: StateRewindPolicy,
-        max_fds: i32,
-        columns_policy: crate::state::rocks_db::ColumnsPolicy,
+        database_config: DatabaseConfig,
     ) -> Result<Self> {
         use anyhow::Context;
+
         let db = HistoricalRocksDB::<Description>::default_open(
             path,
-            capacity.into(),
             state_rewind_policy,
-            max_fds,
-            columns_policy,
+            database_config,
         )
         .map_err(Into::<anyhow::Error>::into)
         .with_context(|| {
@@ -263,9 +263,11 @@ where
         max_fds: i32,
     ) -> Result<Self> {
         let db = RocksDb::<Historical<Description>>::default_open_temp_with_params(
-            max_database_cache_size.into(),
-            max_fds,
-            Default::default(),
+            DatabaseConfig {
+                capacity: max_database_cache_size.into(),
+                max_fds,
+                columns_policy: Default::default(),
+            },
         )?;
         let historical_db = HistoricalRocksDB::new(db, state_rewind_policy)?;
         let data = Arc::new(historical_db);
@@ -1117,10 +1119,12 @@ mod tests {
 
         let db = Database::<OnChain>::open_rocksdb(
             temp_dir.path(),
-            1024 * 1024 * 1024,
             Default::default(),
-            512,
-            Default::default(),
+            DatabaseConfig {
+                capacity: Some(1024 * 1024 * 1024),
+                max_fds: 512,
+                columns_policy: Default::default(),
+            },
         )
         .unwrap();
         // rocks db fails

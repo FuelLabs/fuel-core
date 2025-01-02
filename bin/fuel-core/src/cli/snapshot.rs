@@ -8,7 +8,10 @@ use fuel_core::{
     combined_database::CombinedDatabase,
     state::{
         historical_rocksdb::StateRewindPolicy,
-        rocks_db::ColumnsPolicy,
+        rocks_db::{
+            ColumnsPolicy,
+            DatabaseConfig,
+        },
     },
     types::fuel_types::ContractId,
 };
@@ -212,10 +215,12 @@ fn open_db(
 ) -> anyhow::Result<CombinedDatabase> {
     CombinedDatabase::open(
         path,
-        capacity.unwrap_or(1024 * 1024 * 1024),
         StateRewindPolicy::NoRewind,
-        max_fds,
-        ColumnsPolicy::OnCreation,
+        DatabaseConfig {
+            capacity: Some(capacity.unwrap_or(1024 * 1024 * 1024)),
+            max_fds,
+            columns_policy: ColumnsPolicy::OnCreation,
+        },
     )
     .map_err(Into::<anyhow::Error>::into)
     .context(format!("failed to open combined database at path {path:?}",))

@@ -7,6 +7,7 @@ use fuel_core::{
     database::database_description::DatabaseDescription,
     state::rocks_db::{
         ColumnsPolicy,
+        DatabaseConfig,
         RocksDb,
     },
 };
@@ -42,7 +43,14 @@ pub fn get_random_block_height(
 pub fn open_rocks_db<Description: DatabaseDescription>(
     path: &Path,
 ) -> Result<RocksDb<Description>> {
-    let db = RocksDb::default_open(path, None, -1, ColumnsPolicy::OnCreation)?;
+    let db = RocksDb::default_open(
+        path,
+        DatabaseConfig {
+            capacity: None,
+            max_fds: -1,
+            columns_policy: ColumnsPolicy::OnCreation,
+        },
+    )?;
     Ok(db)
 }
 
