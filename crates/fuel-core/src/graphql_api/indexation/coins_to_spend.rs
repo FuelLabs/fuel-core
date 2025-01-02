@@ -14,7 +14,6 @@ use crate::graphql_api::{
     storage::coins::{
         CoinsToSpendIndex,
         CoinsToSpendIndexKey,
-        IndexedCoinType,
     },
 };
 
@@ -32,7 +31,7 @@ where
 {
     let key = CoinsToSpendIndexKey::from_coin(coin);
     let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
-    let maybe_old_value = storage.replace(&key, &IndexedCoinType::Coin)?;
+    let maybe_old_value = storage.replace(&key, &())?;
     if maybe_old_value.is_some() {
         return Err(IndexationError::CoinToSpendAlreadyIndexed {
             owner: coin.owner,
@@ -75,7 +74,7 @@ where
 {
     let key = CoinsToSpendIndexKey::from_message(message, base_asset_id);
     let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
-    let maybe_old_value = storage.replace(&key, &IndexedCoinType::Message)?;
+    let maybe_old_value = storage.replace(&key, &())?;
     if maybe_old_value.is_some() {
         return Err(IndexationError::MessageToSpendAlreadyIndexed {
             owner: *message.recipient(),
@@ -191,10 +190,10 @@ mod tests {
             .map(|entry| entry.expect("should read entries"))
             .map(|entry| {
                 (
-                    entry.key.owner().unwrap(),
-                    entry.key.asset_id().unwrap(),
-                    [entry.key.retryable_flag().unwrap()],
-                    entry.key.amount().unwrap(),
+                    *entry.key.owner(),
+                    *entry.key.asset_id(),
+                    [entry.key.retryable_flag()],
+                    entry.key.amount(),
                 )
             })
             .collect();
@@ -727,7 +726,7 @@ mod tests {
                     .entries::<CoinsToSpendIndex>(None, IterDirection::Forward)
                     .map(|entry| entry.expect("should read entries"))
                     .map(|entry|
-                            entry.key.amount().unwrap(),
+                            entry.key.amount(),
                     )
                     .collect();
 
