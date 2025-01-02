@@ -21,22 +21,23 @@ pub fn get_da_cost_per_byte_from_source(
         Source::Predefined {
             file_path,
             sample_size,
-        } => {
-            let original =
-                get_costs_from_csv_file::<PredefinedRecord>(&file_path, sample_size);
-            original
-                .into_iter()
-                .flat_map(|x| iter::repeat(x).take(update_period))
-                .collect()
-        }
+        } => get_costs_from_csv_file::<PredefinedRecord>(
+            &file_path,
+            sample_size,
+            PREDEFINED_L2_BLOCKS_PER_L1_BLOCK,
+        ),
         Source::Predefined2 {
             file_path,
             l2_blocks_per_blob,
-        } => {
-            let original = get_costs_from_csv_file::<Predefined2Record>(&file_path, None);
-            todo!()
-        }
+        } => get_costs_from_csv_file::<Predefined2Record>(
+            &file_path,
+            None,
+            l2_blocks_per_blob,
+        ),
     }
+    .into_iter()
+    .flat_map(|x| iter::repeat(x).take(update_period))
+    .collect()
 }
 
 trait HasBlobFee {
@@ -93,7 +94,11 @@ where
     fields.iter().map(|f| f.name.clone()).collect()
 }
 
-fn get_costs_from_csv_file<T>(file_path: &str, sample_size: Option<usize>) -> Vec<u64>
+fn get_costs_from_csv_file<T>(
+    file_path: &str,
+    sample_size: Option<usize>,
+    l2_blocks_per_blob: usize,
+) -> Vec<u64>
 where
     T: serde::de::DeserializeOwned + HasBlobFee,
 {
@@ -101,29 +106,28 @@ where
         .has_headers(true)
         .from_path(file_path)
         .unwrap();
-    let mut costs = vec![];
-
     let headers = csv::StringRecord::from(fields_of_struct_in_order::<T>());
 
-    let mut max_cost = 0;
-    for record in rdr.records() {
-        if let Some(size) = sample_size {
-            if costs.len() >= size / PREDEFINED_L2_BLOCKS_PER_L1_BLOCK {
-                break;
-            }
-        };
-        let record: T = record.unwrap().deserialize(Some(&headers)).unwrap();
-        let cost = record.blob_fee_wei();
-        dbg!(&cost);
-        if cost > max_cost {
-            max_cost = cost;
-        }
-        costs.push(cost);
-    }
-    println!("Max cost: {}", prettify_number(max_cost));
+    let costs: Vec<_> = rdr
+        .records()
+        .step_by(l2_blocks_per_blob as usize)
+        .take(
+            sample_size
+                .map(|size| size / l2_blocks_per_blob)
+                .unwrap_or(usize::MAX),
+        )
+        .map(|record| {
+            let record: T = record.unwrap().deserialize(Some(&headers)).unwrap();
+            record.blob_fee_wei()
+        })
+        .collect();
+
+    println!(
+        "Max cost: {}",
+        prettify_number(costs.iter().max_by(|a, b| a.cmp(b)).unwrap())
+    );
     costs
 }
-
 fn noisy_eth_price<T: TryInto<f64>>(input: T) -> f64
 where
     <T as TryInto<f64>>::Error: core::fmt::Debug,

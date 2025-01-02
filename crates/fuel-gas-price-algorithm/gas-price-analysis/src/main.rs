@@ -77,7 +77,9 @@ enum Source {
         /// columns: block_number, excess_blob_gas, blob_gas_used, blob_fee_wei,
         /// blob_fee_wei_for_1_blob, blob_fee_wei_for_2_blobs, blob_fee_wei_for_3_blobs)
         file_path: String,
-        /// The number of blocks to include from source
+        /// The number of blocks to include from source, specified in L1 blocks.
+        /// This algorithm assumes that there are 12 L2 blocks per L1 block, so if you
+        /// pass 1200 here, it will pull 100 L1 blocks from the source file.
         #[arg(short, long)]
         sample_size: Option<usize>,
     },
@@ -88,7 +90,7 @@ enum Source {
         file_path: String,
         /// The number of L2 blocks per single L1 blob
         #[arg(short, long)]
-        l2_blocks_per_blob: u16,
+        l2_blocks_per_blob: usize,
     },
 }
 
