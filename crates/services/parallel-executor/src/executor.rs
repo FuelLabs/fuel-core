@@ -868,6 +868,7 @@ where
                     }
 
                     let dummy_view = InMemoryStorage::default();
+                    // TODO: Try to avoid cloning the changes when we have an iter_mut
                     let mut changes_storage_tx = StorageTransaction::transaction(
                         &dummy_view,
                         ConflictPolicy::Overwrite,
