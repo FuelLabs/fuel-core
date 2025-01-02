@@ -4,6 +4,10 @@ use crate::{
     charts::draw_chart,
     simulation::da_cost_per_byte::get_da_cost_per_byte_from_source,
 };
+use block_data::{
+    arb_l2_fullness_and_bytes_per_block,
+    Predefined2Record,
+};
 use rand::{
     rngs::StdRng,
     Rng,
@@ -11,11 +15,7 @@ use rand::{
 };
 
 use plotters::coord::Shift;
-use serde_reflection::{
-    Samples,
-    Tracer,
-    TracerConfig,
-};
+use utils::fields_of_struct_in_order;
 
 use crate::{
     optimisation::naive_optimisation,
@@ -25,10 +25,11 @@ use crate::{
     },
 };
 
+mod block_data;
+mod charts;
 mod optimisation;
 mod simulation;
-
-mod charts;
+mod utils;
 
 use clap::{
     Parser,
@@ -100,110 +101,6 @@ enum Source {
     },
 }
 
-trait HasBlobFee {
-    fn blob_fee_wei(&self) -> u64;
-}
-#[allow(dead_code)]
-#[derive(Debug, serde::Deserialize, Default, serde::Serialize)]
-struct PredefinedRecord {
-    block_number: u64,
-    excess_blob_gas: u64,
-    blob_gas_used: u64,
-    blob_fee_wei: u64,
-    blob_fee_wei_for_1_blob: u64,
-    blob_fee_wei_for_2_blobs: u64,
-    blob_fee_wei_for_3_blobs: u64,
-}
-
-impl HasBlobFee for PredefinedRecord {
-    fn blob_fee_wei(&self) -> u64 {
-        self.blob_fee_wei
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Debug, serde::Deserialize)]
-struct Predefined2Record {
-    l1_block_number: u64,
-    l1_blob_fee_wei: u64,
-    l2_block_number: u64,
-    l2_fullness: u64,
-    l2_size: u64,
-}
-
-impl HasBlobFee for Predefined2Record {
-    fn blob_fee_wei(&self) -> u64 {
-        self.l1_blob_fee_wei
-    }
-}
-
-fn fields_of_struct_in_order<T>() -> Vec<String>
-where
-    T: serde::de::DeserializeOwned,
-{
-    let mut tracer = Tracer::new(TracerConfig::default());
-    let samples = Samples::new();
-    tracer.trace_type::<T>(&samples).unwrap();
-    let type_name = std::any::type_name::<T>().split("::").last().unwrap();
-    let registry = tracer.registry().unwrap();
-    let Some(serde_reflection::ContainerFormat::Struct(fields)) = registry.get(type_name)
-    else {
-        panic!("No fields?")
-    };
-
-    fields.iter().map(|f| f.name.clone()).collect()
-}
-
-fn arb_l2_fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u32)> {
-    let mut rng = StdRng::seed_from_u64(888);
-
-    let fullness_noise: Vec<_> = std::iter::repeat(())
-        .take(size)
-        .map(|_| rng.gen_range(-0.5..0.5))
-        // .map(|val| val * capacity as f64)
-        .collect();
-
-    const ROUGH_GAS_TO_BYTE_RATIO: f64 = 0.01;
-    let bytes_scale: Vec<_> = std::iter::repeat(())
-        .take(size)
-        .map(|_| rng.gen_range(0.5..1.0))
-        .map(|x| x * ROUGH_GAS_TO_BYTE_RATIO)
-        .collect();
-
-    (0usize..size)
-        .map(|val| val as f64)
-        .map(noisy_fullness)
-        .map(|signal| (0.01 * signal + 0.01) * capacity as f64) // Scale and shift so it's between 0 and capacity
-        .zip(fullness_noise)
-        .map(|(fullness, noise)| fullness + noise)
-        .map(|x| f64::min(x, capacity as f64))
-        .map(|x| f64::max(x, 5.0))
-        .zip(bytes_scale)
-        .map(|(fullness, bytes_scale)| {
-            let bytes = fullness * bytes_scale;
-            (fullness, bytes)
-        })
-        .map(|(fullness, bytes)| (fullness as u64, std::cmp::max(bytes as u32, 1)))
-        .collect()
-}
-
-// Naive Fourier series
-fn gen_noisy_signal(input: f64, components: &[f64]) -> f64 {
-    components
-        .iter()
-        .fold(0f64, |acc, &c| acc + f64::sin(input / c))
-        / components.len() as f64
-}
-
-fn noisy_fullness<T: TryInto<f64>>(input: T) -> f64
-where
-    <T as TryInto<f64>>::Error: core::fmt::Debug,
-{
-    const COMPONENTS: &[f64] = &[-30.0, 40.0, 700.0, -340.0, 400.0];
-    let input = input.try_into().unwrap();
-    gen_noisy_signal(input, COMPONENTS)
-}
-
 fn get_l2_costs_from_csv_file<P: AsRef<Path>>(file_path: P) -> Vec<(u64, u32)> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(true)
@@ -216,7 +113,7 @@ fn get_l2_costs_from_csv_file<P: AsRef<Path>>(file_path: P) -> Vec<(u64, u32)> {
         .map(|record| {
             let record: Predefined2Record =
                 record.unwrap().deserialize(Some(&headers)).unwrap();
-            (record.l2_fullness, record.l2_size as u32)
+            (record.l2_fullness(), record.l2_size() as u32)
         })
         .collect()
 }
@@ -240,8 +137,6 @@ fn l1_l2_block_data_from_source(
         }
         Source::Predefined2 { file_path, .. } => get_l2_costs_from_csv_file(file_path),
     };
-
-    dbg!(&fullness_and_bytes);
 
     L1L2BlockData {
         da_cost_per_byte,

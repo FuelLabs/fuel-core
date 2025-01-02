@@ -1,15 +1,17 @@
 use crate::{
     fields_of_struct_in_order,
     prettify_number,
-    simulation::gen_noisy_signal,
+    utils::gen_noisy_signal,
     Source,
 };
 use std::iter;
 
 use super::{
-    HasBlobFee,
+    block_data::{
+        HasBlobFee,
+        PredefinedRecord,
+    },
     Predefined2Record,
-    PredefinedRecord,
 };
 
 const PREDEFINED_L2_BLOCKS_PER_L1_BLOCK: usize = 12;
@@ -24,7 +26,7 @@ pub fn get_da_cost_per_byte_from_source(
             file_path,
             sample_size,
         } => get_l1_costs_from_csv_file::<PredefinedRecord>(
-            &file_path,
+            file_path,
             *sample_size,
             PREDEFINED_L2_BLOCKS_PER_L1_BLOCK,
         ),
@@ -32,7 +34,7 @@ pub fn get_da_cost_per_byte_from_source(
             file_path,
             l2_blocks_per_blob,
         } => get_l1_costs_from_csv_file::<Predefined2Record>(
-            &file_path,
+            file_path,
             None,
             *l2_blocks_per_blob,
         ),
@@ -75,7 +77,7 @@ where
 
     let costs: Vec<_> = rdr
         .records()
-        .step_by(l2_blocks_per_blob as usize)
+        .step_by(l2_blocks_per_blob)
         .take(
             sample_size
                 .map(|size| size / l2_blocks_per_blob)

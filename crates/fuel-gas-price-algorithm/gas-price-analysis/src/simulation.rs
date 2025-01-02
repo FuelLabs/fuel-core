@@ -52,22 +52,18 @@ impl Simulator {
         da_p_component: i64,
         da_d_component: i64,
         update_period: usize,
-        fullness_and_bytes: &[(u64, u32)],
+        l2_blocks: &[(u64, u32)],
         da_finalization_rate: usize,
     ) -> SimulationResults {
         let capacity = 30_000_000;
         let gas_per_byte = 63;
         let max_block_bytes = capacity / gas_per_byte;
-        let size = self.da_cost_per_byte.len();
 
-        let l2_blocks = fullness_and_bytes.clone().into_iter();
-        let da_blocks = self.calculate_da_blocks(
-            update_period,
-            da_finalization_rate,
-            &fullness_and_bytes,
-        );
+        let da_blocks =
+            self.calculate_da_blocks(update_period, da_finalization_rate, l2_blocks);
 
         let blocks = l2_blocks
+            .iter()
             .zip(da_blocks.iter())
             .map(|((fullness, bytes), maybe_da_block)| BlockData {
                 fullness: *fullness,
@@ -78,13 +74,7 @@ impl Simulator {
 
         let updater = self.build_updater(da_p_component, da_d_component);
 
-        self.execute_simulation(
-            capacity,
-            max_block_bytes,
-            fullness_and_bytes,
-            blocks,
-            updater,
-        )
+        self.execute_simulation(capacity, max_block_bytes, l2_blocks, blocks, updater)
     }
 
     fn build_updater(
