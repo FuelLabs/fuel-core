@@ -80,7 +80,7 @@ impl<A> GraphqlGasPriceEstimate for FuelGasPriceProvider<A>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
-        Some(self.algorithm.worst_case_gas_price(height).await)
+    fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
+        Some(self.algorithm.worst_case_gas_price(height))
     }
 }

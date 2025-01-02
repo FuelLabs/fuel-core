@@ -20,6 +20,12 @@ pub struct SeqLock<T> {
 
 unsafe impl<T: Send> Sync for SeqLock<T> {}
 
+impl<T: Default> Default for SeqLock<T> {
+    fn default() -> Self {
+        Self::new(T::default())
+    }
+}
+
 impl<T> SeqLock<T> {
     /// Create a new SeqLock with the given data
     pub fn new(data: T) -> Self {

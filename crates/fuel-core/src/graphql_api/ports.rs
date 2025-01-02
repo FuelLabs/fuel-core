@@ -265,7 +265,7 @@ pub trait P2pPort: Send + Sync {
 #[async_trait::async_trait]
 pub trait GasPriceEstimate: Send + Sync {
     /// The worst case scenario for gas price at a given horizon
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64>;
+    fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64>;
 }
 
 /// Trait for getting VM memory.

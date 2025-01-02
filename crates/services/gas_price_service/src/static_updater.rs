@@ -11,7 +11,7 @@ impl StaticAlgorithmUpdater {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub struct StaticAlgorithm {
     price: u64,
 }

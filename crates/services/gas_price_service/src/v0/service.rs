@@ -62,8 +62,8 @@ where
         self.shared_algo.clone()
     }
 
-    async fn update(&mut self, new_algorithm: AlgorithmV0) {
-        self.shared_algo.update(new_algorithm).await;
+    fn update(&mut self, new_algorithm: AlgorithmV0) {
+        self.shared_algo.update(new_algorithm);
     }
 
     fn validate_block_gas_capacity(
@@ -115,7 +115,7 @@ where
             }
         }
 
-        self.update(self.algorithm_updater.algorithm()).await;
+        self.update(self.algorithm_updater.algorithm());
         Ok(())
     }
 }

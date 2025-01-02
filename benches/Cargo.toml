@@ -13,6 +13,7 @@ criterion = { version = "0.5", features = [
   "html_reports",
   "async",
   "async_tokio",
+  "async_futures",
 ] }
 ctrlc = "3.2.3"
 ed25519-dalek = { version = "2.0", features = ["rand_core"] }
@@ -24,12 +25,14 @@ fuel-core = { path = "../crates/fuel-core", default-features = false, features =
 ] }
 fuel-core-chain-config = { workspace = true }
 fuel-core-database = { path = "./../crates/database" }
+fuel-core-gas-price-service = { path = "./../crates/services/gas_price_service" }
 fuel-core-services = { path = "./../crates/services" }
 fuel-core-storage = { path = "./../crates/storage", features = ["smt"] }
 fuel-core-sync = { path = "./../crates/services/sync", features = [
   "benchmarking",
 ] }
 fuel-core-types = { path = "./../crates/types", features = ["test-helpers"] }
+fuel-gas-price-algorithm = { path = "./../crates/fuel-gas-price-algorithm" }
 futures = { workspace = true }
 itertools = { workspace = true }
 num_enum = { workspace = true }
@@ -41,6 +44,7 @@ postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
 quanta = "0.12"
 rand = { workspace = true }
+rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9.13"
@@ -61,6 +65,10 @@ name = "state"
 [[bench]]
 harness = false
 name = "vm"
+
+[[bench]]
+harness = false
+name = "shared_gas_price_algorithm"
 
 [features]
 default = ["fuel-core/rocksdb"]
