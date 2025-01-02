@@ -1,4 +1,7 @@
-use fuel_core::combined_database::CombinedDatabase;
+use fuel_core::{
+    combined_database::CombinedDatabase,
+    state::rocks_db::ColumnsPolicy,
+};
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::blockchain::consensus::Consensus;
 use test_helpers::fuel_core_driver::FuelCoreDriver;
@@ -47,8 +50,14 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
 
     // stop the node and just grab the database
     let db_path = driver.kill().await;
-    let db = CombinedDatabase::open(db_path.path(), 1024 * 1024, Default::default(), 512)
-        .unwrap();
+    let db = CombinedDatabase::open(
+        db_path.path(),
+        1024 * 1024,
+        Default::default(),
+        512,
+        ColumnsPolicy::Lazy,
+    )
+    .unwrap();
 
     let view = db.on_chain().latest_view().unwrap();
 

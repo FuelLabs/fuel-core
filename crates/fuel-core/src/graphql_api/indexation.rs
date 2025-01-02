@@ -238,6 +238,7 @@ mod tests {
                 MessageBalances,
             },
         },
+        state::rocks_db::ColumnsPolicy,
     };
 
     impl PartialEq for IndexationError {
@@ -352,9 +353,14 @@ mod tests {
     fn balances_enabled_flag_is_respected() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            None,
+            Default::default(),
+            512,
+            ColumnsPolicy::Lazy,
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         const BALANCES_ARE_DISABLED: bool = false;
@@ -409,9 +415,14 @@ mod tests {
     fn coins() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            None,
+            Default::default(),
+            512,
+            ColumnsPolicy::Lazy,
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         const BALANCES_ARE_ENABLED: bool = true;
@@ -481,9 +492,14 @@ mod tests {
     fn messages() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            None,
+            Default::default(),
+            512,
+            ColumnsPolicy::Lazy,
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         const BALANCES_ARE_ENABLED: bool = true;
@@ -589,9 +605,14 @@ mod tests {
     fn coin_balance_overflow_does_not_error() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            None,
+            Default::default(),
+            512,
+            ColumnsPolicy::Lazy,
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         const BALANCES_ARE_ENABLED: bool = true;
@@ -623,9 +644,14 @@ mod tests {
     fn message_balance_overflow_does_not_error() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            None,
+            Default::default(),
+            512,
+            ColumnsPolicy::Lazy,
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         const BALANCES_ARE_ENABLED: bool = true;
@@ -661,9 +687,14 @@ mod tests {
     fn coin_balance_underflow_causes_error() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            None,
+            Default::default(),
+            512,
+            ColumnsPolicy::Lazy,
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         const BALANCES_ARE_ENABLED: bool = true;

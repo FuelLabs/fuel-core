@@ -18,7 +18,10 @@ use crate::{
         },
         iterable_key_value_view::IterableKeyValueViewWrapper,
         key_value_view::KeyValueViewWrapper,
-        rocks_db::RocksDb,
+        rocks_db::{
+            ColumnsPolicy,
+            RocksDb,
+        },
         ColumnType,
         IterableKeyValueView,
         KeyValueView,
@@ -109,9 +112,14 @@ where
         capacity: Option<usize>,
         state_rewind_policy: StateRewindPolicy,
         max_fds: i32,
+        columns_policy: ColumnsPolicy,
     ) -> DatabaseResult<Self> {
-        let db =
-            RocksDb::<Historical<Description>>::default_open(path, capacity, max_fds)?;
+        let db = RocksDb::<Historical<Description>>::default_open(
+            path,
+            capacity,
+            max_fds,
+            columns_policy,
+        )?;
         Ok(Self {
             state_rewind_policy,
             db,

@@ -1,5 +1,9 @@
 #[cfg(feature = "rocksdb")]
-use crate::state::historical_rocksdb::StateRewindPolicy;
+use crate::state::{
+    historical_rocksdb::StateRewindPolicy,
+    rocks_db::ColumnsPolicy,
+};
+
 use crate::{
     database::{
         database_description::{
@@ -37,6 +41,8 @@ pub struct CombinedDatabaseConfig {
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub max_database_cache_size: Option<usize>,
+    #[cfg(feature = "rocksdb")]
+    pub columns_policy: ColumnsPolicy,
     #[cfg(feature = "rocksdb")]
     pub state_rewind_policy: StateRewindPolicy,
     #[cfg(feature = "rocksdb")]
@@ -82,6 +88,7 @@ impl CombinedDatabase {
         capacity: impl Into<Option<usize>>,
         state_rewind_policy: StateRewindPolicy,
         max_fds: i32,
+        columns_policy: ColumnsPolicy,
     ) -> crate::database::Result<Self> {
         // Split the fds in equitable manner between the databases
         let max_fds = match max_fds {
@@ -90,14 +97,34 @@ impl CombinedDatabase {
         };
         let capacity = capacity.into();
         // TODO: Use different cache sizes for different databases
-        let on_chain =
-            Database::open_rocksdb(path, capacity, state_rewind_policy, max_fds)?;
-        let off_chain =
-            Database::open_rocksdb(path, capacity, state_rewind_policy, max_fds)?;
-        let relayer =
-            Database::open_rocksdb(path, capacity, StateRewindPolicy::NoRewind, max_fds)?;
-        let gas_price =
-            Database::open_rocksdb(path, capacity, state_rewind_policy, max_fds)?;
+        let on_chain = Database::open_rocksdb(
+            path,
+            capacity,
+            state_rewind_policy,
+            max_fds,
+            columns_policy,
+        )?;
+        let off_chain = Database::open_rocksdb(
+            path,
+            capacity,
+            state_rewind_policy,
+            max_fds,
+            columns_policy,
+        )?;
+        let relayer = Database::open_rocksdb(
+            path,
+            capacity,
+            StateRewindPolicy::NoRewind,
+            max_fds,
+            columns_policy,
+        )?;
+        let gas_price = Database::open_rocksdb(
+            path,
+            capacity,
+            state_rewind_policy,
+            max_fds,
+            columns_policy,
+        )?;
         Ok(Self {
             on_chain,
             off_chain,
@@ -148,6 +175,7 @@ impl CombinedDatabase {
                         config.max_database_cache_size,
                         config.state_rewind_policy,
                         config.max_fds,
+                        config.columns_policy,
                     )?
                 }
             }

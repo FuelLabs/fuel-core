@@ -6,7 +6,10 @@ use clap::{
 };
 use fuel_core::{
     combined_database::CombinedDatabase,
-    state::historical_rocksdb::StateRewindPolicy,
+    state::{
+        historical_rocksdb::StateRewindPolicy,
+        rocks_db::ColumnsPolicy,
+    },
     types::fuel_types::ContractId,
 };
 use fuel_core_chain_config::ChainConfig;
@@ -212,6 +215,7 @@ fn open_db(
         capacity.unwrap_or(1024 * 1024 * 1024),
         StateRewindPolicy::NoRewind,
         max_fds,
+        ColumnsPolicy::OnCreation,
     )
     .map_err(Into::<anyhow::Error>::into)
     .context(format!("failed to open combined database at path {path:?}",))

@@ -204,6 +204,7 @@ where
         capacity: impl Into<Option<usize>>,
         state_rewind_policy: StateRewindPolicy,
         max_fds: i32,
+        columns_policy: crate::state::rocks_db::ColumnsPolicy,
     ) -> Result<Self> {
         use anyhow::Context;
         let db = HistoricalRocksDB::<Description>::default_open(
@@ -211,6 +212,7 @@ where
             capacity.into(),
             state_rewind_policy,
             max_fds,
+            columns_policy,
         )
         .map_err(Into::<anyhow::Error>::into)
         .with_context(|| {
@@ -263,6 +265,10 @@ where
         let db = RocksDb::<Historical<Description>>::default_open_temp_with_params(
             max_database_cache_size.into(),
             max_fds,
+            #[cfg(feature = "rocksdb-production")]
+            crate::state::rocks_db::ColumnsPolicy::Lazy,
+            #[cfg(not(feature = "rocksdb-production"))]
+            crate::state::rocks_db::ColumnsPolicy::OnCreation,
         )?;
         let historical_db = HistoricalRocksDB::new(db, state_rewind_policy)?;
         let data = Arc::new(historical_db);
@@ -1117,6 +1123,7 @@ mod tests {
             1024 * 1024 * 1024,
             Default::default(),
             512,
+            crate::state::rocks_db::ColumnsPolicy::Lazy,
         )
         .unwrap();
         // rocks db fails

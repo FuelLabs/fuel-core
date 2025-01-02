@@ -120,6 +120,8 @@ impl Config {
             max_database_cache_size: Some(10 * 1024 * 1024),
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
+            columns_policy: crate::state::rocks_db::ColumnsPolicy::Lazy,
+            #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,
             #[cfg(not(feature = "rocksdb"))]
             database_type: DbType::InMemory,

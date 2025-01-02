@@ -5,7 +5,10 @@ use crate::db_lookup_times_utils::full_block_table::{
 use anyhow::anyhow;
 use fuel_core::{
     database::database_description::DatabaseDescription,
-    state::rocks_db::RocksDb,
+    state::rocks_db::{
+        ColumnsPolicy,
+        RocksDb,
+    },
 };
 use fuel_core_storage::kv_store::{
     KeyValueInspect,
@@ -39,7 +42,7 @@ pub fn get_random_block_height(
 pub fn open_rocks_db<Description: DatabaseDescription>(
     path: &Path,
 ) -> Result<RocksDb<Description>> {
-    let db = RocksDb::default_open(path, None, -1)?;
+    let db = RocksDb::default_open(path, None, -1, ColumnsPolicy::OnCreation)?;
     Ok(db)
 }
 

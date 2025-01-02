@@ -83,7 +83,10 @@ use tracing::{
 };
 
 #[cfg(feature = "rocksdb")]
-use fuel_core::state::historical_rocksdb::StateRewindPolicy;
+use fuel_core::state::{
+    historical_rocksdb::StateRewindPolicy,
+    rocks_db::ColumnsPolicy,
+};
 
 #[cfg(feature = "p2p")]
 mod p2p;
@@ -451,6 +454,10 @@ impl Command {
             database_path,
             database_type,
             max_database_cache_size,
+            #[cfg(all(feature = "rocksdb", feature = "production"))]
+            columns_policy: ColumnsPolicy::OnCreation,
+            #[cfg(all(feature = "rocksdb", not(feature = "production")))]
+            columns_policy: ColumnsPolicy::Lazy,
             #[cfg(feature = "rocksdb")]
             state_rewind_policy,
             #[cfg(feature = "rocksdb")]
