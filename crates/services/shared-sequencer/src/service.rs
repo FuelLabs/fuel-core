@@ -212,7 +212,7 @@ where
                 let blobs_bytes = postcard::to_allocvec(&blobs).expect("Failed to serialize SSBlob");
 
                 if let Err(err) = ss.send(self.signer.as_ref(), account, next_order, blobs_bytes).await {
-                    TaskNextAction::ErrorContinue(err);
+                    return TaskNextAction::ErrorContinue(err);
                 }
 
                 tracing::info!("Posted block to shared sequencer {blobs:?}");
