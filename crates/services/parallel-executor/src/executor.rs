@@ -447,11 +447,15 @@ where
         let consensus_parameters = consensus_parameters.into_owned();
 
         let start = Instant::now();
+        let nb_inputs = Arc::new(RwLock::new(0));
+        let nb_outputs = Arc::new(RwLock::new(0));
         let handlers = txs
             .chunks(tx_per_core)
             .map(|txs| {
                 // TODO: try to remove this clone
                 let txs = txs.to_vec();
+                let nb_inputs = nb_inputs.clone();
+                let nb_outputs = nb_outputs.clone();
                 runtime.spawn({
                     // TODO: try to remove this clone
                     let consensus_parameters = consensus_parameters.clone();
@@ -459,6 +463,12 @@ where
                         let mut checked_txs: Vec<MaybeCheckedTransaction> =
                             Vec::with_capacity(tx_per_core);
                         for tx in txs {
+                            {
+                                let mut nb_inputs = nb_inputs.write().unwrap();
+                                let mut nb_outputs = nb_outputs.write().unwrap();
+                                *nb_inputs += tx.inputs().unwrap().len();
+                                *nb_outputs += tx.outputs().unwrap().len();
+                            }
                             match tx {
                                 MaybeCheckedTransaction::Transaction(tx) => {
                                     // Not doing into_checked to check signature and predicates
@@ -522,7 +532,12 @@ where
         );
         // TODO: Use reference for `consensus_parameters`.
         let start = Instant::now();
-        let mut splitter = DependencySplitter::new(consensus_parameters.clone());
+        let mut splitter = DependencySplitter::new(
+            consensus_parameters.clone(),
+            txs_len,
+            *nb_inputs.read().unwrap(),
+            *nb_outputs.read().unwrap(),
+        );
 
         let mut skipped_transactions_ids = vec![];
 

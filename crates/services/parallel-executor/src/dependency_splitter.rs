@@ -35,6 +35,10 @@ use std::{
         HashMap,
         HashSet,
     },
+    hash::{
+        BuildHasherDefault,
+        Hasher,
+    },
     num::NonZeroUsize,
 };
 
@@ -45,6 +49,15 @@ struct Bucket {
     gas: u64,
     current_sequence_number: SequenceNumber,
     elements: HashMap<TxId, (SequenceNumber, u64)>,
+}
+
+impl Bucket {
+    fn new(txs_len: usize) -> Self {
+        Self {
+            elements: HashMap::with_capacity(txs_len),
+            ..Default::default()
+        }
+    }
 }
 
 impl Bucket {
@@ -70,27 +83,31 @@ pub struct DependencySplitter {
     independent_bucket: Bucket,
     other_buckets: Bucket,
     blobs_bucket: Bucket,
-    txs_to_bucket: HashMap<TxId, BucketIndex>,
-    txs: HashMap<TxId, MaybeCheckedTransaction>,
+    txs_to_bucket: HashMap<TxId, (MaybeCheckedTransaction, BucketIndex)>,
     used_coins: HashSet<UtxoId>,
     used_messages: HashSet<Nonce>,
     created_contracts: HashMap<ContractId, TxId>,
     consensus_parameters: ConsensusParameters,
-    remaning_block_gas: u64,
+    remaining_block_gas: u64,
 }
 
 impl DependencySplitter {
-    pub fn new(consensus_parameters: ConsensusParameters) -> Self {
+    pub fn new(
+        consensus_parameters: ConsensusParameters,
+        txs_len: usize,
+        nb_inputs: usize,
+        nb_outputs: usize,
+    ) -> Self {
         Self {
-            independent_bucket: Default::default(),
-            other_buckets: Default::default(),
-            blobs_bucket: Default::default(),
-            txs_to_bucket: Default::default(),
-            txs: Default::default(),
-            used_coins: Default::default(),
-            used_messages: Default::default(),
-            created_contracts: Default::default(),
-            remaning_block_gas: consensus_parameters.block_gas_limit(),
+            independent_bucket: Bucket::new(txs_len),
+            other_buckets: Bucket::new(txs_len),
+            blobs_bucket: Bucket::new(txs_len),
+            txs_to_bucket: HashMap::with_capacity(txs_len),
+            // TODO: Maybe use pre-hash build hasher also.
+            used_coins: HashSet::with_capacity(nb_inputs),
+            used_messages: HashSet::with_capacity(nb_inputs),
+            created_contracts: HashMap::with_capacity(nb_outputs),
+            remaining_block_gas: consensus_parameters.block_gas_limit(),
             consensus_parameters,
         }
     }
@@ -101,8 +118,8 @@ impl DependencySplitter {
         tx_id: TxId,
     ) -> ExecutorResult<()> {
         let gas = tx.max_gas(&self.consensus_parameters)?;
-        let remaining_block_gas = self.remaning_block_gas;
-        self.remaning_block_gas = self.remaning_block_gas.checked_sub(gas).ok_or(
+        let remaining_block_gas = self.remaining_block_gas;
+        self.remaining_block_gas = self.remaining_block_gas.checked_sub(gas).ok_or(
             ExecutorError::GasOverflow(
                 format!(
                 "Transaction cannot fit in remaining gas limit: ({remaining_block_gas})."
@@ -114,7 +131,7 @@ impl DependencySplitter {
 
         let inputs = tx.inputs()?;
 
-        if self.txs.contains_key(&tx_id) {
+        if self.txs_to_bucket.contains_key(&tx_id) {
             return Err(ExecutorError::TransactionIdCollision(tx_id))
         }
 
@@ -175,7 +192,7 @@ impl DependencySplitter {
                     self.used_coins.insert(*utxo_id);
 
                     // Always go to other bucket if parent in this block
-                    if let Some(parent_index) =
+                    if let Some((_, parent_index)) =
                         self.txs_to_bucket.get_mut(utxo_id.tx_id())
                     {
                         index = BucketIndex::Other;
@@ -197,7 +214,7 @@ impl DependencySplitter {
                         self.created_contracts.get(&contract.contract_id)
                     {
                         index = BucketIndex::Other;
-                        if let Some(parent_index) =
+                        if let Some((_, parent_index)) =
                             self.txs_to_bucket.get_mut(creator_tx_id)
                         {
                             if *parent_index == BucketIndex::Independent {
@@ -243,7 +260,7 @@ impl DependencySplitter {
             }
         }
 
-        self.txs_to_bucket.insert(tx_id, index);
+        self.txs_to_bucket.insert(tx_id, (tx, index));
 
         match index {
             BucketIndex::Independent => {
@@ -253,8 +270,6 @@ impl DependencySplitter {
                 self.other_buckets.add(tx_id, gas);
             }
         }
-
-        self.txs.insert(tx_id, tx);
 
         Ok(())
     }
@@ -317,7 +332,9 @@ impl DependencySplitter {
             .into_iter()
             .map(|(_, txs)| {
                 txs.into_iter()
-                    .filter_map(|(_, tx_id)| self.txs.remove(&tx_id))
+                    .filter_map(|(_, tx_id)| {
+                        self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx)
+                    })
                     .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>();
@@ -325,7 +342,7 @@ impl DependencySplitter {
         let mut txs_from_most_empty_bucket = most_empty_bucket
             .1
             .into_iter()
-            .filter_map(|(_, tx_id)| self.txs.remove(&tx_id))
+            .filter_map(|(_, tx_id)| self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx))
             .collect::<Vec<_>>();
         let sorted_blobs = self
             .blobs_bucket
@@ -335,7 +352,7 @@ impl DependencySplitter {
             .collect::<BTreeMap<_, _>>();
         let blobs = sorted_blobs
             .into_iter()
-            .filter_map(|(_, tx_id)| self.txs.remove(&tx_id));
+            .filter_map(|(_, tx_id)| self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx));
         txs_from_most_empty_bucket.extend(blobs);
         let bucket_with_blobs = txs_from_most_empty_bucket;
 
