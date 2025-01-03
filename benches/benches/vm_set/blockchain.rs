@@ -22,7 +22,10 @@ use fuel_core::{
     service::Config,
     state::{
         historical_rocksdb::HistoricalRocksDB,
-        rocks_db::DatabaseConfig,
+        rocks_db::{
+            ColumnsPolicy,
+            DatabaseConfig,
+        },
     },
 };
 use fuel_core_benches::*;
@@ -78,9 +81,9 @@ impl BenchDb {
             tmp_dir.path(),
             Default::default(),
             DatabaseConfig {
-                capacity: None,
+                cache_capacity: None,
                 max_fds: -1,
-                columns_policy: Default::default(),
+                columns_policy: ColumnsPolicy::OnCreation,
             },
         )
         .unwrap();

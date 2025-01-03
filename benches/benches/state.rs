@@ -11,7 +11,13 @@ use fuel_core::{
         state::StateInitializer,
         Database,
     },
-    state::historical_rocksdb::StateRewindPolicy,
+    state::{
+        historical_rocksdb::StateRewindPolicy,
+        rocks_db::{
+            ColumnsPolicy,
+            DatabaseConfig,
+        },
+    },
 };
 use fuel_core_storage::{
     transactional::{
@@ -75,9 +81,12 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
             let mut db = Database::<OnChain>::rocksdb_temp(
-                Some(16 * 1024 * 1024 * 1024),
                 StateRewindPolicy::NoRewind,
-                -1,
+                DatabaseConfig {
+                    cache_capacity: Some(16 * 1024 * 1024 * 1024),
+                    max_fds: -1,
+                    columns_policy: ColumnsPolicy::OnCreation,
+                },
             )
             .unwrap();
             let contract: ContractId = rng.gen();
