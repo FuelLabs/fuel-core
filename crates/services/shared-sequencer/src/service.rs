@@ -151,7 +151,7 @@ where
             .shared_sequencer_client
             .as_ref()
             .expect("Shared sequencer client is not set");
-        self.account_metadata =  Some(ss.get_account_meta(self.signer.as_ref()).await?);
+        self.account_metadata = Some(ss.get_account_meta(self.signer.as_ref()).await?);
         Ok(())
     }
 

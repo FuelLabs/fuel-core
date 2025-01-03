@@ -241,9 +241,13 @@ impl Client {
         let signer_info =
             SignerInfo::single_direct(Some(sender_public_key), account.sequence);
         let auth_info = signer_info.auth_info(fee);
-        let sign_doc =
-            SignDoc::new(&tx_body, &auth_info, &self.ss_chain_id, account.account_number)
-                .map_err(|err| anyhow!("{err:?}"))?;
+        let sign_doc = SignDoc::new(
+            &tx_body,
+            &auth_info,
+            &self.ss_chain_id,
+            account.account_number,
+        )
+        .map_err(|err| anyhow!("{err:?}"))?;
 
         let sign_doc_bytes = sign_doc
             .clone()
