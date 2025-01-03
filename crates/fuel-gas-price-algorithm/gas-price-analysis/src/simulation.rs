@@ -12,11 +12,14 @@ use super::*;
 
 pub mod da_cost_per_byte;
 
+pub(crate) type Fullness = u64;
+pub(crate) type Capacity = u64;
+
 pub struct SimulationResults {
     pub gas_prices: Vec<u64>,
     pub exec_gas_prices: Vec<u64>,
     pub da_gas_prices: Vec<u64>,
-    pub fullness: Vec<(u64, u64)>,
+    pub fullness: Vec<(Fullness, Capacity)>,
     pub bytes_and_costs: Vec<(u32, u64)>,
     pub actual_profit: Vec<i128>,
     pub projected_profit: Vec<i128>,
@@ -280,8 +283,6 @@ impl Simulator {
                 }
             })
         });
-        let x = l2_blocks_with_no_da_blocks.chain(da_block_ranges).collect();
-        dbg!(&x);
-        x
+        l2_blocks_with_no_da_blocks.chain(da_block_ranges).collect()
     }
 }

@@ -17,6 +17,10 @@ use plotters::{
         WHITE,
     },
 };
+use simulation::{
+    Capacity,
+    Fullness,
+};
 
 use super::*;
 use std::{
@@ -176,7 +180,7 @@ pub fn draw_gas_prices(
 
 pub fn draw_fullness(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
-    fullness: &[(u64, u64)],
+    fullness: &[(Fullness, Capacity)],
     title: &str,
     first_height: u32,
 ) -> anyhow::Result<()> {
@@ -203,11 +207,7 @@ pub fn draw_fullness(
 
     chart
         .draw_series(LineSeries::new(
-            fullness
-                .iter()
-                .map(|(x, y)| (*x as f64 / *y as f64) * 100.)
-                .map(|x| x as i32)
-                .enumerate(),
+            fullness.iter().map(|(x, _)| *x as i32).enumerate(),
             FULLNESS_COLOR,
         ))
         .unwrap()
