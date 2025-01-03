@@ -30,4 +30,3 @@ itertools = { version = "0.13" }
 
 [build-dependencies]
 fuel-core-client = { version = "0.40.2"}
-

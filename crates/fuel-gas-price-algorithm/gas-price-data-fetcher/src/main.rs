@@ -18,6 +18,7 @@ use clap::{
 pub mod client_ext;
 mod layer1;
 mod layer2;
+mod summary;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -58,12 +59,13 @@ async fn main() -> anyhow::Result<()> {
         block_committer_endpoint,
         l2_block_data_source,
         block_range,
-        output_file: _,
+        output_file,
     } = Arg::parse();
     // Safety: The block range is always a vector of length 2
     let start_block_included = block_range[0];
     let end_block_excluded = block_range[1];
-    let block_range = start_block_included..end_block_excluded;
+    let block_range: std::ops::Range<u64> =
+        start_block_included.saturating_sub(3600)..end_block_excluded;
 
     if end_block_excluded < start_block_included {
         return Err(anyhow::anyhow!(
@@ -118,13 +120,21 @@ async fn main() -> anyhow::Result<()> {
                     gas_consumed,
                     ..
                 },
-            ) in blocks_with_gas_consumed
+            ) in &blocks_with_gas_consumed
             {
                 println!(
                     "Block Height: {}, Block Size: {}, Gas Consumed: {}",
-                    *block_height, block_size, gas_consumed
+                    block_height, block_size, gas_consumed
                 );
             }
+            summary::summarise_available_data(
+                &output_file,
+                &block_costs,
+                &blocks_with_gas_consumed,
+            )
+            .inspect_err(|e| {
+                println!("Failed to write to CSV file: {:?}, {:?}", output_file, e)
+            })?;
         }
         _ => {
             return Err(anyhow::anyhow!(

@@ -27,7 +27,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 pub struct Layer2BlockData {
-    pub block_height: BlockHeight,
+    pub block_height: u32,
     pub block_size: usize,
     pub gas_consumed: u64,
     pub capacity: u64,
@@ -204,7 +204,7 @@ pub async fn get_gas_consumed(
         block_data.insert(
             block_height,
             Layer2BlockData {
-                block_height,
+                block_height: *block_height,
                 block_size,
                 gas_consumed,
                 capacity,

@@ -42,11 +42,11 @@ pub async fn fetch_block_committer_data(
 #[derive(Debug, Serialize, serde::Deserialize)]
 pub struct BlockCommitterCosts {
     /// The cost of the block, supposedly in Wei but need to check
-    cost: u128,
-    size: u64,
-    da_block_height: u64,
-    start_height: u64,
-    end_height: u64,
+    pub cost: u128,
+    pub size: u64,
+    pub da_block_height: u64,
+    pub start_height: u64,
+    pub end_height: u64,
 }
 
 pub struct BlockCommitterDataFetcher {
