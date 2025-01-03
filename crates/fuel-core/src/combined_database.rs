@@ -1,5 +1,9 @@
 #[cfg(feature = "rocksdb")]
-use crate::state::historical_rocksdb::StateRewindPolicy;
+use crate::state::{
+    historical_rocksdb::StateRewindPolicy,
+    rocks_db::DatabaseConfig,
+};
+
 use crate::{
     database::{
         database_description::{
@@ -36,11 +40,9 @@ use std::path::PathBuf;
 pub struct CombinedDatabaseConfig {
     pub database_path: PathBuf,
     pub database_type: DbType,
-    pub max_database_cache_size: usize,
     #[cfg(feature = "rocksdb")]
+    pub database_config: DatabaseConfig,
     pub state_rewind_policy: StateRewindPolicy,
-    #[cfg(feature = "rocksdb")]
-    pub max_fds: i32,
 }
 
 /// A database that combines the on-chain, off-chain and relayer databases into one entity.
@@ -79,24 +81,49 @@ impl CombinedDatabase {
     #[cfg(feature = "rocksdb")]
     pub fn open(
         path: &std::path::Path,
-        capacity: usize,
         state_rewind_policy: StateRewindPolicy,
-        max_fds: i32,
+        database_config: DatabaseConfig,
     ) -> crate::database::Result<Self> {
         // Split the fds in equitable manner between the databases
-        let max_fds = match max_fds {
+
+        let max_fds = match database_config.max_fds {
             -1 => -1,
-            _ => max_fds.saturating_div(4),
+            _ => database_config.max_fds.saturating_div(4),
         };
+
         // TODO: Use different cache sizes for different databases
-        let on_chain =
-            Database::open_rocksdb(path, capacity, state_rewind_policy, max_fds)?;
-        let off_chain =
-            Database::open_rocksdb(path, capacity, state_rewind_policy, max_fds)?;
-        let relayer =
-            Database::open_rocksdb(path, capacity, StateRewindPolicy::NoRewind, max_fds)?;
-        let gas_price =
-            Database::open_rocksdb(path, capacity, state_rewind_policy, max_fds)?;
+        let on_chain = Database::open_rocksdb(
+            path,
+            state_rewind_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
+        )?;
+        let off_chain = Database::open_rocksdb(
+            path,
+            state_rewind_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
+        )?;
+        let relayer = Database::open_rocksdb(
+            path,
+            StateRewindPolicy::NoRewind,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
+        )?;
+        let gas_price = Database::open_rocksdb(
+            path,
+            state_rewind_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
+        )?;
         Ok(Self {
             on_chain,
             off_chain,
@@ -109,10 +136,11 @@ impl CombinedDatabase {
     #[cfg(feature = "rocksdb")]
     pub fn temp_database_with_state_rewind_policy(
         state_rewind_policy: StateRewindPolicy,
+        database_config: DatabaseConfig,
     ) -> DatabaseResult<Self> {
         Ok(Self {
-            on_chain: Database::rocksdb_temp(state_rewind_policy)?,
-            off_chain: Database::rocksdb_temp(state_rewind_policy)?,
+            on_chain: Database::rocksdb_temp(state_rewind_policy, database_config)?,
+            off_chain: Database::rocksdb_temp(state_rewind_policy, database_config)?,
             relayer: Default::default(),
             gas_price: Default::default(),
         })
@@ -129,19 +157,19 @@ impl CombinedDatabase {
                     );
                     CombinedDatabase::temp_database_with_state_rewind_policy(
                         config.state_rewind_policy,
+                        config.database_config,
                     )?
                 } else {
                     tracing::info!(
-                        "Opening database {:?} with cache size \"{}\" and state rewind policy \"{:?}\"",
+                        "Opening database {:?} with cache size \"{:?}\" and state rewind policy \"{:?}\"",
                         config.database_path,
-                        config.max_database_cache_size,
+                        config.database_config.cache_capacity,
                         config.state_rewind_policy,
                     );
                     CombinedDatabase::open(
                         &config.database_path,
-                        config.max_database_cache_size,
                         config.state_rewind_policy,
-                        config.max_fds,
+                        config.database_config,
                     )?
                 }
             }

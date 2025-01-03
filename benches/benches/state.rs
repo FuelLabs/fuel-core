@@ -5,10 +5,19 @@ use criterion::{
     BenchmarkGroup,
     Criterion,
 };
-use fuel_core::database::{
-    database_description::on_chain::OnChain,
-    state::StateInitializer,
-    Database,
+use fuel_core::{
+    database::{
+        database_description::on_chain::OnChain,
+        state::StateInitializer,
+        Database,
+    },
+    state::{
+        historical_rocksdb::StateRewindPolicy,
+        rocks_db::{
+            ColumnsPolicy,
+            DatabaseConfig,
+        },
+    },
 };
 use fuel_core_storage::{
     transactional::{
@@ -71,7 +80,15 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
-            let mut db = Database::<OnChain>::default();
+            let mut db = Database::<OnChain>::rocksdb_temp(
+                StateRewindPolicy::NoRewind,
+                DatabaseConfig {
+                    cache_capacity: Some(16 * 1024 * 1024 * 1024),
+                    max_fds: -1,
+                    columns_policy: ColumnsPolicy::OnCreation,
+                },
+            )
+            .unwrap();
             let contract: ContractId = rng.gen();
             setup(&mut db, &contract, n);
             let outer = db.write_transaction();

@@ -5,6 +5,7 @@ use fuel_core::{
         Config,
         FuelService,
     },
+    state::rocks_db::DatabaseConfig,
     types::fuel_tx::Transaction,
 };
 use fuel_core_client::client::FuelClient;
@@ -28,9 +29,12 @@ async fn can_restart_node() {
 
     // start node once
     {
-        let database =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let database = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let first_startup = FuelService::from_database(database, Config::local_node())
             .await
             .unwrap();
@@ -41,9 +45,12 @@ async fn can_restart_node() {
     }
 
     {
-        let database =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let database = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let _second_startup = FuelService::from_database(database, Config::local_node())
             .await
             .unwrap();
@@ -52,14 +59,16 @@ async fn can_restart_node() {
 
 #[tokio::test]
 async fn can_restart_node_with_transactions() {
-    let capacity = 1024 * 1024;
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
     {
         // Given
-        let database =
-            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default(), 512)
-                .unwrap();
+        let database = CombinedDatabase::open(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
             .await
             .unwrap();
@@ -76,9 +85,12 @@ async fn can_restart_node_with_transactions() {
 
     {
         // When
-        let database =
-            CombinedDatabase::open(tmp_dir.path(), capacity, Default::default(), 512)
-                .unwrap();
+        let database = CombinedDatabase::open(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
             .await
             .unwrap();

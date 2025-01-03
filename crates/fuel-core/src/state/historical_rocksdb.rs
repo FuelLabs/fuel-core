@@ -64,6 +64,8 @@ use std::{
     path::Path,
 };
 
+use super::rocks_db::DatabaseConfig;
+
 pub mod description;
 pub mod modifications_history;
 pub mod view_at_height;
@@ -106,12 +108,10 @@ where
 
     pub fn default_open<P: AsRef<Path>>(
         path: P,
-        capacity: Option<usize>,
         state_rewind_policy: StateRewindPolicy,
-        max_fds: i32,
+        database_config: DatabaseConfig,
     ) -> DatabaseResult<Self> {
-        let db =
-            RocksDb::<Historical<Description>>::default_open(path, capacity, max_fds)?;
+        let db = RocksDb::<Historical<Description>>::default_open(path, database_config)?;
         Ok(Self {
             state_rewind_policy,
             db,
