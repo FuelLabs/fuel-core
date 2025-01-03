@@ -35,14 +35,13 @@ use std::{
         HashMap,
         HashSet,
     },
-    hash::{
-        BuildHasherDefault,
-        Hasher,
-    },
     num::NonZeroUsize,
 };
 
 type SequenceNumber = usize;
+
+// TODO: Try to avoid iterating across hashmaps and make indexes
+// TODO: Try to simplify the logic split_equally to take one transaction for each bucket and then on the opposite side to avoid re-sort
 
 #[derive(Default)]
 struct Bucket {
@@ -92,21 +91,15 @@ pub struct DependencySplitter {
 }
 
 impl DependencySplitter {
-    pub fn new(
-        consensus_parameters: ConsensusParameters,
-        txs_len: usize,
-        nb_inputs: usize,
-        nb_outputs: usize,
-    ) -> Self {
+    pub fn new(consensus_parameters: ConsensusParameters, txs_len: usize) -> Self {
         Self {
             independent_bucket: Bucket::new(txs_len),
             other_buckets: Bucket::new(txs_len),
             blobs_bucket: Bucket::new(txs_len),
             txs_to_bucket: HashMap::with_capacity(txs_len),
-            // TODO: Maybe use pre-hash build hasher also.
-            used_coins: HashSet::with_capacity(nb_inputs),
-            used_messages: HashSet::with_capacity(nb_inputs),
-            created_contracts: HashMap::with_capacity(nb_outputs),
+            used_coins: HashSet::with_capacity(txs_len),
+            used_messages: HashSet::default(),
+            created_contracts: HashMap::default(),
             remaining_block_gas: consensus_parameters.block_gas_limit(),
             consensus_parameters,
         }

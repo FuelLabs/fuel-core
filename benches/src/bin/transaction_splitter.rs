@@ -61,8 +61,7 @@ fn main() {
     let chain_id = consensus_parameters.chain_id();
     let transactions = generate_transactions(n, &mut rng, &chain_id);
     let txs_len = transactions.len();
-    let splitter =
-        DependencySplitter::new(consensus_parameters.clone(), txs_len, txs_len, txs_len);
+    let splitter = DependencySplitter::new(consensus_parameters.clone(), txs_len);
     bench(splitter, transactions, number_of_cores, &chain_id);
 }
 

@@ -447,28 +447,26 @@ where
         let consensus_parameters = consensus_parameters.into_owned();
 
         let start = Instant::now();
-        let nb_inputs = Arc::new(RwLock::new(0));
-        let nb_outputs = Arc::new(RwLock::new(0));
-        let handlers = txs
-            .chunks(tx_per_core)
-            .map(|txs| {
-                // TODO: try to remove this clone
-                let txs = txs.to_vec();
-                let nb_inputs = nb_inputs.clone();
-                let nb_outputs = nb_outputs.clone();
-                runtime.spawn({
+        let mut handlers = Vec::with_capacity(self.number_of_cores.get());
+        let mut current_batch = Vec::with_capacity(tx_per_core);
+        let mut i = 0;
+        // We don't use the `txs.chunks` because it gives references which force us to Clone.
+        // Itertools chunks doesn't allow data to work in async.
+        for tx in txs {
+            current_batch.push(tx);
+            i += 1;
+            if i == tx_per_core {
+                let txs = std::mem::take(&mut current_batch);
+                handlers.push(runtime.spawn({
                     // TODO: try to remove this clone
                     let consensus_parameters = consensus_parameters.clone();
                     async move {
                         let mut checked_txs: Vec<MaybeCheckedTransaction> =
                             Vec::with_capacity(tx_per_core);
                         for tx in txs {
-                            {
-                                let mut nb_inputs = nb_inputs.write().unwrap();
-                                let mut nb_outputs = nb_outputs.write().unwrap();
-                                *nb_inputs += tx.inputs().unwrap().len();
-                                *nb_outputs += tx.outputs().unwrap().len();
-                            }
+                            // TODO: Prevent the failed transaction to make fail the whole executor and push them
+                            // to the skipped transactions. Before doing that we need to have the `tx_id` in the error
+                            // to avoid double hashing only to store the tx in the skipped transactions.
                             match tx {
                                 MaybeCheckedTransaction::Transaction(tx) => {
                                     // Not doing into_checked to check signature and predicates
@@ -515,9 +513,11 @@ where
                         }
                         Ok::<Vec<MaybeCheckedTransaction>, ExecutorError>(checked_txs)
                     }
-                })
-            })
-            .collect::<Vec<_>>();
+                }));
+                i = 0;
+            }
+        }
+
         tracing::info!(
             "Building thread for checking transactions took: {}ms",
             start.elapsed().as_millis()
@@ -532,12 +532,7 @@ where
         );
         // TODO: Use reference for `consensus_parameters`.
         let start = Instant::now();
-        let mut splitter = DependencySplitter::new(
-            consensus_parameters.clone(),
-            txs_len,
-            *nb_inputs.read().unwrap(),
-            *nb_outputs.read().unwrap(),
-        );
+        let mut splitter = DependencySplitter::new(consensus_parameters.clone(), txs_len);
 
         let mut skipped_transactions_ids = vec![];
 

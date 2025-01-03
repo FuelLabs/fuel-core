@@ -1015,7 +1015,7 @@ mod tests {
             )]),
         )];
 
-        db.commit_changes(&HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(HashMap::from_iter(ops)).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
@@ -1031,7 +1031,7 @@ mod tests {
             Column::Metadata.id(),
             BTreeMap::from_iter(vec![(key.clone().into(), WriteOperation::Remove)]),
         )];
-        db.commit_changes(&HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(HashMap::from_iter(ops)).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }
