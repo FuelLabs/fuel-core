@@ -9,9 +9,15 @@ use criterion::{
     SamplingMode,
 };
 use ed25519_dalek::Signer;
-use fuel_core::service::{
-    config::Trigger,
-    DbType,
+use fuel_core::{
+    service::{
+        config::Trigger,
+        DbType,
+    },
+    state::rocks_db::{
+        ColumnsPolicy,
+        DatabaseConfig,
+    },
 };
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::AtomicView;
@@ -97,7 +103,7 @@ where
             test_builder.database_config = DatabaseConfig {
                 cache_capacity: Some(16 * 1024 * 1024 * 1024),
                 max_fds: -1,
-                columns_policy: Default::default(),
+                columns_policy: ColumnsPolicy::OnCreation,
             };
 
             // spin up node

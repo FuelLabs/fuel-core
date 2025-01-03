@@ -59,7 +59,6 @@ async fn can_restart_node() {
 
 #[tokio::test]
 async fn can_restart_node_with_transactions() {
-    let capacity = 1024 * 1024;
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
     {
@@ -67,11 +66,7 @@ async fn can_restart_node_with_transactions() {
         let database = CombinedDatabase::open(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                cache_capacity: Some(capacity),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())
@@ -93,11 +88,7 @@ async fn can_restart_node_with_transactions() {
         let database = CombinedDatabase::open(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                cache_capacity: Some(capacity),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let service = FuelService::from_combined_database(database, Config::local_node())

@@ -53,11 +53,7 @@ async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
     let db = CombinedDatabase::open(
         db_path.path(),
         Default::default(),
-        DatabaseConfig {
-            cache_capacity: Some(1024 * 1024),
-            max_fds: 512,
-            columns_policy: Default::default(),
-        },
+        DatabaseConfig::config_for_tests(),
     )
     .unwrap();
 

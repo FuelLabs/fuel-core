@@ -333,7 +333,6 @@ async fn can_restart_node_with_relayer_data() {
         .try_into()
         .unwrap()]);
 
-    let capacity = 1024 * 1024;
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
     {
@@ -341,11 +340,7 @@ async fn can_restart_node_with_relayer_data() {
         let database = CombinedDatabase::open(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                cache_capacity: Some(capacity),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
 
@@ -368,11 +363,7 @@ async fn can_restart_node_with_relayer_data() {
         let database = CombinedDatabase::open(
             tmp_dir.path(),
             Default::default(),
-            DatabaseConfig {
-                cache_capacity: Some(capacity),
-                max_fds: 512,
-                columns_policy: Default::default(),
-            },
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         let service = FuelService::from_combined_database(database, config)

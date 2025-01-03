@@ -13,10 +13,7 @@ use fuel_core::{
         DbType,
         FuelService,
     },
-    state::rocks_db::{
-        ColumnsPolicy,
-        DatabaseConfig,
-    },
+    state::rocks_db::DatabaseConfig,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
@@ -272,11 +269,7 @@ impl Default for TestSetupBuilder {
             base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
             database_type: DbType::RocksDb,
-            database_config: DatabaseConfig {
-                cache_capacity: None,
-                max_fds: 512,
-                columns_policy: ColumnsPolicy::Lazy,
-            },
+            database_config: DatabaseConfig::config_for_tests(),
         }
     }
 }
