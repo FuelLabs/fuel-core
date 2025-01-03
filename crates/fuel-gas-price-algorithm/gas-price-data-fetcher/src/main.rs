@@ -1,10 +1,7 @@
 use std::path::PathBuf;
 
 use layer1::BlockCommitterDataFetcher;
-use layer2::{
-    GetHeight,
-    TotalGas,
-};
+use layer2::Layer2BlockData;
 use reqwest::{
     header::{
         HeaderMap,
@@ -38,6 +35,10 @@ struct Arg {
     )]
     /// Range of blocks to fetch the data for. Lower bound included, Upper bound excluded.
     block_range: Vec<u64>,
+
+    #[arg(required = true)]
+    /// The output CSV file where Block and Blob data will be written to
+    output_file: PathBuf,
 }
 
 #[derive(Debug, Args)]
@@ -57,6 +58,7 @@ async fn main() -> anyhow::Result<()> {
         block_committer_endpoint,
         l2_block_data_source,
         block_range,
+        output_file: _,
     } = Arg::parse();
     // Safety: The block range is always a vector of length 2
     let start_block_included = block_range[0];
@@ -88,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
     println!("{:?}", block_costs);
     match l2_block_data_source {
         L2BlockDataSource {
-            db_path: Some(db_path),
+            db_path: Some(_db_path),
             sentry_node_endpoint: None,
         } => {
             todo!();
@@ -108,7 +110,16 @@ async fn main() -> anyhow::Result<()> {
             let blocks_with_gas_consumed =
                 layer2::get_gas_consumed(&sentry_node_client, blocks_range, 5000).await?;
 
-            for (block_height, block_size, gas_consumed) in blocks_with_gas_consumed {
+            for (
+                _block_height,
+                Layer2BlockData {
+                    block_height,
+                    block_size,
+                    gas_consumed,
+                    ..
+                },
+            ) in blocks_with_gas_consumed
+            {
                 println!(
                     "Block Height: {}, Block Size: {}, Gas Consumed: {}",
                     *block_height, block_size, gas_consumed

@@ -26,6 +26,14 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
+pub struct Layer2BlockData {
+    pub block_height: BlockHeight,
+    pub block_size: usize,
+    pub gas_consumed: u64,
+    pub capacity: u64,
+    pub bytes_capacity: u64,
+}
+
 #[derive(Clone)]
 pub struct BlockFetcher {
     client: FuelClient,
@@ -72,84 +80,69 @@ impl BlockFetcher {
     }
 }
 
-pub trait GetHeight {
-    fn height(&self) -> BlockHeight;
+fn height(block: &SealedBlockWithMetadata) -> BlockHeight {
+    *block.block.entity.header().height()
 }
 
-impl GetHeight for SealedBlockWithMetadata {
-    fn height(&self) -> BlockHeight {
-        *self.block.entity.header().height()
-    }
-}
-
-pub trait TotalGas {
-    fn total_gas_consumed(
-        &self,
-        consensus_parameters: &ConsensusParameters,
-    ) -> Result<u64, anyhow::Error>;
-}
-
-impl TotalGas for SealedBlockWithMetadata {
-    fn total_gas_consumed(
-        &self,
-        consensus_parameters: &ConsensusParameters,
-    ) -> Result<u64, anyhow::Error> {
-        let min_gas: u64 = self
-            .block
-            .entity
-            .transactions()
-            .iter()
-            .filter_map(|tx| match tx {
-                fuel_core_types::fuel_tx::Transaction::Script(chargeable_transaction) => {
-                    Some(chargeable_transaction.min_gas(
-                        consensus_parameters.gas_costs(),
-                        consensus_parameters.fee_params(),
-                    ))
-                }
-                fuel_core_types::fuel_tx::Transaction::Create(chargeable_transaction) => {
-                    Some(chargeable_transaction.min_gas(
-                        consensus_parameters.gas_costs(),
-                        consensus_parameters.fee_params(),
-                    ))
-                }
-                fuel_core_types::fuel_tx::Transaction::Mint(_mint) => None,
-                fuel_core_types::fuel_tx::Transaction::Upgrade(
-                    chargeable_transaction,
-                ) => Some(chargeable_transaction.min_gas(
+fn total_gas_consumed(
+    block: &SealedBlockWithMetadata,
+    consensus_parameters: &ConsensusParameters,
+) -> Result<u64, anyhow::Error> {
+    let min_gas: u64 = block
+        .block
+        .entity
+        .transactions()
+        .iter()
+        .filter_map(|tx| match tx {
+            fuel_core_types::fuel_tx::Transaction::Script(chargeable_transaction) => {
+                Some(chargeable_transaction.min_gas(
                     consensus_parameters.gas_costs(),
                     consensus_parameters.fee_params(),
-                )),
-                fuel_core_types::fuel_tx::Transaction::Upload(chargeable_transaction) => {
-                    Some(chargeable_transaction.min_gas(
-                        consensus_parameters.gas_costs(),
-                        consensus_parameters.fee_params(),
-                    ))
-                }
-                fuel_core_types::fuel_tx::Transaction::Blob(chargeable_transaction) => {
-                    Some(chargeable_transaction.min_gas(
-                        consensus_parameters.gas_costs(),
-                        consensus_parameters.fee_params(),
-                    ))
-                }
-            })
-            .sum();
-        let gas_consumed = self
-            .receipts
-            .iter()
-            .flatten()
-            .map(|r| r.iter().filter_map(|r| r.gas_used()).sum::<u64>())
-            .sum();
-        min_gas
-            .checked_add(gas_consumed)
-            .ok_or(anyhow::anyhow!("Gas overflow"))
-    }
+                ))
+            }
+            fuel_core_types::fuel_tx::Transaction::Create(chargeable_transaction) => {
+                Some(chargeable_transaction.min_gas(
+                    consensus_parameters.gas_costs(),
+                    consensus_parameters.fee_params(),
+                ))
+            }
+            fuel_core_types::fuel_tx::Transaction::Mint(_mint) => None,
+            fuel_core_types::fuel_tx::Transaction::Upgrade(chargeable_transaction) => {
+                Some(chargeable_transaction.min_gas(
+                    consensus_parameters.gas_costs(),
+                    consensus_parameters.fee_params(),
+                ))
+            }
+            fuel_core_types::fuel_tx::Transaction::Upload(chargeable_transaction) => {
+                Some(chargeable_transaction.min_gas(
+                    consensus_parameters.gas_costs(),
+                    consensus_parameters.fee_params(),
+                ))
+            }
+            fuel_core_types::fuel_tx::Transaction::Blob(chargeable_transaction) => {
+                Some(chargeable_transaction.min_gas(
+                    consensus_parameters.gas_costs(),
+                    consensus_parameters.fee_params(),
+                ))
+            }
+        })
+        .sum();
+    let gas_consumed = block
+        .receipts
+        .iter()
+        .flatten()
+        .map(|r| r.iter().filter_map(|r| r.gas_used()).sum::<u64>())
+        .sum();
+    min_gas
+        .checked_add(gas_consumed)
+        .ok_or(anyhow::anyhow!("Gas overflow"))
 }
 
 pub async fn get_gas_consumed(
     block_fetcher: &BlockFetcher,
     range: Range<u32>,
     num_results: usize,
-) -> anyhow::Result<Vec<(BlockHeight, usize, u64)>> {
+) -> anyhow::Result<HashMap<BlockHeight, Layer2BlockData>> {
     let mut ranges: Vec<Range<u32>> =
         Vec::with_capacity(range.len().saturating_div(num_results));
 
@@ -191,10 +184,10 @@ pub async fn get_gas_consumed(
         }
     }
 
-    let mut block_heights_with_gas_costs = Vec::with_capacity(range.len());
+    let mut block_data = HashMap::with_capacity(range.len());
 
     for b in blocks {
-        let block_height = b.height();
+        let block_height = height(&b);
         let consensus_parameters = consensus_parameters
             .get(&b.block.entity.header().consensus_parameters_version)
             .ok_or(anyhow::anyhow!(
@@ -204,9 +197,21 @@ pub async fn get_gas_consumed(
         // let compressed_block = b.block.entity.compress(&consensus_parameters.chain_id());
         let block_size = postcard::to_allocvec(&b.block)?.len();
 
-        let total_gas = b.total_gas_consumed(consensus_parameters)?;
-        block_heights_with_gas_costs.push((block_height, block_size, total_gas));
+        let gas_consumed = total_gas_consumed(&b, consensus_parameters)?;
+        let capacity = consensus_parameters.block_gas_limit();
+        let bytes_capacity = consensus_parameters.block_transaction_size_limit();
+
+        block_data.insert(
+            block_height,
+            Layer2BlockData {
+                block_height,
+                block_size,
+                gas_consumed,
+                capacity,
+                bytes_capacity,
+            },
+        );
     }
 
-    Ok(block_heights_with_gas_costs)
+    Ok(block_data)
 }
