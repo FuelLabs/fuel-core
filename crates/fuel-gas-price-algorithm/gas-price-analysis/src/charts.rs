@@ -187,7 +187,11 @@ pub fn draw_fullness(
     const FULLNESS_COLOR: RGBColor = BLACK;
 
     let min = 0;
-    let max = 100;
+    let max = fullness
+        .iter()
+        .map(|(fullness, _)| *fullness)
+        .max()
+        .unwrap() as i32;
 
     let mut chart = ChartBuilder::on(drawing_area)
         .caption(title, ("sans-serif", 50).into_font())
@@ -199,7 +203,7 @@ pub fn draw_fullness(
 
     chart
         .configure_mesh()
-        .y_desc("Fullness Percentage")
+        .y_desc("Fullness")
         .x_desc("L2 Block")
         .x_labels(fullness.len())
         .x_label_formatter(&|x| format!("{}", x + first_height as usize))
