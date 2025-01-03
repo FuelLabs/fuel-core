@@ -33,21 +33,31 @@ pub(super) struct Predefined2Record {
     l1_block_number: u64,
     l1_blob_fee_wei: u64,
     l2_block_number: u64,
-    l2_fullness: u64,
-    l2_size: u64,
+    l2_gas_fullness: u64,
+    l2_gas_capacity: u64,
+    l2_byte_size: u64,
+    l2_byte_capacity: u64,
 }
 
 impl Predefined2Record {
-    pub(super) fn l2_fullness(&self) -> u64 {
-        self.l2_fullness
+    pub(super) fn l2_gas_fullness(&self) -> u64 {
+        self.l2_gas_fullness
     }
 
-    pub(super) fn l2_size(&self) -> u64 {
-        self.l2_size
+    pub(super) fn l2_byte_size(&self) -> u64 {
+        self.l2_byte_size
     }
 
     pub(super) fn l2_block_number(&self) -> u64 {
         self.l2_block_number
+    }
+
+    pub(super) fn l2_gas_capacity(&self) -> u64 {
+        self.l2_gas_capacity
+    }
+
+    pub(super) fn l2_byte_capacity(&self) -> u64 {
+        self.l2_byte_capacity
     }
 }
 
@@ -59,9 +69,12 @@ impl HasBlobFee for Predefined2Record {
 
 pub(super) fn arb_l2_fullness_and_bytes_per_block(
     size: usize,
-    capacity: u64,
-) -> Vec<(u64, u32, u64)> {
+) -> Vec<(u64, u32, u64, u64, u64)> {
     let mut rng = StdRng::seed_from_u64(888);
+
+    let capacity = 30_000_000;
+    let gas_per_byte = 63;
+    let max_block_bytes = capacity / gas_per_byte;
 
     let fullness_noise: Vec<_> = std::iter::repeat(())
         .take(size)
@@ -90,7 +103,7 @@ pub(super) fn arb_l2_fullness_and_bytes_per_block(
             (fullness, bytes)
         })
         .map(|(fullness, bytes)| (fullness as u64, std::cmp::max(bytes as u32, 1)))
-        .enumerate().map(|(height, (fullness, bytes))| (fullness, bytes, height as u64))
+        .enumerate().map(|(height, (fullness, bytes))| (fullness, bytes, height as u64, capacity, max_block_bytes))
         .collect()
 }
 

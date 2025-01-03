@@ -44,3 +44,22 @@ pub enum BlockInfo {
         block_fees: u64,
     },
 }
+
+impl core::fmt::Display for BlockInfo {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            BlockInfo::GenesisBlock => write!(f, "Genesis Block"),
+            BlockInfo::Block {
+                height,
+                gas_used,
+                block_gas_capacity,
+                block_bytes,
+                block_fees,
+            } => write!(
+                f,
+                "Block: height: {}, gas_used: {}, block_gas_capacity: {}, block_bytes: {}, block_fees: {}",
+                height, gas_used, block_gas_capacity, block_bytes, block_fees
+            ),
+        }
+    }
+}

@@ -101,7 +101,10 @@ enum Source {
     },
 }
 
-fn get_l2_costs_from_csv_file<P: AsRef<Path>>(file_path: P) -> Vec<(u64, u32, u64)> {
+// TODO[RC]: Just return `Predefined2Record` instead of crazy tuple? :-)
+fn get_l2_costs_from_csv_file<P: AsRef<Path>>(
+    file_path: P,
+) -> Vec<(u64, u32, u64, u64, u64)> {
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(true)
         .from_path(file_path)
@@ -114,9 +117,11 @@ fn get_l2_costs_from_csv_file<P: AsRef<Path>>(file_path: P) -> Vec<(u64, u32, u6
             let record: Predefined2Record =
                 record.unwrap().deserialize(Some(&headers)).unwrap();
             (
-                record.l2_fullness(),
-                record.l2_size() as u32,
+                record.l2_gas_fullness(),
+                record.l2_byte_size() as u32,
                 record.l2_block_number(),
+                record.l2_gas_capacity(),
+                record.l2_byte_capacity(),
             )
         })
         .collect()
@@ -128,7 +133,9 @@ fn get_l2_costs_from_csv_file<P: AsRef<Path>>(file_path: P) -> Vec<(u64, u32, u6
 struct L2BlockData {
     height: u64,
     fullness: u64,
+    gas_capacity: u64,
     size: u32,
+    size_capacity: u64,
 }
 
 // TODO[RC]: Rename, to be more descriptive (not confusing with L2BlockData and BlockData)
@@ -137,26 +144,26 @@ struct L1L2BlockData {
     fullness_and_bytes: Vec<L2BlockData>,
 }
 
-fn l1_l2_block_data_from_source(
-    source: &Source,
-    capacity: u64,
-    update_period: usize,
-) -> L1L2BlockData {
+fn l1_l2_block_data_from_source(source: &Source, update_period: usize) -> L1L2BlockData {
     let da_cost_per_byte = get_da_cost_per_byte_from_source(&source, update_period);
     let size = da_cost_per_byte.len();
 
     let fullness_and_bytes = match source {
         Source::Generated { .. } | Source::Predefined { .. } => {
-            arb_l2_fullness_and_bytes_per_block(size, capacity)
+            arb_l2_fullness_and_bytes_per_block(size)
         }
         Source::Predefined2 { file_path, .. } => get_l2_costs_from_csv_file(file_path),
     }
     .iter()
-    .map(|(fullness, size, height)| L2BlockData {
-        fullness: *fullness,
-        size: *size,
-        height: *height,
-    })
+    .map(
+        |(fullness, size, height, gas_capacity, size_capacity)| L2BlockData {
+            fullness: *fullness,
+            size: *size,
+            height: *height,
+            gas_capacity: *gas_capacity,
+            size_capacity: *size_capacity,
+        },
+    )
     .collect();
 
     L1L2BlockData {
@@ -172,7 +179,6 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     const UPDATE_PERIOD: usize = 12;
-    const CAPACITY: u64 = 30_000_000;
 
     let da_finalization_period = args.da_finalization_period;
 
@@ -181,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
             let L1L2BlockData {
                 da_cost_per_byte,
                 fullness_and_bytes,
-            } = l1_l2_block_data_from_source(&source, CAPACITY, UPDATE_PERIOD);
+            } = l1_l2_block_data_from_source(&source, UPDATE_PERIOD);
 
             dbg!(&fullness_and_bytes);
 
@@ -214,7 +220,7 @@ async fn main() -> anyhow::Result<()> {
             let L1L2BlockData {
                 da_cost_per_byte,
                 fullness_and_bytes,
-            } = l1_l2_block_data_from_source(&source, CAPACITY, UPDATE_PERIOD);
+            } = l1_l2_block_data_from_source(&source, UPDATE_PERIOD);
             println!(
                 "Running optimization with {iterations} iterations and {} L2 blocks",
                 fullness_and_bytes.len()

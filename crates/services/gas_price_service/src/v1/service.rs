@@ -214,6 +214,7 @@ where
     ) -> anyhow::Result<()> {
         match l2_block {
             BlockInfo::GenesisBlock => {
+                tracing::trace!(%l2_block, "genesis");
                 let metadata: UpdaterMetadata = self.algorithm_updater.clone().into();
                 let mut tx = self.storage_tx_provider.begin_transaction()?;
                 tx.set_metadata(&metadata).map_err(|err| anyhow!(err))?;
@@ -228,6 +229,7 @@ where
                 block_bytes,
                 block_fees,
             } => {
+                tracing::trace!(%l2_block, "normal");
                 self.handle_normal_block(
                     height,
                     gas_used,

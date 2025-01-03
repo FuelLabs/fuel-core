@@ -41,6 +41,16 @@ pub struct AlgorithmV1 {
     for_height: u32,
 }
 
+impl core::fmt::Display for AlgorithmV1 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "AlgorithmV1: new_exec_price: {}, exec_price_percentage: {}, new_da_gas_price: {}, da_gas_price_percentage: {}, for_height: {}",    
+            self.new_exec_price, self.exec_price_percentage, self.new_da_gas_price, self.da_gas_price_percentage, self.for_height
+        )
+    }
+}
+
 impl AlgorithmV1 {
     pub fn calculate(&self) -> u64 {
         self.new_exec_price.saturating_add(self.new_da_gas_price)
@@ -70,6 +80,8 @@ pub trait UnrecordedBlocks {
     fn insert(&mut self, height: Height, bytes: Bytes) -> Result<(), String>;
 
     fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, String>;
+
+    fn len(&self) -> usize;
 }
 
 impl UnrecordedBlocks for BTreeMap<Height, Bytes> {
@@ -81,6 +93,10 @@ impl UnrecordedBlocks for BTreeMap<Height, Bytes> {
     fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, String> {
         let value = self.remove(height);
         Ok(value)
+    }
+
+    fn len(&self) -> usize {
+        self.len()
     }
 }
 
@@ -383,6 +399,15 @@ impl AlgorithmUpdaterV1 {
                 got: height,
             })
         } else {
+            tracing::info!(
+                height,
+                total_fee_wei = fee_wei,
+                fullness_used = used,
+                capacity,
+                block_bytes,
+                unrecorded_blocks_len = unrecorded_blocks.len(),
+                "Updating L2 block data for height"
+            );
             self.l2_block_height = height;
 
             // rewards
@@ -390,7 +415,6 @@ impl AlgorithmUpdaterV1 {
             let rewards = self.clamped_rewards_as_i128();
 
             // costs
-            tracing::info!("Block bytes: {}", block_bytes);
             self.update_projected_da_cost(block_bytes);
             let projected_total_da_cost = self.clamped_projected_cost_as_i128();
 
@@ -417,17 +441,23 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn update_activity(&mut self, used: u64, capacity: NonZeroU64) {
+        tracing::info!(fullness_used = used, capacity, "Updating L2 activity, PRE");
         let block_activity = used.saturating_mul(100).div(capacity);
         let usage = ClampedPercentage::new(block_activity.try_into().unwrap_or(100));
+        tracing::info!(block_activity, ?usage, "Updating L2 activity, POST");
         self.l2_activity.update(usage);
     }
 
     fn update_da_rewards(&mut self, fee_wei: u128) {
-        tracing::info!("Fee: {}", fee_wei);
         let block_da_reward = self.da_portion_of_fee(fee_wei);
-        tracing::info!("DA reward: {}", block_da_reward);
         self.total_da_rewards_excess =
             self.total_da_rewards_excess.saturating_add(block_da_reward);
+        tracing::info!(
+            fee_wei,
+            block_da_reward,
+            total_da_rewards_excess = self.total_da_rewards_excess,
+            "Updating DA rewards"
+        );
     }
 
     fn update_projected_da_cost(&mut self, block_bytes: u64) {
@@ -436,6 +466,12 @@ impl AlgorithmUpdaterV1 {
         self.projected_total_da_cost = self
             .projected_total_da_cost
             .saturating_add(block_projected_da_cost);
+        tracing::info!(
+            latest_da_cost_per_byte = self.latest_da_cost_per_byte,
+            block_projected_da_cost,
+            projected_total_da_cost = self.projected_total_da_cost,
+            "Updating projected DA cost"
+        )
     }
 
     // Take the `fee_wei` and return the portion of the fee that should be used for paying DA costs
@@ -460,6 +496,14 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn update_last_profit(&mut self, new_profit: i128) {
+        tracing::info!(
+            "Updating profit: second_to_last_profit ({} -> {}), last_profit ({} -> {})",
+            self.second_to_last_profit,
+            self.last_profit,
+            self.last_profit,
+            new_profit
+        );
+
         self.second_to_last_profit = self.last_profit;
         self.last_profit = new_profit;
     }
@@ -654,12 +698,14 @@ impl AlgorithmUpdaterV1 {
     }
 
     pub fn algorithm(&self) -> AlgorithmV1 {
-        AlgorithmV1 {
+        let algorithm = AlgorithmV1 {
             new_exec_price: self.descaled_exec_price(),
             exec_price_percentage: self.exec_gas_price_change_percent as u64,
             new_da_gas_price: self.descaled_da_price(),
             da_gas_price_percentage: self.max_da_gas_price_change_percent as u64,
             for_height: self.l2_block_height,
-        }
+        };
+        tracing::trace!(%algorithm);
+        algorithm
     }
 }

@@ -36,7 +36,9 @@ pub struct Simulator {
 struct BlockData {
     height: u64,
     fullness: u64,
+    gas_capacity: u64,
     bytes: u32,
+    bytes_capacity: u64,
     maybe_da_bundle: Option<Bundle>,
 }
 
@@ -60,10 +62,6 @@ impl Simulator {
         l2_blocks: &[L2BlockData],
         da_finalization_rate: usize,
     ) -> SimulationResults {
-        let capacity = 30_000_000;
-        let gas_per_byte = 63;
-        let max_block_bytes = capacity / gas_per_byte;
-
         let da_blocks =
             self.calculate_da_blocks(update_period, da_finalization_rate, l2_blocks);
 
@@ -73,6 +71,8 @@ impl Simulator {
                     fullness,
                     size,
                     height,
+                    gas_capacity,
+                    size_capacity,
                 },
                 maybe_da_block,
             )| BlockData {
@@ -80,6 +80,8 @@ impl Simulator {
                 fullness: *fullness,
                 bytes: *size,
                 maybe_da_bundle: maybe_da_block.clone(),
+                gas_capacity: *gas_capacity,
+                bytes_capacity: *size_capacity,
             },
         );
 
@@ -92,7 +94,7 @@ impl Simulator {
                 .height as u32,
         );
 
-        self.execute_simulation(capacity, max_block_bytes, l2_blocks, blocks, updater)
+        self.execute_simulation(l2_blocks, blocks, updater)
     }
 
     fn build_updater(
@@ -104,12 +106,13 @@ impl Simulator {
         // Scales the gas price internally, value is arbitrary
         let gas_price_factor = 100;
         let always_normal_activity = L2ActivityTracker::new_always_normal();
-        AlgorithmUpdaterV1 {
+
+        let updater = AlgorithmUpdaterV1 {
             min_exec_gas_price: 10_000_000,
             min_da_gas_price: 100_000_000,
-            // Change to adjust where the exec gas price starts on block 0
+            // Change to adjust where the exec gas price starts on first block
             new_scaled_exec_price: 10_000_000 * gas_price_factor,
-            // Change to adjust where the da gas price starts on block 0
+            // Change to adjust where the da gas price starts on first block
             new_scaled_da_gas_price: 10_000_000 * gas_price_factor,
             gas_price_factor: NonZeroU64::new(gas_price_factor).unwrap(),
             l2_block_height,
@@ -120,7 +123,7 @@ impl Simulator {
             // Increase to make the da price change faster
             max_da_gas_price_change_percent: 15,
             total_da_rewards_excess: 0,
-            // Change to adjust the cost per byte of the DA on block 0
+            // Change to adjust the cost per byte of the DA on first block
             latest_da_cost_per_byte: 0,
             projected_total_da_cost: 0,
             latest_known_total_da_cost_excess: 0,
@@ -130,13 +133,15 @@ impl Simulator {
             second_to_last_profit: 0,
             l2_activity: always_normal_activity,
             unrecorded_blocks_bytes: 0,
-        }
+        };
+
+        tracing::trace!(?updater, "Built updater");
+
+        updater
     }
 
     fn execute_simulation(
         &self,
-        capacity: u64,
-        max_block_bytes: u64,
         fullness_and_bytes: &[L2BlockData],
         blocks: impl Iterator<Item = BlockData>,
         mut updater: AlgorithmUpdaterV1,
@@ -150,30 +155,49 @@ impl Simulator {
         let mut pessimistic_costs = vec![];
         let mut unrecorded_blocks = BTreeMap::new();
         for block_data in blocks {
+            tracing::trace!(%block_data.height,
+                "Processing L2 block with{} DA bundle",
+                if block_data.maybe_da_bundle.is_some() {
+                    ""
+                } else {
+                    "out"
+                }
+            );
             let BlockData {
                 fullness,
                 bytes,
                 maybe_da_bundle,
                 height,
+                gas_capacity,
+                bytes_capacity,
             } = block_data;
             let height = height as u32 + 1;
-            exec_gas_prices.push(updater.new_scaled_exec_price);
-            da_gas_prices.push(updater.new_scaled_da_gas_price);
+            let new_scaled_exec_price = updater.new_scaled_exec_price;
+            exec_gas_prices.push(new_scaled_exec_price);
+            let new_scaled_da_gas_price = updater.new_scaled_da_gas_price;
+            da_gas_prices.push(new_scaled_da_gas_price);
             let gas_price = updater.algorithm().calculate();
             gas_prices.push(gas_price);
             let total_fee = gas_price as u128 * fullness as u128;
+            tracing::trace!(
+                "New scaled exec price: {}, New scaled da price: {}, Gas price: {}, Fullness: {}, Total fee: {}",
+                new_scaled_exec_price,
+                new_scaled_da_gas_price,
+                gas_price,fullness,
+                total_fee
+            );
             updater
                 .update_l2_block_data(
                     height,
                     fullness,
-                    capacity.try_into().unwrap(),
+                    gas_capacity.try_into().unwrap(),
                     bytes as u64,
                     total_fee,
                     &mut unrecorded_blocks,
                 )
                 .unwrap();
             pessimistic_costs
-                .push(max_block_bytes as u128 * updater.latest_da_cost_per_byte);
+                .push(bytes_capacity as u128 * updater.latest_da_cost_per_byte);
             actual_reward_totals.push(updater.total_da_rewards_excess);
             projected_cost_totals.push(updater.projected_total_da_cost);
 
@@ -198,14 +222,15 @@ impl Simulator {
                 }
             }
         }
-        let (fullness_without_capacity, bytes): (Vec<_>, Vec<_>) = fullness_and_bytes
+        let (fullness, bytes): (Vec<_>, Vec<_>) = fullness_and_bytes
             .iter()
-            .map(|l2_block_data| (l2_block_data.fullness, l2_block_data.size))
+            .map(|l2_block_data| {
+                (
+                    (l2_block_data.fullness, l2_block_data.gas_capacity),
+                    l2_block_data.size,
+                )
+            })
             .unzip();
-        let fullness: Vec<_> = fullness_without_capacity
-            .iter()
-            .map(|&fullness| (fullness, capacity))
-            .collect();
         let bytes_and_costs: Vec<_> = bytes
             .iter()
             .zip(self.da_cost_per_byte.iter())
