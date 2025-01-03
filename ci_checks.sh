@@ -29,7 +29,7 @@ cargo check -p fuel-core-chain-config --target wasm32-unknown-unknown --no-defau
 cargo check -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features --features alloc &&
 cargo make check --all-features --locked &&
 cargo make check --locked &&
-OVERRIDE_CHAIN_CONFIGS=true cargo test --test integration_tests local_node &&
+cargo test --test integration_tests local_node &&
 cargo nextest run --workspace &&
 cargo nextest run --all-features --workspace &&
 cargo nextest run -p fuel-core --no-default-features &&

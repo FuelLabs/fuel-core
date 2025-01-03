@@ -46,7 +46,7 @@ pub mod service;
 pub struct Client {
     endpoints: Endpoints,
     topic: [u8; 32],
-    chain_id: Id,
+    ss_chain_id: Id,
     gas_price: u128,
     coin_denom: Denom,
     account_prefix: String,
@@ -61,7 +61,7 @@ impl Client {
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         let account_prefix =
             http_api::get_account_prefix(&endpoints.blockchain_rest_api).await?;
-        let chain_id = http_api::chain_id(&endpoints.blockchain_rest_api)
+        let ss_chain_id = http_api::chain_id(&endpoints.blockchain_rest_api)
             .await?
             .parse()
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
@@ -81,7 +81,7 @@ impl Client {
             endpoints,
             account_prefix,
             coin_denom,
-            chain_id,
+            ss_chain_id,
             gas_price,
         })
     }
@@ -165,7 +165,7 @@ impl Client {
         topic: [u8; 32],
         data: Bytes,
     ) -> anyhow::Result<()> {
-        // We want to estimate the transaction to know hat amount and fee to use.
+        // We want to estimate the transaction to know what amount and fee to use.
         // We use a dummy amount and fee to estimate the gas, and based on the result
         // we calculate the actual amount and fee to use in real transaction.
         let dummy_amount = Coin {
@@ -242,7 +242,7 @@ impl Client {
             SignerInfo::single_direct(Some(sender_public_key), account.sequence);
         let auth_info = signer_info.auth_info(fee);
         let sign_doc =
-            SignDoc::new(&tx_body, &auth_info, &self.chain_id, account.account_number)
+            SignDoc::new(&tx_body, &auth_info, &self.ss_chain_id, account.account_number)
                 .map_err(|err| anyhow!("{err:?}"))?;
 
         let sign_doc_bytes = sign_doc

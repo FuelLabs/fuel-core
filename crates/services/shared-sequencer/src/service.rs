@@ -46,6 +46,7 @@ pub struct Task<S> {
     account_metadata: Option<AccountMetadata>,
     prev_order: Option<u64>,
     blobs: Arc<tokio::sync::Mutex<SSBlobs>>,
+    interval: tokio::time::Interval,
 }
 
 impl<S> NonInitializedTask<S> {
@@ -126,6 +127,7 @@ where
         }
 
         Ok(Task {
+            interval: tokio::time::interval(self.config.block_posting_frequency),
             shared_sequencer_client,
             config: self.config,
             signer: self.signer,
@@ -140,48 +142,30 @@ impl<S> Task<S>
 where
     S: Signer,
 {
-    // This function is not cancel-safe because it calls `sleep` inside.
-    async fn blobs(&mut self) -> anyhow::Result<Option<SSBlobs>> {
+    /// Fetch latest account metadata if it's not set
+    async fn ensure_account_metadata(&mut self) -> anyhow::Result<()> {
+        if self.account_metadata.is_some() {
+            return Ok(());
+        }
         let ss = self
             .shared_sequencer_client
             .as_ref()
-            .expect("Shared sequencer client is not set; qed");
+            .expect("Shared sequencer client is not set");
+        self.account_metadata =  Some(ss.get_account_meta(self.signer.as_ref()).await?);
+        Ok(())
+    }
 
-        if self.account_metadata.is_none() {
-            // If the account is not funded, this code will fail
-            // because we can't sign the transaction without account metadata.
-            let account_metadata = ss.get_account_meta(self.signer.as_ref()).await;
-
-            match account_metadata {
-                Ok(account_metadata) => {
-                    self.account_metadata = Some(account_metadata);
-                }
-                Err(err) => {
-                    // We don't want to spam the RPC endpoint with a lot of queries,
-                    // so wait for one second before sending the next one.
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    return Err(err);
-                }
-            }
+    /// Fetch previous order in the topic if it's not set
+    async fn ensure_prev_order(&mut self) -> anyhow::Result<()> {
+        if self.prev_order.is_some() {
+            return Ok(());
         }
-
-        if self.prev_order.is_none() {
-            self.prev_order = ss.get_topic().await?.map(|f| f.order);
-        }
-
-        tokio::time::sleep(self.config.block_posting_frequency).await;
-
-        let blobs = {
-            let mut lock = self.blobs.lock().await;
-            core::mem::take(&mut *lock)
-        };
-
-        if blobs.is_empty() {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            Ok(None)
-        } else {
-            Ok(Some(blobs))
-        }
+        let ss = self
+            .shared_sequencer_client
+            .as_ref()
+            .expect("Shared sequencer client is not set");
+        self.prev_order = ss.get_topic().await?.map(|f| f.order);
+        Ok(())
     }
 }
 
@@ -196,49 +180,46 @@ where
             return TaskNextAction::Stop;
         }
 
+        if let Err(err) = self.ensure_account_metadata().await {
+            // We don't want to spam the RPC endpoint with a lot of queries,
+            // so wait for one second before sending the next one.
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            return TaskNextAction::ErrorContinue(err)
+        }
+        if let Err(err) = self.ensure_prev_order().await {
+            return TaskNextAction::ErrorContinue(err)
+        };
+
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
                 TaskNextAction::Stop
             },
-
-            blobs = self.blobs() => {
-                let blobs = match blobs {
-                    Ok(blobs) => blobs,
-                    Err(err) => return TaskNextAction::ErrorContinue(err),
+            _ = self.interval.tick() => {
+                let blobs = {
+                    let mut lock = self.blobs.lock().await;
+                    core::mem::take(&mut *lock)
+                };
+                if blobs.is_empty() {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    return TaskNextAction::Continue;
                 };
 
-                // The `blobs` function is not cancel safe, as it calls sleep inside.
-                // If someone adds new logic into the `tokio::select`, please
-                // rework the `blobs` function to be cancel safe and use interval inside.
-                if let Some(blobs) = blobs {
-                    let mut account = self.account_metadata.take().expect("Account metadata is not set; qed");
-                    let next_order = if let Some(prev_order) = self.prev_order {
-                        prev_order.wrapping_add(1)
-                    } else {
-                        0
-                    };
+                let mut account = self.account_metadata.take().expect("Account metadata is not set");
+                let next_order = self.prev_order.map(|prev| prev.wrapping_add(1)).unwrap_or(0);
+                let ss =  self.shared_sequencer_client
+                    .as_ref().expect("Shared sequencer client is not set");
+                let blobs_bytes = postcard::to_allocvec(&blobs).expect("Failed to serialize SSBlob");
 
-                    let ss =  self.shared_sequencer_client
-                        .as_ref().expect("Shared sequencer client is not set; qed");
-                    let blobs_bytes = postcard::to_allocvec(&blobs).expect("Failed to serialize SSBlob");
-                    let result = ss.send(self.signer.as_ref(), account, next_order, blobs_bytes).await;
-
-                    match result {
-                        Ok(_) => {
-                            tracing::info!("Posted block to shared sequencer {blobs:?}");
-                            account.sequence = account.sequence.saturating_add(1);
-                            self.prev_order = Some(next_order);
-                            self.account_metadata = Some(account);
-                            TaskNextAction::Continue
-                        }
-                        Err(err) => {
-                            TaskNextAction::ErrorContinue(err)
-                        }
-                    }
-                } else {
-                    TaskNextAction::Continue
+                if let Err(err) = ss.send(self.signer.as_ref(), account, next_order, blobs_bytes).await {
+                    TaskNextAction::ErrorContinue(err);
                 }
+
+                tracing::info!("Posted block to shared sequencer {blobs:?}");
+                account.sequence = account.sequence.saturating_add(1);
+                self.prev_order = Some(next_order);
+                self.account_metadata = Some(account);
+                TaskNextAction::Continue
             },
         }
     }
