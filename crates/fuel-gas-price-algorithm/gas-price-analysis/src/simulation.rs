@@ -21,6 +21,7 @@ pub struct SimulationResults {
     pub actual_profit: Vec<i128>,
     pub projected_profit: Vec<i128>,
     pub pessimistic_costs: Vec<u128>,
+    pub first_height: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -220,6 +221,11 @@ impl Simulator {
             .map(|(cost, reward)| *reward as i128 - *cost as i128)
             .collect();
 
+        let first_height = fullness_and_bytes
+            .first()
+            .expect("should have at least 1 l2 block")
+            .height as u32;
+
         SimulationResults {
             gas_prices,
             exec_gas_prices,
@@ -229,6 +235,7 @@ impl Simulator {
             actual_profit,
             projected_profit,
             pessimistic_costs,
+            first_height,
         }
     }
 

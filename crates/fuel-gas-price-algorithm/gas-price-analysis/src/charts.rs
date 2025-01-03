@@ -8,7 +8,13 @@ use plotters::{
     },
     series::LineSeries,
     style::{
-        Color, IntoFont, RGBColor, BLACK, BLUE, RED, WHITE
+        Color,
+        IntoFont,
+        RGBColor,
+        BLACK,
+        BLUE,
+        RED,
+        WHITE,
     },
 };
 
@@ -36,6 +42,7 @@ pub fn draw_chart(
         actual_profit,
         projected_profit,
         pessimistic_costs,
+        first_height,
     } = results;
 
     let plot_width = 640 * 2 * 2;
@@ -58,9 +65,14 @@ pub fn draw_chart(
     let (window_two, new_lower) = lower.split_vertically(plot_height / 4);
     let (window_three, window_four) = new_lower.split_vertically(plot_height / 4);
 
-    draw_fullness(&window_one, &fullness, "Fullness")?;
+    draw_fullness(&window_one, &fullness, "Fullness", first_height)?;
 
-    draw_bytes_and_cost_per_block(&window_two, &bytes_and_costs, "Bytes Per Block")?;
+    draw_bytes_and_cost_per_block(
+        &window_two,
+        &bytes_and_costs,
+        "Bytes Per Block",
+        first_height,
+    )?;
 
     draw_profit(
         &window_three,
@@ -73,6 +85,7 @@ pub fn draw_chart(
             prettify_number(d_comp),
             prettify_number(da_finalization_period)
         ),
+        first_height,
     )?;
     draw_gas_prices(
         &window_four,
@@ -80,6 +93,7 @@ pub fn draw_chart(
         &exec_gas_prices,
         &da_gas_prices,
         "Gas Prices",
+        first_height,
     )?;
 
     root.present()?;
@@ -93,6 +107,7 @@ pub fn draw_gas_prices(
     _exec_gas_prices: &[u64],
     da_gas_prices: &[u64],
     title: &str,
+    first_height: u32,
 ) -> anyhow::Result<()> {
     let gas_prices_gwei: Vec<_> = gas_prices.iter().map(|x| x / ONE_GWEI).collect();
     let _exec_gas_prices_gwei: Vec<_> =
@@ -115,7 +130,9 @@ pub fn draw_gas_prices(
     chart
         .configure_mesh()
         .y_desc("DA Gas Price")
-        .x_desc("Block")
+        .x_desc("L2 Block")
+        .x_labels(da_gas_prices.len())
+        .x_label_formatter(&|x| format!("{}", x + first_height as usize))
         .draw()?;
 
     // chart
@@ -161,6 +178,7 @@ pub fn draw_fullness(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
     fullness: &[(u64, u64)],
     title: &str,
+    first_height: u32,
 ) -> anyhow::Result<()> {
     const FULLNESS_COLOR: RGBColor = BLACK;
 
@@ -178,7 +196,9 @@ pub fn draw_fullness(
     chart
         .configure_mesh()
         .y_desc("Fullness Percentage")
-        .x_desc("Block")
+        .x_desc("L2 Block")
+        .x_labels(fullness.len())
+        .x_label_formatter(&|x| format!("{}", x + first_height as usize))
         .draw()?;
 
     chart
@@ -207,6 +227,7 @@ pub fn draw_bytes_and_cost_per_block(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
     bytes_and_costs_per_block: &[(u32, u64)],
     title: &str,
+    first_height: u32,
 ) -> anyhow::Result<()> {
     const BYTES_PER_BLOCK_COLOR: RGBColor = BLACK;
     let (bytes, costs): (Vec<u32>, Vec<u64>) =
@@ -230,7 +251,9 @@ pub fn draw_bytes_and_cost_per_block(
     chart
         .configure_mesh()
         .y_desc("Bytes Per Block")
-        .x_desc("Block")
+        .x_desc("L2 Block")
+        .x_labels(bytes_and_costs_per_block.len())
+        .x_label_formatter(&|x| format!("{}", x + first_height as usize))
         .draw()
         .unwrap();
 
@@ -284,6 +307,7 @@ pub fn draw_profit(
     projected_profit: &[i128],
     pessimistic_block_costs: &[u128],
     title: &str,
+    first_height: u32,
 ) -> anyhow::Result<()> {
     const ACTUAL_PROFIT_COLOR: RGBColor = BLACK;
     const PROJECTED_PROFIT_COLOR: RGBColor = RED;
@@ -336,7 +360,9 @@ pub fn draw_profit(
     chart
         .configure_mesh()
         .y_desc("Profit (Gwei)")
-        .x_desc("Block")
+        .x_desc("L2 Block")
+        .x_labels(actual_profit.len())
+        .x_label_formatter(&|x| format!("{}", x + first_height as usize))
         .draw()?;
 
     chart
