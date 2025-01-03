@@ -169,6 +169,8 @@ fn l1_l2_block_data_from_source(
 async fn main() -> anyhow::Result<()> {
     let args = Arg::parse();
 
+    tracing_subscriber::fmt::init();
+
     const UPDATE_PERIOD: usize = 12;
     const CAPACITY: u64 = 30_000_000;
 

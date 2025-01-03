@@ -18,3 +18,4 @@ rand_distr = "0.4.3"
 serde = { version = "1.0.209", features = ["derive"] }
 serde-reflection = "0.5.0"
 tokio = { version = "1.40.0", features = ["macros", "rt", "rt-multi-thread"] }
+tracing-subscriber = "0.3"
