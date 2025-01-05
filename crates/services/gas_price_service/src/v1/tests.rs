@@ -561,7 +561,7 @@ impl L2Data for FakeL2Data {
         &self,
         _height: &BlockHeight,
     ) -> StorageResult<Option<Block<Transaction>>> {
-        unimplemented!()
+        Ok(None)
     }
 }
 impl AtomicView for FakeOnChainDb {
