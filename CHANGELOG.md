@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2439](https://github.com/FuelLabs/fuel-core/pull/2439): Add gas costs for the two new zk opcodes `ecop` and `eadd` and the benches that allow to calibrate them.
 - [2472](https://github.com/FuelLabs/fuel-core/pull/2472): Added the `amountU128` field to the `Balance` GraphQL schema, providing the total balance as a `U128`. The existing `amount` field clamps any balance exceeding `U64` to `u64::MAX`.
 - [2526](https://github.com/FuelLabs/fuel-core/pull/2526): Add possibility to not have any cache set for RocksDB. Add an option to either load the RocksDB columns families on creation of the database or when the column is used.
+- [2532](https://github.com/FuelLabs/fuel-core/pull/2532): Getters for inner rocksdb database handles.
 
 ### Fixed
 - [2365](https://github.com/FuelLabs/fuel-core/pull/2365): Fixed the error during dry run in the case of race condition.
@@ -44,6 +45,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2511](https://github.com/FuelLabs/fuel-core/pull/2511): Fix backward compatibility of V0Metadata in gas price db.
 
 ### Changed
+- [2501](https://github.com/FuelLabs/fuel-core/pull/2501): Use gas price from block for estimating future gas prices
 - [2468](https://github.com/FuelLabs/fuel-core/pull/2468): Abstract unrecorded blocks concept for V1 algorithm, create new storage impl. Introduce `TransactionableStorage` trait to allow atomic changes to the storage.
 - [2295](https://github.com/FuelLabs/fuel-core/pull/2295): `CombinedDb::from_config` now respects `state_rewind_policy` with tmp RocksDB.
 - [2378](https://github.com/FuelLabs/fuel-core/pull/2378): Use cached hash of the topic instead of calculating it on each publishing gossip message.
