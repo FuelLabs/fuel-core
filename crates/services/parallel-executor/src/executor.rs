@@ -409,7 +409,8 @@ where
             "The executor runtime is not initialized.".to_string(),
         ))?;
         #[cfg(debug_assertions)]
-        let mut saved_txs: HashMap<TxId, MaybeCheckedTransaction> = HashMap::new();
+        let saved_txs: Arc<RwLock<HashMap<TxId, MaybeCheckedTransaction>>> =
+            Arc::new(RwLock::new(HashMap::new()));
 
         let executor = self.executor.read().map_err(|e| {
             ExecutorError::Other(format!(
@@ -467,13 +468,16 @@ where
                     // TODO: try to remove this clone
                     let consensus_parameters = consensus_parameters.clone();
                     let skipped_transactions_ids = skipped_transactions_ids.clone();
+                    #[cfg(debug_assertions)]
+                    let saved_txs = saved_txs.clone();
                     async move {
                         let mut checked_txs: Vec<MaybeCheckedTransaction> =
                             Vec::with_capacity(tx_per_core);
                         for tx in txs {
-                            // TODO: Prevent the failed transaction to make fail the whole executor and push them
-                            // to the skipped transactions. Before doing that we need to have the `tx_id` in the error
-                            // to avoid double hashing only to store the tx in the skipped transactions.
+                            #[cfg(debug_assertions)]
+                            {
+                                saved_txs.write().unwrap().insert(tx.id(&chain_id), tx.clone());
+                            }
                             match tx {
                                 MaybeCheckedTransaction::Transaction(tx) => {
                                     // Not doing into_checked to check signature and predicates
@@ -547,11 +551,6 @@ where
             let txs = result.unwrap()?;
 
             for tx in txs {
-                #[cfg(debug_assertions)]
-                {
-                    let tx_id = tx.id(&chain_id);
-                    saved_txs.insert(tx_id, tx.clone());
-                }
                 if tx.is_mint() {
                     return Err(ExecutorError::MintIsNotLastTransaction);
                 }
@@ -643,6 +642,10 @@ where
 
         #[cfg(debug_assertions)]
         {
+            let saved_txs = Arc::try_unwrap(saved_txs)
+                .expect("The skipped transactions shouldn't be in others threads")
+                .into_inner()
+                .expect("The skipped transactions shouldn't be in others threads");
             // Add the skipped transactions to the source of normal execution so that they appears on the result also.
             let mut transactions = Vec::with_capacity(
                 result
