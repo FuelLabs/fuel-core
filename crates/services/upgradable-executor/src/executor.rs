@@ -160,7 +160,9 @@ impl<S, R> Executor<S, R> {
         ("0-37-1", 13),
         ("0-38-0", 14),
         ("0-39-0", 15),
-        ("0-40-0", LATEST_STATE_TRANSITION_VERSION),
+        ("0-40-0", 16),
+        ("0-40-1", 17),
+        ("0-40-2", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
