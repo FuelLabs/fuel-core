@@ -453,6 +453,9 @@ where
         let mut handlers = Vec::with_capacity(self.number_of_cores.get());
         let mut current_batch = Vec::with_capacity(tx_per_core);
         let mut i = 0;
+
+        let skipped_transactions_ids: Arc<RwLock<Vec<(TxId, ExecutorError)>>> =
+            Arc::new(RwLock::new(vec![]));
         // We don't use the `txs.chunks` because it gives references which force us to Clone.
         // Itertools chunks doesn't allow data to work in async.
         for tx in txs {
@@ -463,6 +466,7 @@ where
                 handlers.push(runtime.spawn({
                     // TODO: try to remove this clone
                     let consensus_parameters = consensus_parameters.clone();
+                    let skipped_transactions_ids = skipped_transactions_ids.clone();
                     async move {
                         let mut checked_txs: Vec<MaybeCheckedTransaction> =
                             Vec::with_capacity(tx_per_core);
@@ -474,16 +478,15 @@ where
                                 MaybeCheckedTransaction::Transaction(tx) => {
                                     // Not doing into_checked to check signature and predicates
                                     // because it's already done in executor when calling `dry_run`
-                                    checked_txs.push(
-                                        MaybeCheckedTransaction::CheckedTransaction(
-                                            tx.into_checked_basic(
-                                                block_height,
-                                                &consensus_parameters,
-                                            )?
-                                            .into(),
-                                            consensus_parameters_version,
-                                        ),
-                                    )
+                                    let tx = tx.into_checked_basic(block_height, &consensus_parameters);
+                                    match tx {
+                                        Ok(tx) => {
+                                            checked_txs.push(MaybeCheckedTransaction::CheckedTransaction(tx.into(), consensus_parameters_version));
+                                        }
+                                        Err((id, e)) => {
+                                            skipped_transactions_ids.write().unwrap().push((id, ExecutorError::InvalidTransaction(e)));
+                                        }
+                                    }
                                 }
                                 MaybeCheckedTransaction::CheckedTransaction(
                                     checked_tx,
@@ -500,16 +503,15 @@ where
                                         let checked_tx: Checked<Transaction> =
                                             checked_tx.into();
                                         let (tx, _) = checked_tx.into();
-                                        checked_txs.push(
-                                            MaybeCheckedTransaction::CheckedTransaction(
-                                                tx.into_checked_basic(
-                                                    block_height,
-                                                    &consensus_parameters,
-                                                )?
-                                                .into(),
-                                                consensus_parameters_version,
-                                            ),
-                                        )
+                                        let tx = tx.into_checked_basic(block_height, &consensus_parameters);
+                                        match tx {
+                                            Ok(tx) => {
+                                                checked_txs.push(MaybeCheckedTransaction::CheckedTransaction(tx.into(), consensus_parameters_version));
+                                            }
+                                            Err((id, e)) => {
+                                                skipped_transactions_ids.write().unwrap().push((id, ExecutorError::InvalidTransaction(e)));
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -535,8 +537,11 @@ where
         // TODO: Use reference for `consensus_parameters`.
         let start = Instant::now();
         let mut splitter = DependencySplitter::new(consensus_parameters.clone(), txs_len);
-
-        let mut skipped_transactions_ids = vec![];
+        // SAFETY: The `skipped_transactions_ids` is not shared between threads.
+        let mut skipped_transactions_ids = Arc::try_unwrap(skipped_transactions_ids)
+            .expect("The skipped transactions shouldn't be in others threads")
+            .into_inner()
+            .expect("The skipped transactions shouldn't be in others threads");
 
         for result in results {
             let txs = result.unwrap()?;

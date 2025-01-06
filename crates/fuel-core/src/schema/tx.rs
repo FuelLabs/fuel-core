@@ -310,7 +310,7 @@ impl TxMutation {
             if gas > block_gas_limit {
                 return Err(anyhow::anyhow!("The sum of the gas usable by the transactions is greater than the block gas limit").into());
             }
-            tx.precompute(&consensus_params.chain_id())?;
+            tx.precompute(&consensus_params.chain_id()).map_err(|(_, e)| e)?;
             Ok(gas)
         })?;
 

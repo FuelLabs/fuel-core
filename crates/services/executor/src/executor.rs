@@ -1119,7 +1119,7 @@ impl<R> BlockExecutor<R> {
                 memory,
                 block_storage_tx,
             )
-            .map_err(ForcedTransactionFailure::CheckError)?;
+            .map_err(|(_, e)| ForcedTransactionFailure::CheckError(e))?;
         Ok(checked_tx)
     }
 
@@ -1261,7 +1261,8 @@ impl<R> BlockExecutor<R> {
         let actual_version = header.consensus_parameters_version;
         let checked_tx = match tx {
             MaybeCheckedTransaction::Transaction(tx) => tx
-                .into_checked_basic(block_height, &self.consensus_params)?
+                .into_checked_basic(block_height, &self.consensus_params)
+                .map_err(|(_, e)| e)?
                 .into(),
             MaybeCheckedTransaction::CheckedTransaction(checked_tx, checked_version) => {
                 if actual_version == checked_version {
@@ -1269,7 +1270,8 @@ impl<R> BlockExecutor<R> {
                 } else {
                     let checked_tx: Checked<Transaction> = checked_tx.into();
                     let (tx, _) = checked_tx.into();
-                    tx.into_checked_basic(block_height, &self.consensus_params)?
+                    tx.into_checked_basic(block_height, &self.consensus_params)
+                        .map_err(|(_, e)| e)?
                         .into()
                 }
             }
@@ -1757,7 +1759,8 @@ impl<R> BlockExecutor<R> {
         let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
         #[cfg(debug_assertions)]
         {
-            tx.precompute(&self.consensus_params.chain_id())?;
+            tx.precompute(&self.consensus_params.chain_id())
+                .map_err(|(_, e)| e)?;
             debug_assert_eq!(tx.id(&self.consensus_params.chain_id()), tx_id);
         }
 

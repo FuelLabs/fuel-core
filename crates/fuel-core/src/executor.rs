@@ -236,7 +236,6 @@ mod tests {
         Executor::new(database, DisabledRelayer, executor_config)
     }
 
-    #[cfg(feature = "parallel-executor")]
     fn store_block(
         database: &mut Database,
         block: &Block,

@@ -146,7 +146,8 @@ impl UnverifiedTx {
         // let start_time = tokio::time::Instant::now();
         let tx = self
             .0
-            .into_checked_basic(current_height, consensus_params)?;
+            .into_checked_basic(current_height, consensus_params)
+            .map_err(|(_, e)| e)?;
         // tracing::info!(
         //     "Transaction (id: {}) basic verification took: {} micros seconds",
         //     tx.transaction().id(&consensus_params.chain_id()),
