@@ -208,8 +208,8 @@ pub fn init_sub_services(
         da_source,
         database.on_chain().clone(),
     )?;
-
-    let gas_price_provider = FuelGasPriceProvider::new(gas_price_service.shared.clone());
+    let (gas_price_algo, _) = &gas_price_service.shared;
+    let gas_price_provider = FuelGasPriceProvider::new(gas_price_algo.clone());
     let txpool = fuel_core_txpool::new_service(
         chain_id,
         config.txpool.clone(),

@@ -67,14 +67,39 @@ use std::{
 };
 use tokio::sync::broadcast::Receiver;
 
+#[derive(Debug, Clone)]
+pub struct LatestGasPrice<Height, GasPrice> {
+    inner: Arc<parking_lot::RwLock<(Height, GasPrice)>>,
+}
+
+impl<Height, GasPrice> LatestGasPrice<Height, GasPrice> {
+    pub fn new(height: Height, price: GasPrice) -> Self {
+        let pair = (height, price);
+        let inner = Arc::new(parking_lot::RwLock::new(pair));
+        Self { inner }
+    }
+
+    pub fn set(&mut self, height: Height, price: GasPrice) {
+        *self.inner.write() = (height, price);
+    }
+}
+
+impl<Height: Copy, GasPrice: Copy> LatestGasPrice<Height, GasPrice> {
+    pub fn get(&self) -> (Height, GasPrice) {
+        *self.inner.read()
+    }
+}
+
 /// The service that updates the gas price algorithm.
 pub struct GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     DA: DaBlockCostsSource + 'static,
-    AtomicStorage: GasPriceServiceAtomicStorage,
+    // AtomicStorage: GasPriceServiceAtomicStorage,
 {
     /// The algorithm that can be used in the next block
     shared_algo: SharedV1Algorithm,
+    /// The latest gas price
+    latest_gas_price: LatestGasPrice<u32, u64>,
     /// The L2 block source
     l2_block_source: L2,
     /// The algorithm updater
@@ -91,6 +116,24 @@ where
     latest_l2_block: Arc<Mutex<BlockHeight>>,
 }
 
+impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
+where
+    DA: DaBlockCostsSource + 'static,
+{
+    pub(crate) fn update_latest_gas_price(&mut self, block_info: &BlockInfo) {
+        match block_info {
+            BlockInfo::GenesisBlock => {
+                // do nothing
+            }
+            BlockInfo::Block {
+                height, gas_price, ..
+            } => {
+                self.latest_gas_price.set(*height, *gas_price);
+            }
+        }
+    }
+}
+
 impl<L2, DA, AtomicStorage> GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     L2: L2BlockSource,
@@ -104,6 +147,7 @@ where
         tracing::info!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
 
+        self.update_latest_gas_price(&block);
         tracing::debug!("Updating gas price algorithm");
         self.apply_block_info_to_gas_algorithm(block).await?;
 
@@ -135,6 +179,7 @@ where
     pub fn new(
         l2_block_source: L2,
         shared_algo: SharedV1Algorithm,
+        latest_gas_price: LatestGasPrice<u32, u64>,
         algorithm_updater: AlgorithmUpdaterV1,
         da_source_adapter_handle: ServiceRunner<DaSourceService<DA>>,
         storage_tx_provider: AtomicStorage,
@@ -143,6 +188,7 @@ where
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
         Self {
             shared_algo,
+            latest_gas_price,
             l2_block_source,
             algorithm_updater,
             da_source_adapter_handle,
@@ -253,6 +299,7 @@ where
                 block_gas_capacity,
                 block_bytes,
                 block_fees,
+                ..
             } => {
                 self.handle_normal_block(
                     height,
@@ -352,6 +399,7 @@ where
         let v1_metadata = convert_to_v1_metadata(updater_metadata, config)?;
         v1_algorithm_from_metadata(v1_metadata, config)
     } else {
+        // TODO: Shouldn't we be using the `latest_block_height` here for `l2_block_height`?
         updater_from_config(config)
     };
 
@@ -383,6 +431,7 @@ mod tests {
     };
     use fuel_core_storage::{
         structured_storage::test::InMemoryStorage,
+        tables::merkle::DenseMetadataKey::Latest,
         transactional::{
             IntoTransaction,
             StorageTransaction,
@@ -427,6 +476,7 @@ mod tests {
             service::{
                 initialize_algorithm,
                 GasPriceServiceV1,
+                LatestGasPrice,
             },
             uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
         },
@@ -490,6 +540,7 @@ mod tests {
             block_gas_capacity: 100,
             block_bytes: 100,
             block_fees: 100,
+            gas_price: 100,
         };
 
         let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
@@ -532,11 +583,13 @@ mod tests {
         );
         let da_service_runner = ServiceRunner::new(dummy_da_source);
         da_service_runner.start_and_await().await.unwrap();
+        let latest_gas_price = LatestGasPrice::new(0, 0);
         let latest_l2_height = latest_l2_height(0);
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
             shared_algo,
+            latest_gas_price,
             algo_updater,
             da_service_runner,
             inner,
@@ -566,6 +619,7 @@ mod tests {
             block_gas_capacity: 100,
             block_bytes: 100,
             block_fees: 100,
+            gas_price: 100,
         };
 
         let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
@@ -623,10 +677,12 @@ mod tests {
         let mut watcher = StateWatcher::started();
         let da_service_runner = ServiceRunner::new(da_source);
         da_service_runner.start_and_await().await.unwrap();
+        let latest_gas_price = LatestGasPrice::new(0, 0);
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
             shared_algo,
+            latest_gas_price,
             algo_updater,
             da_service_runner,
             inner,
@@ -681,6 +737,7 @@ mod tests {
             block_gas_capacity: 100,
             block_bytes: 100,
             block_fees: 100,
+            gas_price: 100,
         };
 
         let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
@@ -723,10 +780,12 @@ mod tests {
         let mut watcher = StateWatcher::started();
         let da_service_runner = ServiceRunner::new(da_source);
         da_service_runner.start_and_await().await.unwrap();
+        let latest_gas_price = LatestGasPrice::new(0, 0);
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
             shared_algo,
+            latest_gas_price,
             algo_updater,
             da_service_runner,
             inner,
@@ -769,6 +828,7 @@ mod tests {
             block_gas_capacity: 100,
             block_bytes: 100,
             block_fees: 100,
+            gas_price: 0,
         };
 
         let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
@@ -812,10 +872,12 @@ mod tests {
         let mut watcher = StateWatcher::started();
         let da_service_runner = ServiceRunner::new(da_source);
         da_service_runner.start_and_await().await.unwrap();
+        let latest_gas_price = LatestGasPrice::new(0, 0);
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
             shared_algo,
+            latest_gas_price,
             algo_updater,
             da_service_runner,
             inner,
