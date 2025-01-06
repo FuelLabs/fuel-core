@@ -447,7 +447,7 @@ fn block_for_height(height: u32) -> Block {
     let mut header = PartialBlockHeader::default();
     header.consensus.height = height.into();
     let transactions = vec![];
-    Block::new(header, transactions, Default::default(), Default::default()).unwrap()
+    Block::new(header, transactions, None, Default::default(), Default::default()).unwrap()
 }
 
 #[tokio::test]

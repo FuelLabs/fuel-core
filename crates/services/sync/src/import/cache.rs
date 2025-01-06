@@ -256,6 +256,7 @@ mod tests {
             entity: Block::new(
                 (&create_header(height).entity).into(),
                 Vec::new(),
+                None,
                 &[],
                 Bytes32::default(),
             )

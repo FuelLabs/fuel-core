@@ -117,6 +117,7 @@ fn arc_pool_tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block 
     Block::new(
         component.header_to_produce,
         transactions,
+        None,
         &[],
         Default::default(),
     )

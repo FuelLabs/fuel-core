@@ -191,7 +191,7 @@ where
     let mut verifier = MockBlockVerifier::default();
     verifier
         .expect_verify_block_fields()
-        .return_once(move |_, _| result());
+        .return_once(move |_, _, _| result());
 
     verifier
 }
