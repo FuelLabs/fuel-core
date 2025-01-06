@@ -44,6 +44,7 @@ use crate::{
         service::{
             initialize_algorithm,
             GasPriceServiceV1,
+            LatestGasPrice,
         },
         uninitialized_task::fuel_storage_unrecorded_blocks::{
             AsUnrecordedBlocks,
@@ -81,19 +82,23 @@ use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     UnrecordedBlocks,
 };
-use std::time::Duration;
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 
 pub mod fuel_storage_unrecorded_blocks;
 
 pub struct UninitializedTask<L2DataStoreView, GasPriceStore, DA, SettingsProvider> {
     pub config: V1AlgorithmConfig,
-    pub gas_metadata_height: BlockHeight,
+    pub gas_metadata_height: Option<BlockHeight>,
     pub genesis_block_height: BlockHeight,
     pub settings: SettingsProvider,
     pub gas_price_db: GasPriceStore,
     pub on_chain_db: L2DataStoreView,
     pub block_stream: BoxStream<SharedImportResult>,
     pub(crate) shared_algo: SharedV1Algorithm,
+    pub(crate) latest_gas_price: LatestGasPrice<u32, u64>,
     pub(crate) algo_updater: AlgorithmUpdaterV1,
     pub(crate) da_source: DA,
 }
@@ -118,20 +123,35 @@ where
         da_source: DA,
         on_chain_db: L2DataStoreView,
     ) -> anyhow::Result<Self> {
-        let gas_price_db_height = gas_metadata_height.unwrap_or(genesis_block_height);
+        let latest_block_height: u32 = on_chain_db
+            .latest_view()?
+            .latest_height()
+            .unwrap_or(genesis_block_height)
+            .into();
+        let latest_gas_price = on_chain_db
+            .latest_view()?
+            .get_block(&latest_block_height.into())?
+            .and_then(|block| {
+                let (_, gas_price) = mint_values(&block).ok()?;
+                Some(gas_price)
+            })
+            .unwrap_or(0);
 
         let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, gas_price_db_height.into(), &gas_price_db)?;
+            initialize_algorithm(&config, latest_block_height, &gas_price_db)?;
+
+        let latest_gas_price = LatestGasPrice::new(latest_block_height, latest_gas_price);
 
         let task = Self {
             config,
-            gas_metadata_height: gas_price_db_height,
+            gas_metadata_height,
             genesis_block_height,
             settings,
             gas_price_db,
             on_chain_db,
             block_stream,
             algo_updater,
+            latest_gas_price,
             shared_algo,
             da_source,
         };
@@ -144,12 +164,21 @@ where
     ) -> anyhow::Result<
         GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, AtomicStorage>,
     > {
+        let mut first_run = false;
         let latest_block_height: u32 = self
             .on_chain_db
             .latest_view()?
             .latest_height()
             .unwrap_or(self.genesis_block_height)
             .into();
+
+        let maybe_metadata_height = self.gas_metadata_height;
+        let metadata_height = if let Some(metadata_height) = maybe_metadata_height {
+            metadata_height.into()
+        } else {
+            first_run = true;
+            latest_block_height
+        };
 
         let l2_block_source = FuelL2BlockSource::new(
             self.genesis_block_height,
@@ -173,17 +202,18 @@ where
             let service = GasPriceServiceV1::new(
                 l2_block_source,
                 self.shared_algo,
+                self.latest_gas_price,
                 self.algo_updater,
                 da_service_runner,
                 self.gas_price_db,
             );
             Ok(service)
         } else {
-            if latest_block_height > *self.gas_metadata_height {
+            if latest_block_height > metadata_height {
                 sync_v1_metadata(
                     &self.settings,
                     &self.on_chain_db,
-                    *self.gas_metadata_height,
+                    metadata_height,
                     latest_block_height,
                     &mut self.algo_updater,
                     &mut self.gas_price_db,
@@ -194,6 +224,7 @@ where
             let service = GasPriceServiceV1::new(
                 l2_block_source,
                 self.shared_algo,
+                self.latest_gas_price,
                 self.algo_updater,
                 da_service_runner,
                 self.gas_price_db,
@@ -214,12 +245,12 @@ where
     SettingsProvider: GasPriceSettingsProvider + 'static,
 {
     const NAME: &'static str = "GasPriceServiceV1";
-    type SharedData = SharedV1Algorithm;
+    type SharedData = (SharedV1Algorithm, LatestGasPrice<u32, u64>);
     type Task = GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, AtomicStorage>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        self.shared_algo.clone()
+        (self.shared_algo.clone(), self.latest_gas_price.clone())
     }
 
     async fn into_task(

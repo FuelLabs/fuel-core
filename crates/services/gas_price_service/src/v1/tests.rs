@@ -30,6 +30,7 @@ use crate::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
             service::{
+                new_service,
                 DaBlockCostsSource,
                 DaSourceService,
             },
@@ -43,6 +44,7 @@ use crate::{
         service::{
             initialize_algorithm,
             GasPriceServiceV1,
+            LatestGasPrice,
         },
         uninitialized_task::{
             fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
@@ -363,6 +365,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         block_gas_capacity: 100,
         block_bytes: 100,
         block_fees: 100,
+        gas_price: 100,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
@@ -380,9 +383,11 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let da_service_runner = ServiceRunner::new(da_source_service);
     da_service_runner.start_and_await().await.unwrap();
 
+    let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
+        latest_gas_price,
         algo_updater,
         da_service_runner,
         inner,
@@ -412,6 +417,7 @@ async fn run__new_l2_block_saves_old_metadata() {
         block_gas_capacity: 100,
         block_bytes: 100,
         block_fees: 100,
+        gas_price: 100,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
@@ -426,9 +432,11 @@ async fn run__new_l2_block_saves_old_metadata() {
     let da_source_service = DaSourceService::new(da_source, None);
     let da_service_runner = ServiceRunner::new(da_source_service);
     da_service_runner.start_and_await().await.unwrap();
+    let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
+        latest_gas_price,
         algo_updater,
         da_service_runner,
         inner,
@@ -446,6 +454,54 @@ async fn run__new_l2_block_saves_old_metadata() {
         .unwrap()
         .is_some();
     assert!(metadata_is_some);
+
+    // cleanup
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn run__new_l2_block_updates_latest_gas_price_arc() {
+    // given
+    let height = 1;
+    let gas_price = 40;
+    let l2_block = BlockInfo::Block {
+        height,
+        gas_used: 60,
+        block_gas_capacity: 100,
+        block_bytes: 100,
+        block_fees: 100,
+        gas_price,
+    };
+    let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
+    let l2_block_source = FakeL2BlockSource {
+        l2_block: l2_block_receiver,
+    };
+
+    let config = zero_threshold_arbitrary_config();
+    let inner = database();
+    let algo_updater = updater_from_config(&config);
+    let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
+    let da_source = FakeDABlockCost::never_returns();
+    let da_service_runner = new_service(da_source, None);
+    let latest_gas_price = LatestGasPrice::new(0, 0);
+    let mut service = GasPriceServiceV1::new(
+        l2_block_source,
+        shared_algo,
+        latest_gas_price.clone(),
+        algo_updater,
+        da_service_runner,
+        inner,
+    );
+    let mut watcher = StateWatcher::started();
+
+    // when
+    l2_block_sender.send(l2_block).await.unwrap();
+    service.run(&mut watcher).await;
+
+    // then
+    let expected = (height, gas_price);
+    let actual = latest_gas_price.get();
+    assert_eq!(expected, actual);
 
     // cleanup
     service.shutdown().await.unwrap();

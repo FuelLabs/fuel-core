@@ -307,7 +307,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn codec__serialzation_roundtrip_using_v1_on_error_response_returns_predefined_error_code(
+    async fn codec__serialization_roundtrip_using_v1_on_error_response_returns_predefined_error_code(
     ) {
         // Given
         let response = V2ResponseMessage::SealedHeaders(Err(
