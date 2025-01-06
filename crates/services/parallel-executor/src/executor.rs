@@ -440,9 +440,12 @@ where
         let chain_id = consensus_parameters.chain_id();
 
         // Precompute all transactions in all of the cores to avoid recomputing them when asking id.
-        let tx_per_core = txs_len.checked_div(self.number_of_cores.get()).ok_or(
-            ExecutorError::Other("The number of cores is 0.".to_string()),
-        )?;
+        let tx_per_core = txs_len
+            .checked_div(self.number_of_cores.get())
+            .ok_or(ExecutorError::Other(
+                "The number of cores is 0.".to_string(),
+            ))?
+            .saturating_add(1);
         let block_height = *header_to_produce.height();
         let consensus_parameters = consensus_parameters.into_owned();
 
@@ -455,7 +458,7 @@ where
         for tx in txs {
             current_batch.push(tx);
             i += 1;
-            if i == tx_per_core {
+            if i % tx_per_core == 0 || txs_len == i {
                 let txs = std::mem::take(&mut current_batch);
                 handlers.push(runtime.spawn({
                     // TODO: try to remove this clone
@@ -514,7 +517,6 @@ where
                         Ok::<Vec<MaybeCheckedTransaction>, ExecutorError>(checked_txs)
                     }
                 }));
-                i = 0;
             }
         }
 

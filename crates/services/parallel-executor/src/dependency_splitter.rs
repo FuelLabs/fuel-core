@@ -283,28 +283,43 @@ impl DependencySplitter {
         mut self,
         number_of_buckets: NonZeroUsize,
     ) -> Vec<Vec<MaybeCheckedTransaction>> {
+        // One of buckets is reserved (not exclusively) for the `other_bucket`, so subtract 1 from the
+        // `number_of_buckets`.
+        let number_of_buckets = number_of_buckets.get();
+        let number_of_wild_buckets = number_of_buckets.saturating_sub(1) as u64;
         // The last bucket should contain all blobs as the end of all transactions.
         // Blobs at the end avoids potential invalidation of the predicates or transactions
         // after then.
-        let mut sorted_buckets = BTreeMap::new();
-
-        // One of buckets is reserved for the `other_bucket`, so subtract 1 from the
-        // `number_of_buckets`.
-        let number_of_wild_buckets = number_of_buckets.get().saturating_sub(1) as u64;
-        for idx in 0..number_of_wild_buckets {
+        let mut sorted_buckets = Vec::with_capacity(number_of_buckets);
+        // It's certainly a bit too big allocation because some transactions will go to the last bucket used also for
+        // `others_transactions` but I don't think it's a big deal and we still win in terms of performance.
+        let max_size_bucket = self
+            .independent_bucket
+            .elements
+            .len()
+            .saturating_div(number_of_wild_buckets as usize)
+            .saturating_add(1);
+        for _ in 0..number_of_wild_buckets {
             let gas = 0u64;
-            let txs = BTreeMap::<SequenceNumber, TxId>::new();
-            sorted_buckets.insert((gas, idx), txs);
+            let txs: Vec<MaybeCheckedTransaction> = Vec::with_capacity(max_size_bucket);
+            sorted_buckets.push((gas, txs));
         }
 
         let other_gas = self.other_buckets.gas;
-        let other_transactions = self
+        let other_transactions: BTreeMap<usize, MaybeCheckedTransaction> = self
             .other_buckets
             .elements
             .into_iter()
-            .map(|(tx_id, (seq_num, _))| (seq_num, tx_id))
+            .filter_map(|(tx_id, (seq_num, _))| {
+                self.txs_to_bucket
+                    .remove(&tx_id)
+                    .map(|(tx, _)| (seq_num, tx))
+            })
             .collect();
-        sorted_buckets.insert((other_gas, number_of_wild_buckets), other_transactions);
+        sorted_buckets.push((
+            other_gas,
+            other_transactions.into_iter().map(|(_, tx)| tx).collect(),
+        ));
 
         let sorted_independent_txs = self
             .independent_bucket
@@ -315,54 +330,94 @@ impl DependencySplitter {
 
         let independent_most_expensive_transactions = sorted_independent_txs.into_iter();
 
-        for (gas, tx_id, seq_num) in independent_most_expensive_transactions {
-            let most_empty_bucket = sorted_buckets
-                .pop_first()
+        // Iterate from 0 to N buckets and insert transactions (that are sorted by expensive order) to the buckets following these rules:
+        // - Insert in order of bucket ids : 0,1,2,..N,N,N-1,N-2,..0,....
+        // - Skip the last bucket until the others doesn't have more gas usage than the `other_transactions`
+        // (to avoid filling the last bucket at the same rhythm as the others given the fact that he already contains the `others_transaction`)
+        // SAFE: `number_of_buckets` comes from a `NonZeroUsize` so it's always greater than 0
+        #[derive(Debug, PartialEq, Eq)]
+        enum IterationDirection {
+            Forward,
+            Backward,
+        }
+        let last_bucket_idx = number_of_buckets - 1;
+        let mut current_bucket_idx = 0;
+        let mut direction = IterationDirection::Forward;
+        // Allow to block iteration on the edges (0 and N) to fill them twice before going to the other side
+        let mut iterate_next_time = false;
+        // Used to skip the last bucket if the other transactions have more gas than the current other biggest bucket
+        let mut most_gas_usage_bucket = 0;
+        for (gas, tx_id, _) in independent_most_expensive_transactions {
+            // If we are in the last bucket we change the direction
+            if current_bucket_idx == last_bucket_idx {
+                iterate_next_time = if iterate_next_time == true {
+                    false
+                } else {
+                    true
+                };
+                direction = IterationDirection::Backward;
+                // If we are in the last bucket and the other transactions have more gas than the current other biggest bucket, we skip the last bucket
+                if most_gas_usage_bucket < other_gas {
+                    current_bucket_idx = current_bucket_idx.saturating_sub(1);
+                }
+            }
+            // If we are in the first bucket we change the direction
+            if current_bucket_idx == 0 {
+                iterate_next_time = if iterate_next_time == true {
+                    false
+                } else {
+                    true
+                };
+                direction = IterationDirection::Forward;
+            }
+            let txs = sorted_buckets
+                .get_mut(current_bucket_idx)
                 .expect("Always has items in the `sorted_buckets`; qed");
+            if let Some(tx) = self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx) {
+                txs.1.push(tx);
+                txs.0 += gas.0;
+            }
+            if most_gas_usage_bucket < txs.0 {
+                most_gas_usage_bucket = txs.0;
+            }
 
-            let (total_gas, idx) = most_empty_bucket.0;
-            let mut txs = most_empty_bucket.1;
-
-            let new_total_gas = total_gas.saturating_add(gas.0);
-            txs.insert(seq_num, tx_id);
-
-            sorted_buckets.insert((new_total_gas, idx), txs);
+            match direction {
+                IterationDirection::Forward => {
+                    if iterate_next_time {
+                        current_bucket_idx = current_bucket_idx.saturating_add(1);
+                    }
+                }
+                IterationDirection::Backward => {
+                    if iterate_next_time {
+                        current_bucket_idx = current_bucket_idx.saturating_sub(1);
+                    }
+                }
+            }
         }
 
-        let most_empty_bucket = sorted_buckets
-            .pop_first()
+        // Get latest bucket on the vector
+        let last_bucket = sorted_buckets
+            .last_mut()
             .expect("Always has items in the `sorted_buckets`; qed");
-        let mut buckets = sorted_buckets
-            .into_iter()
-            .map(|(_, txs)| {
-                txs.into_iter()
-                    .filter_map(|(_, tx_id)| {
-                        self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx)
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
 
-        let mut txs_from_most_empty_bucket = most_empty_bucket
-            .1
-            .into_iter()
-            .filter_map(|(_, tx_id)| self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx))
-            .collect::<Vec<_>>();
         let sorted_blobs = self
             .blobs_bucket
             .elements
             .into_iter()
-            .map(|(tx_id, (seq_num, _))| (seq_num, tx_id))
+            .map(|(tx_id, (_, gas))| (gas, tx_id))
             .collect::<BTreeMap<_, _>>();
-        let blobs = sorted_blobs
+
+        sorted_blobs.into_iter().for_each(|(gas, tx_id)| {
+            if let Some(tx) = self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx) {
+                last_bucket.1.push(tx);
+                last_bucket.0 += gas;
+            }
+        });
+        let buckets = sorted_buckets
             .into_iter()
-            .filter_map(|(_, tx_id)| self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx));
-        txs_from_most_empty_bucket.extend(blobs);
-        let bucket_with_blobs = txs_from_most_empty_bucket;
-
-        buckets.push(bucket_with_blobs);
-        debug_assert_eq!(buckets.len(), number_of_buckets.get());
-
+            .map(|(_, txs)| txs)
+            .collect::<Vec<_>>();
+        debug_assert_eq!(buckets.len(), number_of_buckets);
         buckets
     }
 }

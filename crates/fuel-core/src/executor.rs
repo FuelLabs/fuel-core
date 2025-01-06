@@ -2059,6 +2059,8 @@ mod tests {
             },
         );
 
+        dbg!(&create.id(&consensus_parameters.chain_id()));
+        dbg!(&modify_balance_and_state_tx.id(&consensus_parameters.chain_id()));
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
@@ -2407,7 +2409,8 @@ mod tests {
         block.header.consensus.height = 1.into();
 
         let ProductionResult { block, .. } = executor.produce_and_commit(block).unwrap();
-
+        dbg!(&block.transactions().len());
+        dbg!(&block.transactions()[0]);
         // ensure that all utxos with an amount are stored into the utxo set
         for (idx, output) in block.transactions()[1]
             .as_script()
