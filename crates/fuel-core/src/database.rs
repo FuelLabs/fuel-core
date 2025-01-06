@@ -78,7 +78,10 @@ use crate::state::{
         HistoricalRocksDB,
         StateRewindPolicy,
     },
-    rocks_db::RocksDb,
+    rocks_db::{
+        DatabaseConfig,
+        RocksDb,
+    },
 };
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -201,16 +204,15 @@ where
     #[cfg(feature = "rocksdb")]
     pub fn open_rocksdb(
         path: &Path,
-        capacity: impl Into<Option<usize>>,
         state_rewind_policy: StateRewindPolicy,
-        max_fds: i32,
+        database_config: DatabaseConfig,
     ) -> Result<Self> {
         use anyhow::Context;
+
         let db = HistoricalRocksDB::<Description>::default_open(
             path,
-            capacity.into(),
             state_rewind_policy,
-            max_fds,
+            database_config,
         )
         .map_err(Into::<anyhow::Error>::into)
         .with_context(|| {
@@ -255,9 +257,14 @@ where
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn rocksdb_temp(rewind_policy: StateRewindPolicy) -> Result<Self> {
-        let db = RocksDb::<Historical<Description>>::default_open_temp(None)?;
-        let historical_db = HistoricalRocksDB::new(db, rewind_policy)?;
+    pub fn rocksdb_temp(
+        state_rewind_policy: StateRewindPolicy,
+        database_config: DatabaseConfig,
+    ) -> Result<Self> {
+        let db = RocksDb::<Historical<Description>>::default_open_temp_with_params(
+            database_config,
+        )?;
+        let historical_db = HistoricalRocksDB::new(db, state_rewind_policy)?;
         let data = Arc::new(historical_db);
         Ok(Self::from_storage(DataSource::new(data, Stage::default())))
     }
@@ -278,8 +285,15 @@ where
         }
         #[cfg(feature = "rocksdb")]
         {
-            Self::rocksdb_temp(StateRewindPolicy::NoRewind)
-                .expect("Failed to create a temporary database")
+            Self::rocksdb_temp(
+                StateRewindPolicy::NoRewind,
+                DatabaseConfig {
+                    cache_capacity: None,
+                    max_fds: 512,
+                    columns_policy: Default::default(),
+                },
+            )
+            .expect("Failed to create a temporary database")
         }
     }
 }
@@ -1107,9 +1121,8 @@ mod tests {
 
         let db = Database::<OnChain>::open_rocksdb(
             temp_dir.path(),
-            1024 * 1024 * 1024,
             Default::default(),
-            512,
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         // rocks db fails
