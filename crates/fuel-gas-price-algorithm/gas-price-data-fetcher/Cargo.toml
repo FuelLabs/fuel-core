@@ -29,6 +29,5 @@ async-trait = "0.1"
 cynic = { version = "2.2", features = ["http-reqwest"] }
 itertools = { version = "0.13" }
 
-
 [build-dependencies]
 fuel-core-client = { version = "0.40.2"}
