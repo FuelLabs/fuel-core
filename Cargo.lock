@@ -3591,6 +3591,7 @@ dependencies = [
  "fuel-core-types 0.40.0",
  "fuel-core-upgradable-executor",
  "futures",
+ "rustc-hash 1.1.0",
  "tokio",
  "tracing",
 ]

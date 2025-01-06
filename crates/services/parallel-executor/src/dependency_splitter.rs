@@ -27,33 +27,35 @@ use fuel_core_upgradable_executor::native_executor::ports::{
     MaybeCheckedTransaction,
     TransactionExt,
 };
+use rustc_hash::{
+    FxHashMap,
+    FxHashSet,
+};
 use std::{
     cmp::Reverse,
     collections::{
         BTreeMap,
         BTreeSet,
-        HashMap,
-        HashSet,
     },
     num::NonZeroUsize,
 };
 
 type SequenceNumber = usize;
 
-// TODO: Try to avoid iterating across hashmaps and make indexes
+// TODO: Try to avoid iterating across FxHashMaps and make indexes
 // TODO: Try to simplify the logic split_equally to take one transaction for each bucket and then on the opposite side to avoid re-sort
 
 #[derive(Default)]
 struct Bucket {
     gas: u64,
     current_sequence_number: SequenceNumber,
-    elements: HashMap<TxId, (SequenceNumber, u64)>,
+    elements: FxHashMap<TxId, (SequenceNumber, u64)>,
 }
 
 impl Bucket {
     fn new(txs_len: usize) -> Self {
         Self {
-            elements: HashMap::with_capacity(txs_len),
+            elements: FxHashMap::with_capacity_and_hasher(txs_len, Default::default()),
             ..Default::default()
         }
     }
@@ -82,10 +84,10 @@ pub struct DependencySplitter {
     independent_bucket: Bucket,
     other_buckets: Bucket,
     blobs_bucket: Bucket,
-    txs_to_bucket: HashMap<TxId, (MaybeCheckedTransaction, BucketIndex)>,
-    used_coins: HashSet<UtxoId>,
-    used_messages: HashSet<Nonce>,
-    created_contracts: HashMap<ContractId, TxId>,
+    txs_to_bucket: FxHashMap<TxId, (MaybeCheckedTransaction, BucketIndex)>,
+    used_coins: FxHashSet<UtxoId>,
+    used_messages: FxHashSet<Nonce>,
+    created_contracts: FxHashMap<ContractId, TxId>,
     consensus_parameters: ConsensusParameters,
     remaining_block_gas: u64,
 }
@@ -96,10 +98,19 @@ impl DependencySplitter {
             independent_bucket: Bucket::new(txs_len),
             other_buckets: Bucket::new(txs_len),
             blobs_bucket: Bucket::new(txs_len),
-            txs_to_bucket: HashMap::with_capacity(txs_len),
-            used_coins: HashSet::with_capacity(txs_len),
-            used_messages: HashSet::default(),
-            created_contracts: HashMap::default(),
+            txs_to_bucket: FxHashMap::with_capacity_and_hasher(
+                txs_len,
+                Default::default(),
+            ),
+            used_coins: FxHashSet::with_capacity_and_hasher(txs_len, Default::default()),
+            used_messages: FxHashSet::with_capacity_and_hasher(
+                txs_len,
+                Default::default(),
+            ),
+            created_contracts: FxHashMap::with_capacity_and_hasher(
+                txs_len,
+                Default::default(),
+            ),
             remaining_block_gas: consensus_parameters.block_gas_limit(),
             consensus_parameters,
         }
