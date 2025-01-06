@@ -6,6 +6,12 @@ use std::{
     ops::Range,
 };
 
+use crate::types::{
+    BytesSize,
+    GasUnits,
+    Layer2BlockData,
+};
+
 use super::client_ext::{
     ClientExt,
     SealedBlockWithMetadata,
@@ -26,14 +32,6 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 
-pub struct Layer2BlockData {
-    pub block_height: u32,
-    pub block_size: usize,
-    pub gas_consumed: u64,
-    pub capacity: u64,
-    pub bytes_capacity: u64,
-}
-
 #[derive(Clone)]
 pub struct BlockFetcher {
     client: FuelClient,
@@ -47,13 +45,6 @@ impl BlockFetcher {
 }
 
 impl BlockFetcher {
-    pub async fn last_height(&self) -> anyhow::Result<BlockHeight> {
-        let chain_info = self.client.chain_info().await?;
-        let height = chain_info.latest_block.header.height.into();
-
-        Ok(height)
-    }
-
     pub async fn blocks_for(
         &self,
         range: Range<u32>,
@@ -87,7 +78,7 @@ fn height(block: &SealedBlockWithMetadata) -> BlockHeight {
 fn total_gas_consumed(
     block: &SealedBlockWithMetadata,
     consensus_parameters: &ConsensusParameters,
-) -> Result<u64, anyhow::Error> {
+) -> Result<GasUnits, anyhow::Error> {
     let min_gas: u64 = block
         .block
         .entity
@@ -133,16 +124,18 @@ fn total_gas_consumed(
         .flatten()
         .map(|r| r.iter().filter_map(|r| r.gas_used()).sum::<u64>())
         .sum();
-    min_gas
+    let total_gas = min_gas
         .checked_add(gas_consumed)
-        .ok_or(anyhow::anyhow!("Gas overflow"))
+        .ok_or(anyhow::anyhow!("Gas overflow"))?;
+    Ok(GasUnits(total_gas))
 }
 
 pub async fn get_gas_consumed(
     block_fetcher: &BlockFetcher,
-    range: Range<u32>,
+    range: Range<BlockHeight>,
     num_results: usize,
 ) -> anyhow::Result<HashMap<BlockHeight, Layer2BlockData>> {
+    let range: Range<u32> = range.start.try_into()?..range.end.try_into()?;
     let mut ranges: Vec<Range<u32>> =
         Vec::with_capacity(range.len().saturating_div(num_results));
 
@@ -195,16 +188,17 @@ pub async fn get_gas_consumed(
                 block_height
             ))?;
         // let compressed_block = b.block.entity.compress(&consensus_parameters.chain_id());
-        let block_size = postcard::to_allocvec(&b.block)?.len();
+        let block_size = BytesSize(postcard::to_allocvec(&b.block)?.len().try_into()?);
 
         let gas_consumed = total_gas_consumed(&b, consensus_parameters)?;
-        let capacity = consensus_parameters.block_gas_limit();
-        let bytes_capacity = consensus_parameters.block_transaction_size_limit();
+        let capacity = GasUnits(consensus_parameters.block_gas_limit());
+        let bytes_capacity =
+            BytesSize(consensus_parameters.block_transaction_size_limit());
 
         block_data.insert(
             block_height,
             Layer2BlockData {
-                block_height: *block_height,
+                block_height,
                 block_size,
                 gas_consumed,
                 capacity,

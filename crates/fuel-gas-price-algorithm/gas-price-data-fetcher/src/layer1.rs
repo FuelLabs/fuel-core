@@ -1,5 +1,6 @@
 use std::ops::Range;
 
+use fuel_core_types::fuel_types::BlockHeight;
 use reqwest::{
     header::{
         HeaderMap,
@@ -7,16 +8,19 @@ use reqwest::{
     },
     Url,
 };
-use serde::Serialize;
+
+use crate::types::BlockCommitterCosts;
 
 pub async fn fetch_block_committer_data(
     data_fetcher: &BlockCommitterDataFetcher,
-    blocks: Range<u64>,
+    blocks: Range<BlockHeight>,
 ) -> Result<Vec<BlockCommitterCosts>, anyhow::Error> {
     let mut block_costs = vec![];
     let mut current_block_height = blocks.start;
     while current_block_height < blocks.end {
-        let Ok(mut costs) = data_fetcher.fetch_blob_data(current_block_height).await
+        let Ok(mut costs) = data_fetcher
+            .fetch_blob_data((*current_block_height).into())
+            .await
         else {
             Err(anyhow::anyhow!(
                 "Could not fetch data for block {}",
@@ -32,21 +36,11 @@ pub async fn fetch_block_committer_data(
 
         // Block committer will return the data for the block in the next batch, hence we don't increment the height of the last
         // block.
-        current_block_height = costs.last().unwrap().end_height;
+        current_block_height = (*costs.last().unwrap().end_height).into();
         block_costs.append(&mut costs);
     }
 
     Ok(block_costs)
-}
-
-#[derive(Debug, Serialize, serde::Deserialize)]
-pub struct BlockCommitterCosts {
-    /// The cost of the block, supposedly in Wei but need to check
-    pub cost: u128,
-    pub size: u64,
-    pub da_block_height: u64,
-    pub start_height: u64,
-    pub end_height: u64,
 }
 
 pub struct BlockCommitterDataFetcher {

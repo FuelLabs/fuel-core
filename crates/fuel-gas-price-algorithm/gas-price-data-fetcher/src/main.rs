@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
+use fuel_core_types::fuel_types::BlockHeight;
 use layer1::BlockCommitterDataFetcher;
-use layer2::Layer2BlockData;
 use reqwest::{
     header::{
         HeaderMap,
@@ -9,6 +9,7 @@ use reqwest::{
     },
     Url,
 };
+use types::Layer2BlockData;
 
 use clap::{
     Args,
@@ -19,6 +20,9 @@ pub mod client_ext;
 mod layer1;
 mod layer2;
 mod summary;
+mod types;
+
+const NUM_BLOCKS_PER_BLOB: u32 = 3_600;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -35,7 +39,7 @@ struct Arg {
         required = true
     )]
     /// Range of blocks to fetch the data for. Lower bound included, Upper bound excluded.
-    block_range: Vec<u64>,
+    block_range: Vec<u32>,
 
     #[arg(required = true)]
     /// The output CSV file where Block and Blob data will be written to
@@ -62,10 +66,14 @@ async fn main() -> anyhow::Result<()> {
         output_file,
     } = Arg::parse();
     // Safety: The block range is always a vector of length 2
-    let start_block_included = block_range[0];
-    let end_block_excluded = block_range[1];
-    let block_range: std::ops::Range<u64> =
-        start_block_included.saturating_sub(3600)..end_block_excluded;
+    let start_block_included = BlockHeight::from(block_range[0]);
+    // When requested a set of results, the block committer will fetch the data for the next blob which
+    // might not include the current height. Each blob contains 3_600 blocks, hence we subtract
+    // this amount from the block height we use for the first request.
+    let start_block_before_request =
+        BlockHeight::from(start_block_included.saturating_sub(NUM_BLOCKS_PER_BLOB));
+    let end_block_excluded = BlockHeight::from(block_range[1]);
+    let block_range = start_block_before_request..end_block_excluded;
 
     if end_block_excluded < start_block_included {
         return Err(anyhow::anyhow!(
@@ -106,8 +114,7 @@ async fn main() -> anyhow::Result<()> {
                 sentry_node_endpoint
             );
             let sentry_node_client = layer2::BlockFetcher::new(sentry_node_endpoint)?;
-            let blocks_range =
-                start_block_included.try_into()?..end_block_excluded.try_into()?;
+            let blocks_range = start_block_included..end_block_excluded;
 
             let blocks_with_gas_consumed =
                 layer2::get_gas_consumed(&sentry_node_client, blocks_range, 5000).await?;
@@ -124,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
             {
                 println!(
                     "Block Height: {}, Block Size: {}, Gas Consumed: {}",
-                    block_height, block_size, gas_consumed
+                    block_height, **block_size, **gas_consumed
                 );
             }
             summary::summarise_available_data(
