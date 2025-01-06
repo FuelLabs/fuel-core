@@ -136,9 +136,12 @@ where
                 Some(gas_price)
             })
             .unwrap_or(0);
+        let gas_price_metadata_height = gas_metadata_height
+            .map(|x| x.into())
+            .unwrap_or(latest_block_height);
 
         let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, latest_block_height, &gas_price_db)?;
+            initialize_algorithm(&config, gas_price_metadata_height, &gas_price_db)?;
 
         let latest_gas_price = LatestGasPrice::new(latest_block_height, latest_gas_price);
 

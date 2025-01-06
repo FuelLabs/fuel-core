@@ -375,6 +375,7 @@ where
         let v1_metadata = convert_to_v1_metadata(updater_metadata, config)?;
         v1_algorithm_from_metadata(v1_metadata, config)
     } else {
+        // TODO: Shouldn't we be using the `latest_block_height` here for `l2_block_height`?
         updater_from_config(config)
     };
 
