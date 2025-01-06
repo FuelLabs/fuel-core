@@ -136,6 +136,7 @@ impl BlockFetcher {
             let capacity = GasUnits(consensus_parameters.block_gas_limit());
             let bytes_capacity =
                 BytesSize(consensus_parameters.block_transaction_size_limit());
+            let transactions_count = b.block.entity.transactions().len();
 
             block_data.insert(
                 block_height,
@@ -145,6 +146,7 @@ impl BlockFetcher {
                     gas_consumed,
                     capacity,
                     bytes_capacity,
+                    transactions_count,
                 },
             );
         }

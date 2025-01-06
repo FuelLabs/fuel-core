@@ -133,12 +133,13 @@ async fn main() -> anyhow::Result<()> {
                     gas_consumed,
                     capacity,
                     bytes_capacity,
+                    transactions_count,
                 },
             ) in &blocks_with_gas_consumed
             {
                 tracing::debug!(
-                    "Block Height: {}, Block Size: {}, Gas Consumed: {}, Capacity: {}, Bytes Capacity: {}",
-                    block_height, **block_size, **gas_consumed, **capacity, **bytes_capacity
+                    "Block Height: {}, Block Size: {}, Gas Consumed: {}, Capacity: {}, Bytes Capacity: {}, Transactions count: {}",
+                    block_height, **block_size, **gas_consumed, **capacity, **bytes_capacity, transactions_count
                 );
             }
             summary::summarise_available_data(

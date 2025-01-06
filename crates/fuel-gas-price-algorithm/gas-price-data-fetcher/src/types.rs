@@ -98,4 +98,5 @@ pub struct Layer2BlockData {
     pub gas_consumed: GasUnits,
     pub capacity: GasUnits,
     pub bytes_capacity: BytesSize,
+    pub transactions_count: usize,
 }

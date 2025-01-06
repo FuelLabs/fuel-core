@@ -20,6 +20,7 @@ struct BlockSummary {
     l2_gas_capacity: u64,
     l2_byte_size: u64,
     l2_byte_capacity: u64,
+    l2_block_transactions_count: usize,
 }
 
 fn summarise_data_for_block_committer_costs(
@@ -43,6 +44,7 @@ fn summarise_data_for_block_committer_costs(
                 l2_gas_capacity: *l2_data.capacity,
                 l2_byte_size: *l2_data.block_size,
                 l2_byte_capacity: *l2_data.bytes_capacity,
+                l2_block_transactions_count: l2_data.transactions_count,
             });
         }
     }
