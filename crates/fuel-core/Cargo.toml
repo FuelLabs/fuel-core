@@ -94,6 +94,7 @@ smt = [
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus", "dep:postcard"]
+backup = ["rocksdb", "fuel-core-database/backup"]
 test-helpers = [
   "fuel-core-database/test-helpers",
   "fuel-core-p2p?/test-helpers",

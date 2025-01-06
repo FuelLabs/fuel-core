@@ -712,6 +712,93 @@ where
             }
         }
     }
+
+    #[cfg(feature = "backup")]
+    fn backup_engine<P: AsRef<Path> + ?Sized>(
+        backup_dir: &P,
+    ) -> DatabaseResult<rocksdb::backup::BackupEngine> {
+        use rocksdb::{
+            backup::{
+                BackupEngine,
+                BackupEngineOptions,
+            },
+            Env,
+        };
+
+        let backup_dir = backup_dir.as_ref().join(Description::name());
+        let backup_dir_path = backup_dir.as_path();
+
+        let backup_engine_options =
+            BackupEngineOptions::new(backup_dir_path).map_err(|e| {
+                DatabaseError::BackupEngineInitError(anyhow::anyhow!(
+                    "Couldn't create backup engine options for path `{}`: {}",
+                    backup_dir_path.display(),
+                    e
+                ))
+            })?;
+
+        let env = Env::new().map_err(|e| {
+            DatabaseError::BackupEngineInitError(anyhow::anyhow!(
+                "Couldn't create environment for backup: {}",
+                e
+            ))
+        })?;
+
+        let backup_engine =
+            BackupEngine::open(&backup_engine_options, &env).map_err(|e| {
+                DatabaseError::BackupEngineInitError(anyhow::anyhow!(
+                    "Couldn't open backup engine for path `{}`: {}",
+                    backup_dir.display(),
+                    e
+                ))
+            })?;
+
+        Ok(backup_engine)
+    }
+
+    #[cfg(feature = "backup")]
+    pub fn backup<P: AsRef<Path> + ?Sized>(&self, backup_dir: &P) -> DatabaseResult<()> {
+        let mut backup_engine = Self::backup_engine(backup_dir)?;
+
+        backup_engine
+            .create_new_backup_flush(&self.db, true)
+            .map_err(|e| {
+                DatabaseError::BackupError(anyhow::anyhow!(
+                    "Couldn't create new backup for path `{}`: {}",
+                    backup_dir.as_ref().display(),
+                    e
+                ))
+            })?;
+
+        Ok(())
+    }
+
+    /// We delegate opening of restored db to consumer, so they can apply their own options
+    #[cfg(feature = "backup")]
+    pub fn restore<P: AsRef<Path> + ?Sized>(
+        db_dir: &P,
+        backup_dir: &P,
+    ) -> DatabaseResult<()> {
+        use rocksdb::backup::RestoreOptions;
+
+        let mut backup_engine = Self::backup_engine(backup_dir)?;
+        let restore_option = RestoreOptions::default();
+
+        let db_dir = db_dir.as_ref().join(Description::name());
+        let db_dir_path = db_dir.as_path();
+        // we use the default wal directory, which is same as db path
+        backup_engine
+            .restore_from_latest_backup(db_dir_path, db_dir_path, &restore_option)
+            .map_err(|e| {
+                DatabaseError::RestoreError(anyhow::anyhow!(
+                    "Couldn't restore from latest backup for path `{}`: {}",
+                    db_dir_path.display(),
+                    e
+                ))
+            })?;
+
+        Ok(())
+    }
 }
 
 pub(crate) struct KeyOnly;
@@ -1427,5 +1514,38 @@ mod tests {
 
         // Then
         assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+    }
+
+    #[cfg(feature = "backup")]
+    #[test]
+    fn backup__correctly_creates_platform_agnostic_backup() {
+        // Given
+        let backup_dir = TempDir::new().unwrap();
+        let key = vec![0xA, 0xB, 0xC];
+        let expected_value = Value::from([1, 2, 3]);
+        let column = Column::Metadata;
+        {
+            let (mut db, _temp_dir) = create_db();
+            db.put(&key, column, expected_value.clone()).unwrap();
+
+            // When
+            db.backup(&backup_dir).unwrap();
+
+            assert_eq!(db.get(&key, column).unwrap().unwrap(), expected_value);
+        }
+
+        // Then
+        // attempt to restore db
+        let restored_db_dir = TempDir::new().unwrap();
+        RocksDb::<OnChain>::restore(restored_db_dir.path(), backup_dir.path()).unwrap();
+        let mut config = DatabaseConfig::config_for_tests();
+        config.max_fds = 1024; // bump fds randomly
+        let restored_db = RocksDb::<OnChain>::default_open(
+            restored_db_dir.path(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
+        let value = restored_db.get(&key, column).unwrap().unwrap();
+        assert_eq!(value, expected_value);
     }
 }

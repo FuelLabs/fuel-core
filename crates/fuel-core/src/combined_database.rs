@@ -78,6 +78,12 @@ impl CombinedDatabase {
         Ok(())
     }
 
+    #[cfg(all(feature = "rocksdb", feature = "backup"))]
+    pub fn backup(&self, _backup_dir: &str) -> crate::database::Result<()> {
+        // crate::state::rocks_db::RocksDb::<OnChain>::backup(&self.on_chain, backup_dir)?;
+        todo!()
+    }
+
     #[cfg(feature = "rocksdb")]
     pub fn open(
         path: &std::path::Path,
