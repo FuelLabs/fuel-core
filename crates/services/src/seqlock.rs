@@ -1,6 +1,12 @@
 //! A simple implementation of a sequential lock.
 //! More details: <https://docs.kernel.org/locking/seqlock.html>
 //! Optimized for occasional writes and frequent reads
+//! !!WARNING!!
+//! ONLY USE IF ALL THE BELOW ARE MET
+//! 1. Internal data < 64 bytes
+//! 2. Data is Copy
+//! 3. ONLY 1 writer
+//! 4. VERY frequent reads
 
 use std::{
     cell::UnsafeCell,
