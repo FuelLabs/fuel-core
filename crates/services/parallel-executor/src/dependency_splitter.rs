@@ -279,6 +279,7 @@ impl DependencySplitter {
     }
 
     /// The last bucket always contains blobs at the end.
+    #[inline(never)]
     pub fn split_equally(
         mut self,
         number_of_buckets: NonZeroUsize,
@@ -381,9 +382,10 @@ impl DependencySplitter {
 
             most_gas_usage_bucket = most_gas_usage_bucket.max(txs.0);
 
-            let direction_sign = (direction as i32 * 2) - 1;
-            current_bucket_idx = current_bucket_idx
-                .saturating_add((direction_sign * (iterate_next_time as i32)) as usize);
+            let direction_sign = -1 * ((direction as i32 * 2) - 1);
+            let step = direction_sign * (iterate_next_time as i32);
+            current_bucket_idx =
+                ((current_bucket_idx as i32).saturating_add(step)) as usize;
         }
 
         // Get latest bucket on the vector
