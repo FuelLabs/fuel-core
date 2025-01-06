@@ -335,7 +335,7 @@ impl DependencySplitter {
         // - Skip the last bucket until the others doesn't have more gas usage than the `other_transactions`
         // (to avoid filling the last bucket at the same rhythm as the others given the fact that he already contains the `others_transaction`)
         // SAFE: `number_of_buckets` comes from a `NonZeroUsize` so it's always greater than 0
-        #[derive(Debug, PartialEq, Eq)]
+        #[derive(Debug, PartialEq, Eq, Copy)]
         enum IterationDirection {
             Forward,
             Backward,
@@ -373,26 +373,17 @@ impl DependencySplitter {
             let txs = sorted_buckets
                 .get_mut(current_bucket_idx)
                 .expect("Always has items in the `sorted_buckets`; qed");
+
             if let Some(tx) = self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx) {
                 txs.1.push(tx);
                 txs.0 += gas.0;
             }
-            if most_gas_usage_bucket < txs.0 {
-                most_gas_usage_bucket = txs.0;
-            }
 
-            match direction {
-                IterationDirection::Forward => {
-                    if iterate_next_time {
-                        current_bucket_idx = current_bucket_idx.saturating_add(1);
-                    }
-                }
-                IterationDirection::Backward => {
-                    if iterate_next_time {
-                        current_bucket_idx = current_bucket_idx.saturating_sub(1);
-                    }
-                }
-            }
+            most_gas_usage_bucket = most_gas_usage_bucket.max(txs.0);
+
+            let direction_sign = (direction as i32 * 2) - 1;
+            current_bucket_idx = current_bucket_idx
+                .saturating_add((direction_sign * (iterate_next_time as i32)) as usize);
         }
 
         // Get latest bucket on the vector
