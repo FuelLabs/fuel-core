@@ -42,7 +42,7 @@ impl BlockCommitterDataFetcher {
         from_height: u64,
     ) -> Result<Vec<BlockCommitterCosts>, anyhow::Error> {
         let query = self.endpoint.join("v1/costs")?.join(&format!(
-            "?from_height={}&limit={}",
+            "?variant=specific&value={}&limit={}",
             from_height, self.num_responses
         ))?;
 

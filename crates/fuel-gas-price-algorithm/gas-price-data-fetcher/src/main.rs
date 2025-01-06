@@ -22,7 +22,6 @@ mod layer2;
 mod summary;
 mod types;
 
-const NUM_BLOCKS_PER_BLOB: u32 = 3_600;
 const SENTRY_NODE_GRAPHQL_RESULTS_PER_QUERY: usize = 5_000;
 
 #[derive(Parser)]
@@ -71,10 +70,8 @@ async fn main() -> anyhow::Result<()> {
     // When requested a set of results, the block committer will fetch the data for the next blob which
     // might not include the current height. Each blob contains 3_600 blocks, hence we subtract
     // this amount from the block height we use for the first request.
-    let start_block_before_request =
-        BlockHeight::from(start_block_included.saturating_sub(NUM_BLOCKS_PER_BLOB));
     let end_block_excluded = BlockHeight::from(block_range[1]);
-    let block_range = start_block_before_request..end_block_excluded;
+    let block_range = start_block_included..end_block_excluded;
 
     if end_block_excluded < start_block_included {
         return Err(anyhow::anyhow!(
