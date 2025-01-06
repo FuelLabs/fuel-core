@@ -335,7 +335,7 @@ impl DependencySplitter {
         // - Skip the last bucket until the others doesn't have more gas usage than the `other_transactions`
         // (to avoid filling the last bucket at the same rhythm as the others given the fact that he already contains the `others_transaction`)
         // SAFE: `number_of_buckets` comes from a `NonZeroUsize` so it's always greater than 0
-        #[derive(Debug, PartialEq, Eq, Copy)]
+        #[derive(Debug, PartialEq, Eq, Copy, Clone)]
         enum IterationDirection {
             Forward,
             Backward,
