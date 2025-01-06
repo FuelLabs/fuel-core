@@ -86,7 +86,7 @@ impl BlockFetcher {
 
         let mut blocks = Vec::with_capacity(range.len());
         for range in ranges {
-            println!("Fetching blocks for range {:?}", range);
+            tracing::info!("Fetching blocks for range {:?}", range);
             let blocks_for_range = self.blocks_for(range).await?;
             blocks.extend(blocks_for_range);
         }
@@ -96,7 +96,7 @@ impl BlockFetcher {
             .map(|b| b.block.entity.header().consensus_parameters_version)
             .collect::<HashSet<u32>>();
 
-        println!(
+        tracing::debug!(
             "Consensus parameter versions: {:?}",
             consensus_parameters_versions
         );
@@ -109,9 +109,10 @@ impl BlockFetcher {
                 .await?;
 
             if let Some(cp) = cp {
-                println!(
+                tracing::debug!(
                     "Found consensus parameters for version {}: {:?}",
-                    consensus_parameters_version, cp
+                    consensus_parameters_version,
+                    cp
                 );
                 consensus_parameters.insert(consensus_parameters_version, cp);
             }

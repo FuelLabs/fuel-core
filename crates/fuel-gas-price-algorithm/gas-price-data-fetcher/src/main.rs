@@ -1,20 +1,20 @@
-use std::path::PathBuf;
+use std::{
+    env,
+    path::PathBuf,
+};
 
 use fuel_core_types::fuel_types::BlockHeight;
 use layer1::BlockCommitterDataFetcher;
-use reqwest::{
-    header::{
-        HeaderMap,
-        CONTENT_TYPE,
-    },
-    Url,
-};
+use reqwest::Url;
+use tracing_subscriber::EnvFilter;
 use types::Layer2BlockData;
 
 use clap::{
     Args,
     Parser,
 };
+
+use tracing_subscriber::prelude::*;
 
 pub mod client_ext;
 mod layer1;
@@ -65,6 +65,20 @@ async fn main() -> anyhow::Result<()> {
         block_range,
         output_file,
     } = Arg::parse();
+
+    let filter = match env::var_os("RUST_LOG") {
+        Some(_) => {
+            EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided")
+        }
+        None => EnvFilter::new("info"),
+    };
+
+    let fmt = tracing_subscriber::fmt::Layer::default()
+        .with_level(true)
+        .boxed();
+
+    tracing_subscriber::registry().with(fmt).with(filter).init();
+
     // Safety: The block range is always a vector of length 2
     let start_block_included = BlockHeight::from(block_range[0]);
     // When requested a set of results, the block committer will fetch the data for the next blob which
@@ -80,13 +94,6 @@ async fn main() -> anyhow::Result<()> {
             end_block_excluded
         ));
     }
-    let mut content_type_json_header = HeaderMap::new();
-    content_type_json_header.insert(
-        CONTENT_TYPE,
-        "application/json"
-            .parse()
-            .expect("Content-Type header value is valid"),
-    );
 
     let block_committer_data_fetcher =
         BlockCommitterDataFetcher::new(block_committer_endpoint, 10)?;
@@ -95,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
         .fetch_l1_block_costs(block_range)
         .await?;
 
-    println!("{:?}", block_costs);
+    tracing::debug!("{:?}", block_costs);
     match l2_block_data_source {
         L2BlockDataSource {
             db_path: Some(_db_path),
@@ -107,7 +114,7 @@ async fn main() -> anyhow::Result<()> {
             db_path: None,
             sentry_node_endpoint: Some(sentry_node_endpoint),
         } => {
-            println!(
+            tracing::info!(
                 "Retrieving L2 data from sentry node: {}",
                 sentry_node_endpoint
             );
@@ -124,13 +131,14 @@ async fn main() -> anyhow::Result<()> {
                     block_height,
                     block_size,
                     gas_consumed,
-                    ..
+                    capacity,
+                    bytes_capacity,
                 },
             ) in &blocks_with_gas_consumed
             {
-                println!(
-                    "Block Height: {}, Block Size: {}, Gas Consumed: {}",
-                    block_height, **block_size, **gas_consumed
+                tracing::debug!(
+                    "Block Height: {}, Block Size: {}, Gas Consumed: {}, Capacity: {}, Bytes Capacity: {}",
+                    block_height, **block_size, **gas_consumed, **capacity, **bytes_capacity
                 );
             }
             summary::summarise_available_data(
@@ -139,7 +147,7 @@ async fn main() -> anyhow::Result<()> {
                 &blocks_with_gas_consumed,
             )
             .inspect_err(|e| {
-                println!("Failed to write to CSV file: {:?}, {:?}", output_file, e)
+                tracing::error!("Failed to write to CSV file: {:?}, {:?}", output_file, e)
             })?;
         }
         _ => {

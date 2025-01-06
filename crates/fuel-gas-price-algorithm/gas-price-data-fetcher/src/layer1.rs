@@ -46,7 +46,7 @@ impl BlockCommitterDataFetcher {
             from_height, self.num_responses
         ))?;
 
-        println!("Query: {}", query.as_str());
+        tracing::debug!("Query: {}", query.as_str());
 
         let response = self.client.get(query).send().await?;
         if !response.status().is_success() {

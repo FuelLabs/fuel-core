@@ -26,7 +26,7 @@ fn summarise_data_for_block_committer_costs(
     costs: &BlockCommitterCosts,
     l2_data: &HashMap<BlockHeight, Layer2BlockData>,
 ) -> Vec<BlockSummary> {
-    println!("Building summary for: {:?}", costs);
+    tracing::info!("Building summary for: {:?}", costs);
     let block_range_len: usize = costs.len().try_into().unwrap_or_default();
     let mut summaries = Vec::with_capacity(block_range_len);
     for block_height in costs.iter() {
@@ -62,7 +62,7 @@ pub fn summarise_available_data(
         let summaries =
             summarise_data_for_block_committer_costs(block_costs_entry, l2_data);
         for summary in summaries {
-            println!("Serializing record: {:?}", summary);
+            tracing::debug!("Serializing record: {:?}", summary);
             writer.serialize(summary)?;
         }
     }

@@ -22,6 +22,8 @@ serde_json = { version = "1.0.134" }
 fuel-core-client = { version = "0.40.2"}
 fuel-core-types = { version = "0.40.2"}
 postcard = { version = "1.0" }
+tracing = { version = "0.1.41"}
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 async-trait = "0.1"
 cynic = { version = "2.2", features = ["http-reqwest"] }
