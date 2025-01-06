@@ -279,7 +279,6 @@ impl DependencySplitter {
     }
 
     /// The last bucket always contains blobs at the end.
-    #[inline(never)]
     pub fn split_equally(
         mut self,
         number_of_buckets: NonZeroUsize,
