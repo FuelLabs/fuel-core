@@ -794,6 +794,7 @@ mod tests {
 
         let notifier = Arc::new(tokio::sync::Notify::new());
         let blob_cost_wei = 9000;
+        let latest_l2_height = latest_l2_height(block_height - 1);
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
@@ -805,6 +806,8 @@ mod tests {
                 notifier.clone(),
             ),
             Some(Duration::from_millis(1)),
+            latest_l2_height.clone(),
+            None,
         );
         let mut watcher = StateWatcher::started();
         let da_service_runner = ServiceRunner::new(da_source);
@@ -816,6 +819,7 @@ mod tests {
             algo_updater,
             da_service_runner,
             inner,
+            latest_l2_height,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
