@@ -11,38 +11,6 @@ use reqwest::{
 
 use crate::types::BlockCommitterCosts;
 
-pub async fn fetch_block_committer_data(
-    data_fetcher: &BlockCommitterDataFetcher,
-    blocks: Range<BlockHeight>,
-) -> Result<Vec<BlockCommitterCosts>, anyhow::Error> {
-    let mut block_costs = vec![];
-    let mut current_block_height = blocks.start;
-    while current_block_height < blocks.end {
-        let Ok(mut costs) = data_fetcher
-            .fetch_blob_data((*current_block_height).into())
-            .await
-        else {
-            Err(anyhow::anyhow!(
-                "Could not fetch data for block {}",
-                current_block_height
-            ))?
-        };
-
-        if costs.is_empty() {
-            // Might be that the block committer doesn't have data for the block, in which case we return prematurely.
-            // If this happen, we should increase the value of results returned by the block committer in the query.
-            break;
-        }
-
-        // Block committer will return the data for the block in the next batch, hence we don't increment the height of the last
-        // block.
-        current_block_height = (*costs.last().unwrap().end_height).into();
-        block_costs.append(&mut costs);
-    }
-
-    Ok(block_costs)
-}
-
 pub struct BlockCommitterDataFetcher {
     client: reqwest::Client,
     endpoint: Url,
@@ -91,5 +59,36 @@ impl BlockCommitterDataFetcher {
 
         let block_committer_costs = response.json::<Vec<BlockCommitterCosts>>().await?;
         Ok(block_committer_costs)
+    }
+
+    pub async fn fetch_l1_block_costs(
+        &self,
+        blocks: Range<BlockHeight>,
+    ) -> Result<Vec<BlockCommitterCosts>, anyhow::Error> {
+        let mut block_costs = vec![];
+        let mut current_block_height = blocks.start;
+        while current_block_height < blocks.end {
+            let Ok(mut costs) =
+                self.fetch_blob_data((*current_block_height).into()).await
+            else {
+                Err(anyhow::anyhow!(
+                    "Could not fetch data for block {}",
+                    current_block_height
+                ))?
+            };
+
+            if costs.is_empty() {
+                // Might be that the block committer doesn't have data for the block, in which case we return prematurely.
+                // If this happen, we should increase the value of results returned by the block committer in the query.
+                break;
+            }
+
+            // Block committer will return the data for the block in the next batch, hence we don't increment the height of the last
+            // block.
+            current_block_height = (*costs.last().unwrap().end_height).into();
+            block_costs.append(&mut costs);
+        }
+
+        Ok(block_costs)
     }
 }

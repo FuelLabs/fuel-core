@@ -23,6 +23,7 @@ mod summary;
 mod types;
 
 const NUM_BLOCKS_PER_BLOB: u32 = 3_600;
+const SENTRY_NODE_GRAPHQL_RESULTS_PER_QUERY: usize = 5_000;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -93,9 +94,9 @@ async fn main() -> anyhow::Result<()> {
     let block_committer_data_fetcher =
         BlockCommitterDataFetcher::new(block_committer_endpoint, 10)?;
 
-    let block_costs =
-        layer1::fetch_block_committer_data(&block_committer_data_fetcher, block_range)
-            .await?;
+    let block_costs = block_committer_data_fetcher
+        .fetch_l1_block_costs(block_range)
+        .await?;
 
     println!("{:?}", block_costs);
     match l2_block_data_source {
@@ -116,8 +117,9 @@ async fn main() -> anyhow::Result<()> {
             let sentry_node_client = layer2::BlockFetcher::new(sentry_node_endpoint)?;
             let blocks_range = start_block_included..end_block_excluded;
 
-            let blocks_with_gas_consumed =
-                layer2::get_gas_consumed(&sentry_node_client, blocks_range, 5000).await?;
+            let blocks_with_gas_consumed = sentry_node_client
+                .get_l2_block_data(blocks_range, SENTRY_NODE_GRAPHQL_RESULTS_PER_QUERY)
+                .await?;
 
             for (
                 _block_height,

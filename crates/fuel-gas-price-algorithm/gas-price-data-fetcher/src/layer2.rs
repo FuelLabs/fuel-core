@@ -69,6 +69,87 @@ impl BlockFetcher {
             .try_collect()?;
         Ok(blocks)
     }
+
+    pub async fn get_l2_block_data(
+        &self,
+        range: Range<BlockHeight>,
+        num_results: usize,
+    ) -> anyhow::Result<HashMap<BlockHeight, Layer2BlockData>> {
+        let range: Range<u32> = range.start.try_into()?..range.end.try_into()?;
+        let mut ranges: Vec<Range<u32>> =
+            Vec::with_capacity(range.len().saturating_div(num_results));
+
+        for start in range.clone().step_by(num_results) {
+            let end = start.saturating_add(num_results as u32).min(range.end);
+            ranges.push(start..end);
+        }
+
+        let mut blocks = Vec::with_capacity(range.len());
+        for range in ranges {
+            println!("Fetching blocks for range {:?}", range);
+            let blocks_for_range = self.blocks_for(range).await?;
+            blocks.extend(blocks_for_range);
+        }
+
+        let consensus_parameters_versions = blocks
+            .iter()
+            .map(|b| b.block.entity.header().consensus_parameters_version)
+            .collect::<HashSet<u32>>();
+
+        println!(
+            "Consensus parameter versions: {:?}",
+            consensus_parameters_versions
+        );
+
+        let mut consensus_parameters: HashMap<u32, ConsensusParameters> = HashMap::new();
+        for consensus_parameters_version in consensus_parameters_versions {
+            let cp = self
+                .client
+                .consensus_parameters(consensus_parameters_version.try_into()?)
+                .await?;
+
+            if let Some(cp) = cp {
+                println!(
+                    "Found consensus parameters for version {}: {:?}",
+                    consensus_parameters_version, cp
+                );
+                consensus_parameters.insert(consensus_parameters_version, cp);
+            }
+        }
+
+        let mut block_data = HashMap::with_capacity(range.len());
+
+        for b in blocks {
+            let block_height = height(&b);
+            let consensus_parameters = consensus_parameters
+                .get(&b.block.entity.header().consensus_parameters_version)
+                .ok_or(anyhow::anyhow!(
+                    "Consensus parameters not found for block {}",
+                    block_height
+                ))?;
+            // let compressed_block = b.block.entity.compress(&consensus_parameters.chain_id());
+            let block_size =
+                BytesSize(postcard::to_allocvec(&b.block)?.len().try_into()?);
+
+            let gas_consumed = total_gas_consumed(&b, consensus_parameters)?;
+            let capacity = GasUnits(consensus_parameters.block_gas_limit());
+            let bytes_capacity =
+                BytesSize(consensus_parameters.block_transaction_size_limit());
+
+            block_data.insert(
+                block_height,
+                Layer2BlockData {
+                    block_height,
+                    block_size,
+                    gas_consumed,
+                    capacity,
+                    bytes_capacity,
+                },
+            );
+        }
+
+        Ok(block_data)
+    }
 }
 
 fn height(block: &SealedBlockWithMetadata) -> BlockHeight {
@@ -128,84 +209,4 @@ fn total_gas_consumed(
         .checked_add(gas_consumed)
         .ok_or(anyhow::anyhow!("Gas overflow"))?;
     Ok(GasUnits(total_gas))
-}
-
-pub async fn get_gas_consumed(
-    block_fetcher: &BlockFetcher,
-    range: Range<BlockHeight>,
-    num_results: usize,
-) -> anyhow::Result<HashMap<BlockHeight, Layer2BlockData>> {
-    let range: Range<u32> = range.start.try_into()?..range.end.try_into()?;
-    let mut ranges: Vec<Range<u32>> =
-        Vec::with_capacity(range.len().saturating_div(num_results));
-
-    for start in range.clone().step_by(num_results) {
-        let end = start.saturating_add(num_results as u32).min(range.end);
-        ranges.push(start..end);
-    }
-
-    let mut blocks = Vec::with_capacity(range.len());
-    for range in ranges {
-        println!("Fetching blocks for range {:?}", range);
-        let blocks_for_range = block_fetcher.blocks_for(range).await?;
-        blocks.extend(blocks_for_range);
-    }
-
-    let consensus_parameters_versions = blocks
-        .iter()
-        .map(|b| b.block.entity.header().consensus_parameters_version)
-        .collect::<HashSet<u32>>();
-
-    println!(
-        "Consensus parameter versions: {:?}",
-        consensus_parameters_versions
-    );
-
-    let mut consensus_parameters: HashMap<u32, ConsensusParameters> = HashMap::new();
-    for consensus_parameters_version in consensus_parameters_versions {
-        let cp = block_fetcher
-            .client
-            .consensus_parameters(consensus_parameters_version.try_into()?)
-            .await?;
-
-        if let Some(cp) = cp {
-            println!(
-                "Found consensus parameters for version {}: {:?}",
-                consensus_parameters_version, cp
-            );
-            consensus_parameters.insert(consensus_parameters_version, cp);
-        }
-    }
-
-    let mut block_data = HashMap::with_capacity(range.len());
-
-    for b in blocks {
-        let block_height = height(&b);
-        let consensus_parameters = consensus_parameters
-            .get(&b.block.entity.header().consensus_parameters_version)
-            .ok_or(anyhow::anyhow!(
-                "Consensus parameters not found for block {}",
-                block_height
-            ))?;
-        // let compressed_block = b.block.entity.compress(&consensus_parameters.chain_id());
-        let block_size = BytesSize(postcard::to_allocvec(&b.block)?.len().try_into()?);
-
-        let gas_consumed = total_gas_consumed(&b, consensus_parameters)?;
-        let capacity = GasUnits(consensus_parameters.block_gas_limit());
-        let bytes_capacity =
-            BytesSize(consensus_parameters.block_transaction_size_limit());
-
-        block_data.insert(
-            block_height,
-            Layer2BlockData {
-                block_height,
-                block_size,
-                gas_consumed,
-                capacity,
-                bytes_capacity,
-            },
-        );
-    }
-
-    Ok(block_data)
 }
