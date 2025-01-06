@@ -30,7 +30,7 @@ pub fn run(c: &mut Criterion) {
         "eck1",
         VmBench::new(op::eck1(RegId::HP, 0x20, 0x21))
             .with_prepare_script(vec![
-                op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+                op::gtf_args(0x20, RegId::ZERO, GTFArgs::ScriptData),
                 op::addi(
                     0x21,
                     0x20,
@@ -57,7 +57,7 @@ pub fn run(c: &mut Criterion) {
         "ecr1",
         VmBench::new(op::ecr1(RegId::HP, 0x20, 0x21))
             .with_prepare_script(vec![
-                op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+                op::gtf_args(0x20, RegId::ZERO, GTFArgs::ScriptData),
                 op::addi(
                     0x21,
                     0x20,
@@ -124,7 +124,7 @@ pub fn run(c: &mut Criterion) {
             format!("{i}"),
             VmBench::new(op::ed19(0x20, 0x21, RegId::ZERO, 0x10))
                 .with_prepare_script(vec![
-                    op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+                    op::gtf_args(0x20, RegId::ZERO, GTFArgs::ScriptData),
                     op::addi(
                         0x21,
                         0x20,
@@ -179,7 +179,7 @@ pub fn run(c: &mut Criterion) {
     run_group_ref(
         &mut c.benchmark_group("ecop"),
         "ecop",
-        VmBench::new(op::ecop(0x10, 0x00, 0x01, 0x10))
+        VmBench::new(op::ecop(0x10, RegId::ZERO, 0x01, 0x10))
             .with_prepare_script(prepare_points),
     );
 
@@ -204,7 +204,7 @@ pub fn run(c: &mut Criterion) {
         run_group_ref(
             &mut bench_epar,
             format!("{i}"),
-            VmBench::new(op::epar(0x12, 0x00, 0x11, 0x10))
+            VmBench::new(op::epar(0x12, RegId::ZERO, 0x11, 0x10))
                 .with_data(points_bytearray)
                 .with_prepare_script(vec![
                     op::movi(0x11, i),

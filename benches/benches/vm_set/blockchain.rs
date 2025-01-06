@@ -559,6 +559,7 @@ pub fn run(c: &mut Criterion) {
                 // Add block height to 0x11
                 op::movi(0x11, 0xc9),
             ])
+            // Random height
             .with_height(0xca.into())
             .with_db(db.to_vm_database()),
     );

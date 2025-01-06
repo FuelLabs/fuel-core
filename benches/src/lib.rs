@@ -141,6 +141,8 @@ pub struct VmBenchPrepared {
     pub diff: diff::Diff<diff::InitialVmState>,
 }
 
+const TX_SIZE: u64 = 64 * 1024 * 1024;
+
 impl VmBench {
     pub const SALT: Salt = Salt::zeroed();
     pub const CONTRACT: ContractId = ContractId::zeroed();
@@ -150,14 +152,14 @@ impl VmBench {
         consensus_params.set_tx_params(
             TxParameters::default()
                 .with_max_gas_per_tx(LARGE_GAS_LIMIT + 1)
-                .with_max_size(64 * 1024 * 1024),
+                .with_max_size(TX_SIZE),
         );
         consensus_params.set_fee_params(FeeParameters::default().with_gas_per_byte(0));
         consensus_params.set_gas_costs(GasCosts::free());
         consensus_params.set_script_params(
             ScriptParameters::default()
-                .with_max_script_length(64 * 1024 * 1024)
-                .with_max_script_data_length(64 * 1024 * 1024),
+                .with_max_script_length(TX_SIZE)
+                .with_max_script_data_length(TX_SIZE),
         );
 
         Self {
