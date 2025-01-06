@@ -155,11 +155,6 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    /// Allows consumers to get the inner db handle
-    pub fn inner(&self) -> &DB {
-        &self.db
-    }
-
     pub fn default_open_temp(capacity: Option<usize>) -> DatabaseResult<Self> {
         Self::default_open_temp_with_params(DatabaseConfig {
             cache_capacity: capacity,

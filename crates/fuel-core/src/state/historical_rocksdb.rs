@@ -106,10 +106,6 @@ where
         })
     }
 
-    pub fn inner(&self) -> &RocksDb<Historical<Description>> {
-        &self.db
-    }
-
     pub fn default_open<P: AsRef<Path>>(
         path: P,
         state_rewind_policy: StateRewindPolicy,
