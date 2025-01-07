@@ -190,10 +190,10 @@ where
         );
 
         let recorded_height = match self.gas_price_db.get_recorded_height()? {
-             Some(height) => height,
-             None => latest_l2_height.clone()
+            Some(height) => height,
+            None => BlockHeight::from(latest_block_height),
         };
-      
+
         let poll_duration = self
             .config
             .da_poll_interval

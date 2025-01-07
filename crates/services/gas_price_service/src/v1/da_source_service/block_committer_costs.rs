@@ -86,13 +86,19 @@ impl<BlockCommitter> DaBlockCostsSource for BlockCommitterDaBlockCosts<BlockComm
 where
     BlockCommitter: BlockCommitterApi,
 {
-    async fn request_da_block_costs(&mut self, last_recorded_height: &BlockHeight) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
-        let next_height = last_recorded_height.succ();
-      
-        let raw_da_block_costs: Vec<_> =
-                    self.client
-                        .get_costs_by_l2_block_number(*next_height.deref())
-                        .await?;
+    async fn request_da_block_costs(
+        &mut self,
+        last_recorded_height: &BlockHeight,
+    ) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
+        let next_height = last_recorded_height.succ().ok_or(anyhow!(
+            "Failed to increment the last recorded height: {:?}",
+            last_recorded_height
+        ))?;
+
+        let raw_da_block_costs: Vec<_> = self
+            .client
+            .get_costs_by_l2_block_number(*next_height.deref())
+            .await?;
 
         let da_block_costs: Vec<_> =
             raw_da_block_costs.iter().map(DaBlockCosts::from).collect();

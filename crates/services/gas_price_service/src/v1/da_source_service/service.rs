@@ -44,7 +44,7 @@ pub struct DaSourceService<Source> {
     source: Source,
     shared_state: SharedState,
     latest_l2_height: Arc<Mutex<BlockHeight>>,
-    recorded_height: Option<BlockHeight>,
+    recorded_height: BlockHeight,
 }
 
 pub(crate) const DA_BLOCK_COSTS_CHANNEL_SIZE: usize = 16 * 1024;
@@ -58,7 +58,7 @@ where
         source: Source,
         poll_interval: Option<Duration>,
         latest_l2_height: Arc<Mutex<BlockHeight>>,
-        recorded_height: Option<BlockHeight>,
+        recorded_height: BlockHeight,
     ) -> Self {
         let (sender, _) = tokio::sync::broadcast::channel(DA_BLOCK_COSTS_CHANNEL_SIZE);
         #[allow(clippy::arithmetic_side_effects)]
@@ -78,7 +78,7 @@ where
         source: Source,
         poll_interval: Option<Duration>,
         latest_l2_height: Arc<Mutex<BlockHeight>>,
-        recorded_height: Option<BlockHeight>,
+        recorded_height: BlockHeight,
         sender: Sender<DaBlockCosts>,
     ) -> Self {
         Self {
@@ -109,12 +109,8 @@ where
             tracing::debug!("Sending block costs: {:?}", da_block_costs);
             let end = BlockHeight::from(*da_block_costs.l2_blocks.end());
             self.shared_state.0.send(da_block_costs)?;
-            if let Some(recorded_height) = self.recorded_height {
-                if end > recorded_height {
-                    self.recorded_height = Some(end)
-                }
-            } else {
-                self.recorded_height = Some(end)
+            if end > self.recorded_height {
+                self.recorded_height = end
             }
         }
         Ok(())
@@ -136,7 +132,7 @@ where
     }
 
     #[cfg(test)]
-    pub fn recorded_height(&self) -> Option<BlockHeight> {
+    pub fn recorded_height(&self) -> BlockHeight {
         self.recorded_height
     }
 }
@@ -147,7 +143,7 @@ where
 pub trait DaBlockCostsSource: Send + Sync {
     async fn request_da_block_costs(
         &mut self,
-        recorded_height: &Option<BlockHeight>,
+        recorded_height: &BlockHeight,
     ) -> Result<Vec<DaBlockCosts>>;
 }
 
@@ -210,11 +206,12 @@ pub fn new_da_service<S: DaBlockCostsSource>(
     da_source: S,
     poll_interval: Option<Duration>,
     latest_l2_height: Arc<Mutex<BlockHeight>>,
+    recorded_height: BlockHeight,
 ) -> ServiceRunner<DaSourceService<S>> {
     ServiceRunner::new(DaSourceService::new(
         da_source,
         poll_interval,
         latest_l2_height,
-        None,
+        recorded_height,
     ))
 }
