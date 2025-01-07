@@ -291,7 +291,6 @@ fn fullness_and_bytes_per_block(size: usize, capacity: u64) -> Vec<(u64, u32)> {
     let fullness_noise: Vec<_> = std::iter::repeat(())
         .take(size)
         .map(|_| rng.gen_range(-0.5..0.5))
-        // .map(|val| val * capacity as f64)
         .collect();
 
     const ROUGH_GAS_TO_BYTE_RATIO: f64 = 0.01;

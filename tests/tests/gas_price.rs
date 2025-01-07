@@ -1,7 +1,4 @@
 #![allow(non_snake_case)]
-// TODO: REMOVE BEFORE MERGING
-#![allow(dead_code)]
-#![allow(unused_imports)]
 
 use crate::helpers::{
     TestContext,
@@ -37,12 +34,16 @@ use fuel_core_gas_price_service::{
         GetMetadataStorage,
     },
     v1::{
-        da_source_service::block_committer_costs::fake_server::FakeServer,
+        da_source_service::block_committer_costs::{
+            fake_server::FakeServer,
+            RawDaBlockCosts,
+        },
         metadata::V1Metadata,
     },
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
+    iter::IterDirection,
     transactional::AtomicView,
     StorageAsRef,
 };
@@ -384,27 +385,6 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     assert!(estimated >= real);
 }
 
-// TODO: this behavior is changing with https://github.com/FuelLabs/fuel-core/pull/2501
-// #[tokio::test]
-// async fn estimate_gas_price__returns_min_gas_price_if_starting_gas_price_is_zero() {
-//     const MIN_GAS_PRICE: u64 = 1;
-//
-//     // Given
-//     let mut node_config = Config::local_node();
-//     node_config.min_exec_gas_price = MIN_GAS_PRICE;
-//     node_config.starting_exec_gas_price = 0;
-//     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
-//     let client = FuelClient::from(srv.bound_address);
-//
-//     // When
-//     let result = client.estimate_gas_price(10).await.unwrap();
-//
-//     // Then
-//     let actual = result.gas_price.0;
-//     assert_eq!(MIN_GAS_PRICE, actual)
-// }
-
-// This test passed before this PR, but doesn't now
 #[tokio::test(flavor = "multi_thread")]
 async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     // given
@@ -562,9 +542,6 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
     assert_eq!(l2_block_height, new_height);
     recovered_driver.kill().await;
 }
-
-use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::RawDaBlockCosts;
-use fuel_core_storage::iter::IterDirection;
 
 #[test]
 fn produce_block__l1_committed_block_affects_gas_price() {
@@ -744,8 +721,6 @@ fn node_config_with_da_committer_url(url: &str) -> Config {
     node_config.da_poll_interval = Some(100);
     node_config.da_p_component = 224_000;
     node_config.da_d_component = 2_690_000;
-    // node_config.da_p_component = 1;
-    // node_config.da_d_component = 10;
     node_config.block_activity_threshold = 0;
     node_config
 }

@@ -190,16 +190,15 @@ pub fn init_sub_services(
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    tracing::debug!("da_committer_url: {:?}", config.da_committer_url);
     let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
-    let da_source = BlockCommitterDaBlockCosts::new(committer_api, None);
+    let da_source = BlockCommitterDaBlockCosts::new(committer_api);
     let v1_config = GasPriceServiceConfig::from(config.clone())
         .v1()
         .ok_or(anyhow!(
             "Gas price service configuration is not compatible with V1 algorithm"
         ))?;
 
-    let gas_price_service = new_gas_price_service_v1(
+    let gas_price_service_v1 = new_gas_price_service_v1(
         v1_config,
         genesis_block_height,
         settings,
@@ -208,7 +207,7 @@ pub fn init_sub_services(
         da_source,
         database.on_chain().clone(),
     )?;
-    let (gas_price_algo, _) = &gas_price_service.shared;
+    let (gas_price_algo, _) = &gas_price_service_v1.shared;
     let gas_price_provider = FuelGasPriceProvider::new(gas_price_algo.clone());
     let txpool = fuel_core_txpool::new_service(
         chain_id,
@@ -346,7 +345,7 @@ pub fn init_sub_services(
     #[allow(unused_mut)]
     // `FuelService` starts and shutdowns all sub-services in the `services` order
     let mut services: SubServices = vec![
-        Box::new(gas_price_service),
+        Box::new(gas_price_service_v1),
         Box::new(txpool),
         Box::new(consensus_parameters_provider_service),
     ];

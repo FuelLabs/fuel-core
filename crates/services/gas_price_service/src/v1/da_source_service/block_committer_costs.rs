@@ -79,10 +79,8 @@ impl From<RawDaBlockCosts> for DaBlockCosts {
 
 impl<BlockCommitter> BlockCommitterDaBlockCosts<BlockCommitter> {
     /// Create a new instance of the block committer da block costs source
-    pub fn new(
-        client: BlockCommitter,
-        last_recorded_height: Option<BlockHeight>,
-    ) -> Self {
+    pub fn new(client: BlockCommitter) -> Self {
+        let last_recorded_height = None;
         Self {
             client,
             last_recorded_height,
@@ -106,10 +104,8 @@ where
                 None => self.client.get_latest_costs().await?.into_iter().collect(),
             };
 
-        tracing::info!("raw_da_block_costs: {:?}", raw_da_block_costs);
         let da_block_costs: Vec<_> =
             raw_da_block_costs.iter().map(DaBlockCosts::from).collect();
-        tracing::info!("da_block_costs: {:?}", da_block_costs);
         if let Some(cost) = raw_da_block_costs.last() {
             self.last_recorded_height = Some(BlockHeight::from(cost.end_height));
         }
@@ -146,13 +142,10 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     ) -> DaBlockCostsResult<Vec<RawDaBlockCosts>> {
         // Specific: http://localhost:8080/v1/costs?variant=specific&value=19098935&limit=5
         if let Some(url) = &self.url {
-            tracing::info!("getting costs by l2 block number");
+            tracing::debug!("getting da costs by l2 block number: {l2_block_number}");
             let formatted_url = format!("{url}/v1/costs?variant=specific&value={l2_block_number}&limit={PAGE_SIZE}");
-            tracing::info!("Formatted URL: {:?}", formatted_url);
             let response = self.client.get(formatted_url).send().await?;
-            tracing::info!("response: {:?}", response);
             let parsed = response.json::<Vec<RawDaBlockCosts>>().await?;
-            tracing::info!("parse: {:?}", parsed);
             Ok(parsed)
         } else {
             Ok(vec![])
@@ -162,13 +155,9 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
         // Latest: http://localhost:8080/v1/costs?variant=latest&limit=5
         if let Some(url) = &self.url {
-            tracing::info!("getting latest costs");
             let formatted_url = format!("{url}/v1/costs?variant=latest&limit=1");
-            tracing::info!("Formatted URL: {:?}", formatted_url);
             let response = self.client.get(formatted_url).send().await?;
-            tracing::info!("response: {:?}", response);
             let raw_da_block_costs = response.json::<Vec<RawDaBlockCosts>>().await?;
-            tracing::info!("Parsed: {:?}", raw_da_block_costs);
             // only take the first element, since we are only looking for the most recent
             Ok(raw_da_block_costs.first().cloned())
         } else {
@@ -510,7 +499,7 @@ mod tests {
         let da_block_costs = test_da_block_costs();
         let expected = vec![(&da_block_costs).into()];
         let mock_api = MockBlockCommitterApi::new(Some(da_block_costs));
-        let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api, None);
+        let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api);
 
         // when
         let actual = block_committer.request_da_block_costs().await.unwrap();
@@ -527,8 +516,8 @@ mod tests {
         let da_block_costs_len = da_block_costs.end_height - da_block_costs.start_height;
         let mock_api = MockBlockCommitterApi::new(Some(da_block_costs.clone()));
         let latest_height = BlockHeight::new(da_block_costs.end_height);
-        let mut block_committer =
-            BlockCommitterDaBlockCosts::new(mock_api, Some(latest_height));
+        let mut block_committer = BlockCommitterDaBlockCosts::new(mock_api);
+        block_committer.set_last_value(latest_height).await.unwrap();
 
         // when
         let actual = block_committer.request_da_block_costs().await.unwrap();

@@ -91,7 +91,6 @@ impl<Height: Copy, GasPrice: Copy> LatestGasPrice<Height, GasPrice> {
 pub struct GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     DA: DaBlockCostsSource + 'static,
-    // AtomicStorage: GasPriceServiceAtomicStorage,
 {
     /// The algorithm that can be used in the next block
     shared_algo: SharedV1Algorithm,
@@ -243,13 +242,13 @@ where
         )?;
 
         let metadata = self.algorithm_updater.clone().into();
-        tracing::info!("Setting metadata: {:?}", metadata);
+        tracing::debug!("Setting metadata: {:?}", metadata);
         storage_tx
             .set_metadata(&metadata)
             .map_err(|err| anyhow!(err))?;
         AtomicStorage::commit_transaction(storage_tx)?;
         let new_algo = self.algorithm_updater.algorithm();
-        tracing::info!("Updating gas price: {}", &new_algo.calculate());
+        tracing::debug!("Updating gas price: {}", &new_algo.calculate());
         self.shared_algo.update(new_algo).await;
         // Clear the buffer after committing changes
         self.da_block_costs_buffer.clear();
@@ -307,12 +306,12 @@ where
                 TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
-                tracing::info!("Received L2 block result: {:?}", l2_block_res);
+                tracing::debug!("Received L2 block result: {:?}", l2_block_res);
                 let res = self.commit_block_data_to_algorithm(l2_block_res).await;
                 TaskNextAction::always_continue(res)
             }
             da_block_costs_res = self.da_source_channel.recv() => {
-                tracing::error!("Received DA block costs: {:?}", da_block_costs_res);
+                tracing::debug!("Received DA block costs: {:?}", da_block_costs_res);
                 match da_block_costs_res {
                     Ok(da_block_costs) => {
                         self.da_block_costs_buffer.push(da_block_costs);
