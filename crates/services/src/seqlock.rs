@@ -26,50 +26,62 @@ pub struct SeqLock<T> {
 
 unsafe impl<T: Send> Sync for SeqLock<T> {}
 
-impl<T> SeqLock<T> {
-    /// Create a new SeqLock with the given data
-    pub fn new(data: T) -> Self {
-        Self {
-            sequence: AtomicU64::new(0),
-            data: UnsafeCell::new(data),
-        }
-    }
+/// The writer handle for the `SeqLock`.
+/// Only one writer exists for a `SeqLock`.
+#[derive(Debug)]
+pub struct SeqLockWriter<T> {
+    lock: std::sync::Arc<SeqLock<T>>,
+}
 
-    /// Write the data
+impl<T> SeqLockWriter<T> {
+    /// Modifies the data within the lock.
     pub fn write<F>(&self, f: F)
     where
         F: FnOnce(&mut T),
     {
-        // starting guard
-        self.sequence.fetch_add(1, Ordering::Release);
+        let lock = &self.lock;
 
-        // Modify the data
+        // Indicate that a write operation is starting.
+        lock.sequence.fetch_add(1, Ordering::Release);
+
+        // Modify the data.
         unsafe {
-            f(&mut *self.data.get());
+            f(&mut *lock.data.get());
         }
 
-        // ending guard
-        self.sequence.fetch_add(1, Ordering::Release);
+        // Indicate that the write operation has finished.
+        lock.sequence.fetch_add(1, Ordering::Release);
     }
+}
 
-    /// Read the data
+/// The reader handle for the `SeqLock`.
+/// Multiple readers can be created for a `SeqLock`.
+#[derive(Clone, Debug)]
+pub struct SeqLockReader<T> {
+    lock: std::sync::Arc<SeqLock<T>>,
+}
+
+impl<T> SeqLockReader<T> {
+    /// Reads the data within the lock.
     pub fn read(&self) -> T
     where
         T: Copy,
     {
+        let lock = &self.lock;
+
         loop {
             // check starting guard
-            let start = self.sequence.load(Ordering::Acquire);
+            let start = lock.sequence.load(Ordering::Acquire);
 
             // if odd, write in progress
             if start % 2 != 0 {
                 continue;
             }
 
-            let data = unsafe { *self.data.get() };
+            let data = unsafe { *lock.data.get() };
 
             // check starting/ending guard
-            let end = self.sequence.load(Ordering::Acquire);
+            let end = lock.sequence.load(Ordering::Acquire);
 
             // if value changed, retry
             if start == end && start % 2 == 0 {
@@ -79,31 +91,44 @@ impl<T> SeqLock<T> {
     }
 }
 
+impl<T> SeqLock<T> {
+    /// Creates a new `SeqLock` and returns a writer and a reader handle.
+    pub fn new(data: T) -> (SeqLockWriter<T>, SeqLockReader<T>) {
+        let lock = Self {
+            sequence: AtomicU64::new(0),
+            data: UnsafeCell::new(data),
+        };
+        let shared = std::sync::Arc::new(lock);
+        (
+            SeqLockWriter {
+                lock: std::sync::Arc::clone(&shared),
+            },
+            SeqLockReader { lock: shared },
+        )
+    }
+}
+
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        sync::Arc,
-        thread,
-    };
+    use std::thread;
 
     #[test]
     fn test_seqlock__provides_correct_values_in_order() {
-        let lock = Arc::new(SeqLock::new(42));
+        let (writer, reader) = SeqLock::new(42);
         let iterations = 100;
 
         let writer = {
-            let lock = lock.clone();
             thread::spawn(move || {
                 for i in 0..iterations {
-                    lock.write(|data| *data = i);
+                    writer.write(|data| *data = i);
                 }
             })
         };
 
         let reader = {
-            let lock = lock.clone();
+            let lock = reader.clone();
             thread::spawn(move || {
                 let seen = 0;
 
@@ -120,13 +145,13 @@ mod tests {
 
     #[test]
     fn test_seqlock__single_threaded() {
-        let lock = SeqLock::new(42);
+        let (writer, reader) = SeqLock::new(42);
 
-        lock.write(|data| {
+        writer.write(|data| {
             *data = 100;
         });
 
-        let value = lock.read();
+        let value = reader.read();
         assert_eq!(value, 100);
     }
 }

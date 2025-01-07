@@ -5,7 +5,11 @@ use fuel_core_services::TaskNextAction;
 
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
-    seqlock::SeqLock,
+    seqlock::{
+        SeqLock,
+        SeqLockReader,
+        SeqLockWriter,
+    },
     AsyncProcessor,
     RunnableService,
     RunnableTask,
@@ -189,7 +193,8 @@ pub struct Task<View> {
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
     pool: Shared<TxPool>,
-    current_height: Arc<SeqLock<BlockHeight>>,
+    current_height_writer: SeqLockWriter<BlockHeight>,
+    current_height_reader: SeqLockReader<BlockHeight>,
     tx_sync_history: Shared<HashSet<PeerId>>,
     shared_state: SharedState,
     metrics: bool,
@@ -321,7 +326,7 @@ where
         }
 
         {
-            self.current_height.write(|data| {
+            self.current_height_writer.write(|data| {
                 *data = new_height;
             });
         }
@@ -392,13 +397,13 @@ where
         let pool = self.pool.clone();
         let p2p = self.p2p.clone();
         let shared_state = self.shared_state.clone();
-        let current_height = self.current_height.clone();
+        let current_height_reader = self.current_height_reader.clone();
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
 
         let insert_transaction_thread_pool_op = move || {
-            let current_height = current_height.read();
+            let current_height = current_height_reader.read();
 
             // TODO: This should be removed if the checked transactions
             //  can work with Arc in it
@@ -795,6 +800,8 @@ where
         config,
     );
 
+    let (current_height_writer, current_height_reader) = SeqLock::new(current_height);
+
     Service::new(Task {
         chain_id,
         utxo_validation,
@@ -804,7 +811,8 @@ where
         p2p_sync_process,
         pruner,
         p2p: Arc::new(p2p),
-        current_height: Arc::new(SeqLock::new(current_height)),
+        current_height_writer,
+        current_height_reader,
         pool: Arc::new(RwLock::new(txpool)),
         shared_state,
         metrics,

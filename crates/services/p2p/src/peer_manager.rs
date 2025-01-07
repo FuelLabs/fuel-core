@@ -2,7 +2,11 @@ use crate::{
     gossipsub_config::GRAYLIST_THRESHOLD,
     peer_manager::heartbeat_data::HeartbeatData,
 };
-use fuel_core_services::seqlock::SeqLock;
+use fuel_core_services::seqlock::{
+    SeqLock,
+    SeqLockReader,
+    SeqLockWriter,
+};
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::peer_reputation::{
@@ -18,12 +22,9 @@ use libp2p::{
     PeerId,
 };
 use rand::seq::IteratorRandom;
-use std::{
-    collections::{
-        HashMap,
-        HashSet,
-    },
-    sync::Arc,
+use std::collections::{
+    HashMap,
+    HashSet,
 };
 use tracing::{
     debug,
@@ -62,7 +63,7 @@ pub struct PeerManager {
     non_reserved_connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_connected_peers: HashMap<PeerId, PeerInfo>,
     reserved_peers: HashSet<PeerId>,
-    connection_state: Arc<SeqLock<ConnectionState>>,
+    connection_state_writer: SeqLockWriter<ConnectionState>,
     max_non_reserved_peers: usize,
     reserved_peers_updates: tokio::sync::broadcast::Sender<usize>,
 }
@@ -71,7 +72,7 @@ impl PeerManager {
     pub fn new(
         reserved_peers_updates: tokio::sync::broadcast::Sender<usize>,
         reserved_peers: HashSet<PeerId>,
-        connection_state: Arc<SeqLock<ConnectionState>>,
+        connection_state_writer: SeqLockWriter<ConnectionState>,
         max_non_reserved_peers: usize,
     ) -> Self {
         Self {
@@ -79,7 +80,7 @@ impl PeerManager {
             non_reserved_connected_peers: HashMap::with_capacity(max_non_reserved_peers),
             reserved_connected_peers: HashMap::with_capacity(reserved_peers.len()),
             reserved_peers,
-            connection_state,
+            connection_state_writer,
             max_non_reserved_peers,
             reserved_peers_updates,
         }
@@ -207,7 +208,7 @@ impl PeerManager {
             {
                 // since all the slots were full prior to this disconnect
                 // let's allow new peer non-reserved peers connections
-                self.connection_state.write(|data| {
+                self.connection_state_writer.write(|data| {
                     data.allow_new_peers();
                 });
             }
@@ -255,7 +256,7 @@ impl PeerManager {
                 == self.max_non_reserved_peers
             {
                 // this is the last non-reserved peer allowed
-                self.connection_state.write(|data| {
+                self.connection_state_writer.write(|data| {
                     data.deny_new_peers();
                 });
             }
@@ -310,10 +311,13 @@ pub struct ConnectionState {
 }
 
 impl ConnectionState {
-    pub fn new() -> Arc<SeqLock<Self>> {
-        Arc::new(SeqLock::new(Self {
+    pub fn new() -> (
+        SeqLockWriter<ConnectionState>,
+        SeqLockReader<ConnectionState>,
+    ) {
+        SeqLock::new(Self {
             peers_allowed: true,
-        }))
+        })
     }
 
     pub fn available_slot(&self) -> bool {
@@ -396,14 +400,14 @@ mod tests {
         reserved_peers: Vec<PeerId>,
         max_non_reserved_peers: usize,
     ) -> PeerManager {
-        let connection_state = ConnectionState::new();
+        let (connection_state_writer, _) = ConnectionState::new();
         let (sender, _) =
             tokio::sync::broadcast::channel(reserved_peers.len().saturating_add(1));
 
         PeerManager::new(
             sender,
             reserved_peers.into_iter().collect(),
-            connection_state,
+            connection_state_writer,
             max_non_reserved_peers,
         )
     }

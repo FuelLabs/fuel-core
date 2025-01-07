@@ -11,7 +11,7 @@ use self::{
     fuel_authenticated::FuelAuthenticated,
     fuel_upgrade::Checksum,
 };
-use fuel_core_services::seqlock::SeqLock;
+use fuel_core_services::seqlock::SeqLockReader;
 use libp2p::{
     gossipsub,
     identity::{
@@ -28,7 +28,6 @@ use std::{
         IpAddr,
         Ipv4Addr,
     },
-    sync::Arc,
     time::Duration,
 };
 mod connection_tracker;
@@ -255,12 +254,8 @@ impl Config<Initialized> {
 /// mplex or yamux for multiplexing
 pub(crate) fn build_transport_function(
     p2p_config: &Config,
-) -> (
-    impl FnOnce(&Keypair) -> Result<FuelAuthenticated<ConnectionTracker>, ()> + '_,
-    Arc<SeqLock<ConnectionState>>,
-) {
-    let connection_state = ConnectionState::new();
-    let kept_connection_state = connection_state.clone();
+    connection_state_reader: SeqLockReader<ConnectionState>,
+) -> impl FnOnce(&Keypair) -> Result<FuelAuthenticated<ConnectionTracker>, ()> + '_ {
     let transport_function = move |keypair: &Keypair| {
         let noise_authenticated =
             noise::Config::new(keypair).expect("Noise key generation failed");
@@ -268,7 +263,7 @@ pub(crate) fn build_transport_function(
         let connection_state = if p2p_config.reserved_nodes_only_mode {
             None
         } else {
-            Some(connection_state)
+            Some(connection_state_reader.clone())
         };
 
         let connection_tracker =
@@ -281,7 +276,7 @@ pub(crate) fn build_transport_function(
         ))
     };
 
-    (transport_function, kept_connection_state)
+    transport_function
 }
 
 fn peer_ids_set_from(multiaddr: &[Multiaddr]) -> HashSet<PeerId> {
