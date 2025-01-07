@@ -26,7 +26,7 @@ pub enum Error {
 pub type Result<T, E = Error> = core::result::Result<T, E>;
 
 // Info required about the l2 block for the gas price algorithm
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BlockInfo {
     // The genesis block of the L2 chain
     GenesisBlock,

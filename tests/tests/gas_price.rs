@@ -602,6 +602,11 @@ fn produce_block__l1_committed_block_affects_gas_price() {
                 .await
                 .unwrap();
             tokio::time::sleep(Duration::from_millis(20)).await;
+            // Won't accept DA costs until l2_height is > 1
+            driver.client.produce_blocks(1, None).await.unwrap();
+            // Wait for DaBlockCosts to be accepted
+            tokio::time::sleep(Duration::from_millis(2)).await;
+            // Produce new block to update gas price
             driver.client.produce_blocks(1, None).await.unwrap();
             tokio::time::sleep(Duration::from_millis(20)).await;
             driver.client.estimate_gas_price(0).await.unwrap().gas_price
