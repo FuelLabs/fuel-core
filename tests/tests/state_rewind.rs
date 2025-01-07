@@ -2,6 +2,7 @@
 
 use clap::Parser;
 use fuel_core::{
+    combined_database::CombinedDatabase,
     schema::tx::types::TransactionStatus,
     service::{
         config::fuel_core_importer::ports::Validator,
@@ -29,6 +30,7 @@ use rand::{
     SeedableRng,
 };
 use std::collections::BTreeSet;
+use tempfile::TempDir;
 use test_helpers::{
     fuel_core_driver::FuelCoreDriver,
     produce_block_with_tx,
@@ -294,5 +296,87 @@ async fn rollback_to__should_work_with_empty_gas_price_database() -> anyhow::Res
     // Then
     result.expect("Rollback should succeed");
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn backup_and_restore__should_work_with_state_rewind() -> anyhow::Result<()> {
+    let mut rng = StdRng::seed_from_u64(1234);
+    let driver = FuelCoreDriver::spawn_feeless(&[
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--state-rewind-duration",
+        "7d",
+    ])
+    .await?;
+    let node = &driver.node;
+
+    // Given
+    // setup a node, produce some blocks
+    const TOTAL_BLOCKS: u64 = 20;
+    const MIN_AMOUNT: u64 = 123456;
+    let mut last_block_height = 0u32;
+    let mut database_modifications = std::collections::HashMap::new();
+    for _ in 0..TOTAL_BLOCKS {
+        let mut blocks = node.shared.block_importer.events();
+        let tx = transfer_transaction(MIN_AMOUNT, &mut rng);
+        let result = node.submit_and_await_commit(tx).await.unwrap();
+        assert!(matches!(result, TransactionStatus::Success(_)));
+
+        let block = blocks.next().await.unwrap();
+        let block_height = *block.shared_result.sealed_block.entity.header().height();
+        last_block_height = block_height.into();
+        database_modifications.insert(last_block_height, block.changes.as_ref().clone());
+    }
+
+    // create a backup and delete the database
+    let db_dir = driver.kill().await;
+    let backup_dir = TempDir::new().unwrap();
+    CombinedDatabase::backup(db_dir.path(), backup_dir.path()).unwrap();
+    drop(db_dir);
+
+    // restore the backup
+    let new_db_dir = TempDir::new().unwrap();
+    CombinedDatabase::restore(new_db_dir.path(), backup_dir.path()).unwrap();
+
+    // start the node again, with the new db
+    let driver = FuelCoreDriver::spawn_feeless_with_directory(
+        new_db_dir,
+        &[
+            "--debug",
+            "--poa-instant",
+            "true",
+            "--state-rewind-duration",
+            "7d",
+        ],
+    )
+    .await
+    .unwrap();
+    let node = &driver.node;
+
+    let view = node.shared.database.on_chain().latest_view().unwrap();
+
+    for i in 0..TOTAL_BLOCKS {
+        let height_to_execute = rng.gen_range(1..last_block_height);
+
+        let block = view
+            .get_full_block(&height_to_execute.into())
+            .unwrap()
+            .unwrap();
+
+        // When
+        tracing::info!("Validating block {i} at height {}", height_to_execute);
+        let result = node.shared.executor.validate(&block);
+
+        // Then
+        let height_to_execute: BlockHeight = height_to_execute.into();
+        let result = result.unwrap();
+        let expected_changes = database_modifications.get(&height_to_execute).unwrap();
+        let actual_changes = result.into_changes();
+        assert_eq!(&actual_changes, expected_changes);
+    }
+
+    driver.kill().await;
     Ok(())
 }
