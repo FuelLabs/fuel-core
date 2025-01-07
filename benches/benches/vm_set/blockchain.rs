@@ -53,8 +53,11 @@ use fuel_core_types::{
     },
     fuel_tx::{
         ContractIdExt,
+        Finalizable,
         Input,
         Output,
+        Transaction,
+        TransactionBuilder,
         Word,
     },
     fuel_types::*,
@@ -71,6 +74,7 @@ pub struct BenchDb {
     db: GenesisDatabase,
     /// Used for RAII cleanup. Contents of this directory are deleted on drop.
     _tmp_dir: utils::ShallowTempDir,
+    latest_block: u32,
 }
 
 impl BenchDb {
@@ -131,18 +135,40 @@ impl BenchDb {
                 &block.compress(&chain_config.consensus_parameters.chain_id()),
             )
             .unwrap();
-
         Ok(Self {
             _tmp_dir: tmp_dir,
             db: database,
+            latest_block: 0,
         })
+    }
+
+    fn add_blocks(&mut self, nb_blocks: u32) {
+        for i in 1..=nb_blocks {
+            let mut block =
+                fuel_core::service::genesis::create_genesis_block(&Config::local_node());
+            let transactions = block.transactions_mut();
+            // Add a dummy transaction to the block to make the block bigger.
+            transactions.push(Transaction::Script(
+                TransactionBuilder::script(vec![], vec![1; 200_000]).finalize(),
+            ));
+            let config = Config::local_node();
+            let chain_config = config.snapshot_reader.chain_config();
+            self.db
+                .storage::<FuelBlocks>()
+                .insert(
+                    &i.into(),
+                    &block.compress(&chain_config.consensus_parameters.chain_id()),
+                )
+                .unwrap();
+        }
+        self.latest_block = nb_blocks;
     }
 
     /// Creates a `VmDatabase` instance.
     fn to_vm_database(&self) -> VmStorage<StorageTransaction<GenesisDatabase>> {
         let consensus = ConsensusHeader {
             prev_root: Default::default(),
-            height: 1.into(),
+            height: self.latest_block.into(),
             time: Tai64::UNIX_EPOCH,
             generated: (),
         };
@@ -526,14 +552,25 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::bhei(0x10)),
     );
 
+    let mut db =
+        BenchDb::new(&VmBench::CONTRACT).expect("Unable to fill contract storage");
+    db.add_blocks(10000);
+
     run_group_ref(
         &mut c.benchmark_group("bhsh"),
         "bhsh",
-        VmBench::new(op::bhsh(0x10, RegId::ZERO)).with_prepare_script(vec![
-            op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
-            op::aloc(0x10),
-            op::move_(0x10, RegId::HP),
-        ]),
+        VmBench::new(op::bhsh(RegId::HP, 0x11))
+            .prepend_prepare_script(vec![
+                // Store number of bytes we want to alloc for the future result
+                op::movi(0x10, Bytes32::LEN.try_into().unwrap()),
+                // Allocate space for the future result
+                op::aloc(0x10),
+                // Add block height to 0x11
+                op::movi(0x11, 0xc9),
+            ])
+            // Random height
+            .with_height(0xca.into())
+            .with_db(db.to_vm_database()),
     );
 
     run_group_ref(

@@ -102,10 +102,8 @@ where
             None => self.client.get_latest_costs().await?.into_iter().collect(),
         };
 
-        tracing::info!("raw_da_block_costs: {:?}", raw_da_block_costs);
         let da_block_costs: Vec<_> =
             raw_da_block_costs.iter().map(DaBlockCosts::from).collect();
-        tracing::info!("da_block_costs: {:?}", da_block_costs);
 
         Ok(da_block_costs)
     }
@@ -134,13 +132,10 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     ) -> DaBlockCostsResult<Vec<RawDaBlockCosts>> {
         // Specific: http://localhost:8080/v1/costs?variant=specific&value=19098935&limit=5
         if let Some(url) = &self.url {
-            tracing::info!("getting costs by l2 block number");
+            tracing::debug!("getting da costs by l2 block number: {l2_block_number}");
             let formatted_url = format!("{url}/v1/costs?variant=specific&value={l2_block_number}&limit={PAGE_SIZE}");
-            tracing::info!("Formatted URL: {:?}", formatted_url);
             let response = self.client.get(formatted_url).send().await?;
-            tracing::info!("response: {:?}", response);
             let parsed = response.json::<Vec<RawDaBlockCosts>>().await?;
-            tracing::info!("parse: {:?}", parsed);
             Ok(parsed)
         } else {
             Ok(vec![])
@@ -150,13 +145,9 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
     async fn get_latest_costs(&self) -> DaBlockCostsResult<Option<RawDaBlockCosts>> {
         // Latest: http://localhost:8080/v1/costs?variant=latest&limit=5
         if let Some(url) = &self.url {
-            tracing::info!("getting latest costs");
             let formatted_url = format!("{url}/v1/costs?variant=latest&limit=1");
-            tracing::info!("Formatted URL: {:?}", formatted_url);
             let response = self.client.get(formatted_url).send().await?;
-            tracing::info!("response: {:?}", response);
             let raw_da_block_costs = response.json::<Vec<RawDaBlockCosts>>().await?;
-            tracing::info!("Parsed: {:?}", raw_da_block_costs);
             // only take the first element, since we are only looking for the most recent
             Ok(raw_da_block_costs.first().cloned())
         } else {

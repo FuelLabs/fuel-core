@@ -287,7 +287,7 @@ where
 {
     let first = metadata_height.saturating_add(1);
     let view = on_chain_db.latest_view()?;
-    tracing::info!(
+    tracing::debug!(
         "Syncing gas price metadata from {} to {}",
         first,
         latest_block_height

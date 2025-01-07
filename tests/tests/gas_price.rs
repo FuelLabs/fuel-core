@@ -1,43 +1,35 @@
 #![allow(non_snake_case)]
-// TODO: REMOVE BEFORE MERGING
-#![allow(dead_code)]
-#![allow(unused_imports)]
 
 use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
-use ethers::types::Opcode;
 use fuel_core::{
     chain_config::{
         ChainConfig,
         StateConfig,
     },
-    combined_database::CombinedDatabase,
     database::Database,
-    fuel_core_graphql_api::ports::worker::OnChainDatabase,
     service::{
         Config,
         FuelService,
     },
-    state::historical_rocksdb::StateRewindPolicy,
 };
 use fuel_core_client::client::{
     types::gas_price::LatestGasPrice,
     FuelClient,
 };
 use fuel_core_gas_price_service::{
-    common::fuel_core_storage_adapter::storage::{
-        GasPriceMetadata,
-        RecordedHeights,
-    },
+    common::fuel_core_storage_adapter::storage::GasPriceMetadata,
     ports::{
         GasPriceData,
-        GetLatestRecordedHeight,
         GetMetadataStorage,
     },
     v1::{
-        da_source_service::block_committer_costs::fake_server::FakeServer,
+        da_source_service::block_committer_costs::{
+            fake_server::FakeServer,
+            RawDaBlockCosts,
+        },
         metadata::V1Metadata,
     },
 };
@@ -65,18 +57,12 @@ use fuel_core_types::{
 };
 use rand::Rng;
 use std::{
-    collections::HashMap,
+    self,
     iter::repeat,
-    num::NonZero,
     ops::Deref,
-    sync::{
-        Arc,
-        Mutex,
-    },
     time::Duration,
 };
 use test_helpers::fuel_core_driver::FuelCoreDriver;
-use wideint::MathOp;
 
 fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
     TransactionBuilder::script(vec![], vec![])
@@ -384,27 +370,6 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     assert!(estimated >= real);
 }
 
-// TODO: this behavior is changing with https://github.com/FuelLabs/fuel-core/pull/2501
-// #[tokio::test]
-// async fn estimate_gas_price__returns_min_gas_price_if_starting_gas_price_is_zero() {
-//     const MIN_GAS_PRICE: u64 = 1;
-//
-//     // Given
-//     let mut node_config = Config::local_node();
-//     node_config.min_exec_gas_price = MIN_GAS_PRICE;
-//     node_config.starting_exec_gas_price = 0;
-//     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
-//     let client = FuelClient::from(srv.bound_address);
-//
-//     // When
-//     let result = client.estimate_gas_price(10).await.unwrap();
-//
-//     // Then
-//     let actual = result.gas_price.0;
-//     assert_eq!(MIN_GAS_PRICE, actual)
-// }
-
-// This test passed before this PR, but doesn't now
 #[tokio::test(flavor = "multi_thread")]
 async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     // given
@@ -563,9 +528,6 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
     recovered_driver.kill().await;
 }
 
-use fuel_core_gas_price_service::v1::da_source_service::block_committer_costs::RawDaBlockCosts;
-use fuel_core_storage::iter::IterDirection;
-
 #[test]
 fn produce_block__l1_committed_block_affects_gas_price() {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -672,61 +634,61 @@ fn run__if_metadata_is_behind_l2_then_will_catch_up() {
         "100",
     ];
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let _temp_dir = rt.block_on(async {
+    let temp_dir = rt.block_on(async {
         let driver = FuelCoreDriver::spawn(&args).await.unwrap();
         driver.client.produce_blocks(100, None).await.unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
         driver.kill().await
     });
 
-    // // rollback 50 blocks
-    // let temp_dir = rt.block_on(async {
-    //     let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
-    //         .await
-    //         .unwrap();
-    //     for _ in 0..50 {
-    //         driver
-    //             .node
-    //             .shared
-    //             .database
-    //             .gas_price()
-    //             .rollback_last_block()
-    //             .unwrap();
-    //         let gas_price_db_height = driver
-    //             .node
-    //             .shared
-    //             .database
-    //             .gas_price()
-    //             .latest_height()
-    //             .unwrap();
-    //         tracing::info!("gas price db height: {:?}", gas_price_db_height);
-    //     }
-    //     driver.kill().await
-    // });
-    //
-    // // when
-    // // restart node
-    // rt.block_on(async {
-    //     let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
-    //         .await
-    //         .unwrap();
-    //     let onchain_db_height = driver
-    //         .node
-    //         .shared
-    //         .database
-    //         .on_chain()
-    //         .latest_height_from_metadata()
-    //         .unwrap()
-    //         .unwrap();
-    //     let gas_price_db_height = driver
-    //         .node
-    //         .shared
-    //         .database
-    //         .gas_price()
-    //         .latest_height()
-    //         .unwrap();
-    //     assert_eq!(onchain_db_height, gas_price_db_height);
-    // });
+    // rollback 50 blocks
+    let temp_dir = rt.block_on(async {
+        let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
+            .await
+            .unwrap();
+        for _ in 0..50 {
+            driver
+                .node
+                .shared
+                .database
+                .gas_price()
+                .rollback_last_block()
+                .unwrap();
+            let gas_price_db_height = driver
+                .node
+                .shared
+                .database
+                .gas_price()
+                .latest_height()
+                .unwrap();
+            tracing::info!("gas price db height: {:?}", gas_price_db_height);
+        }
+        driver.kill().await
+    });
+
+    // when
+    // restart node
+    rt.block_on(async {
+        let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
+            .await
+            .unwrap();
+        let onchain_db_height = driver
+            .node
+            .shared
+            .database
+            .on_chain()
+            .latest_height_from_metadata()
+            .unwrap()
+            .unwrap();
+        let gas_price_db_height = driver
+            .node
+            .shared
+            .database
+            .gas_price()
+            .latest_height()
+            .unwrap();
+        assert_eq!(onchain_db_height, gas_price_db_height);
+    });
 }
 
 fn node_config_with_da_committer_url(url: &str) -> Config {
@@ -749,8 +711,6 @@ fn node_config_with_da_committer_url(url: &str) -> Config {
     node_config.da_poll_interval = Some(100);
     node_config.da_p_component = 224_000;
     node_config.da_d_component = 2_690_000;
-    // node_config.da_p_component = 1;
-    // node_config.da_d_component = 10;
     node_config.block_activity_threshold = 0;
     node_config
 }
