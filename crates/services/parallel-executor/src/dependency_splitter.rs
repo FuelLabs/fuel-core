@@ -13,24 +13,18 @@ use fuel_core_types::{
         Input,
         Transaction,
         TxId,
-        UtxoId,
     },
-    fuel_types::Nonce,
     fuel_vm::checked_transaction::CheckedTransaction,
     services::executor::{
         Error as ExecutorError,
         Result as ExecutorResult,
-        TransactionValidityError,
     },
 };
 use fuel_core_upgradable_executor::native_executor::ports::{
     MaybeCheckedTransaction,
     TransactionExt,
 };
-use rustc_hash::{
-    FxHashMap,
-    FxHashSet,
-};
+use rustc_hash::FxHashMap;
 use std::{
     cmp::Reverse,
     num::NonZeroUsize,
@@ -109,8 +103,6 @@ pub struct DependencySplitter {
     other_buckets: OrderedBucket,
     blobs_bucket: OrderedBucket,
     txs_to_bucket: FxHashMap<TxId, BucketIndex>,
-    used_coins: FxHashSet<UtxoId>,
-    used_messages: FxHashSet<Nonce>,
     created_contracts: FxHashMap<ContractId, TxId>,
     consensus_parameters: ConsensusParameters,
     remaining_block_gas: u64,
@@ -123,11 +115,6 @@ impl DependencySplitter {
             other_buckets: OrderedBucket::new(),
             blobs_bucket: OrderedBucket::new(),
             txs_to_bucket: FxHashMap::with_capacity_and_hasher(
-                txs_len,
-                Default::default(),
-            ),
-            used_coins: FxHashSet::with_capacity_and_hasher(txs_len, Default::default()),
-            used_messages: FxHashSet::with_capacity_and_hasher(
                 txs_len,
                 Default::default(),
             ),
@@ -163,44 +150,6 @@ impl DependencySplitter {
             return Err(ExecutorError::TransactionIdCollision(tx_id))
         }
 
-        for input in inputs {
-            match input {
-                Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    if self.used_coins.contains(utxo_id) {
-                        return Err(ExecutorError::TransactionValidity(
-                            TransactionValidityError::CoinDoesNotExist(*utxo_id),
-                        ))
-                    }
-                }
-                Input::Contract(_) => {
-                    // Nothing to validate
-                }
-
-                // Always go to other buket if nonce already is used
-                Input::MessageCoinSigned(message::MessageCoinSigned {
-                    nonce, ..
-                })
-                | Input::MessageCoinPredicate(message::MessageCoinPredicate {
-                    nonce,
-                    ..
-                })
-                | Input::MessageDataSigned(message::MessageDataSigned {
-                    nonce, ..
-                })
-                | Input::MessageDataPredicate(message::MessageDataPredicate {
-                    nonce,
-                    ..
-                }) => {
-                    if self.used_messages.contains(nonce) {
-                        return Err(ExecutorError::TransactionValidity(
-                            TransactionValidityError::MessageDoesNotExist(*nonce),
-                        ))
-                    }
-                }
-            }
-        }
-
         if is_blob(&tx) {
             // Blobs can't touch contracts, so we don't worry about them.
             // If inputs are dependent, blob execution will fail with
@@ -217,7 +166,6 @@ impl DependencySplitter {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    self.used_coins.insert(*utxo_id);
 
                     // Always go to other bucket if parent in this block
                     if let Some(parent_index) =
@@ -260,20 +208,17 @@ impl DependencySplitter {
 
                 // Always go to other buket if nonce already is used
                 Input::MessageCoinSigned(message::MessageCoinSigned {
-                    nonce, ..
+                    ..
                 })
                 | Input::MessageCoinPredicate(message::MessageCoinPredicate {
-                    nonce,
                     ..
                 })
                 | Input::MessageDataSigned(message::MessageDataSigned {
-                    nonce, ..
+                    ..
                 })
                 | Input::MessageDataPredicate(message::MessageDataPredicate {
-                    nonce,
                     ..
                 }) => {
-                    self.used_messages.insert(*nonce);
                 }
             }
         }

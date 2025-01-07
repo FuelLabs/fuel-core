@@ -41,19 +41,24 @@ use fuel_core_types::{
     },
     fuel_merkle::binary::leaf_sum,
     fuel_tx::{
-        input::coin::{
-            CoinPredicate,
-            CoinSigned,
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            message,
         },
         ConsensusParameters,
         Input,
         Transaction,
         TxId,
         TxPointer,
+        UtxoId,
     },
     fuel_types::{
         canonical::Serialize,
         BlockHeight,
+        Nonce,
     },
     fuel_vm::{
         checked_transaction::{
@@ -69,6 +74,7 @@ use fuel_core_types::{
             Event,
             ProductionResult,
             Result as ExecutorResult,
+            TransactionValidityError,
             UncommittedResult,
             ValidationResult,
         },
@@ -94,6 +100,7 @@ use fuel_core_upgradable_executor::{
         },
     },
 };
+use rustc_hash::FxHashMap;
 #[cfg(debug_assertions)]
 use std::collections::HashMap;
 use std::{
@@ -101,6 +108,7 @@ use std::{
     num::NonZeroUsize,
     sync::{
         Arc,
+        Mutex,
         RwLock,
     },
     time::Instant,
@@ -449,35 +457,49 @@ where
             .saturating_add(1);
         let block_height = *header_to_produce.height();
         let consensus_parameters = consensus_parameters.into_owned();
+        // TODO: Check if `index_map` could be better.
+        let skipped_transactions_ids: Arc<RwLock<FxHashMap<TxId, ExecutorError>>> =
+            Arc::new(RwLock::new(FxHashMap::default()));
 
         let start = Instant::now();
         let mut handlers = Vec::with_capacity(self.number_of_cores.get());
         let mut current_batch = Vec::with_capacity(tx_per_core);
-        let mut i = 0;
-
-        let skipped_transactions_ids: Arc<RwLock<Vec<(TxId, ExecutorError)>>> =
-            Arc::new(RwLock::new(vec![]));
+        let mut idx = 0;
+        let used_coins_and_messages: Arc<
+            Mutex<(
+                FxHashMap<UtxoId, (usize, TxId)>,
+                FxHashMap<Nonce, (usize, TxId)>,
+            )>,
+        > = Arc::new(Mutex::new((
+            FxHashMap::with_capacity_and_hasher(txs_len, Default::default()),
+            FxHashMap::with_capacity_and_hasher(txs_len, Default::default()),
+        )));
         // We don't use the `txs.chunks` because it gives references which force us to Clone.
         // Itertools chunks doesn't allow data to work in async.
         for tx in txs {
             current_batch.push(tx);
-            i += 1;
-            if i % tx_per_core == 0 || txs_len == i {
+            idx += 1;
+            if idx % tx_per_core == 0 || txs_len == idx {
                 let txs = std::mem::take(&mut current_batch);
                 handlers.push(runtime.spawn({
-                    // TODO: try to remove this clone
+                    // TODO: try to remove this clone or use Arc
                     let consensus_parameters = consensus_parameters.clone();
                     let skipped_transactions_ids = skipped_transactions_ids.clone();
                     #[cfg(debug_assertions)]
                     let saved_txs = saved_txs.clone();
+                    let used_coins_and_messages = used_coins_and_messages.clone();
                     async move {
                         let mut checked_txs: Vec<MaybeCheckedTransaction> =
                             Vec::with_capacity(tx_per_core);
                         for tx in txs {
+                            if tx.is_mint() {
+                                return Err(ExecutorError::MintIsNotLastTransaction);
+                            }
                             #[cfg(debug_assertions)]
                             {
                                 saved_txs.write().unwrap().insert(tx.id(&chain_id), tx.clone());
                             }
+
                             match tx {
                                 MaybeCheckedTransaction::Transaction(tx) => {
                                     // Not doing into_checked to check signature and predicates
@@ -485,10 +507,22 @@ where
                                     let tx = tx.into_checked_basic(block_height, &consensus_parameters);
                                     match tx {
                                         Ok(tx) => {
-                                            checked_txs.push(MaybeCheckedTransaction::CheckedTransaction(tx.into(), consensus_parameters_version));
+                                            let checked_tx = MaybeCheckedTransaction::CheckedTransaction(tx.into(), consensus_parameters_version);
+                                            if let Err((tx_id ,e)) = check_used_coins_messages(
+                                                checked_tx
+                                                    .inputs()
+                                                    .expect("Transaction shouldn't be mint transaction, already verified."),
+                                                idx,
+                                                checked_tx.id(&chain_id),
+                                                &used_coins_and_messages
+                                            ) {
+                                                skipped_transactions_ids.write().unwrap().insert(tx_id, e);
+                                                continue;
+                                            };
+                                            checked_txs.push(checked_tx);
                                         }
                                         Err((id, e)) => {
-                                            skipped_transactions_ids.write().unwrap().push((id, ExecutorError::InvalidTransaction(e)));
+                                            skipped_transactions_ids.write().unwrap().insert(id, ExecutorError::InvalidTransaction(e));
                                         }
                                     }
                                 }
@@ -497,12 +531,22 @@ where
                                     checked_version,
                                 ) => {
                                     if consensus_parameters_version == checked_version {
-                                        checked_txs.push(
-                                            MaybeCheckedTransaction::CheckedTransaction(
-                                                checked_tx,
-                                                checked_version,
-                                            ),
-                                        )
+                                        let checked_tx = MaybeCheckedTransaction::CheckedTransaction(
+                                            checked_tx,
+                                            checked_version,
+                                        );
+                                        if let Err((tx_id ,e)) = check_used_coins_messages(
+                                            checked_tx
+                                                .inputs()
+                                                .expect("Transaction shouldn't be mint transaction, already verified."),
+                                            idx,
+                                            checked_tx.id(&chain_id),
+                                            &used_coins_and_messages
+                                        ) {
+                                            skipped_transactions_ids.write().unwrap().insert(tx_id, e);
+                                            continue;
+                                        };
+                                        checked_txs.push(checked_tx)
                                     } else {
                                         let checked_tx: Checked<Transaction> =
                                             checked_tx.into();
@@ -510,16 +554,29 @@ where
                                         let tx = tx.into_checked_basic(block_height, &consensus_parameters);
                                         match tx {
                                             Ok(tx) => {
-                                                checked_txs.push(MaybeCheckedTransaction::CheckedTransaction(tx.into(), consensus_parameters_version));
+                                                let checked_tx = MaybeCheckedTransaction::CheckedTransaction(tx.into(), consensus_parameters_version);
+                                                if let Err((tx_id ,e)) = check_used_coins_messages(
+                                                    checked_tx
+                                                        .inputs()
+                                                        .expect("Transaction shouldn't be mint transaction, already verified."),
+                                                    idx,
+                                                    checked_tx.id(&chain_id),
+                                                    &used_coins_and_messages
+                                                ) {
+                                                    skipped_transactions_ids.write().unwrap().insert(tx_id, e);
+                                                    continue;
+                                                };
+                                                checked_txs.push(checked_tx);
                                             }
                                             Err((id, e)) => {
-                                                skipped_transactions_ids.write().unwrap().push((id, ExecutorError::InvalidTransaction(e)));
+                                                skipped_transactions_ids.write().unwrap().insert(id, ExecutorError::InvalidTransaction(e));
                                             }
                                         }
                                     }
                                 }
                             }
                         }
+                        dbg!(checked_txs.iter().map(|tx| tx.id(&chain_id)).collect::<Vec<TxId>>());
                         Ok::<Vec<MaybeCheckedTransaction>, ExecutorError>(checked_txs)
                     }
                 }));
@@ -547,19 +604,24 @@ where
             .into_inner()
             .expect("The skipped transactions shouldn't be in others threads");
 
+        dbg!(skipped_transactions_ids.len());
         for result in results {
             let txs = result.unwrap()?;
 
             for tx in txs {
-                if tx.is_mint() {
-                    return Err(ExecutorError::MintIsNotLastTransaction);
+                // It's possible that the transaction was skipped but it's still in the `txs` list.
+                if skipped_transactions_ids.contains_key(&tx.id(&chain_id)) {
+                    continue;
                 }
                 let tx_id = tx.id(&chain_id);
+                dbg!(tx_id);
 
                 let result = splitter.process(tx, tx_id);
+                dbg!(&result);
+
 
                 if let Err(e) = result {
-                    skipped_transactions_ids.push((tx_id, e));
+                    skipped_transactions_ids.insert(tx_id, e);
                 }
             }
         }
@@ -637,7 +699,7 @@ where
             consensus_parameters.clone(),
             execution_options,
             execution_results,
-            skipped_transactions_ids,
+            skipped_transactions_ids.into_iter().collect(),
         )?;
 
         #[cfg(debug_assertions)]
@@ -1327,4 +1389,77 @@ mod tests {
         // Then
         assert_eq!(Ok(()), result);
     }
+}
+
+// Returns errors on the biggest tx ids that is involved in the collision.
+fn check_used_coins_messages(
+    inputs: &[Input],
+    tx_index: usize,
+    tx_id: TxId,
+    used_coins_and_messages: &Arc<
+        Mutex<(
+            FxHashMap<UtxoId, (usize, TxId)>,
+            FxHashMap<Nonce, (usize, TxId)>,
+        )>,
+    >,
+) -> Result<(), (TxId, ExecutorError)> {
+    let mut data = used_coins_and_messages.lock().unwrap();
+
+    for input in inputs {
+        match input {
+            Input::CoinSigned(CoinSigned { utxo_id, .. })
+            | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                if let Some((existing_idx, existing_tx_id)) = data.0.get(utxo_id) {
+                    if existing_idx < &tx_index {
+                        return Err((
+                            tx_id,
+                            ExecutorError::TransactionValidity(
+                                TransactionValidityError::CoinDoesNotExist(*utxo_id),
+                            ),
+                        ));
+                    } else {
+                        return Err((
+                            *existing_tx_id,
+                            ExecutorError::TransactionValidity(
+                                TransactionValidityError::CoinDoesNotExist(*utxo_id),
+                            ),
+                        ));
+                    }
+                }
+                data.0.insert(*utxo_id, (tx_index, tx_id));
+            }
+            Input::Contract(_) => {
+                // Nothing to validate
+            }
+
+            Input::MessageCoinSigned(message::MessageCoinSigned { nonce, .. })
+            | Input::MessageCoinPredicate(message::MessageCoinPredicate {
+                nonce, ..
+            })
+            | Input::MessageDataSigned(message::MessageDataSigned { nonce, .. })
+            | Input::MessageDataPredicate(message::MessageDataPredicate {
+                nonce, ..
+            }) => {
+                if let Some((existing_idx, existing_tx_id)) = data.1.get(nonce) {
+                    if existing_idx < &tx_index {
+                        return Err((
+                            tx_id,
+                            ExecutorError::TransactionValidity(
+                                TransactionValidityError::MessageDoesNotExist(*nonce),
+                            ),
+                        ));
+                    } else {
+                        return Err((
+                            *existing_tx_id,
+                            ExecutorError::TransactionValidity(
+                                TransactionValidityError::MessageDoesNotExist(*nonce),
+                            ),
+                        ));
+                    }
+                }
+                data.1.insert(*nonce, (tx_index, tx_id));
+            }
+        }
+    }
+    Ok(())
 }
