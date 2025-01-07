@@ -8,10 +8,7 @@ use fuel_core_types::{
     fuel_asm::{
         op,
         GTFArgs,
-        Instruction,
         RegId,
-        RegisterId,
-        Word,
     },
     fuel_tx::{
         Bytes32,
@@ -23,10 +20,7 @@ use fuel_core_types::{
         UtxoId,
         Witness,
     },
-    fuel_types::{
-        canonical::Serialize,
-        Immediate12,
-    },
+    fuel_types::canonical::Serialize,
     fuel_vm::{
         Call,
         Contract,
@@ -34,23 +28,11 @@ use fuel_core_types::{
     },
 };
 
-/// Set a register `r` to a Word-sized number value using left-shifts
-pub fn set_full_word(r: RegisterId, v: Word) -> Vec<Instruction> {
-    let r = u8::try_from(r).unwrap();
-    let mut ops = vec![op::movi(r, 0)];
-    for byte in v.to_be_bytes() {
-        ops.push(op::ori(r, r, byte as Immediate12));
-        ops.push(op::slli(r, r, 8));
-    }
-    ops.pop().unwrap(); // Remove last shift
-    ops
-}
-
 #[tokio::test]
 async fn asset_info_mint_burn() {
     // Constants
-    let mint_amount: u64 = 100;
-    let burn_amount: u64 = 50;
+    let mint_amount: u32 = 100;
+    let burn_amount: u32 = 50;
     let gas_limit = 1_000_000;
 
     // setup server & client
@@ -72,9 +54,9 @@ async fn asset_info_mint_burn() {
         op::sb(RegId::HP, 0, 0),
     ];
     // Set the mint amount in a register
-    ops.extend(set_full_word(reg_mint_amount.into(), mint_amount));
+    ops.extend([op::movi(reg_mint_amount, mint_amount)]);
     // Set the burn amount in a register
-    ops.extend(set_full_word(reg_burn_amount.into(), burn_amount));
+    ops.extend([op::movi(reg_burn_amount, burn_amount)]);
     ops.extend(vec![
         // Read the register filled by the script data to either make a mint or burn
         // If 0, mint, if 2, burn
@@ -147,13 +129,11 @@ async fn asset_info_mint_burn() {
         .asset_info(&contract_id.asset_id(&Bytes32::zeroed()))
         .await
         .unwrap()
-        .unwrap()
-        .total_supply
-        .0;
+        .total_supply;
 
     // Then
     // We should have the minted amount first
-    assert_eq!(initial_supply, mint_amount);
+    assert_eq!(initial_supply, mint_amount as u128);
 
     // Create and submit transaction that burns coins
     let script_ops = vec![
@@ -196,11 +176,9 @@ async fn asset_info_mint_burn() {
         .asset_info(&contract_id.asset_id(&Bytes32::zeroed()))
         .await
         .unwrap()
-        .unwrap()
-        .total_supply
-        .0;
+        .total_supply;
 
     // Then
-    // We should have the minted amount first
-    assert_eq!(final_supply, mint_amount - burn_amount);
+    // We should have the minted amount reduced by the burned amount
+    assert_eq!(final_supply, (mint_amount - burn_amount) as u128);
 }

@@ -212,9 +212,6 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             .map(|opt| opt.map(|cow| cow.into_owned()))
     }
 
-    fn asset_exists(&self, asset_id: &AssetId) -> StorageResult<bool> {
-        self.storage_as_ref::<AssetsInfo>().contains_key(asset_id)
-    }
     fn balance(
         &self,
         owner: &Address,

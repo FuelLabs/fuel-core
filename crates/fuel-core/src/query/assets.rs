@@ -9,10 +9,10 @@ use fuel_core_storage::{
 use fuel_core_types::fuel_tx::AssetId;
 
 impl ReadView {
-    pub fn get_asset_details(&self, id: AssetId) -> StorageResult<AssetDetails> {
+    pub fn get_asset_details(&self, id: &AssetId) -> StorageResult<AssetDetails> {
         let asset = self
             .off_chain
-            .asset_info(&id)?
+            .asset_info(id)?
             .ok_or(not_found!(AssetDetails))?;
         Ok(asset)
     }

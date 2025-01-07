@@ -7,18 +7,22 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
     Mappable,
 };
-use fuel_core_types::{
-    fuel_merkle::common::Bytes32,
-    fuel_tx::{
-        AssetId,
-        ContractId,
-    },
+use fuel_core_types::fuel_tx::{
+    AssetId,
+    Bytes32,
+    ContractId,
 };
 
-/// Contract info
+/// Asset info table to store information about the asset like total minted amounts,
+/// source contract, original sub id, etc.
 pub struct AssetsInfo;
 
-pub type AssetDetails = (ContractId, Bytes32, u64); // (contract_id, sub_id, total_amount)
+#[derive(Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AssetDetails {
+    pub contract_id: ContractId,
+    pub sub_id: Bytes32,
+    pub total_supply: u128,
+}
 
 impl Mappable for AssetsInfo {
     type Key = AssetId;

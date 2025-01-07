@@ -9,8 +9,9 @@ use crate::{
     schema::{
         scalars::{
             AssetId,
-            HexString,
-            U64,
+            ContractId,
+            SubId,
+            U128,
         },
         ReadViewProvider,
     },
@@ -26,43 +27,43 @@ impl AssetInfoQuery {
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the Asset")] id: AssetId,
-    ) -> async_graphql::Result<Option<AssetInfoDetails>> {
+    ) -> async_graphql::Result<AssetInfoDetails> {
         let query = ctx.read_view()?;
         query
-            .get_asset_details(id.into())
-            .map(|details| Some(details.into()))
+            .get_asset_details(&id.into())
+            .map(|details| details.into())
             .map_err(async_graphql::Error::from)
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct AssetInfoDetails {
-    pub contract_id: HexString,
-    pub sub_id: HexString,
-    pub total_supply: U64,
+    pub contract_id: ContractId,
+    pub sub_id: SubId,
+    pub total_supply: U128,
 }
 
 impl From<AssetDetails> for AssetInfoDetails {
     fn from(details: AssetDetails) -> Self {
         AssetInfoDetails {
-            contract_id: details.0.as_ref().to_vec().into(),
-            sub_id: details.1.as_ref().to_vec().into(),
-            total_supply: details.2.into(),
+            contract_id: details.contract_id.into(),
+            sub_id: details.sub_id.into(),
+            total_supply: details.total_supply.into(),
         }
     }
 }
 
 #[Object]
 impl AssetInfoDetails {
-    async fn contract_id(&self) -> &HexString {
+    async fn contract_id(&self) -> &ContractId {
         &self.contract_id
     }
 
-    async fn sub_id(&self) -> &HexString {
+    async fn sub_id(&self) -> &SubId {
         &self.sub_id
     }
 
-    async fn total_supply(&self) -> &U64 {
+    async fn total_supply(&self) -> &U128 {
         &self.total_supply
     }
 }

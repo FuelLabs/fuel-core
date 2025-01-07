@@ -298,6 +298,7 @@ fuel_type_scalar!("BlockId", BlockId, Bytes32, 32);
 fuel_type_scalar!("AssetId", AssetId, AssetId, 32);
 fuel_type_scalar!("BlobId", BlobId, BlobId, 32);
 fuel_type_scalar!("ContractId", ContractId, ContractId, 32);
+fuel_type_scalar!("SubId", SubId, Bytes32, 32);
 fuel_type_scalar!("Salt", Salt, Salt, 32);
 fuel_type_scalar!("TransactionId", TransactionId, Bytes32, 32);
 fuel_type_scalar!("RelayedTransactionId", RelayedTransactionId, Bytes32, 32);

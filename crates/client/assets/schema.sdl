@@ -3,9 +3,9 @@ scalar Address
 scalar AssetId
 
 type AssetInfoDetails {
-	contractId: HexString!
-	subId: HexString!
-	totalSupply: U64!
+	contractId: ContractId!
+	subId: SubId!
+	totalSupply: U128!
 }
 
 type Balance {
@@ -864,7 +864,7 @@ type Query {
 		ID of the Asset
 		"""
 		id: AssetId!
-	): AssetInfoDetails
+	): AssetInfoDetails!
 	"""
 	Read register value by index.
 	"""
@@ -1132,6 +1132,8 @@ type StateTransitionPurpose {
 	root: Bytes32!
 }
 
+
+scalar SubId
 
 type SubmittedStatus {
 	time: Tai64Timestamp!

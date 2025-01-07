@@ -22,6 +22,7 @@ use crate::{
             },
         },
         storage::{
+            assets::AssetDetails,
             blocks::FuelBlockIdsToHeights,
             coins::{
                 owner_coin_id_key,
@@ -93,6 +94,7 @@ use fuel_core_types::{
         },
         executor::{
             Event,
+            TransactionExecutionResult,
             TransactionExecutionStatus,
         },
         txpool::from_executor_to_status,
@@ -387,59 +389,52 @@ where
             .into());
         }
 
-        for receipt in result.receipts() {
+        // TODO: Do Asset indexation only if it is enabled.
+        //  Enable the indexation only in the case of empty database
+
+        let TransactionExecutionResult::Success { receipts, .. } = result else {
+            continue
+        };
+
+        for receipt in receipts {
             match receipt {
                 Receipt::Mint {
                     sub_id,
                     contract_id,
-                    val,
                     ..
-                } => {
-                    let asset_id = contract_id.asset_id(sub_id);
-                    let current_count = match db.storage::<AssetsInfo>().get(&asset_id) {
-                        Ok(count) => count,
-                        Err(_) => {
-                            // If asset doesn't exist yet, create it with 0 count
-                            db.storage::<AssetsInfo>()
-                                .insert(&asset_id, &(*contract_id, **sub_id, 0))?;
-                            Some(Cow::Owned((*contract_id, **sub_id, 0)))
-                        }
-                    }
-                    .map(|info| {
-                        info.2
-                            .checked_add(*val)
-                            .ok_or(anyhow::anyhow!("Asset count overflow"))
-                    })
-                    .transpose()?
-                    .unwrap_or(*val);
-
-                    db.storage::<AssetsInfo>()
-                        .insert(&asset_id, &(*contract_id, **sub_id, current_count))?;
                 }
-                Receipt::Burn {
+                | Receipt::Burn {
                     sub_id,
                     contract_id,
-                    val,
                     ..
                 } => {
                     let asset_id = contract_id.asset_id(sub_id);
-                    let current_count = db
+                    let current_supply = db
                         .storage::<AssetsInfo>()
-                        .get(&asset_id)
-                        .unwrap_or_else(|_| {
-                            tracing::warn!("Asset {} is not currently indexed", asset_id);
-                            None
-                        })
-                        .map(|info| {
-                            info.2
-                                .checked_sub(*val)
-                                .ok_or(anyhow::anyhow!("Asset count overflow"))
-                        })
-                        .transpose()?
-                        .unwrap_or(*val);
+                        .get(&asset_id)?
+                        .map(|info| info.total_supply)
+                        .unwrap_or_default();
 
-                    db.storage::<AssetsInfo>()
-                        .insert(&asset_id, &(*contract_id, **sub_id, current_count))?;
+                    let new_supply = match receipt {
+                        Receipt::Mint { val, .. } => current_supply
+                            .checked_add(*val as u128)
+                            .expect("Impossible to overflow, because `val` is `u64`"),
+                        Receipt::Burn { val, .. } => {
+                            current_supply.checked_sub(*val as u128).ok_or(
+                                anyhow::anyhow!("Burned more than available amount"),
+                            )?
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    db.storage::<AssetsInfo>().insert(
+                        &asset_id,
+                        &AssetDetails {
+                            contract_id: *contract_id,
+                            sub_id: *sub_id,
+                            total_supply: new_supply,
+                        },
+                    )?;
                 }
                 _ => {}
             }

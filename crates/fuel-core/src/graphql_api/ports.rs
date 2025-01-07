@@ -133,8 +133,6 @@ pub trait OffChainDatabase: Send + Sync {
     fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
 
     fn asset_info(&self, asset_id: &AssetId) -> StorageResult<Option<AssetDetails>>;
-
-    fn asset_exists(&self, asset_id: &AssetId) -> StorageResult<bool>;
 }
 
 /// The on chain database port expected by GraphQL API service.
