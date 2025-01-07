@@ -4,33 +4,25 @@ use crate::helpers::{
     TestContext,
     TestSetupBuilder,
 };
-use ethers::types::Opcode;
 use fuel_core::{
     chain_config::{
         ChainConfig,
         StateConfig,
     },
-    combined_database::CombinedDatabase,
     database::Database,
-    fuel_core_graphql_api::ports::worker::OnChainDatabase,
     service::{
         Config,
         FuelService,
     },
-    state::historical_rocksdb::StateRewindPolicy,
 };
 use fuel_core_client::client::{
     types::gas_price::LatestGasPrice,
     FuelClient,
 };
 use fuel_core_gas_price_service::{
-    common::fuel_core_storage_adapter::storage::{
-        GasPriceMetadata,
-        RecordedHeights,
-    },
+    common::fuel_core_storage_adapter::storage::GasPriceMetadata,
     ports::{
         GasPriceData,
-        GetLatestRecordedHeight,
         GetMetadataStorage,
     },
     v1::{
@@ -43,7 +35,6 @@ use fuel_core_gas_price_service::{
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
-    iter::IterDirection,
     transactional::AtomicView,
     StorageAsRef,
 };
@@ -66,18 +57,12 @@ use fuel_core_types::{
 };
 use rand::Rng;
 use std::{
-    collections::HashMap,
+    self,
     iter::repeat,
-    num::NonZero,
     ops::Deref,
-    sync::{
-        Arc,
-        Mutex,
-    },
     time::Duration,
 };
 use test_helpers::fuel_core_driver::FuelCoreDriver;
-use wideint::MathOp;
 
 fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
     TransactionBuilder::script(vec![], vec![])
@@ -644,61 +629,61 @@ fn run__if_metadata_is_behind_l2_then_will_catch_up() {
         "100",
     ];
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let _temp_dir = rt.block_on(async {
+    let temp_dir = rt.block_on(async {
         let driver = FuelCoreDriver::spawn(&args).await.unwrap();
         driver.client.produce_blocks(100, None).await.unwrap();
         tokio::time::sleep(Duration::from_millis(100)).await;
         driver.kill().await
     });
 
-    // // rollback 50 blocks
-    // let temp_dir = rt.block_on(async {
-    //     let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
-    //         .await
-    //         .unwrap();
-    //     for _ in 0..50 {
-    //         driver
-    //             .node
-    //             .shared
-    //             .database
-    //             .gas_price()
-    //             .rollback_last_block()
-    //             .unwrap();
-    //         let gas_price_db_height = driver
-    //             .node
-    //             .shared
-    //             .database
-    //             .gas_price()
-    //             .latest_height()
-    //             .unwrap();
-    //         tracing::info!("gas price db height: {:?}", gas_price_db_height);
-    //     }
-    //     driver.kill().await
-    // });
-    //
-    // // when
-    // // restart node
-    // rt.block_on(async {
-    //     let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
-    //         .await
-    //         .unwrap();
-    //     let onchain_db_height = driver
-    //         .node
-    //         .shared
-    //         .database
-    //         .on_chain()
-    //         .latest_height_from_metadata()
-    //         .unwrap()
-    //         .unwrap();
-    //     let gas_price_db_height = driver
-    //         .node
-    //         .shared
-    //         .database
-    //         .gas_price()
-    //         .latest_height()
-    //         .unwrap();
-    //     assert_eq!(onchain_db_height, gas_price_db_height);
-    // });
+    // rollback 50 blocks
+    let temp_dir = rt.block_on(async {
+        let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
+            .await
+            .unwrap();
+        for _ in 0..50 {
+            driver
+                .node
+                .shared
+                .database
+                .gas_price()
+                .rollback_last_block()
+                .unwrap();
+            let gas_price_db_height = driver
+                .node
+                .shared
+                .database
+                .gas_price()
+                .latest_height()
+                .unwrap();
+            tracing::info!("gas price db height: {:?}", gas_price_db_height);
+        }
+        driver.kill().await
+    });
+
+    // when
+    // restart node
+    rt.block_on(async {
+        let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &args)
+            .await
+            .unwrap();
+        let onchain_db_height = driver
+            .node
+            .shared
+            .database
+            .on_chain()
+            .latest_height_from_metadata()
+            .unwrap()
+            .unwrap();
+        let gas_price_db_height = driver
+            .node
+            .shared
+            .database
+            .gas_price()
+            .latest_height()
+            .unwrap();
+        assert_eq!(onchain_db_height, gas_price_db_height);
+    });
 }
 
 fn node_config_with_da_committer_url(url: &str) -> Config {
