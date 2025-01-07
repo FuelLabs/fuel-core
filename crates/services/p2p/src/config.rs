@@ -256,7 +256,7 @@ pub(crate) fn build_transport_function(
     p2p_config: &Config,
     connection_state_reader: SeqLockReader<ConnectionState>,
 ) -> impl FnOnce(&Keypair) -> Result<FuelAuthenticated<ConnectionTracker>, ()> + '_ {
-    let transport_function = move |keypair: &Keypair| {
+    move |keypair: &Keypair| {
         let noise_authenticated =
             noise::Config::new(keypair).expect("Noise key generation failed");
 
@@ -274,9 +274,7 @@ pub(crate) fn build_transport_function(
             connection_tracker,
             p2p_config.checksum,
         ))
-    };
-
-    transport_function
+    }
 }
 
 fn peer_ids_set_from(multiaddr: &[Multiaddr]) -> HashSet<PeerId> {
