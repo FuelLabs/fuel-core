@@ -242,24 +242,23 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     ) -> BoxedIter<'a, StorageResult<(AssetId, TotalBalanceAmount)>> {
         match (direction, start) {
             (IterDirection::Forward, None) => {
-                let base_asset_balance = self.base_asset_balance(base_asset_id, owner);
-                let non_base_asset_balance =
-                    self.non_base_asset_balances(owner, None, direction, base_asset_id);
-                base_asset_balance
-                    .chain(non_base_asset_balance)
-                    .into_boxed()
+                self.base_asset_first(owner, base_asset_id, direction)
             }
             (IterDirection::Forward, Some(asset_id)) => {
-                let start = (asset_id != *base_asset_id)
-                    .then_some(CoinBalancesKey::new(owner, &asset_id));
-                self.non_base_asset_balances(owner, start, direction, base_asset_id)
+                if asset_id == *base_asset_id {
+                    self.base_asset_first(owner, base_asset_id, direction)
+                } else {
+                    let start = (asset_id != *base_asset_id)
+                        .then_some(CoinBalancesKey::new(owner, &asset_id));
+                    self.non_base_asset_balances(owner, start, direction, base_asset_id)
+                }
             }
             (IterDirection::Reverse, None) => {
                 self.non_base_assets_first(start, owner, base_asset_id, direction)
             }
             (IterDirection::Reverse, Some(asset_id)) => {
                 if asset_id == *base_asset_id {
-                    std::iter::empty().into_boxed()
+                    self.base_asset_balance(base_asset_id, owner)
                 } else {
                     self.non_base_assets_first(start, owner, base_asset_id, direction)
                 }
@@ -332,6 +331,20 @@ impl OffChainIterableKeyValueView {
             self.non_base_asset_balances(owner, start, direction, base_asset_id);
         non_base_asset_balance
             .chain(base_asset_balance)
+            .into_boxed()
+    }
+
+    fn base_asset_first<'a>(
+        &'a self,
+        owner: &Address,
+        base_asset_id: &'a AssetId,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, Result<(AssetId, u128), StorageError>> {
+        let base_asset_balance = self.base_asset_balance(base_asset_id, owner);
+        let non_base_asset_balances =
+            self.non_base_asset_balances(owner, None, direction, base_asset_id);
+        base_asset_balance
+            .chain(non_base_asset_balances)
             .into_boxed()
     }
 }
