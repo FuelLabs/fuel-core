@@ -578,6 +578,7 @@ impl CombinedGenesisDatabase {
 }
 
 #[allow(non_snake_case)]
+#[cfg(all(feature = "backup", feature = "rocksdb"))]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -588,7 +589,6 @@ mod tests {
     };
     use tempfile::TempDir;
 
-    #[cfg(all(feature = "backup", feature = "rocksdb"))]
     #[test]
     fn backup_and_restore__works_correctly__happy_path() {
         // given
@@ -638,7 +638,6 @@ mod tests {
         std::fs::remove_dir_all(restore_dir.path()).unwrap();
     }
 
-    #[cfg(all(feature = "backup", feature = "rocksdb"))]
     #[test]
     fn backup__when_backup_fails_it_should_not_leave_any_residue() {
         use std::os::unix::fs::PermissionsExt;
@@ -680,7 +679,6 @@ mod tests {
         std::fs::remove_dir_all(backup_dir.path()).unwrap();
     }
 
-    #[cfg(all(feature = "backup", feature = "rocksdb"))]
     #[test]
     fn restore__when_restore_fails_it_should_not_leave_any_residue() {
         use std::os::unix::fs::PermissionsExt;
