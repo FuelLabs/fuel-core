@@ -569,8 +569,8 @@ where
         );
 
         let start = Instant::now();
-        let buckets = splitter.split_equally(self.number_of_cores);
-
+        let buckets = splitter
+            .split_equally(self.number_of_cores, consensus_parameters.block_gas_limit());
         tracing::info!(
             "Splitting transactions took: {}ms",
             start.elapsed().as_millis()

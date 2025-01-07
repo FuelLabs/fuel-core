@@ -157,12 +157,11 @@ impl DependencySplitter {
             ),
         )?;
 
-        let inputs = tx.inputs()?;
-
         if self.txs_to_bucket.contains_key(&tx_id) {
             return Err(ExecutorError::TransactionIdCollision(tx_id))
         }
 
+        let inputs = tx.inputs()?;
         for input in inputs {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
@@ -306,39 +305,86 @@ impl DependencySplitter {
     pub fn split_equally(
         mut self,
         number_of_buckets: NonZeroUsize,
+        max_block_gas: u64,
     ) -> Vec<(u64, Vec<MaybeCheckedTransaction>)> {
         // One of buckets is reserved (not exclusively) for the `other_bucket`, so subtract 1 from the
         // `number_of_buckets`.
         let number_of_buckets = number_of_buckets.get();
-        let number_of_wild_buckets = number_of_buckets.saturating_sub(1) as u64;
+        let number_of_wild_buckets = number_of_buckets.saturating_sub(1);
         // The last bucket should contain all blobs as the end of all transactions.
         // Blobs at the end avoids potential invalidation of the predicates or transactions
         // after then.
         let mut sorted_buckets = Vec::with_capacity(number_of_buckets);
+        let other_gas = self.other_buckets.gas;
+        sorted_buckets.push((self.other_buckets.gas, self.other_buckets.elements));
         // It's certainly a bit too big allocation because some transactions will go to the last bucket used also for
         // `others_transactions` but I don't think it's a big deal and we still win in terms of performance.
-        let max_size_bucket = self
+        let approx_size_bucket = self
             .independent_bucket
             .elements
             .len()
-            .saturating_div(number_of_wild_buckets as usize)
+            .saturating_div(number_of_wild_buckets)
             .saturating_add(1);
         for _ in 0..number_of_wild_buckets {
             let gas = 0u64;
-            let txs: Vec<MaybeCheckedTransaction> = Vec::with_capacity(max_size_bucket);
+            let txs: Vec<MaybeCheckedTransaction> =
+                Vec::with_capacity(approx_size_bucket);
             sorted_buckets.push((gas, txs));
         }
-
-        let other_gas = self.other_buckets.gas;
-        sorted_buckets.push((self.other_buckets.gas, self.other_buckets.elements));
 
         // Sort independent transactions by gas usage in descending order
         self.independent_bucket
             .element_ids
-            .sort_by_key(|(tx_id, gas, exists)| (*exists, Reverse(*gas), *tx_id));
+            .sort_by_key(|(tx_id, gas, exists)| {
+                (Reverse(*exists), Reverse(*gas), *tx_id)
+            });
 
-        let independent_most_expensive_transactions =
-            self.independent_bucket.element_ids.into_iter();
+        let mut independent_most_expensive_transactions =
+            self.independent_bucket.element_ids.into_iter().peekable();
+
+        let gas_per_bucket = max_block_gas / number_of_buckets as u64;
+        let mut current_bucket_idx = 0;
+        // SAFETY: `number_of_buckets` comes from a `NonZeroUsize` so it's always greater than 0
+        let mut bucket = sorted_buckets.get_mut(current_bucket_idx).unwrap();
+        let mut all_txs_sorted = false;
+        'outer: while let Some((tx_id, gas, exists)) =
+            independent_most_expensive_transactions.peek()
+        {
+            // All the transactions that have been moved to `others_transactions` should be at the end
+            // so we can break the loop if we reach them
+            if !exists {
+                all_txs_sorted = true;
+                break;
+            }
+            let mut new_gas = bucket.0.saturating_add(*gas);
+            while new_gas > gas_per_bucket {
+                current_bucket_idx += 1;
+                if current_bucket_idx == number_of_buckets {
+                    break 'outer;
+                }
+                bucket = sorted_buckets.get_mut(current_bucket_idx).unwrap();
+                new_gas = bucket.0.saturating_add(*gas);
+            }
+            bucket.0 = new_gas;
+            bucket.1.push(self.independent_bucket.elements.remove(tx_id).expect(
+                        "Transaction should be in the `independent_bucket` because it's sorted by gas usage; qed",
+            ));
+            independent_most_expensive_transactions.next();
+        }
+        if all_txs_sorted || independent_most_expensive_transactions.peek().is_none() {
+            tracing::info!("All transactions are sorted");
+            // Get latest bucket on the vector
+            let last_bucket = sorted_buckets
+                .last_mut()
+                .expect("Always has items in the `sorted_buckets`; qed");
+
+            last_bucket.0 += self.blobs_bucket.gas;
+            last_bucket.1.extend(self.blobs_bucket.elements);
+
+            debug_assert_eq!(sorted_buckets.len(), number_of_buckets);
+            return sorted_buckets;
+        }
+        sorted_buckets.sort_by_key(|(gas, _)| *gas);
 
         // Iterate from 0 to N buckets and insert transactions (that are sorted by expensive order) to the buckets following these rules:
         // - Insert in order of bucket ids : 0,1,2,..N,N,N-1,N-2,..0,....
@@ -357,7 +403,9 @@ impl DependencySplitter {
         let mut iterate_next_time = false;
         // Used to skip the last bucket if the other transactions have more gas than the current other biggest bucket
         let mut most_gas_usage_bucket = 0;
-        for (tx_id, gas, exists) in independent_most_expensive_transactions {
+        while let Some((tx_id, gas, exists)) =
+            independent_most_expensive_transactions.next()
+        {
             // All the transactions that have been moved to `others_transactions` should be at the end
             // so we can break the loop if we reach them
             if !exists {

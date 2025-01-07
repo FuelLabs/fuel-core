@@ -47,6 +47,8 @@ use test_helpers::builder::local_chain_config;
 
 #[cfg(feature = "parallel-executor")]
 fn main() {
+    use fuel_core::upgradable_executor::native_executor::ports::TransactionExt;
+
     let n = std::env::var("BENCH_TXS_NUMBER")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
@@ -57,12 +59,23 @@ fn main() {
         .unwrap();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
     let mut consensus_parameters = ConsensusParameters::default();
-    consensus_parameters.set_block_gas_limit(u64::MAX);
     let chain_id = consensus_parameters.chain_id();
     let transactions = generate_transactions(n, &mut rng, &chain_id);
+    consensus_parameters.set_block_gas_limit(
+        transactions
+            .iter()
+            .map(|tx| tx.max_gas(&consensus_parameters).unwrap())
+            .sum(),
+    );
     let txs_len = transactions.len();
     let splitter = DependencySplitter::new(consensus_parameters.clone(), txs_len);
-    bench(splitter, transactions, number_of_cores, &chain_id);
+    bench(
+        splitter,
+        transactions,
+        number_of_cores,
+        &chain_id,
+        consensus_parameters.block_gas_limit(),
+    );
 }
 
 fn bench(
@@ -70,6 +83,7 @@ fn bench(
     transactions: Vec<MaybeCheckedTransaction>,
     number_of_cores: usize,
     chain_id: &ChainId,
+    block_gas_limit: u64,
 ) {
     let start = std::time::Instant::now();
     for tx in transactions {
@@ -81,11 +95,13 @@ fn bench(
         start.elapsed().as_millis()
     );
     let start = std::time::Instant::now();
-    splitter.split_equally(NonZeroUsize::new(number_of_cores).unwrap());
+    let buckets = splitter
+        .split_equally(NonZeroUsize::new(number_of_cores).unwrap(), block_gas_limit);
     tracing::info!(
         "Splitting took {:?} milliseconds",
         start.elapsed().as_millis()
     );
+    dbg!(buckets.iter().map(|b| b.1.len()).collect::<Vec<_>>());
 }
 
 fn checked_parameters() -> CheckPredicateParams {
