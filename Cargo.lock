@@ -3847,7 +3847,7 @@ dependencies = [
  "futures",
  "postcard",
  "prost 0.12.6",
- "reqwest 0.12.10",
+ "reqwest 0.12.12",
  "serde",
  "serde_json",
  "tendermint-rpc",
@@ -7756,7 +7756,7 @@ dependencies = [
  "itertools 0.12.1",
  "proc-macro2",
  "quote",
- "syn 2.0.91",
+ "syn 2.0.94",
 ]
 
 [[package]]
@@ -7769,7 +7769,7 @@ dependencies = [
  "itertools 0.12.1",
  "proc-macro2",
  "quote",
- "syn 2.0.91",
+ "syn 2.0.94",
 ]
 
 [[package]]
@@ -7816,7 +7816,7 @@ dependencies = [
  "libflate",
  "log",
  "names",
- "prost",
+ "prost 0.11.9",
  "reqwest 0.12.12",
  "serde_json",
  "thiserror 1.0.69",
@@ -8844,7 +8844,7 @@ checksum = "6c64451ba24fc7a6a2d60fc75dd9c83c90903b19028d4eff35e88fc1e86564e9"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.91",
+ "syn 2.0.94",
 ]
 
 [[package]]
