@@ -282,11 +282,8 @@ impl L2ActivityTracker {
     }
 
     pub fn update(&mut self, block_usage: ClampedPercentage) {
-        tracing::info!("Block usage: {:?}", block_usage);
-        tracing::info!("Chain activity: {}", self.chain_activity);
-        tracing::info!("threshold: {:?}", self.block_activity_threshold);
         if block_usage < self.block_activity_threshold {
-            tracing::info!(
+            tracing::debug!(
                 "Decreasing activity {:?} < {:?}",
                 block_usage,
                 self.block_activity_threshold
@@ -393,7 +390,6 @@ impl AlgorithmUpdaterV1 {
             let rewards = self.clamped_rewards_as_i128();
 
             // costs
-            tracing::info!("Block bytes: {}", block_bytes);
             self.update_projected_da_cost(block_bytes);
             let projected_total_da_cost = self.clamped_projected_cost_as_i128();
 
@@ -426,9 +422,7 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn update_da_rewards(&mut self, fee_wei: u128) {
-        tracing::info!("Fee: {}", fee_wei);
         let block_da_reward = self.da_portion_of_fee(fee_wei);
-        tracing::info!("DA reward: {}", block_da_reward);
         self.total_da_rewards_excess =
             self.total_da_rewards_excess.saturating_add(block_da_reward);
     }
@@ -512,8 +506,8 @@ impl AlgorithmUpdaterV1 {
                     0u64
                 }
             });
-        tracing::info!("Profit: {}", self.last_profit);
-        tracing::info!(
+        tracing::debug!("Profit: {}", self.last_profit);
+        tracing::debug!(
             "DA gas price change: p: {}, d: {}, change: {}, new: {}",
             p,
             d,

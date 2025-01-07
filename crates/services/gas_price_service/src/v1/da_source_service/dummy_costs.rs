@@ -23,7 +23,10 @@ impl DummyDaBlockCosts {
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for DummyDaBlockCosts {
-    async fn request_da_block_costs(&mut self) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
+    async fn request_da_block_costs(
+        &mut self,
+        _latest_recorded_height: &Option<BlockHeight>,
+    ) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
         match &self.value {
             Ok(da_block_costs) => {
                 self.notifier.notify_waiters();
@@ -34,9 +37,5 @@ impl DaBlockCostsSource for DummyDaBlockCosts {
                 Err(anyhow::anyhow!(err.to_string()))
             }
         }
-    }
-
-    async fn set_last_value(&mut self, _height: BlockHeight) -> DaBlockCostsResult<()> {
-        unimplemented!("This is a dummy implementation");
     }
 }
