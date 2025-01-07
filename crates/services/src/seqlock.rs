@@ -93,6 +93,7 @@ impl<T> SeqLockReader<T> {
 
 impl<T> SeqLock<T> {
     /// Creates a new `SeqLock` and returns a writer and a reader handle.
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(data: T) -> (SeqLockWriter<T>, SeqLockReader<T>) {
         let lock = Self {
             sequence: AtomicU64::new(0),
