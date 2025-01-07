@@ -171,7 +171,12 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_behind(
     for _ in 0..diff {
         let _ = database.gas_price().rollback_last_block();
     }
-    assert!(database.on_chain().latest_height() > database.gas_price().latest_height());
+    assert!(
+        database.on_chain().latest_height() > database.gas_price().latest_height(),
+        "on_chain: {:?}, gas_price: {:?}",
+        database.on_chain().latest_height(),
+        database.gas_price().latest_height()
+    );
     let temp_dir = driver.kill().await;
 
     // When
