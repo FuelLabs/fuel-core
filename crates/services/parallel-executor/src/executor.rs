@@ -520,7 +520,7 @@ where
                                 }
                             }
                         }
-                        Ok::<Vec<MaybeCheckedTransaction>, ExecutorError>(checked_txs)
+                        checked_txs
                     }
                 }));
             }
@@ -548,7 +548,7 @@ where
             .expect("The skipped transactions shouldn't be in others threads");
 
         for result in results {
-            let txs = result.unwrap()?;
+            let txs = result.unwrap();
 
             for tx in txs {
                 if tx.is_mint() {
