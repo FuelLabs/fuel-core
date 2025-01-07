@@ -579,7 +579,7 @@ where
         let start = Instant::now();
         let handlers = buckets
             .into_iter()
-            .map(|txs| {
+            .map(|(_, txs)| {
                 tracing::info!("Number of transactions in the bucket: {:?}", txs.len());
                 let part_of_the_block = Components {
                     header_to_produce,

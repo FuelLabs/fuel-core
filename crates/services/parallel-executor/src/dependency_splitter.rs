@@ -33,26 +33,42 @@ use rustc_hash::{
 };
 use std::{
     cmp::Reverse,
-    collections::{
-        BTreeMap,
-        BTreeSet,
-    },
+    collections::BTreeSet,
     num::NonZeroUsize,
 };
 
-type SequenceNumber = usize;
-
-// TODO: Try to avoid iterating across FxHashMaps and make indexes
-// TODO: Try to simplify the logic split_equally to take one transaction for each bucket and then on the opposite side to avoid re-sort
+type Gas = u64;
 
 #[derive(Default)]
-struct Bucket {
-    gas: u64,
-    current_sequence_number: SequenceNumber,
-    elements: FxHashMap<TxId, (SequenceNumber, u64)>,
+struct OrderedBucket {
+    gas: Gas,
+    elements: Vec<TxId>,
 }
 
-impl Bucket {
+impl OrderedBucket {
+    fn new() -> Self {
+        Self {
+            elements: Vec::new(),
+            ..Default::default()
+        }
+    }
+}
+
+impl OrderedBucket {
+    fn add(&mut self, tx_id: TxId, gas: u64) {
+        self.gas += gas;
+        self.elements.push(tx_id);
+    }
+}
+
+#[derive(Default)]
+pub struct UnorderedBucket {
+    gas: Gas,
+    // Gas used to be used when passed to an other bucket and to order transactions afterwards
+    elements: FxHashMap<TxId, Gas>,
+}
+
+impl UnorderedBucket {
     fn new(txs_len: usize) -> Self {
         Self {
             elements: FxHashMap::with_capacity_and_hasher(txs_len, Default::default()),
@@ -61,16 +77,14 @@ impl Bucket {
     }
 }
 
-impl Bucket {
+impl UnorderedBucket {
     fn add(&mut self, tx_id: TxId, gas: u64) {
         self.gas += gas;
-        self.elements
-            .insert(tx_id, (self.current_sequence_number, gas));
-        self.current_sequence_number += 1;
+        self.elements.insert(tx_id, gas);
     }
 
     fn remove(&mut self, tx_id: &TxId) -> Option<u64> {
-        self.elements.remove(tx_id).map(|(_, gas)| gas)
+        self.elements.remove(tx_id)
     }
 }
 
@@ -81,9 +95,9 @@ enum BucketIndex {
 }
 
 pub struct DependencySplitter {
-    independent_bucket: Bucket,
-    other_buckets: Bucket,
-    blobs_bucket: Bucket,
+    independent_bucket: UnorderedBucket,
+    other_buckets: OrderedBucket,
+    blobs_bucket: OrderedBucket,
     txs_to_bucket: FxHashMap<TxId, (MaybeCheckedTransaction, BucketIndex)>,
     used_coins: FxHashSet<UtxoId>,
     used_messages: FxHashSet<Nonce>,
@@ -95,9 +109,9 @@ pub struct DependencySplitter {
 impl DependencySplitter {
     pub fn new(consensus_parameters: ConsensusParameters, txs_len: usize) -> Self {
         Self {
-            independent_bucket: Bucket::new(txs_len),
-            other_buckets: Bucket::new(txs_len),
-            blobs_bucket: Bucket::new(txs_len),
+            independent_bucket: UnorderedBucket::new(txs_len),
+            other_buckets: OrderedBucket::new(),
+            blobs_bucket: OrderedBucket::new(),
             txs_to_bucket: FxHashMap::with_capacity_and_hasher(
                 txs_len,
                 Default::default(),
@@ -282,7 +296,7 @@ impl DependencySplitter {
     pub fn split_equally(
         mut self,
         number_of_buckets: NonZeroUsize,
-    ) -> Vec<Vec<MaybeCheckedTransaction>> {
+    ) -> Vec<(u64, Vec<MaybeCheckedTransaction>)> {
         // One of buckets is reserved (not exclusively) for the `other_bucket`, so subtract 1 from the
         // `number_of_buckets`.
         let number_of_buckets = number_of_buckets.get();
@@ -306,26 +320,19 @@ impl DependencySplitter {
         }
 
         let other_gas = self.other_buckets.gas;
-        let other_transactions: BTreeMap<usize, MaybeCheckedTransaction> = self
+        let other_transactions: Vec<MaybeCheckedTransaction> = self
             .other_buckets
             .elements
             .into_iter()
-            .filter_map(|(tx_id, (seq_num, _))| {
-                self.txs_to_bucket
-                    .remove(&tx_id)
-                    .map(|(tx, _)| (seq_num, tx))
-            })
+            .filter_map(|tx_id| self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx))
             .collect();
-        sorted_buckets.push((
-            other_gas,
-            other_transactions.into_iter().map(|(_, tx)| tx).collect(),
-        ));
+        sorted_buckets.push((other_gas, other_transactions));
 
         let sorted_independent_txs = self
             .independent_bucket
             .elements
             .into_iter()
-            .map(|(tx_id, (seq_num, gas))| (Reverse(gas), tx_id, seq_num))
+            .map(|(tx_id, gas)| (Reverse(gas), tx_id))
             .collect::<BTreeSet<_>>();
 
         let independent_most_expensive_transactions = sorted_independent_txs.into_iter();
@@ -347,7 +354,7 @@ impl DependencySplitter {
         let mut iterate_next_time = false;
         // Used to skip the last bucket if the other transactions have more gas than the current other biggest bucket
         let mut most_gas_usage_bucket = 0;
-        for (gas, tx_id, _) in independent_most_expensive_transactions {
+        for (gas, tx_id) in independent_most_expensive_transactions {
             // If we are in the last bucket we change the direction
             if current_bucket_idx == last_bucket_idx {
                 iterate_next_time = if iterate_next_time == true {
@@ -392,25 +399,14 @@ impl DependencySplitter {
             .last_mut()
             .expect("Always has items in the `sorted_buckets`; qed");
 
-        let sorted_blobs = self
-            .blobs_bucket
-            .elements
-            .into_iter()
-            .map(|(tx_id, (_, gas))| (gas, tx_id))
-            .collect::<BTreeMap<_, _>>();
-
-        sorted_blobs.into_iter().for_each(|(gas, tx_id)| {
+        last_bucket.0 += self.blobs_bucket.gas;
+        self.blobs_bucket.elements.into_iter().for_each(|tx_id| {
             if let Some(tx) = self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx) {
                 last_bucket.1.push(tx);
-                last_bucket.0 += gas;
             }
         });
-        let buckets = sorted_buckets
-            .into_iter()
-            .map(|(_, txs)| txs)
-            .collect::<Vec<_>>();
-        debug_assert_eq!(buckets.len(), number_of_buckets);
-        buckets
+        debug_assert_eq!(sorted_buckets.len(), number_of_buckets);
+        sorted_buckets
     }
 }
 
