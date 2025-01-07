@@ -335,7 +335,7 @@ impl DependencySplitter {
         // Sort independent transactions by gas usage in descending order
         self.independent_bucket
             .element_ids
-            .sort_by_key(|(tx_id, gas, _)| (Reverse(*gas), *tx_id));
+            .sort_by_key(|(tx_id, gas, exists)| (*exists, Reverse(*gas), *tx_id));
 
         let independent_most_expensive_transactions =
             self.independent_bucket.element_ids.into_iter();
@@ -357,7 +357,12 @@ impl DependencySplitter {
         let mut iterate_next_time = false;
         // Used to skip the last bucket if the other transactions have more gas than the current other biggest bucket
         let mut most_gas_usage_bucket = 0;
-        for (tx_id, gas, _) in independent_most_expensive_transactions {
+        for (tx_id, gas, exists) in independent_most_expensive_transactions {
+            // All the transactions that have been moved to `others_transactions` should be at the end
+            // so we can break the loop if we reach them
+            if !exists {
+                break;
+            }
             // If we are in the last bucket we change the direction
             if current_bucket_idx == last_bucket_idx {
                 iterate_next_time = if iterate_next_time == true {
