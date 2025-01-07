@@ -33,16 +33,17 @@ use rustc_hash::{
 };
 use std::{
     cmp::Reverse,
-    collections::BTreeSet,
     num::NonZeroUsize,
 };
+
+// TODO: Try to replace txid with global sequence id to lower copy times
 
 type Gas = u64;
 
 #[derive(Default)]
 struct OrderedBucket {
     gas: Gas,
-    elements: Vec<TxId>,
+    elements: Vec<MaybeCheckedTransaction>,
 }
 
 impl OrderedBucket {
@@ -55,9 +56,9 @@ impl OrderedBucket {
 }
 
 impl OrderedBucket {
-    fn add(&mut self, tx_id: TxId, gas: u64) {
+    fn add(&mut self, tx: MaybeCheckedTransaction, gas: Gas) {
         self.gas += gas;
-        self.elements.push(tx_id);
+        self.elements.push(tx);
     }
 }
 
@@ -65,26 +66,35 @@ impl OrderedBucket {
 pub struct UnorderedBucket {
     gas: Gas,
     // Gas used to be used when passed to an other bucket and to order transactions afterwards
-    elements: FxHashMap<TxId, Gas>,
+    // bool is used to know if the transaction is still in the bucket
+    element_ids: Vec<(TxId, Gas, bool)>,
+    elements: FxHashMap<TxId, MaybeCheckedTransaction>,
 }
 
 impl UnorderedBucket {
     fn new(txs_len: usize) -> Self {
         Self {
             elements: FxHashMap::with_capacity_and_hasher(txs_len, Default::default()),
+            element_ids: Vec::with_capacity(txs_len),
             ..Default::default()
         }
     }
 }
 
 impl UnorderedBucket {
-    fn add(&mut self, tx_id: TxId, gas: u64) {
+    fn add(&mut self, tx_id: TxId, tx: MaybeCheckedTransaction, gas: Gas) {
         self.gas += gas;
-        self.elements.insert(tx_id, gas);
+        self.element_ids.push((tx_id, gas, true));
+        self.elements.insert(tx_id, tx);
     }
 
-    fn remove(&mut self, tx_id: &TxId) -> Option<u64> {
-        self.elements.remove(tx_id)
+    fn remove(&mut self, tx_id: &TxId) -> Option<(MaybeCheckedTransaction, Gas)> {
+        let (_, gas, exists) =
+            self.element_ids.iter_mut().find(|(id, _, _)| id == tx_id)?;
+        *exists = false;
+        self.gas -= *gas;
+        let tx = self.elements.remove(tx_id).expect("Transaction should be in the `elements` because it's in the `element_ids`; qed");
+        Some((tx, *gas))
     }
 }
 
@@ -98,7 +108,7 @@ pub struct DependencySplitter {
     independent_bucket: UnorderedBucket,
     other_buckets: OrderedBucket,
     blobs_bucket: OrderedBucket,
-    txs_to_bucket: FxHashMap<TxId, (MaybeCheckedTransaction, BucketIndex)>,
+    txs_to_bucket: FxHashMap<TxId, BucketIndex>,
     used_coins: FxHashSet<UtxoId>,
     used_messages: FxHashSet<Nonce>,
     created_contracts: FxHashMap<ContractId, TxId>,
@@ -197,7 +207,7 @@ impl DependencySplitter {
             // input doesn't exist.
             // If inputs use blobs in the predicates,
             // based on the order of blobs it can fail with predicate invalid, or not.
-            self.blobs_bucket.add(tx_id, gas);
+            self.blobs_bucket.add(tx, gas);
             return Ok(());
         }
 
@@ -210,18 +220,18 @@ impl DependencySplitter {
                     self.used_coins.insert(*utxo_id);
 
                     // Always go to other bucket if parent in this block
-                    if let Some((_, parent_index)) =
+                    if let Some(parent_index) =
                         self.txs_to_bucket.get_mut(utxo_id.tx_id())
                     {
                         index = BucketIndex::Other;
 
                         if *parent_index == BucketIndex::Independent {
                             *parent_index = BucketIndex::Other;
-                            let parent_gas =
+                            let parent_data =
                                 self.independent_bucket.remove(utxo_id.tx_id());
 
-                            if let Some(parent_gas) = parent_gas {
-                                self.other_buckets.add(*utxo_id.tx_id(), parent_gas);
+                            if let Some((parent_tx, parent_gas)) = parent_data {
+                                self.other_buckets.add(parent_tx, parent_gas);
                             }
                         }
                     }
@@ -232,16 +242,16 @@ impl DependencySplitter {
                         self.created_contracts.get(&contract.contract_id)
                     {
                         index = BucketIndex::Other;
-                        if let Some((_, parent_index)) =
+                        if let Some(parent_index) =
                             self.txs_to_bucket.get_mut(creator_tx_id)
                         {
                             if *parent_index == BucketIndex::Independent {
                                 *parent_index = BucketIndex::Other;
-                                let parent_gas =
+                                let parent_data =
                                     self.independent_bucket.remove(creator_tx_id);
 
-                                if let Some(parent_gas) = parent_gas {
-                                    self.other_buckets.add(*creator_tx_id, parent_gas);
+                                if let Some((parent_tx, parent_gas)) = parent_data {
+                                    self.other_buckets.add(parent_tx, parent_gas);
                                 }
                             }
                         }
@@ -278,14 +288,14 @@ impl DependencySplitter {
             }
         }
 
-        self.txs_to_bucket.insert(tx_id, (tx, index));
+        self.txs_to_bucket.insert(tx_id, index);
 
         match index {
             BucketIndex::Independent => {
-                self.independent_bucket.add(tx_id, gas);
+                self.independent_bucket.add(tx_id, tx, gas);
             }
             BucketIndex::Other => {
-                self.other_buckets.add(tx_id, gas);
+                self.other_buckets.add(tx, gas);
             }
         }
 
@@ -320,22 +330,15 @@ impl DependencySplitter {
         }
 
         let other_gas = self.other_buckets.gas;
-        let other_transactions: Vec<MaybeCheckedTransaction> = self
-            .other_buckets
-            .elements
-            .into_iter()
-            .filter_map(|tx_id| self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx))
-            .collect();
-        sorted_buckets.push((other_gas, other_transactions));
+        sorted_buckets.push((self.other_buckets.gas, self.other_buckets.elements));
 
-        let sorted_independent_txs = self
-            .independent_bucket
-            .elements
-            .into_iter()
-            .map(|(tx_id, gas)| (Reverse(gas), tx_id))
-            .collect::<BTreeSet<_>>();
+        // Sort independent transactions by gas usage in descending order
+        self.independent_bucket
+            .element_ids
+            .sort_by_key(|(tx_id, gas, _)| (Reverse(*gas), *tx_id));
 
-        let independent_most_expensive_transactions = sorted_independent_txs.into_iter();
+        let independent_most_expensive_transactions =
+            self.independent_bucket.element_ids.into_iter();
 
         // Iterate from 0 to N buckets and insert transactions (that are sorted by expensive order) to the buckets following these rules:
         // - Insert in order of bucket ids : 0,1,2,..N,N,N-1,N-2,..0,....
@@ -354,7 +357,7 @@ impl DependencySplitter {
         let mut iterate_next_time = false;
         // Used to skip the last bucket if the other transactions have more gas than the current other biggest bucket
         let mut most_gas_usage_bucket = 0;
-        for (gas, tx_id) in independent_most_expensive_transactions {
+        for (tx_id, gas, _) in independent_most_expensive_transactions {
             // If we are in the last bucket we change the direction
             if current_bucket_idx == last_bucket_idx {
                 iterate_next_time = if iterate_next_time == true {
@@ -380,11 +383,11 @@ impl DependencySplitter {
             let txs = sorted_buckets
                 .get_mut(current_bucket_idx)
                 .expect("Always has items in the `sorted_buckets`; qed");
-
-            if let Some(tx) = self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx) {
-                txs.1.push(tx);
-                txs.0 += gas.0;
-            }
+            let tx = self.independent_bucket.elements.remove(&tx_id).expect(
+                "Transaction should be in the `independent_bucket` because it's sorted by gas usage; qed",
+            );
+            txs.1.push(tx);
+            txs.0 += gas;
 
             most_gas_usage_bucket = most_gas_usage_bucket.max(txs.0);
 
@@ -400,11 +403,8 @@ impl DependencySplitter {
             .expect("Always has items in the `sorted_buckets`; qed");
 
         last_bucket.0 += self.blobs_bucket.gas;
-        self.blobs_bucket.elements.into_iter().for_each(|tx_id| {
-            if let Some(tx) = self.txs_to_bucket.remove(&tx_id).map(|(tx, _)| tx) {
-                last_bucket.1.push(tx);
-            }
-        });
+        last_bucket.1.extend(self.blobs_bucket.elements);
+
         debug_assert_eq!(sorted_buckets.len(), number_of_buckets);
         sorted_buckets
     }
