@@ -19,6 +19,8 @@ pub enum Error {
     CouldNotInitUpdater(anyhow::Error),
     #[error("Failed to convert metadata to concrete type. THere is no migration path for this metadata version")]
     CouldNotConvertMetadata, // todo(https://github.com/FuelLabs/fuel-core/issues/2286)
+    #[error("Failed to commit to storage: {0:?}")]
+    CouldNotCommit(anyhow::Error),
 }
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;
@@ -40,5 +42,7 @@ pub enum BlockInfo {
         block_bytes: u64,
         // The fees the block has collected
         block_fees: u64,
+        // The gas price used in the block
+        gas_price: u64,
     },
 }

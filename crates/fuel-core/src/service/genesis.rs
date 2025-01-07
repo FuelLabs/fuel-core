@@ -285,7 +285,8 @@ pub fn create_genesis_block(config: &Config) -> Block {
             consensus: ConsensusHeader::<Empty> {
                 prev_root,
                 height,
-                time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
+                // The time is set to UNIX_EPOCH + 10 leap seconds to make backward compatibility
+                time: fuel_core_types::tai64::Tai64(4611686018427387914),
                 generated: Empty,
             },
         },
