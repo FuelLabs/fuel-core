@@ -1524,37 +1524,4 @@ mod tests {
         // Then
         assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
     }
-
-    #[cfg(feature = "backup")]
-    #[test]
-    fn backup__correctly_creates_platform_agnostic_backup() {
-        // Given
-        let backup_dir = TempDir::new().unwrap();
-        let key = vec![0xA, 0xB, 0xC];
-        let expected_value = Value::from([1, 2, 3]);
-        let column = Column::Metadata;
-        {
-            let (mut db, temp_dir) = create_db();
-            db.put(&key, column, expected_value.clone()).unwrap();
-
-            // When
-            drop(db);
-
-            RocksDb::<OnChain>::backup(temp_dir.path(), backup_dir.path()).unwrap();
-        }
-
-        // Then
-        // attempt to restore db
-        let restored_db_dir = TempDir::new().unwrap();
-        RocksDb::<OnChain>::restore(restored_db_dir.path(), backup_dir.path()).unwrap();
-        let mut config = DatabaseConfig::config_for_tests();
-        config.max_fds = 1024; // bump fds randomly
-        let restored_db = RocksDb::<OnChain>::default_open(
-            restored_db_dir.path(),
-            DatabaseConfig::config_for_tests(),
-        )
-        .unwrap();
-        let value = restored_db.get(&key, column).unwrap().unwrap();
-        assert_eq!(value, expected_value);
-    }
 }

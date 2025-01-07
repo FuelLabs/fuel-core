@@ -729,4 +729,36 @@ mod tests {
         std::fs::remove_dir_all(backup_dir.path()).unwrap();
         std::fs::remove_dir_all(restore_dir.path()).unwrap();
     }
+
+    #[test]
+    fn backup__cannot_backup_while_db_is_opened() {
+        // given
+        let db_dir = TempDir::new().unwrap();
+        let mut combined_db = CombinedDatabase::open(
+            db_dir.path(),
+            StateRewindPolicy::NoRewind,
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
+        let key = UtxoId::new(Default::default(), Default::default());
+        let expected_value = CompressedCoin::default();
+
+        let on_chain_db = combined_db.on_chain_mut();
+        on_chain_db
+            .storage_as_mut::<Coins>()
+            .insert(&key, &expected_value)
+            .unwrap();
+
+        // when
+        let backup_dir = TempDir::new().unwrap();
+        // no drop for combined_db
+
+        // then
+        CombinedDatabase::backup(db_dir.path(), backup_dir.path())
+            .expect_err("Backup should fail");
+
+        // cleanup
+        std::fs::remove_dir_all(db_dir.path()).unwrap();
+        std::fs::remove_dir_all(backup_dir.path()).unwrap();
+    }
 }
