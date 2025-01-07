@@ -757,18 +757,27 @@ where
     }
 
     #[cfg(feature = "backup")]
-    pub fn backup<P: AsRef<Path> + ?Sized>(&self, backup_dir: &P) -> DatabaseResult<()> {
+    pub fn backup<P: AsRef<Path> + ?Sized>(
+        db_dir: &P,
+        backup_dir: &P,
+    ) -> DatabaseResult<()> {
         let mut backup_engine = Self::backup_engine(backup_dir)?;
 
-        backup_engine
-            .create_new_backup_flush(&self.db, true)
-            .map_err(|e| {
-                DatabaseError::BackupError(anyhow::anyhow!(
-                    "Couldn't create new backup for path `{}`: {}",
-                    backup_dir.as_ref().display(),
-                    e
-                ))
-            })?;
+        let db_config = DatabaseConfig {
+            cache_capacity: None,
+            max_fds: -1,
+            columns_policy: ColumnsPolicy::Lazy,
+        };
+
+        let db = Self::default_open(db_dir, db_config)?;
+
+        backup_engine.create_new_backup(&db.db).map_err(|e| {
+            DatabaseError::BackupError(anyhow::anyhow!(
+                "Couldn't create new backup for path `{}`: {}",
+                backup_dir.as_ref().display(),
+                e
+            ))
+        })?;
 
         Ok(())
     }
@@ -1525,13 +1534,13 @@ mod tests {
         let expected_value = Value::from([1, 2, 3]);
         let column = Column::Metadata;
         {
-            let (mut db, _temp_dir) = create_db();
+            let (mut db, temp_dir) = create_db();
             db.put(&key, column, expected_value.clone()).unwrap();
 
             // When
-            db.backup(&backup_dir).unwrap();
+            drop(db);
 
-            assert_eq!(db.get(&key, column).unwrap().unwrap(), expected_value);
+            RocksDb::<OnChain>::backup(temp_dir.path(), backup_dir.path()).unwrap();
         }
 
         // Then
