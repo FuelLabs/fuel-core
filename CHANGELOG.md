@@ -28,7 +28,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2327](https://github.com/FuelLabs/fuel-core/pull/2327): Add more services tests and more checks of the pool. Also add an high level documentation for users of the pool and contributors.
 - [2416](https://github.com/FuelLabs/fuel-core/issues/2416): Define the `GasPriceServiceV1` task.
 - [2033](https://github.com/FuelLabs/fuel-core/pull/2033): Remove `Option<BlockHeight>` in favor of `BlockHeightQuery` where applicable.
+- [2439](https://github.com/FuelLabs/fuel-core/pull/2439): Add gas costs for the two new zk opcodes `ecop` and `eadd` and the benches that allow to calibrate them.
 - [2472](https://github.com/FuelLabs/fuel-core/pull/2472): Added the `amountU128` field to the `Balance` GraphQL schema, providing the total balance as a `U128`. The existing `amount` field clamps any balance exceeding `U64` to `u64::MAX`.
+- [2526](https://github.com/FuelLabs/fuel-core/pull/2526): Add possibility to not have any cache set for RocksDB. Add an option to either load the RocksDB columns families on creation of the database or when the column is used.
+- [2532](https://github.com/FuelLabs/fuel-core/pull/2532): Getters for inner rocksdb database handles.
 
 ### Fixed
 - [2365](https://github.com/FuelLabs/fuel-core/pull/2365): Fixed the error during dry run in the case of race condition.
@@ -42,6 +45,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2511](https://github.com/FuelLabs/fuel-core/pull/2511): Fix backward compatibility of V0Metadata in gas price db.
 
 ### Changed
+- [2501](https://github.com/FuelLabs/fuel-core/pull/2501): Use gas price from block for estimating future gas prices
 - [2468](https://github.com/FuelLabs/fuel-core/pull/2468): Abstract unrecorded blocks concept for V1 algorithm, create new storage impl. Introduce `TransactionableStorage` trait to allow atomic changes to the storage.
 - [2295](https://github.com/FuelLabs/fuel-core/pull/2295): `CombinedDb::from_config` now respects `state_rewind_policy` with tmp RocksDB.
 - [2378](https://github.com/FuelLabs/fuel-core/pull/2378): Use cached hash of the topic instead of calculating it on each publishing gossip message.
@@ -62,6 +66,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2463](https://github.com/FuelLabs/fuel-core/pull/2463): 'CoinsQueryError::MaxCoinsReached` variant has been removed. The `InsufficientCoins` variant has been renamed to `InsufficientCoinsForTheMax` and it now contains the additional `max` field
 - [2463](https://github.com/FuelLabs/fuel-core/pull/2463): The number of excluded ids in the `coinsToSpend` GraphQL query is now limited to the maximum number of inputs allowed in transaction.
 - [2463](https://github.com/FuelLabs/fuel-core/pull/2463): The `coinsToSpend` GraphQL query may now return different coins, depending whether the indexation is enabled or not. However, regardless of the differences, the returned coins will accurately reflect the current state of the database within the context of the query.
+- [2526](https://github.com/FuelLabs/fuel-core/pull/2526): By default the cache of RocksDB is now disabled instead of being `1024 * 1024 * 1024`.
+
+## [Version 0.40.2]
+
+### Fixed
+
+- [2476](https://github.com/FuelLabs/fuel-core/pull/2476): Hardcode the timestamp of the genesis block.
+
+## [Version 0.40.1]
+
+### Added
+
+- [2450](https://github.com/FuelLabs/fuel-core/pull/2450): Added support for posting blocks to the shared sequencer.
 
 ## [Version 0.40.0]
 
@@ -477,7 +494,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
     The change has many minor improvements in different areas related to the state transition bytecode:
     - The state transition bytecode lies in its own file(`state_transition_bytecode.wasm`) along with the chain config file. The `ChainConfig` loads it automatically when `ChainConfig::load` is called and pushes it back when `ChainConfig::write` is called.
     - The `fuel-core` release bundle also contains the `fuel-core-wasm-executor.wasm` file of the corresponding executor version.
-    - The regenesis process now considers the last block produced by the previous network. When we create a (re)genesis block of a new network, it has the `height = last_block_of_old_netowkr + 1`. It continues the old network and doesn't overlap blocks(before, we had `old_block.height == new_genesis_block.hegiht`).
+    - The regenesis process now considers the last block produced by the previous network. When we create a (re)genesis block of a new network, it has the `height = last_block_of_old_network + 1`. It continues the old network and doesn't overlap blocks(before, we had `old_block.height == new_genesis_block.height`).
     - Along with the new block height, the regenesis process also increases the state transition bytecode and consensus parameters versions. It guarantees that a new network doesn't use values from the previous network and allows us not to migrate `StateTransitionBytecodeVersions` and `ConsensusParametersVersions` tables.
     - Added a new CLI argument, `native-executor-version,` that allows overriding of the default version of the native executor. It can be useful for side rollups that have their own history of executor upgrades.
     - Replaced:

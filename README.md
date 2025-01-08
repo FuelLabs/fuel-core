@@ -15,6 +15,8 @@ Before pushing any changes or creating pull request please run `source ci_checks
 
 ## Building
 
+If you plan to use already pre-compiled binairies you can directly go to [Running a Ignition node](#running-a-ignition-node).
+
 ### System Requirements
 
 There are several system requirements including clang.
@@ -46,6 +48,50 @@ You'll need `wasm32-unknown-unknown` target installed.
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
+
+
+## Running a Ignition node
+
+If you want to participate in the Ignition network with your own node you can launch it following these simple commands.
+
+### From pre-compiled binaries
+
+Follow : https://docs.fuel.network/guides/running-a-node/running-a-mainnet-node/
+
+### From source
+
+Clone the `fuel-core` repository : 
+```
+git clone https://github.com/FuelLabs/fuel-core.git
+```
+
+Go to the latest release tag for ignition on the `fuel-core` repository :
+```
+git checkout v0.40.2
+```
+
+Build your node binary:
+```bash
+cargo build --release --bin fuel-core --no-default-features --features production
+```
+
+To run the node follow : https://docs.fuel.network/guides/running-a-node/running-a-mainnet-node/
+
+## Running a Local network from source
+
+Clone the `fuel-core` repository : 
+```
+git clone https://github.com/FuelLabs/fuel-core.git
+```
+
+Build your node binary:
+```bash
+cargo build --release --bin fuel-core --no-default-features --features production
+```
+
+To run the node follow : https://docs.fuel.network/guides/running-a-node/running-a-local-node/
+
+## Setup to make contributions
 
 ### Compiling
 
@@ -110,47 +156,6 @@ To disable block production on your local node, set `--poa-instant=false`
 $ ./target/debug/fuel-core run --poa-instant=false
 2023-06-13T12:44:12.857763Z  INFO fuel_core::cli::run: 232: Block production disabled
 ```
-
-## Running a Ignition node
-
-If you want to participate in the Ignition network with your own node you can launch it following these simple commands.
-
-Install the latest fuelup :
-```bash
-curl -fsSL https://install.fuel.network/ | sh
-fuelup toolchain install latest
-```
-
-Clone the chain configuration folder :
-```
-git clone https://github.com/FuelLabs/chain-configuration
-```
-
-Generate a keypair for your node:
-```bash
-fuel-core-keygen new --key-type peering
-```
-and copy the secret key displayed.
-
-Run your node (change all variable with `{}` to your own personal variables):
-```bash
-fuel-core run \
---enable-relayer \
---service-name fuel-ignition-node \
---keypair {KEYGEN_SECRET_KEY} \
---relayer {ETHEREUM_RPC_ENDPOINT} \
---ip=0.0.0.0 --port 4000 --peering-port 30333 \
---db-path ~/.fuel-ignition \
---snapshot {PATH_TO_CHAIN_CONFIGURATION_FOLDER}/ignition \
---utxo-validation --poa-instant false --enable-p2p \
---bootstrap-nodes /dnsaddr/mainnet.fuel.network \
---sync-header-batch-size 100 \
---relayer-v2-listening-contracts=0xAEB0c00D0125A8a788956ade4f4F12Ead9f65DDf \
---relayer-da-deploy-height=20620434 \
---relayer-log-page-size=100 \
---sync-block-stream-buffer-size 30
-```
-Instead of directly placing your personal values on the command we advise you to use, for example, environment variables.
 
 ### Troubleshooting
 
