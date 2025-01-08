@@ -208,6 +208,7 @@ async fn produce_block__raises_gas_price() {
     node_config.da_d_component = 0;
     node_config.max_da_gas_price_change_percent = 0;
     node_config.min_da_gas_price = 0;
+    node_config.max_da_gas_price = 1;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -257,6 +258,7 @@ async fn produce_block__lowers_gas_price() {
     node_config.da_d_component = 0;
     node_config.max_da_gas_price_change_percent = 0;
     node_config.min_da_gas_price = 0;
+    node_config.max_da_gas_price = 1;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -705,6 +707,7 @@ fn node_config_with_da_committer_url(url: &str) -> Config {
     let starting_gas_price = 10_000_000;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.min_da_gas_price = starting_gas_price;
+    node_config.max_da_gas_price = starting_gas_price + 1;
     node_config.max_da_gas_price_change_percent = 15;
     node_config.block_production = Trigger::Never;
     node_config.da_committer_url = Some(url.to_string());

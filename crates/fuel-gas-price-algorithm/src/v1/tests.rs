@@ -26,6 +26,7 @@ pub struct BlockBytes {
 pub struct UpdaterBuilder {
     min_exec_gas_price: u64,
     min_da_gas_price: u64,
+    max_da_gas_price: u64,
     starting_exec_gas_price: u64,
     starting_da_gas_price: u64,
     exec_gas_price_change_percent: u16,
@@ -53,6 +54,7 @@ impl UpdaterBuilder {
         Self {
             min_exec_gas_price: 0,
             min_da_gas_price: 0,
+            max_da_gas_price: 1,
             starting_exec_gas_price: 1,
             starting_da_gas_price: 1,
             exec_gas_price_change_percent: 0,
@@ -83,6 +85,11 @@ impl UpdaterBuilder {
 
     fn with_min_da_gas_price(mut self, min_price: u64) -> Self {
         self.min_da_gas_price = min_price;
+        self
+    }
+
+    fn with_max_da_gas_price(mut self, max_price: u64) -> Self {
+        self.max_da_gas_price = max_price;
         self
     }
 
@@ -192,6 +199,7 @@ impl UpdaterBuilder {
             last_profit: self.last_profit,
             second_to_last_profit: self.second_to_last_profit,
             min_da_gas_price: self.min_da_gas_price,
+            max_da_gas_price: self.max_da_gas_price,
             gas_price_factor: self
                 .da_gas_price_factor
                 .try_into()

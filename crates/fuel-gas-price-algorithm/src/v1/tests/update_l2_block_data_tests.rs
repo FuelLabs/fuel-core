@@ -487,6 +487,7 @@ fn update_l2_block_data__never_drops_below_minimum_da_gas_price() {
     let starting_exec_gas_price = 0;
     let last_da_gas_price = 100;
     let min_da_gas_price = 100;
+    let max_da_gas_price = min_da_gas_price + 1;
     let starting_cost = 0;
     let latest_gas_per_byte = 0; // DA is free
     let da_p_component = 100;
@@ -507,6 +508,7 @@ fn update_l2_block_data__never_drops_below_minimum_da_gas_price() {
         .with_da_cost_per_byte(latest_gas_per_byte as u128)
         .with_last_profit(last_profit, avg_window)
         .with_min_da_gas_price(min_da_gas_price)
+        .with_max_da_gas_price(max_da_gas_price)
         .build();
 
     // when
