@@ -16,6 +16,7 @@ use fuel_core_gas_price_service::{
     common::utils::BlockInfo,
     v1::da_source_service::DaBlockCosts,
 };
+use itertools::Itertools;
 use serde_reflection::{
     Samples,
     Tracer,
@@ -75,10 +76,24 @@ impl Data {
     }
 }
 
+impl From<&Record> for BlockInfo {
+    fn from(value: &Record) -> Self {
+        // TODO: Also support `GenesisBlock` variant?
+        return BlockInfo::Block {
+            height: value.l2_block_number.try_into().unwrap(),
+            gas_used: value.l2_gas_fullness,
+            block_gas_capacity: value.l2_gas_capacity,
+            block_bytes: value.l2_byte_size,
+            block_fees: 0, // TODO
+            gas_price: 0,  // TODO
+        }
+    }
+}
+
 struct SimulationResults {}
 
 fn get_data(source: &DataSource) -> anyhow::Result<Data> {
-    match source {
+    let records = match source {
         DataSource::File { path } => {
             let headers = csv::StringRecord::from(fields_of_struct_in_order::<Record>());
             let mut rdr = csv::ReaderBuilder::new()
@@ -93,16 +108,45 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
                     line.deserialize(Some(&headers))
                 })
                 .collect();
-            let records = records?;
-
-            dbg!(&records);
+            records?
         }
         DataSource::Generated => unimplemented!(),
+    };
+
+    let mut data = vec![];
+    let groups = records.iter().chunk_by(|record| record.l1_block_number);
+    for (l1_block_number, block_records) in groups.into_iter() {
+        let blocks: Vec<_> = block_records.into_iter().collect();
+        let mut blocks_iter = blocks.iter().peekable();
+
+        while let Some(block_record) = blocks_iter.next() {
+            let l2_block: BlockInfo = (*block_record).into();
+            let da_block_costs = if blocks_iter.peek().is_none() {
+                // TODO: Check if these are generated correctly.
+                let bundle_id: u32 = l1_block_number.try_into().unwrap();
+                let range = blocks.first().unwrap().l2_block_number as u32
+                    ..=blocks.last().unwrap().l2_block_number as u32;
+                let bundle_size_bytes: u32 =
+                    blocks.iter().map(|r| r.l2_byte_size as u32).sum();
+                let blob_cost_wei = block_record.l1_blob_fee_wei as u128;
+
+                Some(DaBlockCosts {
+                    bundle_id,
+                    l2_blocks: range,
+                    bundle_size_bytes,
+                    blob_cost_wei,
+                })
+            } else {
+                None
+            };
+            data.push((l2_block, da_block_costs));
+        }
     }
 
-    let data = Data { inner: vec![] };
+    let data = Data { inner: data };
     Ok(data)
 }
+
 async fn simulation(
     data: &Data,
     service_controller: &mut ServiceController,
