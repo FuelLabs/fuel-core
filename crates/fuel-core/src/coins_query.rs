@@ -216,13 +216,6 @@ pub async fn largest_first(
 }
 
 // An implementation of the method described on: https://iohk.io/en/blog/posts/2018/07/03/self-organisation-in-coin-selection/
-// TODO: Reimplement this algorithm to be simpler and faster:
-//  Instead of selecting random coins first, we can sort them.
-//  After that, we can split the coins into the part that covers the
-//  target and the part that does not(by choosing the most expensive coins).
-//  When the target is satisfied, we can select random coins from the remaining
-//  coins not used in the target.
-//  https://github.com/FuelLabs/fuel-core/issues/1965
 pub async fn random_improve(
     db: &ReadView,
     spend_query: &SpendQuery,
