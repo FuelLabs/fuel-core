@@ -472,7 +472,7 @@ fn update_da_record_data__da_block_increases_da_gas_price_by_min_da_gas_price_wh
     // then
     let new_da_gas_price = updater.new_scaled_da_gas_price;
 
-    // because max_da_gas_price = 0 and < min_da_gas_price = 0, the new da gas price should be min_da_gas_price
+    // because max_da_gas_price = 0 and < min_da_gas_price = 1, the new da gas price should be min_da_gas_price
     assert_eq!(new_da_gas_price, min_da_gas_price);
 }
 
