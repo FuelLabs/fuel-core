@@ -38,6 +38,17 @@ pub enum IndexationError {
         retryable: bool,
     },
     #[display(
+        fmt = "Asset metadata would overflow for asset_id: {}, current_supply: {}, minted_amount: {}",
+        asset_id,
+        current_supply,
+        minted_amount
+    )]
+    AssetMetadataWouldOverflow {
+        asset_id: AssetId,
+        current_supply: u128,
+        minted_amount: u64,
+    },
+    #[display(
         fmt = "Coin not found in coins to spend index for owner: {}, asset_id: {}, amount: {}, utxo_id: {}",
         owner,
         asset_id,
@@ -96,6 +107,11 @@ pub enum IndexationError {
         current_supply: u128,
         burned_amount: u64,
     },
+    #[display(
+        fmt = "Expected to get either `Mint` or `Burn` receipt, but got: {:?}",
+        receipt
+    )]
+    UnexpectedReceipt { receipt: String },
     #[from]
     StorageError(StorageError),
 }
