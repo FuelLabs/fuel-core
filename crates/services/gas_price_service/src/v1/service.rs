@@ -202,13 +202,18 @@ where
         &self.algorithm_updater
     }
 
-    pub fn next_block_algorithm(&self) -> SharedV1Algorithm {
-        self.shared_algo.clone()
+    pub fn next_block_algorithm(&self) -> &SharedV1Algorithm {
+        &self.shared_algo
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn storage_tx_provider(&self) -> &AtomicStorage {
         &self.storage_tx_provider
+    }
+
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn latest_l2_block(&self) -> BlockHeight {
+        *self.latest_l2_block.lock().unwrap()
     }
 
     async fn update(&mut self, new_algorithm: AlgorithmV1) {

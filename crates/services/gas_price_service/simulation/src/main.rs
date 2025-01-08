@@ -43,7 +43,7 @@ struct Record {
     l2_block_number: u64,
     l2_gas_fullness: u64,
     l2_gas_capacity: u64,
-    l2_byte_size: u64,
+    l2_byte_size: u32,
     l2_byte_capacity: u64,
 }
 
@@ -105,14 +105,37 @@ impl From<&Record> for BlockInfo {
             height: value.l2_block_number.try_into().unwrap(),
             gas_used: value.l2_gas_fullness,
             block_gas_capacity: value.l2_gas_capacity,
-            block_bytes: value.l2_byte_size,
+            block_bytes: value.l2_byte_size as u64,
             block_fees: 0, // Will be overwritten by the simulation code
             gas_price: 0,  // Will be overwritten by the simulation code
         }
     }
 }
 
-struct SimulationResults {}
+#[derive(Debug)]
+struct SimulationResults {
+    gas_price: Vec<u64>,
+    profits: Vec<i128>,
+}
+
+impl SimulationResults {
+    fn new() -> Self {
+        Self {
+            gas_price: Vec::new(),
+            profits: Vec::new(),
+        }
+    }
+}
+
+impl SimulationResults {
+    pub fn add_gas_price(&mut self, gas_price: u64) {
+        self.gas_price.push(gas_price);
+    }
+
+    pub fn add_profit(&mut self, profit: i128) {
+        self.profits.push(profit);
+    }
+}
 
 fn get_data(source: &DataSource) -> anyhow::Result<Data> {
     const DA_OFFSET: usize = 0; // Make configurable
@@ -146,13 +169,16 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
     for (l1_block_number, block_records) in groups.into_iter() {
         let blocks: Vec<_> = block_records.into_iter().collect();
         let mut blocks_iter = blocks.iter().peekable();
+        let mut bundle_bytes = 0;
 
         while let Some(block_record) = blocks_iter.next() {
             let l2_block: BlockInfo = (*block_record).into();
+            bundle_bytes += block_record.l2_byte_size;
             blocks_iter.peek().is_none().then(|| {
                 // TODO: Check if these are generated correctly.
                 let bundle_id: u32 = l1_block_number as u32; // Could be an arbitrary number, but we use L1 block number for convenience.
-                let bundle_size_bytes: u32 = 1; // Modify scrape tool to provide this
+                let bundle_size_bytes: u32 = bundle_bytes; // Modify scrape tool to provide this. For now just using the uncompressed bytes
+                bundle_bytes = 0; // Modify scrape tool to provide this. For now just using the uncompressed bytes
                 let range = blocks.first().unwrap().l2_block_number as u32
                     ..=blocks.last().unwrap().l2_block_number as u32;
                 let blob_cost_wei = block_record.l1_blob_fee_wei as u128;
@@ -163,7 +189,7 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
                     bundle_size_bytes,
                     blob_cost_wei,
                 };
-                latest_da_costs.push((new, DA_OFFSET + 2));
+                latest_da_costs.push((new, DA_OFFSET + 1));
             });
 
             let mut da_block_costs = Vec::new();
@@ -192,16 +218,33 @@ async fn simulation(
     service_controller: &mut ServiceController,
 ) -> anyhow::Result<SimulationResults> {
     tracing::info!("Starting simulation");
-    let res = SimulationResults {};
+    let mut results = SimulationResults::new();
     for (block, maybe_costs) in data.get_iter() {
-        service_controller.advance(block, maybe_costs).await?
+        service_controller.advance(block, maybe_costs).await?;
+        let gas_price = service_controller.gas_price();
+        results.add_gas_price(gas_price);
+        let profit = service_controller.profit()?;
+        results.add_profit(profit);
     }
     tracing::info!("Finished simulation");
-    Ok(res)
+    Ok(results)
 }
 
-fn display_results(_results: SimulationResults) -> anyhow::Result<()> {
-    // TODO
+fn display_results(results: SimulationResults) -> anyhow::Result<()> {
+    // TODO: Just have basic stuff now
+    const WEI_PER_ETH: f64 = 1_000_000_000_000_000_000.0;
+    let gas_price_eth = results
+        .gas_price
+        .iter()
+        .map(|price| *price as f64 / WEI_PER_ETH)
+        .collect::<Vec<_>>();
+    let profits_eth = results
+        .profits
+        .iter()
+        .map(|profit| *profit as f64 / WEI_PER_ETH)
+        .collect::<Vec<_>>();
+    println!("Gas prices (ETH): {:?}", gas_price_eth);
+    println!("Profits (ETH): {:?}", profits_eth);
     Ok(())
 }
 

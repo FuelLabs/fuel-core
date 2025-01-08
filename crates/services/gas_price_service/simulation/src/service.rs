@@ -7,6 +7,7 @@ use fuel_core_gas_price_service::{
         fuel_core_storage_adapter::storage::GasPriceColumn,
         utils::BlockInfo,
     },
+    ports::GetMetadataStorage,
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
@@ -133,6 +134,24 @@ impl ServiceController {
         match self.service.run(&mut watcher).await {
             TaskNextAction::ErrorContinue(err) => Err(err),
             _ => Ok(()),
+        }
+    }
+
+    pub fn gas_price(&self) -> u64 {
+        self.service.next_block_algorithm().next_gas_price()
+    }
+
+    pub fn profit(&self) -> anyhow::Result<i128> {
+        let latest_height = self.service.latest_l2_block();
+        let metadata = self
+            .service
+            .storage_tx_provider()
+            .get_metadata(&latest_height)?
+            .ok_or(anyhow::anyhow!("no metadata found"))?;
+        if let Some(profit) = metadata.v1().map(|m| m.last_profit) {
+            Ok(profit)
+        } else {
+            Err(anyhow::anyhow!("no profit found"))
         }
     }
 }

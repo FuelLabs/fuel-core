@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0" # this is floating and needs to match what is used by other packages
-fuel-core-gas-price-service = { path = ".." }
+fuel-core-gas-price-service = { path = "..", features = ["test-helpers"] }
 fuel-core-services = { path = "../../../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "../../../storage", features = [
   "std",
