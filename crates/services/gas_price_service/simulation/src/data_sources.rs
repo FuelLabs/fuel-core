@@ -4,9 +4,12 @@ use fuel_core_gas_price_service::{
         l2_block_source::L2BlockSource,
         utils::BlockInfo,
     },
-    v1::da_source_service::{
-        service::DaBlockCostsSource,
-        DaBlockCosts,
+    v1::{
+        algorithm::SharedV1Algorithm,
+        da_source_service::{
+            service::DaBlockCostsSource,
+            DaBlockCosts,
+        },
     },
 };
 
@@ -18,30 +21,65 @@ use fuel_core_types::fuel_types::BlockHeight;
 
 pub struct SimulatedL2Blocks {
     recv: tokio::sync::mpsc::Receiver<BlockInfo>,
+    shared_algo: SharedV1Algorithm,
 }
 
 impl SimulatedL2Blocks {
-    pub fn new(recv: tokio::sync::mpsc::Receiver<BlockInfo>) -> Self {
-        Self { recv }
+    pub fn new(
+        recv: tokio::sync::mpsc::Receiver<BlockInfo>,
+        shared_algo: SharedV1Algorithm,
+    ) -> Self {
+        Self { recv, shared_algo }
     }
 
-    pub fn new_with_sender() -> (Self, tokio::sync::mpsc::Sender<BlockInfo>) {
+    pub fn new_with_sender(
+        shared_algo: SharedV1Algorithm,
+    ) -> (Self, tokio::sync::mpsc::Sender<BlockInfo>) {
         let (send, recv) = tokio::sync::mpsc::channel(16);
-        (Self { recv }, send)
+        (Self { recv, shared_algo }, send)
     }
 }
 
 #[async_trait]
 impl L2BlockSource for SimulatedL2Blocks {
     async fn get_l2_block(&mut self) -> GasPriceResult<BlockInfo> {
-        // TODO: do we want to modify these values to somehow reflect the previously chosen gas
-        //   price better? We might be able to do that by having a handle to the shared algo.
-
-        self.recv.recv().await.ok_or({
+        let block = self.recv.recv().await.ok_or({
             GasPriceError::CouldNotFetchL2Block {
                 source_error: anyhow::anyhow!("no more blocks; channel closed"),
             }
-        })
+        })?;
+
+        let BlockInfo::Block {
+            gas_used,
+            height,
+            block_gas_capacity,
+            block_bytes,
+            ..
+        } = block
+        else {
+            return Err(GasPriceError::CouldNotFetchL2Block {
+                source_error: anyhow::anyhow!("unexpected genesis block"),
+            });
+        };
+
+        let gas = gas_used;
+        let new_gas_price = self.shared_algo.next_gas_price();
+        let gas_price_factor = 1_150_000; // TODO: Read from CLI/config
+
+        let mut fee = (gas as u128).checked_mul(new_gas_price as u128).expect(
+            "Impossible to overflow because multiplication of two `u64` <= `u128`",
+        );
+        fee = fee.div_ceil(gas_price_factor as u128);
+
+        let block = BlockInfo::Block {
+            height,
+            gas_used,
+            block_gas_capacity,
+            block_bytes,
+            block_fees: fee.try_into().expect("overflow"),
+            gas_price: new_gas_price,
+        };
+        Ok(block)
     }
 }
 

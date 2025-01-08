@@ -73,7 +73,7 @@ fn read_metadata_from_file(_metadata_path: &str) -> V1Metadata {
     // TODO: read from file and/or CLI
     V1Metadata {
         new_scaled_exec_price: 0,
-        l2_block_height: 0,
+        l2_block_height: 999, // TODO: Use first L2 block height from the CSV
         new_scaled_da_gas_price: 0,
         gas_price_factor: NonZero::new(100).unwrap(),
         total_da_rewards_excess: 0,
@@ -139,7 +139,8 @@ pub async fn get_service_controller() -> ServiceController {
     let algo = algorithm_updater.algorithm();
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo);
 
-    let (l2_block_source, l2_block_sender) = SimulatedL2Blocks::new_with_sender();
+    let (l2_block_source, l2_block_sender) =
+        SimulatedL2Blocks::new_with_sender(shared_algo.clone());
     let (da_block_source, da_costs_sender) = SimulatedDACosts::new_with_sender();
 
     let poll_interval = poll_interval();

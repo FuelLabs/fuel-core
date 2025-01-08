@@ -79,14 +79,13 @@ impl Data {
 
 impl From<&Record> for BlockInfo {
     fn from(value: &Record) -> Self {
-        // TODO: Also support `GenesisBlock` variant?
         return BlockInfo::Block {
             height: value.l2_block_number.try_into().unwrap(),
             gas_used: value.l2_gas_fullness,
             block_gas_capacity: value.l2_gas_capacity,
             block_bytes: value.l2_byte_size,
-            block_fees: 0, // TODO
-            gas_price: 0,  // TODO
+            block_fees: 0, // Will be overwritten by the simulation code
+            gas_price: 0,  // Will be overwritten by the simulation code
         }
     }
 }
@@ -124,11 +123,10 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
             let l2_block: BlockInfo = (*block_record).into();
             let da_block_costs = blocks_iter.peek().is_none().then(|| {
                 // TODO: Check if these are generated correctly.
-                let bundle_id: u32 = l1_block_number.try_into().unwrap();
+                let bundle_id: u32 = l1_block_number as u32; // Could be an arbitrary number, but we use L1 block number for convenience.
+                let bundle_size_bytes: u32 = 0; // Modify scrape tool to provide this
                 let range = blocks.first().unwrap().l2_block_number as u32
                     ..=blocks.last().unwrap().l2_block_number as u32;
-                let bundle_size_bytes: u32 =
-                    blocks.iter().map(|r| r.l2_byte_size as u32).sum();
                 let blob_cost_wei = block_record.l1_blob_fee_wei as u128;
 
                 DaBlockCosts {
@@ -153,11 +151,6 @@ async fn simulation(
     let res = SimulationResults {};
     for (block, maybe_costs) in data.get_iter() {
         service_controller.advance(block, maybe_costs).await?
-        // GET GAS PRICE
-
-        // MODIFY WITH GAS PRICE FACTOR
-
-        // RECORD LATEST VALUES
     }
     Ok(res)
 }
