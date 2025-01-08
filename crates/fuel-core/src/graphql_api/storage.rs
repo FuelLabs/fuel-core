@@ -121,6 +121,8 @@ pub enum Column {
     MessageBalances = 24,
     /// See [`AssetsInfo`](assets::AssetsInfo)
     AssetsInfo = 25,
+    /// Index of the coins that are available to spend.
+    CoinsToSpend = 26,
 }
 
 impl Column {

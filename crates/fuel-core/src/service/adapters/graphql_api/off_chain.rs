@@ -19,24 +19,10 @@ use crate::{
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::storage::{
-        assets::{
-            AssetDetails,
-            AssetsInfo,
-        },
-        balances::{
-            CoinBalances,
-            CoinBalancesKey,
-            MessageBalance,
-            MessageBalances,
-            TotalBalanceAmount,
-        },
-        old::{
-            OldFuelBlockConsensus,
-            OldFuelBlocks,
-            OldTransactions,
-        },
-    },
+    graphql_api::{indexation::coins_to_spend::NON_RETRYABLE_BYTE, ports::CoinsToSpendIndexIter, storage::{assets::{AssetDetails, AssetsInfo}, balances::{CoinBalances, CoinBalancesKey, MessageBalance, MessageBalances, TotalBalanceAmount}, coins::CoinsToSpendIndex, old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks, OldTransactions,
+    }}},
 };
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
@@ -292,10 +278,40 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                 .into_boxed()
         }
     }
+    // TODO: Return error if indexation is not available: https://github.com/FuelLabs/fuel-core/issues/2499
+    fn coins_to_spend_index(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+    ) -> CoinsToSpendIndexIter {
+        let prefix: Vec<_> = NON_RETRYABLE_BYTE
+            .as_ref()
+            .iter()
+            .copied()
+            .chain(owner.iter().copied())
+            .chain(asset_id.iter().copied())
+            .collect();
+
+        CoinsToSpendIndexIter {
+            big_coins_iter: self.iter_all_filtered::<CoinsToSpendIndex, _>(
+                Some(&prefix),
+                None,
+                Some(IterDirection::Reverse),
+            ),
+            dust_coins_iter: self.iter_all_filtered::<CoinsToSpendIndex, _>(
+                Some(&prefix),
+                None,
+                Some(IterDirection::Forward),
+            ),
+        }
+    }
 }
 
 impl worker::OffChainDatabase for Database<OffChain> {
-    type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
+    type Transaction<'a>
+        = StorageTransaction<&'a mut Self>
+    where
+        Self: 'a;
 
     fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
         Ok(fuel_core_storage::transactional::HistoricalView::latest_height(self))
@@ -305,7 +321,11 @@ impl worker::OffChainDatabase for Database<OffChain> {
         self.into_transaction()
     }
 
-    fn balances_enabled(&self) -> StorageResult<bool> {
+    fn balances_indexation_enabled(&self) -> StorageResult<bool> {
         self.indexation_available(IndexationKind::Balances)
+    }
+
+    fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool> {
+        self.indexation_available(IndexationKind::CoinsToSpend)
     }
 }

@@ -285,9 +285,9 @@ pub fn init_sub_services(
         graphql_block_importer,
         database.on_chain().clone(),
         database.off_chain().clone(),
-        chain_id,
         config.da_compression.clone(),
         config.continue_on_error,
+        &chain_config.consensus_parameters,
     );
 
     let graphql_config = GraphQLConfig {

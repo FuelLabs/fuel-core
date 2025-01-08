@@ -144,7 +144,7 @@ impl From<(Vec<UtxoId>, Vec<Nonce>)> for ExcludeInput {
 pub struct SpendQueryElementInput {
     /// asset ID of the coins
     pub asset_id: AssetId,
-    /// address of the owner
+    /// the amount to cover with this asset
     pub amount: U64,
     /// the maximum number of coins per asset from the owner to return.
     pub max: Option<U32>,

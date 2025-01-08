@@ -49,7 +49,7 @@ fn balances_indexation_enabled() -> bool {
     static BALANCES_INDEXATION_ENABLED: OnceLock<bool> = OnceLock::new();
 
     *BALANCES_INDEXATION_ENABLED.get_or_init(|| {
-        // During re-genesis process the metadata is always doesn't exist.
+        // During re-genesis process the metadata never exist.
         let metadata = None;
         let indexation_availability =
             crate::database::database_description::indexation_availability::<OffChain>(
@@ -57,6 +57,24 @@ fn balances_indexation_enabled() -> bool {
             );
         indexation_availability
             .contains(&crate::database::database_description::IndexationKind::Balances)
+    })
+}
+
+fn coins_to_spend_indexation_enabled() -> bool {
+    use std::sync::OnceLock;
+
+    static COINS_TO_SPEND_INDEXATION_ENABLED: OnceLock<bool> = OnceLock::new();
+
+    *COINS_TO_SPEND_INDEXATION_ENABLED.get_or_init(|| {
+        // During re-genesis process the metadata never exist.
+        let metadata = None;
+        let indexation_availability =
+            crate::database::database_description::indexation_availability::<OffChain>(
+                metadata,
+            );
+        indexation_availability.contains(
+            &crate::database::database_description::IndexationKind::CoinsToSpend,
+        )
     })
 }
 
@@ -131,6 +149,8 @@ impl ImportTable for Handler<OwnedMessageIds, Messages> {
             events,
             tx,
             balances_indexation_enabled(),
+            coins_to_spend_indexation_enabled(),
+            &self.base_asset_id,
         )?;
         Ok(())
     }
@@ -153,6 +173,8 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
             events,
             tx,
             balances_indexation_enabled(),
+            coins_to_spend_indexation_enabled(),
+            &self.base_asset_id,
         )?;
         Ok(())
     }

@@ -82,6 +82,7 @@ pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
 )]
 pub enum IndexationKind {
     Balances,
+    CoinsToSpend,
 }
 
 impl IndexationKind {
