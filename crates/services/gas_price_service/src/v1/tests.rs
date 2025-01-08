@@ -283,7 +283,6 @@ impl DaBlockCostsSource for FakeDABlockCost {
         &mut self,
         latest_recorded_height: &BlockHeight,
     ) -> Result<Vec<DaBlockCosts>> {
-        dbg!("AM CALLED");
         *self.latest_requested_height.lock().unwrap() = *latest_recorded_height;
         let costs = self.da_block_costs.recv().await.unwrap();
         Ok(vec![costs])
