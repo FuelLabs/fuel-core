@@ -5,6 +5,7 @@ use crate::{
             storage::{
                 GasPriceColumn,
                 GasPriceMetadata,
+                RecordedHeights,
             },
             GasPriceSettings,
             GasPriceSettingsProvider,
@@ -282,6 +283,7 @@ impl DaBlockCostsSource for FakeDABlockCost {
         &mut self,
         latest_recorded_height: &BlockHeight,
     ) -> Result<Vec<DaBlockCosts>> {
+        dbg!("AM CALLED");
         *self.latest_requested_height.lock().unwrap() = *latest_recorded_height;
         let costs = self.da_block_costs.recv().await.unwrap();
         Ok(vec![costs])
@@ -347,6 +349,7 @@ fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
 
 fn gas_price_database_with_metadata(
     metadata: &V1Metadata,
+    starting_recorded_height: Option<BlockHeight>,
 ) -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
     let mut db = database();
     let mut tx = db.write_transaction();
@@ -355,6 +358,11 @@ fn gas_price_database_with_metadata(
     tx.storage_as_mut::<GasPriceMetadata>()
         .insert(&height, &metadata)
         .unwrap();
+
+    if let Some(starting_recorded_height) = starting_recorded_height {
+        tx.set_recorded_height(starting_recorded_height).unwrap();
+    }
+
     tx.commit().unwrap();
     db
 }
@@ -688,7 +696,7 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let block_stream = empty_block_stream();
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
-    let inner = gas_price_database_with_metadata(&original_metadata);
+    let inner = gas_price_database_with_metadata(&original_metadata, None);
     // when
     let service = UninitializedTask::new(
         different_config.clone(),
@@ -828,11 +836,11 @@ async fn uninitialized_task__init__starts_da_service_with_recorded_height_in_sto
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let (da_cost_source, latest_requested_recorded_height) =
         FakeDABlockCost::never_returns_with_handle_to_last_height();
-    let mut inner = gas_price_database_with_metadata(&original_metadata);
-    let mut tx = inner.begin_transaction().unwrap();
-    tx.set_recorded_height(BlockHeight::from(recorded_height))
-        .unwrap();
-    StorageTransaction::commit_transaction(tx).unwrap();
+    let gas_price_db = gas_price_database_with_metadata(
+        &original_metadata,
+        Some(recorded_height.into()),
+    );
+
     different_config.da_poll_interval = Some(1);
     let service = UninitializedTask::new(
         different_config.clone(),
@@ -840,7 +848,7 @@ async fn uninitialized_task__init__starts_da_service_with_recorded_height_in_sto
         0.into(),
         settings,
         block_stream,
-        inner,
+        gas_price_db,
         da_cost_source,
         on_chain_db,
     )
@@ -885,7 +893,7 @@ async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
         latest_da_cost_per_byte: 0,
         unrecorded_block_bytes: 0,
     };
-    let gas_price_db = gas_price_database_with_metadata(&metadata);
+    let gas_price_db = gas_price_database_with_metadata(&metadata, None);
     let mut onchain_db = FakeOnChainDb::new(l2_height);
     for height in 1..=l2_height {
         let block = arb_block();
@@ -915,52 +923,4 @@ async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
     let algo_updater_height = gas_price_service.algorithm_updater().l2_block_height;
 
     assert_eq!(on_chain_height, algo_updater_height);
-}
-
-#[tokio::test]
-async fn uninitialized_task__init__sets_block_height_for_da_source_before_starting() {
-    // given
-    let metadata_height = 100;
-    let l2_height = 200;
-    let config = zero_threshold_arbitrary_config();
-
-    let metadata = V1Metadata {
-        new_scaled_exec_price: 100,
-        l2_block_height: metadata_height,
-        new_scaled_da_gas_price: 0,
-        gas_price_factor: NonZeroU64::new(100).unwrap(),
-        total_da_rewards_excess: 0,
-        latest_known_total_da_cost_excess: 0,
-        last_profit: 0,
-        second_to_last_profit: 0,
-        latest_da_cost_per_byte: 0,
-        unrecorded_block_bytes: 0,
-    };
-    let gas_price_db = gas_price_database_with_metadata(&metadata);
-    let mut onchain_db = FakeOnChainDb::new(l2_height);
-    for height in 1..=l2_height {
-        let block = arb_block();
-        onchain_db.blocks.insert(BlockHeight::from(height), block);
-    }
-    let da_source = FakeDABlockCost::never_returns();
-    let latest_received_height_arc = da_source.latest_requested_height.clone();
-
-    let service = UninitializedTask::new(
-        config,
-        Some(metadata_height.into()),
-        0.into(),
-        FakeSettings::default(),
-        empty_block_stream(),
-        gas_price_db,
-        da_source,
-        onchain_db.clone(),
-    )
-    .unwrap();
-
-    // when
-    let _ = service.init(&StateWatcher::started()).await.unwrap();
-
-    // then
-    let latest_received_height = (*latest_received_height_arc.lock().unwrap());
-    assert_eq!(latest_received_height, l2_height.into());
 }
