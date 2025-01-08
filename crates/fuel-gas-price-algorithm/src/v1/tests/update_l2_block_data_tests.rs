@@ -24,6 +24,7 @@ fn negative_profit_updater_builder() -> UpdaterBuilder {
     let starting_da_gas_price = 100;
     let starting_cost = u128::MAX;
     let latest_gas_per_byte = i32::MAX; // DA is very expensive
+    let max_da_gas_price = u64::MAX;
     let da_p_component = 100;
     let da_d_component = 10;
     let last_profit = i128::MIN;
@@ -39,6 +40,7 @@ fn negative_profit_updater_builder() -> UpdaterBuilder {
         .with_projected_total_cost(starting_cost)
         .with_da_cost_per_byte(latest_gas_per_byte as u128)
         .with_last_profit(last_profit, last_last_profit)
+        .with_max_da_gas_price(max_da_gas_price)
 }
 
 fn positive_profit_updater_builder() -> UpdaterBuilder {
@@ -399,6 +401,7 @@ fn update_l2_block_data__price_does_not_decrease_more_than_max_percent() {
     let last_profit = i128::MAX; // Large, positive profit to decrease da price
     let last_last_profit = 0;
     let max_da_change_percent = 5;
+    let max_da_gas_price = u64::MAX;
     let large_starting_reward = i128::MAX;
     let mut updater = UpdaterBuilder::new()
         .with_starting_exec_gas_price(starting_exec_gas_price)
@@ -411,6 +414,7 @@ fn update_l2_block_data__price_does_not_decrease_more_than_max_percent() {
         .with_da_cost_per_byte(latest_gas_per_byte as u128)
         .with_last_profit(last_profit, last_last_profit)
         .with_da_max_change_percent(max_da_change_percent)
+        .with_max_da_gas_price(max_da_gas_price)
         .build();
     let unrecorded_blocks = &mut empty_unrecorded_blocks();
 
@@ -446,6 +450,7 @@ fn update_l2_block_data__da_price_does_not_increase_more_than_max_percent() {
     let last_profit = i128::MIN; // Large, negative profit to increase da price
     let last_last_profit = 0;
     let max_da_change_percent = 5;
+    let max_da_gas_price = u64::MAX;
     let large_starting_reward = 0;
     let unrecorded_blocks = &mut empty_unrecorded_blocks();
     let mut updater = UpdaterBuilder::new()
@@ -459,6 +464,7 @@ fn update_l2_block_data__da_price_does_not_increase_more_than_max_percent() {
         .with_da_cost_per_byte(latest_gas_per_byte)
         .with_last_profit(last_profit, last_last_profit)
         .with_da_max_change_percent(max_da_change_percent)
+        .with_max_da_gas_price(max_da_gas_price)
         .build();
 
     // when
@@ -536,6 +542,7 @@ fn update_l2_block_data__even_profit_maintains_price() {
     // given
     let starting_exec_gas_price = 100;
     let starting_da_gas_price = 100;
+    let max_da_gas_price = u64::MAX;
     let starting_cost = 500;
     let latest_cost_per_byte = 10;
     let da_gas_price_denominator = 1;
@@ -550,6 +557,7 @@ fn update_l2_block_data__even_profit_maintains_price() {
         .with_known_total_cost(starting_cost as u128)
         .with_projected_total_cost(starting_cost as u128)
         .with_da_cost_per_byte(latest_cost_per_byte as u128)
+        .with_max_da_gas_price(max_da_gas_price)
         .build();
 
     // when

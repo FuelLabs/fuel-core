@@ -302,6 +302,7 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
 fn update_da_record_data__da_block_increases_da_gas_price() {
     // given
     let da_cost_per_byte = 40;
+    let max_da_gas_price = u64::MAX;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
     let mut unrecorded_blocks: BTreeMap<_, _> = [(11, 3000)].into_iter().collect();
@@ -320,6 +321,7 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
         .with_projected_total_cost(projected_total_cost as u128)
         .with_known_total_cost(original_known_total_cost as u128)
         .with_unrecorded_blocks(&unrecorded_blocks)
+        .with_max_da_gas_price(max_da_gas_price)
         .build();
 
     let new_cost_per_byte = 100;
