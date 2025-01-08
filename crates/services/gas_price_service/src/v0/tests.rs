@@ -133,6 +133,9 @@ fn arbitrary_metadata() -> V0Metadata {
     V0Metadata {
         new_exec_price: 100,
         l2_block_height: 0,
+        _min_exec_gas_price: 0,
+        _exec_gas_price_change_percent: 0,
+        _l2_block_fullness_threshold_percent: 0,
     }
 }
 
@@ -154,6 +157,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         block_gas_capacity: 100,
         block_bytes: 100,
         block_fees: 100,
+        gas_price: 100,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
@@ -197,6 +201,7 @@ async fn next__new_l2_block_saves_old_metadata() {
         block_gas_capacity: 100,
         block_bytes: 100,
         block_fees: 100,
+        gas_price: 100,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
@@ -339,6 +344,7 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let V0Metadata {
         new_exec_price,
         l2_block_height,
+        ..
     } = original_metadata;
     let UninitializedTask { algo_updater, .. } = service;
     assert_eq!(algo_updater.new_exec_price, new_exec_price);

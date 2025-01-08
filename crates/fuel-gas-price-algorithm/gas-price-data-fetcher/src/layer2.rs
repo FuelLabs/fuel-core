@@ -128,7 +128,6 @@ impl BlockFetcher {
                     "Consensus parameters not found for block {}",
                     block_height
                 ))?;
-            // let compressed_block = b.block.entity.compress(&consensus_parameters.chain_id());
             let block_size =
                 BytesSize(postcard::to_allocvec(&b.block)?.len().try_into()?);
 

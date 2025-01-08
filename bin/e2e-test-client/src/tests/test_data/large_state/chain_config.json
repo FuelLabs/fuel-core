@@ -48,7 +48,7 @@
           "andi": 2,
           "bal": 366,
           "bhei": 2,
-          "bhsh": 2,
+          "bhsh": 32,
           "burn": 33949,
           "cb": 2,
           "cfei": 2,
@@ -129,6 +129,7 @@
           "wqmm": 11,
           "xor": 2,
           "xori": 2,
+          "ecop": 3500,
           "call": {
             "LightOperation": {
               "base": 21687,
@@ -235,6 +236,12 @@
             "HeavyOperation": {
               "base": 28484,
               "gas_per_unit": 26613
+            }
+          },
+          "epar": {
+            "HeavyOperation": {
+              "base": 69000,
+              "gas_per_unit": 52000
             }
           },
           "contract_root": {

@@ -18,7 +18,7 @@ pub struct BlockCommitterDataFetcher {
 }
 
 impl BlockCommitterDataFetcher {
-    pub fn new(endpoint: Url, num_responses: usize) -> Result<Self, anyhow::Error> {
+    pub fn new(endpoint: Url, num_responses: usize) -> anyhow::Result<Self> {
         let mut content_type_json_header = HeaderMap::new();
         content_type_json_header.insert(
             CONTENT_TYPE,
@@ -36,11 +36,11 @@ impl BlockCommitterDataFetcher {
         })
     }
 
-    // Todo: Better error type
+    // TODO: Better error type; qed
     async fn fetch_blob_data(
         &self,
         from_height: u64,
-    ) -> Result<Vec<BlockCommitterCosts>, anyhow::Error> {
+    ) -> anyhow::Result<Vec<BlockCommitterCosts>> {
         let query = self.endpoint.join("v1/costs")?.join(&format!(
             "?variant=specific&value={}&limit={}",
             from_height, self.num_responses
@@ -79,7 +79,7 @@ impl BlockCommitterDataFetcher {
 
             if costs.is_empty() {
                 // Might be that the block committer doesn't have data for the block, in which case we return prematurely.
-                // If this happen, we should increase the value of results returned by the block committer in the query.
+                // If this happens, we should increase the value of results returned by the block committer in the query.
                 break;
             }
 
