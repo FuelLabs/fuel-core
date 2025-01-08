@@ -550,7 +550,7 @@ impl AlgorithmUpdaterV1 {
 
     fn max_scaled_da_gas_price(&self) -> u64 {
         // note: here we make sure that a correct maximum is used; hacky :(
-        max(self.max_da_gas_price, self.min_da_gas_price + 1)
+        max(self.max_da_gas_price, self.min_da_gas_price)
             .saturating_mul(self.gas_price_factor.into())
     }
 
