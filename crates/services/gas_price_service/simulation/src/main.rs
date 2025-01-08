@@ -66,6 +66,7 @@ enum DataSource {
     Generated,
 }
 
+#[derive(Debug)]
 pub struct Data {
     inner: Vec<(BlockInfo, Option<DaBlockCosts>)>,
 }
@@ -121,7 +122,7 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
 
         while let Some(block_record) = blocks_iter.next() {
             let l2_block: BlockInfo = (*block_record).into();
-            let da_block_costs = if blocks_iter.peek().is_none() {
+            let da_block_costs = blocks_iter.peek().is_none().then(|| {
                 // TODO: Check if these are generated correctly.
                 let bundle_id: u32 = l1_block_number.try_into().unwrap();
                 let range = blocks.first().unwrap().l2_block_number as u32
@@ -130,15 +131,13 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
                     blocks.iter().map(|r| r.l2_byte_size as u32).sum();
                 let blob_cost_wei = block_record.l1_blob_fee_wei as u128;
 
-                Some(DaBlockCosts {
+                DaBlockCosts {
                     bundle_id,
                     l2_blocks: range,
                     bundle_size_bytes,
                     blob_cost_wei,
-                })
-            } else {
-                None
-            };
+                }
+            });
             data.push((l2_block, da_block_costs));
         }
     }
