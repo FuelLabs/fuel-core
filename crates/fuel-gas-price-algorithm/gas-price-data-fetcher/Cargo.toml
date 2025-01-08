@@ -19,7 +19,7 @@ serde = { version = "1.0.209", features = ["derive"] }
 tokio = { version = "1.40.0", features = ["macros", "rt", "rt-multi-thread"] }
 reqwest = { version = "0.12.11", features = ["json"] }
 serde_json = { version = "1.0.134" }
-fuel-core-client = { version = "0.40.2" } # locked to whatever version you're supposed to be fetching data from
+fuel-core-client = { version = "0.40.2" }                                      # locked to whatever version you're supposed to be fetching data from
 fuel-core-types = { version = "0.40.2" }
 postcard = { version = "1.0" }
 tracing = { version = "0.1.41" }
