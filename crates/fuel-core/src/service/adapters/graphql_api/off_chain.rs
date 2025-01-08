@@ -19,10 +19,29 @@ use crate::{
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::{indexation::coins_to_spend::NON_RETRYABLE_BYTE, ports::CoinsToSpendIndexIter, storage::{assets::{AssetDetails, AssetsInfo}, balances::{CoinBalances, CoinBalancesKey, MessageBalance, MessageBalances, TotalBalanceAmount}, coins::CoinsToSpendIndex, old::{
-        OldFuelBlockConsensus,
-        OldFuelBlocks, OldTransactions,
-    }}},
+    graphql_api::{
+        indexation::coins_to_spend::NON_RETRYABLE_BYTE,
+        ports::CoinsToSpendIndexIter,
+        storage::{
+            assets::{
+                AssetDetails,
+                AssetsInfo,
+            },
+            balances::{
+                CoinBalances,
+                CoinBalancesKey,
+                MessageBalance,
+                MessageBalances,
+                TotalBalanceAmount,
+            },
+            coins::CoinsToSpendIndex,
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
+        },
+    },
 };
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
@@ -327,5 +346,9 @@ impl worker::OffChainDatabase for Database<OffChain> {
 
     fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool> {
         self.indexation_available(IndexationKind::CoinsToSpend)
+    }
+
+    fn asset_metadata_indexation_enabled(&self) -> StorageResult<bool> {
+        self.indexation_available(IndexationKind::AssetMetadata)
     }
 }

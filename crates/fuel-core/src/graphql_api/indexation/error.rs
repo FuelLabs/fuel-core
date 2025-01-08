@@ -87,6 +87,15 @@ pub enum IndexationError {
     },
     #[display(fmt = "Invalid coin type encountered in the index: {:?}", coin_type)]
     InvalidIndexedCoinType { coin_type: Option<u8> },
+    #[display(
+        fmt = "Trying to burn more than the supply: current_supply: {}, burned_amount: {}",
+        current_supply,
+        burned_amount
+    )]
+    TryingToBurnMoreThanSupply {
+        current_supply: u128,
+        burned_amount: u64,
+    },
     #[from]
     StorageError(StorageError),
 }

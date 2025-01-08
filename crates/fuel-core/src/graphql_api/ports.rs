@@ -361,6 +361,9 @@ pub mod worker {
 
         /// Checks if CoinsToSpend indexation functionality is available.
         fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool>;
+
+        /// Checks if AssetMetadata indexation functionality is available.
+        fn asset_metadata_indexation_enabled(&self) -> StorageResult<bool>;
     }
 
     /// Represents either the Genesis Block or a block at a specific height

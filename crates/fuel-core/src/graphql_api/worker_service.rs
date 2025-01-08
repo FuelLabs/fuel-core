@@ -3,13 +3,10 @@ use self::indexation::error::IndexationError;
 use super::{
     da_compression::da_compress_block,
     indexation,
-    storage::{
-        assets::AssetsInfo,
-        old::{
-            OldFuelBlockConsensus,
-            OldFuelBlocks,
-            OldTransactions,
-        },
+    storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
     },
 };
 use crate::{
@@ -22,7 +19,6 @@ use crate::{
             },
         },
         storage::{
-            assets::AssetDetails,
             blocks::FuelBlockIdsToHeights,
             coins::{
                 owner_coin_id_key,
@@ -76,7 +72,6 @@ use fuel_core_types::{
         AssetId,
         ConsensusParameters,
         Contract,
-        ContractIdExt,
         Input,
         Output,
         Receipt,
@@ -144,6 +139,7 @@ pub struct Task<TxPool, D> {
     continue_on_error: bool,
     balances_indexation_enabled: bool,
     coins_to_spend_indexation_enabled: bool,
+    asset_metadata_indexation_enabled: bool,
     base_asset_id: AssetId,
 }
 
@@ -156,7 +152,11 @@ where
         let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
-        persist_transaction_status(&result, &mut transaction)?;
+        persist_transaction_status(
+            &result,
+            self.asset_metadata_indexation_enabled,
+            &mut transaction,
+        )?;
 
         // save the associated owner for each transaction in the block
         index_tx_owners_for_block(block, &mut transaction, &self.chain_id)?;
@@ -217,7 +217,7 @@ where
     T: OffChainDatabaseTransaction,
 {
     for event in events {
-        match update_indexation(
+        match update_event_based_indexation(
             &event,
             block_st_transaction,
             balances_indexation_enabled,
@@ -284,7 +284,7 @@ where
     Ok(())
 }
 
-fn update_indexation<T>(
+fn update_event_based_indexation<T>(
     event: &Event,
     block_st_transaction: &mut T,
     balances_indexation_enabled: bool,
@@ -305,6 +305,23 @@ where
         block_st_transaction,
         coins_to_spend_indexation_enabled,
         base_asset_id,
+    )?;
+
+    Ok(())
+}
+
+fn update_receipt_based_indexation<T>(
+    receipts: &[Receipt],
+    block_st_transaction: &mut T,
+    asset_metadata_indexation_enabled: bool,
+) -> Result<(), IndexationError>
+where
+    T: OffChainDatabaseTransaction,
+{
+    indexation::asset_metadata::update(
+        receipts,
+        block_st_transaction,
+        asset_metadata_indexation_enabled,
     )?;
 
     Ok(())
@@ -407,6 +424,7 @@ where
 
 fn persist_transaction_status<T>(
     import_result: &ImportResult,
+    asset_metadata_indexation_enabled: bool,
     db: &mut T,
 ) -> StorageResult<()>
 where
@@ -424,66 +442,11 @@ where
             .into());
         }
 
-        // TODO: Do Asset indexation only if it is enabled.
-        //  Enable the indexation only in the case of empty database
-
         let TransactionExecutionResult::Success { receipts, .. } = result else {
             continue
         };
 
-        for receipt in receipts {
-            match receipt {
-                Receipt::Mint {
-                    sub_id,
-                    contract_id,
-                    ..
-                }
-                | Receipt::Burn {
-                    sub_id,
-                    contract_id,
-                    ..
-                } => {
-                    let asset_id = contract_id.asset_id(sub_id);
-                    let current_supply = db
-                        .storage::<AssetsInfo>()
-                        .get(&asset_id)?
-                        .map(|info| info.total_supply)
-                        .unwrap_or_default();
-
-                    let new_supply = match receipt {
-                        Receipt::Mint { val, .. } => current_supply
-                            .checked_add(*val as u128)
-                            .expect("Impossible to overflow, because `val` is `u64`"),
-                        Receipt::Burn { val, .. } => {
-                            current_supply.checked_sub(*val as u128).ok_or(
-                                anyhow::anyhow!("Burned more than available amount"),
-                            )?
-                        }
-                        _ => unreachable!(),
-                    };
-
-                    db.storage::<AssetsInfo>().insert(
-                        &asset_id,
-                        &AssetDetails {
-                            contract_id: *contract_id,
-                            sub_id: *sub_id,
-                            total_supply: new_supply,
-                        },
-                    )?;
-                }
-                Receipt::Call { .. }
-                | Receipt::Return { .. }
-                | Receipt::ReturnData { .. }
-                | Receipt::Panic { .. }
-                | Receipt::Revert { .. }
-                | Receipt::Log { .. }
-                | Receipt::LogData { .. }
-                | Receipt::Transfer { .. }
-                | Receipt::TransferOut { .. }
-                | Receipt::ScriptResult { .. }
-                | Receipt::MessageOut { .. } => {}
-            }
-        }
+        update_receipt_based_indexation(receipts, db, asset_metadata_indexation_enabled)?;
     }
     Ok(())
 }
@@ -607,6 +570,9 @@ where
         let coins_to_spend_indexation_enabled = self
             .off_chain_database
             .coins_to_spend_indexation_enabled()?;
+        let asset_metadata_indexation_enabled = self
+            .off_chain_database
+            .asset_metadata_indexation_enabled()?;
         tracing::info!(
             balances_indexation_enabled,
             coins_to_spend_indexation_enabled,
@@ -634,6 +600,7 @@ where
             continue_on_error,
             balances_indexation_enabled,
             coins_to_spend_indexation_enabled,
+            asset_metadata_indexation_enabled,
             base_asset_id,
         };
 
