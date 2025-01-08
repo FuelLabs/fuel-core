@@ -184,10 +184,11 @@ mod tests {
 
         // given
         let l2_height = 10;
-        let recorded_height = 9;
+        let starting_recorded_height = 2;
+        let expected_recorded_height = 9;
         let unexpected_costs = DaBlockCosts {
             bundle_id: 1,
-            l2_blocks: 2..=recorded_height,
+            l2_blocks: starting_recorded_height..=expected_recorded_height,
             bundle_size_bytes: 1024 * 128,
             blob_cost_wei: 2,
         };
@@ -197,12 +198,11 @@ mod tests {
         let latest_l2_height = latest_l2_height(l2_height);
         let (sender, mut receiver) =
             tokio::sync::broadcast::channel(DA_BLOCK_COSTS_CHANNEL_SIZE);
-        let expected_height = BlockHeight::new(recorded_height);
         let mut service = DaSourceService::new_with_sender(
             da_block_costs_source,
             Some(Duration::from_millis(1)),
             latest_l2_height,
-            expected_height,
+            starting_recorded_height.into(),
             sender,
         );
         let mut watcher = StateWatcher::started();
@@ -212,6 +212,6 @@ mod tests {
 
         // then
         let actual = service.recorded_height();
-        assert_eq!(expected_height, actual);
+        assert_eq!(expected_recorded_height, *actual);
     }
 }
