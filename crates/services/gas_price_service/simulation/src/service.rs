@@ -59,10 +59,10 @@ fn read_config_from_file(_config_path: &str) -> V1AlgorithmConfig {
         exec_gas_price_change_percent: 0,
         l2_block_fullness_threshold_percent: 0,
         gas_price_factor: NonZero::new(100).unwrap(),
-        min_da_gas_price: 0,
-        max_da_gas_price_change_percent: 0,
-        da_p_component: 0,
-        da_d_component: 0,
+        min_da_gas_price: 1_000_000,
+        max_da_gas_price_change_percent: 10,
+        da_p_component: 1,
+        da_d_component: 1,
         normal_range_size: 0,
         capped_range_size: 0,
         decrease_range_size: 0,
@@ -74,11 +74,13 @@ fn read_config_from_file(_config_path: &str) -> V1AlgorithmConfig {
 fn read_metadata_from_file(_metadata_path: &str, starting_height: u32) -> V1Metadata {
     // TODO: read from file and/or CLI
     let l2_block_height = starting_height - 1;
+    let gas_price_factor = 100;
+    let new_scaled_da_gas_price = 10_000_000 * gas_price_factor;
     V1Metadata {
         new_scaled_exec_price: 0,
         l2_block_height,
-        new_scaled_da_gas_price: 0,
-        gas_price_factor: NonZero::new(100).unwrap(),
+        new_scaled_da_gas_price,
+        gas_price_factor: NonZero::new(gas_price_factor).unwrap(),
         total_da_rewards_excess: 0,
         latest_known_total_da_cost_excess: 0,
         last_profit: 0,

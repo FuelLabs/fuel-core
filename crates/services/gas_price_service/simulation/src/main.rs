@@ -233,17 +233,12 @@ async fn simulation(
 fn display_results(results: SimulationResults) -> anyhow::Result<()> {
     // TODO: Just have basic stuff now
     const WEI_PER_ETH: f64 = 1_000_000_000_000_000_000.0;
-    let gas_price_eth = results
-        .gas_price
-        .iter()
-        .map(|price| *price as f64 / WEI_PER_ETH)
-        .collect::<Vec<_>>();
     let profits_eth = results
         .profits
         .iter()
         .map(|profit| *profit as f64 / WEI_PER_ETH)
         .collect::<Vec<_>>();
-    println!("Gas prices (ETH): {:?}", gas_price_eth);
+    println!("Gas prices (Wei): {:?}", results.gas_price);
     println!("Profits (ETH): {:?}", profits_eth);
     Ok(())
 }
