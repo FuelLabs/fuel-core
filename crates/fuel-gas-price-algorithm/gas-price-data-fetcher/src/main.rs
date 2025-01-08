@@ -22,7 +22,8 @@ mod layer2;
 mod summary;
 mod types;
 
-const SENTRY_NODE_GRAPHQL_RESULTS_PER_QUERY: usize = 5_000;
+// const SENTRY_NODE_GRAPHQL_RESULTS_PER_QUERY: usize = 5_000;
+const SENTRY_NODE_GRAPHQL_RESULTS_PER_QUERY: usize = 40;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -121,10 +122,17 @@ async fn main() -> anyhow::Result<()> {
             let sentry_node_client = layer2::BlockFetcher::new(sentry_node_endpoint)?;
             let blocks_range = start_block_included..end_block_excluded;
 
-            let blocks_with_gas_consumed = sentry_node_client
+            tracing::info!(
+                "Retrieving L2 data for blocks: {}..{}",
+                start_block_included,
+                end_block_excluded
+            );
+            let res = sentry_node_client
                 .get_l2_block_data(blocks_range, SENTRY_NODE_GRAPHQL_RESULTS_PER_QUERY)
-                .await?;
+                .await;
+            tracing::info!("results: {:?}", res);
 
+            let blocks_with_gas_consumed = res?;
             for (
                 _block_height,
                 Layer2BlockData {

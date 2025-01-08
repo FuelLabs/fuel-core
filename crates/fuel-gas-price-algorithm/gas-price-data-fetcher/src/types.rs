@@ -92,6 +92,7 @@ impl IntoIterator for BlockCommitterCosts {
     }
 }
 
+#[derive(Debug)]
 pub struct Layer2BlockData {
     pub block_height: BlockHeight,
     pub block_size: BytesSize,
