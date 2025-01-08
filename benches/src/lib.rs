@@ -141,6 +141,8 @@ pub struct VmBenchPrepared {
     pub diff: diff::Diff<diff::InitialVmState>,
 }
 
+const TX_SIZE: u64 = 64 * 1024 * 1024;
+
 impl VmBench {
     pub const SALT: Salt = Salt::zeroed();
     pub const CONTRACT: ContractId = ContractId::zeroed();
@@ -148,10 +150,17 @@ impl VmBench {
     pub fn new(instruction: Instruction) -> Self {
         let mut consensus_params = ConsensusParameters::default();
         consensus_params.set_tx_params(
-            TxParameters::default().with_max_gas_per_tx(LARGE_GAS_LIMIT + 1),
+            TxParameters::default()
+                .with_max_gas_per_tx(LARGE_GAS_LIMIT + 1)
+                .with_max_size(TX_SIZE),
         );
         consensus_params.set_fee_params(FeeParameters::default().with_gas_per_byte(0));
         consensus_params.set_gas_costs(GasCosts::free());
+        consensus_params.set_script_params(
+            ScriptParameters::default()
+                .with_max_script_length(TX_SIZE)
+                .with_max_script_data_length(TX_SIZE),
+        );
 
         Self {
             params: consensus_params,
@@ -398,7 +407,6 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         let prepare_script = prepare_script
             .into_iter()
             .chain(iter::once(op::ret(RegId::ONE)))
-            .chain(iter::once(instruction))
             .collect();
 
         let mut tx = TransactionBuilder::script(prepare_script, data);
@@ -531,9 +539,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             }
         }
 
-        let start_vm = vm.clone();
-        let original_db = vm.as_mut().database_mut().clone();
-        let original_memory = vm.memory().clone();
+        let vm_before_first_instruction = vm.clone();
         let mut vm = vm.add_recording();
         match instruction {
             Instruction::CALL(call) => {
@@ -546,12 +552,11 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         }
         let storage_diff = vm.storage_diff();
         let mut vm = vm.remove_recording();
-        let mut diff = start_vm.diff(&vm);
+        let mut diff = vm.rollback_to(&vm_before_first_instruction);
         diff += storage_diff;
         let diff: diff::Diff<diff::InitialVmState> = diff.into();
         vm.reset_vm_state(&diff);
-        *vm.as_mut().database_mut() = original_db;
-        *vm.memory_mut() = original_memory;
+        assert_eq!(vm_before_first_instruction, vm);
 
         Ok(Self {
             vm,

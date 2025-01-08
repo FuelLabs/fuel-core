@@ -31,6 +31,7 @@ fuel-core-sync = { path = "./../crates/services/sync", features = [
 ] }
 fuel-core-types = { path = "./../crates/types", features = ["test-helpers"] }
 futures = { workspace = true }
+hex = "0.4.3"
 itertools = { workspace = true }
 num_enum = { workspace = true }
 p256 = { version = "0.13", default-features = false, features = [
@@ -63,7 +64,7 @@ harness = false
 name = "vm"
 
 [features]
-default = ["fuel-core/rocksdb"]
+default = ["fuel-core/rocksdb", "fuel-core/rocksdb-production"]
 
 [[bench]]
 harness = false
