@@ -7,10 +7,18 @@ edition = "2021"
 anyhow = "1.0" # this is floating and needs to match what is used by other packages
 fuel-core-gas-price-service = { path = ".." }
 fuel-core-services = { path = "../../../services", features = ["test-helpers"] }
-fuel-core-storage = { path = "../../../storage", features = ["std", "test-helpers"] }
+fuel-core-storage = { path = "../../../storage", features = [
+  "std",
+  "test-helpers",
+] }
 fuel-core-types = { version = "0.40.2", path = "../../../types", default-features = false }
 fuel-gas-price-algorithm = { path = "../../../fuel-gas-price-algorithm" }
 async-trait = "0.1.83"
 tokio = "1.41.1"
+serde = { version = "1.0.217", features = ["derive"] }
+serde-reflection = "0.5.0"
+csv = "1.3.1"
+clap = { version = "4.5.24", features = ["derive"] }
+itertools = "0.14.0"
 
 [workspace]
