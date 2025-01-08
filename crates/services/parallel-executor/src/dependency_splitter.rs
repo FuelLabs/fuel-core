@@ -315,8 +315,6 @@ impl DependencySplitter {
         // Blobs at the end avoids potential invalidation of the predicates or transactions
         // after then.
         let mut sorted_buckets = Vec::with_capacity(number_of_buckets);
-        let other_gas = self.other_buckets.gas;
-        sorted_buckets.push((self.other_buckets.gas, self.other_buckets.elements));
         // It's certainly a bit too big allocation because some transactions will go to the last bucket used also for
         // `others_transactions` but I don't think it's a big deal and we still win in terms of performance.
         let approx_size_bucket = self
@@ -325,53 +323,55 @@ impl DependencySplitter {
             .len()
             .saturating_div(number_of_wild_buckets)
             .saturating_add(1);
-        for _ in 0..number_of_wild_buckets {
-            let gas = 0u64;
-            let txs: Vec<MaybeCheckedTransaction> =
-                Vec::with_capacity(approx_size_bucket);
-            sorted_buckets.push((gas, txs));
-        }
 
         // Sort independent transactions by gas usage in descending order
+        let start = std::time::Instant::now();
         self.independent_bucket
             .element_ids
             .sort_by_key(|(tx_id, gas, exists)| {
                 (Reverse(*exists), Reverse(*gas), *tx_id)
             });
+        tracing::info!("Sorting took {:?} ms", start.elapsed().as_millis());
 
         let mut independent_most_expensive_transactions =
-            self.independent_bucket.element_ids.into_iter().peekable();
+            self.independent_bucket.element_ids.into_iter();
 
         let gas_per_bucket = max_block_gas / number_of_buckets as u64;
+
         let mut current_bucket_idx = 0;
-        // SAFETY: `number_of_buckets` comes from a `NonZeroUsize` so it's always greater than 0
-        let mut bucket = sorted_buckets.get_mut(current_bucket_idx).unwrap();
-        let mut all_txs_sorted = false;
+        let mut current_txs: Vec<MaybeCheckedTransaction> =
+            Vec::with_capacity(approx_size_bucket);
+        current_txs.extend(self.other_buckets.elements);
+        let mut current_gas: Gas = self.other_buckets.gas;
+        let mut tx_left = None;
         'outer: while let Some((tx_id, gas, exists)) =
-            independent_most_expensive_transactions.peek()
+            independent_most_expensive_transactions.next()
         {
             // All the transactions that have been moved to `others_transactions` should be at the end
             // so we can break the loop if we reach them
             if !exists {
-                all_txs_sorted = true;
+                tx_left = None;
                 break;
             }
-            let mut new_gas = bucket.0.saturating_add(*gas);
+            let mut new_gas = current_gas.saturating_add(gas);
             while new_gas > gas_per_bucket {
                 current_bucket_idx += 1;
                 if current_bucket_idx == number_of_buckets {
+                    tx_left = Some((tx_id, gas, exists));
                     break 'outer;
                 }
-                bucket = sorted_buckets.get_mut(current_bucket_idx).unwrap();
-                new_gas = bucket.0.saturating_add(*gas);
+                sorted_buckets.push((current_gas, current_txs));
+                current_txs = Vec::with_capacity(approx_size_bucket);
+                current_gas = 0;
+                new_gas = gas;
             }
-            bucket.0 = new_gas;
-            bucket.1.push(self.independent_bucket.elements.remove(tx_id).expect(
+            current_gas = new_gas;
+            current_txs.push(self.independent_bucket.elements.remove(&tx_id).expect(
                         "Transaction should be in the `independent_bucket` because it's sorted by gas usage; qed",
             ));
-            independent_most_expensive_transactions.next();
         }
-        if all_txs_sorted || independent_most_expensive_transactions.peek().is_none() {
+        sorted_buckets.push((current_gas, current_txs));
+        if tx_left.is_none() {
             tracing::info!("All transactions are sorted");
             // Get latest bucket on the vector
             let last_bucket = sorted_buckets
@@ -403,8 +403,9 @@ impl DependencySplitter {
         let mut iterate_next_time = false;
         // Used to skip the last bucket if the other transactions have more gas than the current other biggest bucket
         let mut most_gas_usage_bucket = 0;
-        while let Some((tx_id, gas, exists)) =
-            independent_most_expensive_transactions.next()
+        while let Some((tx_id, gas, exists)) = tx_left
+            .take()
+            .or_else(|| independent_most_expensive_transactions.next())
         {
             // All the transactions that have been moved to `others_transactions` should be at the end
             // so we can break the loop if we reach them
@@ -419,10 +420,6 @@ impl DependencySplitter {
                     true
                 };
                 direction = IterationDirection::Backward;
-                // If we are in the last bucket and the other transactions have more gas than the current other biggest bucket, we skip the last bucket
-                if most_gas_usage_bucket < other_gas {
-                    current_bucket_idx = current_bucket_idx.saturating_sub(1);
-                }
             }
             // If we are in the first bucket we change the direction
             if current_bucket_idx == 0 {

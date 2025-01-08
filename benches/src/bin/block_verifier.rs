@@ -1,6 +1,7 @@
 use fuel_core::{
     service::config::Trigger,
-    state::historical_rocksdb::StateRewindPolicy, upgradable_executor::native_executor::ports::TransactionExt,
+    state::historical_rocksdb::StateRewindPolicy,
+    upgradable_executor::native_executor::ports::TransactionExt,
 };
 use fuel_core_chain_config::CoinConfig;
 use fuel_core_types::blockchain::{
@@ -8,7 +9,9 @@ use fuel_core_types::blockchain::{
     consensus::Sealed,
 };
 use test_helpers::builder::{
-    local_chain_config, TestContext, TestSetupBuilder
+    local_chain_config,
+    TestContext,
+    TestSetupBuilder,
 };
 
 fn read_block() -> Sealed<Block> {
@@ -48,12 +51,19 @@ fn main() {
     let chain_conf = local_chain_config();
     test_builder.trigger = Trigger::Never;
     test_builder.utxo_validation = true;
-    test_builder.gas_limit = Some(block.entity.transactions().iter().filter_map(|tx| {
-        if tx.is_mint() {
-            return None;
-        }
-        Some(tx.max_gas(&chain_conf.consensus_parameters).unwrap())
-    }).sum());
+    test_builder.gas_limit = Some(
+        block
+            .entity
+            .transactions()
+            .iter()
+            .filter_map(|tx| {
+                if tx.is_mint() {
+                    return None;
+                }
+                Some(tx.max_gas(&chain_conf.consensus_parameters).unwrap())
+            })
+            .sum(),
+    );
     test_builder.block_size_limit = Some(1_000_000_000_000_000);
     test_builder.max_txs = n as usize;
     test_builder.state_rewind_policy = Some(StateRewindPolicy::NoRewind);
