@@ -436,7 +436,17 @@ where
                         },
                     )?;
                 }
-                _ => {}
+                Receipt::Call { .. }
+                | Receipt::Return { .. }
+                | Receipt::ReturnData { .. }
+                | Receipt::Panic { .. }
+                | Receipt::Revert { .. }
+                | Receipt::Log { .. }
+                | Receipt::LogData { .. }
+                | Receipt::Transfer { .. }
+                | Receipt::TransferOut { .. }
+                | Receipt::ScriptResult { .. }
+                | Receipt::MessageOut { .. } => {}
             }
         }
     }
