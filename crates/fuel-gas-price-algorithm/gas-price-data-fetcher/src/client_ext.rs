@@ -2,7 +2,7 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(warnings)]
 
-// TODO: This was copy pasted from
+// This was copied from https://github.com/FuelLabs/fuel-core-client-ext/blob/b792ef76cbcf82eda45a944b15433682fe094fee/src/lib.rs
 
 use cynic::QueryBuilder;
 use fuel_core_client::{
@@ -232,35 +232,5 @@ impl TryFrom<FullBlock> for SealedBlockWithMetadata {
         };
 
         Ok(sealed)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use fuel_core_client::client::pagination::PageDirection;
-
-    #[tokio::test]
-    async fn testnet_works() {
-        let client = FuelClient::new("https://testnet.fuel.network")
-            .expect("Should connect to the beta 5 network");
-
-        let request = PaginationRequest {
-            cursor: None,
-            results: 1,
-            direction: PageDirection::Backward,
-        };
-        let full_blocks = client
-            .full_blocks(request)
-            .await
-            .expect("Should get a blocks");
-
-        let full_block = full_blocks
-            .results
-            .into_iter()
-            .next()
-            .expect("Should have a block");
-        let result: anyhow::Result<SealedBlockWithMetadata> = full_block.try_into();
-        assert!(result.is_ok(), "{result:?}");
     }
 }
