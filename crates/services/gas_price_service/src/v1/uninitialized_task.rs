@@ -189,10 +189,10 @@ where
             self.block_stream,
         );
 
-        let recorded_height = match self.gas_price_db.get_recorded_height()? {
-            Some(height) => height,
-            None => BlockHeight::from(latest_block_height),
-        };
+        let starting_recorded_height = self
+            .gas_price_db
+            .get_recorded_height()?
+            .unwrap_or(BlockHeight::from(latest_block_height));
 
         let poll_duration = self
             .config
@@ -203,7 +203,7 @@ where
             self.da_source,
             poll_duration,
             latest_l2_height.clone(),
-            recorded_height,
+            starting_recorded_height,
         );
         let da_service_runner = ServiceRunner::new(da_service);
         da_service_runner.start_and_await().await?;
