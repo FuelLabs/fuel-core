@@ -101,10 +101,6 @@ where
         let da_block_costs = da_block_costs_res?;
         let filtered_block_costs = self
             .filter_costs_that_have_values_greater_than_l2_block_height(da_block_costs)?;
-        tracing::debug!(
-            "the latest l2 height is: {:?}",
-            *self.latest_l2_height.lock().unwrap()
-        );
         for da_block_costs in filtered_block_costs {
             tracing::debug!("Sending block costs: {:?}", da_block_costs);
             let end = BlockHeight::from(*da_block_costs.l2_blocks.end());
@@ -130,7 +126,15 @@ where
             .map_err(|err| anyhow::anyhow!("lock error: {:?}", err))?;
         let iter = da_block_costs.into_iter().filter(move |da_block_costs| {
             let end = BlockHeight::from(*da_block_costs.l2_blocks.end());
-            end < latest_l2_height
+            let keep = end <= latest_l2_height;
+            if !keep {
+                tracing::debug!(
+                    "Filtering out block costs with end height {} because it is greater than the latest l2 height {}",
+                    u32::from(end),
+                    u32::from(latest_l2_height)
+                );
+            }
+            keep
         });
         Ok(iter)
     }

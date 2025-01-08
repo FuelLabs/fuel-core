@@ -29,6 +29,7 @@ use fuel_core_gas_price_service::{
 };
 use fuel_core_services::{
     RunnableTask,
+    Service,
     StateWatcher,
     TaskNextAction,
 };
@@ -69,11 +70,12 @@ fn read_config_from_file(_config_path: &str) -> V1AlgorithmConfig {
     }
 }
 
-fn read_metadata_from_file(_metadata_path: &str) -> V1Metadata {
+fn read_metadata_from_file(_metadata_path: &str, starting_height: u32) -> V1Metadata {
     // TODO: read from file and/or CLI
+    let l2_block_height = starting_height - 1;
     V1Metadata {
         new_scaled_exec_price: 0,
-        l2_block_height: 999, // TODO: Use first L2 block height from the CSV
+        l2_block_height,
         new_scaled_da_gas_price: 0,
         gas_price_factor: NonZero::new(100).unwrap(),
         total_da_rewards_excess: 0,
@@ -85,9 +87,9 @@ fn read_metadata_from_file(_metadata_path: &str) -> V1Metadata {
     }
 }
 
-fn get_updater() -> AlgorithmUpdaterV1 {
+fn get_updater(starting_height: u32) -> AlgorithmUpdaterV1 {
     let metadata_path = "TODO";
-    let metadata = read_metadata_from_file(metadata_path);
+    let metadata = read_metadata_from_file(metadata_path, starting_height);
     let config_path = "TODO";
     let config = read_config_from_file(config_path);
     v1_algorithm_from_metadata(metadata, &config)
@@ -108,10 +110,17 @@ impl ServiceController {
     pub async fn advance(
         &mut self,
         l2_block: BlockInfo,
-        da_costs: Option<DaBlockCosts>,
+        da_costs: Vec<DaBlockCosts>,
     ) -> anyhow::Result<()> {
-        if let Some(da_costs) = da_costs {
-            self.da_costs_sender.send(da_costs).await?;
+        tracing::debug!(
+            "advancing service with l2_block: {:?} and da_costs: {:?}",
+            l2_block,
+            da_costs
+        );
+        for costs in da_costs {
+            tracing::debug!("sending da_costs: {:?}", costs);
+            self.da_costs_sender.send(costs).await?;
+            tracing::debug!("sent da_costs");
             self.run().await?;
         }
         self.l2_block_sender.send(l2_block).await?;
@@ -132,10 +141,9 @@ fn poll_interval() -> Option<std::time::Duration> {
     Some(std::time::Duration::from_millis(1))
 }
 
-// this is async to mark that this must be run with a runtime although not specified by the type system :barf:
-// (due to the `interval` function used internally)
-pub async fn get_service_controller() -> ServiceController {
-    let algorithm_updater = get_updater();
+pub async fn get_service_controller(starting_height: u32) -> ServiceController {
+    tracing::info!("creating service controller");
+    let algorithm_updater = get_updater(starting_height);
     let algo = algorithm_updater.algorithm();
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo);
 
@@ -148,6 +156,7 @@ pub async fn get_service_controller() -> ServiceController {
     let latest_gas_price = LatestGasPrice::new(0, 0);
     let da_source_service =
         new_da_service(da_block_source, poll_interval, latest_l2_height.clone());
+    da_source_service.start_and_await().await;
     let db = database();
     let service = GasPriceServiceV1::new(
         l2_block_source,

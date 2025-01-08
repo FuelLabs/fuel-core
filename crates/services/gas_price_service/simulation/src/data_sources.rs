@@ -104,10 +104,13 @@ impl DaBlockCostsSource for SimulatedDACosts {
         &mut self,
         _recorded_height: &Option<BlockHeight>,
     ) -> anyhow::Result<Vec<DaBlockCosts>> {
-        self.recv
+        let res = self
+            .recv
             .recv()
             .await
             .map(|costs| vec![costs])
-            .ok_or(anyhow::anyhow!("no more costs; channel closed"))
+            .ok_or(anyhow::anyhow!("no more costs; channel closed"));
+        tracing::debug!("received_da_block_costs: {:?}", res);
+        res
     }
 }
