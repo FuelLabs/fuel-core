@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-// const PATH: &str = "data/gas_costs_data.csv";
-const PATH: &str = "/Users/jamesturner/fuel/fuel-core/crates/fuel-gas-price-algorithm/gas-price-data-fetcher/data/scrape_2.csv";
 const WEI_PER_ETH: f64 = 1_000_000_000_000_000_000.;
 // l1_block_number,l1_blob_fee_wei,l2_block_number,l2_gas_fullness,l2_gas_capacity,l2_byte_size,l2_byte_capacity
 // 21403864,509018984154240,9099900,0,30000000,488,260096
@@ -40,8 +38,23 @@ fn get_records_from_csv_file(file_path: &str) -> Vec<Record> {
     records
 }
 
+const ENV_VAR_NAME: &str = "BLOCK_HISTORY_FILE";
+fn get_path_to_file() -> String {
+    if let Some(path) = std::env::var_os(ENV_VAR_NAME) {
+        return path.to_str().unwrap().to_string();
+    } else {
+        let maybe_path = std::env::args().nth(1);
+        if let Some(path) = maybe_path {
+            return path;
+        } else {
+            panic!("Please provide a path to the file or set the {ENV_VAR_NAME} environment variable");
+        }
+    }
+}
+
 fn main() {
-    let records = get_records_from_csv_file(PATH);
+    let path = get_path_to_file();
+    let records = get_records_from_csv_file(&path);
     let length = records.len();
     let costs = records
         .iter()
