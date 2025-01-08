@@ -34,6 +34,9 @@ impl SimulatedL2Blocks {
 #[async_trait]
 impl L2BlockSource for SimulatedL2Blocks {
     async fn get_l2_block(&mut self) -> GasPriceResult<BlockInfo> {
+        // TODO: do we want to modify these values to somehow reflect the previously chosen gas
+        //   price better? We might be able to do that by having a handle to the shared algo.
+
         self.recv.recv().await.ok_or({
             GasPriceError::CouldNotFetchL2Block {
                 source_error: anyhow::anyhow!("no more blocks; channel closed"),
