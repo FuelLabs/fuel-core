@@ -184,17 +184,17 @@ mod tests {
 
         // given
         let l2_height = 10;
-        let starting_recorded_height = 2;
+        let l2_block_range_start = 2;
         let expected_recorded_height = 9;
-        let unexpected_costs = DaBlockCosts {
+        let costs = DaBlockCosts {
             bundle_id: 1,
-            l2_blocks: starting_recorded_height..=expected_recorded_height,
+            l2_blocks: l2_block_range_start..=expected_recorded_height,
             bundle_size_bytes: 1024 * 128,
             blob_cost_wei: 2,
         };
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_block_costs_source =
-            DummyDaBlockCosts::new(Ok(unexpected_costs.clone()), notifier.clone());
+            DummyDaBlockCosts::new(Ok(costs.clone()), notifier.clone());
         let latest_l2_height = latest_l2_height(l2_height);
         let (sender, mut receiver) =
             tokio::sync::broadcast::channel(DA_BLOCK_COSTS_CHANNEL_SIZE);
@@ -202,7 +202,7 @@ mod tests {
             da_block_costs_source,
             Some(Duration::from_millis(1)),
             latest_l2_height,
-            starting_recorded_height.into(),
+            (l2_block_range_start - 1).into(), /* we want to start polling from before the l2 block range */
             sender,
         );
         let mut watcher = StateWatcher::started();
