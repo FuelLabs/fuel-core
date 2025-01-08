@@ -105,7 +105,7 @@ pub struct ServiceController {
 }
 
 impl ServiceController {
-    pub async fn advance_one_l2_block(
+    pub async fn advance(
         &mut self,
         l2_block: BlockInfo,
         da_costs: Option<DaBlockCosts>,

@@ -33,9 +33,12 @@ async fn simulation(
 ) -> anyhow::Result<SimulationResults> {
     let res = SimulationResults {};
     for (block, maybe_costs) in data.get_iter() {
-        service_controller
-            .advance_one_l2_block(block, maybe_costs)
-            .await?
+        service_controller.advance(block, maybe_costs).await?
+        // GET GAS PRICE
+
+        // MODIFY WITH GAS PRICE FACTOR
+
+        // RECORD LATEST VALUES
     }
     Ok(res)
 }
