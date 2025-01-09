@@ -137,7 +137,7 @@ async fn balance() {
 
     let balance = client.balance(&owner, Some(&asset_id)).await.unwrap();
 
-    // Note that the big (200000)  message, which is RETRYABLE is not included in the balance
+    // Note that the big (200000) message, which is RETRYABLE is not included in the balance
     assert_eq!(balance, 449);
 }
 
