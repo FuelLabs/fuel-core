@@ -173,6 +173,13 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
 
     let mut latest_da_costs = Vec::new();
 
+    tracing::info!("record length: {:?}", records.len());
+    let l1_blocks: Vec<_> = records
+        .iter()
+        .map(|record| record.l1_block_number)
+        .unique()
+        .collect();
+    tracing::info!("l1_blocks: {:?}", l1_blocks);
     for record in records.into_iter() {
         // let blocks: Vec<_> = block_records.into_iter().collect();
         // let mut blocks_iter = blocks.iter().peekable();
@@ -180,7 +187,8 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
         // while let Some(block_record) = blocks_iter.next() {
         let l2_block: BlockInfo = (&record).into();
 
-        if !record.l1_block_number == 0 {
+        if record.l1_block_number != 0 {
+            tracing::info!("adding new DA info: {:?}", record);
             // TODO: Check if these are generated correctly.
             let bundle_id = record.l1_block_number as u32; // Could be an arbitrary number, but we use L1 block number for convenience.
             let bundle_size_bytes = record.l1_blob_size_bytes as u32;

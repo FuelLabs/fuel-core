@@ -72,7 +72,7 @@ fn read_metadata_from_file(_metadata_path: &str, starting_height: u32) -> V1Meta
     // TODO: read from file and/or CLI
     let l2_block_height = starting_height - 1;
     let gas_price_factor = 100;
-    let new_scaled_da_gas_price = 1_000 * gas_price_factor;
+    let new_scaled_da_gas_price = 1_000_000 * gas_price_factor;
     V1Metadata {
         new_scaled_exec_price: 0,
         l2_block_height,
@@ -118,7 +118,7 @@ impl ServiceController {
             da_costs
         );
         for costs in da_costs {
-            tracing::debug!("sending da_costs: {:?}", costs);
+            tracing::info!("sending da_costs: {:?}", costs);
             self.da_costs_sender.send(costs).await?;
             tracing::debug!("sent da_costs");
             self.run().await?;

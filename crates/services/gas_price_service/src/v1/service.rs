@@ -143,7 +143,7 @@ where
         &mut self,
         l2_block_res: GasPriceResult<BlockInfo>,
     ) -> anyhow::Result<()> {
-        tracing::info!("Received L2 block result: {:?}", l2_block_res);
+        tracing::debug!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
 
         self.update_latest_gas_price(&block);
@@ -340,7 +340,7 @@ where
                 TaskNextAction::always_continue(res)
             }
             da_block_costs_res = self.da_source_channel.recv() => {
-                tracing::debug!("Received DA block costs: {:?}", da_block_costs_res);
+                tracing::info!("Received DA block costs: {:?}", da_block_costs_res);
                 match da_block_costs_res {
                     Ok(da_block_costs) => {
                         self.da_block_costs_buffer.push(da_block_costs);
