@@ -111,48 +111,66 @@ jobs:
         include:
           - command: clippy
             args: -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features
+            name: "Clippy wasm-executor"
           - command: clippy
             args: --all-targets --all-features
+            name: "Clippy all"
           - command: check
             args: --all-targets
+            name: "Check all-targets"
           - command: doc
             args: --all-features --workspace --no-deps
+            name: "Doc all"
           - command: make
             args: check --locked
+            name: "Cargo Make check"
           - command: nextest
             args: run --workspace
+            name: "Nextest all"
           - command: nextest
             args: run --all-features --workspace
+            name: "Nextest all-features"
           - command: nextest
             args: run -p fuel-core --no-default-features
+            name: "Nextest fuel-core"
           - command: nextest
             args: run -p fuel-core --lib executor --features wasm-executor
+            name: "Nextest wasm-executor"
             env:
               FUEL_ALWAYS_USE_WASM=true
           - command: nextest
             args: run -p fuel-core-client --no-default-features
+            name: "Nextest fuel-core-client"
           - command: nextest
             args: run -p fuel-core-chain-config --no-default-features
+            name: "Nextest fuel-core-chain-config"
           # Don't split this command; this is a workaround.
           # We need to run `cargo check` first to fetch the locked dependencies
           # for `fuel-core 0.26.0`(because of the bug with `--offline`
           # and `--locked` when we build `fuel-core-wasm-executor 0.26.0`).
           - command: check
             args: --manifest-path version-compatibility/Cargo.toml --workspace && cargo test --manifest-path version-compatibility/Cargo.toml --workspace
+            name: "Check version-compatibility"
           - command: build
             args: -p fuel-core-bin --no-default-features --features production
+            name: "Build fuel-core-bin"
 
           # WASM compatibility checks
           - command: check
             args: -p fuel-core-types --target wasm32-unknown-unknown --no-default-features --features alloc
+            name: "Check fuel-core-types wasm"
           - command: check
             args: -p fuel-core-storage --target wasm32-unknown-unknown --no-default-features --features alloc
+            name: "Check fuel-core-storage wasm"
           - command: check
             args: -p fuel-core-client --target wasm32-unknown-unknown --no-default-features
+            name: "Check fuel-core-client wasm"
           - command: check
             args: -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features
+            name: "Check fuel-core-chain-config wasm"
           - command: check
             args: -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features --features alloc
+            name: "Check fuel-core-executor wasm"
       fail-fast: false
 
     # disallow any job that takes longer than 45 minutes
@@ -172,7 +190,7 @@ jobs:
           version: "0.36.4"
       - uses: rui314/setup-mold@v1
       - uses: taiki-e/install-action@nextest
-      - name: ${{ matrix.command }} ${{ matrix.args }}
+      - name: ${{ matrix.name }}
         run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
         if: always() && github.ref == 'refs/heads/master'
