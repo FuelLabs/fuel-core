@@ -1,2 +1,7 @@
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 5 }
+
+# really slow test on ci
+[[profile.default.overrides]]
+filter = 'test(poa_interval_produces_nonempty_blocks_at_correct_rate)'
+slow-timeout = { period = "420s", terminate-after = 5 }
