@@ -15,7 +15,6 @@ use crate::{
         TransactionsSource,
     },
     service::MainTask,
-    signer::SignMode,
     Config,
     Service,
     Trigger,
@@ -31,7 +30,10 @@ use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::Consensus,
+        consensus::{
+            poa::PoAConsensus,
+            Consensus,
+        },
         header::{
             BlockHeader,
             PartialBlockHeader,
@@ -51,6 +53,7 @@ use fuel_core_types::{
         ExecutionResult,
         UncommittedResult,
     },
+    signer::SignMode,
     tai64::{
         Tai64,
         Tai64N,
@@ -184,7 +187,7 @@ impl TestContextBuilder {
             producer,
             importer,
             p2p_port,
-            FakeBlockSigner { succeeds: true },
+            FakeBlockSigner { succeeds: true }.into(),
             predefined_blocks,
             watch,
         );
@@ -201,9 +204,12 @@ struct FakeBlockSigner {
 impl BlockSigner for FakeBlockSigner {
     async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
         if self.succeeds {
-            SignMode::Key(Secret::new(default_consensus_dev_key().into()))
-                .seal_block(block)
-                .await
+            let signature =
+                SignMode::Key(Secret::new(default_consensus_dev_key().into()))
+                    .sign_message(block.id().into_message())
+                    .await?;
+
+            Ok(Consensus::PoA(PoAConsensus::new(signature)))
         } else {
             Err(anyhow::anyhow!("failed to sign block"))
         }
@@ -368,7 +374,7 @@ async fn remove_skipped_transactions() {
         block_producer,
         block_importer,
         p2p_port,
-        FakeBlockSigner { succeeds: true },
+        FakeBlockSigner { succeeds: true }.into(),
         predefined_blocks,
         time.watch(),
     );
@@ -487,7 +493,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         block_producer,
         block_importer,
         generate_p2p_port(),
-        FakeBlockSigner { succeeds: true },
+        FakeBlockSigner { succeeds: true }.into(),
         InMemoryPredefinedBlocks::new(blocks_map),
         time.watch(),
     );
@@ -551,7 +557,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         block_producer,
         block_importer,
         generate_p2p_port(),
-        FakeBlockSigner { succeeds: true },
+        FakeBlockSigner { succeeds: true }.into(),
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
         time.watch(),
     );
