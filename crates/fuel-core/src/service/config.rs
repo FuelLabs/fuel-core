@@ -226,7 +226,7 @@ impl Config {
             activity_decrease_range_size: 0,
             da_committer_url,
             block_activity_threshold: 0,
-            da_poll_interval: Some(10),
+            da_poll_interval: Some(1_000),
         }
     }
 
