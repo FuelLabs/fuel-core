@@ -10,6 +10,7 @@ use crate::types::{
     BytesSize,
     GasUnits,
     Layer2BlockData,
+    Wei,
 };
 
 use super::client_ext::{
@@ -25,6 +26,10 @@ use fuel_core_client::client::{
 };
 use fuel_core_types::{
     fuel_tx::{
+        field::{
+            MintAmount,
+            MintGasPrice,
+        },
         Chargeable,
         ConsensusParameters,
     },
@@ -136,6 +141,19 @@ impl BlockFetcher {
             let bytes_capacity =
                 BytesSize(consensus_parameters.block_transaction_size_limit());
             let transactions_count = b.block.entity.transactions().len();
+            const WEI_PER_GWEI: u64 = 1_000_000_000;
+            let (gas_price, fee) = b
+                .block
+                .entity
+                .transactions()
+                .last()
+                .and_then(|tx| tx.as_mint())
+                .map(|mint| {
+                    let gas_price = *mint.gas_price() as u64;
+                    let fee_gwei = *mint.mint_amount() as u64;
+                    (gas_price, fee_gwei * WEI_PER_GWEI)
+                })
+                .unwrap_or((0, 0));
 
             block_data.insert(
                 block_height,
@@ -146,6 +164,8 @@ impl BlockFetcher {
                     capacity,
                     bytes_capacity,
                     transactions_count,
+                    gas_price,
+                    fee: Wei(fee as u128),
                 },
             );
         }

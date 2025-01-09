@@ -11,10 +11,7 @@ use fuel_core_gas_price_service::{
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
-            service::{
-                new_da_service,
-                DaSourceService,
-            },
+            service::new_da_service,
             DaBlockCosts,
         },
         metadata::{
@@ -59,7 +56,7 @@ fn read_config_from_file(_config_path: &str) -> V1AlgorithmConfig {
         exec_gas_price_change_percent: 0,
         l2_block_fullness_threshold_percent: 0,
         gas_price_factor: NonZero::new(100).unwrap(),
-        min_da_gas_price: 1_000_000,
+        min_da_gas_price: 1_000,
         max_da_gas_price_change_percent: 10,
         da_p_component: 1,
         da_d_component: 1,
@@ -75,7 +72,7 @@ fn read_metadata_from_file(_metadata_path: &str, starting_height: u32) -> V1Meta
     // TODO: read from file and/or CLI
     let l2_block_height = starting_height - 1;
     let gas_price_factor = 100;
-    let new_scaled_da_gas_price = 10_000_000 * gas_price_factor;
+    let new_scaled_da_gas_price = 1_000 * gas_price_factor;
     V1Metadata {
         new_scaled_exec_price: 0,
         l2_block_height,
@@ -162,7 +159,9 @@ fn poll_interval() -> Option<std::time::Duration> {
     Some(std::time::Duration::from_millis(1))
 }
 
-pub async fn get_service_controller(starting_height: u32) -> ServiceController {
+pub async fn get_service_controller(
+    starting_height: u32,
+) -> anyhow::Result<ServiceController> {
     tracing::info!("creating service controller");
     let algorithm_updater = get_updater(starting_height);
     let algo = algorithm_updater.algorithm();
@@ -177,7 +176,7 @@ pub async fn get_service_controller(starting_height: u32) -> ServiceController {
     let latest_gas_price = LatestGasPrice::new(0, 0);
     let da_source_service =
         new_da_service(da_block_source, poll_interval, latest_l2_height.clone());
-    da_source_service.start_and_await().await;
+    da_source_service.start_and_await().await?;
     let db = database();
     let service = GasPriceServiceV1::new(
         l2_block_source,
@@ -188,9 +187,10 @@ pub async fn get_service_controller(starting_height: u32) -> ServiceController {
         db,
         latest_l2_height,
     );
-    ServiceController {
+    let controller = ServiceController {
         service,
         l2_block_sender,
         da_costs_sender,
-    }
+    };
+    Ok(controller)
 }

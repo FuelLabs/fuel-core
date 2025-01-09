@@ -6,7 +6,6 @@ use clap::{
     Parser,
     Subcommand,
 };
-use csv::StringRecord;
 use fuel_core_gas_price_service::{
     common::utils::BlockInfo,
     v1::da_source_service::DaBlockCosts,
@@ -18,12 +17,8 @@ use serde_reflection::{
     TracerConfig,
 };
 use std::{
-    collections::VecDeque,
     env,
-    path::{
-        Path,
-        PathBuf,
-    },
+    path::PathBuf,
 };
 use tracing_subscriber::{
     layer::SubscriberExt,
@@ -35,16 +30,28 @@ use tracing_subscriber::{
 pub mod data_sources;
 pub mod service;
 
+// l1_block_number,l1_blob_fee_wei,l1_blob_size_bytes,l2_block_number,l2_gas_fullness,l2_gas_capacity,l2_byte_size,l2_byte_capacity,l2_block_transactions_count,l2_gas_price,l2_fee
+// 21403864,509018984154240,1436954,9099900,0,30000000,488,260096,1,1000,0
+// 21403864,509018984154240,1436954,9099901,1073531,30000000,3943,260096,2,1000,934000000000
+// 21403864,509018984154240,1436954,9099902,0,30000000,488,260096,1,1000,0
+// 21403864,509018984154240,1436954,9099903,0,30000000,488,260096,1,1000,0
+// 21403864,509018984154240,1436954,9099904,0,30000000,488,260096,1,1000,0
+// 21403864,509018984154240,1436954,9099905,0,30000000,488,260096,1,1000,0
+// 21403864,509018984154240,1436954,9099906,0,30000000,488,260096,1,1000,0
 #[allow(dead_code)]
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 struct Record {
     l1_block_number: u64,
     l1_blob_fee_wei: u64,
+    l1_blob_size_bytes: u64,
     l2_block_number: u64,
     l2_gas_fullness: u64,
     l2_gas_capacity: u64,
     l2_byte_size: u32,
     l2_byte_capacity: u64,
+    l2_block_transactions_count: u64,
+    l2_gas_price: u64,
+    l2_fee: u64,
 }
 
 pub(crate) fn fields_of_struct_in_order<T>() -> Vec<String>
@@ -106,8 +113,8 @@ impl From<&Record> for BlockInfo {
             gas_used: value.l2_gas_fullness,
             block_gas_capacity: value.l2_gas_capacity,
             block_bytes: value.l2_byte_size as u64,
-            block_fees: 0, // Will be overwritten by the simulation code
-            gas_price: 0,  // Will be overwritten by the simulation code
+            block_fees: value.l2_fee, // Will be overwritten by the simulation code
+            gas_price: value.l2_gas_price, // Will be overwritten by the simulation code
         }
     }
 }
@@ -162,51 +169,48 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
     };
 
     let mut data = vec![];
-    let groups = records.iter().chunk_by(|record| record.l1_block_number);
+    // let groups = records.iter().chunk_by(|record| record.l1_block_number);
 
     let mut latest_da_costs = Vec::new();
 
-    for (l1_block_number, block_records) in groups.into_iter() {
-        let blocks: Vec<_> = block_records.into_iter().collect();
-        let mut blocks_iter = blocks.iter().peekable();
-        let mut bundle_bytes = 0;
+    for record in records.into_iter() {
+        // let blocks: Vec<_> = block_records.into_iter().collect();
+        // let mut blocks_iter = blocks.iter().peekable();
 
-        while let Some(block_record) = blocks_iter.next() {
-            let l2_block: BlockInfo = (*block_record).into();
-            bundle_bytes += block_record.l2_byte_size;
-            blocks_iter.peek().is_none().then(|| {
-                // TODO: Check if these are generated correctly.
-                let bundle_id: u32 = l1_block_number as u32; // Could be an arbitrary number, but we use L1 block number for convenience.
-                let bundle_size_bytes: u32 = bundle_bytes; // Modify scrape tool to provide this. For now just using the uncompressed bytes
-                bundle_bytes = 0; // Modify scrape tool to provide this. For now just using the uncompressed bytes
-                let range = blocks.first().unwrap().l2_block_number as u32
-                    ..=blocks.last().unwrap().l2_block_number as u32;
-                let blob_cost_wei = block_record.l1_blob_fee_wei as u128;
+        // while let Some(block_record) = blocks_iter.next() {
+        let l2_block: BlockInfo = (&record).into();
 
-                let new = DaBlockCosts {
-                    bundle_id,
-                    l2_blocks: range,
-                    bundle_size_bytes,
-                    blob_cost_wei,
-                };
-                latest_da_costs.push((new, DA_OFFSET + 1));
-            });
+        if !record.l1_block_number == 0 {
+            // TODO: Check if these are generated correctly.
+            let bundle_id = record.l1_block_number as u32; // Could be an arbitrary number, but we use L1 block number for convenience.
+            let bundle_size_bytes = record.l1_blob_size_bytes as u32;
+            let range = record.l2_block_number as u32..=record.l2_block_number as u32;
+            let blob_cost_wei = record.l1_blob_fee_wei as u128;
 
-            let mut da_block_costs = Vec::new();
-            latest_da_costs = latest_da_costs
-                .into_iter()
-                .filter_map(|(cost, timer)| {
-                    if timer == 0 {
-                        da_block_costs.push(cost);
-                        None
-                    } else {
-                        Some((cost, timer - 1))
-                    }
-                })
-                .collect();
-
-            data.push((l2_block, da_block_costs));
+            let new = DaBlockCosts {
+                bundle_id,
+                l2_blocks: range,
+                bundle_size_bytes,
+                blob_cost_wei,
+            };
+            latest_da_costs.push((new, DA_OFFSET + 1));
         }
+
+        let mut da_block_costs = Vec::new();
+        latest_da_costs = latest_da_costs
+            .into_iter()
+            .filter_map(|(cost, timer)| {
+                if timer == 0 {
+                    da_block_costs.push(cost);
+                    None
+                } else {
+                    Some((cost, timer - 1))
+                }
+            })
+            .collect();
+
+        data.push((l2_block, da_block_costs));
+        // }
     }
 
     let data = Data { inner: data };
@@ -238,8 +242,12 @@ fn display_results(results: SimulationResults) -> anyhow::Result<()> {
         .iter()
         .map(|profit| *profit as f64 / WEI_PER_ETH)
         .collect::<Vec<_>>();
-    println!("Gas prices (Wei): {:?}", results.gas_price);
-    println!("Profits (ETH): {:?}", profits_eth);
+    // println!("Gas prices (Wei): {:?}", results.gas_price);
+    // println!("Profits (ETH): {:?}", profits_eth);
+    let max_gas_price = results.gas_price.iter().max();
+    let max_profit = profits_eth.iter().max_by(|a, b| a.partial_cmp(b).unwrap());
+    println!("Max gas price: {:?}", max_gas_price);
+    println!("Max profit ETH: {:?}", max_profit);
     Ok(())
 }
 
@@ -271,7 +279,7 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let data = get_data(&args.data_source)?;
     let starting_height = data.starting_height();
-    let mut service_controller = get_service_controller(starting_height).await;
+    let mut service_controller = get_service_controller(starting_height).await?;
     let results = simulation(&data, &mut service_controller).await?;
     display_results(results)?;
     Ok(())

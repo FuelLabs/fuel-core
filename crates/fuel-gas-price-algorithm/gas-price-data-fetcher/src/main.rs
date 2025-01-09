@@ -1,3 +1,5 @@
+extern crate core;
+
 use std::{
     env,
     path::PathBuf,
@@ -128,7 +130,10 @@ async fn main() -> anyhow::Result<()> {
                 end_block_excluded
             );
             let res = sentry_node_client
-                .get_l2_block_data(blocks_range, SENTRY_NODE_GRAPHQL_RESULTS_PER_QUERY)
+                .get_l2_block_data(
+                    blocks_range.clone(),
+                    SENTRY_NODE_GRAPHQL_RESULTS_PER_QUERY,
+                )
                 .await;
             tracing::info!("results: {:?}", res);
 
@@ -142,17 +147,24 @@ async fn main() -> anyhow::Result<()> {
                     capacity,
                     bytes_capacity,
                     transactions_count,
+                    gas_price,
+                    fee,
                 },
             ) in &blocks_with_gas_consumed
             {
                 tracing::debug!(
-                    "Block Height: {}, Block Size: {}, Gas Consumed: {}, Capacity: {}, Bytes Capacity: {}, Transactions count: {}",
-                    block_height, **block_size, **gas_consumed, **capacity, **bytes_capacity, transactions_count
+                    "Block Height: {}, Block Size: {}, Gas Consumed: {}, Capacity: {}, Bytes Capacity: {}, Transactions count: {}, Gas Price: {}, Fee: {}",
+                    block_height, **block_size, **gas_consumed, **capacity, **bytes_capacity, transactions_count, gas_price, **fee
                 );
             }
+            let block_costs_map = block_costs
+                .into_iter()
+                .map(|costs| (BlockHeight::from(*costs.end_height), costs))
+                .collect();
             summary::summarise_available_data(
+                blocks_range,
                 &output_file,
-                &block_costs,
+                &block_costs_map,
                 &blocks_with_gas_consumed,
             )
             .inspect_err(|e| {
