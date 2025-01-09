@@ -47,6 +47,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION_FMT }}
           components: rustfmt
+      - uses: Swatinem/rust-cache@v2
 
       - name: Rustfmt check
         run: cargo +${{ env.RUST_VERSION_FMT }} fmt --all -- --check
@@ -164,20 +165,12 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: "wasm32-unknown-unknown"
           components: "clippy"
+      - uses: Swatinem/rust-cache@v2
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
           version: "0.36.4"
       - uses: rui314/setup-mold@v1
-      - uses: buildjet/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ matrix.command }}-${{ matrix.args }}-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - uses: actions-rs/cargo@v1
         if: ${{ matrix.command == 'nextest' }}
         with:
@@ -231,16 +224,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
+      - uses: Swatinem/rust-cache@v2
       - uses: rui314/setup-mold@v1
-      - uses: buildjet/cache@v3
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: cargo-test-kms-${{ hashFiles('**/Cargo.lock') }}
       - name: Run integration tests for kms only
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
@@ -286,6 +271,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: "wasm32-unknown-unknown"
+      - uses: Swatinem/rust-cache@v2
 
       - name: Publish crate
         uses: FuelLabs/publish-crates@v1
@@ -370,6 +356,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.job.target }},"wasm32-unknown-unknown"
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install cross
         uses: baptiste0928/cargo-install@v1
