@@ -576,6 +576,7 @@ where
         tracing::info!(
             balances_indexation_enabled,
             coins_to_spend_indexation_enabled,
+            asset_metadata_indexation_enabled,
             "Indexation availability status"
         );
 

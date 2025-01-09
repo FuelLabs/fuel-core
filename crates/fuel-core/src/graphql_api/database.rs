@@ -92,6 +92,8 @@ pub struct ReadDatabase {
     balances_indexation_enabled: bool,
     /// The flag that indicates whether the CoinsToSpend indexation is enabled.
     coins_to_spend_indexation_enabled: bool,
+    /// The flag that indicates whether the AssetMetadata indexation is enabled.
+    asset_metadata_indexation_enabled: bool,
 }
 
 impl ReadDatabase {
@@ -111,6 +113,8 @@ impl ReadDatabase {
         let balances_indexation_enabled = off_chain.balances_indexation_enabled()?;
         let coins_to_spend_indexation_enabled =
             off_chain.coins_to_spend_indexation_enabled()?;
+        let asset_metadata_indexation_enabled =
+            off_chain.asset_metadata_indexation_enabled()?;
 
         Ok(Self {
             batch_size,
@@ -119,6 +123,7 @@ impl ReadDatabase {
             off_chain: Box::new(ArcWrapper::new(off_chain)),
             balances_indexation_enabled,
             coins_to_spend_indexation_enabled,
+            asset_metadata_indexation_enabled,
         })
     }
 
@@ -134,6 +139,7 @@ impl ReadDatabase {
             off_chain: self.off_chain.latest_view()?,
             balances_indexation_enabled: self.balances_indexation_enabled,
             coins_to_spend_indexation_enabled: self.coins_to_spend_indexation_enabled,
+            asset_metadata_indexation_enabled: self.asset_metadata_indexation_enabled,
         })
     }
 
@@ -151,6 +157,7 @@ pub struct ReadView {
     pub(crate) off_chain: OffChainView,
     pub(crate) balances_indexation_enabled: bool,
     pub(crate) coins_to_spend_indexation_enabled: bool,
+    pub(crate) asset_metadata_indexation_enabled: bool,
 }
 
 impl ReadView {
