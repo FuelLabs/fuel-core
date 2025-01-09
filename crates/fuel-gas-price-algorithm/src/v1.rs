@@ -438,6 +438,7 @@ impl AlgorithmUpdaterV1 {
         self.projected_total_da_cost = self
             .projected_total_da_cost
             .saturating_add(block_projected_da_cost);
+        tracing::debug!("Projected DA cost: {}", self.projected_total_da_cost);
     }
 
     // Take the `fee_wei` and return the portion of the fee that should be used for paying DA costs
@@ -628,7 +629,7 @@ impl AlgorithmUpdaterV1 {
         unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
         let mut total: u128 = 0;
-        tracing::info!("removing for range: {:?}", heights);
+        tracing::debug!("removing for range: {:?}", heights);
         for expected_height in heights {
             let maybe_bytes = unrecorded_blocks
                 .remove(&expected_height)
@@ -643,9 +644,9 @@ impl AlgorithmUpdaterV1 {
                 );
             }
         }
-        tracing::info!("removing total: {}", total);
+        tracing::debug!("removing total: {}", total);
         self.unrecorded_blocks_bytes = self.unrecorded_blocks_bytes.saturating_sub(total);
-        tracing::info!("unrecorded_blocks_bytes: {}", self.unrecorded_blocks_bytes);
+        tracing::debug!("unrecorded_blocks_bytes: {}", self.unrecorded_blocks_bytes);
         Ok(())
     }
 

@@ -59,8 +59,8 @@ fn read_config_from_file(_config_path: &str) -> V1AlgorithmConfig {
         min_da_gas_price: 1_000,
         max_da_gas_price: u64::MAX,
         max_da_gas_price_change_percent: 10,
-        da_p_component: 100_000_000__000_000_000,
-        da_d_component: 1_000_000__000_000_000,
+        da_p_component: 50_000_000__000_000_000,
+        da_d_component: 100_000__000_000_000,
         normal_range_size: 0,
         capped_range_size: 0,
         decrease_range_size: 0,
@@ -75,7 +75,7 @@ fn read_metadata_from_file(_metadata_path: &str, starting_height: u32) -> V1Meta
     let gas_price_factor = 100;
     // let new_scaled_da_gas_price = 3_547_063 * gas_price_factor / 1_000;
     // let new_scaled_da_gas_price = 15_893_241 * gas_price_factor / 1_000;
-    let new_scaled_da_gas_price = 1_000 * gas_price_factor;
+    let new_scaled_da_gas_price = 18_963 * gas_price_factor;
     V1Metadata {
         new_scaled_exec_price: 0,
         l2_block_height,
@@ -121,7 +121,7 @@ impl ServiceController {
             da_costs
         );
         for costs in da_costs {
-            tracing::info!("sending da_costs: {:?}", costs);
+            tracing::debug!("sending da_costs: {:?}", costs);
             self.da_costs_sender.send(costs).await?;
             tracing::debug!("sent da_costs");
             self.run().await?;

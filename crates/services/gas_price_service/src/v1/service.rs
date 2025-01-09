@@ -340,7 +340,7 @@ where
                 TaskNextAction::always_continue(res)
             }
             da_block_costs_res = self.da_source_channel.recv() => {
-                tracing::info!("Received DA block costs: {:?}", da_block_costs_res);
+                tracing::debug!("Received DA block costs: {:?}", da_block_costs_res);
                 match da_block_costs_res {
                     Ok(da_block_costs) => {
                         self.da_block_costs_buffer.push(da_block_costs);

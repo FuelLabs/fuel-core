@@ -19,6 +19,7 @@ use serde_reflection::{
 use std::{
     collections::HashMap,
     env,
+    ops::RangeInclusive,
     path::PathBuf,
 };
 use tracing_subscriber::{
@@ -199,7 +200,7 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
         let l2_block: BlockInfo = (&record).into();
 
         if record.l1_block_number != 0 {
-            tracing::info!("adding new DA info: {:?}", record);
+            tracing::debug!("adding new DA info: {:?}", record);
             // TODO: Check if these are generated correctly.
             let bundle_id = record.l1_block_number as u32; // Could be an arbitrary number, but we use L1 block number for convenience.
             let bundle_size_bytes = record.l1_blob_size_bytes as u32;
@@ -250,6 +251,34 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
 
     tracing::info!("Total orphaned L2 blocks: {}", total_orphaned);
     tracing::info!("Total orphaned L2 block bytes: {}", total_orphaned_bytes);
+    let binding = orphaned_l2_blocks.clone();
+    let sorted_orphans = binding.keys().sorted();
+    tracing::info!(
+        "First 10 orphaned blocks: {:?}",
+        sorted_orphans.clone().take(10).collect::<Vec<_>>()
+    );
+    // separate orphaned blocks into ranges
+    let mut orphaned_ranges = Vec::new();
+    let mut current_range: Option<RangeInclusive<u64>> = None;
+    for height in sorted_orphans {
+        if let Some(range) = current_range.as_mut() {
+            if (range.end() + 1) == *height {
+                current_range = Some(*range.start()..=*height);
+            } else {
+                orphaned_ranges.push(range.clone());
+                current_range = None;
+            }
+        } else {
+            current_range = Some(*height..=*height);
+        }
+    }
+    tracing::info!("Orphaned ranges: {:?}", orphaned_ranges);
+    let lengths_of_ranges = orphaned_ranges
+        .iter()
+        .map(|range| range.end() - range.start() + 1)
+        .collect::<Vec<_>>();
+    tracing::info!("Lengths of ranges: {:?}", lengths_of_ranges);
+
     let data = Data { inner: data };
     Ok(data)
 }
