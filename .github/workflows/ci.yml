@@ -149,7 +149,7 @@ jobs:
           # for `fuel-core 0.26.0`(because of the bug with `--offline`
           # and `--locked` when we build `fuel-core-wasm-executor 0.26.0`).
           - command: check
-            args: --manifest-path version-compatibility/Cargo.toml --workspace && cargo nextest --manifest-path version-compatibility/Cargo.toml --workspace
+            args: --manifest-path version-compatibility/Cargo.toml --workspace && cargo test --manifest-path version-compatibility/Cargo.toml --workspace
             name: "Check version-compatibility"
           - command: build
             args: -p fuel-core-bin --no-default-features --features production
