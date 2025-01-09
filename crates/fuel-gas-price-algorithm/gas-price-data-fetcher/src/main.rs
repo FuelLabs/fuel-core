@@ -62,6 +62,7 @@ struct L2BlockDataSource {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    tracing::info!("Starting gas price data fetcher");
     let Arg {
         block_committer_endpoint,
         l2_block_data_source,

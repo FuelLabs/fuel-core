@@ -17,6 +17,7 @@ use serde_reflection::{
     TracerConfig,
 };
 use std::{
+    collections::HashMap,
     env,
     path::PathBuf,
 };
@@ -124,6 +125,8 @@ impl From<&Record> for BlockInfo {
 struct SimulationResults {
     gas_price: Vec<u64>,
     profits: Vec<i128>,
+    costs: Vec<u128>,
+    rewards: Vec<u128>,
 }
 
 impl SimulationResults {
@@ -131,6 +134,8 @@ impl SimulationResults {
         Self {
             gas_price: Vec::new(),
             profits: Vec::new(),
+            costs: Vec::new(),
+            rewards: Vec::new(),
         }
     }
 }
@@ -142,6 +147,14 @@ impl SimulationResults {
 
     pub fn add_profit(&mut self, profit: i128) {
         self.profits.push(profit);
+    }
+
+    pub fn add_cost(&mut self, cost: u128) {
+        self.costs.push(cost);
+    }
+
+    pub fn add_reward(&mut self, reward: u128) {
+        self.rewards.push(reward);
     }
 }
 
@@ -181,11 +194,8 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
         .unique()
         .collect();
     tracing::info!("l1_blocks: {:?}", l1_blocks);
+    let mut orphaned_l2_blocks = HashMap::new();
     for record in records.into_iter() {
-        // let blocks: Vec<_> = block_records.into_iter().collect();
-        // let mut blocks_iter = blocks.iter().peekable();
-
-        // while let Some(block_record) = blocks_iter.next() {
         let l2_block: BlockInfo = (&record).into();
 
         if record.l1_block_number != 0 {
@@ -218,10 +228,28 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
             })
             .collect();
 
-        data.push((l2_block, da_block_costs));
-        // }
+        data.push((l2_block, da_block_costs.clone()));
+        orphaned_l2_blocks.insert(record.l2_block_number, l2_block);
+        for costs in da_block_costs {
+            for height in costs.l2_blocks.clone() {
+                orphaned_l2_blocks.remove(&(height as u64));
+            }
+        }
     }
+    let total_orphaned = orphaned_l2_blocks.len();
+    let total_orphaned_bytes = orphaned_l2_blocks
+        .values()
+        .filter_map(|block| {
+            if let BlockInfo::Block { block_bytes, .. } = block {
+                Some(*block_bytes)
+            } else {
+                None
+            }
+        })
+        .sum::<u64>();
 
+    tracing::info!("Total orphaned L2 blocks: {}", total_orphaned);
+    tracing::info!("Total orphaned L2 block bytes: {}", total_orphaned_bytes);
     let data = Data { inner: data };
     Ok(data)
 }
@@ -236,8 +264,10 @@ async fn simulation(
         service_controller.advance(block, maybe_costs).await?;
         let gas_price = service_controller.gas_price();
         results.add_gas_price(gas_price);
-        let profit = service_controller.profit()?;
+        let (profit, cost, reward) = service_controller.profit_cost_reward()?;
         results.add_profit(profit);
+        results.add_cost(cost);
+        results.add_reward(reward);
     }
     tracing::info!("Finished simulation");
     Ok(results)
@@ -254,9 +284,31 @@ fn display_results(results: SimulationResults) -> anyhow::Result<()> {
     // println!("Gas prices (Wei): {:?}", results.gas_price);
     // println!("Profits (ETH): {:?}", profits_eth);
     let max_gas_price = results.gas_price.iter().max();
-    let max_profit = profits_eth.iter().max_by(|a, b| a.partial_cmp(b).unwrap());
+    let min_gas_price = results.gas_price.iter().min();
+    let max_profit_eth = profits_eth.iter().max_by(|a, b| a.partial_cmp(b).unwrap());
+    let min_profit_eth = profits_eth.iter().min_by(|a, b| a.partial_cmp(b).unwrap());
+    let final_profit = profits_eth.last().unwrap();
+    let final_cost = results
+        .costs
+        .last()
+        .map(|x| *x as f64 / WEI_PER_ETH)
+        .unwrap();
+    let final_reward = results
+        .rewards
+        .last()
+        .map(|x| *x as f64 / WEI_PER_ETH)
+        .unwrap();
     println!("Max gas price: {:?}", max_gas_price);
-    println!("Max profit ETH: {:?}", max_profit);
+    println!("Min gas price: {:?}", min_gas_price);
+    println!("Final gas price: {:?}", results.gas_price.last().unwrap());
+
+    println!("Max profit ETH: {:?}", max_profit_eth);
+    println!("Min profit ETH: {:?}", min_profit_eth);
+    println!("Final profit: {:?}", final_profit);
+
+    println!("Final cost: {:?}", final_cost);
+
+    println!("Final reward: {:?}", final_reward);
     Ok(())
 }
 

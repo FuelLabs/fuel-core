@@ -57,9 +57,10 @@ fn read_config_from_file(_config_path: &str) -> V1AlgorithmConfig {
         l2_block_fullness_threshold_percent: 0,
         gas_price_factor: NonZero::new(100).unwrap(),
         min_da_gas_price: 1_000,
+        max_da_gas_price: u64::MAX,
         max_da_gas_price_change_percent: 10,
-        da_p_component: 1,
-        da_d_component: 1,
+        da_p_component: 100_000_000__000_000_000,
+        da_d_component: 1_000_000__000_000_000,
         normal_range_size: 0,
         capped_range_size: 0,
         decrease_range_size: 0,
@@ -72,7 +73,9 @@ fn read_metadata_from_file(_metadata_path: &str, starting_height: u32) -> V1Meta
     // TODO: read from file and/or CLI
     let l2_block_height = starting_height - 1;
     let gas_price_factor = 100;
-    let new_scaled_da_gas_price = 1_000_000 * gas_price_factor;
+    // let new_scaled_da_gas_price = 3_547_063 * gas_price_factor / 1_000;
+    // let new_scaled_da_gas_price = 15_893_241 * gas_price_factor / 1_000;
+    let new_scaled_da_gas_price = 1_000 * gas_price_factor;
     V1Metadata {
         new_scaled_exec_price: 0,
         l2_block_height,
@@ -82,7 +85,7 @@ fn read_metadata_from_file(_metadata_path: &str, starting_height: u32) -> V1Meta
         latest_known_total_da_cost_excess: 0,
         last_profit: 0,
         second_to_last_profit: 0,
-        latest_da_cost_per_byte: 0,
+        latest_da_cost_per_byte: 625504961,
         unrecorded_block_bytes: 0,
     }
 }
@@ -140,15 +143,21 @@ impl ServiceController {
         self.service.next_block_algorithm().next_gas_price()
     }
 
-    pub fn profit(&self) -> anyhow::Result<i128> {
+    pub fn profit_cost_reward(&self) -> anyhow::Result<(i128, u128, u128)> {
         let latest_height = self.service.latest_l2_block();
         let metadata = self
             .service
             .storage_tx_provider()
             .get_metadata(&latest_height)?
             .ok_or(anyhow::anyhow!("no metadata found"))?;
-        if let Some(profit) = metadata.v1().map(|m| m.last_profit) {
-            Ok(profit)
+        if let Some(values) = metadata.v1().map(|m| {
+            (
+                m.last_profit,
+                m.latest_known_total_da_cost_excess,
+                m.total_da_rewards_excess,
+            )
+        }) {
+            Ok(values)
         } else {
             Err(anyhow::anyhow!("no profit found"))
         }
