@@ -13,6 +13,7 @@ use fuel_core::{
         DbType,
         FuelService,
     },
+    state::rocks_db::DatabaseConfig,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
@@ -100,6 +101,8 @@ pub struct TestSetupBuilder {
     pub base_asset_id: AssetId,
     pub trigger: Trigger,
     pub max_txs: usize,
+    pub database_type: DbType,
+    pub database_config: DatabaseConfig,
 }
 
 impl TestSetupBuilder {
@@ -241,14 +244,14 @@ impl TestSetupBuilder {
         };
         txpool.heavy_work.size_of_verification_queue = self.max_txs;
 
-        let config = Config {
+        let mut config = Config {
             utxo_validation: self.utxo_validation,
             txpool,
             block_production: self.trigger,
             starting_gas_price: self.starting_gas_price,
             ..Config::local_node_with_configs(chain_conf, state)
         };
-        assert_eq!(config.combined_db_config.database_type, DbType::RocksDb);
+        config.combined_db_config.database_config = self.database_config;
 
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
@@ -276,6 +279,8 @@ impl Default for TestSetupBuilder {
             base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
             max_txs: 100000,
+            database_type: DbType::RocksDb,
+            database_config: DatabaseConfig::config_for_tests(),
         }
     }
 }
