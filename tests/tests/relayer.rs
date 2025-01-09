@@ -680,7 +680,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
         .unwrap_err();
     assert_eq!(
         query.to_string(),
-        "Response errors; not enough coins to fit the target"
+        "Response errors; the target cannot be met due to no coins available or exceeding the 255 coin limit."
     );
 
     srv.send_stop_signal_and_await_shutdown().await.unwrap();
