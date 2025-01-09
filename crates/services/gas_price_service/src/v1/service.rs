@@ -561,6 +561,7 @@ mod tests {
             l2_block_fullness_threshold_percent: 20,
             gas_price_factor: NonZeroU64::new(10).unwrap(),
             min_da_gas_price: 10,
+            max_da_gas_price: 11,
             max_da_gas_price_change_percent: 20,
             da_p_component: 4,
             da_d_component: 2,
@@ -599,7 +600,7 @@ mod tests {
             inner,
             latest_l2_height,
         );
-        let read_algo = service.next_block_algorithm();
+        let read_algo = service.next_block_algorithm().clone();
         let mut watcher = StateWatcher::default();
         let initial_price = read_algo.next_gas_price();
 
@@ -640,6 +641,7 @@ mod tests {
             l2_block_fullness_threshold_percent: 20,
             gas_price_factor: NonZeroU64::new(10).unwrap(),
             min_da_gas_price: 0,
+            max_da_gas_price: 1,
             max_da_gas_price_change_percent: 100,
             da_p_component: 4,
             da_d_component: 2,
@@ -692,7 +694,7 @@ mod tests {
             inner,
             latest_l2_block,
         );
-        let read_algo = service.next_block_algorithm();
+        let read_algo = service.next_block_algorithm().clone();
         let initial_price = read_algo.next_gas_price();
 
         let next = service.run(&mut watcher).await;
@@ -719,6 +721,7 @@ mod tests {
             l2_block_fullness_threshold_percent: 20,
             gas_price_factor: NonZeroU64::new(10).unwrap(),
             min_da_gas_price: 0,
+            max_da_gas_price: 1,
             max_da_gas_price_change_percent: 100,
             da_p_component: 4,
             da_d_component: 2,

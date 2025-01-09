@@ -1,6 +1,9 @@
 use crate::utils::cumulative_percentage_change;
 use std::{
-    cmp::max,
+    cmp::{
+        max,
+        min,
+    },
     collections::BTreeMap,
     num::NonZeroU64,
     ops::{
@@ -147,6 +150,8 @@ pub struct AlgorithmUpdaterV1 {
     pub gas_price_factor: NonZeroU64,
     /// The lowest the algorithm allows the da gas price to go
     pub min_da_gas_price: u64,
+    /// The highest the algorithm allows the da gas price to go
+    pub max_da_gas_price: u64,
     /// The maximum percentage that the DA portion of the gas price can change in a single block
     ///   Using `u16` because it can go above 100% and possibly over 255%
     pub max_da_gas_price_change_percent: u16,
@@ -514,9 +519,12 @@ impl AlgorithmUpdaterV1 {
             scaled_da_change,
             maybe_new_scaled_da_gas_price
         );
-        self.new_scaled_da_gas_price = max(
-            self.min_scaled_da_gas_price(),
-            maybe_new_scaled_da_gas_price,
+        self.new_scaled_da_gas_price = min(
+            max(
+                self.min_scaled_da_gas_price(),
+                maybe_new_scaled_da_gas_price,
+            ),
+            self.max_scaled_da_gas_price(),
         );
     }
 
@@ -537,6 +545,12 @@ impl AlgorithmUpdaterV1 {
 
     fn min_scaled_da_gas_price(&self) -> u64 {
         self.min_da_gas_price
+            .saturating_mul(self.gas_price_factor.into())
+    }
+
+    fn max_scaled_da_gas_price(&self) -> u64 {
+        // note: here we make sure that a correct maximum is used; hacky :(
+        max(self.max_da_gas_price, self.min_da_gas_price)
             .saturating_mul(self.gas_price_factor.into())
     }
 

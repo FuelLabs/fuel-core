@@ -293,6 +293,7 @@ fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
         l2_block_fullness_threshold_percent: 0,
         gas_price_factor: NonZeroU64::new(100).unwrap(),
         min_da_gas_price: 0,
+        max_da_gas_price: 1,
         max_da_gas_price_change_percent: 0,
         da_p_component: 0,
         da_d_component: 0,
@@ -327,6 +328,7 @@ fn different_arb_config() -> V1AlgorithmConfig {
         l2_block_fullness_threshold_percent: 0,
         gas_price_factor: NonZeroU64::new(100).unwrap(),
         min_da_gas_price: 0,
+        max_da_gas_price: 1,
         max_da_gas_price_change_percent: 0,
         da_p_component: 0,
         da_d_component: 0,
@@ -397,7 +399,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         latest_l2_height,
     );
 
-    let read_algo = service.next_block_algorithm();
+    let read_algo = service.next_block_algorithm().clone();
     let initial = read_algo.next_gas_price();
     let mut watcher = StateWatcher::started();
     tokio::spawn(async move { service.run(&mut watcher).await });

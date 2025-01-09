@@ -212,6 +212,11 @@ pub struct Command {
     #[arg(long = "min-da-gas-price", default_value = "10000000", env)]
     pub min_da_gas_price: u64,
 
+    /// Maximum DA gas price
+    // DEV: ensure that the max_da_gas_price default is > then the min_da_gas_price default
+    #[arg(long = "max-da-gas-price", default_value = "10000001", env)]
+    pub max_da_gas_price: u64,
+
     /// P component of DA gas price calculation
     /// **NOTE**: This is the **inverse** gain of a typical P controller.
     /// Increasing this value will reduce gas price fluctuations.
@@ -339,6 +344,7 @@ impl Command {
             min_gas_price,
             gas_price_threshold_percent,
             min_da_gas_price,
+            max_da_gas_price,
             da_p_component,
             da_d_component,
             max_da_gas_price_change_percent,
@@ -660,6 +666,7 @@ impl Command {
             memory_pool_size,
             da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
             min_da_gas_price,
+            max_da_gas_price,
             max_da_gas_price_change_percent,
             da_p_component,
             da_d_component,

@@ -1,5 +1,4 @@
 use clap::ValueEnum;
-use fuel_core_poa::signer::SignMode;
 use std::{
     num::NonZeroU64,
     path::PathBuf,
@@ -88,6 +87,7 @@ pub struct Config {
     pub memory_pool_size: usize,
     pub da_gas_price_factor: NonZeroU64,
     pub min_da_gas_price: u64,
+    pub max_da_gas_price: u64,
     pub max_da_gas_price_change_percent: u16,
     pub da_p_component: i64,
     pub da_d_component: i64,
@@ -218,6 +218,7 @@ impl Config {
             memory_pool_size: 4,
             da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
             min_da_gas_price: 0,
+            max_da_gas_price: 1,
             max_da_gas_price_change_percent: 0,
             da_p_component: 0,
             da_d_component: 0,
@@ -226,7 +227,7 @@ impl Config {
             activity_decrease_range_size: 0,
             da_committer_url,
             block_activity_threshold: 0,
-            da_poll_interval: Some(10),
+            da_poll_interval: Some(1_000),
         }
     }
 
