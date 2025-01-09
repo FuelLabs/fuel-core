@@ -1,42 +1,9 @@
-use fuel_core_consensus_module::{
-    block_verifier::Verifier,
-    RelayerConsensusConfig,
-};
-use fuel_core_executor::executor::OnceTransactionsSource;
-use fuel_core_importer::ImporterResult;
-use fuel_core_poa::{
-    ports::BlockSigner,
-    signer::SignMode,
-};
-use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::Changes;
-use fuel_core_txpool::BorrowedTxPool;
-#[cfg(feature = "p2p")]
-use fuel_core_types::services::p2p::peer_reputation::AppScore;
-use fuel_core_types::{
-    blockchain::{
-        block::Block,
-        consensus::Consensus,
-    },
-    fuel_tx::Transaction,
-    services::{
-        block_importer::SharedImportResult,
-        block_producer::Components,
-        executor::{
-            Result as ExecutorResult,
-            UncommittedResult,
-        },
-    },
-    tai64::Tai64,
-};
-use fuel_core_upgradable_executor::executor::Executor;
-use std::sync::Arc;
-
 use crate::{
     database::{
         database_description::relayer::Relayer,
         Database,
     },
+    fuel_core_graphql_api::ports::GasPriceEstimate,
     service::{
         sub_services::{
             BlockProducerService,
@@ -45,6 +12,42 @@ use crate::{
         vm_pool::MemoryPool,
     },
 };
+use fuel_core_consensus_module::{
+    block_verifier::Verifier,
+    RelayerConsensusConfig,
+};
+use fuel_core_executor::executor::OnceTransactionsSource;
+use fuel_core_gas_price_service::v1::service::LatestGasPrice;
+use fuel_core_importer::ImporterResult;
+use fuel_core_poa::ports::BlockSigner;
+use fuel_core_services::stream::BoxStream;
+use fuel_core_storage::transactional::Changes;
+use fuel_core_txpool::BorrowedTxPool;
+#[cfg(feature = "p2p")]
+use fuel_core_types::services::p2p::peer_reputation::AppScore;
+use fuel_core_types::{
+    blockchain::{
+        block::Block,
+        consensus::{
+            poa::PoAConsensus,
+            Consensus,
+        },
+    },
+    fuel_tx::Transaction,
+    fuel_types::BlockHeight,
+    services::{
+        block_importer::SharedImportResult,
+        block_producer::Components,
+        executor::{
+            Result as ExecutorResult,
+            UncommittedResult,
+        },
+    },
+    signer::SignMode,
+    tai64::Tai64,
+};
+use fuel_core_upgradable_executor::executor::Executor;
+use std::sync::Arc;
 
 pub mod block_importer;
 pub mod consensus_module;
@@ -59,6 +62,8 @@ pub mod p2p;
 pub mod producer;
 #[cfg(feature = "relayer")]
 pub mod relayer;
+#[cfg(feature = "shared-sequencer")]
+pub mod shared_sequencer;
 #[cfg(feature = "p2p")]
 pub mod sync;
 pub mod txpool;
@@ -83,6 +88,162 @@ impl StaticGasPrice {
     pub fn new(gas_price: u64) -> Self {
         Self { gas_price }
     }
+}
+
+#[cfg(test)]
+mod arc_gas_price_estimate_tests {
+    #![allow(non_snake_case)]
+
+    use super::*;
+    use proptest::proptest;
+
+    async fn _worst_case__correctly_calculates_value(
+        gas_price: u64,
+        starting_height: u32,
+        block_horizon: u32,
+        percentage: u16,
+    ) {
+        // given
+        let subject = ArcGasPriceEstimate::new(starting_height, gas_price, percentage);
+
+        // when
+        let target_height = starting_height.saturating_add(block_horizon);
+        let estimated = subject
+            .worst_case_gas_price(target_height.into())
+            .await
+            .unwrap();
+
+        // then
+        let mut actual = gas_price;
+
+        for _ in 0..block_horizon {
+            let change_amount =
+                actual.saturating_mul(percentage as u64).saturating_div(100);
+            actual = actual.saturating_add(change_amount);
+        }
+
+        assert!(estimated >= actual);
+    }
+
+    proptest! {
+        #[test]
+        fn worst_case_gas_price__correctly_calculates_value(
+            gas_price: u64,
+            starting_height: u32,
+            block_horizon in 0..10_000u32,
+            percentage: u16,
+        ) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(_worst_case__correctly_calculates_value(
+                gas_price,
+                starting_height,
+                block_horizon,
+                percentage,
+            ));
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn worst_case_gas_price__never_overflows(
+            gas_price: u64,
+            starting_height: u32,
+            block_horizon in 0..10_000u32,
+            percentage: u16
+        ) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+
+            // given
+            let subject = ArcGasPriceEstimate::new(starting_height, gas_price, percentage);
+
+            // when
+            let target_height = starting_height.saturating_add(block_horizon);
+
+            let _ = rt.block_on(subject.worst_case_gas_price(target_height.into()));
+
+            // then
+            // doesn't panic with an overflow
+        }
+    }
+}
+
+/// Allows communication from other service with more recent gas price data
+/// `Height` refers to the height of the block at which the gas price was last updated
+/// `GasPrice` refers to the gas price at the last updated block
+#[allow(dead_code)]
+pub struct ArcGasPriceEstimate<Height, GasPrice> {
+    /// Shared state of latest gas price data
+    latest_gas_price: LatestGasPrice<Height, GasPrice>,
+    /// The max percentage the gas price can increase per block
+    percentage: u16,
+}
+
+impl<Height, GasPrice> ArcGasPriceEstimate<Height, GasPrice> {
+    #[cfg(test)]
+    pub fn new(height: Height, price: GasPrice, percentage: u16) -> Self {
+        let latest_gas_price = LatestGasPrice::new(height, price);
+        Self {
+            latest_gas_price,
+            percentage,
+        }
+    }
+
+    pub fn new_from_inner(
+        inner: LatestGasPrice<Height, GasPrice>,
+        percentage: u16,
+    ) -> Self {
+        Self {
+            latest_gas_price: inner,
+            percentage,
+        }
+    }
+}
+
+impl<Height: Copy, GasPrice: Copy> ArcGasPriceEstimate<Height, GasPrice> {
+    fn get_height_and_gas_price(&self) -> (Height, GasPrice) {
+        self.latest_gas_price.get()
+    }
+}
+
+#[async_trait::async_trait]
+impl GasPriceEstimate for ArcGasPriceEstimate<u32, u64> {
+    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
+        let (best_height, best_gas_price) = self.get_height_and_gas_price();
+        let percentage = self.percentage;
+
+        let worst = cumulative_percentage_change(
+            best_gas_price,
+            best_height,
+            percentage as u64,
+            height.into(),
+        );
+        Some(worst)
+    }
+}
+
+#[allow(clippy::cast_possible_truncation)]
+pub(crate) fn cumulative_percentage_change(
+    start_gas_price: u64,
+    best_height: u32,
+    percentage: u64,
+    target_height: u32,
+) -> u64 {
+    let blocks = target_height.saturating_sub(best_height) as f64;
+    let percentage_as_decimal = percentage as f64 / 100.0;
+    let multiple = (1.0f64 + percentage_as_decimal).powf(blocks);
+    let mut approx = start_gas_price as f64 * multiple;
+    // Account for rounding errors and take a slightly higher value
+    // Around the `ROUNDING_ERROR_CUTOFF` the rounding errors will cause the estimate to be too low.
+    // We increase by `ROUNDING_ERROR_COMPENSATION` to account for this.
+    // This is an unlikely situation in practice, but we want to guarantee that the actual
+    // gas price is always equal or less than the estimate given here
+    const ROUNDING_ERROR_CUTOFF: f64 = 16948547188989277.0;
+    if approx > ROUNDING_ERROR_CUTOFF {
+        const ROUNDING_ERROR_COMPENSATION: f64 = 2000.0;
+        approx += ROUNDING_ERROR_COMPENSATION;
+    }
+    // `f64` over `u64::MAX` are cast to `u64::MAX`
+    approx.ceil() as u64
 }
 
 #[derive(Clone)]
@@ -226,7 +387,34 @@ impl FuelBlockSigner {
 #[async_trait::async_trait]
 impl BlockSigner for FuelBlockSigner {
     async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
-        self.mode.seal_block(block).await
+        let block_hash = block.id();
+        let message = block_hash.into_message();
+        let signature = self.mode.sign_message(message).await?;
+        Ok(Consensus::PoA(PoAConsensus::new(signature)))
+    }
+
+    fn is_available(&self) -> bool {
+        self.mode.is_available()
+    }
+}
+
+#[cfg(feature = "shared-sequencer")]
+#[async_trait::async_trait]
+impl fuel_core_shared_sequencer::ports::Signer for FuelBlockSigner {
+    async fn sign(
+        &self,
+        data: &[u8],
+    ) -> anyhow::Result<fuel_core_types::fuel_crypto::Signature> {
+        Ok(self.mode.sign(data).await?)
+    }
+
+    fn public_key(&self) -> cosmrs::crypto::PublicKey {
+        let pubkey = self
+            .mode
+            .verifying_key()
+            .expect("Invalid public key")
+            .expect("Public key not available");
+        cosmrs::crypto::PublicKey::from(pubkey)
     }
 
     fn is_available(&self) -> bool {

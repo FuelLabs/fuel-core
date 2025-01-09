@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 87eb4d9c7c90c2a0ee11edef3ee1b01303db0a6ba1fd34d7fc6146a2c36387f4 # shrinks to gas_price = 1, starting_height = 0, block_horizon = 1, percentage = 100
