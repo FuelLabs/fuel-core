@@ -44,6 +44,7 @@ struct Record {
     l1_block_number: u64,
     l1_blob_fee_wei: u64,
     l1_blob_size_bytes: u64,
+    blob_start_l2_block_number: u32,
     l2_block_number: u64,
     l2_gas_fullness: u64,
     l2_gas_capacity: u64,
@@ -192,7 +193,7 @@ fn get_data(source: &DataSource) -> anyhow::Result<Data> {
             // TODO: Check if these are generated correctly.
             let bundle_id = record.l1_block_number as u32; // Could be an arbitrary number, but we use L1 block number for convenience.
             let bundle_size_bytes = record.l1_blob_size_bytes as u32;
-            let range = record.l2_block_number as u32..=record.l2_block_number as u32;
+            let range = record.blob_start_l2_block_number..=record.l2_block_number as u32;
             let blob_cost_wei = record.l1_blob_fee_wei as u128;
 
             let new = DaBlockCosts {
