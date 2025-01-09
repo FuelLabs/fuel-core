@@ -159,13 +159,109 @@ where
 
 #[cfg(test)]
 mod tests {
+    use fuel_core_storage::{
+        transactional::WriteTransaction,
+        StorageAsMut,
+    };
+    use fuel_core_types::fuel_tx::{
+        Bytes32,
+        ContractId,
+        ContractIdExt,
+        Receipt,
+    };
+
+    use crate::{
+        database::{
+            database_description::off_chain::OffChain,
+            Database,
+        },
+        graphql_api::{
+            indexation::asset_metadata::update,
+            storage::assets::{
+                AssetDetails,
+                AssetsInfo,
+            },
+        },
+        state::rocks_db::DatabaseConfig,
+    };
+
     #[test]
     fn asset_metadata_index_is_correctly_updated() {
-        // TODO[RC]:
+        use tempfile::TempDir;
+        let tmp_dir = TempDir::new().unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
+        let mut tx = db.write_transaction();
+
+        const ASSET_METADATA_IS_ENABLED: bool = true;
+
+        let sub_id: Bytes32 = Bytes32::from([1u8; 32]);
+        let contract_id: ContractId = ContractId::from([2u8; 32]);
+        let contract_asset_id = contract_id.asset_id(&sub_id);
+        const MINT_AMOUNT: u64 = 3;
+        const BURN_AMOUNT: u64 = 2;
+
+        let receipts: Vec<Receipt> = vec![
+            Receipt::mint(sub_id, contract_id, MINT_AMOUNT, 0, 0),
+            Receipt::burn(sub_id, contract_id, BURN_AMOUNT, 0, 0),
+        ];
+
+        update(&receipts, &mut tx, ASSET_METADATA_IS_ENABLED)
+            .expect("should process receipt");
+
+        let metadata = &*tx
+            .storage::<AssetsInfo>()
+            .get(&contract_asset_id)
+            .expect("should correctly query db")
+            .expect("should have metadata");
+
+        assert_eq!(
+            metadata,
+            &AssetDetails {
+                contract_id,
+                sub_id,
+                total_supply: MINT_AMOUNT as u128 - BURN_AMOUNT as u128
+            }
+        );
     }
 
     #[test]
     fn asset_metadata_indexation_enabled_flag_is_respected() {
-        // TODO[RC]:
+        use tempfile::TempDir;
+        let tmp_dir = TempDir::new().unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
+        let mut tx = db.write_transaction();
+
+        const ASSET_METADATA_IS_DISABLED: bool = false;
+
+        let sub_id: Bytes32 = Bytes32::from([1u8; 32]);
+        let contract_id: ContractId = ContractId::from([2u8; 32]);
+        let contract_asset_id = contract_id.asset_id(&sub_id);
+        const MINT_AMOUNT: u64 = 3;
+        const BURN_AMOUNT: u64 = 2;
+
+        let receipts: Vec<Receipt> = vec![
+            Receipt::mint(sub_id, contract_id, MINT_AMOUNT, 0, 0),
+            Receipt::burn(sub_id, contract_id, BURN_AMOUNT, 0, 0),
+        ];
+
+        update(&receipts, &mut tx, ASSET_METADATA_IS_DISABLED)
+            .expect("should process receipt");
+
+        let metadata = tx
+            .storage::<AssetsInfo>()
+            .get(&contract_asset_id)
+            .expect("should correctly query db");
+
+        assert!(metadata.is_none());
     }
 }
