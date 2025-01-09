@@ -208,7 +208,7 @@ pub struct Command {
     pub min_da_gas_price: u64,
 
     /// Maximum DA gas price
-    /// DEV: ensure that the max_da_gas_price default is > then the min_da_gas_price default
+    // DEV: ensure that the max_da_gas_price default is > then the min_da_gas_price default
     #[arg(long = "max-da-gas-price", default_value = "10000001", env)]
     pub max_da_gas_price: u64,
 
