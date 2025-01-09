@@ -419,8 +419,7 @@ fn update_da_record_data__da_block_increases_da_gas_price_within_the_min_max_ran
 }
 
 #[test]
-fn update_da_record_data__sets_da_gas_price_to_min_da_gas_price_when_max_lt_min(
-) {
+fn update_da_record_data__sets_da_gas_price_to_min_da_gas_price_when_max_lt_min() {
     // given
     let min_da_gas_price = 1;
     let max_da_gas_price = 0;
