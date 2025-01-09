@@ -1,0 +1,33 @@
+[package]
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+description = "The service responsible for communication with the shared sequencer."
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies", "fuel-client", "fuel-core"]
+license = { workspace = true }
+name = "fuel-core-shared-sequencer"
+repository = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+base64 = "0.22"
+cosmos-sdk-proto = { version = "0.26", features = ["grpc"] }
+cosmrs = "0.21"
+fuel-core-services = { workspace = true }
+fuel-core-types = { workspace = true, features = ["std", "serde"] }
+fuel-sequencer-proto = { version = "0.1.0" }
+futures = { workspace = true }
+postcard = { workspace = true }
+prost = "0.12"
+reqwest = { version = "0.12", features = ["json"], default-features = false }
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1.0"
+tendermint-rpc = { version = "0.36", features = ["http-client"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[features]
+test-helpers = []
