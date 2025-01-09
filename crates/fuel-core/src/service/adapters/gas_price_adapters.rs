@@ -71,6 +71,7 @@ impl From<Config> for GasPriceServiceConfig {
             value.exec_gas_price_threshold_percent,
             value.da_gas_price_factor,
             value.min_da_gas_price,
+            value.max_da_gas_price,
             value.max_da_gas_price_change_percent,
             value.da_p_component,
             value.da_d_component,

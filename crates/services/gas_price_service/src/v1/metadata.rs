@@ -67,6 +67,7 @@ pub struct V1AlgorithmConfig {
     // https://github.com/FuelLabs/fuel-core/issues/2481
     pub gas_price_factor: NonZeroU64,
     pub min_da_gas_price: u64,
+    pub max_da_gas_price: u64,
     pub max_da_gas_price_change_percent: u16,
     pub da_p_component: i64,
     pub da_d_component: i64,
@@ -108,6 +109,7 @@ pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
             .l2_block_fullness_threshold_percent
             .into(),
         min_da_gas_price: value.min_da_gas_price,
+        max_da_gas_price: value.max_da_gas_price,
         max_da_gas_price_change_percent: value.max_da_gas_price_change_percent,
         da_p_component: value.da_p_component,
         da_d_component: value.da_d_component,
@@ -166,6 +168,7 @@ pub fn v1_algorithm_from_metadata(
             .l2_block_fullness_threshold_percent
             .into(),
         min_da_gas_price: config.min_da_gas_price,
+        max_da_gas_price: config.max_da_gas_price,
         max_da_gas_price_change_percent: config.max_da_gas_price_change_percent,
         da_p_component: config.da_p_component,
         da_d_component: config.da_d_component,
