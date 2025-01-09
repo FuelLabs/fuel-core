@@ -42,10 +42,7 @@ use fuel_core_gas_price_service::v0::uninitialized_task::{
     new_gas_price_service_v0,
     AlgorithmV0,
 };
-use fuel_core_poa::{
-    signer::SignMode,
-    Trigger,
-};
+use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     self,
     structured_storage::StructuredStorage,
@@ -53,6 +50,7 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::signer::SignMode;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -245,9 +243,22 @@ pub fn init_sub_services(
         tracing::info!("Enabled manual block production because of `debug` flag");
     }
 
+    let signer = Arc::new(FuelBlockSigner::new(config.consensus_signer.clone()));
+
+    #[cfg(feature = "shared-sequencer")]
+    let shared_sequencer = {
+        let config = config.shared_sequencer.clone();
+
+        fuel_core_shared_sequencer::service::new_service(
+            importer_adapter.clone(),
+            config,
+            signer.clone(),
+        )?
+    };
+
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
-    let poa = (production_enabled).then(|| {
+    let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
             &last_block_header,
             poa_config,
@@ -255,7 +266,7 @@ pub fn init_sub_services(
             producer_adapter.clone(),
             importer_adapter.clone(),
             p2p_adapter.clone(),
-            FuelBlockSigner::new(config.consensus_signer.clone()),
+            signer,
             predefined_blocks,
             SystemTime,
         )
@@ -353,6 +364,8 @@ pub fn init_sub_services(
             services.push(Box::new(sync));
         }
     }
+    #[cfg(feature = "shared-sequencer")]
+    services.push(Box::new(shared_sequencer));
 
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
