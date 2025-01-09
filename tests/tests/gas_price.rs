@@ -707,7 +707,7 @@ fn node_config_with_da_committer_url(url: &str) -> Config {
     let starting_gas_price = 10_000_000;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.min_da_gas_price = starting_gas_price;
-    node_config.max_da_gas_price = starting_gas_price + 1;
+    node_config.max_da_gas_price = u64::MAX;
     node_config.max_da_gas_price_change_percent = 15;
     node_config.block_production = Trigger::Never;
     node_config.da_committer_url = Some(url.to_string());
