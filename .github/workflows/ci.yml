@@ -171,12 +171,7 @@ jobs:
         with:
           version: "0.36.4"
       - uses: rui314/setup-mold@v1
-      - uses: actions-rs/cargo@v1
-        if: ${{ matrix.command == 'nextest' }}
-        with:
-          command: install
-          args: cargo-nextest --locked
-        continue-on-error: true
+      - uses: taiki-e/install-action@nextest
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
       - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
