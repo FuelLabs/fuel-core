@@ -119,7 +119,7 @@ impl<Storage> GasPriceServiceAtomicStorage for Storage
 where
     Storage: 'static,
     Storage: GetMetadataStorage + GetLatestRecordedHeight,
-    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync + Clone,
+    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
 {
     type Transaction<'a> = StorageTransaction<&'a mut Storage> where Self: 'a;
 
