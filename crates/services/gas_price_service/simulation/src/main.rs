@@ -29,21 +29,6 @@ pub mod service;
 pub mod simulation;
 pub mod tracing;
 
-pub async fn run_single_simulation(data: Data) -> anyhow::Result<SimulationResults> {
-    let starting_height = data.starting_height();
-    let config_values = ConfigValues {
-        min_da_gas_price: 1000,
-        max_da_gas_price: u64::MAX,
-        da_p_component: 50_000_000__000_000_000,
-        da_d_component: 100_000__000_000_000,
-    };
-    let metadata_values = MetadataValues::new(starting_height, 18_963);
-    let mut service_controller =
-        get_service_controller(config_values, metadata_values).await?;
-    let results = single_simulation(&data, &mut service_controller).await?;
-    Ok(results)
-}
-
 pub async fn run_a_simulation(
     args: SimulationArgs,
     data: Data,
@@ -54,29 +39,46 @@ pub async fn run_a_simulation(
             d_component,
             start_gas_price,
         } => {
-            let starting_height = data.starting_height();
-            let config_values = ConfigValues {
-                min_da_gas_price: 1000,
-                max_da_gas_price: u64::MAX,
-                da_p_component: p_component,
-                da_d_component: d_component,
-            };
-            let metadata_values = MetadataValues::new(starting_height, start_gas_price);
-            let mut service_controller =
-                get_service_controller(config_values, metadata_values).await?;
-            let results = single_simulation(&data, &mut service_controller).await?;
-            Ok(results)
+            run_single_simulation(&data, p_component, d_component, start_gas_price).await
+        }
+        SimulationArgs::Optimization { iterations } => {
+            optimization(data, iterations).await
         }
     }
+}
+
+async fn run_single_simulation(
+    data: &Data,
+    p_component: i64,
+    d_component: i64,
+    start_gas_price: u64,
+) -> anyhow::Result<SimulationResults> {
+    let starting_height = data.starting_height();
+    let config_values = ConfigValues {
+        min_da_gas_price: 1000,
+        max_da_gas_price: u64::MAX,
+        da_p_component: p_component,
+        da_d_component: d_component,
+    };
+    let metadata_values = MetadataValues::new(starting_height, start_gas_price);
+    let mut service_controller =
+        get_service_controller(config_values, metadata_values).await?;
+    single_simulation(&data, &mut service_controller).await
+}
+
+pub async fn optimization(
+    _data: Data,
+    _iterations: u64,
+) -> anyhow::Result<SimulationResults> {
+    todo!()
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     configure_tracing();
-
     let args = Args::parse();
     let data = get_data(&args.file_path)?;
-    let results = run_single_simulation(data).await?;
+    let results = run_a_simulation(args.simulation, data).await?;
     display_results(results)?;
     Ok(())
 }
