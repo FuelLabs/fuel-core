@@ -382,6 +382,14 @@ fn draw_profits(
 ) -> anyhow::Result<()> {
     let min_profit = *results.profits.iter().min().unwrap();
     let max_profit = *results.profits.iter().max().unwrap();
+    let min_cost = *results.costs.iter().min().unwrap() as i128;
+    let max_cost = *results.costs.iter().max().unwrap() as i128;
+    let min_reward = *results.rewards.iter().min().unwrap() as i128;
+    let max_reward = *results.rewards.iter().max().unwrap() as i128;
+
+    let max_overall = max_profit.max(max_cost).max(max_reward);
+    let min_overall = min_profit.min(min_cost).min(min_reward);
+
     let mut chart = ChartBuilder::on(&upper)
         .caption(
             "Profit, Cost, and Reward Over Time",
@@ -390,7 +398,7 @@ fn draw_profits(
         .margin(5)
         .x_label_area_size(40)
         .y_label_area_size(60)
-        .build_cartesian_2d(0..results.profits.len(), min_profit..max_profit)?;
+        .build_cartesian_2d(0..results.profits.len(), min_overall..max_overall)?;
 
     chart.configure_mesh().draw()?;
 
@@ -402,22 +410,30 @@ fn draw_profits(
         .label("Profit")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLACK));
 
-    // chart
-    //     .draw_series(LineSeries::new(
-    //         results.costs.iter().enumerate().map(|(x, *y as i128)| (x, *y)),
-    //         &RED,
-    //     ))?
-    //     .label("Cost")
-    //     .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
-    //
-    // chart
-    //     .draw_series(LineSeries::new(
-    //         results.rewards.iter().enumerate().map(|(x, y)| (x, *y)),
-    //         &BLUE,
-    //     ))?
-    //     .label("Reward")
-    //     .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
-    //
+    chart
+        .draw_series(LineSeries::new(
+            results
+                .costs
+                .iter()
+                .enumerate()
+                .map(|(x, y)| (x, *y as i128)),
+            &RED,
+        ))?
+        .label("Cost")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+    chart
+        .draw_series(LineSeries::new(
+            results
+                .rewards
+                .iter()
+                .enumerate()
+                .map(|(x, y)| (x, *y as i128)),
+            &BLUE,
+        ))?
+        .label("Reward")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+
     chart
         .configure_series_labels()
         .background_style(&WHITE.mix(0.8))
