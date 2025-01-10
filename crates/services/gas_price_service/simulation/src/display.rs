@@ -29,6 +29,22 @@ pub fn display_results(results: SimulationResults) -> anyhow::Result<()> {
         .last()
         .map(|x| *x as f64 / WEI_PER_ETH)
         .unwrap();
+
+    let sample_size = results.profits.len();
+
+    const DAYS_IN_SECONDS: usize = 24 * 60 * 60;
+    const HOURS_IN_SECONDS: usize = 60 * 60;
+    const MINUTES_IN_SECONDS: usize = 60;
+    let sample_length_days = sample_size / DAYS_IN_SECONDS;
+    let sample_length_hours = (sample_size % DAYS_IN_SECONDS) / HOURS_IN_SECONDS;
+    let sample_length_minutes = (sample_size % HOURS_IN_SECONDS) / MINUTES_IN_SECONDS;
+    let sample_length_seconds = sample_size % MINUTES_IN_SECONDS;
+
+    println!(
+        "Sample size: {:?} blocks, produced over {:?} days, {:?} hours, {:?} minutes, {:?} seconds",
+        sample_size, sample_length_days, sample_length_hours, sample_length_minutes, sample_length_seconds
+    );
+
     println!("Max gas price: {:?}", max_gas_price);
     println!("Min gas price: {:?}", min_gas_price);
     println!("Final gas price: {:?}", results.gas_price.last().unwrap());

@@ -1,3 +1,11 @@
+use std::{
+    cmp::{
+        max,
+        min,
+    },
+    ops::RangeInclusive,
+};
+
 use crate::{
     cli::SimulationArgs,
     data::Data,
@@ -7,10 +15,6 @@ use crate::{
         MetadataValues,
         ServiceController,
     },
-};
-use std::cmp::{
-    max,
-    min,
 };
 
 #[derive(Debug)]
@@ -119,9 +123,10 @@ async fn run_single_simulation(
 }
 
 pub async fn optimization(data: Data) -> anyhow::Result<SimulationResults> {
-    let start_gas_price = 1_000; // TODO: pass value
+    let start_gas_price = 25_000; // TODO: pass value
     let p = select_p_value(&data, start_gas_price).await?;
     let d = select_d_value(&data, p, start_gas_price).await?;
+    tracing::info!("Optimal p: {}, optimal d: {}", p, d);
     let best_result = run_single_simulation(&data, p, d, start_gas_price).await?;
     Ok(best_result)
 }
@@ -136,43 +141,13 @@ pub async fn optimization(data: Data) -> anyhow::Result<SimulationResults> {
 // Each simulation can be run in a separate thread
 async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64> {
     const DISSECT_SAMPLES: i128 = 10;
-    let mut p_range = (i64::MIN as i128)..=(i64::MAX as i128); // convert to i128 to be safe
+    let mut p_range = 0..=(i64::MAX as i128); // convert to i128 to be safe
     let mut best_p = 1;
     let mut best_profit = i128::MAX;
     let tries = 10;
     for _ in 0..tries {
         // split the p_range into DISSECT_SAMPLES
-        let mut p_values = Vec::new();
-        let range_len =
-            p_range
-                .end()
-                .checked_sub(*p_range.start())
-                .ok_or(anyhow::anyhow!(
-                    "Overflow: {} - {}",
-                    p_range.end(),
-                    p_range.start()
-                ))?;
-        let interval_len =
-            range_len
-                .checked_div(DISSECT_SAMPLES)
-                .ok_or(anyhow::anyhow!(
-                    "Overflow: {} / {}",
-                    range_len,
-                    DISSECT_SAMPLES
-                ))?;
-        for i in 0..DISSECT_SAMPLES {
-            let add = interval_len.checked_mul(i).ok_or(anyhow::anyhow!(
-                "Overflow: {} * {}",
-                interval_len,
-                i
-            ))?;
-            let p = p_range.start().checked_add(add).ok_or(anyhow::anyhow!(
-                "Overflow: {} + {}",
-                p_range.start(),
-                add
-            ))?;
-            p_values.push(p);
-        }
+        let p_values = dissect_range(&p_range, DISSECT_SAMPLES)?;
 
         tracing::info!("running for p_values: {:?}", p_values);
 
@@ -195,7 +170,7 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
             .collect();
 
         // join all the futures and get the results
-        let mut pairs_res: anyhow::Result<Vec<_>> = futures::future::join_all(futures)
+        let pairs_res: anyhow::Result<Vec<_>> = futures::future::join_all(futures)
             .await
             .into_iter()
             .map(|fut_res| fut_res.map_err(|err| anyhow::anyhow!(err)))
@@ -206,9 +181,11 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
         let mut pairs = pairs_res?;
 
         pairs.sort_by_key(|(profit, _)| *profit);
+        tracing::info!("pairs: {:?}", pairs);
         let ((new_best_profit, new_best_p), remaining) = pairs
             .split_first()
             .ok_or(anyhow::anyhow!("No best profit found"))?;
+        tracing::info!("remaining: {:?}", remaining);
         let ((_, second_best_p), _) = remaining
             .split_first()
             .ok_or(anyhow::anyhow!("No second best profit found"))?;
@@ -234,6 +211,39 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
 
     Ok(best_p)
 }
+fn dissect_range(
+    range: &RangeInclusive<i128>,
+    samples: i128,
+) -> anyhow::Result<Vec<i128>> {
+    let mut values = Vec::new();
+    let range_len = range
+        .end()
+        .checked_sub(*range.start())
+        .ok_or(anyhow::anyhow!(
+            "Overflow: {} - {}",
+            range.end(),
+            range.start()
+        ))?;
+    let interval_len = range_len.checked_div(samples).ok_or(anyhow::anyhow!(
+        "Overflow: {} / {}",
+        range_len,
+        samples
+    ))?;
+    for i in 0..samples {
+        let add = interval_len.checked_mul(i).ok_or(anyhow::anyhow!(
+            "Overflow: {} * {}",
+            interval_len,
+            i
+        ))?;
+        let p = range.start().checked_add(add).ok_or(anyhow::anyhow!(
+            "Overflow: {} + {}",
+            range.start(),
+            add
+        ))?;
+        values.push(p);
+    }
+    Ok(values)
+}
 
 // do the same as with p for d, but use a predefined p value,
 async fn select_d_value(
@@ -242,26 +252,21 @@ async fn select_d_value(
     start_gas_price: u64,
 ) -> anyhow::Result<i64> {
     const DISSECT_SAMPLES: usize = 10;
-    let mut d_range = i64::MIN..=i64::MAX;
+    let mut d_range = 0..=(i64::MAX as i128);
     let mut best_d = 1;
     let mut best_profit = i128::MAX;
     let tries = 10;
     for _ in 0..tries {
         // split the d_range into DISSECT_SAMPLES
-        let mut d_values = Vec::new();
-        for i in 0..DISSECT_SAMPLES {
-            let d = d_range.start()
-                + (d_range.end() - d_range.start()) * i as i64 / DISSECT_SAMPLES as i64;
-            d_values.push(d);
-        }
+        let d_values = dissect_range(&d_range, DISSECT_SAMPLES as i128)?;
 
         // for each d value, run a single simulation in a separate task and return the results
         let futures: Vec<_> = d_values
-            .iter()
+            .into_iter()
             .map(|d| {
                 let data = data.clone();
-                let d = *d;
                 tokio::spawn(async move {
+                    let d: i64 = d.try_into()?;
                     let result =
                         run_single_simulation(&data, p, d, start_gas_price).await?;
                     // use the abs of the profits so we large swings in profit don't cancel out
@@ -274,7 +279,7 @@ async fn select_d_value(
             .collect();
 
         // join all the futures and get the results
-        let mut pairs_res: anyhow::Result<Vec<_>> = futures::future::join_all(futures)
+        let pairs_res: anyhow::Result<Vec<_>> = futures::future::join_all(futures)
             .await
             .into_iter()
             .map(|fut_res| fut_res.map_err(|err| anyhow::anyhow!(err)))
@@ -282,15 +287,27 @@ async fn select_d_value(
             .collect();
 
         // choose the one d value associated with the lowest average profit
-        let pairs = pairs_res?;
-        let (new_best_profit, new_best_d) = pairs
-            .into_iter()
-            .min_by_key(|(profit, _)| *profit)
+        let mut pairs = pairs_res?;
+        // let (new_best_profit, new_best_d) = pairs
+        //     .into_iter()
+        //     .min_by_key(|(profit, _)| *profit)
+        //     .ok_or(anyhow::anyhow!("No best profit found"))?;
+        pairs.sort_by_key(|(profit, _)| *profit);
+        let ((new_best_profit, new_best_d), remaining) = pairs
+            .split_first()
             .ok_or(anyhow::anyhow!("No best profit found"))?;
+        let ((_, second_best_d), _) = remaining
+            .split_first()
+            .ok_or(anyhow::anyhow!("No second best profit found"))?;
 
-        if new_best_profit < best_profit {
-            best_d = new_best_d;
-            best_profit = new_best_profit;
+        if *new_best_profit < best_profit {
+            best_d = *new_best_d;
+            best_profit = *new_best_profit;
+
+            // update d range
+            let start_d = min(best_d, *second_best_d);
+            let end_d = max(best_d, *second_best_d);
+            d_range = start_d.into()..=end_d.into();
         } else {
             break
         }
