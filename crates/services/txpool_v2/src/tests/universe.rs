@@ -43,6 +43,7 @@ use fuel_core_types::{
     },
     fuel_types::{
         AssetId,
+        BlockHeight,
         ChainId,
         Word,
     },
@@ -93,6 +94,7 @@ use super::mocks::{
 // the byte and gas price fees.
 pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 pub const GAS_LIMIT: Word = 100000;
+pub const DEFAULT_EXPIRATION_HEIGHT: BlockHeight = BlockHeight::new(1000);
 
 pub struct TestPoolUniverse {
     mock_db: MockDb,
@@ -197,6 +199,7 @@ impl TestPoolUniverse {
         }
         tx_builder.tip(tip);
         tx_builder.max_fee_limit(10000);
+        tx_builder.expiration(DEFAULT_EXPIRATION_HEIGHT);
         tx_builder.finalize().into()
     }
 
