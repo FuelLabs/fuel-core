@@ -178,6 +178,7 @@ pub fn get_block_info(
         block_gas_capacity: block_gas_limit,
         block_bytes: Postcard::encode(block).len() as u64,
         block_fees: fee,
+        gas_price,
     };
     Ok(info)
 }

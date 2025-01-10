@@ -177,6 +177,7 @@ mod tests {
                 CoinsToSpendIndexKey,
             },
         },
+        state::rocks_db::DatabaseConfig,
     };
 
     use super::NON_RETRYABLE_BYTE;
@@ -205,9 +206,12 @@ mod tests {
     fn coins_to_spend_indexation_enabled_flag_is_respected() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         // Given
@@ -286,9 +290,12 @@ mod tests {
     fn coin_owner_and_asset_id_is_respected() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         // Given
@@ -372,9 +379,12 @@ mod tests {
     fn message_owner_is_respected() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         // Given
@@ -439,9 +449,12 @@ mod tests {
     fn coins_with_retryable_and_non_retryable_messages_are_not_mixed() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         // Given
@@ -507,9 +520,12 @@ mod tests {
     fn double_insertion_of_message_causes_error() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         // Given
@@ -551,9 +567,12 @@ mod tests {
     fn double_insertion_of_coin_causes_error() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         // Given
@@ -598,9 +617,12 @@ mod tests {
     fn removal_of_non_existing_coin_causes_error() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         // Given
@@ -656,9 +678,12 @@ mod tests {
     fn removal_of_non_existing_message_causes_error() {
         use tempfile::TempDir;
         let tmp_dir = TempDir::new().unwrap();
-        let mut db: Database<OffChain> =
-            Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                .unwrap();
+        let mut db: Database<OffChain> = Database::open_rocksdb(
+            tmp_dir.path(),
+            Default::default(),
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
         let mut tx = db.write_transaction();
 
         // Given
@@ -696,9 +721,12 @@ mod tests {
         ) {
             use tempfile::TempDir;
             let tmp_dir = TempDir::new().unwrap();
-            let mut db: Database<OffChain> =
-                Database::open_rocksdb(tmp_dir.path(), None, Default::default(), 512)
-                    .unwrap();
+            let mut db: Database<OffChain> = Database::open_rocksdb(
+                tmp_dir.path(),
+                Default::default(),
+                DatabaseConfig::config_for_tests(),
+            )
+            .unwrap();
             let mut tx = db.write_transaction();
             let base_asset_id = AssetId::from([0; 32]);
 

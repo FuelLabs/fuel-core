@@ -9,7 +9,16 @@ use criterion::{
     SamplingMode,
 };
 use ed25519_dalek::Signer;
-use fuel_core::service::config::Trigger;
+use fuel_core::{
+    service::{
+        config::Trigger,
+        DbType,
+    },
+    state::rocks_db::{
+        ColumnsPolicy,
+        DatabaseConfig,
+    },
+};
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -90,6 +99,12 @@ where
             test_builder.utxo_validation = true;
             test_builder.gas_limit = Some(10_000_000_000);
             test_builder.block_size_limit = Some(1_000_000_000_000);
+            test_builder.database_type = DbType::RocksDb;
+            test_builder.database_config = DatabaseConfig {
+                cache_capacity: Some(16 * 1024 * 1024 * 1024),
+                max_fds: -1,
+                columns_policy: ColumnsPolicy::OnCreation,
+            };
 
             // spin up node
             let transactions: Vec<Transaction> =

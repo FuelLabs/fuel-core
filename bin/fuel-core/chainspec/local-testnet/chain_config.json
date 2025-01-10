@@ -47,7 +47,7 @@
           "andi": 2,
           "bal": 274,
           "bhei": 2,
-          "bhsh": 2,
+          "bhsh": 32,
           "burn": 7566,
           "cb": 2,
           "cfsi": 2,
@@ -126,7 +126,7 @@
           "wqmm": 6,
           "xor": 2,
           "xori": 2,
-          "ecop": 2,
+          "ecop": 3500,
           "aloc": {
             "LightOperation": {
               "base": 2,
@@ -273,8 +273,8 @@
           },
           "epar": {
             "HeavyOperation": {
-              "base": 2,
-              "gas_per_unit": 2
+              "base": 69000,
+              "gas_per_unit": 52000
             }
           },
           "contract_root": {
@@ -304,7 +304,7 @@
       "privileged_address": "9f0e19d6c2a6283a3222426ab2630d35516b1799b503f37b02105bebe1b8a3e9"
     }
   },
-  "genesis_state_transition_version": 16,
+  "genesis_state_transition_version": 18,
   "consensus": {
     "PoAV2": {
       "genesis_signing_key": "e0a9fcde1b73f545252e01b30b50819eb9547d07531fa3df0385c5695736634d",

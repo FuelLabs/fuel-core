@@ -17,10 +17,7 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_poa::{
-    signer::SignMode,
-    Trigger,
-};
+use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     tables::{
         FuelBlocks,
@@ -37,6 +34,7 @@ use fuel_core_types::{
     },
     fuel_tx::*,
     secrecy::ExposeSecret,
+    signer::SignMode,
     tai64::Tai64,
 };
 use itertools::{

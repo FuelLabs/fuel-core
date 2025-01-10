@@ -12,13 +12,13 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_poa::signer::SignMode;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::consensus::Consensus,
     fuel_crypto::SecretKey,
     fuel_tx::Transaction,
     secrecy::Secret,
+    signer::SignMode,
 };
 use rand::{
     rngs::StdRng,

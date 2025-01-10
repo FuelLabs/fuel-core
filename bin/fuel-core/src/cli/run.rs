@@ -34,6 +34,10 @@ use fuel_core::{
         RelayerConsensusConfig,
         VMConfig,
     },
+    state::rocks_db::{
+        ColumnsPolicy,
+        DatabaseConfig,
+    },
     txpool::config::{
         BlackList,
         Config as TxPoolConfig,
@@ -55,8 +59,10 @@ use fuel_core_metrics::config::{
     DisableConfig,
     Module,
 };
-use fuel_core_poa::signer::SignMode;
-use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
+use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
+    signer::SignMode,
+};
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
@@ -85,10 +91,11 @@ use tracing::{
 #[cfg(feature = "rocksdb")]
 use fuel_core::state::historical_rocksdb::StateRewindPolicy;
 
-use super::DEFAULT_DATABASE_CACHE_SIZE;
-
 #[cfg(feature = "p2p")]
 mod p2p;
+
+#[cfg(feature = "shared-sequencer")]
+mod shared_sequencer;
 
 mod consensus;
 mod graphql;
@@ -105,12 +112,8 @@ pub struct Command {
     pub service_name: String,
 
     /// The maximum database cache size in bytes.
-    #[arg(
-        long = "max-database-cache-size",
-        default_value_t = DEFAULT_DATABASE_CACHE_SIZE,
-        env
-    )]
-    pub max_database_cache_size: usize,
+    #[arg(long = "max-database-cache-size", env)]
+    pub max_database_cache_size: Option<usize>,
 
     #[clap(
         name = "DB_PATH",
@@ -256,6 +259,10 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
+    #[cfg_attr(feature = "shared-sequencer", clap(flatten))]
+    #[cfg(feature = "shared-sequencer")]
+    pub shared_sequencer_args: shared_sequencer::Args,
+
     #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), env)]
     pub disabled_metrics: Vec<Module>,
 
@@ -316,6 +323,8 @@ impl Command {
             p2p_args,
             #[cfg(feature = "p2p")]
             sync_args,
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer_args,
             disabled_metrics,
             max_da_lag,
             max_wait_time,
@@ -395,8 +404,9 @@ impl Command {
                 // if consensus key is not configured, fallback to dev consensus key
                 let key = default_consensus_dev_key();
                 warn!(
-                    "Fuel Core is using an insecure test key for consensus. Public key: {}",
-                    key.public_key()
+                    "Fuel Core is using an insecure test key for consensus. Public key: {}, SecretKey: {}",
+                    key.public_key(),
+                    key
                 );
                 consensus_signer = SignMode::Key(Secret::new(key.into()));
             }
@@ -456,11 +466,17 @@ impl Command {
         let combined_db_config = CombinedDatabaseConfig {
             database_path,
             database_type,
-            max_database_cache_size,
+            #[cfg(feature = "rocksdb")]
+            database_config: DatabaseConfig {
+                max_fds: rocksdb_max_fds,
+                cache_capacity: max_database_cache_size,
+                #[cfg(feature = "production")]
+                columns_policy: ColumnsPolicy::OnCreation,
+                #[cfg(not(feature = "production"))]
+                columns_policy: ColumnsPolicy::Lazy,
+            },
             #[cfg(feature = "rocksdb")]
             state_rewind_policy,
-            #[cfg(feature = "rocksdb")]
-            max_fds: rocksdb_max_fds,
         };
 
         let block_importer = fuel_core::service::config::fuel_core_importer::Config::new(
@@ -600,6 +616,8 @@ impl Command {
             p2p: p2p_cfg,
             #[cfg(feature = "p2p")]
             sync: sync_args.into(),
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer: shared_sequencer_args.try_into()?,
             consensus_signer,
             name,
             relayer_consensus_config: verifier,

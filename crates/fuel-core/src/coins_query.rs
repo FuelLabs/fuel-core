@@ -212,13 +212,6 @@ pub async fn largest_first(
 }
 
 // An implementation of the method described on: https://iohk.io/en/blog/posts/2018/07/03/self-organisation-in-coin-selection/
-// TODO: Reimplement this algorithm to be simpler and faster:
-//  Instead of selecting random coins first, we can sort them.
-//  After that, we can split the coins into the part that covers the
-//  target and the part that does not(by choosing the most expensive coins).
-//  When the target is satisfied, we can select random coins from the remaining
-//  coins not used in the target.
-//  https://github.com/FuelLabs/fuel-core/issues/1965
 pub async fn random_improve(
     db: &ReadView,
     spend_query: &SpendQuery,
@@ -286,7 +279,12 @@ pub async fn select_coins_to_spend(
     excluded_ids: &ExcludedCoinIds<'_>,
     batch_size: usize,
 ) -> Result<Vec<CoinsToSpendIndexKey>, CoinsQueryError> {
+    // We aim to reduce dust creation by targeting twice the required amount for selection,
+    // inspired by the random-improve approach. This increases the likelihood of generating
+    // useful change outputs for future transactions, minimizing unusable dust outputs.
+    // See also "let upper_target = target.saturating_mul(2);" in "fn random_improve()".
     const TOTAL_AMOUNT_ADJUSTMENT_FACTOR: u64 = 2;
+
     if total == 0 || max == 0 {
         return Err(CoinsQueryError::IncorrectQueryParameters {
             provided_total: total,
