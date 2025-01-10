@@ -11,6 +11,7 @@ use fuel_core_gas_price_service::{
     v1::da_source_service::DaBlockCosts,
 };
 use itertools::Itertools;
+use plotters::coord::Shift;
 use serde_reflection::{
     Samples,
     Tracer,
@@ -31,6 +32,7 @@ use tracing_subscriber::{
 
 pub mod data_sources;
 pub mod service;
+use plotters::prelude::*;
 
 // l1_block_number,l1_blob_fee_wei,l1_blob_size_bytes,l2_block_number,l2_gas_fullness,l2_gas_capacity,l2_byte_size,l2_byte_capacity,l2_block_transactions_count,l2_gas_price,l2_fee
 // 21403864,509018984154240,1436954,9099900,0,30000000,488,260096,1,1000,0
@@ -128,6 +130,7 @@ struct SimulationResults {
     profits: Vec<i128>,
     costs: Vec<u128>,
     rewards: Vec<u128>,
+    cost_per_byte: Vec<u128>,
 }
 
 impl SimulationResults {
@@ -137,6 +140,7 @@ impl SimulationResults {
             profits: Vec::new(),
             costs: Vec::new(),
             rewards: Vec::new(),
+            cost_per_byte: Vec::new(),
         }
     }
 }
@@ -156,6 +160,10 @@ impl SimulationResults {
 
     pub fn add_reward(&mut self, reward: u128) {
         self.rewards.push(reward);
+    }
+
+    pub fn add_cost_per_byte(&mut self, cost_per_byte: u128) {
+        self.cost_per_byte.push(cost_per_byte);
     }
 }
 
@@ -289,14 +297,22 @@ async fn simulation(
 ) -> anyhow::Result<SimulationResults> {
     tracing::info!("Starting simulation");
     let mut results = SimulationResults::new();
+    let last_cost_per_byte = 0;
     for (block, maybe_costs) in data.get_iter() {
+        let cost_per_byte = if let Some(costs) = maybe_costs.last() {
+            costs.blob_cost_wei / costs.bundle_size_bytes as u128
+        } else {
+            last_cost_per_byte
+        };
         service_controller.advance(block, maybe_costs).await?;
         let gas_price = service_controller.gas_price();
-        results.add_gas_price(gas_price);
         let (profit, cost, reward) = service_controller.profit_cost_reward()?;
+
+        results.add_gas_price(gas_price);
         results.add_profit(profit);
         results.add_cost(cost);
         results.add_reward(reward);
+        results.add_cost_per_byte(cost_per_byte);
     }
     tracing::info!("Finished simulation");
     Ok(results)
@@ -338,6 +354,114 @@ fn display_results(results: SimulationResults) -> anyhow::Result<()> {
     println!("Final cost: {:?}", final_cost);
 
     println!("Final reward: {:?}", final_reward);
+
+    graph_results(results)?;
+
+    Ok(())
+}
+
+fn graph_results(results: SimulationResults) -> anyhow::Result<()> {
+    let root_area =
+        BitMapBackend::new("charts/results.png", (1280, 720)).into_drawing_area();
+    root_area.fill(&WHITE)?;
+
+    let (upper, lower) = root_area.split_vertically(360);
+
+    // Upper chart for profit, cost, and reward
+    draw_profits(&results, &upper)?;
+
+    // Lower chart for price per byte to post to DA
+    draw_da_costs(results, &lower)?;
+
+    Ok(())
+}
+
+fn draw_profits(
+    results: &SimulationResults,
+    upper: &DrawingArea<BitMapBackend, Shift>,
+) -> anyhow::Result<()> {
+    let min_profit = *results.profits.iter().min().unwrap();
+    let max_profit = *results.profits.iter().max().unwrap();
+    let mut chart = ChartBuilder::on(&upper)
+        .caption(
+            "Profit, Cost, and Reward Over Time",
+            ("sans-serif", 50).into_font(),
+        )
+        .margin(5)
+        .x_label_area_size(40)
+        .y_label_area_size(60)
+        .build_cartesian_2d(0..results.profits.len(), min_profit..max_profit)?;
+
+    chart.configure_mesh().draw()?;
+
+    chart
+        .draw_series(LineSeries::new(
+            results.profits.iter().enumerate().map(|(x, y)| (x, *y)),
+            &BLACK,
+        ))?
+        .label("Profit")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLACK));
+
+    // chart
+    //     .draw_series(LineSeries::new(
+    //         results.costs.iter().enumerate().map(|(x, *y as i128)| (x, *y)),
+    //         &RED,
+    //     ))?
+    //     .label("Cost")
+    //     .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+    //
+    // chart
+    //     .draw_series(LineSeries::new(
+    //         results.rewards.iter().enumerate().map(|(x, y)| (x, *y)),
+    //         &BLUE,
+    //     ))?
+    //     .label("Reward")
+    //     .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+    //
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.8))
+        .border_style(&BLACK)
+        .draw()?;
+    Ok(())
+}
+
+fn draw_da_costs(
+    results: SimulationResults,
+    lower: &DrawingArea<BitMapBackend, Shift>,
+) -> anyhow::Result<()> {
+    let mut chart = ChartBuilder::on(&lower)
+        .caption(
+            "Price Per Byte to Post to DA Over Time",
+            ("sans-serif", 50).into_font(),
+        )
+        .margin(5)
+        .x_label_area_size(40)
+        .y_label_area_size(60)
+        .build_cartesian_2d(
+            0..results.cost_per_byte.len(),
+            0..*results.cost_per_byte.iter().max().unwrap() as i32,
+        )?;
+
+    chart.configure_mesh().draw()?;
+
+    chart
+        .draw_series(LineSeries::new(
+            results
+                .cost_per_byte
+                .iter()
+                .enumerate()
+                .map(|(x, y)| (x, *y as i32)),
+            &BLUE,
+        ))?
+        .label("Price Per Byte")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.8))
+        .border_style(&BLACK)
+        .draw()?;
     Ok(())
 }
 

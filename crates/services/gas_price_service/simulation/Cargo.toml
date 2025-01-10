@@ -22,5 +22,6 @@ clap = { version = "4.5.24", features = ["derive"] }
 itertools = "0.14.0"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+plotters = "0.3.5"
 
 [workspace]
