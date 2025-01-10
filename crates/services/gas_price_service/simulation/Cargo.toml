@@ -23,5 +23,6 @@ itertools = "0.14.0"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 plotters = "0.3.5"
+futures = "0.3.17"
 
 [workspace]

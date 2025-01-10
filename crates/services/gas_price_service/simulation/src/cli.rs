@@ -18,9 +18,9 @@ pub enum SimulationArgs {
         start_gas_price: u64,
     },
     Optimization {
-        /// Number of iterations to run the optimization for
-        #[arg(short, long)]
-        iterations: u64,
+        // /// Number of iterations to run the optimization for
+        // #[arg(short, long)]
+        // iterations: u64,
     },
 }
 
