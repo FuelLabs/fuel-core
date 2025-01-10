@@ -43,7 +43,14 @@ pub struct DaSourceService<Source> {
     poll_interval: Interval,
     source: Source,
     shared_state: SharedState,
+    // This is the latest L2 height that is shared between this service
+    // and the block importer
+    // This is done for filtering out da block costs which reference
+    // a height greater than the latest L2 height
+    // This is a situation that occurs during syncing of the node
     latest_l2_height: Arc<Mutex<BlockHeight>>,
+    // This is the last recorded height of the da block costs
+    // This is used to fetch the da block costs from the source
     recorded_height: BlockHeight,
 }
 
