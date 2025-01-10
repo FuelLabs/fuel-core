@@ -4,7 +4,10 @@ use fuel_core_types::{
         block::Block,
         consensus::Sealed,
     },
-    fuel_tx::UniqueIdentifier,
+    fuel_tx::{
+        UniqueIdentifier,
+        UtxoId,
+    },
     fuel_types::ChainId,
     services::{
         block_importer::ImportResult,
@@ -331,6 +334,105 @@ async fn prune_expired_transactions() {
             .count(),
         0
     );
+
+    service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test]
+async fn prune_expired_doesnt_trigger_twice() {
+    let mut universe = TestPoolUniverse::default();
+    let (sender, receiver) = tokio::sync::mpsc::channel(10);
+
+    let (output_1, input_1) = universe.create_output_and_input();
+    let (output_2, input_2) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output_1]), 10);
+    let tx2 = universe.build_script_transaction(None, Some(vec![output_2]), 20);
+
+    let service =
+        universe.build_service(None, Some(MockImporter::with_block_provider(receiver)));
+    service.start_and_await().await.unwrap();
+
+    let ids = vec![tx1.id(&Default::default()), tx2.id(&Default::default())];
+    service
+        .shared
+        .try_insert(vec![tx1.clone(), tx2.clone()])
+        .unwrap();
+
+    universe
+        .waiting_txs_insertion(service.shared.new_tx_notification_subscribe(), ids)
+        .await;
+
+    let tx3 = universe.build_script_transaction(
+        Some(vec![
+            input_1.into_input(UtxoId::new(tx1.id(&ChainId::default()), 0)),
+            input_2.into_input(UtxoId::new(tx2.id(&ChainId::default()), 0)),
+        ]),
+        None,
+        30,
+    );
+
+    let ids = vec![tx3.id(&Default::default())];
+    service.shared.try_insert(vec![tx3.clone()]).unwrap();
+
+    universe
+        .waiting_txs_insertion(service.shared.new_tx_notification_subscribe(), ids)
+        .await;
+
+    // Given
+    let expiration_block = Sealed {
+        entity: {
+            let mut block = Block::default();
+            let header = block.header_mut();
+            header.set_block_height(DEFAULT_EXPIRATION_HEIGHT);
+            block
+        },
+        consensus: Default::default(),
+    };
+
+    assert_eq!(
+        service
+            .shared
+            .find(vec![
+                tx1.id(&Default::default()),
+                tx2.id(&Default::default()),
+                tx3.id(&Default::default()),
+            ])
+            .await
+            .unwrap()
+            .iter()
+            .filter(|x| x.is_some())
+            .count(),
+        3
+    );
+
+    // When
+    let mut update_1 = service
+        .shared
+        .tx_update_subscribe(tx1.id(&ChainId::default()))
+        .unwrap();
+    let mut update_2 = service
+        .shared
+        .tx_update_subscribe(tx2.id(&ChainId::default()))
+        .unwrap();
+    let mut update_3 = service
+        .shared
+        .tx_update_subscribe(tx3.id(&ChainId::default()))
+        .unwrap();
+    sender
+        .send(Arc::new(ImportResult::new_from_local(
+            expiration_block,
+            vec![],
+            vec![],
+        )))
+        .await
+        .unwrap();
+    update_1.next().await.expect("tx1 should be pruned");
+    update_2.next().await.expect("tx2 should be pruned");
+    update_3.next().await.expect("tx3 should be pruned");
+
+    // Then
+    // Verify that their no new messages on `update_3`
+    assert!(update_3.next().await.is_none());
 
     service.stop_and_await().await.unwrap();
 }

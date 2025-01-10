@@ -477,7 +477,6 @@ type GasCosts {
 
 enum GasCostsVersion {
 	V1
-	V2
 }
 
 type Genesis {
