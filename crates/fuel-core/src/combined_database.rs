@@ -78,7 +78,7 @@ impl CombinedDatabase {
         Ok(())
     }
 
-    #[cfg(all(feature = "rocksdb", feature = "backup"))]
+    #[cfg(feature = "backup")]
     pub fn backup(
         db_dir: &std::path::Path,
         backup_dir: &std::path::Path,
@@ -152,7 +152,7 @@ impl CombinedDatabase {
         Ok(())
     }
 
-    #[cfg(all(feature = "rocksdb", feature = "backup"))]
+    #[cfg(feature = "backup")]
     pub fn restore(
         restore_to: &std::path::Path,
         backup_dir: &std::path::Path,
@@ -578,7 +578,7 @@ impl CombinedGenesisDatabase {
 }
 
 #[allow(non_snake_case)]
-#[cfg(all(feature = "backup", feature = "rocksdb"))]
+#[cfg(feature = "backup")]
 #[cfg(test)]
 mod tests {
     use super::*;
