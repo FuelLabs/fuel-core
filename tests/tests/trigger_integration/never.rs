@@ -12,15 +12,13 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
-use fuel_core_poa::{
-    signer::SignMode,
-    Trigger,
-};
+use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::op,
     fuel_crypto::SecretKey,
     fuel_tx::TransactionBuilder,
     secrecy::Secret,
+    signer::SignMode,
 };
 use rand::{
     rngs::StdRng,

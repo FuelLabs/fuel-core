@@ -44,7 +44,7 @@ expression: json
       },
       "chain_id": 0,
       "gas_costs": {
-        "V4": {
+        "V5": {
           "add": 1,
           "addi": 1,
           "and": 1,
@@ -130,6 +130,7 @@ expression: json
           "wqmm": 3,
           "xor": 1,
           "xori": 1,
+          "ecop": 3500,
           "aloc": {
             "LightOperation": {
               "base": 2,
@@ -274,6 +275,12 @@ expression: json
               "units_per_gas": 5
             }
           },
+          "epar": {
+            "HeavyOperation": {
+              "base": 69000,
+              "gas_per_unit": 52000
+            }
+          },
           "contract_root": {
             "LightOperation": {
               "base": 75,
@@ -301,7 +308,7 @@ expression: json
       "privileged_address": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   },
-  "genesis_state_transition_version": 16,
+  "genesis_state_transition_version": 18,
   "consensus": {
     "PoAV2": {
       "genesis_signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb",

@@ -1,0 +1,33 @@
+[package]
+name = "fuel-gas-price-data-fetcher"
+version = "0.0.1"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1.0.86"
+clap = { version = "4.5.16", features = ["derive"] }
+csv = "1.3.0"
+fuel-gas-price-algorithm = { path = ".." }
+futures = "0.3.30"
+plotters = "0.3.5"
+rand = "0.8.5"
+rand_distr = "0.4.3"
+serde = { version = "1.0.209", features = ["derive"] }
+tokio = { version = "1.40.0", features = ["macros", "rt", "rt-multi-thread"] }
+reqwest = { version = "0.12.11", features = ["json"] }
+serde_json = { version = "1.0.134" }
+fuel-core-client = { version = "0.40.2" }                                      # locked to whatever version you're supposed to be fetching data from
+fuel-core-types = { version = "0.40.2" }
+postcard = { version = "1.0" }
+tracing = { version = "0.1.41" }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+
+async-trait = "0.1"
+cynic = { version = "2.2", features = ["http-reqwest"] }
+itertools = { version = "0.13" }
+
+[build-dependencies]
+fuel-core-client = { version = "0.40.2" }

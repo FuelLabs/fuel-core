@@ -2,6 +2,10 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::{
+            storage::{
+                GasPriceColumn,
+                GasPriceMetadata,
+            },
             GasPriceSettings,
             GasPriceSettingsProvider,
         },
@@ -15,10 +19,15 @@ use crate::{
     },
     ports::{
         GasPriceData,
+        GasPriceServiceAtomicStorage,
+        GetDaBundleId,
+        GetMetadataStorage,
         L2Data,
-        MetadataStorage,
+        SetDaBundleId,
+        SetMetadataStorage,
     },
     v1::{
+        algorithm::SharedV1Algorithm,
         da_source_service::{
             service::{
                 DaBlockCostsSource,
@@ -27,17 +36,25 @@ use crate::{
             DaBlockCosts,
         },
         metadata::{
+            updater_from_config,
             V1AlgorithmConfig,
             V1Metadata,
         },
         service::{
             initialize_algorithm,
             GasPriceServiceV1,
+            LatestGasPrice,
         },
-        uninitialized_task::UninitializedTask,
+        uninitialized_task::{
+            fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
+            UninitializedTask,
+        },
     },
 };
-use anyhow::anyhow;
+use anyhow::{
+    anyhow,
+    Result,
+};
 use fuel_core_services::{
     stream::{
         BoxStream,
@@ -47,14 +64,23 @@ use fuel_core_services::{
     StateWatcher,
 };
 use fuel_core_storage::{
-    transactional::AtomicView,
+    iter::IteratorOverTable,
+    structured_storage::test::InMemoryStorage,
+    transactional::{
+        AtomicView,
+        IntoTransaction,
+        StorageTransaction,
+        WriteTransaction,
+    },
     Result as StorageResult,
+    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
         header::ConsensusParametersVersion,
     },
+    fuel_asm::op::exp,
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::block_importer::{
@@ -62,11 +88,20 @@ use fuel_core_types::{
         SharedImportResult,
     },
 };
-use fuel_gas_price_algorithm::v1::AlgorithmUpdaterV1;
+use fuel_gas_price_algorithm::v1::{
+    AlgorithmUpdaterV1,
+    Bytes,
+    Error,
+    Height,
+    UnrecordedBlocks,
+};
 use std::{
     num::NonZeroU64,
     ops::Deref,
-    sync::Arc,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 use tokio::sync::mpsc::Receiver;
 
@@ -94,27 +129,23 @@ impl FakeMetadata {
     }
 }
 
-impl MetadataStorage for FakeMetadata {
-    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
-        let metadata = self.inner.lock().unwrap().clone();
-        Ok(metadata)
-    }
-
+impl SetMetadataStorage for FakeMetadata {
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
         *self.inner.lock().unwrap() = Some(metadata.clone());
         Ok(())
     }
 }
 
-struct ErroringMetadata;
-
-impl MetadataStorage for ErroringMetadata {
+impl GetMetadataStorage for FakeMetadata {
     fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
-        Err(GasPriceError::CouldNotFetchMetadata {
-            source_error: anyhow!("boo!"),
-        })
+        let metadata = self.inner.lock().unwrap().clone();
+        Ok(metadata)
     }
+}
 
+struct ErroringPersistedData;
+
+impl SetMetadataStorage for ErroringPersistedData {
     fn set_metadata(&mut self, _: &UpdaterMetadata) -> GasPriceResult<()> {
         Err(GasPriceError::CouldNotSetMetadata {
             block_height: Default::default(),
@@ -123,8 +154,88 @@ impl MetadataStorage for ErroringMetadata {
     }
 }
 
+impl GetMetadataStorage for ErroringPersistedData {
+    fn get_metadata(&self, _: &BlockHeight) -> GasPriceResult<Option<UpdaterMetadata>> {
+        Err(GasPriceError::CouldNotFetchMetadata {
+            source_error: anyhow!("boo!"),
+        })
+    }
+}
+
+impl GetDaBundleId for ErroringPersistedData {
+    fn get_bundle_id(&self, _block_height: &BlockHeight) -> GasPriceResult<Option<u32>> {
+        Err(GasPriceError::CouldNotFetchDARecord(anyhow!("boo!")))
+    }
+}
+
+struct UnimplementedStorageTx;
+
+impl GasPriceServiceAtomicStorage for ErroringPersistedData {
+    type Transaction<'a> = UnimplementedStorageTx;
+
+    fn begin_transaction(&mut self) -> GasPriceResult<Self::Transaction<'_>> {
+        todo!()
+    }
+
+    fn commit_transaction(_transaction: Self::Transaction<'_>) -> GasPriceResult<()> {
+        todo!()
+    }
+}
+
+impl SetMetadataStorage for UnimplementedStorageTx {
+    fn set_metadata(&mut self, _metadata: &UpdaterMetadata) -> GasPriceResult<()> {
+        unimplemented!()
+    }
+}
+
+impl GetMetadataStorage for UnimplementedStorageTx {
+    fn get_metadata(
+        &self,
+        _block_height: &BlockHeight,
+    ) -> GasPriceResult<Option<UpdaterMetadata>> {
+        unimplemented!()
+    }
+}
+
+impl UnrecordedBlocks for UnimplementedStorageTx {
+    fn insert(&mut self, _height: Height, _bytes: Bytes) -> Result<(), String> {
+        unimplemented!()
+    }
+
+    fn remove(&mut self, _height: &Height) -> Result<Option<Bytes>, String> {
+        unimplemented!()
+    }
+}
+
+impl SetDaBundleId for UnimplementedStorageTx {
+    fn set_bundle_id(
+        &mut self,
+        _block_height: &BlockHeight,
+        _bundle_id: u32,
+    ) -> GasPriceResult<()> {
+        unimplemented!()
+    }
+}
+
+impl GetDaBundleId for UnimplementedStorageTx {
+    fn get_bundle_id(&self, _block_height: &BlockHeight) -> GasPriceResult<Option<u32>> {
+        unimplemented!()
+    }
+}
+
+impl AsUnrecordedBlocks for UnimplementedStorageTx {
+    type Wrapper<'a> = UnimplementedStorageTx
+        where
+            Self: 'a;
+
+    fn as_unrecorded_blocks(&mut self) -> Self::Wrapper<'_> {
+        UnimplementedStorageTx
+    }
+}
+
 struct FakeDABlockCost {
     da_block_costs: Receiver<DaBlockCosts>,
+    bundle_id: Arc<Mutex<Option<u32>>>,
 }
 
 impl FakeDABlockCost {
@@ -132,19 +243,38 @@ impl FakeDABlockCost {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
         Self {
             da_block_costs: receiver,
+            bundle_id: Arc::new(Mutex::new(None)),
         }
     }
 
     fn new(da_block_costs: Receiver<DaBlockCosts>) -> Self {
-        Self { da_block_costs }
+        Self {
+            da_block_costs,
+            bundle_id: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    fn never_returns_with_handle_to_bundle_id() -> (Self, Arc<Mutex<Option<u32>>>) {
+        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+        let bundle_id = Arc::new(Mutex::new(None));
+        let service = Self {
+            da_block_costs: receiver,
+            bundle_id: bundle_id.clone(),
+        };
+        (service, bundle_id)
     }
 }
 
 #[async_trait::async_trait]
 impl DaBlockCostsSource for FakeDABlockCost {
-    async fn request_da_block_cost(&mut self) -> anyhow::Result<DaBlockCosts> {
+    async fn request_da_block_cost(&mut self) -> Result<DaBlockCosts> {
         let costs = self.da_block_costs.recv().await.unwrap();
         Ok(costs)
+    }
+
+    async fn set_last_value(&mut self, bundle_id: u32) -> Result<()> {
+        self.bundle_id.lock().unwrap().replace(bundle_id);
+        Ok(())
     }
 }
 
@@ -163,7 +293,6 @@ fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
         capped_range_size: 0,
         decrease_range_size: 0,
         block_activity_threshold: 0,
-        unrecorded_blocks: vec![],
     }
 }
 
@@ -178,7 +307,7 @@ fn arbitrary_metadata() -> V1Metadata {
         last_profit: 0,
         second_to_last_profit: 0,
         latest_da_cost_per_byte: 0,
-        unrecorded_blocks: vec![],
+        unrecorded_block_bytes: 0,
     }
 }
 
@@ -197,8 +326,25 @@ fn different_arb_config() -> V1AlgorithmConfig {
         capped_range_size: 0,
         decrease_range_size: 0,
         block_activity_threshold: 0,
-        unrecorded_blocks: vec![],
     }
+}
+
+fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
+    InMemoryStorage::default().into_transaction()
+}
+
+fn database_with_metadata(
+    metadata: &V1Metadata,
+) -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
+    let mut db = database();
+    let mut tx = db.write_transaction();
+    let height = metadata.l2_block_height.into();
+    let metadata = UpdaterMetadata::V1(metadata.clone());
+    tx.storage_as_mut::<GasPriceMetadata>()
+        .insert(&height, &metadata)
+        .unwrap();
+    tx.commit().unwrap();
+    db
 }
 
 #[tokio::test]
@@ -210,6 +356,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         block_gas_capacity: 100,
         block_bytes: 100,
         block_fees: 100,
+        gas_price: 100,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
@@ -219,16 +366,19 @@ async fn next_gas_price__affected_by_new_l2_block() {
 
     let config = zero_threshold_arbitrary_config();
     let height = 0;
+    let inner = database();
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, &metadata_storage).unwrap();
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
+    let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
-        metadata_storage,
         shared_algo,
+        latest_gas_price,
         algo_updater,
         da_source_service,
+        inner,
     );
 
     let read_algo = service.next_block_algorithm();
@@ -248,45 +398,99 @@ async fn next_gas_price__affected_by_new_l2_block() {
 #[tokio::test]
 async fn run__new_l2_block_saves_old_metadata() {
     // given
+    let height = 1;
     let l2_block = BlockInfo::Block {
-        height: 1,
+        height,
         gas_used: 60,
         block_gas_capacity: 100,
         block_bytes: 100,
         block_fees: 100,
+        gas_price: 100,
     };
     let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
     let l2_block_source = FakeL2BlockSource {
         l2_block: l2_block_receiver,
     };
-    let metadata_inner = Arc::new(std::sync::Mutex::new(None));
-    let metadata_storage = FakeMetadata {
-        inner: metadata_inner.clone(),
+
+    let config = zero_threshold_arbitrary_config();
+    let inner = database();
+    let algo_updater = updater_from_config(&config);
+    let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
+    let da_source = FakeDABlockCost::never_returns();
+    let da_source_service = DaSourceService::new(da_source, None);
+    let latest_gas_price = LatestGasPrice::new(0, 0);
+    let mut service = GasPriceServiceV1::new(
+        l2_block_source,
+        shared_algo,
+        latest_gas_price,
+        algo_updater,
+        da_source_service,
+        inner,
+    );
+    let mut watcher = StateWatcher::started();
+
+    // when
+    l2_block_sender.send(l2_block).await.unwrap();
+    service.run(&mut watcher).await;
+
+    // then
+    let metadata_is_some = service
+        .storage_tx_provider()
+        .get_metadata(&height.into())
+        .unwrap()
+        .is_some();
+    assert!(metadata_is_some);
+
+    // cleanup
+    service.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn run__new_l2_block_updates_latest_gas_price_arc() {
+    // given
+    let height = 1;
+    let gas_price = 40;
+    let l2_block = BlockInfo::Block {
+        height,
+        gas_used: 60,
+        block_gas_capacity: 100,
+        block_bytes: 100,
+        block_fees: 100,
+        gas_price,
+    };
+    let (l2_block_sender, l2_block_receiver) = tokio::sync::mpsc::channel(1);
+    let l2_block_source = FakeL2BlockSource {
+        l2_block: l2_block_receiver,
     };
 
     let config = zero_threshold_arbitrary_config();
-    let height = 0;
-    let (algo_updater, shared_algo) =
-        initialize_algorithm(&config, height, &metadata_storage).unwrap();
+    let inner = database();
+    let algo_updater = updater_from_config(&config);
+    let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
     let da_source_service = DaSourceService::new(da_source, None);
+    let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
-        metadata_storage,
         shared_algo,
+        latest_gas_price.clone(),
         algo_updater,
         da_source_service,
+        inner,
     );
-    let mut watcher = StateWatcher::default();
+    let mut watcher = StateWatcher::started();
 
     // when
-    service.run(&mut watcher).await;
     l2_block_sender.send(l2_block).await.unwrap();
-    service.shutdown().await.unwrap();
+    service.run(&mut watcher).await;
 
     // then
-    let metadata_is_some = metadata_inner.lock().unwrap().is_some();
-    assert!(metadata_is_some)
+    let expected = (height, gas_price);
+    let actual = latest_gas_price.get();
+    assert_eq!(expected, actual);
+
+    // cleanup
+    service.shutdown().await.unwrap();
 }
 
 #[derive(Clone)]
@@ -302,12 +506,26 @@ impl GasPriceSettingsProvider for FakeSettings {
 }
 
 #[derive(Clone)]
-struct FakeGasPriceDb;
+struct FakeGasPriceDb {
+    height: Option<BlockHeight>,
+}
+
+impl FakeGasPriceDb {
+    fn new(height: u32) -> Self {
+        Self {
+            height: Some(height.into()),
+        }
+    }
+
+    fn empty() -> Self {
+        Self { height: None }
+    }
+}
 
 // GasPriceData + Modifiable + KeyValueInspect<Column = GasPriceColumn>
 impl GasPriceData for FakeGasPriceDb {
     fn latest_height(&self) -> Option<BlockHeight> {
-        unimplemented!()
+        self.height
     }
 }
 
@@ -343,7 +561,7 @@ impl L2Data for FakeL2Data {
         &self,
         _height: &BlockHeight,
     ) -> StorageResult<Option<Block<Transaction>>> {
-        unimplemented!()
+        Ok(None)
     }
 }
 impl AtomicView for FakeOnChainDb {
@@ -373,22 +591,20 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let descaleed_exec_price =
         original_metadata.new_scaled_exec_price / original_metadata.gas_price_factor;
     assert_ne!(different_config.new_exec_gas_price, descaleed_exec_price);
-    let different_l2_block = 1231;
-    assert_ne!(different_l2_block, original_metadata.l2_block_height);
+    let different_l2_block = 0;
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
-    let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
-
+    let inner = database_with_metadata(&original_metadata);
     // when
     let service = UninitializedTask::new(
-        different_config,
+        different_config.clone(),
+        None,
         0.into(),
         settings,
         block_stream,
-        gas_price_db,
-        metadata_storage,
+        inner,
         da_cost_source,
         on_chain_db,
     )
@@ -396,11 +612,15 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
 
     // then
     let UninitializedTask { algo_updater, .. } = service;
-    algo_updater_matches_values_from_old_metadata(algo_updater, original_metadata);
+    algo_updater_matches_values_from_old_metadata(
+        algo_updater.clone(),
+        original_metadata.clone(),
+    );
+    algo_updater_override_values_match(algo_updater, different_config);
 }
 
 fn algo_updater_matches_values_from_old_metadata(
-    algo_updater: AlgorithmUpdaterV1,
+    mut algo_updater: AlgorithmUpdaterV1,
     original_metadata: V1Metadata,
 ) {
     let V1Metadata {
@@ -413,7 +633,7 @@ fn algo_updater_matches_values_from_old_metadata(
         last_profit: original_last_profit,
         second_to_last_profit: original_second_to_last_profit,
         latest_da_cost_per_byte: original_latest_da_cost_per_byte,
-        unrecorded_blocks: original_unrecorded_blocks,
+        unrecorded_block_bytes: original_unrecorded_block_bytes,
     } = original_metadata;
     assert_eq!(
         algo_updater.new_scaled_exec_price,
@@ -443,12 +663,32 @@ fn algo_updater_matches_values_from_old_metadata(
         original_latest_da_cost_per_byte
     );
     assert_eq!(
-        algo_updater
-            .unrecorded_blocks
-            .into_iter()
-            .collect::<Vec<_>>(),
-        original_unrecorded_blocks.into_iter().collect::<Vec<_>>()
+        algo_updater.unrecorded_blocks_bytes,
+        original_unrecorded_block_bytes
     );
+}
+
+fn algo_updater_override_values_match(
+    algo_updater: AlgorithmUpdaterV1,
+    config: V1AlgorithmConfig,
+) {
+    assert_eq!(algo_updater.min_exec_gas_price, config.min_exec_gas_price);
+    assert_eq!(
+        algo_updater.exec_gas_price_change_percent,
+        config.exec_gas_price_change_percent
+    );
+    assert_eq!(
+        algo_updater.l2_block_fullness_threshold_percent,
+        config.l2_block_fullness_threshold_percent.into()
+    );
+    assert_eq!(algo_updater.gas_price_factor, config.gas_price_factor);
+    assert_eq!(algo_updater.min_da_gas_price, config.min_da_gas_price);
+    assert_eq!(
+        algo_updater.max_da_gas_price_change_percent,
+        config.max_da_gas_price_change_percent
+    );
+    assert_eq!(algo_updater.da_p_component, config.da_p_component);
+    assert_eq!(algo_updater.da_d_component, config.da_d_component);
 }
 
 #[tokio::test]
@@ -456,21 +696,20 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     // given
     let config = zero_threshold_arbitrary_config();
     let different_l2_block = 1231;
-    let metadata_storage = ErroringMetadata;
+    let erroring_persisted_data = ErroringPersistedData;
     let settings = FakeSettings;
     let block_stream = empty_block_stream();
-    let gas_price_db = FakeGasPriceDb;
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
 
     // when
     let res = UninitializedTask::new(
         config,
+        None,
         0.into(),
         settings,
         block_stream,
-        gas_price_db,
-        metadata_storage,
+        erroring_persisted_data,
         da_cost_source,
         on_chain_db,
     );
@@ -478,4 +717,46 @@ async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     // then
     let is_err = res.is_err();
     assert!(is_err);
+}
+
+#[tokio::test]
+async fn uninitialized_task__init__starts_da_service_with_bundle_id_in_storage() {
+    // given
+    let block_height = 1;
+    let bundle_id: u32 = 123;
+    let original_metadata = arbitrary_metadata();
+
+    let different_config = different_arb_config();
+    let descaleed_exec_price =
+        original_metadata.new_scaled_exec_price / original_metadata.gas_price_factor;
+    assert_ne!(different_config.new_exec_gas_price, descaleed_exec_price);
+    let different_l2_block = 0;
+    let settings = FakeSettings;
+    let block_stream = empty_block_stream();
+    let on_chain_db = FakeOnChainDb::new(different_l2_block);
+    let (da_cost_source, bundle_id_handle) =
+        FakeDABlockCost::never_returns_with_handle_to_bundle_id();
+    let mut inner = database_with_metadata(&original_metadata);
+    let mut tx = inner.begin_transaction().unwrap();
+    tx.set_bundle_id(&block_height.into(), bundle_id).unwrap();
+    StorageTransaction::commit_transaction(tx).unwrap();
+    let service = UninitializedTask::new(
+        different_config.clone(),
+        Some(block_height.into()),
+        0.into(),
+        settings,
+        block_stream,
+        inner,
+        da_cost_source,
+        on_chain_db,
+    )
+    .unwrap();
+
+    // when
+    service.init().await.unwrap();
+
+    // then
+    let actual = bundle_id_handle.lock().unwrap();
+    let expected = Some(bundle_id);
+    assert_eq!(*actual, expected);
 }
