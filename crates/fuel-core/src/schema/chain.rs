@@ -44,7 +44,6 @@ pub struct GasCosts(fuel_tx::GasCosts);
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum GasCostsVersion {
     V1,
-    V2,
 }
 
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
