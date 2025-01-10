@@ -167,7 +167,6 @@ where
     ) -> anyhow::Result<
         GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, AtomicStorage>,
     > {
-        let mut first_run = false;
         let latest_block_height: u32 = self
             .on_chain_db
             .latest_view()?
@@ -179,7 +178,6 @@ where
         let metadata_height = if let Some(metadata_height) = maybe_metadata_height {
             metadata_height.into()
         } else {
-            first_run = true;
             latest_block_height
         };
 
