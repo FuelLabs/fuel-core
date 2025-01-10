@@ -302,6 +302,7 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
 fn update_da_record_data__da_block_increases_da_gas_price() {
     // given
     let da_cost_per_byte = 40;
+    let max_da_gas_price = u64::MAX;
     let l2_block_height = 11;
     let original_known_total_cost = 150;
     let mut unrecorded_blocks: BTreeMap<_, _> = [(11, 3000)].into_iter().collect();
@@ -320,6 +321,7 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
         .with_projected_total_cost(projected_total_cost as u128)
         .with_known_total_cost(original_known_total_cost as u128)
         .with_unrecorded_blocks(&unrecorded_blocks)
+        .with_max_da_gas_price(max_da_gas_price)
         .build();
 
     let new_cost_per_byte = 100;
@@ -353,6 +355,126 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
     // because the profit is -10 and the da_p_component is 2, the new da gas price should be greater than the previous one.
     assert_eq!(new_da_gas_price, 6);
     assert_ne!(old_da_gas_price, new_da_gas_price);
+}
+
+#[test]
+fn update_da_record_data__da_block_increases_da_gas_price_within_the_min_max_range() {
+    // given
+    let min_da_gas_price = 0;
+    let max_da_gas_price = 5;
+    let da_cost_per_byte = 40;
+    let l2_block_height = 11;
+    let original_known_total_cost = 150;
+    let mut unrecorded_blocks: BTreeMap<_, _> = [(11, 3000)].into_iter().collect();
+    let da_p_component = 2;
+    let guessed_cost: u64 = unrecorded_blocks
+        .values()
+        .map(|bytes| bytes * da_cost_per_byte)
+        .sum();
+    let projected_total_cost = original_known_total_cost + guessed_cost;
+
+    let mut updater = UpdaterBuilder::new()
+        .with_da_cost_per_byte(da_cost_per_byte as u128)
+        .with_da_p_component(da_p_component)
+        .with_last_profit(-10, 0)
+        .with_l2_block_height(l2_block_height)
+        .with_projected_total_cost(projected_total_cost as u128)
+        .with_known_total_cost(original_known_total_cost as u128)
+        .with_unrecorded_blocks(&unrecorded_blocks)
+        .with_min_da_gas_price(min_da_gas_price)
+        .with_max_da_gas_price(max_da_gas_price)
+        .build();
+
+    let new_cost_per_byte = 100;
+    let (recorded_heights, recorded_cost) = unrecorded_blocks.iter().fold(
+        (vec![], 0),
+        |(mut range, cost), (height, bytes)| {
+            range.push(height);
+            (range, cost + bytes * new_cost_per_byte)
+        },
+    );
+
+    let min = *recorded_heights.iter().min().unwrap();
+    let max = *recorded_heights.iter().max().unwrap();
+    let recorded_range = *min..=*max;
+    let recorded_bytes = 500;
+
+    let old_da_gas_price = updater.new_scaled_da_gas_price;
+
+    // when
+    updater
+        .update_da_record_data(
+            recorded_range,
+            recorded_bytes,
+            recorded_cost as u128,
+            &mut unrecorded_blocks,
+        )
+        .unwrap();
+
+    // then
+    let new_da_gas_price = updater.new_scaled_da_gas_price;
+    // because the profit is -10 and the da_p_component is 2, the new da gas price should be greater than the previous one.
+    assert_eq!(new_da_gas_price, max_da_gas_price);
+    assert_ne!(old_da_gas_price, new_da_gas_price);
+}
+
+#[test]
+fn update_da_record_data__sets_da_gas_price_to_min_da_gas_price_when_max_lt_min() {
+    // given
+    let min_da_gas_price = 1;
+    let max_da_gas_price = 0;
+    let da_cost_per_byte = 40;
+    let l2_block_height = 11;
+    let original_known_total_cost = 150;
+    let mut unrecorded_blocks: BTreeMap<_, _> = [(11, 3000)].into_iter().collect();
+    let da_p_component = 2;
+    let guessed_cost: u64 = unrecorded_blocks
+        .values()
+        .map(|bytes| bytes * da_cost_per_byte)
+        .sum();
+    let projected_total_cost = original_known_total_cost + guessed_cost;
+
+    let mut updater = UpdaterBuilder::new()
+        .with_da_cost_per_byte(da_cost_per_byte as u128)
+        .with_da_p_component(da_p_component)
+        .with_last_profit(-10, 0)
+        .with_l2_block_height(l2_block_height)
+        .with_projected_total_cost(projected_total_cost as u128)
+        .with_known_total_cost(original_known_total_cost as u128)
+        .with_unrecorded_blocks(&unrecorded_blocks)
+        .with_min_da_gas_price(min_da_gas_price)
+        .with_max_da_gas_price(max_da_gas_price)
+        .build();
+
+    let new_cost_per_byte = 100;
+    let (recorded_heights, recorded_cost) = unrecorded_blocks.iter().fold(
+        (vec![], 0),
+        |(mut range, cost), (height, bytes)| {
+            range.push(height);
+            (range, cost + bytes * new_cost_per_byte)
+        },
+    );
+
+    let min = *recorded_heights.iter().min().unwrap();
+    let max = *recorded_heights.iter().max().unwrap();
+    let recorded_range = *min..=*max;
+    let recorded_bytes = 500;
+
+    // when
+    updater
+        .update_da_record_data(
+            recorded_range,
+            recorded_bytes,
+            recorded_cost as u128,
+            &mut unrecorded_blocks,
+        )
+        .unwrap();
+
+    // then
+    let new_da_gas_price = updater.new_scaled_da_gas_price;
+
+    // because max_da_gas_price = 0 and < min_da_gas_price = 1, the new da gas price should be min_da_gas_price
+    assert_eq!(new_da_gas_price, min_da_gas_price);
 }
 
 #[test]
