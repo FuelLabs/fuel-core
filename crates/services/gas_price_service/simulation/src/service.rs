@@ -48,19 +48,29 @@ use std::{
     },
 };
 
-fn read_config_from_file(_config_path: &str) -> V1AlgorithmConfig {
-    // TODO: read from file and/or CLI
+fn construct_config(config_values: ConfigValues) -> V1AlgorithmConfig {
+    let ConfigValues {
+        min_da_gas_price,
+        max_da_gas_price,
+        da_p_component,
+        da_d_component,
+    } = config_values;
+
     V1AlgorithmConfig {
         new_exec_gas_price: 0,
         min_exec_gas_price: 0,
         exec_gas_price_change_percent: 0,
         l2_block_fullness_threshold_percent: 0,
         gas_price_factor: NonZero::new(100).unwrap(),
-        min_da_gas_price: 1_000,
-        max_da_gas_price: u64::MAX,
+        // min_da_gas_price: 1_000,
+        // max_da_gas_price: u64::MAX,
+        min_da_gas_price,
+        max_da_gas_price,
         max_da_gas_price_change_percent: 10,
-        da_p_component: 50_000_000__000_000_000,
-        da_d_component: 100_000__000_000_000,
+        // da_p_component: 50_000_000__000_000_000,
+        // da_d_component: 100_000__000_000_000,
+        da_p_component,
+        da_d_component,
         normal_range_size: 0,
         capped_range_size: 0,
         decrease_range_size: 0,
@@ -69,13 +79,17 @@ fn read_config_from_file(_config_path: &str) -> V1AlgorithmConfig {
     }
 }
 
-fn read_metadata_from_file(_metadata_path: &str, starting_height: u32) -> V1Metadata {
+fn construct_metadata(metadata_values: MetadataValues) -> V1Metadata {
+    let MetadataValues {
+        l2_block_height,
+        latest_gas_price,
+    } = metadata_values;
     // TODO: read from file and/or CLI
-    let l2_block_height = starting_height - 1;
-    let gas_price_factor = 100;
+    let gas_price_factor = 1;
     // let new_scaled_da_gas_price = 3_547_063 * gas_price_factor / 1_000;
     // let new_scaled_da_gas_price = 15_893_241 * gas_price_factor / 1_000;
-    let new_scaled_da_gas_price = 18_963 * gas_price_factor;
+    // let new_scaled_da_gas_price = 18_963;
+    let new_scaled_da_gas_price = latest_gas_price * gas_price_factor;
     V1Metadata {
         new_scaled_exec_price: 0,
         l2_block_height,
@@ -90,11 +104,33 @@ fn read_metadata_from_file(_metadata_path: &str, starting_height: u32) -> V1Meta
     }
 }
 
-fn get_updater(starting_height: u32) -> AlgorithmUpdaterV1 {
-    let metadata_path = "TODO";
-    let metadata = read_metadata_from_file(metadata_path, starting_height);
-    let config_path = "TODO";
-    let config = read_config_from_file(config_path);
+pub struct ConfigValues {
+    pub min_da_gas_price: u64,
+    pub max_da_gas_price: u64,
+    pub da_p_component: i64,
+    pub da_d_component: i64,
+}
+
+pub struct MetadataValues {
+    pub l2_block_height: u32,
+    pub latest_gas_price: u64,
+}
+
+impl MetadataValues {
+    pub fn new(starting_height: u32, latest_gas_price: u64) -> Self {
+        Self {
+            l2_block_height: starting_height - 1,
+            latest_gas_price,
+        }
+    }
+}
+
+fn get_updater(
+    config_values: ConfigValues,
+    metadata_values: MetadataValues,
+) -> AlgorithmUpdaterV1 {
+    let metadata = construct_metadata(metadata_values);
+    let config = construct_config(config_values);
     v1_algorithm_from_metadata(metadata, &config)
 }
 type GasPriceStorage = StorageTransaction<InMemoryStorage<GasPriceColumn>>;
@@ -169,10 +205,11 @@ fn poll_interval() -> Option<std::time::Duration> {
 }
 
 pub async fn get_service_controller(
-    starting_height: u32,
+    config_values: ConfigValues,
+    metadata_values: MetadataValues,
 ) -> anyhow::Result<ServiceController> {
     tracing::info!("creating service controller");
-    let algorithm_updater = get_updater(starting_height);
+    let algorithm_updater = get_updater(config_values, metadata_values);
     let algo = algorithm_updater.algorithm();
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo);
 

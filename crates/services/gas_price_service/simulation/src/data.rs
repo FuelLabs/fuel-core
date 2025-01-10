@@ -1,4 +1,3 @@
-use crate::DataSource;
 use fuel_core_gas_price_service::{
     common::utils::BlockInfo,
     v1::da_source_service::DaBlockCosts,
@@ -11,7 +10,9 @@ use serde_reflection::{
 };
 use std::{
     collections::HashMap,
+    fmt::Debug,
     ops::RangeInclusive,
+    path::Path,
 };
 
 #[allow(dead_code)]
@@ -48,7 +49,7 @@ where
     fields.iter().map(|f| f.name.clone()).collect()
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Data {
     inner: Vec<(BlockInfo, Vec<DaBlockCosts>)>,
 }
@@ -85,29 +86,24 @@ impl From<&Record> for BlockInfo {
     }
 }
 
-pub fn get_data(source: &DataSource) -> anyhow::Result<Data> {
+pub fn get_data<P: AsRef<Path> + Debug>(path: P) -> anyhow::Result<Data> {
     const DA_OFFSET: usize = 0; // Make configurable
 
-    let records = match source {
-        DataSource::File { path } => {
-            tracing::info!("Loading data from file: {:?}", path);
-            let headers = csv::StringRecord::from(fields_of_struct_in_order::<Record>());
-            let mut rdr = csv::ReaderBuilder::new()
-                .has_headers(true)
-                .from_path(path)
-                .unwrap();
+    tracing::info!("Loading data from file: {:?}", path);
+    let headers = csv::StringRecord::from(fields_of_struct_in_order::<Record>());
+    let mut rdr = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .from_path(path)
+        .unwrap();
 
-            let records: Result<Vec<Record>, _> = rdr
-                .records()
-                .map(|line_entry| {
-                    let line = line_entry?;
-                    line.deserialize(Some(&headers))
-                })
-                .collect();
-            records?
-        }
-        DataSource::Generated => unimplemented!(),
-    };
+    let records_res: Result<Vec<Record>, _> = rdr
+        .records()
+        .map(|line_entry| {
+            let line = line_entry?;
+            line.deserialize(Some(&headers))
+        })
+        .collect();
+    let records = records_res?;
 
     let mut data = vec![];
     // let groups = records.iter().chunk_by(|record| record.l1_block_number);

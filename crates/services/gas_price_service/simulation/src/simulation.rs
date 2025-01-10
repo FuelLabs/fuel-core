@@ -46,7 +46,7 @@ impl SimulationResults {
     }
 }
 
-pub async fn simulation(
+pub async fn single_simulation(
     data: &Data,
     service_controller: &mut ServiceController,
 ) -> anyhow::Result<SimulationResults> {
