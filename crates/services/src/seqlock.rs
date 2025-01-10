@@ -40,6 +40,7 @@ impl<T: Copy> SeqLockWriter<T> {
         lock.sequence.fetch_add(1, Ordering::Release);
 
         // attempt to perform the write, and catch any panics
+        // safety: panics are caught and resumed
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
             let data = &mut *lock.data.get();
             f(data);
