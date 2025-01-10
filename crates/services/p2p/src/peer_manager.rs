@@ -315,9 +315,12 @@ impl ConnectionState {
         SeqLockWriter<ConnectionState>,
         SeqLockReader<ConnectionState>,
     ) {
-        SeqLock::new(Self {
-            peers_allowed: true,
-        })
+        // ConnectionState < 64 bytes, so it's safe to use SeqLock
+        unsafe {
+            SeqLock::new(Self {
+                peers_allowed: true,
+            })
+        }
     }
 
     pub fn available_slot(&self) -> bool {

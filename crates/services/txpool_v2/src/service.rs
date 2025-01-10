@@ -800,7 +800,9 @@ where
         config,
     );
 
-    let (current_height_writer, current_height_reader) = SeqLock::new(current_height);
+    // BlockHeight is < 64 bytes, so we can use SeqLock
+    let (current_height_writer, current_height_reader) =
+        unsafe { SeqLock::new(current_height) };
 
     Service::new(Task {
         chain_id,

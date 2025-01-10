@@ -3,6 +3,7 @@
 
 use std::{
     cell::UnsafeCell,
+    panic::UnwindSafe,
     sync::atomic::{
         AtomicU64,
         Ordering,
@@ -12,54 +13,58 @@ use std::{
 /// A simple implementation of a sequential lock.
 /// some usage of unsafe, T must be Copy
 #[derive(Debug)]
-pub struct SeqLock<T> {
+pub struct SeqLock<T: Copy> {
     sequence: AtomicU64,
     data: UnsafeCell<T>,
 }
 
-unsafe impl<T: Send> Sync for SeqLock<T> {}
+unsafe impl<T: Send + Copy> Sync for SeqLock<T> {}
 
 /// The writer handle for the `SeqLock`.
 /// Only one writer exists for a `SeqLock`.
+/// There is no Clone bound since we want to enforce only one writer.
 #[derive(Debug)]
-pub struct SeqLockWriter<T> {
+pub struct SeqLockWriter<T: Copy> {
     lock: std::sync::Arc<SeqLock<T>>,
 }
 
-impl<T> SeqLockWriter<T> {
+impl<T: Copy> SeqLockWriter<T> {
     /// Modifies the data within the lock.
     pub fn write<F>(&self, f: F)
     where
-        F: FnOnce(&mut T),
+        F: FnOnce(&mut T) + UnwindSafe,
     {
         let lock = &self.lock;
 
         // Indicate that a write operation is starting.
         lock.sequence.fetch_add(1, Ordering::Release);
 
-        // Modify the data.
-        unsafe {
-            f(&mut *lock.data.get());
-        }
+        // attempt to perform the write, and catch any panics
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+            let data = &mut *lock.data.get();
+            f(data);
+        }));
 
         // Indicate that the write operation has finished.
         lock.sequence.fetch_add(1, Ordering::Release);
+
+        // resume unwinding if there was an error
+        if let Err(e) = result {
+            std::panic::resume_unwind(e);
+        }
     }
 }
 
 /// The reader handle for the `SeqLock`.
 /// Multiple readers can be created for a `SeqLock`.
 #[derive(Clone, Debug)]
-pub struct SeqLockReader<T> {
+pub struct SeqLockReader<T: Copy> {
     lock: std::sync::Arc<SeqLock<T>>,
 }
 
-impl<T> SeqLockReader<T> {
+impl<T: Copy> SeqLockReader<T> {
     /// Reads the data within the lock.
-    pub fn read(&self) -> T
-    where
-        T: Copy,
-    {
+    pub fn read(&self) -> T {
         let lock = &self.lock;
 
         loop {
@@ -84,17 +89,16 @@ impl<T> SeqLockReader<T> {
     }
 }
 
-impl<T> SeqLock<T> {
+impl<T: Copy> SeqLock<T> {
     /// Creates a new `SeqLock` and returns a writer and a reader handle.
     /// Optimized for occasional writes and frequent reads
     ///  !!WARNING!!
     /// ONLY USE IF ALL THE BELOW CRITERIA ARE MET
     ///  1. Internal data < 64 bytes
-    ///  2. Data is Copy
-    ///  3. ONLY 1 writer
-    ///  4. VERY frequent reads
+    ///  2. ONLY 1 writer
+    ///  3. VERY frequent reads
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(data: T) -> (SeqLockWriter<T>, SeqLockReader<T>) {
+    pub unsafe fn new(data: T) -> (SeqLockWriter<T>, SeqLockReader<T>) {
         let lock = Self {
             sequence: AtomicU64::new(0),
             data: UnsafeCell::new(data),
@@ -117,7 +121,7 @@ mod tests {
 
     #[test]
     fn test_seqlock__provides_correct_values_in_order() {
-        let (writer, reader) = SeqLock::new(42);
+        let (writer, reader) = unsafe { SeqLock::new(42) };
         let iterations = 100;
 
         let writer = {
@@ -146,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_seqlock__single_threaded() {
-        let (writer, reader) = SeqLock::new(42);
+        let (writer, reader) = unsafe { SeqLock::new(42) };
 
         writer.write(|data| {
             *data = 100;
