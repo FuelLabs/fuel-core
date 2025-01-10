@@ -39,6 +39,10 @@ use libp2p::{
     PeerId,
 };
 
+const MAX_PENDING_INCOMING_CONNECTIONS: u32 = 100;
+const MAX_PENDING_OUTGOING_CONNECTIONS: u32 = 100;
+const MAX_ESTABLISHED_CONNECTIONS: u32 = 1000;
+
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
 pub struct FuelBehaviour {
@@ -122,13 +126,9 @@ impl FuelBehaviour {
 
         let connection_limits = connection_limits::Behaviour::new(
             ConnectionLimits::default()
-                .with_max_pending_incoming(Some(
-                    p2p_config.max_pending_incoming_connections,
-                ))
-                .with_max_pending_outgoing(Some(
-                    p2p_config.max_pending_outgoing_connections,
-                ))
-                .with_max_established(Some(p2p_config.max_established_connections)),
+                .with_max_pending_incoming(Some(MAX_PENDING_INCOMING_CONNECTIONS))
+                .with_max_pending_outgoing(Some(MAX_PENDING_OUTGOING_CONNECTIONS))
+                .with_max_established(Some(MAX_ESTABLISHED_CONNECTIONS)),
         );
 
         let req_res_protocol = codec

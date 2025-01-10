@@ -99,19 +99,6 @@ pub struct P2PArgs {
     #[clap(long = "max-connections-per-peer", default_value = "3", env)]
     pub max_connections_per_peer: u32,
 
-    /// Max number of concurrent pending incoming connections
-    /// Useful in mitigating against DDoS attacks
-    #[clap(long = "max-pending-incoming-connections", default_value = "100", env)]
-    pub max_pending_incoming_connections: u32,
-
-    /// Max number of concurrent pending outgoing connections
-    #[clap(long = "max-pending-outgoing-connections", default_value = "100", env)]
-    pub max_pending_outgoing_connections: u32,
-
-    /// Max number of established connections
-    #[clap(long = "max-established-connections", default_value = "100", env)]
-    pub max_established_connections: u32,
-
     /// Set the delay between random walks for p2p node discovery in seconds.
     /// If it's not set the random walk will be disabled.
     /// Also if `reserved_nodes_only_mode` is set to `true`,
@@ -235,16 +222,16 @@ impl KeypairArg {
 
         let secret = SecretKey::from_str(s);
         if let Ok(secret) = secret {
-            return Ok(KeypairArg::InlineSecret(secret));
+            return Ok(KeypairArg::InlineSecret(secret))
         }
         let path = PathBuf::from_str(s);
         if let Ok(pathbuf) = path {
             if pathbuf.exists() {
-                return Ok(KeypairArg::Path(pathbuf));
+                return Ok(KeypairArg::Path(pathbuf))
             } else {
                 return Err(anyhow!(
                     "path `{pathbuf:?}` does not exist for keypair argument"
-                ));
+                ))
             }
         }
         Err(anyhow!(
@@ -270,7 +257,7 @@ impl P2PArgs {
     ) -> anyhow::Result<Option<Config<NotInitialized>>> {
         if !self.enable_p2p {
             tracing::info!("P2P service disabled");
-            return Ok(None);
+            return Ok(None)
         }
 
         let local_keypair = {
@@ -336,9 +323,6 @@ impl P2PArgs {
             enable_mdns: self.enable_mdns,
             max_peers_connected: self.max_peers_connected,
             max_connections_per_peer: self.max_connections_per_peer,
-            max_pending_incoming_connections: self.max_pending_incoming_connections,
-            max_pending_outgoing_connections: self.max_pending_outgoing_connections,
-            max_established_connections: self.max_established_connections,
             allow_private_addresses: self.allow_private_addresses,
             random_walk,
             connection_idle_timeout: Some(Duration::from_secs(
