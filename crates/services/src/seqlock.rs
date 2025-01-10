@@ -98,6 +98,8 @@ impl<T: Copy> SeqLock<T> {
     ///  1. Internal data < 64 bytes
     ///  2. ONLY 1 writer
     ///  3. VERY frequent reads
+    /// # Safety
+    /// The data must be `Copy`
     #[allow(clippy::new_ret_no_self)]
     pub unsafe fn new(data: T) -> (SeqLockWriter<T>, SeqLockReader<T>) {
         let lock = Self {
