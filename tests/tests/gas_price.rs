@@ -369,7 +369,12 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     let latest = client.latest_gas_price().await.unwrap();
     let real = latest.gas_price;
     let estimated = u64::from(estimate.gas_price);
-    assert!(estimated >= real);
+    assert!(
+        estimated >= real,
+        "estimated: {}, real: {}",
+        estimated,
+        real
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -532,6 +537,10 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
 
 #[test]
 fn produce_block__l1_committed_block_affects_gas_price() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
+
     let rt = tokio::runtime::Runtime::new().unwrap();
     // set up chain with single unrecorded block
     let mut args = vec![
@@ -607,16 +616,23 @@ fn produce_block__l1_committed_block_affects_gas_price() {
             // Won't accept DA costs until l2_height is > 1
             driver.client.produce_blocks(1, None).await.unwrap();
             // Wait for DaBlockCosts to be accepted
-            tokio::time::sleep(Duration::from_millis(2)).await;
+            tokio::time::sleep(Duration::from_millis(200)).await;
             // Produce new block to update gas price
             driver.client.produce_blocks(1, None).await.unwrap();
-            tokio::time::sleep(Duration::from_millis(20)).await;
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            driver.client.produce_blocks(1, None).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(10)).await;
             driver.client.estimate_gas_price(0).await.unwrap().gas_price
         })
         .into();
 
     // then
-    assert!(first_gas_price < new_gas_price);
+    assert!(
+        first_gas_price < new_gas_price,
+        "first: {}, new: {}",
+        first_gas_price,
+        new_gas_price
+    );
     rt.shutdown_timeout(tokio::time::Duration::from_millis(100));
 }
 

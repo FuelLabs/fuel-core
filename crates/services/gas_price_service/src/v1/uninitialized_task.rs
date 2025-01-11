@@ -8,7 +8,10 @@ use crate::{
             GasPriceSettings,
             GasPriceSettingsProvider,
         },
-        gas_price_algorithm::SharedGasPriceAlgo,
+        gas_price_algorithm::{
+            GasPriceAlgorithm,
+            SharedGasPriceAlgo,
+        },
         l2_block_source::FuelL2BlockSource,
         updater_metadata::UpdaterMetadata,
         utils::{
@@ -128,6 +131,13 @@ where
             .latest_height()
             .unwrap_or(genesis_block_height)
             .into();
+
+        let gas_price_metadata_height = gas_metadata_height
+            .map(|x| x.into())
+            .unwrap_or(latest_block_height);
+
+        let (algo_updater, shared_algo) =
+            initialize_algorithm(&config, gas_price_metadata_height, &gas_price_db)?;
         let latest_gas_price = on_chain_db
             .latest_view()?
             .get_block(&latest_block_height.into())?
@@ -135,13 +145,7 @@ where
                 let (_, gas_price) = mint_values(&block).ok()?;
                 Some(gas_price)
             })
-            .unwrap_or(0);
-        let gas_price_metadata_height = gas_metadata_height
-            .map(|x| x.into())
-            .unwrap_or(latest_block_height);
-
-        let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, gas_price_metadata_height, &gas_price_db)?;
+            .unwrap_or(algo_updater.algorithm().next_gas_price());
 
         let latest_gas_price = LatestGasPrice::new(latest_block_height, latest_gas_price);
 
@@ -227,6 +231,10 @@ where
                     state_watcher,
                 )?;
             }
+            self.latest_gas_price.set(
+                latest_block_height,
+                self.algo_updater.algorithm().next_gas_price(),
+            );
 
             let service = GasPriceServiceV1::new(
                 l2_block_source,
