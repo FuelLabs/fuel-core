@@ -537,10 +537,6 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
 
 #[test]
 fn produce_block__l1_committed_block_affects_gas_price() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
-
     let rt = tokio::runtime::Runtime::new().unwrap();
     // set up chain with single unrecorded block
     let mut args = vec![
