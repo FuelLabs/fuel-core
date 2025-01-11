@@ -5,6 +5,7 @@ use std::{
     cell::UnsafeCell,
     panic::UnwindSafe,
     sync::atomic::{
+        fence,
         AtomicU64,
         Ordering,
     },
@@ -37,15 +38,20 @@ impl<T: Copy> SeqLockWriter<T> {
         let lock = &self.lock;
 
         // Indicate that a write operation is starting.
-        lock.sequence.fetch_add(1, Ordering::Release);
+        lock.sequence.fetch_add(1, Ordering::AcqRel);
+        // reordering safety
+        fence(Ordering::Acquire);
 
         // attempt to perform the write, and catch any panics
+        // we won't have partial write problems since data <= 64 bytes
         // safety: panics are caught and resumed
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
             let data = &mut *lock.data.get();
             f(data);
         }));
 
+        // reordering safety
+        fence(Ordering::Release);
         // Indicate that the write operation has finished.
         lock.sequence.fetch_add(1, Ordering::Release);
 
@@ -74,10 +80,19 @@ impl<T: Copy> SeqLockReader<T> {
 
             // if odd, write in progress
             if start % 2 != 0 {
+                std::thread::yield_now();
                 continue;
             }
 
+            // reordering safety
+            fence(Ordering::Acquire);
+
+            // safety: when the data <=64 bytes, it fits in a single cache line
+            // and cannot be subject to torn reads
             let data = unsafe { *lock.data.get() };
+
+            // reordering safety
+            fence(Ordering::Acquire);
 
             // check starting/ending guard
             let end = lock.sequence.load(Ordering::Acquire);
@@ -95,9 +110,8 @@ impl<T: Copy> SeqLock<T> {
     /// Optimized for occasional writes and frequent reads
     ///  !!WARNING!!
     /// ONLY USE IF ALL THE BELOW CRITERIA ARE MET
-    ///  1. Internal data < 64 bytes
-    ///  2. ONLY 1 writer
-    ///  3. VERY frequent reads
+    ///  1. Internal data <= 64 bytes
+    ///  2. VERY frequent reads
     /// # Safety
     /// The data must be `Copy`
     #[allow(clippy::new_ret_no_self)]
