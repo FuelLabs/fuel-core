@@ -41,8 +41,12 @@ pub fn display_results(results: SimulationResults) -> anyhow::Result<()> {
     let sample_length_seconds = sample_size % MINUTES_IN_SECONDS;
 
     println!(
-        "Sample size: {:?} blocks, produced over {:?} days, {:?} hours, {:?} minutes, {:?} seconds",
-        sample_size, sample_length_days, sample_length_hours, sample_length_minutes, sample_length_seconds
+        "Sample size: {:?} blocks ({:?} days, {:?} hours, {:?} minutes, {:?} seconds)",
+        sample_size,
+        sample_length_days,
+        sample_length_hours,
+        sample_length_minutes,
+        sample_length_seconds
     );
 
     println!("Max gas price: {:?}", max_gas_price);
