@@ -519,6 +519,10 @@ mod tests {
             // p2p & sync
             expected_services += 2;
         }
+        #[cfg(feature = "shared-sequencer")]
+        {
+            expected_services += 1;
+        }
 
         // # Dev-note: Update the `expected_services` when we add/remove a new/old service.
         assert_eq!(i, expected_services);

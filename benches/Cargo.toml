@@ -34,6 +34,7 @@ fuel-core-sync = { path = "./../crates/services/sync", features = [
 fuel-core-types = { path = "./../crates/types", features = ["test-helpers"] }
 fuel-gas-price-algorithm = { path = "./../crates/fuel-gas-price-algorithm" }
 futures = { workspace = true }
+hex = "0.4.3"
 itertools = { workspace = true }
 num_enum = { workspace = true }
 p256 = { version = "0.13", default-features = false, features = [
@@ -71,7 +72,7 @@ harness = false
 name = "shared_gas_price_algorithm"
 
 [features]
-default = ["fuel-core/rocksdb"]
+default = ["fuel-core/rocksdb", "fuel-core/rocksdb-production"]
 
 [[bench]]
 harness = false

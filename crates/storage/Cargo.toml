@@ -24,7 +24,7 @@ fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
 ] }
 fuel-vm-private = { workspace = true, default-features = false }
-impl-tools = "0.10"
+impl-tools = "0.10.3"
 itertools = { workspace = true, features = ["use_alloc"] }
 mockall = { workspace = true, optional = true }
 num_enum = { workspace = true }

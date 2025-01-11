@@ -4,7 +4,6 @@ use std::{
 };
 
 use clap::ValueEnum;
-use fuel_core_poa::signer::SignMode;
 use strum_macros::{
     Display,
     EnumString,
@@ -28,7 +27,10 @@ pub use fuel_core_poa::Trigger;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
 use fuel_core_txpool::config::Config as TxPoolConfig;
-use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
+use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
+    signer::SignMode,
+};
 
 use crate::{
     combined_database::CombinedDatabaseConfig,
@@ -69,6 +71,8 @@ pub struct Config {
     pub p2p: Option<P2PConfig<NotInitialized>>,
     #[cfg(feature = "p2p")]
     pub sync: fuel_core_sync::Config,
+    #[cfg(feature = "shared-sequencer")]
+    pub shared_sequencer: fuel_core_shared_sequencer::Config,
     pub consensus_signer: SignMode,
     pub name: String,
     pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
@@ -104,6 +108,8 @@ impl Config {
 
     #[cfg(feature = "test-helpers")]
     pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
+        use crate::state::rocks_db::DatabaseConfig;
+
         let block_importer = fuel_core_importer::Config::new(false);
         let latest_block = snapshot_reader.last_block_config();
         // In tests, we always want to use the native executor as a default configuration.
@@ -117,7 +123,12 @@ impl Config {
 
         let combined_db_config = CombinedDatabaseConfig {
             // Set the cache for tests = 10MB
-            max_database_cache_size: 10 * 1024 * 1024,
+            #[cfg(feature = "rocksdb")]
+            database_config: DatabaseConfig {
+                cache_capacity: Some(10 * 1024 * 1024),
+                columns_policy: Default::default(),
+                max_fds: 512,
+            },
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,
@@ -126,8 +137,6 @@ impl Config {
             #[cfg(feature = "rocksdb")]
             state_rewind_policy:
                 crate::state::historical_rocksdb::StateRewindPolicy::RewindFullRange,
-            #[cfg(feature = "rocksdb")]
-            max_fds: 512,
         };
         let starting_gas_price = 0;
         let gas_price_change_percent = 0;
@@ -182,6 +191,8 @@ impl Config {
             p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer: fuel_core_shared_sequencer::Config::local_node(),
             consensus_signer: SignMode::Key(fuel_core_types::secrecy::Secret::new(
                 fuel_core_chain_config::default_consensus_dev_key().into(),
             )),
@@ -234,7 +245,7 @@ pub struct VMConfig {
 }
 
 #[derive(
-    Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
+    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
 )]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {

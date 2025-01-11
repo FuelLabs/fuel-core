@@ -24,6 +24,7 @@ members = [
   "crates/services/p2p",
   "crates/services/producer",
   "crates/services/relayer",
+  "crates/services/shared-sequencer",
   "crates/services/sync",
   "crates/services/txpool_v2",
   "crates/services/upgradable-executor",
@@ -69,6 +70,7 @@ fuel-core-services = { version = "0.40.2", path = "./crates/services" }
 fuel-core-consensus-module = { version = "0.40.2", path = "./crates/services/consensus_module" }
 fuel-core-bft = { version = "0.40.2", path = "./crates/services/consensus_module/bft" }
 fuel-core-poa = { version = "0.40.2", path = "./crates/services/consensus_module/poa" }
+fuel-core-shared-sequencer = { version = "0.40.2", path = "crates/services/shared-sequencer" }
 fuel-core-executor = { version = "0.40.2", path = "./crates/services/executor", default-features = false }
 fuel-core-importer = { version = "0.40.2", path = "./crates/services/importer" }
 fuel-core-gas-price-service = { version = "0.40.2", path = "crates/services/gas_price_service" }
@@ -92,6 +94,7 @@ fuel-vm-private = { version = "0.59.1", package = "fuel-vm", default-features = 
 # Common dependencies
 anyhow = "1.0"
 async-trait = "0.1"
+aws-sdk-kms = "1.37"
 cynic = { version = "3.1.0", features = ["http-reqwest"] }
 clap = "4.4"
 derivative = { version = "2" }
