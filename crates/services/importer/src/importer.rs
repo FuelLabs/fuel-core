@@ -12,7 +12,10 @@ use crate::{
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
     not_found,
-    transactional::ListChanges,
+    transactional::{
+        Changes,
+        ListChanges,
+    },
     Error as StorageError,
     MerkleRoot,
 };
@@ -28,6 +31,7 @@ use fuel_core_types::{
     fuel_tx::{
         field::MintGasPrice,
         Transaction,
+        UniqueIdentifier,
         ValidityError,
     },
     fuel_types::{
@@ -108,6 +112,7 @@ pub enum Error {
     UnsupportedConsensusVariant(String),
     ActiveBlockResultsSemaphoreClosed(tokio::sync::AcquireError),
     RayonTaskWasCanceled,
+    TaskError(String),
 }
 
 impl From<Error> for anyhow::Error {
@@ -124,10 +129,10 @@ impl PartialEq for Error {
 }
 
 pub struct Importer<D, E, V> {
-    database: Mutex<D>,
+    database: Arc<Mutex<D>>,
     executor: Arc<E>,
     verifier: Arc<V>,
-    _chain_id: ChainId,
+    chain_id: ChainId,
     broadcast: broadcast::Sender<ImporterResult>,
     guard: Semaphore,
     /// The semaphore tracks the number of unprocessed `SharedImportResult`.
@@ -159,10 +164,10 @@ impl<D, E, V> Importer<D, E, V> {
             .expect("Failed to create a thread pool for the block processing");
 
         Self {
-            database: Mutex::new(database),
+            database: Arc::new(Mutex::new(database)),
             executor: Arc::new(executor),
             verifier: Arc::new(verifier),
-            _chain_id: chain_id,
+            chain_id,
             broadcast,
             active_import_results: Arc::new(Semaphore::new(max_block_notify_buffer)),
             guard: Semaphore::new(1),
@@ -264,7 +269,12 @@ where
                 .try_lock()
                 .expect("Semaphore prevents concurrent access to the database");
             let database = guard.deref_mut();
-            self._commit_result(result, permit, database)
+            let block_changes = create_block_changes(
+                &self.chain_id,
+                &result.result().sealed_block,
+                database,
+            )?;
+            self._commit_result(result, block_changes, permit, database)
         })
         .await?
     }
@@ -281,10 +291,12 @@ where
     fn _commit_result(
         &self,
         result: UncommittedResult<ListChanges>,
+        block_changes: Changes,
         permit: OwnedSemaphorePermit,
         database: &mut D,
     ) -> Result<(), Error> {
         let (result, mut changes) = result.into();
+
         let block = &result.sealed_block.entity;
         let consensus = &result.sealed_block.consensus;
         let actual_next_height = *block.header().height();
@@ -332,35 +344,8 @@ where
             ))
         }
 
-        // Importer expects that `UncommittedResult` contains the result of block
-        // execution without block itself.
-        let expected_block_root = database.latest_block_root()?;
-
-        let start_db = Instant::now();
-        let mut db_after_execution = database.storage_transaction(Default::default());
-        tracing::info!(
-            "Creating a transaction for the block took: {}ms",
-            start_db.elapsed().as_millis()
-        );
         let start = Instant::now();
-        let actual_block_root = db_after_execution.latest_block_root()?;
-        tracing::info!(
-            "Getting the latest block root took: {}ms",
-            start.elapsed().as_millis()
-        );
-        if actual_block_root != expected_block_root {
-            return Err(Error::InvalidDatabaseStateAfterExecution(
-                expected_block_root,
-                actual_block_root,
-            ))
-        }
-
-        db_after_execution.store_new_block(
-            &result.sealed_block,
-            result.tx_status.iter().map(|res| res.id).collect(),
-        )?;
-        let start = Instant::now();
-        changes.push(db_after_execution.into_changes());
+        changes.push(block_changes);
         tracing::info!(
             "Storing the block in the database took: {}ms",
             start.elapsed().as_millis()
@@ -555,6 +540,19 @@ where
         let start = Instant::now();
         let _guard = self.lock()?;
 
+        let block_changes = std::thread::spawn({
+            let sealed_block = sealed_block.clone();
+            let database = self.database.clone();
+            let chain_id = self.chain_id;
+            move || {
+                let mut guard = database
+                    .try_lock()
+                    .expect("Semaphore prevents concurrent access to the database");
+                let database = guard.deref_mut();
+                create_block_changes(&chain_id, &sealed_block, database)
+            }
+        });
+
         let executor = self.executor.clone();
         let verifier = self.verifier.clone();
         let (result, execute_time) = self
@@ -563,7 +561,7 @@ where
                 let result = Self::verify_and_execute_block_inner(
                     executor,
                     verifier,
-                    sealed_block,
+                    sealed_block.clone(),
                 );
                 let execute_time = start.elapsed().as_secs_f64();
                 tracing::info!(
@@ -575,6 +573,9 @@ where
             .await?;
 
         let result = result?;
+        let block_changes = block_changes.join().map_err(|e| {
+            Error::TaskError(format!("Error while waiting for block changes: {:?}", e))
+        })??;
 
         // Await until all receivers of the notification process the result.
         const TIMEOUT: u64 = 20;
@@ -602,7 +603,8 @@ where
                 let database = guard.deref_mut();
 
                 let start = Instant::now();
-                self._commit_result(result, permit, database).map(|_| start)
+                self._commit_result(result, block_changes, permit, database)
+                    .map(|_| start)
             })
             .await?;
 
@@ -644,4 +646,45 @@ impl Awaiter {
             _permit: permit,
         }
     }
+}
+
+fn create_block_changes<D: ImporterDatabase + Transactional>(
+    chain_id: &ChainId,
+    sealed_block: &SealedBlock,
+    database: &mut D,
+) -> Result<Changes, Error> {
+    // Importer expects that `UncommittedResult` contains the result of block
+    // execution without block itself.
+    let expected_block_root = database.latest_block_root()?;
+
+    let start_db = Instant::now();
+    let mut db_after_execution = database.storage_transaction(Default::default());
+    tracing::info!(
+        "Creating a transaction for the block took: {}ms",
+        start_db.elapsed().as_millis()
+    );
+    let start = Instant::now();
+    let actual_block_root = db_after_execution.latest_block_root()?;
+    tracing::info!(
+        "Getting the latest block root took: {}ms",
+        start.elapsed().as_millis()
+    );
+    if actual_block_root != expected_block_root {
+        return Err(Error::InvalidDatabaseStateAfterExecution(
+            expected_block_root,
+            actual_block_root,
+        ))
+    }
+
+    db_after_execution.store_new_block(
+        &sealed_block,
+        sealed_block
+            .entity
+            .transactions()
+            .iter()
+            .map(|tx| tx.id(chain_id))
+            .collect(),
+    )?;
+
+    Ok(db_after_execution.into_changes())
 }
