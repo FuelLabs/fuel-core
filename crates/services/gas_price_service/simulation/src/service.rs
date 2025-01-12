@@ -114,8 +114,9 @@ pub struct MetadataValues {
 
 impl MetadataValues {
     pub fn new(starting_height: u32, latest_gas_price: u64) -> Self {
+        let l2_block_height = starting_height.saturating_sub(1);
         Self {
-            l2_block_height: starting_height - 1,
+            l2_block_height,
             latest_gas_price,
         }
     }

@@ -116,7 +116,7 @@ fn draw_profits(
     let max_overall = max_profit.max(max_cost).max(max_reward);
     let min_overall = min_profit.min(min_cost).min(min_reward);
 
-    let mut chart = ChartBuilder::on(&upper)
+    let mut chart = ChartBuilder::on(upper)
         .caption(
             "Profit, Cost, and Reward Over Time",
             ("sans-serif", 50).into_font(),
@@ -134,7 +134,7 @@ fn draw_profits(
             &BLACK,
         ))?
         .label("Predicted Profit ETH")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLACK));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLACK));
 
     chart
         .draw_series(LineSeries::new(
@@ -142,7 +142,7 @@ fn draw_profits(
             &RED,
         ))?
         .label("Known Cost ETH")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED));
 
     chart
         .draw_series(LineSeries::new(
@@ -150,12 +150,12 @@ fn draw_profits(
             &BLUE,
         ))?
         .label("Reward ETH")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
 
     chart
         .configure_series_labels()
-        .background_style(&WHITE.mix(0.8))
-        .border_style(&BLACK)
+        .background_style(WHITE.mix(0.8))
+        .border_style(BLACK)
         .draw()?;
     Ok(())
 }
@@ -164,7 +164,7 @@ fn draw_da_costs(
     results: &SimulationResults,
     lower: &DrawingArea<BitMapBackend, Shift>,
 ) -> anyhow::Result<()> {
-    let mut chart = ChartBuilder::on(&lower)
+    let mut chart = ChartBuilder::on(lower)
         .caption(
             "Price Per Byte to Post to DA Over Time",
             ("sans-serif", 50).into_font(),
@@ -192,12 +192,12 @@ fn draw_da_costs(
             &BLUE,
         ))?
         .label("Price Per Byte")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
 
     chart
         .configure_series_labels()
-        .background_style(&WHITE.mix(0.8))
-        .border_style(&BLACK)
+        .background_style(WHITE.mix(0.8))
+        .border_style(BLACK)
         .draw()?;
     Ok(())
 }
@@ -206,7 +206,7 @@ fn draw_da_gas_prices(
     results: &SimulationResults,
     bottom: &DrawingArea<BitMapBackend, Shift>,
 ) -> anyhow::Result<()> {
-    let mut chart = ChartBuilder::on(&bottom)
+    let mut chart = ChartBuilder::on(bottom)
         .caption("DA Gas Price Over Time", ("sans-serif", 50).into_font())
         .margin(5)
         .x_label_area_size(40)
@@ -228,12 +228,12 @@ fn draw_da_gas_prices(
             &BLUE,
         ))?
         .label("DA Gas Price")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
 
     chart
         .configure_series_labels()
-        .background_style(&WHITE.mix(0.8))
-        .border_style(&BLACK)
+        .background_style(WHITE.mix(0.8))
+        .border_style(BLACK)
         .draw()?;
     Ok(())
 }

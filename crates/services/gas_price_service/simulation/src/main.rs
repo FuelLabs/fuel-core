@@ -1,3 +1,6 @@
+#![deny(clippy::arithmetic_side_effects)]
+#![deny(clippy::cast_possible_truncation)]
+
 use crate::{
     cli::Args,
     data::get_data,
@@ -10,6 +13,9 @@ use clap::Parser;
 pub mod cli;
 pub mod data;
 pub mod data_sources;
+
+#[allow(clippy::arithmetic_side_effects)]
+#[allow(clippy::cast_possible_truncation)]
 pub mod display;
 pub mod service;
 pub mod simulation;

@@ -114,7 +114,7 @@ async fn run_single_simulation(
     let metadata_values = MetadataValues::new(starting_height, start_gas_price);
     let mut service_controller =
         get_service_controller(config_values, metadata_values).await?;
-    single_simulation(&data, &mut service_controller).await
+    single_simulation(data, &mut service_controller).await
 }
 
 pub async fn optimization(data: Data) -> anyhow::Result<SimulationResults> {
@@ -126,6 +126,8 @@ pub async fn optimization(data: Data) -> anyhow::Result<SimulationResults> {
     Ok(best_result)
 }
 
+const ETH_IN_WEI: i128 = 1_000_000_000_000_000_000;
+
 // do a minimization on the p component
 // this will first choose a distribution of p values
 // from there it will find the two p values with the best results
@@ -136,7 +138,7 @@ pub async fn optimization(data: Data) -> anyhow::Result<SimulationResults> {
 // Each simulation can be run in a separate thread
 async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64> {
     const DISSECT_SAMPLES: i128 = 100;
-    let mut p_range = 1..=1_000_000_000__000_000_000; // convert to i128 to be safe
+    let mut p_range = 1..=ETH_IN_WEI; // convert to i128 to be safe
     let mut best_p = 1;
     let mut best_profit = i128::MAX;
     let tries = 10;
@@ -155,20 +157,19 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
                     let p: i64 = p.try_into()?;
                     let result =
                         run_single_simulation(&data, p, 0, start_gas_price).await?;
-                    // use the abs of the profits so we large swings in profit don't cancel out
-                    // let profit_abs_sum =
-                    //     result.profits.iter().map(|p| p.abs()).sum::<i128>();
-                    // profit is the reward - known cost (not the predicted profit)
-                    // use the abs of the profits so we large swings in profit don't cancel out
+
                     let profit_abs_sum = result
                         .rewards
                         .iter()
                         .map(|r| *r as i128)
                         .zip(result.costs.iter().map(|c| *c as i128))
-                        .map(|(r, c)| r - c)
+                        .map(|(r, c)| r.saturating_sub(c))
                         .map(|p| p.abs())
                         .sum::<i128>();
-                    let avg_abs_profit = profit_abs_sum / result.profits.len() as i128;
+                    let len = i128::try_from(result.profits.len())?;
+                    let avg_abs_profit = profit_abs_sum.checked_div(len).ok_or(
+                        anyhow::anyhow!("Overflow: {} / {}", profit_abs_sum, len),
+                    )?;
                     Ok::<(i128, i64), anyhow::Error>((avg_abs_profit, p))
                 })
             })
@@ -178,8 +179,7 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
         let pairs_res: anyhow::Result<Vec<_>> = futures::future::join_all(futures)
             .await
             .into_iter()
-            .map(|fut_res| fut_res.map_err(|err| anyhow::anyhow!(err)))
-            .flatten()
+            .flat_map(|fut_res| fut_res.map_err(|err| anyhow::anyhow!(err)))
             .collect();
 
         // choose the one p value associated with the lowest average profit
@@ -257,7 +257,7 @@ async fn select_d_value(
     start_gas_price: u64,
 ) -> anyhow::Result<i64> {
     const DISSECT_SAMPLES: usize = 100;
-    let mut d_range = 1..=1_000_000_000__000_000_000;
+    let mut d_range = 1..=ETH_IN_WEI;
     let mut best_d = 1;
     let mut best_profit = i128::MAX;
     let tries = 10;
@@ -283,10 +283,13 @@ async fn select_d_value(
                         .iter()
                         .map(|r| *r as i128)
                         .zip(result.costs.iter().map(|c| *c as i128))
-                        .map(|(r, c)| r - c)
+                        .map(|(r, c)| r.saturating_sub(c))
                         .map(|p| p.abs())
                         .sum::<i128>();
-                    let avg_abs_profit = profit_abs_sum / result.profits.len() as i128;
+                    let len = i128::try_from(result.profits.len())?;
+                    let avg_abs_profit = profit_abs_sum.checked_div(len).ok_or(
+                        anyhow::anyhow!("Overflow: {} / {}", profit_abs_sum, len),
+                    )?;
                     Ok::<(i128, i64), anyhow::Error>((avg_abs_profit, d))
                 })
             })
@@ -296,16 +299,11 @@ async fn select_d_value(
         let pairs_res: anyhow::Result<Vec<_>> = futures::future::join_all(futures)
             .await
             .into_iter()
-            .map(|fut_res| fut_res.map_err(|err| anyhow::anyhow!(err)))
-            .flatten()
+            .flat_map(|fut_res| fut_res.map_err(|err| anyhow::anyhow!(err)))
             .collect();
 
         // choose the one d value associated with the lowest average profit
         let mut pairs = pairs_res?;
-        // let (new_best_profit, new_best_d) = pairs
-        //     .into_iter()
-        //     .min_by_key(|(profit, _)| *profit)
-        //     .ok_or(anyhow::anyhow!("No best profit found"))?;
         pairs.sort_by_key(|(profit, _)| *profit);
         let ((new_best_profit, new_best_d), remaining) = pairs
             .split_first()

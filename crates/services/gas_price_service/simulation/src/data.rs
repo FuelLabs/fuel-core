@@ -75,7 +75,7 @@ impl Data {
 
 impl From<&Record> for BlockInfo {
     fn from(value: &Record) -> Self {
-        return BlockInfo::Block {
+        BlockInfo::Block {
             height: value.l2_block_number.try_into().unwrap(),
             gas_used: value.l2_gas_fullness,
             block_gas_capacity: value.l2_gas_capacity,
@@ -124,9 +124,10 @@ pub fn get_data<P: AsRef<Path> + Debug>(path: P) -> anyhow::Result<Data> {
         if record.l1_block_number != 0 {
             tracing::debug!("adding new DA info: {:?}", record);
             // TODO: Check if these are generated correctly.
-            let bundle_id = record.l1_block_number as u32; // Could be an arbitrary number, but we use L1 block number for convenience.
-            let bundle_size_bytes = record.l1_blob_size_bytes as u32;
-            let range = record.blob_start_l2_block_number..=record.l2_block_number as u32;
+            let bundle_id = u32::try_from(record.l1_block_number)?; // Could be an arbitrary number, but we use L1 block number for convenience.
+            let bundle_size_bytes = u32::try_from(record.l1_blob_size_bytes)?;
+            let end_block_number = u32::try_from(record.l2_block_number)?;
+            let range = record.blob_start_l2_block_number..=end_block_number;
             let blob_cost_wei = record.l1_blob_fee_wei as u128;
 
             let new = DaBlockCosts {
@@ -146,7 +147,7 @@ pub fn get_data<P: AsRef<Path> + Debug>(path: P) -> anyhow::Result<Data> {
                     da_block_costs.push(cost);
                     None
                 } else {
-                    Some((cost, timer - 1))
+                    Some((cost, timer.saturating_sub(1)))
                 }
             })
             .collect();
@@ -184,7 +185,7 @@ pub fn get_data<P: AsRef<Path> + Debug>(path: P) -> anyhow::Result<Data> {
     let mut current_range: Option<RangeInclusive<u64>> = None;
     for height in sorted_orphans {
         if let Some(range) = current_range.as_mut() {
-            if (range.end() + 1) == *height {
+            if range.end().saturating_add(1) == *height {
                 current_range = Some(*range.start()..=*height);
             } else {
                 orphaned_ranges.push(range.clone());
@@ -197,7 +198,7 @@ pub fn get_data<P: AsRef<Path> + Debug>(path: P) -> anyhow::Result<Data> {
     tracing::info!("Orphaned ranges: {:?}", orphaned_ranges);
     let lengths_of_ranges = orphaned_ranges
         .iter()
-        .map(|range| range.end() - range.start() + 1)
+        .map(|range| range.end().saturating_sub(*range.start()).saturating_add(1))
         .collect::<Vec<_>>();
     tracing::info!("Lengths of ranges: {:?}", lengths_of_ranges);
 
