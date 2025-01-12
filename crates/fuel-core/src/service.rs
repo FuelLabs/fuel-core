@@ -39,7 +39,10 @@ use fuel_core_storage::{
     IsNotFound,
     StorageAsMut,
 };
-use fuel_core_types::blockchain::consensus::Consensus;
+use fuel_core_types::{
+    blockchain::consensus::Consensus,
+    services::Uncommitted,
+};
 use std::{
     net::SocketAddr,
     sync::Arc,
@@ -309,11 +312,10 @@ impl FuelService {
                     &Consensus::Genesis(initialized_genesis),
                 )?;
 
-            self.shared
-                .database
-                .on_chain()
-                .data
-                .commit_changes(Some(genesis_block_height), database_tx.into_changes())?;
+            self.shared.database.on_chain().data.commit_changes(
+                Some(genesis_block_height),
+                vec![database_tx.into_changes()],
+            )?;
         }
 
         Ok(())
@@ -330,7 +332,12 @@ impl FuelService {
                 )
                 .await?;
 
-                self.shared.block_importer.commit_result(result).await?;
+                // TODO: Change when the block producer will also return list of changes
+                let (result, changes) = result.into();
+                self.shared
+                    .block_importer
+                    .commit_result(Uncommitted::new(result, vec![changes]))
+                    .await?;
             }
         }
 

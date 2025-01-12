@@ -28,10 +28,7 @@ use fuel_core_storage::{
         ConsensusParametersVersions,
         FuelBlocks,
     },
-    transactional::{
-        Changes,
-        StorageChanges,
-    },
+    transactional::ListChanges,
     MerkleRoot,
     Result as StorageResult,
     StorageAsRef,
@@ -124,13 +121,21 @@ impl ImporterDatabase for Database {
             .get(consensus_parameters_version)?
             .map(|cow| cow.chain_id()))
     }
+
+    fn commit_changes(
+        &mut self,
+        new_height: BlockHeight,
+        changes: Vec<fuel_core_storage::transactional::Changes>,
+    ) -> StorageResult<()> {
+        self.data.commit_changes(Some(new_height), changes)
+    }
 }
 
 impl Validator for ExecutorAdapter {
     fn validate(
         &self,
         block: &Block,
-    ) -> ExecutorResult<UncommittedValidationResult<StorageChanges>> {
+    ) -> ExecutorResult<UncommittedValidationResult<ListChanges>> {
         self.executor.validate(block)
     }
 }

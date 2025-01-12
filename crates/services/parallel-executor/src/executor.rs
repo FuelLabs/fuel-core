@@ -25,8 +25,8 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         HistoricalView,
+        ListChanges,
         Modifiable,
-        StorageChanges,
         StorageTransaction,
     },
     StorageAsMut,
@@ -216,8 +216,14 @@ where
                 &block.compress(&ChainId::default()),
             )
             .unwrap();
-        changes.extend(tx.into_changes());
-        executor.storage_view_provider.commit_changes(changes)?;
+        changes.push(tx.into_changes());
+        let mut final_changes = HashMap::new();
+        for changes in changes {
+            final_changes.extend(changes.into_iter());
+        }
+        executor
+            .storage_view_provider
+            .commit_changes(final_changes)?;
 
         Ok(result)
     }
@@ -334,7 +340,7 @@ where
     pub fn validate(
         &self,
         block: &Block,
-    ) -> ExecutorResult<Uncommitted<ValidationResult, StorageChanges>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, ListChanges>> {
         self.validate_inner(block)
     }
 
@@ -415,7 +421,7 @@ where
         components: Components<TxSource>,
         consensus_parameters: Cow<ConsensusParameters>,
         consensus_parameters_version: u32,
-    ) -> ExecutorResult<Uncommitted<ProductionResult, StorageChanges>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, ListChanges>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -709,7 +715,7 @@ where
     fn validate_inner(
         &self,
         block: &Block,
-    ) -> ExecutorResult<Uncommitted<ValidationResult, StorageChanges>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, ListChanges>> {
         let (gas_price, coinbase_contract_id) = native_executor::executor::BlockExecutor::<
             (),
         >::get_coinbase_info_from_mint_tx(
@@ -786,7 +792,7 @@ where
         options: ExecutionOptions,
         uncommitted_results: Vec<ExecutionResult>,
         skipped_txs: Vec<(TxId, ExecutorError)>,
-    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
+    ) -> ExecutorResult<UncommittedResult<ListChanges>> {
         let partial_block_header = components.header_to_produce;
 
         let mut txs_count = 0usize;

@@ -179,7 +179,7 @@ mod tests {
         tables::Coins,
         transactional::{
             Changes,
-            StorageChanges,
+            ListChanges,
             StorageTransaction,
         },
         Result as StorageResult,
@@ -571,7 +571,7 @@ mod tests {
         fn commit_changes(
             &self,
             _: Option<BlockHeight>,
-            _: StorageChanges,
+            _: ListChanges,
         ) -> StorageResult<()> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }

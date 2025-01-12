@@ -361,10 +361,11 @@ where
         };
 
         // Import the sealed block
+        // TODO: Change when the block producer will also return list of changes
         self.block_importer
             .commit_result(Uncommitted::new(
                 ImportResult::new_from_local(block, tx_status, events),
-                changes,
+                vec![changes],
             ))
             .await?;
 
@@ -420,10 +421,11 @@ where
             consensus: seal,
         };
         // Import the sealed block
+        // TODO: Change when the block producer will also return list of changes
         self.block_importer
             .commit_result(Uncommitted::new(
                 ImportResult::new_from_local(sealed_block.clone(), tx_status, events),
-                changes,
+                vec![changes],
             ))
             .await?;
 

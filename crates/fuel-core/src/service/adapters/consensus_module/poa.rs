@@ -23,7 +23,10 @@ use fuel_core_poa::{
     },
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::Changes;
+use fuel_core_storage::transactional::{
+    Changes,
+    ListChanges,
+};
 use fuel_core_types::{
     blockchain::block::Block,
     fuel_tx::Bytes32,
@@ -123,7 +126,7 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
 impl BlockImporter for BlockImporterAdapter {
     async fn commit_result(
         &self,
-        result: UncommittedImporterResult<Changes>,
+        result: UncommittedImporterResult<ListChanges>,
     ) -> anyhow::Result<()> {
         self.block_importer
             .commit_result(result)

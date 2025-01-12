@@ -12,7 +12,7 @@ use crate::{
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
     not_found,
-    transactional::StorageChanges,
+    transactional::ListChanges,
     Error as StorageError,
     MerkleRoot,
 };
@@ -237,7 +237,7 @@ where
     /// Returns an error if called while another call is in progress.
     pub async fn commit_result(
         &self,
-        result: UncommittedResult<StorageChanges>,
+        result: UncommittedResult<ListChanges>,
     ) -> Result<(), Error> {
         let _guard = self.lock()?;
 
@@ -280,11 +280,11 @@ where
     )]
     fn _commit_result(
         &self,
-        result: UncommittedResult<StorageChanges>,
+        result: UncommittedResult<ListChanges>,
         permit: OwnedSemaphorePermit,
         database: &mut D,
     ) -> Result<(), Error> {
-        let (result, changes) = result.into();
+        let (result, mut changes) = result.into();
         let block = &result.sealed_block.entity;
         let consensus = &result.sealed_block.consensus;
         let actual_next_height = *block.header().height();
@@ -337,7 +337,7 @@ where
         let expected_block_root = database.latest_block_root()?;
 
         let start_db = Instant::now();
-        let mut db_after_execution = database.storage_transaction(changes);
+        let mut db_after_execution = database.storage_transaction(Default::default());
         tracing::info!(
             "Creating a transaction for the block took: {}ms",
             start_db.elapsed().as_millis()
@@ -360,16 +360,13 @@ where
             result.tx_status.iter().map(|res| res.id).collect(),
         )?;
         let start = Instant::now();
-
-        db_after_execution.commit()?;
+        changes.push(db_after_execution.into_changes());
         tracing::info!(
-            "Commiting the block to the database took: {}ms",
+            "Storing the block in the database took: {}ms",
             start.elapsed().as_millis()
         );
-        tracing::info!(
-            "Commiting to the database took: {}ms",
-            start_db.elapsed().as_millis()
-        );
+
+        database.commit_changes(expected_next_height, changes)?;
 
         if self.metrics {
             Self::update_metrics(&result, &actual_next_height);
@@ -477,7 +474,7 @@ where
     pub fn verify_and_execute_block(
         &self,
         sealed_block: SealedBlock,
-    ) -> Result<UncommittedResult<StorageChanges>, Error> {
+    ) -> Result<UncommittedResult<ListChanges>, Error> {
         Self::verify_and_execute_block_inner(
             self.executor.clone(),
             self.verifier.clone(),
@@ -489,7 +486,7 @@ where
         executor: Arc<E>,
         verifier: Arc<V>,
         sealed_block: SealedBlock,
-    ) -> Result<UncommittedResult<StorageChanges>, Error> {
+    ) -> Result<UncommittedResult<ListChanges>, Error> {
         let start = tokio::time::Instant::now();
         let consensus = sealed_block.consensus;
         let block = sealed_block.entity;

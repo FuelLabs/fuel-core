@@ -403,19 +403,19 @@ impl Modifiable for Database<Relayer> {
 
 impl Modifiable for GenesisDatabase<OnChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(None, changes)
+        self.data.as_ref().commit_changes(None, vec![changes])
     }
 }
 
 impl Modifiable for GenesisDatabase<OffChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(None, changes)
+        self.data.as_ref().commit_changes(None, vec![changes])
     }
 }
 
 impl Modifiable for GenesisDatabase<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(None, changes)
+        self.data.as_ref().commit_changes(None, vec![changes])
     }
 }
 
@@ -517,7 +517,9 @@ where
 
     // Atomically commit the changes to the database, and to the mutex-protected field.
     let mut guard = database.stage.height.lock();
-    database.data.commit_changes(new_height, updated_changes)?;
+    database
+        .data
+        .commit_changes(new_height, vec![updated_changes])?;
 
     // Update the block height
     if let Some(new_height) = new_height {

@@ -27,7 +27,7 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    transactional::StorageChanges,
+    transactional::ListChanges,
     Result as StorageResult,
 };
 use itertools::Itertools;
@@ -820,7 +820,7 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn commit_changes(&self, changes: StorageChanges) -> StorageResult<()> {
+    pub fn commit_changes(&self, changes: ListChanges) -> StorageResult<()> {
         let instant = std::time::Instant::now();
         let mut batch = WriteBatch::default();
         for changes in changes.iter() {
@@ -892,8 +892,8 @@ pub mod test_helpers {
         ) -> StorageResult<usize> {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
-            let changes = transaction.into_storage_changes();
-            self.commit_changes(changes)?;
+            let changes = transaction.into_changes();
+            self.commit_changes(vec![changes])?;
 
             Ok(len)
         }
@@ -901,8 +901,8 @@ pub mod test_helpers {
         fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
-            let changes = transaction.into_storage_changes();
-            self.commit_changes(changes)?;
+            let changes = transaction.into_changes();
+            self.commit_changes(vec![changes])?;
             Ok(())
         }
     }

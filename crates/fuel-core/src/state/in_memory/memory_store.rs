@@ -29,7 +29,7 @@ use fuel_core_storage::{
         WriteOperation,
     },
     transactional::{
-        Changes,
+        ListChanges,
         ReferenceBytesKey,
     },
     Result as StorageResult,
@@ -167,20 +167,22 @@ where
     fn commit_changes(
         &self,
         _: Option<Description::Height>,
-        changes: Changes,
+        changes: ListChanges,
     ) -> StorageResult<()> {
-        for (column, btree) in changes.into_iter() {
-            let mut lock = self.inner[column as usize]
-                .lock()
-                .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?;
+        for changes in changes.into_iter() {
+            for (column, btree) in changes.into_iter() {
+                let mut lock = self.inner[column as usize]
+                    .lock()
+                    .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?;
 
-            for (key, operation) in btree.into_iter() {
-                match operation {
-                    WriteOperation::Insert(value) => {
-                        lock.insert(key, value);
-                    }
-                    WriteOperation::Remove => {
-                        lock.remove(&key);
+                for (key, operation) in btree.into_iter() {
+                    match operation {
+                        WriteOperation::Insert(value) => {
+                            lock.insert(key, value);
+                        }
+                        WriteOperation::Remove => {
+                            lock.remove(&key);
+                        }
                     }
                 }
             }
@@ -237,7 +239,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(None, changes)?;
+            self.commit_changes(None, vec![changes])?;
             Ok(len)
         }
 
@@ -245,7 +247,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(None, changes)?;
+            self.commit_changes(None, vec![changes])?;
             Ok(())
         }
     }

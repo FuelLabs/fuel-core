@@ -13,7 +13,7 @@ use anyhow::anyhow;
 use fuel_core_storage::{
     transactional::{
         Changes,
-        StorageChanges,
+        ListChanges,
     },
     Error as StorageError,
     MerkleRoot,
@@ -151,7 +151,7 @@ fn storage_failure_error() -> Error {
     storage_failure::<()>().unwrap_err().into()
 }
 
-fn ex_result() -> ExecutorResult<UncommittedValidationResult<StorageChanges>> {
+fn ex_result() -> ExecutorResult<UncommittedValidationResult<ListChanges>> {
     Ok(Uncommitted::new(
         ValidationResult {
             tx_status: vec![],
@@ -171,9 +171,7 @@ fn execution_failure_error() -> Error {
 
 fn executor<R>(result: R) -> MockValidator
 where
-    R: Fn() -> ExecutorResult<UncommittedValidationResult<StorageChanges>>
-        + Send
-        + 'static,
+    R: Fn() -> ExecutorResult<UncommittedValidationResult<ListChanges>> + Send + 'static,
 {
     let mut executor = MockValidator::default();
     executor.expect_validate().return_once(move |_| result());
@@ -477,7 +475,7 @@ async fn execute_and_commit_and_verify_and_execute_block_poa<V, P>(
     commits: usize,
 ) -> Result<(), Error>
 where
-    P: Fn() -> ExecutorResult<UncommittedValidationResult<StorageChanges>>
+    P: Fn() -> ExecutorResult<UncommittedValidationResult<ListChanges>>
         + Send
         + Clone
         + 'static,
@@ -516,9 +514,7 @@ fn verify_and_execute_assert<P, V>(
     verifier_result: V,
 ) -> Result<(), Error>
 where
-    P: Fn() -> ExecutorResult<UncommittedValidationResult<StorageChanges>>
-        + Send
-        + 'static,
+    P: Fn() -> ExecutorResult<UncommittedValidationResult<ListChanges>> + Send + 'static,
     V: Fn() -> anyhow::Result<()> + Send + 'static,
 {
     let importer = Importer::default_config(

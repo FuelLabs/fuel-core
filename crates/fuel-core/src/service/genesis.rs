@@ -206,6 +206,7 @@ pub async fn execute_and_commit_genesis_block(
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
+    use fuel_core_types::services::Uncommitted;
     let result = execute_genesis_block(StateWatcher::default(), config, db).await?;
     let importer = fuel_core_importer::Importer::new(
         config
@@ -218,7 +219,10 @@ pub async fn execute_and_commit_genesis_block(
         (),
         (),
     );
-    importer.commit_result(result).await?;
+    let (result, changes) = result.into();
+    importer
+        .commit_result(Uncommitted::new(result, vec![changes]))
+        .await?;
     Ok(())
 }
 

@@ -1,6 +1,9 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    transactional::Changes,
+    transactional::{
+        Changes,
+        ListChanges,
+    },
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -62,7 +65,7 @@ pub trait BlockProducer: Send + Sync {
 pub trait BlockImporter: Send + Sync {
     async fn commit_result(
         &self,
-        result: UncommittedImportResult<Changes>,
+        result: UncommittedImportResult<ListChanges>,
     ) -> anyhow::Result<()>;
 
     fn block_stream(&self) -> BoxStream<BlockImportInfo>;
