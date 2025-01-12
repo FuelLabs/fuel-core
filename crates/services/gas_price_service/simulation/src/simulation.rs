@@ -157,19 +157,7 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
                     let p: i64 = p.try_into()?;
                     let result =
                         run_single_simulation(&data, p, 0, start_gas_price).await?;
-
-                    let profit_abs_sum = result
-                        .rewards
-                        .iter()
-                        .map(|r| *r as i128)
-                        .zip(result.costs.iter().map(|c| *c as i128))
-                        .map(|(r, c)| r.saturating_sub(c))
-                        .map(|p| p.abs())
-                        .sum::<i128>();
-                    let len = i128::try_from(result.profits.len())?;
-                    let avg_abs_profit = profit_abs_sum.checked_div(len).ok_or(
-                        anyhow::anyhow!("Overflow: {} / {}", profit_abs_sum, len),
-                    )?;
+                    let avg_abs_profit = avg_profit(&result)?;
                     Ok::<(i128, i64), anyhow::Error>((avg_abs_profit, p))
                 })
             })
@@ -216,39 +204,6 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
 
     Ok(best_p)
 }
-fn dissect_range(
-    range: &RangeInclusive<i128>,
-    samples: i128,
-) -> anyhow::Result<Vec<i128>> {
-    let mut values = Vec::new();
-    let range_len = range
-        .end()
-        .checked_sub(*range.start())
-        .ok_or(anyhow::anyhow!(
-            "Overflow: {} - {}",
-            range.end(),
-            range.start()
-        ))?;
-    let interval_len = range_len.checked_div(samples).ok_or(anyhow::anyhow!(
-        "Overflow: {} / {}",
-        range_len,
-        samples
-    ))?;
-    for i in 0..samples {
-        let add = interval_len.checked_mul(i).ok_or(anyhow::anyhow!(
-            "Overflow: {} * {}",
-            interval_len,
-            i
-        ))?;
-        let p = range.start().checked_add(add).ok_or(anyhow::anyhow!(
-            "Overflow: {} + {}",
-            range.start(),
-            add
-        ))?;
-        values.push(p);
-    }
-    Ok(values)
-}
 
 // do the same as with p for d, but use a predefined p value,
 async fn select_d_value(
@@ -274,22 +229,7 @@ async fn select_d_value(
                     let d: i64 = d.try_into()?;
                     let result =
                         run_single_simulation(&data, p, d, start_gas_price).await?;
-                    // let profit_abs_sum =
-                    //     result.profits.iter().map(|p| p.abs()).sum::<i128>();
-                    // profit is the reward - known cost (not the predicted profit)
-                    // use the abs of the profits so we large swings in profit don't cancel out
-                    let profit_abs_sum = result
-                        .rewards
-                        .iter()
-                        .map(|r| *r as i128)
-                        .zip(result.costs.iter().map(|c| *c as i128))
-                        .map(|(r, c)| r.saturating_sub(c))
-                        .map(|p| p.abs())
-                        .sum::<i128>();
-                    let len = i128::try_from(result.profits.len())?;
-                    let avg_abs_profit = profit_abs_sum.checked_div(len).ok_or(
-                        anyhow::anyhow!("Overflow: {} / {}", profit_abs_sum, len),
-                    )?;
+                    let avg_abs_profit = avg_profit(&result)?;
                     Ok::<(i128, i64), anyhow::Error>((avg_abs_profit, d))
                 })
             })
@@ -325,4 +265,56 @@ async fn select_d_value(
         }
     }
     Ok(best_d)
+}
+
+fn dissect_range(
+    range: &RangeInclusive<i128>,
+    samples: i128,
+) -> anyhow::Result<Vec<i128>> {
+    let mut values = Vec::new();
+    let range_len = range
+        .end()
+        .checked_sub(*range.start())
+        .ok_or(anyhow::anyhow!(
+            "Overflow: {} - {}",
+            range.end(),
+            range.start()
+        ))?;
+    let interval_len = range_len.checked_div(samples).ok_or(anyhow::anyhow!(
+        "Overflow: {} / {}",
+        range_len,
+        samples
+    ))?;
+    for i in 0..samples {
+        let add = interval_len.checked_mul(i).ok_or(anyhow::anyhow!(
+            "Overflow: {} * {}",
+            interval_len,
+            i
+        ))?;
+        let p = range.start().checked_add(add).ok_or(anyhow::anyhow!(
+            "Overflow: {} + {}",
+            range.start(),
+            add
+        ))?;
+        values.push(p);
+    }
+    Ok(values)
+}
+
+// profit is the reward - known cost (not the predicted profit)
+// use the abs of the profits so we large swings in profit don't cancel out
+fn avg_profit(result: &SimulationResults) -> anyhow::Result<i128> {
+    let profit_abs_sum = result
+        .rewards
+        .iter()
+        .map(|r| *r as i128)
+        .zip(result.costs.iter().map(|c| *c as i128))
+        .map(|(r, c)| r.saturating_sub(c))
+        .map(|p| p.abs())
+        .sum::<i128>();
+    let len = i128::try_from(result.profits.len())?;
+    let avg_abs_profit = profit_abs_sum.checked_div(len).ok_or(
+        anyhow::anyhow!("Overflow: {} / {}", profit_abs_sum, len),
+    )?;
+    Ok(avg_abs_profit)
 }
