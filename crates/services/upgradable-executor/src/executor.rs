@@ -21,6 +21,7 @@ use fuel_core_storage::{
         Changes,
         HistoricalView,
         Modifiable,
+        StorageChanges,
     },
 };
 #[cfg(feature = "wasm-executor")]
@@ -359,9 +360,12 @@ where
     pub fn validate(
         &self,
         block: &Block,
-    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, StorageChanges>> {
         let options = self.config.as_ref().into();
-        self.validate_inner(block, options)
+        self.validate_inner(block, options).map(|result| {
+            let (result, changes) = result.into();
+            Uncommitted::new(result, vec![changes])
+        })
     }
 
     #[cfg(feature = "wasm-executor")]
