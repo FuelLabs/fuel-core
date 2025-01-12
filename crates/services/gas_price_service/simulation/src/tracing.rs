@@ -11,7 +11,7 @@ pub fn configure_tracing() {
         Some(_) => {
             EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided")
         }
-        None => EnvFilter::new("info"),
+        None => EnvFilter::new("simulation::simulation=info"),
     };
 
     let fmt = tracing_subscriber::fmt::Layer::default()

@@ -64,7 +64,7 @@ pub async fn single_simulation(
     data: &Data,
     service_controller: &mut ServiceController,
 ) -> anyhow::Result<SimulationResults> {
-    tracing::info!("Starting simulation");
+    tracing::debug!("Starting simulation");
     let mut results = SimulationResults::new();
     for (block, maybe_costs) in data.get_iter() {
         service_controller.advance(block, maybe_costs).await?;
@@ -78,7 +78,7 @@ pub async fn single_simulation(
         results.add_reward(reward);
         results.add_cost_per_byte(cost_per_byte);
     }
-    tracing::info!("Finished simulation");
+    tracing::debug!("Finished simulation");
     Ok(results)
 }
 
@@ -163,9 +163,15 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
             })
             .collect();
 
-        // join all the futures and get the results
-        let pairs_res: anyhow::Result<Vec<_>> = futures::future::join_all(futures)
-            .await
+        const TICK_TIME_SECONDS: u64 = 5;
+        const TIMEOUT_SECONDS: u64 = 60;
+        let future_res = tick_until_future_returns_or_timeout(
+            futures::future::join_all(futures),
+            TICK_TIME_SECONDS,
+            TIMEOUT_SECONDS,
+        )
+        .await?;
+        let pairs_res: anyhow::Result<Vec<_>> = future_res
             .into_iter()
             .flat_map(|fut_res| fut_res.map_err(|err| anyhow::anyhow!(err)))
             .collect();
@@ -174,21 +180,22 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
         let mut pairs = pairs_res?;
 
         pairs.sort_by_key(|(profit, _)| *profit);
-        tracing::info!("pairs: {:?}", pairs);
+        tracing::debug!("pairs: {:?}", pairs);
         let ((new_best_profit, new_best_p), remaining) = pairs
             .split_first()
             .ok_or(anyhow::anyhow!("No best profit found"))?;
-        tracing::info!("remaining: {:?}", remaining);
+        tracing::debug!("remaining: {:?}", remaining);
         let ((_, second_best_p), _) = remaining
             .split_first()
             .ok_or(anyhow::anyhow!("No second best profit found"))?;
 
+        tracing::info!("old best profit: {}, old best p: {}", best_profit, best_p);
+        tracing::info!(
+            "new best profit: {}, new best p: {}",
+            new_best_profit,
+            new_best_p
+        );
         if *new_best_profit < best_profit {
-            tracing::info!(
-                "new best profit: {}, new best p: {}",
-                new_best_profit,
-                new_best_p
-            );
             tracing::info!("second best p: {}", second_best_p);
             best_p = *new_best_p;
             best_profit = *new_best_profit;
@@ -201,8 +208,37 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
             break
         }
     }
-
+    tracing::info!("best p: {}", best_p);
     Ok(best_p)
+}
+
+async fn tick_until_future_returns_or_timeout<F: std::future::Future + Unpin>(
+    future: F,
+    tick_time_seconds: u64,
+    timeout_seconds: u64,
+) -> anyhow::Result<F::Output> {
+    let mut future = Box::pin(future);
+    let mut timeout = Box::pin(tokio::time::sleep(tokio::time::Duration::from_secs(
+        timeout_seconds,
+    )));
+    let mut time_elapsed = 0;
+    loop {
+        let tick_timeout = Box::pin(tokio::time::sleep(
+            tokio::time::Duration::from_secs(tick_time_seconds),
+        ));
+        tokio::select! {
+            res = &mut future => {
+                return Ok(res);
+            }
+            _ = &mut timeout => {
+                return Err(anyhow::anyhow!("Timeout: {} seconds", timeout_seconds));
+            }
+            _ = tick_timeout => {
+                time_elapsed += tick_time_seconds;
+                tracing::info!("Time elapsed: {}", time_elapsed);
+            }
+        }
+    }
 }
 
 // do the same as with p for d, but use a predefined p value,
@@ -220,6 +256,8 @@ async fn select_d_value(
         // split the d_range into DISSECT_SAMPLES
         let d_values = dissect_range(&d_range, DISSECT_SAMPLES as i128)?;
 
+        tracing::info!("running for d_values: {:?}", d_values);
+
         // for each d value, run a single simulation in a separate task and return the results
         let futures: Vec<_> = d_values
             .into_iter()
@@ -236,8 +274,21 @@ async fn select_d_value(
             .collect();
 
         // join all the futures and get the results
-        let pairs_res: anyhow::Result<Vec<_>> = futures::future::join_all(futures)
-            .await
+        // let pairs_res: anyhow::Result<Vec<_>> = futures::future::join_all(futures)
+        //     .await
+        //     .into_iter()
+        //     .flat_map(|fut_res| fut_res.map_err(|err| anyhow::anyhow!(err)))
+        //     .collect();
+
+        const TICK_TIME_SECONDS: u64 = 5;
+        const TIMEOUT_SECONDS: u64 = 60;
+        let future_res = tick_until_future_returns_or_timeout(
+            futures::future::join_all(futures),
+            TICK_TIME_SECONDS,
+            TIMEOUT_SECONDS,
+        )
+        .await?;
+        let pairs_res: anyhow::Result<Vec<_>> = future_res
             .into_iter()
             .flat_map(|fut_res| fut_res.map_err(|err| anyhow::anyhow!(err)))
             .collect();
@@ -252,7 +303,14 @@ async fn select_d_value(
             .split_first()
             .ok_or(anyhow::anyhow!("No second best profit found"))?;
 
+        tracing::info!("old best profit: {}, old best d: {}", best_profit, best_d);
+        tracing::info!(
+            "new best profit: {}, new best d: {}",
+            new_best_profit,
+            new_best_d
+        );
         if *new_best_profit < best_profit {
+            tracing::info!("second best d: {}", second_best_d);
             best_d = *new_best_d;
             best_profit = *new_best_profit;
 
@@ -264,6 +322,7 @@ async fn select_d_value(
             break
         }
     }
+    tracing::info!("best d: {}", best_d);
     Ok(best_d)
 }
 
@@ -313,8 +372,10 @@ fn avg_profit(result: &SimulationResults) -> anyhow::Result<i128> {
         .map(|p| p.abs())
         .sum::<i128>();
     let len = i128::try_from(result.profits.len())?;
-    let avg_abs_profit = profit_abs_sum.checked_div(len).ok_or(
-        anyhow::anyhow!("Overflow: {} / {}", profit_abs_sum, len),
-    )?;
+    let avg_abs_profit = profit_abs_sum.checked_div(len).ok_or(anyhow::anyhow!(
+        "Overflow: {} / {}",
+        profit_abs_sum,
+        len
+    ))?;
     Ok(avg_abs_profit)
 }
