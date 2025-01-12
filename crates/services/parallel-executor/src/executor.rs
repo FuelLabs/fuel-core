@@ -26,6 +26,7 @@ use fuel_core_storage::{
         ConflictPolicy,
         HistoricalView,
         Modifiable,
+        StorageChanges,
         StorageTransaction,
     },
     StorageAsMut,
@@ -333,7 +334,7 @@ where
     pub fn validate(
         &self,
         block: &Block,
-    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, StorageChanges>> {
         self.validate_inner(block)
     }
 
@@ -389,11 +390,24 @@ where
 
             return executor.produce_without_commit_with_source(new_small_block)
         }
+        // TODO: Directly return vec
         self.produce_inner_without_da(
             components,
             consensus_parameters,
             consensus_parameters_version,
         )
+        .map(|uncommitted| {
+            let (result, changes) = uncommitted.into();
+            let mut tx_changes = StorageTransaction::transaction(
+                &view,
+                ConflictPolicy::Fail,
+                Default::default(),
+            );
+            for changes in changes {
+                tx_changes.commit_changes(changes)?;
+            }
+            Ok(Uncommitted::new(result, tx_changes.into_changes()))
+        })?
     }
 
     fn produce_inner_without_da<TxSource>(
@@ -401,7 +415,7 @@ where
         components: Components<TxSource>,
         consensus_parameters: Cow<ConsensusParameters>,
         consensus_parameters_version: u32,
-    ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, StorageChanges>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -683,7 +697,6 @@ where
             };
             let old_result = executor.produce_without_commit_with_source(components)?;
             assert_eq!(old_result.result(), result.result());
-            assert_eq!(old_result.changes(), result.changes());
         }
         tracing::info!(
             "Merging of transactions took: {}ms",
@@ -696,7 +709,7 @@ where
     fn validate_inner(
         &self,
         block: &Block,
-    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, StorageChanges>> {
         let (gas_price, coinbase_contract_id) = native_executor::executor::BlockExecutor::<
             (),
         >::get_coinbase_info_from_mint_tx(
@@ -773,7 +786,7 @@ where
         options: ExecutionOptions,
         uncommitted_results: Vec<ExecutionResult>,
         skipped_txs: Vec<(TxId, ExecutorError)>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         let partial_block_header = components.header_to_produce;
 
         let mut txs_count = 0usize;
@@ -814,11 +827,7 @@ where
 
         total_data.skipped_transactions.extend(skipped_txs);
 
-        let mut total_changes = StorageTransaction::transaction(
-            &view,
-            ConflictPolicy::Fail,
-            Changes::default(),
-        );
+        let mut total_changes = Vec::with_capacity(uncommitted_results.len());
 
         let current_height = *total_partial_block.header.height();
         let (_, handlers) = uncommitted_results.into_iter().fold(
@@ -991,7 +1000,7 @@ where
         );
 
         for part in results {
-            let start = tokio::time::Instant::now();
+            let start = std::time::Instant::now();
             let (shifted_changes, execution_data, transactions, tx_leaf_hashes) =
                 part.map_err(|e| {
                     ExecutorError::Other(format!(
@@ -1018,8 +1027,8 @@ where
                 .ok_or(ExecutorError::TxSizeOverflow)?;
 
             // If `part_changes` to the database gas conflicts, `commit_changes` should fail.
-            let start_time = tokio::time::Instant::now();
-            total_changes.commit_changes(shifted_changes)?;
+            let start_time = std::time::Instant::now();
+            total_changes.push(shifted_changes);
             tracing::info!(
                 "Committing changes to total storage took: {}ms",
                 start_time.elapsed().as_millis()
@@ -1050,24 +1059,28 @@ where
         );
 
         let mut memory = MemoryInstance::new();
+
+        let mut tx_changes = StorageTransaction::transaction(
+            &view,
+            ConflictPolicy::Fail,
+            Default::default(),
+        );
         block_executor.produce_mint_tx(
             &mut total_partial_block,
             &components,
-            &mut total_changes,
+            &mut tx_changes,
             &mut total_data,
             &mut memory,
         )?;
+        total_changes.push(tx_changes.into_changes());
         // Make hash of mint
         let mint_hash =
             leaf_sum(&total_partial_block.transactions.last().unwrap().to_bytes());
         total_tx_hashes.push(mint_hash.into());
 
-        total_data.changes = total_changes.into_changes();
-
         let ExecutionData {
             message_ids,
             event_inbox_root,
-            changes,
             events,
             tx_status,
             skipped_transactions,
@@ -1077,7 +1090,7 @@ where
             ..
         } = total_data;
 
-        let start_time = tokio::time::Instant::now();
+        let start_time = std::time::Instant::now();
 
         let block = total_partial_block
             .generate(&message_ids[..], event_inbox_root, Some(total_tx_hashes))
@@ -1105,7 +1118,7 @@ where
             events,
         };
 
-        Ok(UncommittedResult::new(result, changes))
+        Ok(UncommittedResult::new(result, total_changes))
     }
 }
 

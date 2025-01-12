@@ -306,7 +306,6 @@ impl DependencySplitter {
         // One of buckets is reserved (not exclusively) for the `other_bucket`, so subtract 1 from the
         // `number_of_buckets`.
         let number_of_buckets = number_of_buckets.get();
-        let number_of_wild_buckets = number_of_buckets.saturating_sub(1);
         // The last bucket should contain all blobs as the end of all transactions.
         // Blobs at the end avoids potential invalidation of the predicates or transactions
         // after then.
@@ -320,13 +319,11 @@ impl DependencySplitter {
             });
         let gas_per_bucket = max_block_gas / number_of_buckets as u64;
 
-        // It's certainly a bit too big allocation because some transactions will go to the last bucket used also for
-        // `others_transactions` but I don't think it's a big deal and we still win in terms of performance.
         let approx_size_bucket = self
             .independent_bucket
             .elements
             .len()
-            .saturating_div(number_of_wild_buckets)
+            .saturating_div(number_of_buckets)
             .saturating_add(1);
         let mut current_txs: Vec<MaybeCheckedTransaction> =
             Vec::with_capacity(approx_size_bucket);
@@ -370,7 +367,6 @@ impl DependencySplitter {
             last_bucket.0 += self.blobs_bucket.gas;
             last_bucket.1.extend(self.blobs_bucket.elements);
 
-            debug_assert_eq!(sorted_buckets.len(), number_of_buckets);
             return sorted_buckets;
         }
         sorted_buckets.sort_by_key(|(gas, _)| *gas);
@@ -441,7 +437,6 @@ impl DependencySplitter {
         last_bucket.0 += self.blobs_bucket.gas;
         last_bucket.1.extend(self.blobs_bucket.elements);
 
-        debug_assert_eq!(sorted_buckets.len(), number_of_buckets);
         sorted_buckets
     }
 }

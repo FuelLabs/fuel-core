@@ -28,7 +28,10 @@ use fuel_core_storage::{
         ConsensusParametersVersions,
         FuelBlocks,
     },
-    transactional::Changes,
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
     MerkleRoot,
     Result as StorageResult,
     StorageAsRef,
@@ -127,7 +130,7 @@ impl Validator for ExecutorAdapter {
     fn validate(
         &self,
         block: &Block,
-    ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
+    ) -> ExecutorResult<UncommittedValidationResult<StorageChanges>> {
         self.executor.validate(block)
     }
 }

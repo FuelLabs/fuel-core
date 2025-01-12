@@ -27,7 +27,7 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    transactional::Changes,
+    transactional::StorageChanges,
     Result as StorageResult,
 };
 use itertools::Itertools;
@@ -820,23 +820,24 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn commit_changes(&self, changes: Changes) -> StorageResult<()> {
+    pub fn commit_changes(&self, changes: StorageChanges) -> StorageResult<()> {
         let instant = std::time::Instant::now();
         let mut batch = WriteBatch::default();
-
-        for (column, ops) in changes.iter() {
-            let cf = self.cf_u32(*column);
-            let column_metrics = self.metrics.columns_write_statistic.get(column);
-            for (key, op) in ops {
-                self.metrics.write_meter.inc();
-                column_metrics.map(|metric| metric.inc());
-                match op {
-                    WriteOperation::Insert(value) => {
-                        self.metrics.bytes_written.inc_by(value.len() as u64);
-                        batch.put_cf(&cf, key, value.as_ref());
-                    }
-                    WriteOperation::Remove => {
-                        batch.delete_cf(&cf, key);
+        for changes in changes.iter() {
+            for (column, ops) in changes.iter() {
+                let cf = self.cf_u32(*column);
+                let column_metrics = self.metrics.columns_write_statistic.get(column);
+                for (key, op) in ops {
+                    self.metrics.write_meter.inc();
+                    column_metrics.map(|metric| metric.inc());
+                    match op {
+                        WriteOperation::Insert(value) => {
+                            self.metrics.bytes_written.inc_by(value.len() as u64);
+                            batch.put_cf(&cf, key, value.as_ref());
+                        }
+                        WriteOperation::Remove => {
+                            batch.delete_cf(&cf, key);
+                        }
                     }
                 }
             }
@@ -891,7 +892,7 @@ pub mod test_helpers {
         ) -> StorageResult<usize> {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
-            let changes = transaction.into_changes();
+            let changes = transaction.into_storage_changes();
             self.commit_changes(changes)?;
 
             Ok(len)
@@ -900,7 +901,7 @@ pub mod test_helpers {
         fn delete(&mut self, key: &[u8], column: Self::Column) -> StorageResult<()> {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
-            let changes = transaction.into_changes();
+            let changes = transaction.into_storage_changes();
             self.commit_changes(changes)?;
             Ok(())
         }
@@ -1015,7 +1016,7 @@ mod tests {
             )]),
         )];
 
-        db.commit_changes(HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(vec![HashMap::from_iter(ops)]).unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
@@ -1031,7 +1032,7 @@ mod tests {
             Column::Metadata.id(),
             BTreeMap::from_iter(vec![(key.clone().into(), WriteOperation::Remove)]),
         )];
-        db.commit_changes(HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(vec![HashMap::from_iter(ops)]).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }

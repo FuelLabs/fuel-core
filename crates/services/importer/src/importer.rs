@@ -12,7 +12,7 @@ use crate::{
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
     not_found,
-    transactional::Changes,
+    transactional::StorageChanges,
     Error as StorageError,
     MerkleRoot,
 };
@@ -237,7 +237,7 @@ where
     /// Returns an error if called while another call is in progress.
     pub async fn commit_result(
         &self,
-        result: UncommittedResult<Changes>,
+        result: UncommittedResult<StorageChanges>,
     ) -> Result<(), Error> {
         let _guard = self.lock()?;
 
@@ -280,7 +280,7 @@ where
     )]
     fn _commit_result(
         &self,
-        result: UncommittedResult<Changes>,
+        result: UncommittedResult<StorageChanges>,
         permit: OwnedSemaphorePermit,
         database: &mut D,
     ) -> Result<(), Error> {
@@ -477,7 +477,7 @@ where
     pub fn verify_and_execute_block(
         &self,
         sealed_block: SealedBlock,
-    ) -> Result<UncommittedResult<Changes>, Error> {
+    ) -> Result<UncommittedResult<StorageChanges>, Error> {
         Self::verify_and_execute_block_inner(
             self.executor.clone(),
             self.verifier.clone(),
@@ -489,7 +489,7 @@ where
         executor: Arc<E>,
         verifier: Arc<V>,
         sealed_block: SealedBlock,
-    ) -> Result<UncommittedResult<Changes>, Error> {
+    ) -> Result<UncommittedResult<StorageChanges>, Error> {
         let start = tokio::time::Instant::now();
         let consensus = sealed_block.consensus;
         let block = sealed_block.entity;

@@ -43,6 +43,7 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         ReadTransaction,
+        StorageChanges,
         StorageTransaction,
     },
     Error as StorageError,
@@ -353,7 +354,8 @@ where
         )
         .commit()?;
 
-        self.db.commit_changes(storage_transaction.into_changes())?;
+        self.db
+            .commit_changes(storage_transaction.into_storage_changes())?;
 
         Ok(())
     }
@@ -574,7 +576,7 @@ where
     fn commit_changes(
         &self,
         height: Option<Description::Height>,
-        changes: Changes,
+        changes: StorageChanges,
     ) -> StorageResult<()> {
         // TODO: Maybe too much optimized for not really better performance try to remove
         // the changes at the end.
@@ -600,7 +602,8 @@ where
                 start.elapsed().as_millis()
             );
             let start = std::time::Instant::now();
-            self.db.commit_changes(storage_transaction.into_changes())?;
+            self.db
+                .commit_changes(storage_transaction.into_storage_changes())?;
             tracing::info!(
                 "Commit to rocksdb in commit_changes2 took {} milliseconds",
                 start.elapsed().as_millis()
@@ -984,7 +987,7 @@ mod tests {
 
         historical_rocks_db
             .db
-            .commit_changes(migration_transaction.into_changes())
+            .commit_changes(migration_transaction.into_storage_changes())
             .unwrap();
 
         // Check that the history has indeed been written to V1

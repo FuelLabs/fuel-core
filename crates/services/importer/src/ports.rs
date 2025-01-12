@@ -14,6 +14,7 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         Modifiable,
+        StorageChanges,
         StorageTransaction,
         WriteTransaction,
     },
@@ -51,7 +52,7 @@ pub trait Validator: Send + Sync {
     fn validate(
         &self,
         block: &Block,
-    ) -> ExecutorResult<UncommittedValidationResult<Changes>>;
+    ) -> ExecutorResult<UncommittedValidationResult<StorageChanges>>;
 }
 
 /// The trait indicates that the type supports storage transactions.
