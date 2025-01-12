@@ -66,16 +66,11 @@ pub async fn single_simulation(
 ) -> anyhow::Result<SimulationResults> {
     tracing::info!("Starting simulation");
     let mut results = SimulationResults::new();
-    let last_cost_per_byte = 0;
     for (block, maybe_costs) in data.get_iter() {
-        let cost_per_byte = if let Some(costs) = maybe_costs.last() {
-            costs.blob_cost_wei / costs.bundle_size_bytes as u128
-        } else {
-            last_cost_per_byte
-        };
         service_controller.advance(block, maybe_costs).await?;
         let gas_price = service_controller.gas_price();
-        let (profit, cost, reward) = service_controller.profit_cost_reward()?;
+        let (profit, cost, reward, cost_per_byte) =
+            service_controller.profit_cost_reward_cpb()?;
 
         results.add_gas_price(gas_price);
         results.add_profit(profit);
@@ -140,8 +135,8 @@ pub async fn optimization(data: Data) -> anyhow::Result<SimulationResults> {
 //
 // Each simulation can be run in a separate thread
 async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64> {
-    const DISSECT_SAMPLES: i128 = 10;
-    let mut p_range = 0..=(i64::MAX as i128); // convert to i128 to be safe
+    const DISSECT_SAMPLES: i128 = 100;
+    let mut p_range = 1..=1_000_000_000__000_000_000; // convert to i128 to be safe
     let mut best_p = 1;
     let mut best_profit = i128::MAX;
     let tries = 10;
@@ -161,8 +156,18 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
                     let result =
                         run_single_simulation(&data, p, 0, start_gas_price).await?;
                     // use the abs of the profits so we large swings in profit don't cancel out
-                    let profit_abs_sum =
-                        result.profits.iter().map(|p| p.abs()).sum::<i128>();
+                    // let profit_abs_sum =
+                    //     result.profits.iter().map(|p| p.abs()).sum::<i128>();
+                    // profit is the reward - known cost (not the predicted profit)
+                    // use the abs of the profits so we large swings in profit don't cancel out
+                    let profit_abs_sum = result
+                        .rewards
+                        .iter()
+                        .map(|r| *r as i128)
+                        .zip(result.costs.iter().map(|c| *c as i128))
+                        .map(|(r, c)| r - c)
+                        .map(|p| p.abs())
+                        .sum::<i128>();
                     let avg_abs_profit = profit_abs_sum / result.profits.len() as i128;
                     Ok::<(i128, i64), anyhow::Error>((avg_abs_profit, p))
                 })
@@ -251,8 +256,8 @@ async fn select_d_value(
     p: i64,
     start_gas_price: u64,
 ) -> anyhow::Result<i64> {
-    const DISSECT_SAMPLES: usize = 10;
-    let mut d_range = 0..=(i64::MAX as i128);
+    const DISSECT_SAMPLES: usize = 100;
+    let mut d_range = 1..=1_000_000_000__000_000_000;
     let mut best_d = 1;
     let mut best_profit = i128::MAX;
     let tries = 10;
@@ -269,9 +274,18 @@ async fn select_d_value(
                     let d: i64 = d.try_into()?;
                     let result =
                         run_single_simulation(&data, p, d, start_gas_price).await?;
+                    // let profit_abs_sum =
+                    //     result.profits.iter().map(|p| p.abs()).sum::<i128>();
+                    // profit is the reward - known cost (not the predicted profit)
                     // use the abs of the profits so we large swings in profit don't cancel out
-                    let profit_abs_sum =
-                        result.profits.iter().map(|p| p.abs()).sum::<i128>();
+                    let profit_abs_sum = result
+                        .rewards
+                        .iter()
+                        .map(|r| *r as i128)
+                        .zip(result.costs.iter().map(|c| *c as i128))
+                        .map(|(r, c)| r - c)
+                        .map(|p| p.abs())
+                        .sum::<i128>();
                     let avg_abs_profit = profit_abs_sum / result.profits.len() as i128;
                     Ok::<(i128, i64), anyhow::Error>((avg_abs_profit, d))
                 })

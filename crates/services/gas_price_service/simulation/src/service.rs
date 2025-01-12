@@ -62,13 +62,9 @@ fn construct_config(config_values: ConfigValues) -> V1AlgorithmConfig {
         exec_gas_price_change_percent: 0,
         l2_block_fullness_threshold_percent: 0,
         gas_price_factor: NonZero::new(100).unwrap(),
-        // min_da_gas_price: 1_000,
-        // max_da_gas_price: u64::MAX,
         min_da_gas_price,
         max_da_gas_price,
         max_da_gas_price_change_percent: 10,
-        // da_p_component: 50_000_000__000_000_000,
-        // da_d_component: 100_000__000_000_000,
         da_p_component,
         da_d_component,
         normal_range_size: 0,
@@ -179,7 +175,7 @@ impl ServiceController {
         self.service.next_block_algorithm().next_gas_price()
     }
 
-    pub fn profit_cost_reward(&self) -> anyhow::Result<(i128, u128, u128)> {
+    pub fn profit_cost_reward_cpb(&self) -> anyhow::Result<(i128, u128, u128, u128)> {
         let latest_height = self.service.latest_l2_block();
         let metadata = self
             .service
@@ -191,6 +187,7 @@ impl ServiceController {
                 m.last_profit,
                 m.latest_known_total_da_cost_excess,
                 m.total_da_rewards_excess,
+                m.latest_da_cost_per_byte,
             )
         }) {
             Ok(values)

@@ -4,9 +4,9 @@ use plotters::{
     prelude::*,
 };
 
+const WEI_PER_ETH: f64 = 1_000_000_000_000_000_000.0;
 pub fn display_results(results: SimulationResults) -> anyhow::Result<()> {
     // TODO: Just have basic stuff now
-    const WEI_PER_ETH: f64 = 1_000_000_000_000_000_000.0;
     let profits_eth = results
         .profits
         .iter()
@@ -57,6 +57,11 @@ pub fn display_results(results: SimulationResults) -> anyhow::Result<()> {
     println!("Min profit ETH: {:?}", min_profit_eth);
     println!("Final profit: {:?}", final_profit);
 
+    println!(
+        "Max cost_per_byte: {:?}",
+        results.cost_per_byte.iter().max()
+    );
+
     println!("Final cost: {:?}", final_cost);
 
     println!("Final reward: {:?}", final_reward);
@@ -71,13 +76,12 @@ fn graph_results(results: SimulationResults) -> anyhow::Result<()> {
         BitMapBackend::new("charts/results.png", (1280, 720)).into_drawing_area();
     root_area.fill(&WHITE)?;
 
-    let (upper, lower) = root_area.split_vertically(360);
+    let (upper, lower_two) = root_area.split_vertically(720 / 3);
+    let (middle, _bottom) = lower_two.split_vertically(720 / 3);
 
-    // Upper chart for profit, cost, and reward
     draw_profits(&results, &upper)?;
-
-    // Lower chart for price per byte to post to DA
-    draw_da_costs(results, &lower)?;
+    draw_da_costs(&results, &middle)?;
+    draw_da_gas_prices(&results, &_bottom)?;
 
     Ok(())
 }
@@ -86,12 +90,28 @@ fn draw_profits(
     results: &SimulationResults,
     upper: &DrawingArea<BitMapBackend, Shift>,
 ) -> anyhow::Result<()> {
-    let min_profit = *results.profits.iter().min().unwrap();
-    let max_profit = *results.profits.iter().max().unwrap();
-    let min_cost = *results.costs.iter().min().unwrap() as i128;
-    let max_cost = *results.costs.iter().max().unwrap() as i128;
-    let min_reward = *results.rewards.iter().min().unwrap() as i128;
-    let max_reward = *results.rewards.iter().max().unwrap() as i128;
+    let profit_eth = results
+        .profits
+        .iter()
+        .map(|profit| *profit as f64 / WEI_PER_ETH)
+        .collect::<Vec<_>>();
+    let cost_eth = results
+        .costs
+        .iter()
+        .map(|cost| *cost as f64 / WEI_PER_ETH)
+        .collect::<Vec<_>>();
+    let reward_eth = results
+        .rewards
+        .iter()
+        .map(|reward| *reward as f64 / WEI_PER_ETH)
+        .collect::<Vec<_>>();
+
+    let min_profit = profit_eth.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+    let max_profit = profit_eth.iter().fold(f64::MIN, |a, &b| a.max(b));
+    let min_cost = cost_eth.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+    let max_cost = cost_eth.iter().fold(f64::MIN, |a, &b| a.max(b));
+    let min_reward = reward_eth.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+    let max_reward = reward_eth.iter().fold(f64::MIN, |a, &b| a.max(b));
 
     let max_overall = max_profit.max(max_cost).max(max_reward);
     let min_overall = min_profit.min(min_cost).min(min_reward);
@@ -104,40 +124,32 @@ fn draw_profits(
         .margin(5)
         .x_label_area_size(40)
         .y_label_area_size(60)
-        .build_cartesian_2d(0..results.profits.len(), min_overall..max_overall)?;
+        .build_cartesian_2d(0..profit_eth.len(), min_overall..max_overall)?;
 
     chart.configure_mesh().draw()?;
 
     chart
         .draw_series(LineSeries::new(
-            results.profits.iter().enumerate().map(|(x, y)| (x, *y)),
+            profit_eth.iter().enumerate().map(|(x, y)| (x, *y)),
             &BLACK,
         ))?
-        .label("Profit")
+        .label("Predicted Profit ETH")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLACK));
 
     chart
         .draw_series(LineSeries::new(
-            results
-                .costs
-                .iter()
-                .enumerate()
-                .map(|(x, y)| (x, *y as i128)),
+            cost_eth.iter().enumerate().map(|(x, y)| (x, *y)),
             &RED,
         ))?
-        .label("Cost")
+        .label("Known Cost ETH")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
 
     chart
         .draw_series(LineSeries::new(
-            results
-                .rewards
-                .iter()
-                .enumerate()
-                .map(|(x, y)| (x, *y as i128)),
+            reward_eth.iter().enumerate().map(|(x, y)| (x, *y)),
             &BLUE,
         ))?
-        .label("Reward")
+        .label("Reward ETH")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
 
     chart
@@ -149,7 +161,7 @@ fn draw_profits(
 }
 
 fn draw_da_costs(
-    results: SimulationResults,
+    results: &SimulationResults,
     lower: &DrawingArea<BitMapBackend, Shift>,
 ) -> anyhow::Result<()> {
     let mut chart = ChartBuilder::on(&lower)
@@ -162,10 +174,13 @@ fn draw_da_costs(
         .y_label_area_size(60)
         .build_cartesian_2d(
             0..results.cost_per_byte.len(),
-            0..*results.cost_per_byte.iter().max().unwrap() as i32,
+            0..*results.cost_per_byte.iter().max().unwrap() as i64,
         )?;
 
-    chart.configure_mesh().draw()?;
+    chart
+        .configure_mesh()
+        .y_label_formatter(&|y| format!("{:e}", y))
+        .draw()?;
 
     chart
         .draw_series(LineSeries::new(
@@ -173,10 +188,46 @@ fn draw_da_costs(
                 .cost_per_byte
                 .iter()
                 .enumerate()
-                .map(|(x, y)| (x, *y as i32)),
+                .map(|(x, y)| (x, *y as i64)),
             &BLUE,
         ))?
         .label("Price Per Byte")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
+
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.8))
+        .border_style(&BLACK)
+        .draw()?;
+    Ok(())
+}
+
+fn draw_da_gas_prices(
+    results: &SimulationResults,
+    bottom: &DrawingArea<BitMapBackend, Shift>,
+) -> anyhow::Result<()> {
+    let mut chart = ChartBuilder::on(&bottom)
+        .caption("DA Gas Price Over Time", ("sans-serif", 50).into_font())
+        .margin(5)
+        .x_label_area_size(40)
+        .y_label_area_size(60)
+        .build_cartesian_2d(
+            0..results.gas_price.len(),
+            0..*results.gas_price.iter().max().unwrap() as i64,
+        )?;
+
+    chart.configure_mesh().draw()?;
+
+    chart
+        .draw_series(LineSeries::new(
+            results
+                .gas_price
+                .iter()
+                .enumerate()
+                .map(|(x, y)| (x, *y as i64)),
+            &BLUE,
+        ))?
+        .label("DA Gas Price")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &BLUE));
 
     chart
