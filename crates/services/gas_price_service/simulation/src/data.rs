@@ -106,7 +106,6 @@ pub fn get_data<P: AsRef<Path> + Debug>(path: P) -> anyhow::Result<Data> {
     let records = records_res?;
 
     let mut data = vec![];
-    // let groups = records.iter().chunk_by(|record| record.l1_block_number);
 
     let mut latest_da_costs = Vec::new();
 

@@ -6,14 +6,18 @@ use plotters::{
 
 const WEI_PER_ETH: f64 = 1_000_000_000_000_000_000.0;
 pub fn display_results(results: SimulationResults) -> anyhow::Result<()> {
-    // TODO: Just have basic stuff now
+    graph_results(&results)?;
+    print_details(&results)?;
+
+    Ok(())
+}
+
+fn print_details(results: &SimulationResults) -> anyhow::Result<()> {
     let profits_eth = results
         .profits
         .iter()
         .map(|profit| *profit as f64 / WEI_PER_ETH)
         .collect::<Vec<_>>();
-    // println!("Gas prices (Wei): {:?}", results.gas_price);
-    // println!("Profits (ETH): {:?}", profits_eth);
     let max_gas_price = results.gas_price.iter().max();
     let min_gas_price = results.gas_price.iter().min();
     let max_profit_eth = profits_eth.iter().max_by(|a, b| a.partial_cmp(b).unwrap());
@@ -29,9 +33,7 @@ pub fn display_results(results: SimulationResults) -> anyhow::Result<()> {
         .last()
         .map(|x| *x as f64 / WEI_PER_ETH)
         .unwrap();
-
     let sample_size = results.profits.len();
-
     const DAYS_IN_SECONDS: usize = 24 * 60 * 60;
     const HOURS_IN_SECONDS: usize = 60 * 60;
     const MINUTES_IN_SECONDS: usize = 60;
@@ -66,12 +68,10 @@ pub fn display_results(results: SimulationResults) -> anyhow::Result<()> {
 
     println!("Final reward: {:?}", final_reward);
 
-    graph_results(results)?;
-
     Ok(())
 }
 
-fn graph_results(results: SimulationResults) -> anyhow::Result<()> {
+fn graph_results(results: &SimulationResults) -> anyhow::Result<()> {
     let root_area =
         BitMapBackend::new("charts/results.png", (1280, 720)).into_drawing_area();
     root_area.fill(&WHITE)?;

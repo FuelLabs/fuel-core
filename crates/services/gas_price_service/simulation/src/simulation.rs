@@ -273,13 +273,6 @@ async fn select_d_value(
             })
             .collect();
 
-        // join all the futures and get the results
-        // let pairs_res: anyhow::Result<Vec<_>> = futures::future::join_all(futures)
-        //     .await
-        //     .into_iter()
-        //     .flat_map(|fut_res| fut_res.map_err(|err| anyhow::anyhow!(err)))
-        //     .collect();
-
         const TICK_TIME_SECONDS: u64 = 5;
         const TIMEOUT_SECONDS: u64 = 60;
         let future_res = tick_until_future_returns_or_timeout(

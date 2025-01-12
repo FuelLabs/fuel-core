@@ -82,9 +82,6 @@ fn construct_metadata(metadata_values: MetadataValues) -> V1Metadata {
     } = metadata_values;
     // TODO: read from file and/or CLI
     let gas_price_factor = 1;
-    // let new_scaled_da_gas_price = 3_547_063 * gas_price_factor / 1_000;
-    // let new_scaled_da_gas_price = 15_893_241 * gas_price_factor / 1_000;
-    // let new_scaled_da_gas_price = 18_963;
     let new_scaled_da_gas_price = latest_gas_price * gas_price_factor;
     V1Metadata {
         new_scaled_exec_price: 0,
