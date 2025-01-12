@@ -15,7 +15,10 @@ use crate::{
         view_extension::ViewExtension,
         Config,
     },
-    graphql_api,
+    graphql_api::{
+        self,
+        required_fuel_block_height_extension::RequiredFuelBlockHeightExtension,
+    },
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -84,6 +87,9 @@ use tower_http::{
     timeout::TimeoutLayer,
     trace::TraceLayer,
 };
+
+pub(crate) const REQUIRED_FUEL_BLOCK_HEIGHT_HEADER: &str = "required_fuel_block_height";
+pub(crate) const CURRENT_FUEL_BLOCK_HEIGHT_HEADER: &str = "current_fuel_block_height";
 
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
@@ -274,6 +280,9 @@ where
         ))
         .extension(async_graphql::extensions::Tracing)
         .extension(ViewExtension::new())
+        // `RequiredFuelBlockHeightExtension` uses the view set by the ViewExtension.
+        // Do not reorder this line before adding the `ViewExtension`.
+        .extension(RequiredFuelBlockHeightExtension::new())
         .finish();
 
     let graphql_endpoint = "/v1/graphql";
@@ -350,15 +359,18 @@ async fn graphql_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Json<Response> {
-    schema.execute(req.0).await.into()
+    let response = schema.execute(req.0).await;
+
+    response.into()
 }
 
 async fn graphql_subscription_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
+    let request = req.0;
     let stream = schema
-        .execute_stream(req.0)
+        .execute_stream(request)
         .map(|r| Event::default().json_data(r));
     Sse::new(stream)
         .keep_alive(axum::response::sse::KeepAlive::new().text("keep-alive-text"))
