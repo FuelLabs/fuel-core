@@ -600,7 +600,10 @@ fn produce_block__l1_committed_block_affects_gas_price() {
             // Produce new block to update gas price
             driver.client.produce_blocks(1, None).await.unwrap();
             tokio::time::sleep(Duration::from_millis(20)).await;
-            driver.client.estimate_gas_price(0).await.unwrap().gas_price
+            let gas_price = driver.client.estimate_gas_price(0).await.unwrap().gas_price;
+            // cleanup
+            driver.kill().await;
+            gas_price
         })
         .into();
 
