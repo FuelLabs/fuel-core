@@ -549,13 +549,12 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
         .unwrap();
 
     let client = FuelClient::from(srv.bound_address);
-    let base_asset_id = client
+    let base_asset_id = *client
         .consensus_parameters(0)
         .await
         .unwrap()
         .unwrap()
-        .base_asset_id()
-        .clone();
+        .base_asset_id();
 
     // When
 
@@ -595,9 +594,10 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
         }
     })
     .await;
-    if let Err(_) = result {
+    if result.is_err() {
         panic!("Off-chain worker didn't process balances within timeout")
     }
+
     // Then
 
     // Expect two messages to be available
@@ -680,7 +680,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
         .unwrap_err();
     assert_eq!(
         query.to_string(),
-        "Response errors; not enough coins to fit the target"
+        "Response errors; the target cannot be met due to no coins available or exceeding the 255 coin limit."
     );
 
     srv.send_stop_signal_and_await_shutdown().await.unwrap();

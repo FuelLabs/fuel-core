@@ -1,4 +1,4 @@
-use self::indexation::IndexationError;
+use self::indexation::error::IndexationError;
 
 use super::{
     da_compression::da_compress_block,
@@ -69,9 +69,12 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
+        AssetId,
+        ConsensusParameters,
         Contract,
         Input,
         Output,
+        Receipt,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -88,6 +91,7 @@ use fuel_core_types::{
         },
         executor::{
             Event,
+            TransactionExecutionResult,
             TransactionExecutionStatus,
         },
         txpool::from_executor_to_status,
@@ -121,6 +125,7 @@ pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
     block_importer: BlockImporter,
     on_chain_database: OnChain,
     off_chain_database: OffChain,
+    base_asset_id: AssetId,
 }
 
 /// The off-chain GraphQL API worker task processes the imported blocks
@@ -132,7 +137,10 @@ pub struct Task<TxPool, D> {
     chain_id: ChainId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
-    balances_enabled: bool,
+    balances_indexation_enabled: bool,
+    coins_to_spend_indexation_enabled: bool,
+    asset_metadata_indexation_enabled: bool,
+    base_asset_id: AssetId,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -144,7 +152,11 @@ where
         let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
-        persist_transaction_status(&result, &mut transaction)?;
+        persist_transaction_status(
+            &result,
+            self.asset_metadata_indexation_enabled,
+            &mut transaction,
+        )?;
 
         // save the associated owner for each transaction in the block
         index_tx_owners_for_block(block, &mut transaction, &self.chain_id)?;
@@ -165,7 +177,9 @@ where
         process_executor_events(
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
-            self.balances_enabled,
+            self.balances_indexation_enabled,
+            self.coins_to_spend_indexation_enabled,
+            &self.base_asset_id,
         )?;
 
         match self.da_compression_config {
@@ -194,29 +208,31 @@ where
 pub fn process_executor_events<'a, Iter, T>(
     events: Iter,
     block_st_transaction: &mut T,
-    balances_enabled: bool,
+    balances_indexation_enabled: bool,
+    coins_to_spend_indexation_enabled: bool,
+    base_asset_id: &AssetId,
 ) -> anyhow::Result<()>
 where
     Iter: Iterator<Item = Cow<'a, Event>>,
     T: OffChainDatabaseTransaction,
 {
     for event in events {
-        match indexation::process_balances_update(
-            event.deref(),
+        match update_event_based_indexation(
+            &event,
             block_st_transaction,
-            balances_enabled,
+            balances_indexation_enabled,
+            coins_to_spend_indexation_enabled,
+            base_asset_id,
         ) {
             Ok(()) => (),
             Err(IndexationError::StorageError(err)) => {
                 return Err(err.into());
             }
-            Err(err @ IndexationError::CoinBalanceWouldUnderflow { .. })
-            | Err(err @ IndexationError::MessageBalanceWouldUnderflow { .. }) => {
-                // TODO[RC]: Balances overflow to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
-                tracing::error!("Balances underflow detected: {}", err);
+            Err(err) => {
+                // TODO[RC]: Indexation errors to be correctly handled. See: https://github.com/FuelLabs/fuel-core/issues/2428
+                tracing::error!("Indexation error: {}", err);
             }
-        }
-
+        };
         match event.deref() {
             Event::MessageImported(message) => {
                 block_st_transaction
@@ -265,6 +281,49 @@ where
             }
         }
     }
+    Ok(())
+}
+
+fn update_event_based_indexation<T>(
+    event: &Event,
+    block_st_transaction: &mut T,
+    balances_indexation_enabled: bool,
+    coins_to_spend_indexation_enabled: bool,
+    base_asset_id: &AssetId,
+) -> Result<(), IndexationError>
+where
+    T: OffChainDatabaseTransaction,
+{
+    indexation::balances::update(
+        event,
+        block_st_transaction,
+        balances_indexation_enabled,
+    )?;
+
+    indexation::coins_to_spend::update(
+        event,
+        block_st_transaction,
+        coins_to_spend_indexation_enabled,
+        base_asset_id,
+    )?;
+
+    Ok(())
+}
+
+fn update_receipt_based_indexation<T>(
+    receipts: &[Receipt],
+    block_st_transaction: &mut T,
+    asset_metadata_indexation_enabled: bool,
+) -> Result<(), IndexationError>
+where
+    T: OffChainDatabaseTransaction,
+{
+    indexation::asset_metadata::update(
+        receipts,
+        block_st_transaction,
+        asset_metadata_indexation_enabled,
+    )?;
+
     Ok(())
 }
 
@@ -365,6 +424,7 @@ where
 
 fn persist_transaction_status<T>(
     import_result: &ImportResult,
+    asset_metadata_indexation_enabled: bool,
     db: &mut T,
 ) -> StorageResult<()>
 where
@@ -381,6 +441,12 @@ where
             )
             .into());
         }
+
+        let TransactionExecutionResult::Success { receipts, .. } = result else {
+            continue
+        };
+
+        update_receipt_based_indexation(receipts, db, asset_metadata_indexation_enabled)?;
     }
     Ok(())
 }
@@ -499,8 +565,20 @@ where
             graphql_metrics().total_txs_count.set(total_tx_count as i64);
         }
 
-        let balances_enabled = self.off_chain_database.balances_enabled()?;
-        tracing::info!("Balances cache available: {}", balances_enabled);
+        let balances_indexation_enabled =
+            self.off_chain_database.balances_indexation_enabled()?;
+        let coins_to_spend_indexation_enabled = self
+            .off_chain_database
+            .coins_to_spend_indexation_enabled()?;
+        let asset_metadata_indexation_enabled = self
+            .off_chain_database
+            .asset_metadata_indexation_enabled()?;
+        tracing::info!(
+            balances_indexation_enabled,
+            coins_to_spend_indexation_enabled,
+            asset_metadata_indexation_enabled,
+            "Indexation availability status"
+        );
 
         let InitializeTask {
             chain_id,
@@ -511,6 +589,7 @@ where
             on_chain_database,
             off_chain_database,
             continue_on_error,
+            base_asset_id,
         } = self;
 
         let mut task = Task {
@@ -520,7 +599,10 @@ where
             chain_id,
             da_compression_config,
             continue_on_error,
-            balances_enabled,
+            balances_indexation_enabled,
+            coins_to_spend_indexation_enabled,
+            asset_metadata_indexation_enabled,
+            base_asset_id,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;
@@ -636,9 +718,9 @@ pub fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
     block_importer: BlockImporter,
     on_chain_database: OnChain,
     off_chain_database: OffChain,
-    chain_id: ChainId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
+    consensus_parameters: &ConsensusParameters,
 ) -> ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>
 where
     TxPool: ports::worker::TxPool,
@@ -652,8 +734,9 @@ where
         block_importer,
         on_chain_database,
         off_chain_database,
-        chain_id,
+        chain_id: consensus_parameters.chain_id(),
         da_compression_config,
         continue_on_error,
+        base_asset_id: *consensus_parameters.base_asset_id(),
     })
 }
