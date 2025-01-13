@@ -23,6 +23,7 @@ use fuel_core_chain_config::{
     StateConfig,
     StateConfigBuilder,
 };
+use fuel_core_services::TraceErr;
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
     Coins,
@@ -85,64 +86,35 @@ impl CombinedDatabase {
     ) -> crate::database::Result<()> {
         use tempfile::TempDir;
 
-        let temp_backup_dir = TempDir::new().map_err(|e| {
-            crate::database::Error::BackupError(anyhow::anyhow!(
-                "Failed to create temporary backup directory: {}",
-                e
-            ))
-        })?;
+        let temp_backup_dir = TempDir::new()
+            .trace_err("Failed to create temporary backup directory")
+            .map_err(|e| anyhow::anyhow!(e))?;
 
-        fn backup_databases(
-            db_dir: &std::path::Path,
-            temp_dir: &std::path::Path,
-        ) -> crate::database::Result<()> {
-            crate::state::rocks_db::RocksDb::<OnChain>::backup(db_dir, temp_dir)
-                .map_err(|e| {
-                    tracing::error!("Failed to backup on-chain database: {}", e);
-                    crate::database::Error::BackupError(anyhow::anyhow!(
-                        "Failed to backup on-chain database: {}",
-                        e
-                    ))
-                })?;
+        Self::backup_databases(db_dir, temp_backup_dir.path())?;
 
-            crate::state::rocks_db::RocksDb::<OffChain>::backup(db_dir, temp_dir)
-                .map_err(|e| {
-                    tracing::error!("Failed to backup off-chain database: {}", e);
-                    crate::database::Error::BackupError(anyhow::anyhow!(
-                        "Failed to backup off-chain database: {}",
-                        e
-                    ))
-                })?;
+        std::fs::rename(temp_backup_dir.path(), backup_dir)
+            .trace_err("Failed to move temporary backup directory")
+            .map_err(|e| anyhow::anyhow!(e))?;
 
-            crate::state::rocks_db::RocksDb::<Relayer>::backup(db_dir, temp_dir)
-                .map_err(|e| {
-                    tracing::error!("Failed to backup relayer database: {}", e);
-                    crate::database::Error::BackupError(anyhow::anyhow!(
-                        "Failed to backup relayer database: {}",
-                        e
-                    ))
-                })?;
+        Ok(())
+    }
 
-            crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(db_dir, temp_dir)
-                .map_err(|e| {
-                    tracing::error!("Failed to backup gas-price database: {}", e);
-                    crate::database::Error::BackupError(anyhow::anyhow!(
-                        "Failed to backup gas-price database: {}",
-                        e
-                    ))
-                })?;
+    #[cfg(feature = "backup")]
+    fn backup_databases(
+        db_dir: &std::path::Path,
+        temp_dir: &std::path::Path,
+    ) -> crate::database::Result<()> {
+        crate::state::rocks_db::RocksDb::<OnChain>::backup(db_dir, temp_dir)
+            .trace_err("Failed to backup on-chain database")?;
 
-            Ok(())
-        }
+        crate::state::rocks_db::RocksDb::<OffChain>::backup(db_dir, temp_dir)
+            .trace_err("Failed to backup off-chain database")?;
 
-        backup_databases(db_dir, temp_backup_dir.path())?;
+        crate::state::rocks_db::RocksDb::<Relayer>::backup(db_dir, temp_dir)
+            .trace_err("Failed to backup relayer database")?;
 
-        std::fs::rename(temp_backup_dir.path(), backup_dir).map_err(|e| {
-            crate::database::Error::BackupError(anyhow::anyhow!(
-                "Failed to move temporary backup directory: {}",
-                e
-            ))
-        })?;
+        crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(db_dir, temp_dir)
+            .trace_err("Failed to backup gas-price database")?;
 
         Ok(())
     }
@@ -154,72 +126,44 @@ impl CombinedDatabase {
     ) -> crate::database::Result<()> {
         use tempfile::TempDir;
 
-        let temp_restore_dir = TempDir::new().map_err(|e| {
-            crate::database::Error::RestoreError(anyhow::anyhow!(
-                "Failed to create temporary restore directory: {}",
-                e
-            ))
-        })?;
+        let temp_restore_dir = TempDir::new()
+            .trace_err("Failed to create temporary restore directory")
+            .map_err(|e| anyhow::anyhow!(e))?;
 
-        let mut must_rollback = false;
+        Self::restore_database(backup_dir, temp_restore_dir.path())?;
 
-        for _ in 0..1 {
-            if let Err(e) = crate::state::rocks_db::RocksDb::<OnChain>::restore(
-                temp_restore_dir.path(),
-                backup_dir,
-            ) {
-                tracing::error!("Failed to restore on-chain database: {}", e);
-                must_rollback = true;
-                break;
-            }
-            if let Err(e) = crate::state::rocks_db::RocksDb::<OffChain>::restore(
-                temp_restore_dir.path(),
-                backup_dir,
-            ) {
-                tracing::error!("Failed to restore off-chain database: {}", e);
-                must_rollback = true;
-                break;
-            }
-            if let Err(e) = crate::state::rocks_db::RocksDb::<Relayer>::restore(
-                temp_restore_dir.path(),
-                backup_dir,
-            ) {
-                tracing::error!("Failed to restore relayer database: {}", e);
-                must_rollback = true;
-                break;
-            }
-            if let Err(e) = crate::state::rocks_db::RocksDb::<GasPriceDatabase>::restore(
-                temp_restore_dir.path(),
-                backup_dir,
-            ) {
-                tracing::error!("Failed to restore gas-price database: {}", e);
-                must_rollback = true;
-                break;
-            }
-        }
-
-        if must_rollback {
-            std::fs::remove_dir_all(temp_restore_dir.path()).map_err(|e| {
-                crate::database::Error::RestoreError(anyhow::anyhow!(
-                    "Failed to remove temporary restore directory: {}",
-                    e
-                ))
-            })?;
-
-            return Err(crate::database::Error::RestoreError(anyhow::anyhow!(
-                "Failed to restore databases"
-            )));
-        }
-
-        std::fs::rename(temp_restore_dir.path(), restore_to).map_err(|e| {
-            crate::database::Error::RestoreError(anyhow::anyhow!(
-                "Failed to move temporary restore directory: {}",
-                e
-            ))
-        })?;
+        std::fs::rename(temp_restore_dir.path(), restore_to)
+            .trace_err("Failed to move temporary restore directory")
+            .map_err(|e| anyhow::anyhow!(e))?;
 
         // we don't return a CombinedDatabase here
         // because the consumer can use any db config while opening it
+        Ok(())
+    }
+
+    #[cfg(feature = "backup")]
+    fn restore_database(
+        backup_dir: &std::path::Path,
+        temp_restore_dir: &std::path::Path,
+    ) -> crate::database::Result<()> {
+        crate::state::rocks_db::RocksDb::<OnChain>::restore(temp_restore_dir, backup_dir)
+            .trace_err("Failed to backup on-chain database")?;
+
+        crate::state::rocks_db::RocksDb::<OffChain>::restore(
+            temp_restore_dir,
+            backup_dir,
+        )
+        .trace_err("Failed to backup off-chain database")?;
+
+        crate::state::rocks_db::RocksDb::<Relayer>::restore(temp_restore_dir, backup_dir)
+            .trace_err("Failed to backup relayer database")?;
+
+        crate::state::rocks_db::RocksDb::<GasPriceDatabase>::restore(
+            temp_restore_dir,
+            backup_dir,
+        )
+        .trace_err("Failed to backup gas-price database")?;
+
         Ok(())
     }
 
