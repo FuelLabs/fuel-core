@@ -222,7 +222,7 @@ where
             Ok(service)
         } else {
             if latest_block_height > metadata_height {
-                sync_v1_metadata(
+                sync_gas_price_db_with_on_chain_storage(
                     &self.settings,
                     &self.on_chain_db,
                     metadata_height,
@@ -275,7 +275,12 @@ where
     }
 }
 
-fn sync_v1_metadata<L2DataStore, L2DataStoreView, SettingsProvider, AtomicStorage>(
+fn sync_gas_price_db_with_on_chain_storage<
+    L2DataStore,
+    L2DataStoreView,
+    SettingsProvider,
+    AtomicStorage,
+>(
     settings: &SettingsProvider,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,
