@@ -292,26 +292,16 @@ async fn produce_block__raises_gas_price_with_default_parameters() {
         "false",
         "--coinbase-recipient",
         "0x1111111111111111111111111111111111111111111111111111111111111111",
-        "--min-da-gas-price",
-        "0",
-        "--da-gas-price-p-component",
-        "0",
-        "--da-gas-price-d-component",
-        "0",
-        "--starting-gas-price",
-        "1000",
-        "--gas-price-change-percent",
-        "10",
-        "--max-da-gas-price-change-percent",
-        "0",
     ];
     let driver = FuelCoreDriver::spawn(&args).await.unwrap();
 
-    let starting_gas_price = 1000;
+    let expected_default_da_gas_price = 10000000;
+    let expected_default_exec_gas_price = 1000;
     let expected_default_percentage_increase = 10;
 
-    let expected_gas_price =
-        starting_gas_price * (100 + expected_default_percentage_increase) / 100;
+    let expected_gas_price = expected_default_da_gas_price
+        + expected_default_exec_gas_price * (100 + expected_default_percentage_increase)
+            / 100;
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
