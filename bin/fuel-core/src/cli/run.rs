@@ -220,14 +220,14 @@ pub struct Command {
     /// P component of DA gas price calculation
     /// **NOTE**: This is the **inverse** gain of a typical P controller.
     /// Increasing this value will reduce gas price fluctuations.
-    #[arg(long = "da-p-component", default_value = "620090", env)]
-    pub da_p_component: i64,
+    #[arg(long = "da-gas-price-p-component", default_value = "620090", env)]
+    pub da_gas_price_p_component: i64,
 
     /// D component of DA gas price calculation
     /// **NOTE**: This is the **inverse** anticipatory control factor of a typical PD controller.
     /// Increasing this value will reduce the dampening effect of quick algorithm changes.
-    #[arg(long = "da-d-component", default_value = "3528576", env)]
-    pub da_d_component: i64,
+    #[arg(long = "da-gas-price-d-component", default_value = "3528576", env)]
+    pub da_gas_price_d_component: i64,
 
     /// Maximum DA gas price change percent
     #[arg(long = "max-da-gas-price-change-percent", default_value = "10", env)]
@@ -345,8 +345,8 @@ impl Command {
             gas_price_threshold_percent,
             min_da_gas_price,
             max_da_gas_price,
-            da_p_component,
-            da_d_component,
+            da_gas_price_p_component,
+            da_gas_price_d_component,
             max_da_gas_price_change_percent,
             da_committer_url,
             da_poll_interval,
@@ -668,8 +668,8 @@ impl Command {
             min_da_gas_price,
             max_da_gas_price,
             max_da_gas_price_change_percent,
-            da_p_component,
-            da_d_component,
+            da_gas_price_p_component,
+            da_gas_price_d_component,
             activity_normal_range_size: 100,
             activity_capped_range_size: 0,
             activity_decrease_range_size: 0,

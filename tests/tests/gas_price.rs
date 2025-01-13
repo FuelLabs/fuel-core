@@ -182,9 +182,6 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
 
 #[tokio::test]
 async fn produce_block__raises_gas_price() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
     // given
     let block_gas_limit = 3_000_000;
     let chain_config = ChainConfig {
@@ -204,8 +201,8 @@ async fn produce_block__raises_gas_price() {
     node_config.exec_gas_price_change_percent = percent;
     node_config.exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
-    node_config.da_p_component = 0;
-    node_config.da_d_component = 0;
+    node_config.da_gas_price_p_component = 0;
+    node_config.da_gas_price_d_component = 0;
     node_config.max_da_gas_price_change_percent = 0;
     node_config.min_da_gas_price = 0;
     node_config.max_da_gas_price = 1;
@@ -254,8 +251,8 @@ async fn produce_block__lowers_gas_price() {
     node_config.exec_gas_price_change_percent = percent;
     node_config.exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
-    node_config.da_p_component = 0;
-    node_config.da_d_component = 0;
+    node_config.da_gas_price_p_component = 0;
+    node_config.da_gas_price_d_component = 0;
     node_config.max_da_gas_price_change_percent = 0;
     node_config.min_da_gas_price = 0;
     node_config.max_da_gas_price = 1;
@@ -292,26 +289,16 @@ async fn produce_block__raises_gas_price_with_default_parameters() {
         "false",
         "--coinbase-recipient",
         "0x1111111111111111111111111111111111111111111111111111111111111111",
-        "--min-da-gas-price",
-        "0",
-        "--da-p-component",
-        "0",
-        "--da-d-component",
-        "0",
-        "--starting-gas-price",
-        "1000",
-        "--gas-price-change-percent",
-        "10",
-        "--max-da-gas-price-change-percent",
-        "0",
     ];
     let driver = FuelCoreDriver::spawn(&args).await.unwrap();
 
-    let starting_gas_price = 1000;
+    let expected_default_da_gas_price = 10000000;
+    let expected_default_exec_gas_price = 1000;
     let expected_default_percentage_increase = 10;
 
-    let expected_gas_price =
-        starting_gas_price * (100 + expected_default_percentage_increase) / 100;
+    let expected_gas_price = expected_default_da_gas_price
+        + expected_default_exec_gas_price * (100 + expected_default_percentage_increase)
+            / 100;
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
@@ -339,6 +326,7 @@ async fn produce_block__raises_gas_price_with_default_parameters() {
     let latest_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
 
     assert_eq!(expected_gas_price, latest_gas_price);
+    driver.kill().await;
 }
 
 #[tokio::test]
@@ -382,7 +370,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
         "--starting-gas-price",
         "1000",
         "--gas-price-change-percent",
-        "100",
+        "10",
         "--gas-price-threshold-percent",
         "0",
     ];
@@ -543,10 +531,11 @@ fn produce_block__l1_committed_block_affects_gas_price() {
     ];
 
     let mut default_args = args.clone();
+    // Start without da gas price updates
     default_args.extend([
-        "--da-p-component",
+        "--da-gas-price-p-component",
         "0",
-        "--da-d-component",
+        "--da-gas-price-d-component",
         "0",
         "--starting-gas-price",
         "0",
@@ -585,13 +574,13 @@ fn produce_block__l1_committed_block_affects_gas_price() {
     };
     mock.add_response(costs);
 
-    // add the da committer url to the args
+    // add the da committer url to the args, as well as set da parameters to modify the gas price
     args.extend(&[
         "--da-committer-url",
         &url,
         "--da-poll-interval",
         "1",
-        "--da-p-component",
+        "--da-gas-price-p-component",
         "1",
         "--max-da-gas-price-change-percent",
         "100",
@@ -622,10 +611,6 @@ fn produce_block__l1_committed_block_affects_gas_price() {
 
 #[test]
 fn run__if_metadata_is_behind_l2_then_will_catch_up() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .try_init();
-
     // given
     // produce 100 blocks
     let args = vec![
@@ -712,17 +697,14 @@ fn node_config_with_da_committer_url(url: &str) -> Config {
     node_config.block_production = Trigger::Never;
     node_config.da_committer_url = Some(url.to_string());
     node_config.da_poll_interval = Some(100);
-    node_config.da_p_component = 224_000;
-    node_config.da_d_component = 2_690_000;
+    node_config.da_gas_price_p_component = 123_456;
+    node_config.da_gas_price_d_component = 1_234_567;
     node_config.block_activity_threshold = 0;
     node_config
 }
 
 #[test]
 fn produce_block__algorithm_recovers_from_divergent_profit() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given
@@ -826,28 +808,6 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
             "Could not recover from divergent profit after {} tries.\n Profits: {:?}.\n Changes: {:?}.\n Gas prices: {:?}\n Gas price changes: {:?}",
             tries, profits, changes, gas_prices, gas_price_changes
         );
-    } else {
-        tracing::info!("Success on try {}/{}", success_iteration, tries);
-        let profits_as_gwei = profits
-            .iter()
-            .map(|x| *x as f64 / 1_000_000_000.0)
-            .collect::<Vec<_>>();
-        let changes_as_gwei = changes
-            .iter()
-            .map(|x| *x as f64 / 1_000_000_000.0)
-            .collect::<Vec<_>>();
-        let gas_prices_as_gwei = gas_prices
-            .iter()
-            .map(|x| *x as f64 / 1_000_000_000.0)
-            .collect::<Vec<_>>();
-        let gas_price_changes_as_gwei = gas_price_changes
-            .iter()
-            .map(|x| *x as f64 / 1_000_000_000.0)
-            .collect::<Vec<_>>();
-        tracing::info!("Profits as gwei: {:?}", profits_as_gwei);
-        tracing::info!("Changes as gwei: {:?}", changes_as_gwei);
-        tracing::info!("Gas prices as gwei: {:?}", gas_prices_as_gwei);
-        tracing::info!("Gas price changes as gwei: {:?}", gas_price_changes_as_gwei);
     }
 }
 
@@ -855,9 +815,7 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
     let arb_tx_count = 2;
     for i in 0..arb_tx_count {
         let large_fee_limit = u32::MAX as u64 - i;
-        // let tx = arb_large_tx(large_fee_limit, rng);
         let tx = arb_small_tx(large_fee_limit, rng);
-        // let tx = arb_large_tx(189028 + i as Word, rng);
         let _status = client.submit(&tx).await.unwrap();
     }
     let _ = client.produce_blocks(1, None).await.unwrap();
@@ -865,9 +823,6 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
 
 #[test]
 fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::ERROR)
-        .try_init();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given

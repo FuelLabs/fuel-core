@@ -140,8 +140,12 @@ where
             .map(|x| x.into())
             .unwrap_or(latest_block_height);
 
-        let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, gas_price_metadata_height, &gas_price_db)?;
+        let (algo_updater, shared_algo) = initialize_algorithm(
+            &config,
+            gas_price_metadata_height,
+            latest_block_height,
+            &gas_price_db,
+        )?;
 
         let latest_gas_price = LatestGasPrice::new(latest_block_height, latest_gas_price);
 
@@ -194,7 +198,8 @@ where
             .config
             .da_poll_interval
             .map(|x| Duration::from_millis(x.into()));
-        let latest_l2_height = Arc::new(std::sync::Mutex::new(BlockHeight::new(0)));
+        let latest_l2_height =
+            Arc::new(std::sync::Mutex::new(BlockHeight::new(latest_block_height)));
         let da_service = DaSourceService::new(
             self.da_source,
             poll_duration,
@@ -217,7 +222,7 @@ where
             Ok(service)
         } else {
             if latest_block_height > metadata_height {
-                sync_v1_metadata(
+                sync_gas_price_db_with_on_chain_storage(
                     &self.settings,
                     &self.on_chain_db,
                     metadata_height,
@@ -270,7 +275,12 @@ where
     }
 }
 
-fn sync_v1_metadata<L2DataStore, L2DataStoreView, SettingsProvider, AtomicStorage>(
+fn sync_gas_price_db_with_on_chain_storage<
+    L2DataStore,
+    L2DataStoreView,
+    SettingsProvider,
+    AtomicStorage,
+>(
     settings: &SettingsProvider,
     on_chain_db: &L2DataStoreView,
     metadata_height: u32,

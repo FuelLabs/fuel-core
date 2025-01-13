@@ -389,22 +389,22 @@ fn convert_to_v1_metadata(
 
 pub fn initialize_algorithm<Metadata>(
     config: &V1AlgorithmConfig,
-    latest_block_height: u32,
+    latest_metadata_block_height: u32,
+    latest_l2_block_height: u32,
     metadata_storage: &Metadata,
 ) -> crate::common::utils::Result<(AlgorithmUpdaterV1, SharedV1Algorithm)>
 where
     Metadata: GetMetadataStorage,
 {
     let algorithm_updater = if let Some(updater_metadata) = metadata_storage
-        .get_metadata(&latest_block_height.into())
+        .get_metadata(&latest_metadata_block_height.into())
         .map_err(|err| {
             crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(err))
         })? {
         let v1_metadata = convert_to_v1_metadata(updater_metadata, config)?;
         v1_algorithm_from_metadata(v1_metadata, config)
     } else {
-        // TODO: Shouldn't we be using the `latest_block_height` here for `l2_block_height`?
-        updater_from_config(config)
+        updater_from_config(config, latest_l2_block_height)
     };
 
     let shared_algo =
@@ -463,6 +463,7 @@ mod tests {
             },
         },
         ports::{
+            GetLatestRecordedHeight,
             GetMetadataStorage,
             SetMetadataStorage,
         },
@@ -572,8 +573,13 @@ mod tests {
             da_poll_interval: None,
         };
         let inner = database();
-        let (algo_updater, shared_algo) =
-            initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();
+        let (algo_updater, shared_algo) = initialize_algorithm(
+            &config,
+            l2_block_height,
+            l2_block_height,
+            &metadata_storage,
+        )
+        .unwrap();
 
         let notifier = Arc::new(tokio::sync::Notify::new());
         let latest_l2_block = Arc::new(Mutex::new(BlockHeight::new(0)));
@@ -657,7 +663,7 @@ mod tests {
             .insert(&BlockHeight::from(1), &100)
             .unwrap();
         tx.commit().unwrap();
-        let mut algo_updater = updater_from_config(&config);
+        let mut algo_updater = updater_from_config(&config, 0);
         let shared_algo =
             SharedGasPriceAlgo::new_with_algorithm(algo_updater.algorithm());
         algo_updater.l2_block_height = block_height - 1;
@@ -698,13 +704,11 @@ mod tests {
         let initial_price = read_algo.next_gas_price();
 
         let next = service.run(&mut watcher).await;
-        tracing::info!("Next action: {:?}", next);
         tokio::time::sleep(Duration::from_millis(3)).await;
         l2_block_sender.send(l2_block_2).await.unwrap();
 
         // when
         let next = service.run(&mut watcher).await;
-        tracing::info!("Next action 2: {:?}", next);
         tokio::time::sleep(Duration::from_millis(3)).await;
         service.shutdown().await.unwrap();
 
@@ -761,7 +765,7 @@ mod tests {
             .insert(&BlockHeight::from(1), &100)
             .unwrap();
         tx.commit().unwrap();
-        let mut algo_updater = updater_from_config(&config);
+        let mut algo_updater = updater_from_config(&config, 0);
         let shared_algo =
             SharedGasPriceAlgo::new_with_algorithm(algo_updater.algorithm());
         algo_updater.l2_block_height = block_height - 1;
@@ -812,12 +816,11 @@ mod tests {
         // then
         let latest_recorded_block_height = service
             .storage_tx_provider
-            .storage::<RecordedHeights>()
-            .get(&())
+            .get_recorded_height()
             .unwrap()
             .unwrap();
         assert_eq!(
-            *latest_recorded_block_height,
+            latest_recorded_block_height,
             BlockHeight::from(recorded_block_height)
         );
 
@@ -852,7 +855,7 @@ mod tests {
             .insert(&BlockHeight::from(1), &100)
             .unwrap();
         tx.commit().unwrap();
-        let mut algo_updater = updater_from_config(&config);
+        let mut algo_updater = updater_from_config(&config, 0);
         let shared_algo =
             SharedGasPriceAlgo::new_with_algorithm(algo_updater.algorithm());
         algo_updater.l2_block_height = block_height - 1;
