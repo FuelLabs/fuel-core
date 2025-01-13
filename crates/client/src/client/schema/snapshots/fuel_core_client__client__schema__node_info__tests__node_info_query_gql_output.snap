@@ -1,6 +1,7 @@
 ---
 source: crates/client/src/client/schema/node_info.rs
 expression: operation.query
+snapshot_kind: text
 ---
 query QueryNodeInfo {
   nodeInfo {
@@ -9,5 +10,10 @@ query QueryNodeInfo {
     maxTx
     maxDepth
     nodeVersion
+    txPoolStats {
+      nbTransactions
+      totalGas
+      totalSize
+    }
   }
 }
