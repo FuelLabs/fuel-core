@@ -71,6 +71,10 @@ pub enum Column {
     // TODO: Remove this column and use `Metadata` column instead.
     /// Table for genesis state import progress tracking.
     GenesisMetadata = 21,
+    #[cfg(feature = "global-state-root")]
+    CoinsMerkleData = 22,
+    #[cfg(feature = "global-state-root")]
+    CoinsMerkleMetadata = 23,
 }
 
 impl Column {

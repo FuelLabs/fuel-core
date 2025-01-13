@@ -97,6 +97,9 @@ smt = [
   "fuel-core-executor/smt",
   "fuel-core-upgradable-executor/smt",
 ]
+global-state-root = [
+  "fuel-core-storage/global-state-root",
+]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 shared-sequencer = ["dep:fuel-core-shared-sequencer", "dep:cosmrs"]

@@ -348,4 +348,14 @@ pub mod merkle {
         type Value = SparseMerkleMetadata;
         type OwnedValue = Self::Value;
     }
+
+    /// The metadata table for the [`Coins`] table. It contains a single global root for all coins
+    pub struct CoinsMerkleMetadata;
+
+    impl Mappable for CoinsMerkleMetadata {
+        type Key = Self::OwnedKey;
+        type OwnedKey = ();
+        type Value = Self::OwnedValue;
+        type OwnedValue = SparseMerkleMetadata;
+    }
 }
