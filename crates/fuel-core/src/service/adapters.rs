@@ -19,10 +19,7 @@ use fuel_core_consensus_module::{
 use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_gas_price_service::v1::service::LatestGasPrice;
 use fuel_core_importer::ImporterResult;
-use fuel_core_poa::{
-    ports::BlockSigner,
-    signer::SignMode,
-};
+use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_txpool::BorrowedTxPool;
@@ -31,7 +28,10 @@ use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::Consensus,
+        consensus::{
+            poa::PoAConsensus,
+            Consensus,
+        },
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
@@ -43,6 +43,7 @@ use fuel_core_types::{
             UncommittedResult,
         },
     },
+    signer::SignMode,
     tai64::Tai64,
 };
 use fuel_core_upgradable_executor::executor::Executor;
@@ -61,6 +62,8 @@ pub mod p2p;
 pub mod producer;
 #[cfg(feature = "relayer")]
 pub mod relayer;
+#[cfg(feature = "shared-sequencer")]
+pub mod shared_sequencer;
 #[cfg(feature = "p2p")]
 pub mod sync;
 pub mod txpool;
@@ -384,7 +387,34 @@ impl FuelBlockSigner {
 #[async_trait::async_trait]
 impl BlockSigner for FuelBlockSigner {
     async fn seal_block(&self, block: &Block) -> anyhow::Result<Consensus> {
-        self.mode.seal_block(block).await
+        let block_hash = block.id();
+        let message = block_hash.into_message();
+        let signature = self.mode.sign_message(message).await?;
+        Ok(Consensus::PoA(PoAConsensus::new(signature)))
+    }
+
+    fn is_available(&self) -> bool {
+        self.mode.is_available()
+    }
+}
+
+#[cfg(feature = "shared-sequencer")]
+#[async_trait::async_trait]
+impl fuel_core_shared_sequencer::ports::Signer for FuelBlockSigner {
+    async fn sign(
+        &self,
+        data: &[u8],
+    ) -> anyhow::Result<fuel_core_types::fuel_crypto::Signature> {
+        Ok(self.mode.sign(data).await?)
+    }
+
+    fn public_key(&self) -> cosmrs::crypto::PublicKey {
+        let pubkey = self
+            .mode
+            .verifying_key()
+            .expect("Invalid public key")
+            .expect("Public key not available");
+        cosmrs::crypto::PublicKey::from(pubkey)
     }
 
     fn is_available(&self) -> bool {
