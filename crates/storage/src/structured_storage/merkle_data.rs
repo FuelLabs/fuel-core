@@ -19,6 +19,12 @@ use crate::{
     },
 };
 
+#[cfg(feature = "global-state-root")]
+use crate::tables::merkle::{
+    CoinsMerkleData,
+    CoinsMerkleMetadata,
+};
+
 macro_rules! merkle_table {
     ($table:ident) => {
         merkle_table!($table, Raw);
@@ -48,5 +54,10 @@ merkle_table!(FuelBlockMerkleData, U64Codec);
 merkle_table!(FuelBlockMerkleMetadata, Postcard);
 merkle_table!(ContractsAssetsMerkleData);
 merkle_table!(ContractsAssetsMerkleMetadata);
+// TODO: Using `Postcard` to avoid compilation errors.
+#[cfg(feature = "global-state-root")]
+merkle_table!(CoinsMerkleData, Postcard);
+#[cfg(feature = "global-state-root")]
+merkle_table!(CoinsMerkleMetadata, Postcard);
 merkle_table!(ContractsStateMerkleData);
 merkle_table!(ContractsStateMerkleMetadata);
