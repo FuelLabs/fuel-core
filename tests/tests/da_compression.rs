@@ -23,7 +23,6 @@ use fuel_core_compression::{
     decompress::decompress,
     VersionedCompressedBlock,
 };
-use fuel_core_poa::signer::SignMode;
 use fuel_core_storage::transactional::{
     HistoricalView,
     IntoTransaction,
@@ -42,6 +41,7 @@ use fuel_core_types::{
         TxPointer,
     },
     secrecy::Secret,
+    signer::SignMode,
 };
 use rand::{
     rngs::StdRng,

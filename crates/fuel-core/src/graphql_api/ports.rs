@@ -1,3 +1,5 @@
+use super::storage::balances::TotalBalanceAmount;
+use crate::fuel_core_graphql_api::storage::coins::CoinsToSpendIndexKey;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
@@ -64,7 +66,10 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-use super::storage::balances::TotalBalanceAmount;
+pub struct CoinsToSpendIndexIter<'a> {
+    pub big_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexKey, StorageError>>,
+    pub dust_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexKey, StorageError>>,
+}
 
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
@@ -108,6 +113,12 @@ pub trait OffChainDatabase: Send + Sync {
         start: Option<TxPointer>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
+
+    fn coins_to_spend_index(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+    ) -> CoinsToSpendIndexIter;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 
@@ -294,6 +305,7 @@ pub mod worker {
                 CoinBalances,
                 MessageBalances,
             },
+            coins::CoinsToSpendIndex,
             da_compression::*,
             old::{
                 OldFuelBlockConsensus,
@@ -338,8 +350,11 @@ pub mod worker {
         /// Creates a write database transaction.
         fn transaction(&mut self) -> Self::Transaction<'_>;
 
-        /// Checks if Balances cache functionality is available.
-        fn balances_enabled(&self) -> StorageResult<bool>;
+        /// Checks if Balances indexation functionality is available.
+        fn balances_indexation_enabled(&self) -> StorageResult<bool>;
+
+        /// Checks if CoinsToSpend indexation functionality is available.
+        fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool>;
     }
 
     /// Represents either the Genesis Block or a block at a specific height
@@ -363,6 +378,7 @@ pub mod worker {
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
         + StorageMutate<CoinBalances, Error = StorageError>
         + StorageMutate<MessageBalances, Error = StorageError>
+        + StorageMutate<CoinsToSpendIndex, Error = StorageError>
         + StorageMutate<DaCompressedBlocks, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>
