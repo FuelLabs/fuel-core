@@ -960,12 +960,12 @@ async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
     // when
     let num_of_blocks = 5;
     let producer_client = FuelClient::from(producer.node.bound_address);
-    let latest_block_height = producer_client
+    let producer_block_height = producer_client
         .produce_blocks(num_of_blocks, None)
         .await
         .unwrap();
     let block = producer_client
-        .block_by_height(latest_block_height)
+        .block_by_height(producer_block_height)
         .await
         .unwrap()
         .unwrap();
@@ -988,7 +988,10 @@ async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
 
     // then
     let validator_client = FuelClient::from(validator.node.bound_address);
-    let estimate = validator_client.estimate_gas_price(0).await.unwrap();
+    let validator_gas_price = validator_client.estimate_gas_price(0).await.unwrap();
+    let validator_chain_info = validator_client.chain_info().await.unwrap();
+    let validator_block_height = validator_chain_info.latest_block.header.height.into();
 
-    assert_eq!(gas_price, u64::from(estimate.gas_price));
+    assert_eq!(producer_block_height, validator_block_height);
+    assert_eq!(gas_price, u64::from(validator_gas_price.gas_price));
 }
