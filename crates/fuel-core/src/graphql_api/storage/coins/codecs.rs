@@ -31,10 +31,22 @@ pub enum CoinType {
 }
 
 pub const COIN_TYPE_SIZE: usize = size_of::<CoinType>();
-pub const COIN_VARIANT_SIZE: usize =
-    1 + Address::LEN + AssetId::LEN + AMOUNT_SIZE + UTXO_ID_SIZE + COIN_TYPE_SIZE;
-pub const MESSAGE_VARIANT_SIZE: usize =
-    1 + Address::LEN + AssetId::LEN + AMOUNT_SIZE + Nonce::LEN + COIN_TYPE_SIZE;
+
+// Even though coins are never retryable, we still need to store the retryable flag to maintain
+// proper ordering of keys in the database.
+pub const COIN_VARIANT_SIZE: usize = RETRYABLE_FLAG_SIZE
+    + Address::LEN
+    + AssetId::LEN
+    + AMOUNT_SIZE
+    + UTXO_ID_SIZE
+    + COIN_TYPE_SIZE;
+
+pub const MESSAGE_VARIANT_SIZE: usize = RETRYABLE_FLAG_SIZE
+    + Address::LEN
+    + AssetId::LEN
+    + AMOUNT_SIZE
+    + Nonce::LEN
+    + COIN_TYPE_SIZE;
 
 pub enum SerializedCoinsToSpendIndexKey {
     Coin([u8; COIN_VARIANT_SIZE]),
@@ -131,7 +143,6 @@ impl Decode<CoinsToSpendIndexKey> for Manual<CoinsToSpendIndexKey> {
                 let bytes: [u8; COIN_VARIANT_SIZE] = bytes.try_into()?;
                 let mut start;
                 let mut end = RETRYABLE_FLAG_SIZE;
-                // let retryable_flag = bytes[start..end];
                 start = end;
                 end = end.saturating_add(Address::LEN);
                 let owner = Address::try_from(&bytes[start..end])?;
