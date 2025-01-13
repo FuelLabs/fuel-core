@@ -54,7 +54,7 @@ impl UpdaterBuilder {
         Self {
             min_exec_gas_price: 0,
             min_da_gas_price: 0,
-            max_da_gas_price: 1,
+            max_da_gas_price: u64::MAX,
             starting_exec_gas_price: 1,
             starting_da_gas_price: 1,
             exec_gas_price_change_percent: 0,
