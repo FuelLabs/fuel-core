@@ -109,7 +109,7 @@ where
         let recorded_height = self
             .storage::<RecordedHeights>()
             .get(KEY)
-            .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?
+            .map_err(|err| GasPriceError::CouldNotFetchRecordedHeight(err.into()))?
             .map(|no| *no);
         Ok(recorded_height)
     }
@@ -148,7 +148,7 @@ where
         const KEY: &() = &();
         self.storage_as_mut::<RecordedHeights>()
             .insert(KEY, &recorded_height)
-            .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?;
+            .map_err(|err| GasPriceError::CouldNotSetRecordedHeight(err.into()))?;
         Ok(())
     }
 }

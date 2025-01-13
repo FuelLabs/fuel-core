@@ -175,7 +175,7 @@ impl GetMetadataStorage for ErroringPersistedData {
 
 impl GetLatestRecordedHeight for ErroringPersistedData {
     fn get_recorded_height(&self) -> GasPriceResult<Option<BlockHeight>> {
-        Err(GasPriceError::CouldNotFetchDARecord(anyhow!("boo!")))
+        Err(GasPriceError::CouldNotFetchRecordedHeight(anyhow!("boo!")))
     }
 }
 
