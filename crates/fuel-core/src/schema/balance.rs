@@ -95,7 +95,7 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
         let query = ctx.read_view()?;
-        if !query.balances_enabled && (before.is_some() || after.is_some()) {
+        if !query.balances_indexation_enabled && (before.is_some() || after.is_some()) {
             return Err(anyhow!(
                 "Can not use pagination when balances indexation is not available"
             )
