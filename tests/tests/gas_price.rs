@@ -204,8 +204,8 @@ async fn produce_block__raises_gas_price() {
     node_config.exec_gas_price_change_percent = percent;
     node_config.exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
-    node_config.da_p_component = 0;
-    node_config.da_d_component = 0;
+    node_config.da_gas_price_p_component = 0;
+    node_config.da_gas_price_d_component = 0;
     node_config.max_da_gas_price_change_percent = 0;
     node_config.min_da_gas_price = 0;
     node_config.max_da_gas_price = 1;
@@ -254,8 +254,8 @@ async fn produce_block__lowers_gas_price() {
     node_config.exec_gas_price_change_percent = percent;
     node_config.exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
-    node_config.da_p_component = 0;
-    node_config.da_d_component = 0;
+    node_config.da_gas_price_p_component = 0;
+    node_config.da_gas_price_d_component = 0;
     node_config.max_da_gas_price_change_percent = 0;
     node_config.min_da_gas_price = 0;
     node_config.max_da_gas_price = 1;
@@ -294,9 +294,9 @@ async fn produce_block__raises_gas_price_with_default_parameters() {
         "0x1111111111111111111111111111111111111111111111111111111111111111",
         "--min-da-gas-price",
         "0",
-        "--da-p-component",
+        "--da-gas-price-p-component",
         "0",
-        "--da-d-component",
+        "--da-gas-price-d-component",
         "0",
         "--starting-gas-price",
         "1000",
@@ -544,9 +544,9 @@ fn produce_block__l1_committed_block_affects_gas_price() {
 
     let mut default_args = args.clone();
     default_args.extend([
-        "--da-p-component",
+        "--da-gas-price-p-component",
         "0",
-        "--da-d-component",
+        "--da-gas-price-d-component",
         "0",
         "--starting-gas-price",
         "0",
@@ -591,7 +591,7 @@ fn produce_block__l1_committed_block_affects_gas_price() {
         &url,
         "--da-poll-interval",
         "1",
-        "--da-p-component",
+        "--da-gas-price-p-component",
         "1",
         "--max-da-gas-price-change-percent",
         "100",
@@ -712,8 +712,8 @@ fn node_config_with_da_committer_url(url: &str) -> Config {
     node_config.block_production = Trigger::Never;
     node_config.da_committer_url = Some(url.to_string());
     node_config.da_poll_interval = Some(100);
-    node_config.da_p_component = 224_000;
-    node_config.da_d_component = 2_690_000;
+    node_config.da_gas_price_p_component = 224_000;
+    node_config.da_gas_price_d_component = 2_690_000;
     node_config.block_activity_threshold = 0;
     node_config
 }
