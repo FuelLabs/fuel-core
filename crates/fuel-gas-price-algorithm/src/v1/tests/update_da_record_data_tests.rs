@@ -256,7 +256,9 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
         .sum();
     let projected_total_cost = original_known_total_cost + guessed_cost;
 
+    let old_da_gas_price = 1;
     let mut updater = UpdaterBuilder::new()
+        .with_starting_da_gas_price(old_da_gas_price)
         .with_da_cost_per_byte(da_cost_per_byte as u128)
         .with_da_p_component(da_p_component)
         .with_last_profit(10, 0)
@@ -279,8 +281,7 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
     let recorded_range = *min..=*max;
     let recorded_bytes = 500;
 
-    let old_da_gas_price = updater.new_scaled_da_gas_price;
-
+    tracing::info!("old_da_gas_price: {}", old_da_gas_price);
     // when
     updater
         .update_da_record_data(
@@ -292,10 +293,10 @@ fn update_da_record_data__da_block_lowers_da_gas_price() {
         .unwrap();
 
     // then
-    let new_da_gas_price = updater.new_scaled_da_gas_price;
-    // because the profit is 10 and the da_p_component is 2, the new da gas price should be lesser than the previous one.
-    assert_eq!(new_da_gas_price, 0);
-    assert_ne!(old_da_gas_price, new_da_gas_price);
+    let actual = updater.new_scaled_da_gas_price;
+    let change = (updater.last_profit / da_p_component as i128) as u64;
+    let expected = old_da_gas_price.saturating_sub(change);
+    assert_eq!(expected, actual);
 }
 
 #[test]
@@ -312,7 +313,9 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
         .sum();
     let projected_total_cost = original_known_total_cost + guessed_cost;
 
+    let old_da_gas_price = 1;
     let mut updater = UpdaterBuilder::new()
+        .with_starting_da_gas_price(old_da_gas_price)
         .with_da_cost_per_byte(da_cost_per_byte as u128)
         .with_da_p_component(da_p_component)
         .with_last_profit(-10, 0)
@@ -336,8 +339,6 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
     let recorded_range = *min..=*max;
     let recorded_bytes = 500;
 
-    let old_da_gas_price = updater.new_scaled_da_gas_price;
-
     // when
     updater
         .update_da_record_data(
@@ -349,10 +350,10 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
         .unwrap();
 
     // then
-    let new_da_gas_price = updater.new_scaled_da_gas_price;
-    // because the profit is -10 and the da_p_component is 2, the new da gas price should be greater than the previous one.
-    assert_eq!(new_da_gas_price, 6);
-    assert_ne!(old_da_gas_price, new_da_gas_price);
+    let actual = updater.new_scaled_da_gas_price;
+    let change = (updater.last_profit / da_p_component as i128).abs() as u64;
+    let expected = old_da_gas_price + change;
+    assert_eq!(expected, actual);
 }
 
 #[test]
