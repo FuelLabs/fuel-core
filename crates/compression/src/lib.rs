@@ -14,15 +14,13 @@ pub use config::Config;
 pub use registry::RegistryKeyspace;
 
 #[cfg(feature = "fault-proving")]
-use fuel_core_types::blockchain::header::{
-    ApplicationHeader,
-    BlockHeader,
-};
+use fuel_core_types::blockchain::header::BlockHeader;
 #[cfg(feature = "fault-proving")]
 use fuel_core_types::blockchain::primitives::BlockId;
 use fuel_core_types::{
     blockchain::{
         header::{
+            ApplicationHeader,
             ConsensusHeader,
             PartialBlockHeader,
         },
