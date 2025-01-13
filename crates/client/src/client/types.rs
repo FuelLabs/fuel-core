@@ -7,6 +7,7 @@ pub mod contract;
 pub mod gas_costs;
 pub mod upgrades;
 
+pub mod asset;
 pub mod gas_price;
 pub mod merkle_proof;
 pub mod message;

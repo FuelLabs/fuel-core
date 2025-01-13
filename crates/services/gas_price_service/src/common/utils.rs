@@ -4,8 +4,10 @@ use fuel_core_types::fuel_types::BlockHeight;
 pub enum Error {
     #[error("Failed to find L2 block: {source_error:?}")]
     CouldNotFetchL2Block { source_error: anyhow::Error },
-    #[error("Failed to find DA records: {0:?}")]
-    CouldNotFetchDARecord(anyhow::Error),
+    #[error("Failed to get the recorded height: {0:?}")]
+    CouldNotFetchRecordedHeight(anyhow::Error),
+    #[error("Failed to set the recorded height: {0:?}")]
+    CouldNotSetRecordedHeight(anyhow::Error),
     #[error("Failed to retrieve updater metadata: {source_error:?}")]
     CouldNotFetchMetadata { source_error: anyhow::Error },
     #[error(

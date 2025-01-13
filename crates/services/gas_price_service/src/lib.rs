@@ -3,6 +3,9 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+#[cfg(test)]
+use tracing_subscriber as _;
+
 #[allow(unused)]
 pub mod static_updater;
 

@@ -44,9 +44,9 @@ pub struct RawDaBlockCosts {
     pub end_height: u32,
     /// The DA block height of the last transaction for the range of blocks
     pub da_block_height: DaBlockHeight,
-    /// cost of posting this blob (wei)
+    /// cost of posting this bundle (wei)
     pub cost: u128,
-    /// size of this blob (bytes)
+    /// size of this bundle (bytes)
     pub size: u32,
 }
 

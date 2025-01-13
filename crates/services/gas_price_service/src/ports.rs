@@ -36,11 +36,12 @@ pub trait GetMetadataStorage: Send + Sync {
 }
 
 pub trait SetLatestRecordedHeight: Send + Sync {
-    /// For any given L2 block produced, the DA will have committed some
+    /// Set the latest L2 block height which has been committed to the DA layer
     fn set_recorded_height(&mut self, recorded_height: BlockHeight) -> Result<()>;
 }
 
 pub trait GetLatestRecordedHeight: Send + Sync {
+    /// Get the most recent L2 block that has been committed to DA
     fn get_recorded_height(&self) -> Result<Option<BlockHeight>>;
 }
 
