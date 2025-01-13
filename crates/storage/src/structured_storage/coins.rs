@@ -30,6 +30,8 @@ mod plain {
 mod sparse {
     use super::*;
 
+    use fuel_vm_private::fuel_storage::Mappable;
+
     use crate::{
         blueprint::sparse::{
             PrimaryKey,
@@ -38,21 +40,6 @@ mod sparse {
         tables::merkle::{
             CoinsMerkleData,
             CoinsMerkleMetadata,
-        },
-    };
-
-    use fuel_core_types::entities::coins::coin::{
-        CompressedCoin,
-        CompressedCoinV1,
-    };
-    use fuel_vm_private::{
-        fuel_storage::Mappable,
-        prelude::{
-            Address,
-            AssetId,
-            Bytes32,
-            TxPointer,
-            Word,
         },
     };
 
@@ -85,6 +72,22 @@ mod sparse {
 
     #[cfg(test)]
     mod tests {
+        use super::*;
+        use fuel_core_types::entities::coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        };
+        use fuel_vm_private::{
+            fuel_storage::Mappable,
+            prelude::{
+                Address,
+                AssetId,
+                Bytes32,
+                TxPointer,
+                Word,
+            },
+        };
+
         fn generate_key(
             _primary_key: &<CoinsMerkleMetadata as Mappable>::Key,
             rng: &mut impl rand::Rng,
@@ -111,8 +114,8 @@ mod sparse {
         crate::root_storage_tests!(
             Coins,
             CoinsMerkleMetadata,
-            <CoinsMerkleMetadata as Mappable>::Key::from([1u8; 32]),
-            <CoinsMerkleMetadata as Mappable>::Key::from([2u8; 32]),
+            (),
+            (),
             generate_key,
             generate_value
         );
