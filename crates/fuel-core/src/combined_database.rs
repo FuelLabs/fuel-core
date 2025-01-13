@@ -92,54 +92,51 @@ impl CombinedDatabase {
             ))
         })?;
 
-        let mut must_rollback = false;
+        fn backup_databases(
+            db_dir: &std::path::Path,
+            temp_dir: &std::path::Path,
+        ) -> crate::database::Result<()> {
+            crate::state::rocks_db::RocksDb::<OnChain>::backup(db_dir, temp_dir)
+                .map_err(|e| {
+                    tracing::error!("Failed to backup on-chain database: {}", e);
+                    crate::database::Error::BackupError(anyhow::anyhow!(
+                        "Failed to backup on-chain database: {}",
+                        e
+                    ))
+                })?;
 
-        for _ in 0..1 {
-            if let Err(e) = crate::state::rocks_db::RocksDb::<OnChain>::backup(
-                db_dir,
-                temp_backup_dir.path(),
-            ) {
-                tracing::error!("Failed to backup on-chain database: {}", e);
-                must_rollback = true;
-                break;
-            }
-            if let Err(e) = crate::state::rocks_db::RocksDb::<OffChain>::backup(
-                db_dir,
-                temp_backup_dir.path(),
-            ) {
-                tracing::error!("Failed to backup off-chain database: {}", e);
-                must_rollback = true;
-                break;
-            }
-            if let Err(e) = crate::state::rocks_db::RocksDb::<Relayer>::backup(
-                db_dir,
-                temp_backup_dir.path(),
-            ) {
-                tracing::error!("Failed to backup relayer database: {}", e);
-                must_rollback = true;
-                break;
-            }
-            if let Err(e) = crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(
-                db_dir,
-                temp_backup_dir.path(),
-            ) {
-                tracing::error!("Failed to backup gas-price database: {}", e);
-                must_rollback = true;
-                break;
-            }
+            crate::state::rocks_db::RocksDb::<OffChain>::backup(db_dir, temp_dir)
+                .map_err(|e| {
+                    tracing::error!("Failed to backup off-chain database: {}", e);
+                    crate::database::Error::BackupError(anyhow::anyhow!(
+                        "Failed to backup off-chain database: {}",
+                        e
+                    ))
+                })?;
+
+            crate::state::rocks_db::RocksDb::<Relayer>::backup(db_dir, temp_dir)
+                .map_err(|e| {
+                    tracing::error!("Failed to backup relayer database: {}", e);
+                    crate::database::Error::BackupError(anyhow::anyhow!(
+                        "Failed to backup relayer database: {}",
+                        e
+                    ))
+                })?;
+
+            crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(db_dir, temp_dir)
+                .map_err(|e| {
+                    tracing::error!("Failed to backup gas-price database: {}", e);
+                    crate::database::Error::BackupError(anyhow::anyhow!(
+                        "Failed to backup gas-price database: {}",
+                        e
+                    ))
+                })?;
+
+            Ok(())
         }
 
-        if must_rollback {
-            std::fs::remove_dir_all(temp_backup_dir.path()).map_err(|e| {
-                crate::database::Error::BackupError(anyhow::anyhow!(
-                    "Failed to remove temporary backup directory: {}",
-                    e
-                ))
-            })?;
-
-            return Err(crate::database::Error::BackupError(anyhow::anyhow!(
-                "Failed to backup databases"
-            )));
+        if let Err(e) = backup_databases(db_dir, temp_backup_dir.path()) {
+            return Err(e);
         }
 
         std::fs::rename(temp_backup_dir.path(), backup_dir).map_err(|e| {
