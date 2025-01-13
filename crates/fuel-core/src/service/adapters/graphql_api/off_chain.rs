@@ -23,6 +23,10 @@ use crate::{
         indexation::coins_to_spend::NON_RETRYABLE_BYTE,
         ports::CoinsToSpendIndexIter,
         storage::{
+            assets::{
+                AssetDetails,
+                AssetsInfo,
+            },
             balances::{
                 CoinBalances,
                 CoinBalancesKey,
@@ -207,6 +211,12 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         self.message_is_spent(nonce)
     }
 
+    fn asset_info(&self, asset_id: &AssetId) -> StorageResult<Option<AssetDetails>> {
+        self.storage_as_ref::<AssetsInfo>()
+            .get(asset_id)
+            .map(|opt| opt.map(|cow| cow.into_owned()))
+    }
+
     fn balance(
         &self,
         owner: &Address,
@@ -323,7 +333,10 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 }
 
 impl worker::OffChainDatabase for Database<OffChain> {
-    type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
+    type Transaction<'a>
+        = StorageTransaction<&'a mut Self>
+    where
+        Self: 'a;
 
     fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
         Ok(fuel_core_storage::transactional::HistoricalView::latest_height(self))
@@ -339,5 +352,9 @@ impl worker::OffChainDatabase for Database<OffChain> {
 
     fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool> {
         self.indexation_available(IndexationKind::CoinsToSpend)
+    }
+
+    fn asset_metadata_indexation_enabled(&self) -> StorageResult<bool> {
+        self.indexation_available(IndexationKind::AssetMetadata)
     }
 }

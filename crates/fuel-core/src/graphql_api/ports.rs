@@ -1,4 +1,7 @@
-use super::storage::balances::TotalBalanceAmount;
+use super::storage::{
+    assets::AssetDetails,
+    balances::TotalBalanceAmount,
+};
 use crate::fuel_core_graphql_api::storage::coins::CoinsToSpendIndexKey;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
@@ -139,6 +142,8 @@ pub trait OffChainDatabase: Send + Sync {
     ) -> StorageResult<Option<RelayedTransactionStatus>>;
 
     fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
+
+    fn asset_info(&self, asset_id: &AssetId) -> StorageResult<Option<AssetDetails>>;
 }
 
 /// The on chain database port expected by GraphQL API service.
@@ -300,6 +305,7 @@ pub mod worker {
             },
         },
         graphql_api::storage::{
+            assets::AssetsInfo,
             balances::{
                 CoinBalances,
                 MessageBalances,
@@ -354,6 +360,9 @@ pub mod worker {
 
         /// Checks if CoinsToSpend indexation functionality is available.
         fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool>;
+
+        /// Checks if AssetMetadata indexation functionality is available.
+        fn asset_metadata_indexation_enabled(&self) -> StorageResult<bool>;
     }
 
     /// Represents either the Genesis Block or a block at a specific height
@@ -387,6 +396,7 @@ pub mod worker {
         + StorageMutate<DaCompressionTemporalRegistryIndex, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryTimestamps, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryEvictorCache, Error = StorageError>
+        + StorageMutate<AssetsInfo, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,

@@ -36,6 +36,7 @@ use fuel_core_types::{
 };
 use statistic::StatisticTable;
 
+pub mod assets;
 pub mod balances;
 pub mod blocks;
 pub mod coins;
@@ -118,8 +119,10 @@ pub enum Column {
     CoinBalances = 23,
     /// Message balances per account.
     MessageBalances = 24,
+    /// See [`AssetsInfo`](assets::AssetsInfo)
+    AssetsInfo = 25,
     /// Index of the coins that are available to spend.
-    CoinsToSpend = 25,
+    CoinsToSpend = 26,
 }
 
 impl Column {
