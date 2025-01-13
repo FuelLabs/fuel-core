@@ -1,3 +1,8 @@
+use super::storage::{
+    assets::AssetDetails,
+    balances::TotalBalanceAmount,
+};
+use crate::fuel_core_graphql_api::storage::coins::CoinsToSpendIndexKey;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
@@ -64,15 +69,9 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-use super::storage::{
-    assets::AssetDetails,
-    balances::TotalBalanceAmount,
-    coins::CoinsToSpendIndexEntry,
-};
-
 pub struct CoinsToSpendIndexIter<'a> {
-    pub big_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexEntry, StorageError>>,
-    pub dust_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexEntry, StorageError>>,
+    pub big_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexKey, StorageError>>,
+    pub dust_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexKey, StorageError>>,
 }
 
 pub trait OffChainDatabase: Send + Sync {
