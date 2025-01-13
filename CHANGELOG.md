@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2524](https://github.com/FuelLabs/fuel-core/pull/2524): Adds a new lock type which is optimized for certain workloads to the txpool and p2p services.
 
 ### Fixed
+- [2469](https://github.com/FuelLabs/fuel-core/pull/2469): Improved the logic for syncing the gas price database with on_chain database
 - [2365](https://github.com/FuelLabs/fuel-core/pull/2365): Fixed the error during dry run in the case of race condition.
 - [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.
 - [2369](https://github.com/FuelLabs/fuel-core/pull/2369): The `transaction_insertion_time_in_thread_pool_milliseconds` metric is properly collected.
@@ -49,6 +50,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2511](https://github.com/FuelLabs/fuel-core/pull/2511): Fix backward compatibility of V0Metadata in gas price db.
 
 ### Changed
+- [2469](https://github.com/FuelLabs/fuel-core/pull/2469): Updated adapter for querying costs from DA Block committer API
+- [2469](https://github.com/FuelLabs/fuel-core/pull/2469): Use the gas price from the latest block to estimate future gas prices
 - [2501](https://github.com/FuelLabs/fuel-core/pull/2501): Use gas price from block for estimating future gas prices
 - [2468](https://github.com/FuelLabs/fuel-core/pull/2468): Abstract unrecorded blocks concept for V1 algorithm, create new storage impl. Introduce `TransactionableStorage` trait to allow atomic changes to the storage.
 - [2295](https://github.com/FuelLabs/fuel-core/pull/2295): `CombinedDb::from_config` now respects `state_rewind_policy` with tmp RocksDB.
