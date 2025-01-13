@@ -41,7 +41,20 @@ mod sparse {
         },
     };
 
-    use fuel_vm_private::fuel_storage::Mappable;
+    use fuel_core_types::entities::coins::coin::{
+        CompressedCoin,
+        CompressedCoinV1,
+    };
+    use fuel_vm_private::{
+        fuel_storage::Mappable,
+        prelude::{
+            Address,
+            AssetId,
+            Bytes32,
+            TxPointer,
+            Word,
+        },
+    };
 
     /// Maps coin IDs to the unit type, enabling a single global merkle root for all coins.
     pub struct KeyConverter;
@@ -68,6 +81,41 @@ mod sparse {
         fn column() -> Column {
             Column::Coins
         }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        fn generate_key(
+            _primary_key: &<CoinsMerkleMetadata as Mappable>::Key,
+            rng: &mut impl rand::Rng,
+        ) -> <Coins as Mappable>::Key {
+            let tx_id: Bytes32 = rng.gen();
+            let output_index = rng.gen();
+            <Coins as Mappable>::Key::new(tx_id, output_index)
+        }
+
+        fn generate_value(rng: &mut impl rand::Rng) -> <Coins as Mappable>::Value {
+            let owner: Address = rng.gen();
+            let amount: Word = rng.gen();
+            let asset_id: AssetId = rng.gen();
+            let tx_pointer: TxPointer = rng.gen();
+
+            CompressedCoin::V1(CompressedCoinV1 {
+                owner,      // Address,
+                amount,     //  Word,
+                asset_id,   // AssetId,
+                tx_pointer, // TxPointer,
+            })
+        }
+
+        crate::root_storage_tests!(
+            Coins,
+            CoinsMerkleMetadata,
+            <CoinsMerkleMetadata as Mappable>::Key::from([1u8; 32]),
+            <CoinsMerkleMetadata as Mappable>::Key::from([2u8; 32]),
+            generate_key,
+            generate_value
+        );
     }
 }
 
