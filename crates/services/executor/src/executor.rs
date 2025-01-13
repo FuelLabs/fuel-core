@@ -330,6 +330,19 @@ where
         Ok(UncommittedResult::new(result, changes))
     }
 
+    pub fn record_storage_reads_for(
+        self,
+        block: &Block,
+        tx_separator_callback: &mut dyn FnMut(usize) -> (),
+    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+        let consensus_params_version = block.header().consensus_parameters_version;
+        let (block_executor, storage_tx) =
+            self.into_executor(consensus_params_version)?;
+        Ok(block_executor
+            .record_storage_reads_for(block, storage_tx, tx_separator_callback)?
+            .tx_status)
+    }
+
     pub fn validate_without_commit(
         self,
         block: &Block,
@@ -700,6 +713,109 @@ where
             .ok_or(ExecutorError::TooManyTransactions)?;
 
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn record_storage_reads_for<D>(
+        mut self,
+        block: &Block,
+        mut block_storage_tx: StorageTransaction<D>,
+        tx_separator_callback: &mut dyn FnMut(usize) -> (),
+    ) -> ExecutorResult<ExecutionData>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
+        let mut data = ExecutionData::new();
+
+        let partial_header = PartialBlockHeader::from(block.header());
+        let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
+        let transactions = block.transactions();
+        let mut memory = MemoryInstance::new();
+
+        let (gas_price, coinbase_contract_id) =
+            Self::get_coinbase_info_from_mint_tx(transactions)?;
+
+        // self.process_l1_txs(
+        //     &mut partial_block,
+        //     coinbase_contract_id,
+        //     &mut block_storage_tx,
+        //     &mut data,
+        //     &mut memory,
+        // )?;
+
+        let block_height = *partial_block.header.height();
+        let da_block_height = partial_block.header.da_height;
+        let relayed_txs = self.get_relayed_txs(
+            block_height,
+            da_block_height,
+            &mut data,
+            &mut block_storage_tx,
+            &mut memory,
+        )?;
+
+        // self.process_relayed_txs(
+        //     relayed_txs,
+        //     block,
+        //     storage_tx,
+        //     data,
+        //     coinbase_contract_id,
+        //     memory,
+        // )?;
+
+        let consensus_parameters_version =
+            partial_block.header.consensus_parameters_version;
+        let relayed_tx_iter = relayed_txs.into_iter();
+        for (i, checked) in relayed_tx_iter.enumerate() {
+            tx_separator_callback(i);
+            let maybe_checked_transaction = MaybeCheckedTransaction::CheckedTransaction(
+                checked,
+                consensus_parameters_version,
+            );
+            let tx_id = maybe_checked_transaction.id(&self.consensus_params.chain_id());
+            match self.execute_transaction_and_commit(
+                &mut partial_block,
+                &mut block_storage_tx,
+                &mut data,
+                maybe_checked_transaction,
+                Self::RELAYED_GAS_PRICE,
+                coinbase_contract_id,
+                &mut memory,
+            ) {
+                Ok(_) => {}
+                Err(err) => {
+                    let event = ExecutorEvent::ForcedTransactionFailed {
+                        id: tx_id.into(),
+                        block_height,
+                        failure: err.to_string(),
+                    };
+                    data.events.push(event);
+                }
+            }
+        }
+
+        let processed_l1_tx_count = partial_block.transactions.len();
+
+        for (i, transaction) in
+            transactions.iter().enumerate().skip(processed_l1_tx_count)
+        {
+            tx_separator_callback(i);
+            let maybe_checked_tx =
+                MaybeCheckedTransaction::Transaction(transaction.clone());
+            self.execute_transaction_and_commit(
+                &mut partial_block,
+                &mut block_storage_tx,
+                &mut data,
+                maybe_checked_tx,
+                gas_price,
+                coinbase_contract_id,
+                &mut memory,
+            )?;
+        }
+
+        self.check_block_matches(partial_block, block, &data)?;
+
+        data.changes = block_storage_tx.into_changes();
+        Ok(data)
     }
 
     #[tracing::instrument(skip_all)]
@@ -1261,14 +1377,15 @@ where
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
-        let (reverted, state, tx, receipts) = self.attempt_tx_execution_with_vm(
-            checked_tx,
-            header,
-            coinbase_contract_id,
-            gas_price,
-            storage_tx,
-            memory,
-        )?;
+        let (reverted, state, tx, receipts) = self
+            .attempt_tx_execution_with_vm::<_, _>(
+                checked_tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                storage_tx,
+                memory,
+            )?;
 
         self.spend_input_utxos(tx.inputs(), storage_tx, reverted, execution_data)?;
 
@@ -1599,6 +1716,7 @@ where
         Ok(checked_tx)
     }
 
+    #[allow(clippy::type_complexity)]
     fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
         checked_tx: Checked<Tx>,
@@ -1642,7 +1760,7 @@ where
             Some(*header.height()),
         )?;
 
-        let mut vm = Interpreter::with_storage(
+        let mut vm = Interpreter::<_, _, _>::with_storage(
             memory,
             vm_db,
             InterpreterParams::new(gas_price, &self.consensus_params),
@@ -1678,7 +1796,7 @@ where
         }
 
         self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
-        Ok((reverted, state, tx, receipts))
+        Ok((reverted, state, tx, receipts.to_vec()))
     }
 
     fn verify_inputs_exist_and_values_match<T>(
@@ -1983,9 +2101,9 @@ where
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace<M, T, Tx>(
+    fn log_backtrace<M, T, Tx, Ecal>(
         &self,
-        vm: &Interpreter<M, VmStorage<T>, Tx>,
+        vm: &Interpreter<M, VmStorage<T>, Tx, Ecal>,
         receipts: &[Receipt],
     ) where
         M: Memory,

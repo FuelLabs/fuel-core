@@ -742,6 +742,10 @@ type Mutation {
 	"""
 	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64): [DryRunTransactionExecutionStatus!]!
 	"""
+	Get execution trace for an already-executed transaction.
+	"""
+	storageReadReplay(height: U32!): [[StorageReadReplayEvent!]!]!
+	"""
 	Submits transaction to the `TxPool`.
 	
 	Returns submitted transaction if the transaction is included in the `TxPool` without problems.
@@ -1130,6 +1134,12 @@ type StateTransitionBytecode {
 
 type StateTransitionPurpose {
 	root: Bytes32!
+}
+
+type StorageReadReplayEvent {
+	column: String!
+	key: HexString!
+	value: HexString
 }
 
 

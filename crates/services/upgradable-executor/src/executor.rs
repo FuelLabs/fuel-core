@@ -1,6 +1,10 @@
-use crate::config::Config;
 #[cfg(feature = "wasm-executor")]
 use crate::error::UpgradableError;
+use crate::{
+    config::Config,
+    relayer_recorder::RelayerRecorder,
+    storage_access_recorder::StorageAccessRecorder,
+};
 
 use fuel_core_executor::{
     executor::{
@@ -41,6 +45,7 @@ use fuel_core_types::{
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             ValidationResult,
         },
@@ -374,6 +379,52 @@ where
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let options = self.config.as_ref().into();
         self.validate_inner(block, options)
+    }
+
+    pub fn storage_read_replay(
+        &self,
+        block: &Block,
+    ) -> ExecutorResult<Vec<Vec<StorageReadReplayEvent>>> {
+        // HERE!
+
+        let block_version = block.header().state_transition_bytecode_version;
+        let native_executor_version = self.native_executor_version();
+        if block_version != native_executor_version {
+            todo!("Handle this. Wasm?"); // TODO
+        }
+
+        let previous_block_height = block.header().height().pred();
+        let relayer = self.relayer_view_provider.latest_view()?;
+        let relayer = RelayerRecorder::new(relayer);
+        let relayer_rec = relayer.record.clone();
+
+        let mut accesses_per_tx = Vec::new();
+
+        if let Some(previous_block_height) = previous_block_height {
+            let database = self.storage_view_provider.view_at(&previous_block_height)?;
+            let database = StorageAccessRecorder::new(database);
+            let database_rec = database.record.clone();
+
+            let executor =
+                ExecutionInstance::new(relayer, database, self.config.as_ref().into());
+
+            let result = executor.record_storage_reads_for(block, &mut |index| {
+                println!("== tx {index} starts ==");
+                let changes = database_rec.take();
+                if index > 0 {
+                    // We don't care about block-level accesses, only the tx-level ones
+                    accesses_per_tx.push(changes);
+                }
+            })?;
+
+            dbg!(&accesses_per_tx, database_rec, relayer_rec);
+
+            result
+        } else {
+            todo!();
+        };
+
+        Ok(accesses_per_tx)
     }
 
     #[cfg(feature = "wasm-executor")]

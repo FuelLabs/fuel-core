@@ -65,7 +65,10 @@ use fuel_core_types::{
         BlockHeight,
         Nonce,
     },
-    services::executor::TransactionExecutionStatus,
+    services::executor::{
+        StorageReadReplayEvent,
+        TransactionExecutionStatus,
+    },
 };
 #[cfg(feature = "subscriptions")]
 use futures::{
@@ -506,6 +509,28 @@ impl FuelClient {
             .into_iter()
             .map(|tx_status| tx_status.try_into().map_err(Into::into))
             .collect()
+    }
+
+    /// Get storage read replay for a block
+    pub async fn storage_read_replay(
+        &self,
+        height: &BlockHeight,
+    ) -> io::Result<Vec<Vec<StorageReadReplayEvent>>> {
+        let query: Operation<
+            schema::storage_read_replay::StorageReadReplay,
+            schema::storage_read_replay::StorageReadReplayArgs,
+        > = schema::storage_read_replay::StorageReadReplay::build(
+            schema::storage_read_replay::StorageReadReplayArgs {
+                height: (*height).into(),
+            },
+        );
+        Ok(self
+            .query(query)
+            .await
+            .map(|r| r.storage_read_replay)?
+            .into_iter()
+            .map(|events| events.into_iter().map(Into::into).collect())
+            .collect())
     }
 
     /// Estimate predicates for the transaction

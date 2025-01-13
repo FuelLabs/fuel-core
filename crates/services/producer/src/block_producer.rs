@@ -17,6 +17,7 @@ use anyhow::{
 use fuel_core_storage::transactional::{
     AtomicView,
     Changes,
+    HistoricalView,
 };
 use fuel_core_types::{
     blockchain::{
@@ -42,6 +43,7 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -374,6 +376,34 @@ where
         } else {
             Ok(tx_statuses)
         }
+    }
+}
+
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+where
+    ViewProvider: HistoricalView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
+    Executor: ports::StorageReadReplayRecorder + 'static,
+    GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
+{
+    /// Re-executes an old block, getting the storage read events.
+    pub async fn storage_read_replay(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Vec<Vec<StorageReadReplayEvent>>> {
+        let view = self.view_provider.latest_view()?;
+
+        let block = view.get_block(&height)?;
+        let transactions = block
+            .transactions()
+            .iter()
+            .map(|id| view.get_transaction(id).map(|tx| tx.into_owned()))
+            .collect::<Result<Vec<_>, _>>()?;
+        let block = block.into_owned().uncompress(transactions);
+
+        Ok(self.executor.storage_read_replay(&block)?)
     }
 }
 

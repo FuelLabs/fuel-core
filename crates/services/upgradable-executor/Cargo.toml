@@ -11,7 +11,8 @@ description = "Fuel Block Upgradable Executor"
 build = "build.rs"
 
 [dependencies]
-anyhow = { workspace = true, optional = true }
+anyhow = { workspace = true }
+# anyhow = { workspace = true, optional = true }
 derive_more = { workspace = true, optional = true }
 fuel-core-executor = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
@@ -47,7 +48,7 @@ smt = [
   "fuel-core-wasm-executor?/smt",
 ]
 wasm-executor = [
-  "dep:anyhow",
+  # "dep:anyhow",
   "dep:derive_more",
   "dep:parking_lot",
   "dep:postcard",
