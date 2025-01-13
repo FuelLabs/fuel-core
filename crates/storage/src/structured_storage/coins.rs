@@ -11,58 +11,63 @@ use crate::{
 };
 
 #[cfg(not(feature = "global-state-root"))]
-use crate::blueprint::plain::Plain;
+mod plain {
+    use super::*;
+    use crate::blueprint::plain::Plain;
 
-#[cfg(feature = "global-state-root")]
-use crate::{
-    blueprint::sparse::PrimaryKey,
-    blueprint::sparse::Sparse,
-    tables::merkle::{
-        CoinsMerkleData,
-        CoinsMerkleMetadata,
-    },
-};
+    #[cfg(not(feature = "global-state-root"))]
+    impl TableWithBlueprint for Coins {
+        type Blueprint = Plain<Primitive<34>, Postcard>;
+        type Column = Column;
 
-#[cfg(feature = "global-state-root")]
-use fuel_vm_private::fuel_storage::Mappable;
-
-#[cfg(not(feature = "global-state-root"))]
-impl TableWithBlueprint for Coins {
-    type Blueprint = Plain<Primitive<34>, Postcard>;
-    type Column = Column;
-
-    fn column() -> Column {
-        Column::Coins
-    }
-}
-
-/// TODO: Document
-#[cfg(feature = "global-state-root")]
-pub struct KeyConverter;
-
-#[cfg(feature = "global-state-root")]
-impl PrimaryKey for KeyConverter {
-    type InputKey = <Coins as Mappable>::Key;
-    type OutputKey = ();
-
-    fn primary_key(_key: &Self::InputKey) -> &Self::OutputKey {
-        &()
+        fn column() -> Column {
+            Column::Coins
+        }
     }
 }
 
 #[cfg(feature = "global-state-root")]
-impl TableWithBlueprint for Coins {
-    type Blueprint = Sparse<
-        Primitive<34>,
-        Postcard,
-        CoinsMerkleMetadata,
-        CoinsMerkleData,
-        KeyConverter,
-    >;
+mod sparse {
+    use super::*;
 
-    type Column = Column;
-    fn column() -> Column {
-        Column::Coins
+    use crate::{
+        blueprint::sparse::{
+            PrimaryKey,
+            Sparse,
+        },
+        tables::merkle::{
+            CoinsMerkleData,
+            CoinsMerkleMetadata,
+        },
+    };
+
+    use fuel_vm_private::fuel_storage::Mappable;
+
+    /// Maps coin IDs to the unit type, enabling a single global merkle root for all coins.
+    pub struct KeyConverter;
+
+    impl PrimaryKey for KeyConverter {
+        type InputKey = <Coins as Mappable>::Key;
+        type OutputKey = ();
+
+        fn primary_key(_key: &Self::InputKey) -> &Self::OutputKey {
+            &()
+        }
+    }
+
+    impl TableWithBlueprint for Coins {
+        type Blueprint = Sparse<
+            Primitive<34>,
+            Postcard,
+            CoinsMerkleMetadata,
+            CoinsMerkleData,
+            KeyConverter,
+        >;
+
+        type Column = Column;
+        fn column() -> Column {
+            Column::Coins
+        }
     }
 }
 
