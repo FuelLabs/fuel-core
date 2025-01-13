@@ -354,10 +354,7 @@ impl OffChainIterableKeyValueView {
 }
 
 impl worker::OffChainDatabase for Database<OffChain> {
-    type Transaction<'a>
-        = StorageTransaction<&'a mut Self>
-    where
-        Self: 'a;
+    type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
 
     fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
         Ok(fuel_core_storage::transactional::HistoricalView::latest_height(self))
