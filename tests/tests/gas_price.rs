@@ -326,6 +326,7 @@ async fn produce_block__raises_gas_price_with_default_parameters() {
     let latest_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
 
     assert_eq!(expected_gas_price, latest_gas_price);
+    driver.kill().await;
 }
 
 #[tokio::test]
