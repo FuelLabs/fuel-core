@@ -23,6 +23,10 @@ use crate::{
         indexation::coins_to_spend::NON_RETRYABLE_BYTE,
         ports::CoinsToSpendIndexIter,
         storage::{
+            assets::{
+                AssetDetails,
+                AssetsInfo,
+            },
             balances::{
                 CoinBalances,
                 CoinBalancesKey,
@@ -205,6 +209,12 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
 
     fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.message_is_spent(nonce)
+    }
+
+    fn asset_info(&self, asset_id: &AssetId) -> StorageResult<Option<AssetDetails>> {
+        self.storage_as_ref::<AssetsInfo>()
+            .get(asset_id)
+            .map(|opt| opt.map(|cow| cow.into_owned()))
     }
 
     fn balance(
@@ -412,5 +422,9 @@ impl worker::OffChainDatabase for Database<OffChain> {
 
     fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool> {
         self.indexation_available(IndexationKind::CoinsToSpend)
+    }
+
+    fn asset_metadata_indexation_enabled(&self) -> StorageResult<bool> {
+        self.indexation_available(IndexationKind::AssetMetadata)
     }
 }
