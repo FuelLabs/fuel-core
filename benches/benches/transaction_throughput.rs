@@ -1,4 +1,5 @@
 //! Tests throughput of various transaction types
+//! `cargo bench --bench transaction_throughput -p fuel-core-benches`
 
 use criterion::{
     criterion_group,
@@ -99,6 +100,7 @@ where
             test_builder.utxo_validation = true;
             test_builder.gas_limit = Some(10_000_000_000);
             test_builder.block_size_limit = Some(1_000_000_000_000);
+            test_builder.max_txs = 100000;
             test_builder.database_type = DbType::RocksDb;
             test_builder.database_config = DatabaseConfig {
                 cache_capacity: Some(16 * 1024 * 1024 * 1024),

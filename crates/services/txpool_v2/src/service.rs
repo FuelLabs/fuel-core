@@ -80,6 +80,7 @@ use futures::StreamExt;
 use parking_lot::RwLock;
 use std::{
     collections::{
+        BTreeMap,
         HashSet,
         VecDeque,
     },
@@ -323,6 +324,29 @@ where
             let mut block_height = self.current_height.write();
             *block_height = new_height;
         }
+
+        // Remove expired transactions
+        let mut removed_txs = vec![];
+        {
+            let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
+            let range_to_remove = height_expiration_txs
+                .range(..=new_height)
+                .map(|(k, _)| *k)
+                .collect::<Vec<_>>();
+            for height in range_to_remove {
+                let expired_txs = height_expiration_txs.remove(&height);
+                if let Some(expired_txs) = expired_txs {
+                    let mut tx_pool = self.pool.write();
+                    removed_txs
+                        .extend(tx_pool.remove_transaction_and_dependents(expired_txs));
+                }
+            }
+        }
+        for tx in removed_txs {
+            self.shared_state
+                .tx_status_sender
+                .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
+        }
     }
 
     fn borrow_txpool(&self, request: BorrowTxPoolRequest) {
@@ -392,6 +416,7 @@ where
         let shared_state = self.shared_state.clone();
         let current_height = self.current_height.clone();
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
+        let height_expiration_txs = self.pruner.height_expiration_txs.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
 
@@ -431,6 +456,7 @@ where
             };
 
             let tx = Arc::new(checked_tx);
+            let expiration = tx.expiration();
 
             let result = {
                 let mut pool = pool.write();
@@ -448,6 +474,12 @@ where
                     time_txs_submitted
                         .write()
                         .push_front((submitted_time, tx_id));
+
+                    if expiration < u32::MAX.into() {
+                        let mut lock = height_expiration_txs.write();
+                        let block_height_expiration = lock.entry(expiration).or_default();
+                        block_height_expiration.push(tx_id);
+                    }
 
                     let duration = submitted_time
                         .duration_since(SystemTime::UNIX_EPOCH)
@@ -764,6 +796,7 @@ where
     let pruner = TransactionPruner {
         txs_ttl: config.max_txs_ttl,
         time_txs_submitted: Arc::new(RwLock::new(VecDeque::new())),
+        height_expiration_txs: Arc::new(RwLock::new(BTreeMap::new())),
         ttl_timer,
     };
 
