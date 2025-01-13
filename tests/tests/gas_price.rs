@@ -610,10 +610,6 @@ fn produce_block__l1_committed_block_affects_gas_price() {
 
 #[test]
 fn run__if_metadata_is_behind_l2_then_will_catch_up() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .try_init();
-
     // given
     // produce 100 blocks
     let args = vec![
