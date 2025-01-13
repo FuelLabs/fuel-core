@@ -1,6 +1,9 @@
 use crate::Multiaddr;
 use libp2p::{
-    core::Endpoint,
+    core::{
+        transport::PortUse,
+        Endpoint,
+    },
     mdns::{
         self,
         tokio::Behaviour as TokioMdns,
@@ -107,6 +110,7 @@ impl NetworkBehaviour for MdnsWrapper {
         peer: PeerId,
         addr: &Multiaddr,
         role_override: Endpoint,
+        port_use: PortUse,
     ) -> Result<THandler<Self>, ConnectionDenied> {
         match self {
             MdnsWrapper::Ready(mdns) => mdns.handle_established_outbound_connection(
@@ -114,6 +118,7 @@ impl NetworkBehaviour for MdnsWrapper {
                 peer,
                 addr,
                 role_override,
+                port_use,
             ),
             MdnsWrapper::Disabled => Ok(dummy::ConnectionHandler),
         }

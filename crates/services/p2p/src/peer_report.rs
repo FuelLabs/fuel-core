@@ -4,7 +4,10 @@ use crate::{
 };
 use libp2p::{
     self,
-    core::Endpoint,
+    core::{
+        transport::PortUse,
+        Endpoint,
+    },
     swarm::{
         derive_prelude::{
             ConnectionClosed,
@@ -128,6 +131,7 @@ impl NetworkBehaviour for Behaviour {
         _peer: PeerId,
         _addr: &Multiaddr,
         _role_override: Endpoint,
+        _port_use: PortUse,
     ) -> Result<THandler<Self>, ConnectionDenied> {
         Ok(dummy::ConnectionHandler)
     }

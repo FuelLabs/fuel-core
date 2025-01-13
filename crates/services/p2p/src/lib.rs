@@ -17,6 +17,7 @@ pub mod service;
 mod utils;
 
 mod cached_view;
+pub mod sized_hashset;
 
 pub use gossipsub::config as gossipsub_config;
 pub use heartbeat::Config;

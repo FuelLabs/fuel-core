@@ -1,7 +1,10 @@
 use self::mdns_wrapper::MdnsWrapper;
 use futures::FutureExt;
 use libp2p::{
-    core::Endpoint,
+    core::{
+        transport::PortUse,
+        Endpoint,
+    },
     kad::{
         self,
         store::MemoryStore,
@@ -125,12 +128,14 @@ impl NetworkBehaviour for Behaviour {
         peer: PeerId,
         addr: &Multiaddr,
         role_override: Endpoint,
+        port_use: PortUse,
     ) -> Result<THandler<Self>, ConnectionDenied> {
         self.kademlia.handle_established_outbound_connection(
             connection_id,
             peer,
             addr,
             role_override,
+            port_use,
         )
     }
 

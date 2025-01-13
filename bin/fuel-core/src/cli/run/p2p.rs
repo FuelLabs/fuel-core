@@ -321,8 +321,9 @@ impl P2PArgs {
             reserved_nodes: self.reserved_nodes,
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,
             enable_mdns: self.enable_mdns,
-            max_peers_connected: self.max_peers_connected,
-            max_connections_per_peer: self.max_connections_per_peer,
+            max_discovery_peers_connected: self.max_peers_connected,
+            max_gossipsub_peers_connected: 100,
+            max_request_response_peers_connected: 100,
             allow_private_addresses: self.allow_private_addresses,
             random_walk,
             connection_idle_timeout: Some(Duration::from_secs(
