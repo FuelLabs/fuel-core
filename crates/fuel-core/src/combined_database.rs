@@ -135,9 +135,7 @@ impl CombinedDatabase {
             Ok(())
         }
 
-        if let Err(e) = backup_databases(db_dir, temp_backup_dir.path()) {
-            return Err(e);
-        }
+        backup_databases(db_dir, temp_backup_dir.path())?;
 
         std::fs::rename(temp_backup_dir.path(), backup_dir).map_err(|e| {
             crate::database::Error::BackupError(anyhow::anyhow!(
