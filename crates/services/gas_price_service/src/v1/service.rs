@@ -458,6 +458,7 @@ mod tests {
             },
         },
         ports::{
+            GetLatestRecordedHeight,
             GetMetadataStorage,
             SetMetadataStorage,
         },
@@ -807,12 +808,11 @@ mod tests {
         // then
         let latest_recorded_block_height = service
             .storage_tx_provider
-            .storage::<RecordedHeights>()
-            .get(&())
+            .get_recorded_height()
             .unwrap()
             .unwrap();
         assert_eq!(
-            *latest_recorded_block_height,
+            latest_recorded_block_height,
             BlockHeight::from(recorded_block_height)
         );
 
