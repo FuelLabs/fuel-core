@@ -79,7 +79,10 @@ pub struct V1AlgorithmConfig {
     pub da_poll_interval: Option<u32>,
 }
 
-pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
+pub fn updater_from_config(
+    value: &V1AlgorithmConfig,
+    l2_block_height: u32,
+) -> AlgorithmUpdaterV1 {
     let l2_activity = L2ActivityTracker::new_full(
         value.normal_range_size,
         value.capped_range_size,
@@ -91,7 +94,7 @@ pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
         new_scaled_exec_price: value
             .new_exec_gas_price
             .saturating_mul(value.gas_price_factor.get()),
-        l2_block_height: 0,
+        l2_block_height,
         new_scaled_da_gas_price: value
             .min_da_gas_price
             .saturating_mul(value.gas_price_factor.get()),
