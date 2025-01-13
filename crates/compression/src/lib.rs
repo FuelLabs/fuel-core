@@ -94,8 +94,8 @@ impl From<&BlockHeader> for CompressedBlockHeader {
 impl From<&CompressedBlockHeader> for PartialBlockHeader {
     fn from(value: &CompressedBlockHeader) -> Self {
         PartialBlockHeader {
-            application: value.application.clone(),
-            consensus: value.consensus.clone(),
+            application: value.application,
+            consensus: value.consensus,
         }
     }
 }
@@ -165,7 +165,7 @@ impl VersionedCompressedBlock {
     /// Returns the partial block header
     pub fn partial_block_header(&self) -> PartialBlockHeader {
         match self {
-            VersionedCompressedBlock::V0(block) => block.header.clone(),
+            VersionedCompressedBlock::V0(block) => block.header,
             #[cfg(feature = "fault-proving")]
             VersionedCompressedBlock::V1(block) => {
                 PartialBlockHeader::from(&block.header)
