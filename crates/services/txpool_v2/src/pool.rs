@@ -66,6 +66,8 @@ pub struct Pool<S, SI, CM, SA> {
     pub(crate) current_gas: u64,
     /// Current pool size in bytes.
     pub(crate) current_bytes_size: usize,
+    /// The current pool gas.
+    pub(crate) current_pool_gas_sender: tokio::sync::watch::Sender<u64>,
 }
 
 impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
@@ -75,6 +77,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
         collision_manager: CM,
         selection_algorithm: SA,
         config: Config,
+        current_pool_gas_sender: tokio::sync::watch::Sender<u64>,
     ) -> Self {
         Pool {
             storage,
@@ -84,6 +87,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             tx_id_to_storage_id: HashMap::new(),
             current_gas: 0,
             current_bytes_size: 0,
+            current_pool_gas_sender,
         }
     }
 
@@ -183,7 +187,7 @@ where
             .into_iter()
             .map(|data| data.transaction)
             .collect::<Vec<_>>();
-
+        let _ = self.current_pool_gas_sender.send(self.current_gas);
         Ok(removed_transactions)
     }
 

@@ -756,6 +756,7 @@ type NodeInfo {
 	maxTx: U64!
 	maxDepth: U64!
 	nodeVersion: String!
+	currentPoolGas: U64!
 	peers: [PeerInfo!]!
 }
 

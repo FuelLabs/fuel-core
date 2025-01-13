@@ -54,6 +54,7 @@ pub struct SharedState {
     pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
+    pub(crate) latest_pool_gas_info: tokio::sync::watch::Receiver<u64>,
 }
 
 impl SharedState {
@@ -177,5 +178,9 @@ impl SharedState {
         let _ = self
             .write_pool_requests_sender
             .try_send(WritePoolRequest::RemoveCoinDependents { transactions });
+    }
+
+    pub fn current_pool_gas(&self) -> u64 {
+        *self.latest_pool_gas_info.borrow()
     }
 }

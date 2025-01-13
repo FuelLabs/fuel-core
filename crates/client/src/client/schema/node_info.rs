@@ -25,6 +25,7 @@ pub struct NodeInfo {
     pub max_tx: U64,
     pub max_depth: U64,
     pub node_version: String,
+    pub current_pool_gas: U64,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

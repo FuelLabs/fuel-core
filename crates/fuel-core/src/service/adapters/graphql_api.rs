@@ -97,6 +97,10 @@ impl TxPoolPort for TxPoolAdapter {
     ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
         self.service.tx_update_subscribe(id)
     }
+
+    fn current_pool_gas(&self) -> u64 {
+        self.service.current_pool_gas()
+    }
 }
 
 impl DatabaseMessageProof for OnChainIterableKeyValueView {

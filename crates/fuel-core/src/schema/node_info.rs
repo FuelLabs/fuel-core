@@ -2,9 +2,12 @@ use super::scalars::{
     U32,
     U64,
 };
-use crate::fuel_core_graphql_api::{
-    query_costs,
-    Config as GraphQLConfig,
+use crate::{
+    fuel_core_graphql_api::{
+        query_costs,
+        Config as GraphQLConfig,
+    },
+    graphql_api::api_service::TxPool,
 };
 use async_graphql::{
     Context,
@@ -18,6 +21,7 @@ pub struct NodeInfo {
     max_tx: U64,
     max_depth: U64,
     node_version: String,
+    current_pool_gas: U64,
 }
 
 #[Object]
@@ -40,6 +44,10 @@ impl NodeInfo {
 
     async fn node_version(&self) -> String {
         self.node_version.to_owned()
+    }
+
+    async fn current_pool_gas(&self) -> U64 {
+        self.current_pool_gas
     }
 
     #[graphql(complexity = "query_costs().get_peers + child_complexity")]
@@ -69,6 +77,7 @@ impl NodeQuery {
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn node_info(&self, ctx: &Context<'_>) -> async_graphql::Result<NodeInfo> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
+        let txpool = ctx.data_unchecked::<TxPool>();
 
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -78,6 +87,7 @@ impl NodeQuery {
             max_tx: (config.max_tx as u64).into(),
             max_depth: (config.max_txpool_dependency_chain_length as u64).into(),
             node_version: VERSION.to_owned(),
+            current_pool_gas: txpool.current_pool_gas().into(),
         })
     }
 }

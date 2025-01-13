@@ -222,6 +222,8 @@ pub trait TxPoolPort: Send + Sync {
         &self,
         tx_id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>>;
+
+    fn current_pool_gas(&self) -> u64;
 }
 
 #[async_trait]
