@@ -95,7 +95,7 @@ use fuel_core_upgradable_executor::{
         },
     },
 };
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "test-helpers"))]
 use std::collections::HashMap;
 use std::{
     borrow::Cow,
