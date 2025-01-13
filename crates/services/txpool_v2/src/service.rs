@@ -1,5 +1,6 @@
 use crate::{
     self as fuel_core_txpool,
+    pool::TxPoolStats,
 };
 use fuel_core_services::TaskNextAction;
 
@@ -765,8 +766,8 @@ where
         mpsc::channel(1);
     let (read_pool_requests_sender, read_pool_requests_receiver) =
         mpsc::channel(config.service_channel_limits.max_pending_read_pool_requests);
-    let (current_pool_gas_sender, current_pool_gas_receiver) =
-        tokio::sync::watch::channel(0);
+    let (pool_stats_sender, pool_stats_receiver) =
+        tokio::sync::watch::channel(TxPoolStats::default());
     let tx_status_sender = TxStatusChange::new(
         config.max_tx_update_subscriptions,
         // The connection should be closed automatically after the `SqueezedOut` event.
@@ -783,7 +784,7 @@ where
         select_transactions_requests_sender,
         read_pool_requests_sender,
         new_txs_notifier,
-        latest_pool_gas_info: current_pool_gas_receiver,
+        latest_stats: pool_stats_receiver,
     };
 
     let subscriptions = Subscriptions {
@@ -834,7 +835,7 @@ where
         BasicCollisionManager::new(),
         RatioTipGasSelection::new(),
         config,
-        current_pool_gas_sender,
+        pool_stats_sender,
     );
 
     // BlockHeight is < 64 bytes, so we can use SeqLock

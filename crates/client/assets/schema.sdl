@@ -762,8 +762,23 @@ type NodeInfo {
 	maxTx: U64!
 	maxDepth: U64!
 	nodeVersion: String!
-	currentPoolGas: U64!
+	txPoolStats: TxPoolStats!
 	peers: [PeerInfo!]!
+}
+
+type TxPoolStats {
+	"""
+	Number of transactions in the pool.
+	"""
+	nbTransactions: U64!
+	"""
+	Total size of transactions in the pool.
+	"""
+	totalSize: U64!
+	"""
+	Total gas of transactions in the pool.
+	"""
+	totalGas: U64!
 }
 
 scalar Nonce

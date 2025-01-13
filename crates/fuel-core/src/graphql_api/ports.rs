@@ -24,7 +24,10 @@ use fuel_core_storage::{
     StorageInspect,
     StorageRead,
 };
-use fuel_core_txpool::TxStatusMessage;
+use fuel_core_txpool::{
+    TxPoolStats,
+    TxStatusMessage,
+};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -239,7 +242,7 @@ pub trait TxPoolPort: Send + Sync {
         tx_id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>>;
 
-    fn current_pool_gas(&self) -> u64;
+    fn latest_pool_stats(&self) -> TxPoolStats;
 }
 
 #[async_trait]

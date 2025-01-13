@@ -30,7 +30,10 @@ use crate::{
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::TxStatusMessage;
+use fuel_core_txpool::{
+    TxPoolStats,
+    TxStatusMessage,
+};
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     entities::relayer::message::MerkleProof,
@@ -98,8 +101,8 @@ impl TxPoolPort for TxPoolAdapter {
         self.service.tx_update_subscribe(id)
     }
 
-    fn current_pool_gas(&self) -> u64 {
-        self.service.current_pool_gas()
+    fn latest_pool_stats(&self) -> TxPoolStats {
+        self.service.get_latest_stats()
     }
 }
 

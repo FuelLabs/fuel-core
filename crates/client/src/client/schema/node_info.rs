@@ -25,7 +25,7 @@ pub struct NodeInfo {
     pub max_tx: U64,
     pub max_depth: U64,
     pub node_version: String,
-    pub current_pool_gas: U64,
+    pub tx_pool_stats: TxPoolStats,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -76,6 +76,14 @@ impl From<PeerInfo> for fuel_core_types::services::p2p::PeerInfo {
             app_score: info.app_score,
         }
     }
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug, PartialEq, Eq)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct TxPoolStats {
+    pub nb_transactions: U64,
+    pub total_gas: U64,
+    pub total_size: U64,
 }
 
 #[cfg(test)]

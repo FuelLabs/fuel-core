@@ -21,7 +21,6 @@ pub struct NodeInfo {
     max_tx: U64,
     max_depth: U64,
     node_version: String,
-    current_pool_gas: U64,
 }
 
 #[Object]
@@ -46,8 +45,10 @@ impl NodeInfo {
         self.node_version.to_owned()
     }
 
-    async fn current_pool_gas(&self) -> U64 {
-        self.current_pool_gas
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn pool_stats(&self, ctx: &Context<'_>) -> async_graphql::Result<TxPoolStats> {
+        let tx_pool = ctx.data_unchecked::<TxPool>();
+        Ok(TxPoolStats(tx_pool.latest_pool_stats()))
     }
 
     #[graphql(complexity = "query_costs().get_peers + child_complexity")]
@@ -77,7 +78,6 @@ impl NodeQuery {
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn node_info(&self, ctx: &Context<'_>) -> async_graphql::Result<NodeInfo> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
-        let txpool = ctx.data_unchecked::<TxPool>();
 
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -87,7 +87,6 @@ impl NodeQuery {
             max_tx: (config.max_tx as u64).into(),
             max_depth: (config.max_txpool_dependency_chain_length as u64).into(),
             node_version: VERSION.to_owned(),
-            current_pool_gas: txpool.current_pool_gas().into(),
         })
     }
 }
@@ -132,5 +131,25 @@ impl PeerInfo {
     /// The internal fuel p2p reputation of this peer
     async fn app_score(&self) -> f64 {
         self.0.app_score
+    }
+}
+
+struct TxPoolStats(fuel_core_txpool::TxPoolStats);
+
+#[Object]
+impl TxPoolStats {
+    /// The number of transactions in the pool
+    async fn nb_transactions(&self) -> U64 {
+        self.0.nb_transactions.into()
+    }
+
+    /// The total size of the transactions in the pool
+    async fn total_size(&self) -> U64 {
+        self.0.total_size.into()
+    }
+
+    /// The total gas of the transactions in the pool
+    async fn total_gas(&self) -> U64 {
+        self.0.total_gas.into()
     }
 }

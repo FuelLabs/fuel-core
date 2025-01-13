@@ -49,6 +49,13 @@ use crate::{
 #[cfg(test)]
 use std::collections::HashSet;
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TxPoolStats {
+    pub nb_transactions: u64,
+    pub total_size: u64,
+    pub total_gas: u64,
+}
+
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
 /// and allowing the selection of transactions for inclusion in a block.
 pub struct Pool<S, SI, CM, SA> {
@@ -67,7 +74,7 @@ pub struct Pool<S, SI, CM, SA> {
     /// Current pool size in bytes.
     pub(crate) current_bytes_size: usize,
     /// The current pool gas.
-    pub(crate) current_pool_gas_sender: tokio::sync::watch::Sender<u64>,
+    pub(crate) pool_stats_sender: tokio::sync::watch::Sender<TxPoolStats>,
 }
 
 impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
@@ -77,7 +84,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
         collision_manager: CM,
         selection_algorithm: SA,
         config: Config,
-        current_pool_gas_sender: tokio::sync::watch::Sender<u64>,
+        pool_stats_sender: tokio::sync::watch::Sender<TxPoolStats>,
     ) -> Self {
         Pool {
             storage,
@@ -87,7 +94,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             tx_id_to_storage_id: HashMap::new(),
             current_gas: 0,
             current_bytes_size: 0,
-            current_pool_gas_sender,
+            pool_stats_sender,
         }
     }
 
@@ -187,7 +194,11 @@ where
             .into_iter()
             .map(|data| data.transaction)
             .collect::<Vec<_>>();
-        let _ = self.current_pool_gas_sender.send(self.current_gas);
+        let _ = self.pool_stats_sender.send(TxPoolStats {
+            nb_transactions: self.tx_count() as u64,
+            total_size: self.current_bytes_size as u64,
+            total_gas: self.current_gas,
+        });
         Ok(removed_transactions)
     }
 
