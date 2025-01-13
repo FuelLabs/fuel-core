@@ -58,6 +58,7 @@ use fuel_core_types::{
         block::Block,
         primitives::DaBlockHeight,
     },
+    fuel_tx::AssetId,
     fuel_types::BlockHeight,
     fuel_vm::BlobData,
 };
@@ -187,7 +188,14 @@ impl SnapshotImporter {
             .table_reporter(Some(num_groups), migration_name);
 
         let task = ImportTask::new(
-            Handler::new(block_height, da_block_height),
+            Handler::new(
+                block_height,
+                da_block_height,
+                self.snapshot_reader
+                    .chain_config()
+                    .consensus_parameters
+                    .base_asset_id(),
+            ),
             groups,
             db,
             progress_reporter,
@@ -235,7 +243,14 @@ impl SnapshotImporter {
             .table_reporter(Some(num_groups), migration_name);
 
         let task = ImportTask::new(
-            Handler::new(block_height, da_block_height),
+            Handler::new(
+                block_height,
+                da_block_height,
+                self.snapshot_reader
+                    .chain_config()
+                    .consensus_parameters
+                    .base_asset_id(),
+            ),
             groups,
             db,
             progress_reporter,
@@ -255,15 +270,21 @@ impl SnapshotImporter {
 pub struct Handler<TableBeingWritten, TableInSnapshot> {
     pub block_height: BlockHeight,
     pub da_block_height: DaBlockHeight,
+    pub base_asset_id: AssetId,
     _table_being_written: PhantomData<TableBeingWritten>,
     _table_in_snapshot: PhantomData<TableInSnapshot>,
 }
 
 impl<A, B> Handler<A, B> {
-    pub fn new(block_height: BlockHeight, da_block_height: DaBlockHeight) -> Self {
+    pub fn new(
+        block_height: BlockHeight,
+        da_block_height: DaBlockHeight,
+        base_asset_id: &AssetId,
+    ) -> Self {
         Self {
             block_height,
             da_block_height,
+            base_asset_id: *base_asset_id,
             _table_being_written: PhantomData,
             _table_in_snapshot: PhantomData,
         }

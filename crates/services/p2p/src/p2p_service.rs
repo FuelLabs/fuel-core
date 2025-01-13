@@ -22,6 +22,7 @@ use crate::{
     },
     heartbeat,
     peer_manager::{
+        ConnectionState,
         PeerManager,
         Punisher,
     },
@@ -232,8 +233,11 @@ impl FuelP2PService {
         config.reserved_nodes = parse_multiaddrs(config.reserved_nodes).await?;
 
         // configure and build P2P Service
-        let (transport_function, connection_state) = build_transport_function(&config);
-        let tcp_config = tcp::Config::new();
+        let (connection_state_writer, connection_state_reader) = ConnectionState::new();
+        let transport_function =
+            build_transport_function(&config, connection_state_reader);
+        let tcp_config = tcp::Config::new().port_reuse(true);
+
         let behaviour = FuelBehaviour::new(&config, codec.clone())?;
 
         let swarm_builder = SwarmBuilder::with_existing_identity(config.keypair.clone())
@@ -309,7 +313,7 @@ impl FuelP2PService {
             peer_manager: PeerManager::new(
                 reserved_peers_updates,
                 reserved_peers,
-                connection_state,
+                connection_state_writer,
                 config.max_discovery_peers_connected as usize,
             ),
         })
