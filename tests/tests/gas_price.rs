@@ -369,7 +369,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
         "--starting-gas-price",
         "1000",
         "--gas-price-change-percent",
-        "100",
+        "10",
         "--gas-price-threshold-percent",
         "0",
     ];
