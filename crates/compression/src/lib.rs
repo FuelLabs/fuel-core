@@ -31,17 +31,6 @@ use fuel_core_types::{
 };
 use registry::RegistrationsPerTable;
 
-/// Compressed block, without the preceding version byte.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct CompressedBlockPayloadV0 {
-    /// Temporal registry insertions
-    pub registrations: RegistrationsPerTable,
-    /// Compressed block header
-    pub header: PartialBlockHeader,
-    /// Compressed transactions
-    pub transactions: Vec<CompressedTransaction>,
-}
-
 #[cfg(feature = "fault-proving")]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(
@@ -59,6 +48,12 @@ pub struct CompressedBlockHeader {
     // The block id.
     pub block_id: BlockId,
 }
+
+mod compressed_block_payload;
+
+pub use compressed_block_payload::v0::*;
+#[cfg(feature = "fault-proving")]
+pub use compressed_block_payload::v1::*;
 
 #[cfg(feature = "fault-proving")]
 impl From<&BlockHeader> for CompressedBlockHeader {
@@ -98,17 +93,6 @@ impl From<&CompressedBlockHeader> for PartialBlockHeader {
     }
 }
 
-#[cfg(feature = "fault-proving")]
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct CompressedBlockPayloadV1 {
-    /// Temporal registry insertions
-    pub registrations: RegistrationsPerTable,
-    /// Compressed block header
-    pub header: CompressedBlockHeader,
-    /// Compressed transactions
-    pub transactions: Vec<CompressedTransaction>,
-}
-
 /// Versioned compressed block.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum VersionedCompressedBlock {
@@ -123,61 +107,51 @@ impl Default for VersionedCompressedBlock {
     }
 }
 
+trait VersionedBlockPayload {
+    fn height(&self) -> &BlockHeight;
+    fn consensus_header(&self) -> &ConsensusHeader<Empty>;
+    fn application_header(&self) -> &ApplicationHeader<Empty>;
+    fn registrations(&self) -> &RegistrationsPerTable;
+    fn transactions(&self) -> Vec<CompressedTransaction>;
+    fn partial_block_header(&self) -> PartialBlockHeader;
+}
+
 impl VersionedCompressedBlock {
+    fn inner(&self) -> &dyn VersionedBlockPayload {
+        match self {
+            VersionedCompressedBlock::V0(block) => block,
+            #[cfg(feature = "fault-proving")]
+            VersionedCompressedBlock::V1(block) => block,
+        }
+    }
     /// Returns the height of the compressed block.
     pub fn height(&self) -> &BlockHeight {
-        match self {
-            VersionedCompressedBlock::V0(block) => block.header.height(),
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => &block.header.consensus.height,
-        }
+        self.inner().height()
     }
 
     /// Returns the consensus header
     pub fn consensus_header(&self) -> &ConsensusHeader<Empty> {
-        match self {
-            VersionedCompressedBlock::V0(block) => &block.header.consensus,
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => &block.header.consensus,
-        }
+        self.inner().consensus_header()
     }
 
     /// Returns the application header
     pub fn application_header(&self) -> &ApplicationHeader<Empty> {
-        match self {
-            VersionedCompressedBlock::V0(block) => &block.header.application,
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => &block.header.application,
-        }
+        self.inner().application_header()
     }
 
     /// Returns the registrations table
     pub fn registrations(&self) -> &RegistrationsPerTable {
-        match self {
-            VersionedCompressedBlock::V0(block) => &block.registrations,
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => &block.registrations,
-        }
+        self.inner().registrations()
     }
 
     /// Returns the transactions
     pub fn transactions(&self) -> Vec<CompressedTransaction> {
-        match self {
-            VersionedCompressedBlock::V0(block) => block.transactions.clone(),
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => block.transactions.clone(),
-        }
+        self.inner().transactions()
     }
 
     /// Returns the partial block header
     pub fn partial_block_header(&self) -> PartialBlockHeader {
-        match self {
-            VersionedCompressedBlock::V0(block) => block.header,
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => {
-                PartialBlockHeader::from(&block.header)
-            }
-        }
+        self.inner().partial_block_header()
     }
 }
 
