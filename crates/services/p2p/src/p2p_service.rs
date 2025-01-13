@@ -236,7 +236,7 @@ impl FuelP2PService {
         let (connection_state_writer, connection_state_reader) = ConnectionState::new();
         let transport_function =
             build_transport_function(&config, connection_state_reader);
-        let tcp_config = tcp::Config::new().port_reuse(true);
+        let tcp_config = tcp::Config::new();
 
         let behaviour = FuelBehaviour::new(&config, codec.clone())?;
 
