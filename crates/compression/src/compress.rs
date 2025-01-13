@@ -12,7 +12,6 @@ use crate::{
         RegistrationsPerTable,
         TemporalRegistryAll,
     },
-    CompressedBlockPayloadV0,
     VersionedCompressedBlock,
 };
 use anyhow::Context;
@@ -42,6 +41,15 @@ use std::collections::{
     HashSet,
 };
 
+#[cfg(feature = "fault-proving")]
+use crate::{
+    CompressedBlockHeader,
+    CompressedBlockPayloadV1,
+};
+
+#[cfg(not(feature = "fault-proving"))]
+use crate::CompressedBlockPayloadV0;
+
 pub trait CompressDb: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer {}
 impl<T> CompressDb for T where T: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer {}
 
@@ -70,9 +78,16 @@ where
     let transactions = target.compress_with(&mut ctx).await?;
     let registrations: RegistrationsPerTable = ctx.finalize()?;
 
-    Ok(VersionedCompressedBlock::V0(CompressedBlockPayloadV0 {
+    #[cfg(not(feature = "fault-proving"))]
+    return Ok(VersionedCompressedBlock::V0(CompressedBlockPayloadV0 {
         registrations,
         header: block.header().into(),
+        transactions,
+    }));
+    #[cfg(feature = "fault-proving")]
+    Ok(VersionedCompressedBlock::V1(CompressedBlockPayloadV1 {
+        registrations,
+        header: CompressedBlockHeader::from(block.header()),
         transactions,
     }))
 }

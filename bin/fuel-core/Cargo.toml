@@ -82,3 +82,4 @@ production = [
   "parquet",
   "aws-kms",
 ]
+fault-proving = ["fuel-core-compression/fault-proving"]
