@@ -59,3 +59,4 @@ test-helpers = [
   "fuel-core-storage/test-helpers",
   "fuel-core-types/test-helpers",
 ]
+limited-tx-count = ["fuel-core-executor/limited-tx-count"]
