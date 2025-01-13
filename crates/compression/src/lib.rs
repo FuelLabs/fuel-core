@@ -144,6 +144,15 @@ impl VersionedCompressedBlock {
         }
     }
 
+    /// Returns the application header
+    pub fn application_header(&self) -> &ApplicationHeader<Empty> {
+        match self {
+            VersionedCompressedBlock::V0(block) => &block.header.application,
+            #[cfg(feature = "fault-proving")]
+            VersionedCompressedBlock::V1(block) => &block.header.application,
+        }
+    }
+
     /// Returns the registrations table
     pub fn registrations(&self) -> &RegistrationsPerTable {
         match self {
@@ -189,7 +198,8 @@ mod tests {
         tai64::Tai64,
     };
     use proptest::prelude::*;
-
+    #[cfg(feature = "fault-proving")]
+    use std::str::FromStr;
     use super::*;
 
     fn keyspace() -> impl Strategy<Value = RegistryKeyspace> {
@@ -243,6 +253,7 @@ mod tests {
                 }
             }
 
+            #[cfg(not(feature = "fault-proving"))]
             let header = PartialBlockHeader {
                 application: ApplicationHeader {
                     da_height: da_height.into(),
@@ -257,31 +268,51 @@ mod tests {
                     generated: Empty
                 }
             };
-            let original = CompressedBlockPayloadV0 {
+            #[cfg(feature = "fault-proving")]
+            let header = CompressedBlockHeader {
+                application: ApplicationHeader {
+                    da_height: da_height.into(),
+                    consensus_parameters_version,
+                    state_transition_bytecode_version,
+                    generated: Empty,
+                },
+                consensus: ConsensusHeader {
+                    prev_root: prev_root.into(),
+                    height: height.into(),
+                    time: Tai64::UNIX_EPOCH,
+                    generated: Empty,
+                },
+                block_id: BlockId::from_str("0xecea85c17070bc2e65f911310dbd01198f4436052ebba96cded9ddf30c58dd1a").unwrap(),
+            };
+
+            #[cfg(not(feature = "fault-proving"))]
+            let original = VersionedCompressedBlock::V0(CompressedBlockPayloadV0 {
                 registrations,
                 header,
                 transactions: vec![],
-            };
-
-            let compressed = postcard::to_allocvec(&original).unwrap();
-            let decompressed: CompressedBlockPayloadV0 =
-                postcard::from_bytes(&compressed).unwrap();
-
-            let CompressedBlockPayloadV0 {
+            });
+            let original = VersionedCompressedBlock::V1(CompressedBlockPayloadV1 {
                 registrations,
                 header,
-                transactions,
-            } = decompressed;
+                transactions: vec![]
+            });
 
-            assert_eq!(registrations, original.registrations);
+            let compressed = postcard::to_allocvec(&original).unwrap();
+            let decompressed: VersionedCompressedBlock =
+                postcard::from_bytes(&compressed).unwrap();
 
-            assert_eq!(header.da_height, da_height.into());
-            assert_eq!(*header.prev_root(), prev_root.into());
-            assert_eq!(*header.height(), height.into());
-            assert_eq!(header.consensus_parameters_version, consensus_parameters_version);
-            assert_eq!(header.state_transition_bytecode_version, state_transition_bytecode_version);
+            let consensus_header = decompressed.consensus_header();
+            let application_header = decompressed.application_header();
 
-            assert!(transactions.is_empty());
+            assert_eq!(decompressed.registrations(), original.registrations());
+
+            assert_eq!(application_header.da_height, da_height.into());
+            assert_eq!(consensus_header.prev_root, prev_root.into());
+            assert_eq!(consensus_header.height, height.into());
+            assert_eq!(application_header.consensus_parameters_version, consensus_parameters_version);
+            assert_eq!(application_header.state_transition_bytecode_version, state_transition_bytecode_version);
+
+            assert!(decompressed.transactions().is_empty());
         }
     }
 }
