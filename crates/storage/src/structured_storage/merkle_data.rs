@@ -54,10 +54,10 @@ merkle_table!(FuelBlockMerkleData, U64Codec);
 merkle_table!(FuelBlockMerkleMetadata, Postcard);
 merkle_table!(ContractsAssetsMerkleData);
 merkle_table!(ContractsAssetsMerkleMetadata);
+merkle_table!(ContractsStateMerkleData);
+merkle_table!(ContractsStateMerkleMetadata);
 // TODO: Using `Postcard` to avoid compilation errors.
 #[cfg(feature = "global-state-root")]
 merkle_table!(CoinsMerkleData, Postcard);
 #[cfg(feature = "global-state-root")]
 merkle_table!(CoinsMerkleMetadata, Postcard);
-merkle_table!(ContractsStateMerkleData);
-merkle_table!(ContractsStateMerkleMetadata);
