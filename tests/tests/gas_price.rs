@@ -10,13 +10,24 @@ use fuel_core::{
         StateConfig,
     },
     database::Database,
+    p2p_test_helpers::{
+        make_nodes,
+        BootstrapSetup,
+        ConfigOverrides,
+        Nodes,
+        ProducerSetup,
+        ValidatorSetup,
+    },
     service::{
         Config,
         FuelService,
     },
 };
 use fuel_core_client::client::{
-    types::gas_price::LatestGasPrice,
+    types::{
+        gas_price::LatestGasPrice,
+        TransactionType,
+    },
     FuelClient,
 };
 use fuel_core_gas_price_service::{
@@ -47,15 +58,20 @@ use fuel_core_types::{
     },
     fuel_tx::{
         consensus_parameters::ConsensusParametersV1,
+        field::MintGasPrice,
         AssetId,
         ConsensusParameters,
         Finalizable,
+        Input,
         Transaction,
         TransactionBuilder,
     },
     services::executor::TransactionExecutionResult,
 };
-use rand::Rng;
+use rand::{
+    prelude::StdRng,
+    Rng,
+};
 use std::{
     self,
     iter::repeat,
@@ -905,4 +921,74 @@ fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
             assert_eq!(metadata.latest_known_total_da_cost_excess, total_cost);
         });
     }
+}
+
+#[tokio::test]
+async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
+    let mut rng = StdRng::seed_from_u64(1234 as u64);
+
+    // given
+    let unexpected_high_min_gas_limit = u64::MAX;
+    let secret = SecretKey::random(&mut rng);
+    let pub_key = Input::owner(&secret.public_key());
+
+    let bootstrap_setup = BootstrapSetup::new(pub_key);
+    let producer_overrides = ConfigOverrides::no_overrides().min_gas_price(1);
+    let producer_setup = ProducerSetup::new_with_overrides(secret, producer_overrides)
+        .with_txs(1)
+        .with_name("Alice");
+    let validator_overrides =
+        ConfigOverrides::no_overrides().min_gas_price(unexpected_high_min_gas_limit);
+    let validator_setup =
+        ValidatorSetup::new_with_overrides(pub_key, validator_overrides).with_name("Bob");
+
+    let Nodes {
+        mut producers,
+        mut validators,
+        bootstrap_nodes: _dont_drop,
+    } = make_nodes(
+        [Some(bootstrap_setup)],
+        [Some(producer_setup)],
+        [Some(validator_setup)],
+        None,
+    )
+    .await;
+
+    let producer = producers.pop().unwrap();
+    let validator = validators.pop().unwrap();
+
+    // when
+    let num_of_blocks = 5;
+    let producer_client = FuelClient::from(producer.node.bound_address);
+    let latest_block_height = producer_client
+        .produce_blocks(num_of_blocks, None)
+        .await
+        .unwrap();
+    let block = producer_client
+        .block_by_height(latest_block_height)
+        .await
+        .unwrap()
+        .unwrap();
+    let mint_tx_id = block.transactions.last().unwrap();
+    let mint_res = producer_client
+        .transaction(mint_tx_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let mint = if let TransactionType::Known(known) = mint_res.transaction {
+        known.as_mint().unwrap().to_owned()
+    } else {
+        panic!("Expected mint transaction");
+    };
+    let gas_price = *mint.gas_price();
+
+    validator
+        .wait_for_blocks(num_of_blocks as usize, false)
+        .await;
+
+    // then
+    let validator_client = FuelClient::from(validator.node.bound_address);
+    let estimate = validator_client.estimate_gas_price(0).await.unwrap();
+
+    assert_eq!(gas_price, u64::from(estimate.gas_price));
 }
