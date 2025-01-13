@@ -1,10 +1,6 @@
 //! The module contains implementations and tests for the `Coins` table.
 
 use crate::{
-    blueprint::{
-        plain::Plain,
-        sparse::Sparse,
-    },
     codec::{
         postcard::Postcard,
         primitive::Primitive,
@@ -13,6 +9,22 @@ use crate::{
     structured_storage::TableWithBlueprint,
     tables::Coins,
 };
+
+#[cfg(not(feature = "global-state-root"))]
+use crate::blueprint::plain::Plain;
+
+#[cfg(feature = "global-state-root")]
+use crate::{
+    blueprint::sparse::PrimaryKey,
+    blueprint::sparse::Sparse,
+    tables::merkle::{
+        CoinsMerkleData,
+        CoinsMerkleMetadata,
+    },
+};
+
+#[cfg(feature = "global-state-root")]
+use fuel_vm_private::fuel_storage::Mappable;
 
 #[cfg(not(feature = "global-state-root"))]
 impl TableWithBlueprint for Coins {
@@ -24,13 +36,33 @@ impl TableWithBlueprint for Coins {
     }
 }
 
+/// TODO: Document
+#[cfg(feature = "global-state-root")]
+pub struct KeyConverter;
+
+#[cfg(feature = "global-state-root")]
+impl PrimaryKey for KeyConverter {
+    type InputKey = <Coins as Mappable>::Key;
+    type OutputKey = ();
+
+    fn primary_key(_key: &Self::InputKey) -> &Self::OutputKey {
+        &()
+    }
+}
+
 #[cfg(feature = "global-state-root")]
 impl TableWithBlueprint for Coins {
-    type Blueprint = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>;
+    type Blueprint = Sparse<
+        Primitive<34>,
+        Postcard,
+        CoinsMerkleMetadata,
+        CoinsMerkleData,
+        KeyConverter,
+    >;
 
     type Column = Column;
     fn column() -> Column {
-        Column::CoinsMerkleMetadata
+        Column::Coins
     }
 }
 
