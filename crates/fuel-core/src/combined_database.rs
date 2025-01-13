@@ -23,6 +23,7 @@ use fuel_core_chain_config::{
     StateConfig,
     StateConfigBuilder,
 };
+#[cfg(feature = "backup")]
 use fuel_core_services::TraceErr;
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
