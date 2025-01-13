@@ -248,9 +248,13 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                 if asset_id == *base_asset_id {
                     self.base_asset_first(owner, base_asset_id, direction)
                 } else {
-                    let start = (asset_id != *base_asset_id)
-                        .then_some(CoinBalancesKey::new(owner, &asset_id));
-                    self.non_base_asset_balances(owner, start, direction, base_asset_id)
+                    let start = CoinBalancesKey::new(owner, &asset_id);
+                    self.non_base_asset_balances(
+                        owner,
+                        Some(start),
+                        direction,
+                        base_asset_id,
+                    )
                 }
             }
             (IterDirection::Reverse, None) => {
@@ -350,7 +354,10 @@ impl OffChainIterableKeyValueView {
 }
 
 impl worker::OffChainDatabase for Database<OffChain> {
-    type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
+    type Transaction<'a>
+        = StorageTransaction<&'a mut Self>
+    where
+        Self: 'a;
 
     fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
         Ok(fuel_core_storage::transactional::HistoricalView::latest_height(self))
