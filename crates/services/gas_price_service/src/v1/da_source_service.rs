@@ -135,7 +135,6 @@ mod tests {
 
     #[tokio::test]
     async fn run__filtered_da_block_costs_do_not_update_latest_recorded_block() {
-
         // given
         let l2_height = 4;
         let unexpected_costs = DaBlockCosts {
