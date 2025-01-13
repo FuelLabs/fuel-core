@@ -289,6 +289,7 @@ mod tests {
                 header,
                 transactions: vec![],
             });
+            #[cfg(feature = "fault-proving")]
             let original = VersionedCompressedBlock::V1(CompressedBlockPayloadV1 {
                 registrations,
                 header,
@@ -312,6 +313,7 @@ mod tests {
 
             assert!(decompressed.transactions().is_empty());
 
+            #[cfg(feature = "fault-proving")]
             if let VersionedCompressedBlock::V1(block) = decompressed {
                 assert_eq!(block.header.block_id, header.block_id);
             }
