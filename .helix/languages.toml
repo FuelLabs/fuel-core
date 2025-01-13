@@ -1,2 +1,0 @@
-[language-server.rust-analyzer.config]
-cargo.features = "all"
