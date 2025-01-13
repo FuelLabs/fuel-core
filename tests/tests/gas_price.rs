@@ -700,8 +700,8 @@ fn node_config_with_da_committer_url(url: &str) -> Config {
     node_config.block_production = Trigger::Never;
     node_config.da_committer_url = Some(url.to_string());
     node_config.da_poll_interval = Some(100);
-    node_config.da_gas_price_p_component = 224_000;
-    node_config.da_gas_price_d_component = 2_690_000;
+    node_config.da_gas_price_p_component = 123_456;
+    node_config.da_gas_price_d_component = 1_234_567;
     node_config.block_activity_threshold = 0;
     node_config
 }
@@ -811,24 +811,6 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
             "Could not recover from divergent profit after {} tries.\n Profits: {:?}.\n Changes: {:?}.\n Gas prices: {:?}\n Gas price changes: {:?}",
             tries, profits, changes, gas_prices, gas_price_changes
         );
-    } else {
-        tracing::info!("Success on try {}/{}", success_iteration, tries);
-        let profits_as_gwei = profits
-            .iter()
-            .map(|x| *x as f64 / 1_000_000_000.0)
-            .collect::<Vec<_>>();
-        let changes_as_gwei = changes
-            .iter()
-            .map(|x| *x as f64 / 1_000_000_000.0)
-            .collect::<Vec<_>>();
-        let gas_prices_as_gwei = gas_prices
-            .iter()
-            .map(|x| *x as f64 / 1_000_000_000.0)
-            .collect::<Vec<_>>();
-        let gas_price_changes_as_gwei = gas_price_changes
-            .iter()
-            .map(|x| *x as f64 / 1_000_000_000.0)
-            .collect::<Vec<_>>();
     }
 }
 
@@ -844,9 +826,6 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
 
 #[test]
 fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::ERROR)
-        .try_init();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given
