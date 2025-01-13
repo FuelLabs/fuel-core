@@ -351,7 +351,7 @@ fn update_da_record_data__da_block_increases_da_gas_price() {
 
     // then
     let actual = updater.new_scaled_da_gas_price;
-    let change = (updater.last_profit / da_p_component as i128).abs() as u64;
+    let change = (updater.last_profit / da_p_component as i128).unsigned_abs() as u64;
     let expected = old_da_gas_price + change;
     assert_eq!(expected, actual);
 }
