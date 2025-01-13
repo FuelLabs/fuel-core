@@ -182,9 +182,6 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
 
 #[tokio::test]
 async fn produce_block__raises_gas_price() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
     // given
     let block_gas_limit = 3_000_000;
     let chain_config = ChainConfig {
@@ -533,6 +530,7 @@ fn produce_block__l1_committed_block_affects_gas_price() {
     ];
 
     let mut default_args = args.clone();
+    // Start without da gas price updates
     default_args.extend([
         "--da-gas-price-p-component",
         "0",
@@ -575,7 +573,7 @@ fn produce_block__l1_committed_block_affects_gas_price() {
     };
     mock.add_response(costs);
 
-    // add the da committer url to the args
+    // add the da committer url to the args, as well as set da parameters to modify the gas price
     args.extend(&[
         "--da-committer-url",
         &url,
@@ -710,9 +708,6 @@ fn node_config_with_da_committer_url(url: &str) -> Config {
 
 #[test]
 fn produce_block__algorithm_recovers_from_divergent_profit() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given
@@ -834,10 +829,6 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
             .iter()
             .map(|x| *x as f64 / 1_000_000_000.0)
             .collect::<Vec<_>>();
-        tracing::info!("Profits as gwei: {:?}", profits_as_gwei);
-        tracing::info!("Changes as gwei: {:?}", changes_as_gwei);
-        tracing::info!("Gas prices as gwei: {:?}", gas_prices_as_gwei);
-        tracing::info!("Gas price changes as gwei: {:?}", gas_price_changes_as_gwei);
     }
 }
 
@@ -845,9 +836,7 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
     let arb_tx_count = 2;
     for i in 0..arb_tx_count {
         let large_fee_limit = u32::MAX as u64 - i;
-        // let tx = arb_large_tx(large_fee_limit, rng);
         let tx = arb_small_tx(large_fee_limit, rng);
-        // let tx = arb_large_tx(189028 + i as Word, rng);
         let _status = client.submit(&tx).await.unwrap();
     }
     let _ = client.produce_blocks(1, None).await.unwrap();

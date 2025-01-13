@@ -694,13 +694,11 @@ mod tests {
         let initial_price = read_algo.next_gas_price();
 
         let next = service.run(&mut watcher).await;
-        tracing::info!("Next action: {:?}", next);
         tokio::time::sleep(Duration::from_millis(3)).await;
         l2_block_sender.send(l2_block_2).await.unwrap();
 
         // when
         let next = service.run(&mut watcher).await;
-        tracing::info!("Next action 2: {:?}", next);
         tokio::time::sleep(Duration::from_millis(3)).await;
         service.shutdown().await.unwrap();
 

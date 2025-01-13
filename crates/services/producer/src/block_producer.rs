@@ -250,7 +250,6 @@ where
             .next_gas_price()
             .await
             .map_err(|e| anyhow!("No gas price found: {e:?}"));
-        tracing::info!("Gas price: {:?}", price);
         price
     }
 }
