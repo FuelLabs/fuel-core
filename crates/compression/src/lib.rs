@@ -185,6 +185,7 @@ impl VersionedCompressedBlock {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use fuel_core_compression as _;
     use fuel_core_types::{
         blockchain::{
@@ -200,7 +201,6 @@ mod tests {
     use proptest::prelude::*;
     #[cfg(feature = "fault-proving")]
     use std::str::FromStr;
-    use super::*;
 
     fn keyspace() -> impl Strategy<Value = RegistryKeyspace> {
         prop_oneof![
@@ -313,6 +313,10 @@ mod tests {
             assert_eq!(application_header.state_transition_bytecode_version, state_transition_bytecode_version);
 
             assert!(decompressed.transactions().is_empty());
+
+            if let VersionedCompressedBlock::V1(block) = decompressed {
+                assert_eq!(block.header.block_id, header.block_id);
+            }
         }
     }
 }
