@@ -19,18 +19,23 @@ use crate::{
             transactions::OwnedTransactionIndexCursor,
         },
     },
-    graphql_api::storage::{
-        balances::{
-            CoinBalances,
-            CoinBalancesKey,
-            MessageBalance,
-            MessageBalances,
-            TotalBalanceAmount,
-        },
-        old::{
-            OldFuelBlockConsensus,
-            OldFuelBlocks,
-            OldTransactions,
+    graphql_api::{
+        indexation::coins_to_spend::NON_RETRYABLE_BYTE,
+        ports::CoinsToSpendIndexIter,
+        storage::{
+            balances::{
+                CoinBalances,
+                CoinBalancesKey,
+                MessageBalance,
+                MessageBalances,
+                TotalBalanceAmount,
+            },
+            coins::CoinsToSpendIndex,
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
         },
     },
 };
@@ -282,6 +287,39 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
                 .into_boxed()
         }
     }
+    // TODO: Return error if indexation is not available: https://github.com/FuelLabs/fuel-core/issues/2499
+    fn coins_to_spend_index(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+    ) -> CoinsToSpendIndexIter {
+        let prefix: Vec<_> = NON_RETRYABLE_BYTE
+            .as_ref()
+            .iter()
+            .copied()
+            .chain(owner.iter().copied())
+            .chain(asset_id.iter().copied())
+            .collect();
+
+        CoinsToSpendIndexIter {
+            big_coins_iter: self
+                .iter_all_filtered::<CoinsToSpendIndex, _>(
+                    Some(&prefix),
+                    None,
+                    Some(IterDirection::Reverse),
+                )
+                .map(|result| result.map(|(key, _)| key))
+                .into_boxed(),
+            dust_coins_iter: self
+                .iter_all_filtered::<CoinsToSpendIndex, _>(
+                    Some(&prefix),
+                    None,
+                    Some(IterDirection::Forward),
+                )
+                .map(|result| result.map(|(key, _)| key))
+                .into_boxed(),
+        }
+    }
 }
 
 impl worker::OffChainDatabase for Database<OffChain> {
@@ -295,7 +333,11 @@ impl worker::OffChainDatabase for Database<OffChain> {
         self.into_transaction()
     }
 
-    fn balances_enabled(&self) -> StorageResult<bool> {
+    fn balances_indexation_enabled(&self) -> StorageResult<bool> {
         self.indexation_available(IndexationKind::Balances)
+    }
+
+    fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool> {
+        self.indexation_available(IndexationKind::CoinsToSpend)
     }
 }

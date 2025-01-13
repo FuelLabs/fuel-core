@@ -22,7 +22,7 @@ impl From<schema::balance::Balance> for Balance {
             owner: value.owner.into(),
             amount: {
                 let amount: u64 = value.amount.into();
-                amount as u128
+                u128::from(amount)
             },
             asset_id: value.asset_id.into(),
         }

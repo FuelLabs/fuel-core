@@ -336,6 +336,10 @@ pub enum Error {
     RelayerGivesIncorrectMessages,
     #[display(fmt = "Consensus parameters not found for version {_0}")]
     ConsensusParametersNotFound(ConsensusParametersVersion),
+    #[display(
+        fmt = "The expiration block height {_0} of the transaction is more than the current block height {_1}"
+    )]
+    TransactionExpired(BlockHeight, BlockHeight),
     /// It is possible to occur untyped errors in the case of the upgrade.
     #[display(fmt = "Occurred untyped error: {_0}")]
     Other(String),

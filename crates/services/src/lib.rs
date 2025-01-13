@@ -6,6 +6,7 @@
 #![deny(warnings)]
 
 mod async_processor;
+pub mod seqlock;
 mod service;
 mod state;
 mod sync;
@@ -74,6 +75,11 @@ where
 }
 
 pub use async_processor::AsyncProcessor;
+pub use seqlock::{
+    SeqLock,
+    SeqLockReader,
+    SeqLockWriter,
+};
 pub use service::{
     EmptyShared,
     RunnableService,
