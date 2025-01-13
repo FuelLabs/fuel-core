@@ -74,6 +74,7 @@ use fuel_core_types::{
         Contract,
         Input,
         Output,
+        Receipt,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -90,6 +91,7 @@ use fuel_core_types::{
         },
         executor::{
             Event,
+            TransactionExecutionResult,
             TransactionExecutionStatus,
         },
         txpool::from_executor_to_status,
@@ -137,6 +139,7 @@ pub struct Task<TxPool, D> {
     continue_on_error: bool,
     balances_indexation_enabled: bool,
     coins_to_spend_indexation_enabled: bool,
+    asset_metadata_indexation_enabled: bool,
     base_asset_id: AssetId,
 }
 
@@ -149,7 +152,11 @@ where
         let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
-        persist_transaction_status(&result, &mut transaction)?;
+        persist_transaction_status(
+            &result,
+            self.asset_metadata_indexation_enabled,
+            &mut transaction,
+        )?;
 
         // save the associated owner for each transaction in the block
         index_tx_owners_for_block(block, &mut transaction, &self.chain_id)?;
@@ -210,7 +217,7 @@ where
     T: OffChainDatabaseTransaction,
 {
     for event in events {
-        match update_indexation(
+        match update_event_based_indexation(
             &event,
             block_st_transaction,
             balances_indexation_enabled,
@@ -277,7 +284,7 @@ where
     Ok(())
 }
 
-fn update_indexation<T>(
+fn update_event_based_indexation<T>(
     event: &Event,
     block_st_transaction: &mut T,
     balances_indexation_enabled: bool,
@@ -298,6 +305,23 @@ where
         block_st_transaction,
         coins_to_spend_indexation_enabled,
         base_asset_id,
+    )?;
+
+    Ok(())
+}
+
+fn update_receipt_based_indexation<T>(
+    receipts: &[Receipt],
+    block_st_transaction: &mut T,
+    asset_metadata_indexation_enabled: bool,
+) -> Result<(), IndexationError>
+where
+    T: OffChainDatabaseTransaction,
+{
+    indexation::asset_metadata::update(
+        receipts,
+        block_st_transaction,
+        asset_metadata_indexation_enabled,
     )?;
 
     Ok(())
@@ -400,6 +424,7 @@ where
 
 fn persist_transaction_status<T>(
     import_result: &ImportResult,
+    asset_metadata_indexation_enabled: bool,
     db: &mut T,
 ) -> StorageResult<()>
 where
@@ -416,6 +441,12 @@ where
             )
             .into());
         }
+
+        let TransactionExecutionResult::Success { receipts, .. } = result else {
+            continue
+        };
+
+        update_receipt_based_indexation(receipts, db, asset_metadata_indexation_enabled)?;
     }
     Ok(())
 }
@@ -539,9 +570,13 @@ where
         let coins_to_spend_indexation_enabled = self
             .off_chain_database
             .coins_to_spend_indexation_enabled()?;
+        let asset_metadata_indexation_enabled = self
+            .off_chain_database
+            .asset_metadata_indexation_enabled()?;
         tracing::info!(
             balances_indexation_enabled,
             coins_to_spend_indexation_enabled,
+            asset_metadata_indexation_enabled,
             "Indexation availability status"
         );
 
@@ -566,6 +601,7 @@ where
             continue_on_error,
             balances_indexation_enabled,
             coins_to_spend_indexation_enabled,
+            asset_metadata_indexation_enabled,
             base_asset_id,
         };
 
