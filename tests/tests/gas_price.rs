@@ -594,7 +594,7 @@ fn produce_block__l1_committed_block_affects_gas_price() {
         "--da-committer-url",
         url.as_str(),
         "--da-poll-interval",
-        "1ms",
+        "20ms",
         "--da-gas-price-p-component",
         "1",
         "--gas-price-change-percent",
@@ -613,6 +613,8 @@ fn produce_block__l1_committed_block_affects_gas_price() {
             // Wait for DaBlockCosts to be accepted
             tokio::time::sleep(Duration::from_millis(200)).await;
             // Produce new block to update gas price
+            driver.client.produce_blocks(1, None).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(20)).await;
             driver.client.produce_blocks(1, None).await.unwrap();
             tokio::time::sleep(Duration::from_millis(20)).await;
             let gas_price = driver.client.estimate_gas_price(0).await.unwrap().gas_price;
