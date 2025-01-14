@@ -5,6 +5,7 @@ use crate::{
         TemporalRegistry,
     },
     registry::TemporalRegistryAll,
+    VersionedBlockPayload,
     VersionedCompressedBlock,
 };
 use fuel_core_types::{

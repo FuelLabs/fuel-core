@@ -28,6 +28,7 @@ rand = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
+enum_dispatch = "0.3.13"
 
 [dev-dependencies]
 fuel-core-compression = { path = ".", features = ["test-helpers"] }

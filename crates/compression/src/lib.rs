@@ -4,6 +4,7 @@
 #![deny(warnings)]
 
 pub mod compress;
+mod compressed_block_payload;
 pub mod config;
 pub mod decompress;
 mod eviction_policy;
@@ -11,12 +12,12 @@ pub mod ports;
 mod registry;
 
 pub use config::Config;
+use enum_dispatch::enum_dispatch;
 pub use registry::RegistryKeyspace;
 
+use crate::compressed_block_payload::v0::CompressedBlockPayloadV0;
 #[cfg(feature = "fault-proving")]
-use fuel_core_types::blockchain::header::BlockHeader;
-#[cfg(feature = "fault-proving")]
-use fuel_core_types::blockchain::primitives::BlockId;
+use crate::compressed_block_payload::v1::CompressedBlockPayloadV1;
 use fuel_core_types::{
     blockchain::{
         header::{
@@ -31,86 +32,22 @@ use fuel_core_types::{
 };
 use registry::RegistrationsPerTable;
 
-/// Compressed block, without the preceding version byte.
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct CompressedBlockPayloadV0 {
-    /// Temporal registry insertions
-    pub registrations: RegistrationsPerTable,
-    /// Compressed block header
-    pub header: PartialBlockHeader,
-    /// Compressed transactions
-    pub transactions: Vec<CompressedTransaction>,
-}
-
-#[cfg(feature = "fault-proving")]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(
-    feature = "fault-proving",
-    derive(serde::Serialize, serde::Deserialize)
-)]
-#[derive(Default)]
-/// A partially complete fuel block header that does not
-/// have any generated fields because it has not been executed yet.
-pub struct CompressedBlockHeader {
-    /// The application header.
-    pub application: ApplicationHeader<Empty>,
-    /// The consensus header.
-    pub consensus: ConsensusHeader<Empty>,
-    // The block id.
-    pub block_id: BlockId,
-}
-
-#[cfg(feature = "fault-proving")]
-impl From<&BlockHeader> for CompressedBlockHeader {
-    fn from(header: &BlockHeader) -> Self {
-        let ConsensusHeader {
-            prev_root,
-            height,
-            time,
-            ..
-        } = *header.consensus();
-        CompressedBlockHeader {
-            application: ApplicationHeader {
-                da_height: header.da_height,
-                consensus_parameters_version: header.consensus_parameters_version,
-                state_transition_bytecode_version: header
-                    .state_transition_bytecode_version,
-                generated: Empty {},
-            },
-            consensus: ConsensusHeader {
-                prev_root,
-                height,
-                time,
-                generated: Empty {},
-            },
-            block_id: header.id(),
-        }
-    }
-}
-
-#[cfg(feature = "fault-proving")]
-impl From<&CompressedBlockHeader> for PartialBlockHeader {
-    fn from(value: &CompressedBlockHeader) -> Self {
-        PartialBlockHeader {
-            application: value.application,
-            consensus: value.consensus,
-        }
-    }
-}
-
-#[cfg(feature = "fault-proving")]
-#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct CompressedBlockPayloadV1 {
-    /// Temporal registry insertions
-    pub registrations: RegistrationsPerTable,
-    /// Compressed block header
-    pub header: CompressedBlockHeader,
-    /// Compressed transactions
-    pub transactions: Vec<CompressedTransaction>,
+/// A compressed block payload MUST implement this trait
+/// It is used to provide a convenient interface for usage within
+/// compression
+#[enum_dispatch]
+pub trait VersionedBlockPayload {
+    fn height(&self) -> &BlockHeight;
+    fn consensus_header(&self) -> &ConsensusHeader<Empty>;
+    fn application_header(&self) -> &ApplicationHeader<Empty>;
+    fn registrations(&self) -> &RegistrationsPerTable;
+    fn transactions(&self) -> Vec<CompressedTransaction>;
+    fn partial_block_header(&self) -> PartialBlockHeader;
 }
 
 /// Versioned compressed block.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[enum_dispatch(VersionedBlockPayload)]
 pub enum VersionedCompressedBlock {
     V0(CompressedBlockPayloadV0),
     #[cfg(feature = "fault-proving")]
@@ -120,64 +57,6 @@ pub enum VersionedCompressedBlock {
 impl Default for VersionedCompressedBlock {
     fn default() -> Self {
         Self::V0(Default::default())
-    }
-}
-
-impl VersionedCompressedBlock {
-    /// Returns the height of the compressed block.
-    pub fn height(&self) -> &BlockHeight {
-        match self {
-            VersionedCompressedBlock::V0(block) => block.header.height(),
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => &block.header.consensus.height,
-        }
-    }
-
-    /// Returns the consensus header
-    pub fn consensus_header(&self) -> &ConsensusHeader<Empty> {
-        match self {
-            VersionedCompressedBlock::V0(block) => &block.header.consensus,
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => &block.header.consensus,
-        }
-    }
-
-    /// Returns the application header
-    pub fn application_header(&self) -> &ApplicationHeader<Empty> {
-        match self {
-            VersionedCompressedBlock::V0(block) => &block.header.application,
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => &block.header.application,
-        }
-    }
-
-    /// Returns the registrations table
-    pub fn registrations(&self) -> &RegistrationsPerTable {
-        match self {
-            VersionedCompressedBlock::V0(block) => &block.registrations,
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => &block.registrations,
-        }
-    }
-
-    /// Returns the transactions
-    pub fn transactions(&self) -> Vec<CompressedTransaction> {
-        match self {
-            VersionedCompressedBlock::V0(block) => block.transactions.clone(),
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => block.transactions.clone(),
-        }
-    }
-
-    /// Returns the partial block header
-    pub fn partial_block_header(&self) -> PartialBlockHeader {
-        match self {
-            VersionedCompressedBlock::V0(block) => block.header,
-            #[cfg(feature = "fault-proving")]
-            VersionedCompressedBlock::V1(block) => {
-                PartialBlockHeader::from(&block.header)
-            }
-        }
     }
 }
 
