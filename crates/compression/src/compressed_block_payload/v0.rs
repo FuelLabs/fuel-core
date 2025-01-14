@@ -6,6 +6,7 @@ use fuel_core_types::{
     blockchain::{
         header::{
             ApplicationHeader,
+            BlockHeader,
             ConsensusHeader,
             PartialBlockHeader,
         },
@@ -49,5 +50,19 @@ impl VersionedBlockPayload for CompressedBlockPayloadV0 {
 
     fn partial_block_header(&self) -> PartialBlockHeader {
         self.header
+    }
+}
+
+impl CompressedBlockPayloadV0 {
+    pub(crate) fn new(
+        header: &BlockHeader,
+        registrations: RegistrationsPerTable,
+        transactions: Vec<CompressedTransaction>,
+    ) -> Self {
+        Self {
+            header: PartialBlockHeader::from(header),
+            registrations,
+            transactions,
+        }
     }
 }

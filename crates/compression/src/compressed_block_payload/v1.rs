@@ -104,3 +104,17 @@ impl VersionedBlockPayload for CompressedBlockPayloadV1 {
         PartialBlockHeader::from(&self.header)
     }
 }
+
+impl CompressedBlockPayloadV1 {
+    pub(crate) fn new(
+        header: &BlockHeader,
+        registrations: RegistrationsPerTable,
+        transactions: Vec<CompressedTransaction>,
+    ) -> Self {
+        Self {
+            header: CompressedBlockHeader::from(header),
+            registrations,
+            transactions,
+        }
+    }
+}

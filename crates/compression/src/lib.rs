@@ -22,6 +22,7 @@ use fuel_core_types::{
     blockchain::{
         header::{
             ApplicationHeader,
+            BlockHeader,
             ConsensusHeader,
             PartialBlockHeader,
         },
@@ -52,6 +53,27 @@ pub enum VersionedCompressedBlock {
     V0(CompressedBlockPayloadV0),
     #[cfg(feature = "fault-proving")]
     V1(CompressedBlockPayloadV1),
+}
+
+impl VersionedCompressedBlock {
+    fn new(
+        header: &BlockHeader,
+        registrations: RegistrationsPerTable,
+        transactions: Vec<CompressedTransaction>,
+    ) -> Self {
+        #[cfg(not(feature = "fault-proving"))]
+        return Self::V0(CompressedBlockPayloadV0::new(
+            header,
+            registrations,
+            transactions,
+        ));
+        #[cfg(feature = "fault-proving")]
+        Self::V1(CompressedBlockPayloadV1::new(
+            header,
+            registrations,
+            transactions,
+        ))
+    }
 }
 
 impl Default for VersionedCompressedBlock {
