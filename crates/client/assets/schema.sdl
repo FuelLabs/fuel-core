@@ -1281,7 +1281,7 @@ type TxPoolStats {
 	"""
 	The number of transactions in the pool
 	"""
-	nbTransactions: U64!
+	txCount: U64!
 	"""
 	The total size of the transactions in the pool
 	"""

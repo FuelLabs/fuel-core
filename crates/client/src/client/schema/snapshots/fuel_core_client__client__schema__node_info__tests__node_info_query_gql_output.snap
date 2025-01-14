@@ -11,7 +11,7 @@ query QueryNodeInfo {
     maxDepth
     nodeVersion
     txPoolStats {
-      nbTransactions
+      txCount
       totalGas
       totalSize
     }

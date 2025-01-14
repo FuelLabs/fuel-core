@@ -142,8 +142,8 @@ struct TxPoolStats(fuel_core_txpool::TxPoolStats);
 #[Object]
 impl TxPoolStats {
     /// The number of transactions in the pool
-    async fn nb_transactions(&self) -> U64 {
-        self.0.nb_transactions.into()
+    async fn tx_count(&self) -> U64 {
+        self.0.tx_count.into()
     }
 
     /// The total size of the transactions in the pool

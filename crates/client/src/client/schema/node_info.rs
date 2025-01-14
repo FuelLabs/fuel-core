@@ -81,7 +81,7 @@ impl From<PeerInfo> for fuel_core_types::services::p2p::PeerInfo {
 #[derive(cynic::QueryFragment, Clone, Debug, PartialEq, Eq)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TxPoolStats {
-    pub nb_transactions: U64,
+    pub tx_count: U64,
     pub total_gas: U64,
     pub total_size: U64,
 }

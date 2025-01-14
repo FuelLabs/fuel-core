@@ -51,7 +51,7 @@ use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TxPoolStats {
-    pub nb_transactions: u64,
+    pub tx_count: u64,
     pub total_size: u64,
     pub total_gas: u64,
 }
@@ -195,7 +195,7 @@ where
             .map(|data| data.transaction)
             .collect::<Vec<_>>();
         let _ = self.pool_stats_sender.send(TxPoolStats {
-            nb_transactions: self.tx_count() as u64,
+            tx_count: self.tx_count() as u64,
             total_size: self.current_bytes_size as u64,
             total_gas: self.current_gas,
         });
