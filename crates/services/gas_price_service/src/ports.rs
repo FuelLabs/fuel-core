@@ -10,11 +10,7 @@ use crate::{
         updater_metadata::UpdaterMetadata,
         utils::Result,
     },
-    v0::metadata::V0AlgorithmConfig,
-    v1::{
-        metadata::V1AlgorithmConfig,
-        uninitialized_task::fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
-    },
+    v1::uninitialized_task::fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
 };
 
 pub trait L2Data: Send + Sync {
@@ -34,26 +30,27 @@ pub trait GetMetadataStorage: Send + Sync {
         -> Result<Option<UpdaterMetadata>>;
 }
 
-pub trait SetDaBundleId: Send + Sync {
-    fn set_bundle_id(&mut self, block_height: &BlockHeight, bundle_id: u32)
-        -> Result<()>;
+pub trait SetLatestRecordedHeight: Send + Sync {
+    /// Set the latest L2 block height which has been committed to the DA layer
+    fn set_recorded_height(&mut self, recorded_height: BlockHeight) -> Result<()>;
 }
 
-pub trait GetDaBundleId: Send + Sync {
-    fn get_bundle_id(&self, block_height: &BlockHeight) -> Result<Option<u32>>;
+pub trait GetLatestRecordedHeight: Send + Sync {
+    /// Get the most recent L2 block that has been committed to DA
+    fn get_recorded_height(&self) -> Result<Option<BlockHeight>>;
 }
 
 pub trait GasPriceServiceAtomicStorage
 where
     Self: 'static,
     Self: Send + Sync,
-    Self: GetMetadataStorage + GetDaBundleId,
+    Self: GetMetadataStorage + GetLatestRecordedHeight,
 {
     type Transaction<'a>: AsUnrecordedBlocks
         + SetMetadataStorage
         + GetMetadataStorage
-        + SetDaBundleId
-        + GetDaBundleId
+        + SetLatestRecordedHeight
+        + GetLatestRecordedHeight
     where
         Self: 'a;
 
@@ -67,59 +64,4 @@ where
 /// We need this to fetch the gas price data for the latest block.
 pub trait GasPriceData: Send + Sync {
     fn latest_height(&self) -> Option<BlockHeight>;
-}
-
-pub enum GasPriceServiceConfig {
-    V0(V0AlgorithmConfig),
-    V1(V1AlgorithmConfig),
-}
-
-impl GasPriceServiceConfig {
-    pub fn new_v0(
-        starting_gas_price: u64,
-        min_gas_price: u64,
-        gas_price_change_percent: u64,
-        gas_price_threshold_percent: u64,
-    ) -> Self {
-        Self::V0(V0AlgorithmConfig {
-            starting_gas_price,
-            min_gas_price,
-            gas_price_change_percent,
-            gas_price_threshold_percent,
-        })
-    }
-
-    pub fn new_v1(metadata: V1AlgorithmConfig) -> Self {
-        Self::V1(metadata)
-    }
-
-    /// Extract V0AlgorithmConfig if it is of V0 version
-    pub fn v0(self) -> Option<V0AlgorithmConfig> {
-        if let GasPriceServiceConfig::V0(v0) = self {
-            Some(v0)
-        } else {
-            None
-        }
-    }
-
-    /// Extract V1AlgorithmConfig if it is of V1 version
-    pub fn v1(self) -> Option<V1AlgorithmConfig> {
-        if let GasPriceServiceConfig::V1(v1) = self {
-            Some(v1)
-        } else {
-            None
-        }
-    }
-}
-
-impl From<V0AlgorithmConfig> for GasPriceServiceConfig {
-    fn from(value: V0AlgorithmConfig) -> Self {
-        GasPriceServiceConfig::V0(value)
-    }
-}
-
-impl From<V1AlgorithmConfig> for GasPriceServiceConfig {
-    fn from(value: V1AlgorithmConfig) -> Self {
-        GasPriceServiceConfig::V1(value)
-    }
 }

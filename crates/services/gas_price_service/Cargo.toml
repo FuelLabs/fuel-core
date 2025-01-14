@@ -17,18 +17,26 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 fuel-gas-price-algorithm = { workspace = true }
 futures = { workspace = true }
+mockito = { version = "1.6.1", optional = true }
 num_enum = { workspace = true }
 parking_lot = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { path = "./../../types", features = ["test-helpers"] }
+mockito = { version = "1.6.1" }
+serde_json = { workspace = true }
+
+[features]
+test-helpers = ["dep:mockito", "dep:serde_json"]

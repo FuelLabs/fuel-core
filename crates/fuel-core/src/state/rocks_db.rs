@@ -155,11 +155,6 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    /// Allows consumers to get the inner db handle
-    pub fn inner(&self) -> &DB {
-        &self.db
-    }
-
     pub fn default_open_temp(capacity: Option<usize>) -> DatabaseResult<Self> {
         Self::default_open_temp_with_params(DatabaseConfig {
             cache_capacity: capacity,
@@ -716,6 +711,102 @@ where
                     .into_boxed()
             }
         }
+    }
+
+    #[cfg(feature = "backup")]
+    fn backup_engine<P: AsRef<Path> + ?Sized>(
+        backup_dir: &P,
+    ) -> DatabaseResult<rocksdb::backup::BackupEngine> {
+        use rocksdb::{
+            backup::{
+                BackupEngine,
+                BackupEngineOptions,
+            },
+            Env,
+        };
+
+        let backup_dir = backup_dir.as_ref().join(Description::name());
+        let backup_dir_path = backup_dir.as_path();
+
+        let backup_engine_options =
+            BackupEngineOptions::new(backup_dir_path).map_err(|e| {
+                DatabaseError::BackupEngineInitError(anyhow::anyhow!(
+                    "Couldn't create backup engine options for path `{}`: {}",
+                    backup_dir_path.display(),
+                    e
+                ))
+            })?;
+
+        let env = Env::new().map_err(|e| {
+            DatabaseError::BackupEngineInitError(anyhow::anyhow!(
+                "Couldn't create environment for backup: {}",
+                e
+            ))
+        })?;
+
+        let backup_engine =
+            BackupEngine::open(&backup_engine_options, &env).map_err(|e| {
+                DatabaseError::BackupEngineInitError(anyhow::anyhow!(
+                    "Couldn't open backup engine for path `{}`: {}",
+                    backup_dir.display(),
+                    e
+                ))
+            })?;
+
+        Ok(backup_engine)
+    }
+
+    #[cfg(feature = "backup")]
+    pub fn backup<P: AsRef<Path> + ?Sized>(
+        db_dir: &P,
+        backup_dir: &P,
+    ) -> DatabaseResult<()> {
+        let mut backup_engine = Self::backup_engine(backup_dir)?;
+
+        let db_config = DatabaseConfig {
+            cache_capacity: None,
+            max_fds: -1,
+            columns_policy: ColumnsPolicy::Lazy,
+        };
+
+        let db = Self::default_open(db_dir, db_config)?;
+
+        backup_engine.create_new_backup(&db.db).map_err(|e| {
+            DatabaseError::BackupError(anyhow::anyhow!(
+                "Couldn't create new backup for path `{}`: {}",
+                backup_dir.as_ref().display(),
+                e
+            ))
+        })?;
+
+        Ok(())
+    }
+
+    /// We delegate opening of restored db to consumer, so they can apply their own options
+    #[cfg(feature = "backup")]
+    pub fn restore<P: AsRef<Path> + ?Sized>(
+        db_dir: &P,
+        backup_dir: &P,
+    ) -> DatabaseResult<()> {
+        use rocksdb::backup::RestoreOptions;
+
+        let mut backup_engine = Self::backup_engine(backup_dir)?;
+        let restore_option = RestoreOptions::default();
+
+        let db_dir = db_dir.as_ref().join(Description::name());
+        let db_dir_path = db_dir.as_path();
+        // we use the default wal directory, which is same as db path
+        backup_engine
+            .restore_from_latest_backup(db_dir_path, db_dir_path, &restore_option)
+            .map_err(|e| {
+                DatabaseError::RestoreError(anyhow::anyhow!(
+                    "Couldn't restore from latest backup for path `{}`: {}",
+                    db_dir_path.display(),
+                    e
+                ))
+            })?;
+
+        Ok(())
     }
 }
 

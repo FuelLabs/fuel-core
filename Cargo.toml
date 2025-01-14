@@ -151,3 +151,4 @@ itertools = { version = "0.12", default-features = false }
 insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
+url = "2.2"

@@ -28,7 +28,7 @@ pub enum GasPriceColumn {
     Metadata = 0,
     State = 1,
     UnrecordedBlocks = 2,
-    BundleId = 3,
+    LatestRecordedHeight = 3,
 }
 
 impl GasPriceColumn {
@@ -93,23 +93,21 @@ impl TableWithBlueprint for UnrecordedBlocksTable {
     }
 }
 
-pub struct BundleIdTable;
+/// Used to store the latest L2 block that has been recorded on the DA chain
+pub struct RecordedHeights;
 
-/// The sequence number or bundle id of the posted blocks.
-type BundleId = u32;
-
-impl Mappable for BundleIdTable {
+impl Mappable for RecordedHeights {
     type Key = Self::OwnedKey;
-    type OwnedKey = BlockHeight;
+    type OwnedKey = ();
     type Value = Self::OwnedValue;
-    type OwnedValue = BundleId;
+    type OwnedValue = BlockHeight;
 }
 
-impl TableWithBlueprint for BundleIdTable {
-    type Blueprint = Plain<Primitive<4>, Postcard>;
+impl TableWithBlueprint for RecordedHeights {
+    type Blueprint = Plain<Postcard, Primitive<4>>;
     type Column = GasPriceColumn;
 
     fn column() -> Self::Column {
-        GasPriceColumn::BundleId
+        GasPriceColumn::LatestRecordedHeight
     }
 }

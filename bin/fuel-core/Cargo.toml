@@ -45,7 +45,7 @@ tracing-subscriber = { workspace = true, features = [
   "env-filter",
   "json",
 ] }
-url = { version = "2.2", optional = true }
+url = { workspace = true, optional = true }
 
 [dev-dependencies]
 fuel-core = { workspace = true, features = ["test-helpers"] }
