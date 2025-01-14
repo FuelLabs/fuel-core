@@ -37,15 +37,12 @@ mod tests {
     use fuel_core_types::fuel_types::BlockHeight;
     use std::{
         sync::{
+            atomic::AtomicU32,
             Arc,
             Mutex,
         },
         time::Duration,
     };
-
-    fn latest_l2_height(height: u32) -> Arc<Mutex<BlockHeight>> {
-        Arc::new(Mutex::new(BlockHeight::new(height)))
-    }
 
     #[tokio::test]
     async fn run__when_da_block_cost_source_gives_value_shared_state_is_updated() {
@@ -59,7 +56,7 @@ mod tests {
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_block_costs_source =
             DummyDaBlockCosts::new(Ok(expected_da_cost.clone()), notifier.clone());
-        let latest_l2_height = Arc::new(Mutex::new(BlockHeight::new(10u32)));
+        let latest_l2_height = Arc::new(AtomicU32::new(10u32));
         let service = new_da_service(
             da_block_costs_source,
             Some(Duration::from_millis(1)),
@@ -83,7 +80,7 @@ mod tests {
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_block_costs_source =
             DummyDaBlockCosts::new(Err(anyhow::anyhow!("boo!")), notifier.clone());
-        let latest_l2_height = latest_l2_height(0);
+        let latest_l2_height = Arc::new(AtomicU32::new(0));
         let service = new_da_service(
             da_block_costs_source,
             Some(Duration::from_millis(1)),
@@ -116,7 +113,7 @@ mod tests {
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_block_costs_source =
             DummyDaBlockCosts::new(Ok(unexpected_costs.clone()), notifier.clone());
-        let latest_l2_height = latest_l2_height(l2_height);
+        let latest_l2_height = Arc::new(AtomicU32::new(l2_height));
         let service = new_da_service(
             da_block_costs_source,
             Some(Duration::from_millis(1)),
@@ -147,7 +144,7 @@ mod tests {
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_block_costs_source =
             DummyDaBlockCosts::new(Ok(unexpected_costs.clone()), notifier.clone());
-        let latest_l2_height = latest_l2_height(l2_height);
+        let latest_l2_height = Arc::new(AtomicU32::new(l2_height));
         let mut service = DaSourceService::new(
             da_block_costs_source,
             Some(Duration::from_millis(1)),
@@ -178,7 +175,7 @@ mod tests {
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_block_costs_source =
             DummyDaBlockCosts::new(Ok(unexpected_costs.clone()), notifier.clone());
-        let latest_l2_height = latest_l2_height(l2_height);
+        let latest_l2_height = Arc::new(AtomicU32::new(l2_height));
         let (sender, mut receiver) =
             tokio::sync::broadcast::channel(DA_BLOCK_COSTS_CHANNEL_SIZE);
         let mut service = DaSourceService::new_with_sender(
