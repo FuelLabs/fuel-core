@@ -96,7 +96,7 @@ impl BalanceQuery {
     // Rust SDK sends a query with child_complexity ≅ 11 and we want to support slightly more
     // than 10k items in a single query (so we target 11k). The total complexity would be 11k * 11 = 121k,
     // but since our default limit is 80k, we need the 0.66 factor.
-    #[graphql(complexity = "
+    #[graphql(complexity = "query_costs().balance_query +
         (child_complexity as f32 * first.unwrap_or_default() as f32 * 0.66) as usize + \
         (child_complexity as f32 * last.unwrap_or_default() as f32 * 0.66) as usize
     ")]

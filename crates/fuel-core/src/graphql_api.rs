@@ -3,6 +3,7 @@ use fuel_core_storage::{
     IsNotFound,
 };
 use std::{
+    borrow::Cow,
     net::SocketAddr,
     sync::OnceLock,
     time::Duration,
@@ -79,11 +80,14 @@ impl Default for Costs {
     }
 }
 
+const BALANCES_QUERY_COST_WITH_INDEXATION: usize = 0;
+const BALANCES_QUERY_COST_WITHOUT_INDEXATION: usize = 40001;
+
 pub const DEFAULT_QUERY_COSTS: Costs = Costs {
-    // TODO: The cost of the `balance`, `balances` and `coins_to_spend` query should depend on the
+    balance_query: BALANCES_QUERY_COST_WITH_INDEXATION,
+    // TODO: The cost of the `coins_to_spend` query should depend on the
     // values of respective flags in the OffChainDatabase. If additional indexation is enabled,
     // the cost should be cheaper (https://github.com/FuelLabs/fuel-core/issues/2496)
-    balance_query: 40001,
     coins_to_spend: 40001,
     get_peers: 40001,
     estimate_predicates: 40001,
@@ -104,13 +108,26 @@ pub const DEFAULT_QUERY_COSTS: Costs = Costs {
     da_compressed_block_read: 4000,
 };
 
-pub fn query_costs() -> &'static Costs {
-    QUERY_COSTS.get().unwrap_or(&DEFAULT_QUERY_COSTS)
+static BALANCES_INDEXATION_ENABLED: OnceLock<bool> = OnceLock::new();
+
+pub fn query_costs() -> Cow<'static, Costs> {
+    let base_costs = QUERY_COSTS.get().unwrap_or(&DEFAULT_QUERY_COSTS);
+    let balances_indexation_enabled = BALANCES_INDEXATION_ENABLED.get().unwrap_or(&false);
+    match balances_indexation_enabled {
+        true => Cow::Borrowed(base_costs),
+        false => Cow::Owned(Costs {
+            balance_query: BALANCES_QUERY_COST_WITHOUT_INDEXATION,
+            ..*base_costs
+        }),
+    }
 }
 
 pub static QUERY_COSTS: OnceLock<Costs> = OnceLock::new();
 
-fn initialize_query_costs(costs: Costs) -> anyhow::Result<()> {
+fn initialize_query_costs(
+    costs: Costs,
+    balances_indexation_enabled: bool,
+) -> anyhow::Result<()> {
     #[cfg(feature = "test-helpers")]
     if costs != DEFAULT_QUERY_COSTS {
         // We don't support setting these values in test contexts, because
@@ -119,6 +136,7 @@ fn initialize_query_costs(costs: Costs) -> anyhow::Result<()> {
         anyhow::bail!("cannot initialize queries with non-default costs in tests")
     }
 
+    BALANCES_INDEXATION_ENABLED.get_or_init(|| balances_indexation_enabled);
     QUERY_COSTS.get_or_init(|| costs);
 
     Ok(())
