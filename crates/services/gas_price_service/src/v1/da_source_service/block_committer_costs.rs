@@ -111,11 +111,11 @@ where
 
 pub struct BlockCommitterHttpApi {
     client: reqwest::Client,
-    url: Option<String>,
+    url: Option<url::Url>,
 }
 
 impl BlockCommitterHttpApi {
-    pub fn new(url: Option<String>) -> Self {
+    pub fn new(url: Option<url::Url>) -> Self {
         Self {
             client: reqwest::Client::new(),
             url,
@@ -422,8 +422,8 @@ pub mod fake_server {
             guard.push(costs);
         }
 
-        pub fn url(&self) -> String {
-            self.server.url()
+        pub fn url(&self) -> url::Url {
+            url::Url::parse(self.server.url().as_str()).unwrap()
         }
     }
     impl Default for FakeServer {

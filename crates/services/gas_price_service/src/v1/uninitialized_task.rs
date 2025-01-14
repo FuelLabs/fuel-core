@@ -20,7 +20,6 @@ use crate::{
     ports::{
         GasPriceData,
         GasPriceServiceAtomicStorage,
-        GasPriceServiceConfig,
         GetLatestRecordedHeight,
         GetMetadataStorage,
         L2Data,
@@ -194,10 +193,7 @@ where
         );
 
         let recorded_height = self.gas_price_db.get_recorded_height()?;
-        let poll_duration = self
-            .config
-            .da_poll_interval
-            .map(|x| Duration::from_millis(x.into()));
+        let poll_duration = self.config.da_poll_interval;
         let latest_l2_height =
             Arc::new(std::sync::Mutex::new(BlockHeight::new(latest_block_height)));
         let da_service = DaSourceService::new(

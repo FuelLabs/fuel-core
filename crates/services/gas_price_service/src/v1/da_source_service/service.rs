@@ -206,6 +206,7 @@ where
     }
 }
 
+#[cfg(feature = "test-helpers")]
 pub fn new_da_service<S: DaBlockCostsSource>(
     da_source: S,
     poll_interval: Option<Duration>,
