@@ -25,7 +25,7 @@ impl DummyDaBlockCosts {
 impl DaBlockCostsSource for DummyDaBlockCosts {
     async fn request_da_block_costs(
         &mut self,
-        _latest_recorded_height: &Option<BlockHeight>,
+        _latest_recorded_height: &BlockHeight,
     ) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
         match &self.value {
             Ok(da_block_costs) => {

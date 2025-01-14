@@ -581,6 +581,8 @@ mod tests {
 
         let notifier = Arc::new(tokio::sync::Notify::new());
         let latest_l2_height = Arc::new(AtomicU32::new(0));
+        let recorded_height = BlockHeight::new(0);
+
         let dummy_da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Err(anyhow::anyhow!("unused at the moment")),
@@ -588,7 +590,7 @@ mod tests {
             ),
             None,
             Arc::clone(&latest_l2_height),
-            None,
+            recorded_height,
         );
         let da_service_runner = ServiceRunner::new(dummy_da_source);
         da_service_runner.start_and_await().await.unwrap();
@@ -669,6 +671,7 @@ mod tests {
 
         let latest_l2_block = Arc::new(AtomicU32::new(block_height - 1));
         let notifier = Arc::new(tokio::sync::Notify::new());
+        let recorded_height = BlockHeight::new(0);
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
@@ -681,7 +684,7 @@ mod tests {
             ),
             Some(Duration::from_millis(1)),
             Arc::clone(&latest_l2_block),
-            None,
+            recorded_height,
         );
         let mut watcher = StateWatcher::started();
         let da_service_runner = ServiceRunner::new(da_source);
@@ -771,6 +774,7 @@ mod tests {
 
         let latest_l2_height = Arc::new(AtomicU32::new(block_height - 1));
         let notifier = Arc::new(tokio::sync::Notify::new());
+        let recorded_height = BlockHeight::new(0);
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
@@ -783,7 +787,7 @@ mod tests {
             ),
             Some(Duration::from_millis(1)),
             Arc::clone(&latest_l2_height),
-            None,
+            recorded_height,
         );
         let mut watcher = StateWatcher::started();
         let da_service_runner = ServiceRunner::new(da_source);
@@ -862,6 +866,7 @@ mod tests {
         let notifier = Arc::new(tokio::sync::Notify::new());
         let blob_cost_wei = 9000;
         let latest_l2_height = Arc::new(AtomicU32::new(block_height - 1));
+        let recorded_height = BlockHeight::new(0);
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
@@ -874,7 +879,7 @@ mod tests {
             ),
             Some(Duration::from_millis(1)),
             Arc::clone(&latest_l2_height),
-            None,
+            recorded_height,
         );
         let mut watcher = StateWatcher::started();
         let da_service_runner = ServiceRunner::new(da_source);

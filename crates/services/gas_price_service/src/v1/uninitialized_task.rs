@@ -173,7 +173,6 @@ where
     ) -> anyhow::Result<
         GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, AtomicStorage>,
     > {
-        let mut first_run = false;
         let latest_block_height: u32 = self
             .on_chain_db
             .latest_view()?
@@ -185,7 +184,6 @@ where
         let metadata_height = if let Some(metadata_height) = maybe_metadata_height {
             metadata_height.into()
         } else {
-            first_run = true;
             latest_block_height
         };
 
@@ -195,7 +193,11 @@ where
             self.block_stream,
         );
 
-        let recorded_height = self.gas_price_db.get_recorded_height()?;
+        let starting_recorded_height = self
+            .gas_price_db
+            .get_recorded_height()?
+            .unwrap_or(BlockHeight::from(latest_block_height));
+
         let poll_duration = self.config.da_poll_interval;
         let latest_l2_height = Arc::new(AtomicU32::new(latest_block_height));
 
@@ -203,7 +205,7 @@ where
             self.da_source,
             poll_duration,
             Arc::clone(&latest_l2_height),
-            recorded_height,
+            starting_recorded_height,
         );
         let da_service_runner = ServiceRunner::new(da_service);
         da_service_runner.start_and_await().await?;
