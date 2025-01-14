@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use fuel_core::service::{
     Config,
     FuelService,
@@ -6,6 +8,8 @@ use fuel_core_client::client::{
     types::NodeInfo,
     FuelClient,
 };
+use fuel_core_poa::Trigger;
+use fuel_core_types::fuel_tx::Transaction;
 
 #[tokio::test]
 async fn node_info() {
@@ -25,6 +29,38 @@ async fn node_info() {
     assert_eq!(vm_backtrace, node_config.vm.backtrace);
     assert_eq!(max_depth, node_config.txpool.max_txs_chain_count as u64);
     assert_eq!(max_tx, node_config.txpool.pool_limits.max_txs as u64);
+}
+
+#[tokio::test]
+async fn tx_pool_stats__should_be_updated_when_transaction_is_submitted() {
+    // Given
+    let mut node_config = Config::local_node();
+    node_config.block_production = Trigger::Never;
+
+    let srv = FuelService::new_node(node_config.clone()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // When
+    let NodeInfo {
+        tx_pool_stats: initial_tx_pool_stats,
+        ..
+    } = client.node_info().await.unwrap();
+
+    let tx = Transaction::default_test_tx();
+    client.submit(&tx).await.unwrap();
+
+    let NodeInfo {
+        tx_pool_stats: updated_tx_pool_stats,
+        ..
+    } = client.node_info().await.unwrap();
+
+    // Then
+    assert_eq!(initial_tx_pool_stats.tx_count.0, 0);
+    assert_eq!(initial_tx_pool_stats.total_gas.0, 0);
+    assert_eq!(initial_tx_pool_stats.total_size.0, 0);
+    assert_eq!(updated_tx_pool_stats.tx_count.0, 1);
+    assert_eq!(updated_tx_pool_stats.total_gas.0, 4330);
+    assert_eq!(updated_tx_pool_stats.total_size.0, 344);
 }
 
 #[tokio::test(flavor = "multi_thread")]

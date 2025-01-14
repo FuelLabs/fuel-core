@@ -914,7 +914,7 @@ mod tests {
             .unwrap()
             .and_then(|x| x.v1().cloned())
             .unwrap();
-        assert_eq!(metadata.latest_known_total_da_cost_excess, blob_cost_wei);
+        assert_eq!(metadata.latest_known_total_da_cost, blob_cost_wei);
 
         service.shutdown().await.unwrap();
     }

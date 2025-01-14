@@ -26,6 +26,8 @@ pub struct Config {
     pub debug: bool,
     pub vm_backtrace: bool,
     pub max_tx: usize,
+    pub max_gas: u64,
+    pub max_size: usize,
     pub max_txpool_dependency_chain_length: usize,
     pub chain_name: String,
 }

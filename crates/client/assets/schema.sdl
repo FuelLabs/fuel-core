@@ -760,8 +760,11 @@ type NodeInfo {
 	utxoValidation: Boolean!
 	vmBacktrace: Boolean!
 	maxTx: U64!
+	maxGas: U64!
+	maxSize: U64!
 	maxDepth: U64!
 	nodeVersion: String!
+	txPoolStats: TxPoolStats!
 	peers: [PeerInfo!]!
 }
 
@@ -1275,6 +1278,21 @@ enum TxParametersVersion {
 }
 
 scalar TxPointer
+
+type TxPoolStats {
+	"""
+	The number of transactions in the pool
+	"""
+	txCount: U64!
+	"""
+	The total size of the transactions in the pool
+	"""
+	totalSize: U64!
+	"""
+	The total gas of the transactions in the pool
+	"""
+	totalGas: U64!
+}
 
 scalar U128
 

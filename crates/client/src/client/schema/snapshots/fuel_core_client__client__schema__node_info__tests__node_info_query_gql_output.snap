@@ -1,13 +1,21 @@
 ---
 source: crates/client/src/client/schema/node_info.rs
 expression: operation.query
+snapshot_kind: text
 ---
 query QueryNodeInfo {
   nodeInfo {
     utxoValidation
     vmBacktrace
     maxTx
+    maxGas
+    maxSize
     maxDepth
     nodeVersion
+    txPoolStats {
+      txCount
+      totalGas
+      totalSize
+    }
   }
 }
