@@ -22,6 +22,13 @@ impl UpdaterMetadata {
             UpdaterMetadata::V1(v1) => v1.l2_block_height.into(),
         }
     }
+
+    pub fn v1(&self) -> Option<&V1Metadata> {
+        match self {
+            UpdaterMetadata::V1(v1) => Some(v1),
+            _ => None,
+        }
+    }
 }
 
 impl From<AlgorithmUpdaterV0> for UpdaterMetadata {

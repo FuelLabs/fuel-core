@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2535](https://github.com/FuelLabs/fuel-core/pull/2535): Expose `backup` and `restore` APIs on the `CombinedDatabase` struct to create portable backups and restore from them.
 
 ### Fixed
+- [2469](https://github.com/FuelLabs/fuel-core/pull/2469): Improved the logic for syncing the gas price database with on_chain database
 - [2365](https://github.com/FuelLabs/fuel-core/pull/2365): Fixed the error during dry run in the case of race condition.
 - [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.
 - [2369](https://github.com/FuelLabs/fuel-core/pull/2369): The `transaction_insertion_time_in_thread_pool_milliseconds` metric is properly collected.
@@ -50,6 +51,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2511](https://github.com/FuelLabs/fuel-core/pull/2511): Fix backward compatibility of V0Metadata in gas price db.
 
 ### Changed
+- [2469](https://github.com/FuelLabs/fuel-core/pull/2469): Updated adapter for querying costs from DA Block committer API
+- [2469](https://github.com/FuelLabs/fuel-core/pull/2469): Use the gas price from the latest block to estimate future gas prices
 - [2501](https://github.com/FuelLabs/fuel-core/pull/2501): Use gas price from block for estimating future gas prices
 - [2468](https://github.com/FuelLabs/fuel-core/pull/2468): Abstract unrecorded blocks concept for V1 algorithm, create new storage impl. Introduce `TransactionableStorage` trait to allow atomic changes to the storage.
 - [2295](https://github.com/FuelLabs/fuel-core/pull/2295): `CombinedDb::from_config` now respects `state_rewind_policy` with tmp RocksDB.
@@ -62,6 +65,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2463](https://github.com/FuelLabs/fuel-core/pull/2463): The `coinsToSpend` GraphQL query handler now uses index to provide the response in a more performant way. As the index is not created retroactively, the client must be initialized with an empty database and synced from the genesis block to utilize it. Otherwise, the legacy way of retrieving data will be used.
 
 #### Breaking
+- [2469](https://github.com/FuelLabs/fuel-core/pull/2469): Move from `GasPriceServicev0` to `GasPriceServiceV1`. Include new config values.
 - [2438](https://github.com/FuelLabs/fuel-core/pull/2438): The `fuel-core-client` can only work with new version of the `fuel-core`. The `0.40` and all older versions are not supported.
 - [2438](https://github.com/FuelLabs/fuel-core/pull/2438): Updated `fuel-vm` to `0.59.1` release. Check [release notes](https://github.com/FuelLabs/fuel-vm/releases/tag/v0.59.0) for more details.
 - [2389](https://github.com/FuelLabs/fuel-core/pull/2258): Updated the `messageProof` GraphQL schema to return a non-nullable `MessageProof`.

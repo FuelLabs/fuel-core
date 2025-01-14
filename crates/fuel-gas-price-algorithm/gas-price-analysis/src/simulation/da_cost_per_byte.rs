@@ -53,8 +53,9 @@ fn get_costs_from_csv_file(file_path: &str, sample_size: Option<usize>) -> Vec<u
     ]);
     let mut max_cost = 0;
     for record in rdr.records().skip(1) {
+        const L2_BLOCKS_PER_L1_BLOCK: usize = 12;
         if let Some(size) = sample_size {
-            if costs.len() >= size {
+            if costs.len() >= size / L2_BLOCKS_PER_L1_BLOCK {
                 break;
             }
         };

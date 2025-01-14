@@ -38,14 +38,18 @@ use crate::{
         SubServices,
     },
 };
-use fuel_core_gas_price_service::v0::uninitialized_task::{
-    new_gas_price_service_v0,
-    AlgorithmV0,
+use fuel_core_gas_price_service::v1::{
+    algorithm::AlgorithmV1,
+    da_source_service::block_committer_costs::{
+        BlockCommitterDaBlockCosts,
+        BlockCommitterHttpApi,
+    },
+    metadata::V1AlgorithmConfig,
+    uninitialized_task::new_gas_price_service_v1,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     self,
-    structured_storage::StructuredStorage,
     transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
@@ -69,7 +73,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
-    FuelGasPriceProvider<AlgorithmV0>,
+    FuelGasPriceProvider<AlgorithmV1>,
     ConsensusParametersProvider,
 >;
 
@@ -180,20 +184,22 @@ pub fn init_sub_services(
     let genesis_block_height = *genesis_block.header().height();
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
-    let metadata = database.gas_price().clone();
 
-    let gas_price_service_v0 = new_gas_price_service_v0(
-        config.clone().into(),
+    let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
+    let da_source = BlockCommitterDaBlockCosts::new(committer_api);
+    let v1_config = V1AlgorithmConfig::from(config.clone());
+
+    let gas_price_service_v1 = new_gas_price_service_v1(
+        v1_config,
         genesis_block_height,
         settings,
         block_stream,
         database.gas_price().clone(),
-        StructuredStorage::new(metadata),
+        da_source,
         database.on_chain().clone(),
     )?;
-
-    let gas_price_provider =
-        FuelGasPriceProvider::new(gas_price_service_v0.shared.clone());
+    let (gas_price_algo, _) = gas_price_service_v1.shared.clone();
+    let gas_price_provider = FuelGasPriceProvider::new(gas_price_algo);
     let txpool = fuel_core_txpool::new_service(
         chain_id,
         config.txpool.clone(),
@@ -343,7 +349,7 @@ pub fn init_sub_services(
     #[allow(unused_mut)]
     // `FuelService` starts and shutdowns all sub-services in the `services` order
     let mut services: SubServices = vec![
-        Box::new(gas_price_service_v0),
+        Box::new(gas_price_service_v1),
         Box::new(txpool),
         Box::new(consensus_parameters_provider_service),
     ];
