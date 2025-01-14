@@ -14,6 +14,8 @@ use crate::{
 };
 use anyhow::Context;
 use clap::Parser;
+#[cfg(feature = "production")]
+use fuel_core::service::sub_services::DEFAULT_GAS_PRICE_CHANGE_PERCENT;
 use fuel_core::{
     chain_config::default_consensus_dev_key,
     combined_database::{
@@ -29,7 +31,6 @@ use fuel_core::{
     service::{
         config::Trigger,
         genesis::NotifyCancel,
-        sub_services::DEFAULT_GAS_PRICE_CHANGE_PERCENT,
         Config,
         DbType,
         RelayerConsensusConfig,
@@ -52,6 +53,7 @@ use fuel_core::{
         secrecy::Secret,
     },
 };
+
 use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
