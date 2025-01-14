@@ -90,7 +90,7 @@ fn draw_profits(
     results: &SimulationResults,
     upper: &DrawingArea<BitMapBackend, Shift>,
 ) -> anyhow::Result<()> {
-    let profit_eth = results
+    let predicted_profit_eth = results
         .profits
         .iter()
         .map(|profit| *profit as f64 / WEI_PER_ETH)
@@ -106,15 +106,28 @@ fn draw_profits(
         .map(|reward| *reward as f64 / WEI_PER_ETH)
         .collect::<Vec<_>>();
 
-    let min_profit = profit_eth.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-    let max_profit = profit_eth.iter().fold(f64::MIN, |a, &b| a.max(b));
-    let min_cost = cost_eth.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-    let max_cost = cost_eth.iter().fold(f64::MIN, |a, &b| a.max(b));
-    let min_reward = reward_eth.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-    let max_reward = reward_eth.iter().fold(f64::MIN, |a, &b| a.max(b));
+    let known_profits_eth = reward_eth.iter().zip(cost_eth.iter()).map(|(r, c)| r - c);
 
-    let max_overall = max_profit.max(max_cost).max(max_reward);
-    let min_overall = min_profit.min(min_cost).min(min_reward);
+    let min_predicted_profit = predicted_profit_eth
+        .iter()
+        .fold(f64::INFINITY, |a, &b| a.min(b));
+    let max_predicted_profit =
+        predicted_profit_eth.iter().fold(f64::MIN, |a, &b| a.max(b));
+    // let min_cost = cost_eth.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+    // let max_cost = cost_eth.iter().fold(f64::MIN, |a, &b| a.max(b));
+    // let min_reward = reward_eth.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+    // let max_reward = reward_eth.iter().fold(f64::MIN, |a, &b| a.max(b));
+
+    let min_known_profit = known_profits_eth
+        .clone()
+        .fold(f64::INFINITY, |a, b| a.min(b));
+    let max_known_profit = known_profits_eth.clone().fold(f64::MIN, |a, b| a.max(b));
+
+    // let max_overall = max_profit.max(max_cost).max(max_reward);
+    // let min_overall = min_profit.min(min_cost).min(min_reward);
+
+    let max_overall = max_predicted_profit.max(max_known_profit);
+    let min_overall = min_predicted_profit.min(min_known_profit);
 
     let mut chart = ChartBuilder::on(upper)
         .caption(
@@ -124,33 +137,44 @@ fn draw_profits(
         .margin(5)
         .x_label_area_size(40)
         .y_label_area_size(60)
-        .build_cartesian_2d(0..profit_eth.len(), min_overall..max_overall)?;
+        .build_cartesian_2d(0..predicted_profit_eth.len(), min_overall..max_overall)?;
 
     chart.configure_mesh().draw()?;
 
     chart
         .draw_series(LineSeries::new(
-            profit_eth.iter().enumerate().map(|(x, y)| (x, *y)),
-            &BLACK,
-        ))?
-        .label("Predicted Profit ETH")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLACK));
-
-    chart
-        .draw_series(LineSeries::new(
-            cost_eth.iter().enumerate().map(|(x, y)| (x, *y)),
+            predicted_profit_eth
+                .iter()
+                .enumerate()
+                .map(|(x, y)| (x, *y)),
             &RED,
         ))?
-        .label("Known Cost ETH")
+        .label("Predicted Profit ETH")
         .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED));
+
+    // chart
+    //     .draw_series(LineSeries::new(
+    //         cost_eth.iter().enumerate().map(|(x, y)| (x, *y)),
+    //         &RED,
+    //     ))?
+    //     .label("Known Cost ETH")
+    //     .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], RED));
+    //
+    // chart
+    //     .draw_series(LineSeries::new(
+    //         reward_eth.iter().enumerate().map(|(x, y)| (x, *y)),
+    //         &BLUE,
+    //     ))?
+    //     .label("Reward ETH")
+    //     .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
 
     chart
         .draw_series(LineSeries::new(
-            reward_eth.iter().enumerate().map(|(x, y)| (x, *y)),
-            &BLUE,
+            known_profits_eth.enumerate().map(|(x, y)| (x, y)),
+            &BLACK,
         ))?
-        .label("Reward ETH")
-        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLUE));
+        .label("Known Profit ETH")
+        .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], BLACK));
 
     chart
         .configure_series_labels()
