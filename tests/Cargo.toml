@@ -38,7 +38,9 @@ fuel-core-benches = { path = "../benches" }
 fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-compression = { path = "../crates/compression" }
-fuel-core-gas-price-service = { path = "../crates/services/gas_price_service" }
+fuel-core-gas-price-service = { path = "../crates/services/gas_price_service", features = [
+  "test-helpers",
+] }
 fuel-core-p2p = { path = "../crates/services/p2p", features = [
   "test-helpers",
 ], optional = true }
@@ -74,6 +76,8 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
   "test-util",
 ] }
+tracing-subscriber = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }

@@ -5,6 +5,10 @@
 mod backward_compatibility;
 #[cfg(test)]
 mod forward_compatibility;
+
+#[cfg(test)]
+mod gas_price_algo_compatibility;
+
 #[cfg(test)]
 mod genesis;
 #[cfg(test)]

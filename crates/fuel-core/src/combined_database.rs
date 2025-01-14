@@ -284,6 +284,7 @@ impl CombinedDatabase {
         self.on_chain.check_version()?;
         self.off_chain.check_version()?;
         self.relayer.check_version()?;
+        self.gas_price.check_version()?;
         Ok(())
     }
 
