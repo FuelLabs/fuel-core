@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2550](https://github.com/FuelLabs/fuel-core/pull/2550): Add statistics and more limits infos about txpool on the node_info endpoint
 
 ### Fixed
+- [2558](https://github.com/FuelLabs/fuel-core/pull/2558): Rename `cost` and `reward` to remove `excess` wording
 - [2469](https://github.com/FuelLabs/fuel-core/pull/2469): Improved the logic for syncing the gas price database with on_chain database
 - [2365](https://github.com/FuelLabs/fuel-core/pull/2365): Fixed the error during dry run in the case of race condition.
 - [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.

@@ -880,7 +880,7 @@ fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
             .and_then(|x| x.v1().cloned())
             .unwrap();
         tracing::info!("metadata: {:?}", metadata);
-        assert_eq!(metadata.latest_known_total_da_cost_excess, 0);
+        assert_eq!(metadata.latest_known_total_da_cost, 0);
         (srv, client)
     });
 
@@ -918,7 +918,7 @@ fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
                 .unwrap();
 
             // then
-            assert_eq!(metadata.latest_known_total_da_cost_excess, total_cost);
+            assert_eq!(metadata.latest_known_total_da_cost, total_cost);
         });
     }
 }
