@@ -22,6 +22,7 @@ use crate::{
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
+            ArcGasPriceEstimate,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ConsensusParametersProvider,
@@ -78,6 +79,9 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
 >;
 
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
+
+// TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
+pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
 
 pub fn init_sub_services(
     config: &Config,
@@ -198,8 +202,9 @@ pub fn init_sub_services(
         da_source,
         database.on_chain().clone(),
     )?;
-    let (gas_price_algo, _) = gas_price_service_v1.shared.clone();
-    let gas_price_provider = FuelGasPriceProvider::new(gas_price_algo);
+    let (gas_price_algo, latest_gas_price) = gas_price_service_v1.shared.clone();
+    let gas_price_provider = FuelGasPriceProvider::new(gas_price_algo.clone());
+
     let txpool = fuel_core_txpool::new_service(
         chain_id,
         config.txpool.clone(),
@@ -317,6 +322,10 @@ pub fn init_sub_services(
         chain_name,
     };
 
+    let graphql_gas_price_provider = ArcGasPriceEstimate::new_from_inner(
+        latest_gas_price,
+        DEFAULT_GAS_PRICE_CHANGE_PERCENT,
+    );
     let graph_ql = fuel_core_graphql_api::api_service::new_service(
         *genesis_block.header().height(),
         graphql_config,
@@ -327,7 +336,7 @@ pub fn init_sub_services(
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),
-        Box::new(gas_price_provider),
+        Box::new(graphql_gas_price_provider),
         Box::new(consensus_parameters_provider),
         SharedMemoryPool::new(config.memory_pool_size),
     )?;
