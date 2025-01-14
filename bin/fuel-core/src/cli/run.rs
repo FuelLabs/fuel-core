@@ -224,24 +224,32 @@ pub struct Command {
     pub gas_price_threshold_percent: u8,
 
     /// Minimum DA gas price
-    #[arg(long = "min-da-gas-price", default_value = "10000000", env)]
+    #[arg(long = "min-da-gas-price", default_value = "1000", env)]
     pub min_da_gas_price: u64,
 
     /// Maximum DA gas price
     // DEV: ensure that the max_da_gas_price default is > then the min_da_gas_price default
-    #[arg(long = "max-da-gas-price", default_value = "10000001", env)]
+    #[arg(long = "max-da-gas-price", default_value = "100000", env)]
     pub max_da_gas_price: u64,
 
     /// P component of DA gas price calculation
     /// **NOTE**: This is the **inverse** gain of a typical P controller.
     /// Increasing this value will reduce gas price fluctuations.
-    #[arg(long = "da-gas-price-p-component", default_value = "620090", env)]
+    #[arg(
+        long = "da-gas-price-p-component",
+        default_value = "799999999999993",
+        env
+    )]
     pub da_gas_price_p_component: i64,
 
     /// D component of DA gas price calculation
     /// **NOTE**: This is the **inverse** anticipatory control factor of a typical PD controller.
     /// Increasing this value will reduce the dampening effect of quick algorithm changes.
-    #[arg(long = "da-gas-price-d-component", default_value = "3528576", env)]
+    #[arg(
+        long = "da-gas-price-d-component",
+        default_value = "10000000000000000",
+        env
+    )]
     pub da_gas_price_d_component: i64,
 
     /// The URL for the DA Block Committer info
