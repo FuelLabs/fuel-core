@@ -318,6 +318,8 @@ pub fn init_sub_services(
         debug: config.debug,
         vm_backtrace: config.vm.backtrace,
         max_tx: config.txpool.pool_limits.max_txs,
+        max_gas: config.txpool.pool_limits.max_gas,
+        max_size: config.txpool.pool_limits.max_bytes_size,
         max_txpool_dependency_chain_length: config.txpool.max_txs_chain_count,
         chain_name,
     };
