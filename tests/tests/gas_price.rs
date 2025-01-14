@@ -13,7 +13,7 @@ use fuel_core::{
     p2p_test_helpers::{
         make_nodes,
         BootstrapSetup,
-        ConfigOverrides,
+        CustomizeConfig,
         Nodes,
         ProducerSetup,
         ValidatorSetup,
@@ -928,12 +928,12 @@ async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
     let pub_key = Input::owner(&secret.public_key());
 
     let bootstrap_setup = BootstrapSetup::new(pub_key);
-    let producer_overrides = ConfigOverrides::no_overrides().min_gas_price(1);
+    let producer_overrides = CustomizeConfig::no_overrides().min_gas_price(1);
     let producer_setup = ProducerSetup::new_with_overrides(secret, producer_overrides)
         .with_txs(1)
         .with_name("Alice");
     let validator_overrides =
-        ConfigOverrides::no_overrides().min_gas_price(unexpected_high_min_gas_limit);
+        CustomizeConfig::no_overrides().min_gas_price(unexpected_high_min_gas_limit);
     let validator_setup =
         ValidatorSetup::new_with_overrides(pub_key, validator_overrides).with_name("Bob");
 

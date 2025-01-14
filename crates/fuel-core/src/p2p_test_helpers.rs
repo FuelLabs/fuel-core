@@ -85,11 +85,11 @@ pub enum BootstrapType {
 
 /// Set of values that will be overridden in the node's configuration
 #[derive(Clone, Debug)]
-pub struct ConfigOverrides {
+pub struct CustomizeConfig {
     min_exec_gas_price: Option<u64>,
 }
 
-impl ConfigOverrides {
+impl CustomizeConfig {
     pub fn no_overrides() -> Self {
         Self {
             min_exec_gas_price: None,
@@ -116,7 +116,7 @@ pub struct ProducerSetup {
     /// Indicates the type of initial connections.
     pub bootstrap_type: BootstrapType,
     /// Config Overrides
-    pub config_overrides: ConfigOverrides,
+    pub config_overrides: CustomizeConfig,
 }
 
 #[derive(Clone)]
@@ -131,7 +131,7 @@ pub struct ValidatorSetup {
     /// Indicates the type of initial connections.
     pub bootstrap_type: BootstrapType,
     /// Config Overrides
-    pub config_overrides: ConfigOverrides,
+    pub config_overrides: CustomizeConfig,
 }
 
 #[derive(Clone)]
@@ -308,7 +308,7 @@ pub async fn make_nodes(
                             .then_some(name)
                             .unwrap_or_else(|| format!("b:{i}")),
                         config.clone(),
-                        ConfigOverrides::no_overrides(),
+                        CustomizeConfig::no_overrides(),
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         update_signing_key(&mut node_config, pub_key);
@@ -329,7 +329,7 @@ pub async fn make_nodes(
         let name = s.as_ref().map_or(String::new(), |s| s.0.name.clone());
         let overrides = s
             .clone()
-            .map_or(ConfigOverrides::no_overrides(), |s| s.0.config_overrides);
+            .map_or(CustomizeConfig::no_overrides(), |s| s.0.config_overrides);
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
@@ -388,7 +388,7 @@ pub async fn make_nodes(
         let name = s.as_ref().map_or(String::new(), |s| s.name.clone());
         let overrides = s
             .clone()
-            .map_or(ConfigOverrides::no_overrides(), |s| s.config_overrides);
+            .map_or(CustomizeConfig::no_overrides(), |s| s.config_overrides);
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
@@ -455,7 +455,7 @@ fn update_signing_key(config: &mut Config, key: Address) {
 pub fn make_config(
     name: String,
     mut node_config: Config,
-    config_overrides: ConfigOverrides,
+    config_overrides: CustomizeConfig,
 ) -> Config {
     node_config.p2p = Config::local_node().p2p;
     node_config.utxo_validation = true;
@@ -641,13 +641,13 @@ impl ProducerSetup {
             num_test_txs: Default::default(),
             utxo_validation: true,
             bootstrap_type: BootstrapType::BootstrapNodes,
-            config_overrides: ConfigOverrides::no_overrides(),
+            config_overrides: CustomizeConfig::no_overrides(),
         }
     }
 
     pub fn new_with_overrides(
         secret: SecretKey,
-        config_overrides: ConfigOverrides,
+        config_overrides: CustomizeConfig,
     ) -> Self {
         Self {
             name: Default::default(),
@@ -695,13 +695,13 @@ impl ValidatorSetup {
             name: Default::default(),
             utxo_validation: true,
             bootstrap_type: BootstrapType::BootstrapNodes,
-            config_overrides: ConfigOverrides::no_overrides(),
+            config_overrides: CustomizeConfig::no_overrides(),
         }
     }
 
     pub fn new_with_overrides(
         pub_key: Address,
-        config_overrides: ConfigOverrides,
+        config_overrides: CustomizeConfig,
     ) -> Self {
         Self {
             pub_key,

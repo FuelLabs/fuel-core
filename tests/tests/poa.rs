@@ -165,7 +165,7 @@ mod p2p {
             make_config,
             make_node,
             Bootstrap,
-            ConfigOverrides,
+            CustomizeConfig,
         },
     };
     use fuel_core_poa::{
@@ -199,7 +199,7 @@ mod p2p {
         let bootstrap_config = make_config(
             "Bootstrap".to_string(),
             config.clone(),
-            ConfigOverrides::no_overrides(),
+            CustomizeConfig::no_overrides(),
         );
         let bootstrap = Bootstrap::new(&bootstrap_config).await.unwrap();
 
@@ -207,7 +207,7 @@ mod p2p {
             let mut config = make_config(
                 name.to_string(),
                 config.clone(),
-                ConfigOverrides::no_overrides(),
+                CustomizeConfig::no_overrides(),
             );
             config.debug = true;
             config.block_production = Trigger::Interval {
