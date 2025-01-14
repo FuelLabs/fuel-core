@@ -28,11 +28,9 @@ impl FuelCoreDriver {
             "0",
             "--min-da-gas-price",
             "0",
-            "--da-p-component",
+            "--da-gas-price-p-component",
             "0",
-            "--da-d-component",
-            "0",
-            "--max-da-gas-price-change-percent",
+            "--da-gas-price-d-component",
             "0",
         ];
         args.extend(extra_args);

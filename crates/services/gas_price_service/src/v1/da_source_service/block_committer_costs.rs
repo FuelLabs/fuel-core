@@ -42,9 +42,9 @@ pub struct RawDaBlockCosts {
     pub end_height: u32,
     /// The DA block height of the last transaction for the range of blocks
     pub da_block_height: DaBlockHeight,
-    /// cost of posting this blob (wei)
+    /// cost of posting this bundle (wei)
     pub cost: u128,
-    /// size of this blob (bytes)
+    /// size of this bundle (bytes)
     pub size: u32,
 }
 
@@ -109,11 +109,11 @@ where
 
 pub struct BlockCommitterHttpApi {
     client: reqwest::Client,
-    url: Option<String>,
+    url: Option<url::Url>,
 }
 
 impl BlockCommitterHttpApi {
-    pub fn new(url: Option<String>) -> Self {
+    pub fn new(url: Option<url::Url>) -> Self {
         Self {
             client: reqwest::Client::new(),
             url,
@@ -121,7 +121,7 @@ impl BlockCommitterHttpApi {
     }
 }
 
-const PAGE_SIZE: u32 = 10;
+const NUMBER_OF_BUNDLES: u32 = 10;
 #[async_trait::async_trait]
 impl BlockCommitterApi for BlockCommitterHttpApi {
     async fn get_costs_by_l2_block_number(
@@ -131,7 +131,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
         // Specific: http://localhost:8080/v1/costs?variant=specific&value=19098935&limit=5
         if let Some(url) = &self.url {
             tracing::debug!("getting da costs by l2 block number: {l2_block_number}");
-            let formatted_url = format!("{url}/v1/costs?variant=specific&value={l2_block_number}&limit={PAGE_SIZE}");
+            let formatted_url = format!("{url}/v1/costs?variant=specific&value={l2_block_number}&limit={NUMBER_OF_BUNDLES}");
             let response = self.client.get(formatted_url).send().await?;
             let parsed = response.json::<Vec<RawDaBlockCosts>>().await?;
             Ok(parsed)
@@ -205,7 +205,7 @@ mod test_block_committer_http_api {
         let mut expected = Vec::new();
 
         // should return
-        for _ in 0..PAGE_SIZE {
+        for _ in 0..NUMBER_OF_BUNDLES {
             bundle_id += 1;
             da_block_height += 1;
             current_height += 1;
@@ -357,8 +357,8 @@ pub mod fake_server {
             guard.push(costs);
         }
 
-        pub fn url(&self) -> String {
-            self.server.url()
+        pub fn url(&self) -> url::Url {
+            url::Url::parse(self.server.url().as_str()).unwrap()
         }
     }
     impl Default for FakeServer {

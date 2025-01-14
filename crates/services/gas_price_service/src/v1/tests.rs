@@ -114,6 +114,7 @@ use std::{
         Arc,
         Mutex,
     },
+    time::Duration,
 };
 use tokio::sync::mpsc::Receiver;
 
@@ -176,7 +177,7 @@ impl GetMetadataStorage for ErroringPersistedData {
 
 impl GetLatestRecordedHeight for ErroringPersistedData {
     fn get_recorded_height(&self) -> GasPriceResult<Option<BlockHeight>> {
-        Err(GasPriceError::CouldNotFetchDARecord(anyhow!("boo!")))
+        Err(GasPriceError::CouldNotFetchRecordedHeight(anyhow!("boo!")))
     }
 }
 
@@ -392,7 +393,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let height = 0;
     let inner = database();
     let (algo_updater, shared_algo) =
-        initialize_algorithm(&config, height, &metadata_storage).unwrap();
+        initialize_algorithm(&config, height, height, &metadata_storage).unwrap();
     let da_source = FakeDABlockCost::never_returns();
     let latest_l2_height = latest_l2_height(0);
     let recorded_height = BlockHeight::new(0);
@@ -444,7 +445,7 @@ async fn run__new_l2_block_saves_old_metadata() {
 
     let config = zero_threshold_arbitrary_config();
     let inner = database();
-    let algo_updater = updater_from_config(&config);
+    let algo_updater = updater_from_config(&config, 0);
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
     let latest_l2_height = latest_l2_height(0);
@@ -500,7 +501,7 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
 
     let config = zero_threshold_arbitrary_config();
     let inner = database();
-    let algo_updater = updater_from_config(&config);
+    let algo_updater = updater_from_config(&config, 0);
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
     let latest_l2_height = latest_l2_height(0);
@@ -551,7 +552,7 @@ async fn run__updates_da_service_latest_l2_height() {
 
     let config = zero_threshold_arbitrary_config();
     let inner = database();
-    let mut algo_updater = updater_from_config(&config);
+    let mut algo_updater = updater_from_config(&config, 0);
     algo_updater.l2_block_height = l2_height - 1;
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
@@ -793,6 +794,35 @@ fn algo_updater_override_values_match(
 }
 
 #[tokio::test]
+async fn uninitialized_task__new__if_no_metadata_found_use_latest_l2_height() {
+    // given
+    let different_config = different_arb_config();
+    let l2_block = 1234;
+    let settings = FakeSettings::default();
+    let block_stream = empty_block_stream();
+    let on_chain_db = FakeOnChainDb::new(l2_block);
+    let da_cost_source = FakeDABlockCost::never_returns();
+    let inner = database();
+    // when
+    let service = UninitializedTask::new(
+        different_config.clone(),
+        None,
+        0.into(),
+        settings,
+        block_stream,
+        inner,
+        da_cost_source,
+        on_chain_db,
+    )
+    .unwrap();
+
+    // then
+    let UninitializedTask { algo_updater, .. } = service;
+    let algo_height = algo_updater.l2_block_height;
+    assert_eq!(algo_height, l2_block);
+}
+
+#[tokio::test]
 async fn uninitialized_task__new__should_fail_if_cannot_fetch_metadata() {
     // given
     let config = zero_threshold_arbitrary_config();
@@ -843,6 +873,7 @@ async fn uninitialized_task__init__starts_da_service_with_recorded_height_in_sto
     );
 
     different_config.da_poll_interval = Some(1);
+
     let service = UninitializedTask::new(
         different_config.clone(),
         Some(block_height.into()),
@@ -874,9 +905,6 @@ fn arb_block() -> Block<Transaction> {
 
 #[tokio::test]
 async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .try_init();
     // given
     let metadata_height = 100;
     let l2_height = 200;

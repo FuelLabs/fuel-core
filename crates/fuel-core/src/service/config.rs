@@ -63,8 +63,8 @@ pub struct Config {
     pub exec_gas_price_change_percent: u16,
     pub min_exec_gas_price: u64,
     pub exec_gas_price_threshold_percent: u8,
-    pub da_committer_url: Option<String>,
-    pub da_poll_interval: Option<u32>,
+    pub da_committer_url: Option<url::Url>,
+    pub da_poll_interval: Option<Duration>,
     pub da_compression: DaCompressionConfig,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -88,8 +88,8 @@ pub struct Config {
     pub min_da_gas_price: u64,
     pub max_da_gas_price: u64,
     pub max_da_gas_price_change_percent: u16,
-    pub da_p_component: i64,
-    pub da_d_component: i64,
+    pub da_gas_price_p_component: i64,
+    pub da_gas_price_d_component: i64,
     pub activity_normal_range_size: u16,
     pub activity_capped_range_size: u16,
     pub activity_decrease_range_size: u16,
@@ -112,17 +112,14 @@ impl Config {
         chain_config: ChainConfig,
         state_config: StateConfig,
     ) -> Self {
-        Self::local_node_with_reader(
-            SnapshotReader::new_in_memory(chain_config, state_config),
-            None,
-        )
+        Self::local_node_with_reader(SnapshotReader::new_in_memory(
+            chain_config,
+            state_config,
+        ))
     }
 
     #[cfg(feature = "test-helpers")]
-    pub fn local_node_with_reader(
-        snapshot_reader: SnapshotReader,
-        da_committer_url: Option<String>,
-    ) -> Self {
+    pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
         use crate::state::rocks_db::DatabaseConfig;
         let block_importer = fuel_core_importer::Config::new(false);
         let latest_block = snapshot_reader.last_block_config();
@@ -219,14 +216,14 @@ impl Config {
             min_da_gas_price: 0,
             max_da_gas_price: 1,
             max_da_gas_price_change_percent: 0,
-            da_p_component: 0,
-            da_d_component: 0,
+            da_gas_price_p_component: 0,
+            da_gas_price_d_component: 0,
             activity_normal_range_size: 0,
             activity_capped_range_size: 0,
             activity_decrease_range_size: 0,
-            da_committer_url,
+            da_committer_url: None,
             block_activity_threshold: 0,
-            da_poll_interval: Some(1_000),
+            da_poll_interval: Some(Duration::from_secs(1)),
         }
     }
 

@@ -28,7 +28,7 @@ pub enum GasPriceColumn {
     Metadata = 0,
     State = 1,
     UnrecordedBlocks = 2,
-    BundleId = 3,
+    LatestRecordedHeight = 3,
 }
 
 impl GasPriceColumn {
@@ -104,10 +104,10 @@ impl Mappable for RecordedHeights {
 }
 
 impl TableWithBlueprint for RecordedHeights {
-    type Blueprint = Plain<Postcard, Postcard>;
+    type Blueprint = Plain<Postcard, Primitive<4>>;
     type Column = GasPriceColumn;
 
     fn column() -> Self::Column {
-        GasPriceColumn::BundleId
+        GasPriceColumn::LatestRecordedHeight
     }
 }

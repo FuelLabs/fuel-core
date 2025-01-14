@@ -87,6 +87,7 @@ use tracing::{
     trace,
     warn,
 };
+use url::Url;
 
 #[cfg(feature = "rocksdb")]
 use fuel_core::state::historical_rocksdb::StateRewindPolicy;
@@ -193,11 +194,25 @@ pub struct Command {
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
     /// The starting execution gas price for the network
-    #[arg(long = "starting-gas-price", default_value = "1000", env)]
+    #[cfg_attr(
+        feature = "production",
+        arg(long = "starting-gas-price", default_value = "1000", env)
+    )]
+    #[cfg_attr(
+        not(feature = "production"),
+        arg(long = "starting-gas-price", default_value = "0", env)
+    )]
     pub starting_gas_price: u64,
 
     /// The percentage change in gas price per block
-    #[arg(long = "gas-price-change-percent", default_value = "10", env)]
+    #[cfg_attr(
+        feature = "production",
+        arg(long = "gas-price-change-percent", default_value = "10", env)
+    )]
+    #[cfg_attr(
+        not(feature = "production"),
+        arg(long = "gas-price-change-percent", default_value = "0", env)
+    )]
     pub gas_price_change_percent: u16,
 
     /// The minimum allowed gas price
@@ -209,37 +224,41 @@ pub struct Command {
     pub gas_price_threshold_percent: u8,
 
     /// Minimum DA gas price
-    #[arg(long = "min-da-gas-price", default_value = "10000000", env)]
+    #[arg(long = "min-da-gas-price", default_value = "1000", env)]
     pub min_da_gas_price: u64,
 
     /// Maximum DA gas price
     // DEV: ensure that the max_da_gas_price default is > then the min_da_gas_price default
-    #[arg(long = "max-da-gas-price", default_value = "10000001", env)]
+    #[arg(long = "max-da-gas-price", default_value = "100000", env)]
     pub max_da_gas_price: u64,
 
     /// P component of DA gas price calculation
     /// **NOTE**: This is the **inverse** gain of a typical P controller.
     /// Increasing this value will reduce gas price fluctuations.
-    #[arg(long = "da-p-component", default_value = "620090", env)]
-    pub da_p_component: i64,
+    #[arg(
+        long = "da-gas-price-p-component",
+        default_value = "799999999999993",
+        env
+    )]
+    pub da_gas_price_p_component: i64,
 
     /// D component of DA gas price calculation
     /// **NOTE**: This is the **inverse** anticipatory control factor of a typical PD controller.
     /// Increasing this value will reduce the dampening effect of quick algorithm changes.
-    #[arg(long = "da-d-component", default_value = "3528576", env)]
-    pub da_d_component: i64,
-
-    /// Maximum DA gas price change percent
-    #[arg(long = "max-da-gas-price-change-percent", default_value = "10", env)]
-    pub max_da_gas_price_change_percent: u16,
+    #[arg(
+        long = "da-gas-price-d-component",
+        default_value = "10000000000000000",
+        env
+    )]
+    pub da_gas_price_d_component: i64,
 
     /// The URL for the DA Block Committer info
     #[arg(long = "da-committer-url", env)]
-    pub da_committer_url: Option<String>,
+    pub da_committer_url: Option<Url>,
 
     /// The interval at which the `DaSourceService` polls for new data
     #[arg(long = "da-poll-interval", env)]
-    pub da_poll_interval: Option<u32>,
+    pub da_poll_interval: Option<humantime::Duration>,
 
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
@@ -345,9 +364,8 @@ impl Command {
             gas_price_threshold_percent,
             min_da_gas_price,
             max_da_gas_price,
-            da_p_component,
-            da_d_component,
-            max_da_gas_price_change_percent,
+            da_gas_price_p_component,
+            da_gas_price_d_component,
             da_committer_url,
             da_poll_interval,
             consensus_key,
@@ -667,15 +685,15 @@ impl Command {
             da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
             min_da_gas_price,
             max_da_gas_price,
-            max_da_gas_price_change_percent,
-            da_p_component,
-            da_d_component,
+            max_da_gas_price_change_percent: gas_price_change_percent,
+            da_gas_price_p_component,
+            da_gas_price_d_component,
             activity_normal_range_size: 100,
             activity_capped_range_size: 0,
             activity_decrease_range_size: 0,
             da_committer_url,
             block_activity_threshold: 0,
-            da_poll_interval,
+            da_poll_interval: da_poll_interval.map(Into::into),
         };
         Ok(config)
     }

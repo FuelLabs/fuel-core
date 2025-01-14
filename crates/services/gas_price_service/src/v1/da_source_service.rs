@@ -136,16 +136,11 @@ mod tests {
 
         // then
         let err = shared_state.try_recv();
-        tracing::info!("err: {:?}", err);
         assert!(err.is_err());
     }
 
     #[tokio::test]
     async fn run__filtered_da_block_costs_do_not_update_latest_recorded_block() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .try_init();
-
         // given
         let l2_height = 4;
         let unexpected_costs = DaBlockCosts {
@@ -178,10 +173,6 @@ mod tests {
 
     #[tokio::test]
     async fn run__recorded_height_updated_by_da_costs() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .try_init();
-
         // given
         let l2_height = 10;
         let l2_block_range_start = 2;

@@ -41,7 +41,7 @@ impl ReadView {
         asset_id: AssetId,
         base_asset_id: AssetId,
     ) -> StorageResult<AddressBalance> {
-        let amount = if self.balances_enabled {
+        let amount = if self.balances_indexation_enabled {
             self.off_chain.balance(&owner, &asset_id, &base_asset_id)?
         } else {
             AssetQuery::new(
@@ -72,7 +72,7 @@ impl ReadView {
         direction: IterDirection,
         base_asset_id: &'a AssetId,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        if self.balances_enabled {
+        if self.balances_indexation_enabled {
             futures::future::Either::Left(self.balances_with_cache(
                 owner,
                 base_asset_id,
