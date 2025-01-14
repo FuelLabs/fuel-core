@@ -111,6 +111,10 @@ use std::{
     num::NonZeroU64,
     ops::Deref,
     sync::{
+        atomic::{
+            AtomicU32,
+            Ordering,
+        },
         Arc,
         Mutex,
     },
@@ -368,9 +372,6 @@ fn gas_price_database_with_metadata(
     tx.commit().unwrap();
     db
 }
-fn latest_l2_height(height: u32) -> Arc<Mutex<BlockHeight>> {
-    Arc::new(Mutex::new(BlockHeight::new(height)))
-}
 
 #[tokio::test]
 async fn next_gas_price__affected_by_new_l2_block() {
@@ -395,10 +396,11 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, height, &metadata_storage).unwrap();
     let da_source = FakeDABlockCost::never_returns();
-    let latest_l2_height = latest_l2_height(0);
+    let latest_l2_height = Arc::new(AtomicU32::new(0));
     let recorded_height = BlockHeight::new(0);
     let da_service_runner =
-        new_da_service(da_source, None, latest_l2_height.clone(), recorded_height);
+        new_da_service(da_source, None, Arc::clone(&latest_l2_height), recorded_height);
+
     da_service_runner.start_and_await().await.unwrap();
 
     let latest_gas_price = LatestGasPrice::new(0, 0);
@@ -448,11 +450,13 @@ async fn run__new_l2_block_saves_old_metadata() {
     let algo_updater = updater_from_config(&config, 0);
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
-    let latest_l2_height = latest_l2_height(0);
+    let latest_l2_height = Arc::new(AtomicU32::new(0));
     let recorded_height = BlockHeight::new(0);
     let da_service_runner =
-        new_da_service(da_source, None, latest_l2_height.clone(), recorded_height);
+        new_da_service(da_source, None, Arc::clone(&latest_l2_height), recorded_height);
+  
     da_service_runner.start_and_await().await.unwrap();
+  
     let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
@@ -504,10 +508,11 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
     let algo_updater = updater_from_config(&config, 0);
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
-    let latest_l2_height = latest_l2_height(0);
+    let latest_l2_height = Arc::new(AtomicU32::new(0));
     let recorded_height = BlockHeight::new(0);
     let da_service_runner =
-        new_da_service(da_source, None, latest_l2_height.clone(), recorded_height);
+        new_da_service(da_source, None, Arc::clone(&latest_l2_height), recorded_height);
+
     let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
@@ -556,12 +561,14 @@ async fn run__updates_da_service_latest_l2_height() {
     algo_updater.l2_block_height = l2_height - 1;
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
-    let latest_l2_height = latest_l2_height(0);
+    let latest_l2_height = Arc::new(AtomicU32::new(0));
     let latest_gas_price = LatestGasPrice::new(0, 0);
     let recorded_height = BlockHeight::new(0);
     let da_service_runner =
-        new_da_service(da_source, None, latest_l2_height.clone(), recorded_height);
+        new_da_service(da_source, None, Arc::clone(&latest_l2_height), recorded_height);
+
     da_service_runner.start_and_await().await.unwrap();
+    
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -569,7 +576,7 @@ async fn run__updates_da_service_latest_l2_height() {
         algo_updater,
         da_service_runner,
         inner,
-        latest_l2_height.clone(),
+        latest_l2_height,
     );
     let mut watcher = StateWatcher::started();
 
@@ -578,8 +585,8 @@ async fn run__updates_da_service_latest_l2_height() {
     let _ = service.run(&mut watcher).await;
 
     // then
-    let latest_value = *latest_l2_height.lock().unwrap();
-    assert_eq!(*latest_value, l2_height);
+    let latest_value = service.latest_l2_block().load(Ordering::SeqCst);
+    assert_eq!(latest_value, l2_height);
 }
 
 #[derive(Clone)]

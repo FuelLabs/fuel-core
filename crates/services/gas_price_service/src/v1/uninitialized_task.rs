@@ -82,7 +82,10 @@ use fuel_gas_price_algorithm::v1::{
     UnrecordedBlocks,
 };
 use std::{
-    sync::Arc,
+    sync::{
+        atomic::AtomicU32,
+        Arc,
+    },
     time::Duration,
 };
 
@@ -196,13 +199,12 @@ where
             .unwrap_or(BlockHeight::from(latest_block_height));
 
         let poll_duration = self.config.da_poll_interval;
-        let latest_l2_height =
-            Arc::new(std::sync::Mutex::new(BlockHeight::new(latest_block_height)));
+        let latest_l2_height = Arc::new(AtomicU32::new(latest_block_height));
 
         let da_service = DaSourceService::new(
             self.da_source,
             poll_duration,
-            latest_l2_height.clone(),
+            Arc::clone(&latest_l2_height),
             starting_recorded_height,
         );
         let da_service_runner = ServiceRunner::new(da_service);
@@ -216,7 +218,7 @@ where
                 self.algo_updater,
                 da_service_runner,
                 self.gas_price_db,
-                latest_l2_height,
+                Arc::clone(&latest_l2_height),
             );
             Ok(service)
         } else {
@@ -239,7 +241,7 @@ where
                 self.algo_updater,
                 da_service_runner,
                 self.gas_price_db,
-                latest_l2_height,
+                Arc::clone(&latest_l2_height),
             );
             Ok(service)
         }
