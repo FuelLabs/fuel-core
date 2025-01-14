@@ -85,7 +85,7 @@ mod tests {
             DummyDaBlockCosts::new(Err(anyhow::anyhow!("boo!")), notifier.clone());
         let latest_l2_height = Arc::new(AtomicU32::new(0));
         let recorded_height = BlockHeight::new(0);
-        
+
         let service = new_da_service(
             da_block_costs_source,
             Some(Duration::from_millis(1)),

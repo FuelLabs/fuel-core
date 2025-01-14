@@ -398,8 +398,12 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let da_source = FakeDABlockCost::never_returns();
     let latest_l2_height = Arc::new(AtomicU32::new(0));
     let recorded_height = BlockHeight::new(0);
-    let da_service_runner =
-        new_da_service(da_source, None, Arc::clone(&latest_l2_height), recorded_height);
+    let da_service_runner = new_da_service(
+        da_source,
+        None,
+        Arc::clone(&latest_l2_height),
+        recorded_height,
+    );
 
     da_service_runner.start_and_await().await.unwrap();
 
@@ -452,11 +456,15 @@ async fn run__new_l2_block_saves_old_metadata() {
     let da_source = FakeDABlockCost::never_returns();
     let latest_l2_height = Arc::new(AtomicU32::new(0));
     let recorded_height = BlockHeight::new(0);
-    let da_service_runner =
-        new_da_service(da_source, None, Arc::clone(&latest_l2_height), recorded_height);
-  
+    let da_service_runner = new_da_service(
+        da_source,
+        None,
+        Arc::clone(&latest_l2_height),
+        recorded_height,
+    );
+
     da_service_runner.start_and_await().await.unwrap();
-  
+
     let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
@@ -510,8 +518,12 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
     let da_source = FakeDABlockCost::never_returns();
     let latest_l2_height = Arc::new(AtomicU32::new(0));
     let recorded_height = BlockHeight::new(0);
-    let da_service_runner =
-        new_da_service(da_source, None, Arc::clone(&latest_l2_height), recorded_height);
+    let da_service_runner = new_da_service(
+        da_source,
+        None,
+        Arc::clone(&latest_l2_height),
+        recorded_height,
+    );
 
     let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
@@ -564,11 +576,15 @@ async fn run__updates_da_service_latest_l2_height() {
     let latest_l2_height = Arc::new(AtomicU32::new(0));
     let latest_gas_price = LatestGasPrice::new(0, 0);
     let recorded_height = BlockHeight::new(0);
-    let da_service_runner =
-        new_da_service(da_source, None, Arc::clone(&latest_l2_height), recorded_height);
+    let da_service_runner = new_da_service(
+        da_source,
+        None,
+        Arc::clone(&latest_l2_height),
+        recorded_height,
+    );
 
     da_service_runner.start_and_await().await.unwrap();
-    
+
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
