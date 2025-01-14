@@ -60,10 +60,12 @@ mod tests {
         let da_block_costs_source =
             DummyDaBlockCosts::new(Ok(expected_da_cost.clone()), notifier.clone());
         let latest_l2_height = Arc::new(Mutex::new(BlockHeight::new(10u32)));
+        let recorded_height = BlockHeight::new(0);
         let service = new_da_service(
             da_block_costs_source,
             Some(Duration::from_millis(1)),
             latest_l2_height,
+            recorded_height,
         );
         let mut shared_state = &mut service.shared.subscribe();
 
@@ -84,10 +86,12 @@ mod tests {
         let da_block_costs_source =
             DummyDaBlockCosts::new(Err(anyhow::anyhow!("boo!")), notifier.clone());
         let latest_l2_height = latest_l2_height(0);
+        let recorded_height = BlockHeight::new(0);
         let service = new_da_service(
             da_block_costs_source,
             Some(Duration::from_millis(1)),
             latest_l2_height,
+            recorded_height,
         );
         let mut shared_state = &mut service.shared.subscribe();
 
@@ -117,10 +121,12 @@ mod tests {
         let da_block_costs_source =
             DummyDaBlockCosts::new(Ok(unexpected_costs.clone()), notifier.clone());
         let latest_l2_height = latest_l2_height(l2_height);
+        let recorded_height = BlockHeight::new(0);
         let service = new_da_service(
             da_block_costs_source,
             Some(Duration::from_millis(1)),
             latest_l2_height,
+            recorded_height,
         );
         let mut shared_state = &mut service.shared.subscribe();
 
@@ -148,11 +154,12 @@ mod tests {
         let da_block_costs_source =
             DummyDaBlockCosts::new(Ok(unexpected_costs.clone()), notifier.clone());
         let latest_l2_height = latest_l2_height(l2_height);
+        let recorded_height = BlockHeight::new(0);
         let mut service = DaSourceService::new(
             da_block_costs_source,
             Some(Duration::from_millis(1)),
             latest_l2_height,
-            None,
+            recorded_height,
         );
         let mut watcher = StateWatcher::started();
 
@@ -161,23 +168,24 @@ mod tests {
 
         // then
         let recorded_height = service.recorded_height();
-        assert!(recorded_height.is_none())
+        assert_eq!(*recorded_height, 0);
     }
 
     #[tokio::test]
     async fn run__recorded_height_updated_by_da_costs() {
         // given
         let l2_height = 10;
-        let recorded_height = 9;
-        let unexpected_costs = DaBlockCosts {
+        let l2_block_range_start = 2;
+        let expected_recorded_height = 9;
+        let costs = DaBlockCosts {
             bundle_id: 1,
-            l2_blocks: 2..=recorded_height,
+            l2_blocks: l2_block_range_start..=expected_recorded_height,
             bundle_size_bytes: 1024 * 128,
             blob_cost_wei: 2,
         };
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_block_costs_source =
-            DummyDaBlockCosts::new(Ok(unexpected_costs.clone()), notifier.clone());
+            DummyDaBlockCosts::new(Ok(costs.clone()), notifier.clone());
         let latest_l2_height = latest_l2_height(l2_height);
         let (sender, mut receiver) =
             tokio::sync::broadcast::channel(DA_BLOCK_COSTS_CHANNEL_SIZE);
@@ -185,7 +193,7 @@ mod tests {
             da_block_costs_source,
             Some(Duration::from_millis(1)),
             latest_l2_height,
-            None,
+            (l2_block_range_start - 1).into(), /* we want to start polling from before the l2 block range */
             sender,
         );
         let mut watcher = StateWatcher::started();
@@ -194,8 +202,7 @@ mod tests {
         let next = service.run(&mut watcher).await;
 
         // then
-        let actual = service.recorded_height().unwrap();
-        let expected = BlockHeight::from(recorded_height);
-        assert_eq!(expected, actual);
+        let actual = service.recorded_height();
+        assert_eq!(expected_recorded_height, *actual);
     }
 }
