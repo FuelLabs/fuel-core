@@ -201,6 +201,7 @@ fn main() {
             .shared
             .txpool_shared_state
             .new_tx_notification_subscribe();
+        tracing::warn!("Inserting {} transactions.", n);
         let mut nb_left = n;
         let start_insertion = std::time::Instant::now();
         srv.shared
