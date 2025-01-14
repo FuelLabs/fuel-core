@@ -181,7 +181,7 @@ impl SharedState {
             .try_send(WritePoolRequest::RemoveCoinDependents { transactions });
     }
 
-    pub fn get_latest_stats(&self) -> TxPoolStats {
+    pub fn latest_stats(&self) -> TxPoolStats {
         *self.latest_stats.borrow()
     }
 }

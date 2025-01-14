@@ -102,7 +102,7 @@ impl TxPoolPort for TxPoolAdapter {
     }
 
     fn latest_pool_stats(&self) -> TxPoolStats {
-        self.service.get_latest_stats()
+        self.service.latest_stats()
     }
 }
 
