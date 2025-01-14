@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2532](https://github.com/FuelLabs/fuel-core/pull/2532): Getters for inner rocksdb database handles.
 - [2524](https://github.com/FuelLabs/fuel-core/pull/2524): Adds a new lock type which is optimized for certain workloads to the txpool and p2p services.
 - [2535](https://github.com/FuelLabs/fuel-core/pull/2535): Expose `backup` and `restore` APIs on the `CombinedDatabase` struct to create portable backups and restore from them.
+- [2550](https://github.com/FuelLabs/fuel-core/pull/2550): Add statistics and more limits infos about txpool on the node_info endpoint
 
 ### Fixed
 - [2558](https://github.com/FuelLabs/fuel-core/pull/2558): Rename `cost` and `reward` to remove `excess` wording
