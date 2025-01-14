@@ -4,7 +4,6 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
-
 use strum_macros::{
     Display,
     EnumString,

@@ -5,6 +5,7 @@ use crate::{
             storage::{
                 GasPriceColumn,
                 GasPriceMetadata,
+                RecordedHeights,
             },
             GasPriceSettings,
             GasPriceSettingsProvider,
@@ -110,6 +111,10 @@ use std::{
     num::NonZeroU64,
     ops::Deref,
     sync::{
+        atomic::{
+            AtomicU32,
+            Ordering,
+        },
         Arc,
         Mutex,
     },
@@ -243,34 +248,37 @@ impl AsUnrecordedBlocks for UnimplementedStorageTx {
 
 struct FakeDABlockCost {
     da_block_costs: Receiver<DaBlockCosts>,
-    latest_requested_height: Arc<Mutex<Option<BlockHeight>>>,
+    latest_requested_height: Arc<Mutex<BlockHeight>>,
 }
 
 impl FakeDABlockCost {
     fn never_returns() -> Self {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+        let block_height = BlockHeight::from(0);
         Self {
             da_block_costs: receiver,
-            latest_requested_height: Arc::new(Mutex::new(None)),
+            latest_requested_height: Arc::new(Mutex::new(block_height)),
         }
     }
 
     fn new(da_block_costs: Receiver<DaBlockCosts>) -> Self {
+        let block_height = BlockHeight::from(0);
+
         Self {
             da_block_costs,
-            latest_requested_height: Arc::new(Mutex::new(None)),
+            latest_requested_height: Arc::new(Mutex::new(block_height)),
         }
     }
 
-    fn never_returns_with_handle_to_last_height(
-    ) -> (Self, Arc<Mutex<Option<BlockHeight>>>) {
+    fn never_returns_with_handle_to_last_height() -> (Self, Arc<Mutex<BlockHeight>>) {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
-        let height = Arc::new(Mutex::new(None));
+        let block_height = BlockHeight::from(0);
+        let thread_safe_block_height = Arc::new(Mutex::new(block_height));
         let service = Self {
             da_block_costs: receiver,
-            latest_requested_height: height.clone(),
+            latest_requested_height: thread_safe_block_height.clone(),
         };
-        (service, height)
+        (service, thread_safe_block_height)
     }
 }
 
@@ -278,7 +286,7 @@ impl FakeDABlockCost {
 impl DaBlockCostsSource for FakeDABlockCost {
     async fn request_da_block_costs(
         &mut self,
-        latest_recorded_height: &Option<BlockHeight>,
+        latest_recorded_height: &BlockHeight,
     ) -> Result<Vec<DaBlockCosts>> {
         *self.latest_requested_height.lock().unwrap() = *latest_recorded_height;
         let costs = self.da_block_costs.recv().await.unwrap();
@@ -347,6 +355,7 @@ fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
 
 fn gas_price_database_with_metadata(
     metadata: &V1Metadata,
+    starting_recorded_height: Option<BlockHeight>,
 ) -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
     let mut db = database();
     let mut tx = db.write_transaction();
@@ -355,11 +364,13 @@ fn gas_price_database_with_metadata(
     tx.storage_as_mut::<GasPriceMetadata>()
         .insert(&height, &metadata)
         .unwrap();
+
+    if let Some(starting_recorded_height) = starting_recorded_height {
+        tx.set_recorded_height(starting_recorded_height).unwrap();
+    }
+
     tx.commit().unwrap();
     db
-}
-fn latest_l2_height(height: u32) -> Arc<Mutex<BlockHeight>> {
-    Arc::new(Mutex::new(BlockHeight::new(height)))
 }
 
 #[tokio::test]
@@ -385,8 +396,15 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let (algo_updater, shared_algo) =
         initialize_algorithm(&config, height, height, &metadata_storage).unwrap();
     let da_source = FakeDABlockCost::never_returns();
-    let latest_l2_height = latest_l2_height(0);
-    let da_service_runner = new_da_service(da_source, None, latest_l2_height.clone());
+    let latest_l2_height = Arc::new(AtomicU32::new(0));
+    let recorded_height = BlockHeight::new(0);
+    let da_service_runner = new_da_service(
+        da_source,
+        None,
+        Arc::clone(&latest_l2_height),
+        recorded_height,
+    );
+
     da_service_runner.start_and_await().await.unwrap();
 
     let latest_gas_price = LatestGasPrice::new(0, 0);
@@ -400,7 +418,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         latest_l2_height,
     );
 
-    let read_algo = service.next_block_algorithm().clone();
+    let read_algo = service.next_block_algorithm();
     let initial = read_algo.next_gas_price();
     let mut watcher = StateWatcher::started();
     tokio::spawn(async move { service.run(&mut watcher).await });
@@ -436,9 +454,17 @@ async fn run__new_l2_block_saves_old_metadata() {
     let algo_updater = updater_from_config(&config, 0);
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
-    let latest_l2_height = latest_l2_height(0);
-    let da_service_runner = new_da_service(da_source, None, latest_l2_height.clone());
+    let latest_l2_height = Arc::new(AtomicU32::new(0));
+    let recorded_height = BlockHeight::new(0);
+    let da_service_runner = new_da_service(
+        da_source,
+        None,
+        Arc::clone(&latest_l2_height),
+        recorded_height,
+    );
+
     da_service_runner.start_and_await().await.unwrap();
+
     let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
@@ -490,8 +516,15 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
     let algo_updater = updater_from_config(&config, 0);
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
-    let latest_l2_height = latest_l2_height(0);
-    let da_service_runner = new_da_service(da_source, None, latest_l2_height.clone());
+    let latest_l2_height = Arc::new(AtomicU32::new(0));
+    let recorded_height = BlockHeight::new(0);
+    let da_service_runner = new_da_service(
+        da_source,
+        None,
+        Arc::clone(&latest_l2_height),
+        recorded_height,
+    );
+
     let latest_gas_price = LatestGasPrice::new(0, 0);
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
@@ -540,10 +573,18 @@ async fn run__updates_da_service_latest_l2_height() {
     algo_updater.l2_block_height = l2_height - 1;
     let shared_algo = SharedV1Algorithm::new_with_algorithm(algo_updater.algorithm());
     let da_source = FakeDABlockCost::never_returns();
-    let latest_l2_height = latest_l2_height(0);
+    let latest_l2_height = Arc::new(AtomicU32::new(0));
     let latest_gas_price = LatestGasPrice::new(0, 0);
-    let da_service_runner = new_da_service(da_source, None, latest_l2_height.clone());
+    let recorded_height = BlockHeight::new(0);
+    let da_service_runner = new_da_service(
+        da_source,
+        None,
+        Arc::clone(&latest_l2_height),
+        recorded_height,
+    );
+
     da_service_runner.start_and_await().await.unwrap();
+
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -551,7 +592,7 @@ async fn run__updates_da_service_latest_l2_height() {
         algo_updater,
         da_service_runner,
         inner,
-        latest_l2_height.clone(),
+        latest_l2_height,
     );
     let mut watcher = StateWatcher::started();
 
@@ -560,8 +601,8 @@ async fn run__updates_da_service_latest_l2_height() {
     let _ = service.run(&mut watcher).await;
 
     // then
-    let latest_value = *latest_l2_height.lock().unwrap();
-    assert_eq!(*latest_value, l2_height);
+    let latest_value = service.latest_l2_block().load(Ordering::SeqCst);
+    assert_eq!(latest_value, l2_height);
 }
 
 #[derive(Clone)]
@@ -680,7 +721,7 @@ async fn uninitialized_task__new__if_exists_already_reload_old_values_with_overr
     let block_stream = empty_block_stream();
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let da_cost_source = FakeDABlockCost::never_returns();
-    let inner = gas_price_database_with_metadata(&original_metadata);
+    let inner = gas_price_database_with_metadata(&original_metadata, None);
     // when
     let service = UninitializedTask::new(
         different_config.clone(),
@@ -849,19 +890,20 @@ async fn uninitialized_task__init__starts_da_service_with_recorded_height_in_sto
     let on_chain_db = FakeOnChainDb::new(different_l2_block);
     let (da_cost_source, latest_requested_recorded_height) =
         FakeDABlockCost::never_returns_with_handle_to_last_height();
-    let mut inner = gas_price_database_with_metadata(&original_metadata);
-    let mut tx = inner.begin_transaction().unwrap();
-    tx.set_recorded_height(BlockHeight::from(recorded_height))
-        .unwrap();
-    StorageTransaction::commit_transaction(tx).unwrap();
+    let gas_price_db = gas_price_database_with_metadata(
+        &original_metadata,
+        Some(recorded_height.into()),
+    );
+
     different_config.da_poll_interval = Some(Duration::from_millis(1));
+
     let service = UninitializedTask::new(
         different_config.clone(),
         Some(block_height.into()),
         0.into(),
         settings,
         block_stream,
-        inner,
+        gas_price_db,
         da_cost_source,
         on_chain_db,
     )
@@ -873,7 +915,7 @@ async fn uninitialized_task__init__starts_da_service_with_recorded_height_in_sto
 
     // then
     let actual = latest_requested_recorded_height.lock().unwrap();
-    let expected = Some(BlockHeight::new(recorded_height));
+    let expected = BlockHeight::new(recorded_height);
     assert_eq!(*actual, expected);
 }
 
@@ -903,7 +945,7 @@ async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
         latest_da_cost_per_byte: 0,
         unrecorded_block_bytes: 0,
     };
-    let gas_price_db = gas_price_database_with_metadata(&metadata);
+    let gas_price_db = gas_price_database_with_metadata(&metadata, None);
     let mut onchain_db = FakeOnChainDb::new(l2_height);
     for height in 1..=l2_height {
         let block = arb_block();
