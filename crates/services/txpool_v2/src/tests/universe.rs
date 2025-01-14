@@ -130,7 +130,7 @@ impl TestPoolUniverse {
 
     pub fn latest_stats(&self) -> TxPoolStats {
         if let Some(receiver) = &self.stats_receiver {
-            receiver.borrow().clone()
+            *receiver.borrow()
         } else {
             TxPoolStats::default()
         }
@@ -320,11 +320,13 @@ impl TestPoolUniverse {
     pub fn assert_pool_integrity(&self, expected_txs: &[ArcPoolTx]) {
         let stats = self.latest_stats();
         assert_eq!(stats.tx_count, expected_txs.len() as u64);
-        let mut total_gas = 0;
-        let mut total_size = 0;
+        let mut total_gas: u64 = 0;
+        let mut total_size: u64 = 0;
         for tx in expected_txs {
-            total_gas += tx.max_gas();
-            total_size += tx.metered_bytes_size() as u64;
+            total_gas = total_gas.checked_add(tx.max_gas()).unwrap();
+            total_size = total_gas
+                .checked_add(tx.metered_bytes_size() as u64)
+                .unwrap();
         }
         assert_eq!(stats.total_gas, total_gas);
         assert_eq!(stats.total_size, total_size);
