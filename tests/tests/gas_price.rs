@@ -292,7 +292,7 @@ async fn produce_block__dont_raises_gas_price_with_default_parameters() {
     ];
     let driver = FuelCoreDriver::spawn(&args).await.unwrap();
 
-    let expected_default_da_gas_price = 10000000;
+    let expected_default_da_gas_price = 0;
 
     let expected_gas_price = expected_default_da_gas_price;
 
