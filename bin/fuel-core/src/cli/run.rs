@@ -224,11 +224,17 @@ pub struct Command {
     pub gas_price_threshold_percent: u8,
 
     /// Minimum DA gas price
-    #[arg(long = "min-da-gas-price", default_value = "1000", env)]
+    #[cfg_attr(
+        feature = "production",
+        arg(long = "min-da-gas-price", default_value = "1000", env)
+    )]
+    #[cfg_attr(
+        not(feature = "production"),
+        arg(long = "min-da-gas-price", default_value = "0", env)
+    )]
     pub min_da_gas_price: u64,
 
-    /// Maximum DA gas price
-    // DEV: ensure that the max_da_gas_price default is > then the min_da_gas_price default
+    /// Maximum allowed gas price for DA.
     #[arg(long = "max-da-gas-price", default_value = "100000", env)]
     pub max_da_gas_price: u64,
 
@@ -400,6 +406,12 @@ impl Command {
             info!("`{:?}` metrics are enabled", enabled_metrics);
         } else {
             info!("All metrics are disabled");
+        }
+
+        if max_da_gas_price < min_da_gas_price {
+            anyhow::bail!(
+                "The maximum DA gas price must be greater than or equal to the minimum DA gas price"
+            );
         }
 
         let addr = net::SocketAddr::new(graphql.ip, graphql.port);
