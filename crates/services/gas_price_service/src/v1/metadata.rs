@@ -21,9 +21,9 @@ pub struct V1Metadata {
     /// Scale factor for the gas price.
     pub gas_price_factor: NonZeroU64,
     /// The cumulative reward from the DA portion of the gas price
-    pub total_da_rewards_excess: u128,
+    pub total_da_rewards: u128,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
-    pub latest_known_total_da_cost_excess: u128,
+    pub latest_known_total_da_cost: u128,
     /// The last profit
     pub last_profit: i128,
     /// The profit before last
@@ -49,8 +49,8 @@ impl V1Metadata {
                 .min_da_gas_price
                 .saturating_mul(config.gas_price_factor.get()),
             gas_price_factor: config.gas_price_factor,
-            total_da_rewards_excess: 0,
-            latest_known_total_da_cost_excess: 0,
+            total_da_rewards: 0,
+            latest_known_total_da_cost: 0,
             last_profit: 0,
             second_to_last_profit: 0,
             latest_da_cost_per_byte: 0,
@@ -102,8 +102,8 @@ pub fn updater_from_config(
             .min_da_gas_price
             .saturating_mul(value.gas_price_factor.get()),
         gas_price_factor: value.gas_price_factor,
-        total_da_rewards_excess: 0,
-        latest_known_total_da_cost_excess: 0,
+        total_da_rewards: 0,
+        latest_known_total_da_cost: 0,
         projected_total_da_cost: 0,
         last_profit: 0,
         second_to_last_profit: 0,
@@ -130,8 +130,8 @@ impl From<AlgorithmUpdaterV1> for V1Metadata {
             l2_block_height: updater.l2_block_height,
             new_scaled_da_gas_price: updater.new_scaled_da_gas_price,
             gas_price_factor: updater.gas_price_factor,
-            total_da_rewards_excess: updater.total_da_rewards_excess,
-            latest_known_total_da_cost_excess: updater.latest_known_total_da_cost_excess,
+            total_da_rewards: updater.total_da_rewards,
+            latest_known_total_da_cost: updater.latest_known_total_da_cost,
             last_profit: updater.last_profit,
             second_to_last_profit: updater.second_to_last_profit,
             latest_da_cost_per_byte: updater.latest_da_cost_per_byte,
@@ -154,15 +154,15 @@ pub fn v1_algorithm_from_metadata(
     let projected_portion =
         unrecorded_blocks_bytes.saturating_mul(metadata.latest_da_cost_per_byte);
     let projected_total_da_cost = metadata
-        .latest_known_total_da_cost_excess
+        .latest_known_total_da_cost
         .saturating_add(projected_portion);
     AlgorithmUpdaterV1 {
         new_scaled_exec_price: metadata.new_scaled_exec_price,
         l2_block_height: metadata.l2_block_height,
         new_scaled_da_gas_price: metadata.new_scaled_da_gas_price,
         gas_price_factor: metadata.gas_price_factor,
-        total_da_rewards_excess: metadata.total_da_rewards_excess,
-        latest_known_total_da_cost_excess: metadata.latest_known_total_da_cost_excess,
+        total_da_rewards: metadata.total_da_rewards,
+        latest_known_total_da_cost: metadata.latest_known_total_da_cost,
         projected_total_da_cost,
         last_profit: metadata.last_profit,
         second_to_last_profit: metadata.second_to_last_profit,
