@@ -7,6 +7,7 @@
 .envrc
 .direnv
 .cov
+.helix
 lcov.info
 version-compatibility/Cargo.lock
 benches/benches-outputs/Cargo.lock
