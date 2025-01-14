@@ -80,6 +80,8 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
 
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 
+pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
+
 pub fn init_sub_services(
     config: &Config,
     database: CombinedDatabase,
@@ -319,7 +321,6 @@ pub fn init_sub_services(
         chain_name,
     };
 
-    const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
     let graphql_gas_price_provider = ArcGasPriceEstimate::new_from_inner(
         latest_gas_price.clone(),
         DEFAULT_GAS_PRICE_CHANGE_PERCENT,

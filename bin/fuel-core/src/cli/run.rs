@@ -29,6 +29,7 @@ use fuel_core::{
     service::{
         config::Trigger,
         genesis::NotifyCancel,
+        sub_services::DEFAULT_GAS_PRICE_CHANGE_PERCENT,
         Config,
         DbType,
         RelayerConsensusConfig,
@@ -207,7 +208,7 @@ pub struct Command {
     /// The percentage change in gas price per block
     #[cfg_attr(
         feature = "production",
-        arg(long = "gas-price-change-percent", default_value = "10", env)
+        arg(long = "gas-price-change-percent", default_value_t = DEFAULT_GAS_PRICE_CHANGE_PERCENT, env)
     )]
     #[cfg_attr(
         not(feature = "production"),
