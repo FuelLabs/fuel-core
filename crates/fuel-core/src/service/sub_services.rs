@@ -80,6 +80,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
 
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 
+// TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
 pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
 
 pub fn init_sub_services(
