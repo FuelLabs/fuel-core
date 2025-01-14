@@ -202,7 +202,7 @@ pub fn init_sub_services(
         da_source,
         database.on_chain().clone(),
     )?;
-    let (gas_price_algo, latest_gas_price) = &gas_price_service_v1.shared;
+    let (gas_price_algo, latest_gas_price) = gas_price_service_v1.shared.clone();
     let gas_price_provider = FuelGasPriceProvider::new(gas_price_algo.clone());
 
     let txpool = fuel_core_txpool::new_service(
@@ -323,7 +323,7 @@ pub fn init_sub_services(
     };
 
     let graphql_gas_price_provider = ArcGasPriceEstimate::new_from_inner(
-        latest_gas_price.clone(),
+        latest_gas_price,
         DEFAULT_GAS_PRICE_CHANGE_PERCENT,
     );
     let graph_ql = fuel_core_graphql_api::api_service::new_service(

@@ -635,14 +635,7 @@ fn not_found_txs<'iter>(
 
 impl ProducerSetup {
     pub fn new(secret: SecretKey) -> Self {
-        Self {
-            name: Default::default(),
-            secret,
-            num_test_txs: Default::default(),
-            utxo_validation: true,
-            bootstrap_type: BootstrapType::BootstrapNodes,
-            config_overrides: CustomizeConfig::no_overrides(),
-        }
+        Self::new_with_overrides(secret, CustomizeConfig::no_overrides())
     }
 
     pub fn new_with_overrides(
@@ -690,13 +683,7 @@ impl ProducerSetup {
 
 impl ValidatorSetup {
     pub fn new(pub_key: Address) -> Self {
-        Self {
-            pub_key,
-            name: Default::default(),
-            utxo_validation: true,
-            bootstrap_type: BootstrapType::BootstrapNodes,
-            config_overrides: CustomizeConfig::no_overrides(),
-        }
+        Self::new_with_overrides(pub_key, CustomizeConfig::no_overrides())
     }
 
     pub fn new_with_overrides(
