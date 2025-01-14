@@ -195,11 +195,9 @@ where
             .get_recorded_height()?
             .unwrap_or(BlockHeight::from(latest_block_height));
 
-        let poll_duration = self
-            .config
-            .da_poll_interval
-            .map(|x| Duration::from_millis(x.into()));
-        let latest_l2_height = Arc::new(std::sync::Mutex::new(BlockHeight::new(0)));
+        let poll_duration = self.config.da_poll_interval;
+        let latest_l2_height =
+            Arc::new(std::sync::Mutex::new(BlockHeight::new(latest_block_height)));
 
         let da_service = DaSourceService::new(
             self.da_source,

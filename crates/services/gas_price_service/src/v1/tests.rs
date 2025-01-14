@@ -872,7 +872,7 @@ async fn uninitialized_task__init__starts_da_service_with_recorded_height_in_sto
         Some(recorded_height.into()),
     );
 
-    different_config.da_poll_interval = Some(1);
+    different_config.da_poll_interval = Some(Duration::from_millis(1));
 
     let service = UninitializedTask::new(
         different_config.clone(),
