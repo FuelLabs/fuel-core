@@ -908,7 +908,7 @@ async fn uninitialized_task__init__starts_da_service_with_recorded_height_in_sto
 
     // when
     let _gas_price_service = service.init(&StateWatcher::started()).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(3)).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // then
     let actual = latest_requested_recorded_height.lock().unwrap();
