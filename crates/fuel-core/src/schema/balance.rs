@@ -79,11 +79,27 @@ impl BalanceQuery {
         Ok(balance)
     }
 
-    #[graphql(
-        complexity = "query_costs().balance_query + query_costs().storage_iterator \
-        + (query_costs().storage_read * first.unwrap_or_default() as usize) * child_complexity \
-        + (query_costs().storage_read * last.unwrap_or_default() as usize) * child_complexity"
-    )]
+    // TODO: https://github.com/FuelLabs/fuel-core/issues/2496
+    // This is the complexity we want to use with "balances()" query, but it's not
+    // currently possible, because we need to handle queries with ~10k items.
+    // We use the temporary complexity until the SDKs are updated to not
+    // request such a large number of items.
+    // #[graphql(
+    // complexity = "query_costs().balance_query + query_costs().storage_iterator \
+    // + (query_costs().storage_read * first.unwrap_or_default() as usize) \
+    // + (child_complexity * first.unwrap_or_default() as usize) \
+    // + (query_costs().storage_read * last.unwrap_or_default() as usize) \
+    // + (child_complexity * last.unwrap_or_default() as usize)"
+    // )]
+
+    // The 0.66 factor is a Goldilocks approach to balancing the complexity of the query for the SDKs.
+    // Rust SDK sends a query with child_complexity ≅ 11 and we want to support slightly more
+    // than 10k items in a single query (so we target 11k). The total complexity would be 11k * 11 = 121k,
+    // but since our default limit is 80k, we need the 0.66 factor.
+    #[graphql(complexity = "
+        (child_complexity as f32 * first.unwrap_or_default() as f32 * 0.66) as usize + \
+        (child_complexity as f32 * last.unwrap_or_default() as f32 * 0.66) as usize
+    ")]
     async fn balances(
         &self,
         ctx: &Context<'_>,
