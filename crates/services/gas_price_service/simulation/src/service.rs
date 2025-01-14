@@ -38,13 +38,15 @@ use fuel_core_storage::{
         StorageTransaction,
     },
 };
-use fuel_core_types::fuel_types::BlockHeight;
 use fuel_gas_price_algorithm::v1::AlgorithmUpdaterV1;
 use std::{
     num::NonZero,
     sync::{
+        atomic::{
+            AtomicU32,
+            Ordering,
+        },
         Arc,
-        Mutex,
     },
 };
 
@@ -174,11 +176,11 @@ impl ServiceController {
     }
 
     pub fn profit_cost_reward_cpb(&self) -> anyhow::Result<(i128, u128, u128, u128)> {
-        let latest_height = self.service.latest_l2_block();
+        let latest_height: u32 = self.service.latest_l2_block().load(Ordering::Relaxed);
         let metadata = self
             .service
             .storage_tx_provider()
-            .get_metadata(&latest_height)?
+            .get_metadata(&latest_height.into())?
             .ok_or(anyhow::anyhow!("no metadata found"))?;
         if let Some(values) = metadata.v1().map(|m| {
             (
@@ -213,10 +215,14 @@ pub async fn get_service_controller(
     let (da_block_source, da_costs_sender) = SimulatedDACosts::new_with_sender();
 
     let poll_interval = poll_interval();
-    let latest_l2_height = Arc::new(Mutex::new(BlockHeight::new(0)));
+    let latest_l2_height = Arc::new(AtomicU32::from(9));
     let latest_gas_price = LatestGasPrice::new(0, 0);
-    let da_source_service =
-        new_da_service(da_block_source, poll_interval, latest_l2_height.clone());
+    let da_source_service = new_da_service(
+        da_block_source,
+        poll_interval,
+        latest_l2_height.clone(),
+        0.into(),
+    );
     da_source_service.start_and_await().await?;
     let db = database();
     let service = GasPriceServiceV1::new(

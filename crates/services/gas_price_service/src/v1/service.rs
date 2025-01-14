@@ -136,7 +136,7 @@ where
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn latest_l2_block(&self) -> &AtomicU32 {
         &self.latest_l2_block
     }
@@ -211,7 +211,7 @@ where
         self.shared_algo.clone()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn storage_tx_provider(&self) -> &AtomicStorage {
         &self.storage_tx_provider
     }

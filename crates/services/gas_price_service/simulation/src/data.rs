@@ -87,7 +87,7 @@ impl From<&Record> for BlockInfo {
 }
 
 pub fn get_data<P: AsRef<Path> + Debug>(path: P) -> anyhow::Result<Data> {
-    const DA_OFFSET: usize = 0; // Make configurable
+    const DA_OFFSET: usize = 60 * 15; // Make configurable
 
     tracing::info!("Loading data from file: {:?}", path);
     let headers = csv::StringRecord::from(fields_of_struct_in_order::<Record>());

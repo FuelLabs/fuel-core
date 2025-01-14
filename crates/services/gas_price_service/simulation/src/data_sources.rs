@@ -102,7 +102,7 @@ impl SimulatedDACosts {
 impl DaBlockCostsSource for SimulatedDACosts {
     async fn request_da_block_costs(
         &mut self,
-        _recorded_height: &Option<BlockHeight>,
+        _recorded_height: &BlockHeight,
     ) -> anyhow::Result<Vec<DaBlockCosts>> {
         let res = self
             .recv
