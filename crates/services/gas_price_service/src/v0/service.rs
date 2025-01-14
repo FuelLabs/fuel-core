@@ -129,7 +129,7 @@ where
         &mut self,
         l2_block_res: crate::common::utils::Result<BlockInfo>,
     ) -> anyhow::Result<()> {
-        tracing::info!("Received L2 block result: {:?}", l2_block_res);
+        tracing::debug!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
 
         tracing::debug!("Updating gas price algorithm");

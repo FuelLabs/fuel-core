@@ -44,6 +44,10 @@ mod tests {
         time::Duration,
     };
 
+    fn latest_l2_height(height: u32) -> Arc<Mutex<BlockHeight>> {
+        Arc::new(Mutex::new(BlockHeight::new(height)))
+    }
+
     #[tokio::test]
     async fn run__when_da_block_cost_source_gives_value_shared_state_is_updated() {
         // given

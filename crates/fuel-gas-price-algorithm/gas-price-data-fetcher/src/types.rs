@@ -17,7 +17,7 @@ use serde::{
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct Wei(u128);
+pub struct Wei(pub u128);
 
 impl Deref for Wei {
     type Target = u128;
@@ -39,7 +39,7 @@ impl Deref for GasUnits {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BytesSize(pub u64);
 
 impl Deref for BytesSize {
@@ -50,7 +50,7 @@ impl Deref for BytesSize {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockCommitterCosts {
     /// The cost of the block, supposedly in Wei but need to check
     pub cost: Wei,
@@ -61,6 +61,15 @@ pub struct BlockCommitterCosts {
 }
 
 impl BlockCommitterCosts {
+    pub fn empty() -> Self {
+        Self {
+            cost: Wei(0),
+            size: BytesSize(0),
+            da_block_height: DaBlockHeight(0),
+            start_height: BlockHeight::new(0),
+            end_height: BlockHeight::new(0),
+        }
+    }
     pub fn iter(&self) -> impl Iterator<Item = BlockHeight> {
         let start_height = *self.start_height;
         let end_height = *self.end_height;
@@ -100,4 +109,6 @@ pub struct Layer2BlockData {
     pub capacity: GasUnits,
     pub bytes_capacity: BytesSize,
     pub transactions_count: usize,
+    pub gas_price: u64,
+    pub fee: Wei,
 }
