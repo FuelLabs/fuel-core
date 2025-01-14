@@ -1,9 +1,7 @@
-use crate::fuel_core_graphql_api::ports::GasPriceEstimate as GraphqlGasPriceEstimate;
 use fuel_core_gas_price_service::common::gas_price_algorithm::{
     GasPriceAlgorithm,
     SharedGasPriceAlgo,
 };
-
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 use fuel_core_types::fuel_types::BlockHeight;
@@ -54,10 +52,6 @@ where
     fn next_gas_price(&self) -> u64 {
         self.algorithm.next_gas_price()
     }
-
-    async fn get_worst_case_gas_price(&self, height: BlockHeight) -> u64 {
-        self.algorithm.worst_case_gas_price(height).await
-    }
 }
 
 #[async_trait::async_trait]
@@ -76,15 +70,5 @@ where
 {
     fn next_gas_price(&self) -> u64 {
         self.next_gas_price()
-    }
-}
-
-#[async_trait::async_trait]
-impl<A> GraphqlGasPriceEstimate for FuelGasPriceProvider<A>
-where
-    A: GasPriceAlgorithm + Send + Sync,
-{
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
-        Some(self.get_worst_case_gas_price(height).await)
     }
 }

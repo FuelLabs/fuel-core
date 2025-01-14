@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [2547](https://github.com/FuelLabs/fuel-core/pull/2547): Replace the old Graphql gas price provider adapter with the ArcGasPriceEstimate.
 - [2445](https://github.com/FuelLabs/fuel-core/pull/2445): Added GQL endpoint for querying asset details.
 - [2442](https://github.com/FuelLabs/fuel-core/pull/2442): Add uninitialized task for V1 gas price service
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `ConsensusParameters` graphql queries
