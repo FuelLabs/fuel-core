@@ -46,7 +46,10 @@ impl NodeInfo {
     }
 
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
-    async fn pool_stats(&self, ctx: &Context<'_>) -> async_graphql::Result<TxPoolStats> {
+    async fn tx_pool_stats(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<TxPoolStats> {
         let tx_pool = ctx.data_unchecked::<TxPool>();
         Ok(TxPoolStats(tx_pool.latest_pool_stats()))
     }
