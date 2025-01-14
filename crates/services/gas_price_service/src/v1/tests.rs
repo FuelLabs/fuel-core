@@ -320,8 +320,8 @@ fn arbitrary_metadata() -> V1Metadata {
         l2_block_height: 0,
         new_scaled_da_gas_price: 0,
         gas_price_factor: NonZeroU64::new(100).unwrap(),
-        total_da_rewards_excess: 0,
-        latest_known_total_da_cost_excess: 0,
+        total_da_rewards: 0,
+        latest_known_total_da_cost: 0,
         last_profit: 0,
         second_to_last_profit: 0,
         latest_da_cost_per_byte: 0,
@@ -753,8 +753,8 @@ fn algo_updater_matches_values_from_old_metadata(
         l2_block_height: original_l2_block_height,
         new_scaled_da_gas_price: original_new_scaled_da_gas_price,
         gas_price_factor: original_gas_price_factor,
-        total_da_rewards_excess: original_total_da_rewards_excess,
-        latest_known_total_da_cost_excess: original_latest_known_total_da_cost_excess,
+        total_da_rewards: original_total_da_rewards,
+        latest_known_total_da_cost: original_latest_known_total_da_cost,
         last_profit: original_last_profit,
         second_to_last_profit: original_second_to_last_profit,
         latest_da_cost_per_byte: original_latest_da_cost_per_byte,
@@ -770,13 +770,10 @@ fn algo_updater_matches_values_from_old_metadata(
         original_new_scaled_da_gas_price
     );
     assert_eq!(algo_updater.gas_price_factor, original_gas_price_factor);
+    assert_eq!(algo_updater.total_da_rewards, original_total_da_rewards);
     assert_eq!(
-        algo_updater.total_da_rewards_excess,
-        original_total_da_rewards_excess
-    );
-    assert_eq!(
-        algo_updater.latest_known_total_da_cost_excess,
-        original_latest_known_total_da_cost_excess
+        algo_updater.latest_known_total_da_cost,
+        original_latest_known_total_da_cost
     );
     assert_eq!(algo_updater.last_profit, original_last_profit);
     assert_eq!(
@@ -938,8 +935,8 @@ async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
         l2_block_height: metadata_height,
         new_scaled_da_gas_price: 0,
         gas_price_factor: NonZeroU64::new(100).unwrap(),
-        total_da_rewards_excess: 0,
-        latest_known_total_da_cost_excess: 0,
+        total_da_rewards: 0,
+        latest_known_total_da_cost: 0,
         last_profit: 0,
         second_to_last_profit: 0,
         latest_da_cost_per_byte: 0,

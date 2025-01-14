@@ -33,7 +33,7 @@ fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_include_kno
     let new = updater.algorithm();
     assert_eq!(new, old);
     let expected = known_total_cost + recorded_cost;
-    let actual = updater.latest_known_total_da_cost_excess;
+    let actual = updater.latest_known_total_da_cost;
     assert_eq!(expected, actual);
 }
 
@@ -69,7 +69,7 @@ fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_never_incre
     let new = updater.algorithm();
     assert_eq!(new, old);
     let expected = known_total_cost + recorded_cost;
-    let actual = updater.latest_known_total_da_cost_excess;
+    let actual = updater.latest_known_total_da_cost;
     assert_eq!(expected, actual);
 }
 
@@ -135,7 +135,7 @@ fn update_da_record_data__updates_known_total_cost() {
         .unwrap();
 
     // then
-    let actual = updater.latest_known_total_da_cost_excess;
+    let actual = updater.latest_known_total_da_cost;
     let expected = known_total_cost + recorded_cost;
     assert_eq!(actual, expected);
 }
@@ -183,7 +183,7 @@ fn update_da_record_data__if_da_height_matches_l2_height_projected_and_known_mat
     assert_eq!(unrecorded_blocks.len(), 0);
     assert_eq!(
         updater.projected_total_da_cost,
-        updater.latest_known_total_da_cost_excess
+        updater.latest_known_total_da_cost
     );
 }
 

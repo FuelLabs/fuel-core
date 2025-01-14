@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2535](https://github.com/FuelLabs/fuel-core/pull/2535): Expose `backup` and `restore` APIs on the `CombinedDatabase` struct to create portable backups and restore from them.
 
 ### Fixed
+- [2558](https://github.com/FuelLabs/fuel-core/pull/2558): Rename `cost` and `reward` to remove `excess` wording
 - [2469](https://github.com/FuelLabs/fuel-core/pull/2469): Improved the logic for syncing the gas price database with on_chain database
 - [2365](https://github.com/FuelLabs/fuel-core/pull/2365): Fixed the error during dry run in the case of race condition.
 - [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.

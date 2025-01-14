@@ -109,11 +109,11 @@ impl Simulator {
             exec_gas_price_change_percent: 2,
             // Increase to make the da price change faster
             max_da_gas_price_change_percent: 15,
-            total_da_rewards_excess: 0,
+            total_da_rewards: 0,
             // Change to adjust the cost per byte of the DA on block 0
             latest_da_cost_per_byte: 0,
             projected_total_da_cost: 0,
-            latest_known_total_da_cost_excess: 0,
+            latest_known_total_da_cost: 0,
             da_p_component,
             da_d_component,
             last_profit: 0,
@@ -163,7 +163,7 @@ impl Simulator {
                 .unwrap();
             pessimistic_costs
                 .push(max_block_bytes as u128 * updater.latest_da_cost_per_byte);
-            actual_reward_totals.push(updater.total_da_rewards_excess);
+            actual_reward_totals.push(updater.total_da_rewards);
             projected_cost_totals.push(updater.projected_total_da_cost);
 
             // Update DA blocks on the occasion there is one
@@ -183,7 +183,7 @@ impl Simulator {
                             &mut unrecorded_blocks,
                         )
                         .unwrap();
-                    actual_costs.push(updater.latest_known_total_da_cost_excess)
+                    actual_costs.push(updater.latest_known_total_da_cost)
                 }
             }
         }
