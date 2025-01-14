@@ -4,8 +4,10 @@ use fuel_core_types::fuel_types::BlockHeight;
 pub enum Error {
     #[error("Failed to find L2 block: {source_error:?}")]
     CouldNotFetchL2Block { source_error: anyhow::Error },
-    #[error("Failed to find DA records: {0:?}")]
-    CouldNotFetchDARecord(anyhow::Error),
+    #[error("Failed to get the recorded height: {0:?}")]
+    CouldNotFetchRecordedHeight(anyhow::Error),
+    #[error("Failed to set the recorded height: {0:?}")]
+    CouldNotSetRecordedHeight(anyhow::Error),
     #[error("Failed to retrieve updater metadata: {source_error:?}")]
     CouldNotFetchMetadata { source_error: anyhow::Error },
     #[error(
@@ -26,7 +28,7 @@ pub enum Error {
 pub type Result<T, E = Error> = core::result::Result<T, E>;
 
 // Info required about the l2 block for the gas price algorithm
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BlockInfo {
     // The genesis block of the L2 chain
     GenesisBlock,

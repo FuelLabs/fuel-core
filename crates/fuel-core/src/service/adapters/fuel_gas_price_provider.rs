@@ -54,6 +54,10 @@ where
     fn next_gas_price(&self) -> u64 {
         self.algorithm.next_gas_price()
     }
+
+    async fn get_worst_case_gas_price(&self, height: BlockHeight) -> u64 {
+        self.algorithm.worst_case_gas_price(height).await
+    }
 }
 
 #[async_trait::async_trait]
@@ -81,6 +85,6 @@ where
     A: GasPriceAlgorithm + Send + Sync,
 {
     async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
-        Some(self.algorithm.worst_case_gas_price(height).await)
+        Some(self.get_worst_case_gas_price(height).await)
     }
 }

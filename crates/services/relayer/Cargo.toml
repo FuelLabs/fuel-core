@@ -36,7 +36,7 @@ strum_macros = { workspace = true }
 thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }
-url = "2.2"
+url = { workspace = true }
 
 [dev-dependencies]
 fuel-core-relayer = { path = "", features = ["test-helpers"] }

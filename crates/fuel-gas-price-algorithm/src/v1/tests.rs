@@ -26,10 +26,11 @@ pub struct BlockBytes {
 pub struct UpdaterBuilder {
     min_exec_gas_price: u64,
     min_da_gas_price: u64,
+    max_da_gas_price: u64,
     starting_exec_gas_price: u64,
     starting_da_gas_price: u64,
     exec_gas_price_change_percent: u16,
-    max_change_percent: u16,
+    max_da_change_percent: u16,
 
     da_p_component: i64,
     da_d_component: i64,
@@ -53,10 +54,11 @@ impl UpdaterBuilder {
         Self {
             min_exec_gas_price: 0,
             min_da_gas_price: 0,
+            max_da_gas_price: u64::MAX,
             starting_exec_gas_price: 1,
             starting_da_gas_price: 1,
             exec_gas_price_change_percent: 0,
-            max_change_percent: u16::MAX,
+            max_da_change_percent: u16::MAX,
 
             da_p_component: 0,
             da_d_component: 0,
@@ -86,6 +88,11 @@ impl UpdaterBuilder {
         self
     }
 
+    fn with_max_da_gas_price(mut self, max_price: u64) -> Self {
+        self.max_da_gas_price = max_price;
+        self
+    }
+
     fn with_starting_exec_gas_price(mut self, starting_da_gas_price: u64) -> Self {
         self.starting_exec_gas_price = starting_da_gas_price;
         self
@@ -102,7 +109,7 @@ impl UpdaterBuilder {
     }
 
     fn with_da_max_change_percent(mut self, max_change_percent: u16) -> Self {
-        self.max_change_percent = max_change_percent;
+        self.max_da_change_percent = max_change_percent;
         self
     }
 
@@ -177,7 +184,7 @@ impl UpdaterBuilder {
             new_scaled_exec_price: self.starting_exec_gas_price,
             new_scaled_da_gas_price: self.starting_da_gas_price,
             exec_gas_price_change_percent: self.exec_gas_price_change_percent,
-            max_da_gas_price_change_percent: self.max_change_percent,
+            max_da_gas_price_change_percent: self.max_da_change_percent,
 
             da_p_component: self.da_p_component,
             da_d_component: self.da_d_component,
@@ -192,6 +199,7 @@ impl UpdaterBuilder {
             last_profit: self.last_profit,
             second_to_last_profit: self.second_to_last_profit,
             min_da_gas_price: self.min_da_gas_price,
+            max_da_gas_price: self.max_da_gas_price,
             gas_price_factor: self
                 .da_gas_price_factor
                 .try_into()

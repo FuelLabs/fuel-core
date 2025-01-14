@@ -15,9 +15,9 @@ use fuel_core_gas_price_service::{
     },
     ports::{
         GasPriceData,
-        GasPriceServiceConfig,
         L2Data,
     },
+    v1::metadata::V1AlgorithmConfig,
 };
 use fuel_core_storage::{
     transactional::HistoricalView,
@@ -62,14 +62,25 @@ impl GasPriceData for Database<GasPriceDatabase> {
     }
 }
 
-impl From<Config> for GasPriceServiceConfig {
+impl From<Config> for V1AlgorithmConfig {
     fn from(value: Config) -> Self {
-        GasPriceServiceConfig::new_v0(
-            value.starting_gas_price,
-            value.min_gas_price,
-            value.gas_price_change_percent,
-            value.gas_price_threshold_percent,
-        )
+        V1AlgorithmConfig {
+            new_exec_gas_price: value.starting_exec_gas_price,
+            min_exec_gas_price: value.min_exec_gas_price,
+            exec_gas_price_change_percent: value.exec_gas_price_change_percent,
+            l2_block_fullness_threshold_percent: value.exec_gas_price_threshold_percent,
+            min_da_gas_price: value.min_da_gas_price,
+            max_da_gas_price: value.max_da_gas_price,
+            max_da_gas_price_change_percent: value.max_da_gas_price_change_percent,
+            da_p_component: value.da_gas_price_p_component,
+            da_d_component: value.da_gas_price_d_component,
+            normal_range_size: value.activity_normal_range_size,
+            capped_range_size: value.activity_capped_range_size,
+            decrease_range_size: value.activity_decrease_range_size,
+            block_activity_threshold: value.block_activity_threshold,
+            da_poll_interval: value.da_poll_interval,
+            gas_price_factor: value.da_gas_price_factor,
+        }
     }
 }
 
