@@ -3,7 +3,10 @@ use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     L2ActivityTracker,
 };
-use std::num::NonZeroU64;
+use std::{
+    num::NonZeroU64,
+    time::Duration,
+};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct V1Metadata {
@@ -76,7 +79,7 @@ pub struct V1AlgorithmConfig {
     pub decrease_range_size: u16,
     pub block_activity_threshold: u8,
     /// The interval at which the `DaSourceService` polls for new data
-    pub da_poll_interval: Option<u32>,
+    pub da_poll_interval: Option<Duration>,
 }
 
 pub fn updater_from_config(

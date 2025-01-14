@@ -113,6 +113,7 @@ use std::{
         Arc,
         Mutex,
     },
+    time::Duration,
 };
 use tokio::sync::mpsc::Receiver;
 
@@ -853,7 +854,7 @@ async fn uninitialized_task__init__starts_da_service_with_recorded_height_in_sto
     tx.set_recorded_height(BlockHeight::from(recorded_height))
         .unwrap();
     StorageTransaction::commit_transaction(tx).unwrap();
-    different_config.da_poll_interval = Some(1);
+    different_config.da_poll_interval = Some(Duration::from_millis(1));
     let service = UninitializedTask::new(
         different_config.clone(),
         Some(block_height.into()),

@@ -26,7 +26,10 @@ use libp2p::{
     },
     PeerId,
 };
-use std::ops::Deref;
+use std::{
+    ops::Deref,
+    time::Duration,
+};
 use version_36_fuel_core_gas_price_service::fuel_gas_price_updater::{
     fuel_core_storage_adapter::storage::GasPriceMetadata as OldGasPriceMetadata,
     UpdaterMetadata as OldUpdaterMetadata,
@@ -67,6 +70,14 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     ])
     .await
     .unwrap();
+
+    old_driver
+        .client
+        .produce_blocks(BLOCKS_TO_PRODUCE, None)
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
     let db = &old_driver.node.shared.database;
     let latest_height = db.gas_price().latest_height().unwrap();

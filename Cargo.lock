@@ -3416,6 +3416,7 @@ dependencies = [
  "tower 0.4.13",
  "tower-http 0.4.4",
  "tracing",
+ "url",
  "uuid 1.11.0",
 ]
 
@@ -3663,7 +3664,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
@@ -3968,6 +3969,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

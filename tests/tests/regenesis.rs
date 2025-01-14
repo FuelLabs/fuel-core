@@ -739,8 +739,6 @@ async fn starting_empty_node_with_overwritten_poa_works() -> anyhow::Result<()> 
             "0",
             "--da-gas-price-d-component",
             "0",
-            "--max-da-gas-price-change-percent",
-            "0",
             "--starting-gas-price",
             "0",
             "--gas-price-change-percent",

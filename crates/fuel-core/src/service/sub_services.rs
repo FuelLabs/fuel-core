@@ -38,17 +38,14 @@ use crate::{
         SubServices,
     },
 };
-use anyhow::anyhow;
-use fuel_core_gas_price_service::{
-    ports::GasPriceServiceConfig,
-    v1::{
-        algorithm::AlgorithmV1,
-        da_source_service::block_committer_costs::{
-            BlockCommitterDaBlockCosts,
-            BlockCommitterHttpApi,
-        },
-        uninitialized_task::new_gas_price_service_v1,
+use fuel_core_gas_price_service::v1::{
+    algorithm::AlgorithmV1,
+    da_source_service::block_committer_costs::{
+        BlockCommitterDaBlockCosts,
+        BlockCommitterHttpApi,
     },
+    metadata::V1AlgorithmConfig,
+    uninitialized_task::new_gas_price_service_v1,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
@@ -190,11 +187,7 @@ pub fn init_sub_services(
 
     let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
     let da_source = BlockCommitterDaBlockCosts::new(committer_api);
-    let v1_config = GasPriceServiceConfig::from(config.clone())
-        .v1()
-        .ok_or(anyhow!(
-            "Gas price service configuration is not compatible with V1 algorithm"
-        ))?;
+    let v1_config = V1AlgorithmConfig::from(config.clone());
 
     let gas_price_service_v1 = new_gas_price_service_v1(
         v1_config,
@@ -205,8 +198,8 @@ pub fn init_sub_services(
         da_source,
         database.on_chain().clone(),
     )?;
-    let (gas_price_algo, _) = &gas_price_service_v1.shared;
-    let gas_price_provider = FuelGasPriceProvider::new(gas_price_algo.clone());
+    let (gas_price_algo, _) = gas_price_service_v1.shared.clone();
+    let gas_price_provider = FuelGasPriceProvider::new(gas_price_algo);
     let txpool = fuel_core_txpool::new_service(
         chain_id,
         config.txpool.clone(),

@@ -10,7 +10,7 @@ impl DatabaseDescription for GasPriceDatabase {
     type Height = BlockHeight;
 
     fn version() -> u32 {
-        1
+        0
     }
 
     fn name() -> String {

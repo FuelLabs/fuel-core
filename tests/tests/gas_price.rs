@@ -281,7 +281,7 @@ async fn produce_block__lowers_gas_price() {
 }
 
 #[tokio::test]
-async fn produce_block__raises_gas_price_with_default_parameters() {
+async fn produce_block__dont_raises_gas_price_with_default_parameters() {
     // given
     let args = vec![
         "--debug",
@@ -292,13 +292,9 @@ async fn produce_block__raises_gas_price_with_default_parameters() {
     ];
     let driver = FuelCoreDriver::spawn(&args).await.unwrap();
 
-    let expected_default_da_gas_price = 10000000;
-    let expected_default_exec_gas_price = 1000;
-    let expected_default_percentage_increase = 10;
+    let expected_default_da_gas_price = 0;
 
-    let expected_gas_price = expected_default_da_gas_price
-        + expected_default_exec_gas_price * (100 + expected_default_percentage_increase)
-            / 100;
+    let expected_gas_price = expected_default_da_gas_price;
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
@@ -541,8 +537,6 @@ fn produce_block__l1_committed_block_affects_gas_price() {
         "0",
         "--gas-price-change-percent",
         "0",
-        "--max-da-gas-price-change-percent",
-        "0",
     ]);
 
     let (first_gas_price, temp_dir) = rt.block_on(async {
@@ -577,12 +571,12 @@ fn produce_block__l1_committed_block_affects_gas_price() {
     // add the da committer url to the args, as well as set da parameters to modify the gas price
     args.extend(&[
         "--da-committer-url",
-        &url,
+        url.as_str(),
         "--da-poll-interval",
-        "1",
+        "1ms",
         "--da-gas-price-p-component",
         "1",
-        "--max-da-gas-price-change-percent",
+        "--gas-price-change-percent",
         "100",
     ]);
 
@@ -600,7 +594,10 @@ fn produce_block__l1_committed_block_affects_gas_price() {
             // Produce new block to update gas price
             driver.client.produce_blocks(1, None).await.unwrap();
             tokio::time::sleep(Duration::from_millis(20)).await;
-            driver.client.estimate_gas_price(0).await.unwrap().gas_price
+            let gas_price = driver.client.estimate_gas_price(0).await.unwrap().gas_price;
+            // cleanup
+            driver.kill().await;
+            gas_price
         })
         .into();
 
@@ -678,7 +675,7 @@ fn run__if_metadata_is_behind_l2_then_will_catch_up() {
     });
 }
 
-fn node_config_with_da_committer_url(url: &str) -> Config {
+fn node_config_with_da_committer_url(url: url::Url) -> Config {
     let block_gas_limit = 3_000_000;
     let chain_config = ChainConfig {
         consensus_parameters: ConsensusParameters::V1(ConsensusParametersV1 {
@@ -695,8 +692,8 @@ fn node_config_with_da_committer_url(url: &str) -> Config {
     node_config.max_da_gas_price = u64::MAX;
     node_config.max_da_gas_price_change_percent = 15;
     node_config.block_production = Trigger::Never;
-    node_config.da_committer_url = Some(url.to_string());
-    node_config.da_poll_interval = Some(100);
+    node_config.da_committer_url = Some(url);
+    node_config.da_poll_interval = Some(Duration::from_millis(100));
     node_config.da_gas_price_p_component = 123_456;
     node_config.da_gas_price_d_component = 1_234_567;
     node_config.block_activity_threshold = 0;
@@ -711,7 +708,7 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
     let mut mock = FakeServer::new();
     let url = mock.url();
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let node_config = node_config_with_da_committer_url(&url);
+    let node_config = node_config_with_da_committer_url(url);
     let block_delay = 110;
 
     let (srv, client) = rt.block_on(async {
@@ -829,7 +826,7 @@ fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
     let mut mock = FakeServer::new();
     let url = mock.url();
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let node_config = node_config_with_da_committer_url(&url);
+    let node_config = node_config_with_da_committer_url(url);
     let l2_blocks = 1000;
     let da_blocks = l2_blocks / 2;
 
