@@ -23,6 +23,8 @@ use fuel_core_chain_config::{
     StateConfig,
     StateConfigBuilder,
 };
+#[cfg(feature = "backup")]
+use fuel_core_services::TraceErr;
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
     Coins,
@@ -75,6 +77,94 @@ impl CombinedDatabase {
         crate::state::rocks_db::RocksDb::<OffChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
         crate::state::rocks_db::RocksDb::<GasPriceDatabase>::prune(path)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "backup")]
+    pub fn backup(
+        db_dir: &std::path::Path,
+        backup_dir: &std::path::Path,
+    ) -> crate::database::Result<()> {
+        use tempfile::TempDir;
+
+        let temp_backup_dir = TempDir::new()
+            .trace_err("Failed to create temporary backup directory")
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        Self::backup_databases(db_dir, temp_backup_dir.path())?;
+
+        std::fs::rename(temp_backup_dir.path(), backup_dir)
+            .trace_err("Failed to move temporary backup directory")
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "backup")]
+    fn backup_databases(
+        db_dir: &std::path::Path,
+        temp_dir: &std::path::Path,
+    ) -> crate::database::Result<()> {
+        crate::state::rocks_db::RocksDb::<OnChain>::backup(db_dir, temp_dir)
+            .trace_err("Failed to backup on-chain database")?;
+
+        crate::state::rocks_db::RocksDb::<OffChain>::backup(db_dir, temp_dir)
+            .trace_err("Failed to backup off-chain database")?;
+
+        crate::state::rocks_db::RocksDb::<Relayer>::backup(db_dir, temp_dir)
+            .trace_err("Failed to backup relayer database")?;
+
+        crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(db_dir, temp_dir)
+            .trace_err("Failed to backup gas-price database")?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "backup")]
+    pub fn restore(
+        restore_to: &std::path::Path,
+        backup_dir: &std::path::Path,
+    ) -> crate::database::Result<()> {
+        use tempfile::TempDir;
+
+        let temp_restore_dir = TempDir::new()
+            .trace_err("Failed to create temporary restore directory")
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        Self::restore_database(backup_dir, temp_restore_dir.path())?;
+
+        std::fs::rename(temp_restore_dir.path(), restore_to)
+            .trace_err("Failed to move temporary restore directory")
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        // we don't return a CombinedDatabase here
+        // because the consumer can use any db config while opening it
+        Ok(())
+    }
+
+    #[cfg(feature = "backup")]
+    fn restore_database(
+        backup_dir: &std::path::Path,
+        temp_restore_dir: &std::path::Path,
+    ) -> crate::database::Result<()> {
+        crate::state::rocks_db::RocksDb::<OnChain>::restore(temp_restore_dir, backup_dir)
+            .trace_err("Failed to backup on-chain database")?;
+
+        crate::state::rocks_db::RocksDb::<OffChain>::restore(
+            temp_restore_dir,
+            backup_dir,
+        )
+        .trace_err("Failed to backup off-chain database")?;
+
+        crate::state::rocks_db::RocksDb::<Relayer>::restore(temp_restore_dir, backup_dir)
+            .trace_err("Failed to backup relayer database")?;
+
+        crate::state::rocks_db::RocksDb::<GasPriceDatabase>::restore(
+            temp_restore_dir,
+            backup_dir,
+        )
+        .trace_err("Failed to backup gas-price database")?;
+
         Ok(())
     }
 
@@ -424,5 +514,191 @@ impl CombinedGenesisDatabase {
 
     pub fn off_chain(&self) -> &GenesisDatabase<OffChain> {
         &self.off_chain
+    }
+}
+
+#[allow(non_snake_case)]
+#[cfg(feature = "backup")]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_core_storage::StorageAsMut;
+    use fuel_core_types::{
+        entities::coins::coin::CompressedCoin,
+        fuel_tx::UtxoId,
+    };
+    use tempfile::TempDir;
+
+    #[test]
+    fn backup_and_restore__works_correctly__happy_path() {
+        // given
+        let db_dir = TempDir::new().unwrap();
+        let mut combined_db = CombinedDatabase::open(
+            db_dir.path(),
+            StateRewindPolicy::NoRewind,
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
+        let key = UtxoId::new(Default::default(), Default::default());
+        let expected_value = CompressedCoin::default();
+
+        let on_chain_db = combined_db.on_chain_mut();
+        on_chain_db
+            .storage_as_mut::<Coins>()
+            .insert(&key, &expected_value)
+            .unwrap();
+        drop(combined_db);
+
+        // when
+        let backup_dir = TempDir::new().unwrap();
+        CombinedDatabase::backup(db_dir.path(), backup_dir.path()).unwrap();
+
+        // then
+        let restore_dir = TempDir::new().unwrap();
+        CombinedDatabase::restore(restore_dir.path(), backup_dir.path()).unwrap();
+        let restored_db = CombinedDatabase::open(
+            restore_dir.path(),
+            StateRewindPolicy::NoRewind,
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
+
+        let mut restored_on_chain_db = restored_db.on_chain();
+        let restored_value = restored_on_chain_db
+            .storage::<Coins>()
+            .get(&key)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        assert_eq!(expected_value, restored_value);
+
+        // cleanup
+        std::fs::remove_dir_all(db_dir.path()).unwrap();
+        std::fs::remove_dir_all(backup_dir.path()).unwrap();
+        std::fs::remove_dir_all(restore_dir.path()).unwrap();
+    }
+
+    #[test]
+    fn backup__when_backup_fails_it_should_not_leave_any_residue() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // given
+        let db_dir = TempDir::new().unwrap();
+        let mut combined_db = CombinedDatabase::open(
+            db_dir.path(),
+            StateRewindPolicy::NoRewind,
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
+        let key = UtxoId::new(Default::default(), Default::default());
+        let expected_value = CompressedCoin::default();
+
+        let on_chain_db = combined_db.on_chain_mut();
+        on_chain_db
+            .storage_as_mut::<Coins>()
+            .insert(&key, &expected_value)
+            .unwrap();
+        drop(combined_db);
+
+        // when
+        // we set the permissions of db_dir to not allow reading
+        std::fs::set_permissions(db_dir.path(), std::fs::Permissions::from_mode(0o030))
+            .unwrap();
+        let backup_dir = TempDir::new().unwrap();
+
+        // then
+        CombinedDatabase::backup(db_dir.path(), backup_dir.path())
+            .expect_err("Backup should fail");
+        let backup_dir_contents = std::fs::read_dir(backup_dir.path()).unwrap();
+        assert_eq!(backup_dir_contents.count(), 0);
+
+        // cleanup
+        std::fs::set_permissions(db_dir.path(), std::fs::Permissions::from_mode(0o770))
+            .unwrap();
+        std::fs::remove_dir_all(db_dir.path()).unwrap();
+        std::fs::remove_dir_all(backup_dir.path()).unwrap();
+    }
+
+    #[test]
+    fn restore__when_restore_fails_it_should_not_leave_any_residue() {
+        use std::os::unix::fs::PermissionsExt;
+
+        // given
+        let db_dir = TempDir::new().unwrap();
+        let mut combined_db = CombinedDatabase::open(
+            db_dir.path(),
+            StateRewindPolicy::NoRewind,
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
+        let key = UtxoId::new(Default::default(), Default::default());
+        let expected_value = CompressedCoin::default();
+
+        let on_chain_db = combined_db.on_chain_mut();
+        on_chain_db
+            .storage_as_mut::<Coins>()
+            .insert(&key, &expected_value)
+            .unwrap();
+        drop(combined_db);
+
+        let backup_dir = TempDir::new().unwrap();
+        CombinedDatabase::backup(db_dir.path(), backup_dir.path()).unwrap();
+
+        // when
+        // we set the permissions of backup_dir to not allow reading
+        std::fs::set_permissions(
+            backup_dir.path(),
+            std::fs::Permissions::from_mode(0o030),
+        )
+        .unwrap();
+        let restore_dir = TempDir::new().unwrap();
+
+        // then
+        CombinedDatabase::restore(restore_dir.path(), backup_dir.path())
+            .expect_err("Restore should fail");
+        let restore_dir_contents = std::fs::read_dir(restore_dir.path()).unwrap();
+        assert_eq!(restore_dir_contents.count(), 0);
+
+        // cleanup
+        std::fs::set_permissions(
+            backup_dir.path(),
+            std::fs::Permissions::from_mode(0o770),
+        )
+        .unwrap();
+        std::fs::remove_dir_all(db_dir.path()).unwrap();
+        std::fs::remove_dir_all(backup_dir.path()).unwrap();
+        std::fs::remove_dir_all(restore_dir.path()).unwrap();
+    }
+
+    #[test]
+    fn backup__cannot_backup_while_db_is_opened() {
+        // given
+        let db_dir = TempDir::new().unwrap();
+        let mut combined_db = CombinedDatabase::open(
+            db_dir.path(),
+            StateRewindPolicy::NoRewind,
+            DatabaseConfig::config_for_tests(),
+        )
+        .unwrap();
+        let key = UtxoId::new(Default::default(), Default::default());
+        let expected_value = CompressedCoin::default();
+
+        let on_chain_db = combined_db.on_chain_mut();
+        on_chain_db
+            .storage_as_mut::<Coins>()
+            .insert(&key, &expected_value)
+            .unwrap();
+
+        // when
+        let backup_dir = TempDir::new().unwrap();
+        // no drop for combined_db
+
+        // then
+        CombinedDatabase::backup(db_dir.path(), backup_dir.path())
+            .expect_err("Backup should fail");
+
+        // cleanup
+        std::fs::remove_dir_all(db_dir.path()).unwrap();
+        std::fs::remove_dir_all(backup_dir.path()).unwrap();
     }
 }
