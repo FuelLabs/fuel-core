@@ -181,27 +181,29 @@ impl BasicVerifiedTx {
 impl GasPriceVerifiedTx {
     pub fn perform_inputs_verifications<View>(
         self,
-        pool: &Shared<TxPool>,
-        view: &View,
-        metadata: Metadata,
+        _pool: &Shared<TxPool>,
+        _view: &View,
+        _metadata: Metadata,
     ) -> Result<InputDependenciesVerifiedTx, Error>
     where
         View: TxPoolPersistentStorage,
     {
-        let pool_tx = checked_tx_into_pool(self.0, metadata)?;
+        //TODO: See in the end if it change something
+
+        // let pool_tx = checked_tx_into_pool(self.0, metadata)?;
         // let tx_id = pool_tx.id();
 
         // let start_time = tokio::time::Instant::now();
-        let read_lock = pool.read();
+        // let read_lock = pool.read();
         // tracing::info!(
         //     "Transaction (id: {}) waiting for read lock took: {} micros seconds",
         //     tx_id,
         //     start_time.elapsed().as_micros()
         // );
         // let start_time = tokio::time::Instant::now();
-        let transaction = read_lock
-            .can_insert_transaction(Arc::new(pool_tx), view)?
-            .into_transaction();
+        // let transaction = read_lock
+        //     .can_insert_transaction(Arc::new(pool_tx), view)?
+        //     .into_transaction();
         // tracing::info!(
         //     "Transaction (id: {}) verify insert pool took: {} micros seconds",
         //     tx_id,
@@ -209,10 +211,10 @@ impl GasPriceVerifiedTx {
         // );
 
         // SAFETY: We created the arc just above and it's not shared.
-        let transaction =
-            Arc::try_unwrap(transaction).expect("We only the owner of the `Arc`; qed");
-        let checked_transaction: CheckedTransaction = transaction.into();
-        Ok(InputDependenciesVerifiedTx(checked_transaction.into()))
+        // let transaction =
+        //     Arc::try_unwrap(transaction).expect("We only the owner of the `Arc`; qed");
+        // let checked_transaction: CheckedTransaction = transaction.into();
+        Ok(InputDependenciesVerifiedTx(self.0.into()))
     }
 }
 
