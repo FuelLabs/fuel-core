@@ -194,12 +194,16 @@ where
             .into_iter()
             .map(|data| data.transaction)
             .collect::<Vec<_>>();
+        self.update_stats();
+        Ok(removed_transactions)
+    }
+
+    fn update_stats(&self) {
         let _ = self.pool_stats_sender.send(TxPoolStats {
             tx_count: self.tx_count() as u64,
             total_size: self.current_bytes_size as u64,
             total_gas: self.current_gas,
         });
-        Ok(removed_transactions)
     }
 
     /// Check if a transaction can be inserted into the pool.
@@ -323,13 +327,17 @@ where
             });
         }
 
-        best_txs
+        let txs = best_txs
             .into_iter()
             .map(|storage_entry| {
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
                 storage_entry.transaction
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        self.update_stats();
+
+        txs
     }
 
     pub fn find_one(&self, tx_id: &TxId) -> Option<&StorageData> {
@@ -377,6 +385,8 @@ where
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
             }
         }
+
+        self.update_stats();
     }
 
     /// Check if the pool has enough space to store a transaction.
@@ -528,6 +538,9 @@ where
                     .extend(removed.into_iter().map(|data| data.transaction));
             }
         }
+
+        self.update_stats();
+
         removed_transactions
     }
 
@@ -541,6 +554,9 @@ where
             self.update_components_and_caches_on_removal(removed.iter());
             txs_removed.extend(removed.into_iter().map(|data| data.transaction));
         }
+
+        self.update_stats();
+
         txs_removed
     }
 
