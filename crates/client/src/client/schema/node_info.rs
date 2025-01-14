@@ -23,6 +23,8 @@ pub struct NodeInfo {
     pub utxo_validation: bool,
     pub vm_backtrace: bool,
     pub max_tx: U64,
+    pub max_gas: U64,
+    pub max_size: U64,
     pub max_depth: U64,
     pub node_version: String,
     pub tx_pool_stats: TxPoolStats,

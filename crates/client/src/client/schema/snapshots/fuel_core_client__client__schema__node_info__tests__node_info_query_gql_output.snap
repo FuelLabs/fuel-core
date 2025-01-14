@@ -8,6 +8,8 @@ query QueryNodeInfo {
     utxoValidation
     vmBacktrace
     maxTx
+    maxGas
+    maxSize
     maxDepth
     nodeVersion
     txPoolStats {

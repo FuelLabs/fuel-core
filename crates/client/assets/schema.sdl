@@ -760,6 +760,8 @@ type NodeInfo {
 	utxoValidation: Boolean!
 	vmBacktrace: Boolean!
 	maxTx: U64!
+	maxGas: U64!
+	maxSize: U64!
 	maxDepth: U64!
 	nodeVersion: String!
 	txPoolStats: TxPoolStats!
