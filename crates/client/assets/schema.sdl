@@ -762,23 +762,8 @@ type NodeInfo {
 	maxTx: U64!
 	maxDepth: U64!
 	nodeVersion: String!
-	txPoolStats: TxPoolStats!
+	poolStats: TxPoolStats!
 	peers: [PeerInfo!]!
-}
-
-type TxPoolStats {
-	"""
-	Number of transactions in the pool.
-	"""
-	nbTransactions: U64!
-	"""
-	Total size of transactions in the pool.
-	"""
-	totalSize: U64!
-	"""
-	Total gas of transactions in the pool.
-	"""
-	totalGas: U64!
 }
 
 scalar Nonce
@@ -1291,6 +1276,21 @@ enum TxParametersVersion {
 }
 
 scalar TxPointer
+
+type TxPoolStats {
+	"""
+	The number of transactions in the pool
+	"""
+	nbTransactions: U64!
+	"""
+	The total size of the transactions in the pool
+	"""
+	totalSize: U64!
+	"""
+	The total gas of the transactions in the pool
+	"""
+	totalGas: U64!
+}
 
 scalar U128
 
