@@ -61,6 +61,10 @@ use futures::FutureExt;
 use std::{
     num::NonZeroU64,
     sync::{
+        atomic::{
+            AtomicU32,
+            Ordering,
+        },
         Arc,
         Mutex,
     },
@@ -112,7 +116,7 @@ where
     /// Storage transaction provider for metadata and unrecorded blocks
     storage_tx_provider: AtomicStorage,
     /// communicates to the Da source service what the latest L2 block was
-    latest_l2_block: Arc<Mutex<BlockHeight>>,
+    latest_l2_block: Arc<AtomicU32>,
 }
 
 impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
@@ -130,6 +134,11 @@ where
                 self.latest_gas_price.set(*height, *gas_price);
             }
         }
+    }
+
+    #[cfg(test)]
+    pub fn latest_l2_block(&self) -> &AtomicU32 {
+        &self.latest_l2_block
     }
 }
 
@@ -159,11 +168,7 @@ where
         match block {
             BlockInfo::GenesisBlock => {}
             BlockInfo::Block { height, .. } => {
-                let mut latest_l2_block = self
-                    .latest_l2_block
-                    .lock()
-                    .map_err(|err| anyhow!("Error locking latest L2 block: {:?}", err))?;
-                *latest_l2_block = BlockHeight::from(height);
+                self.latest_l2_block.store(height, Ordering::Release);
             }
         }
         Ok(())
@@ -182,7 +187,7 @@ where
         algorithm_updater: AlgorithmUpdaterV1,
         da_source_adapter_handle: ServiceRunner<DaSourceService<DA>>,
         storage_tx_provider: AtomicStorage,
-        latest_l2_block: Arc<Mutex<BlockHeight>>,
+        latest_l2_block: Arc<AtomicU32>,
     ) -> Self {
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
         Self {
@@ -415,6 +420,7 @@ mod tests {
     use std::{
         num::NonZeroU64,
         sync::{
+            atomic::AtomicU32,
             Arc,
             Mutex,
         },
@@ -526,9 +532,6 @@ mod tests {
     fn database() -> StorageTransaction<InMemoryStorage<GasPriceColumn>> {
         InMemoryStorage::default().into_transaction()
     }
-    fn latest_l2_height(height: u32) -> Arc<Mutex<BlockHeight>> {
-        Arc::new(Mutex::new(BlockHeight::new(height)))
-    }
 
     #[tokio::test]
     async fn run__updates_gas_price_with_l2_block_source() {
@@ -577,20 +580,19 @@ mod tests {
         .unwrap();
 
         let notifier = Arc::new(tokio::sync::Notify::new());
-        let latest_l2_block = Arc::new(Mutex::new(BlockHeight::new(0)));
+        let latest_l2_height = Arc::new(AtomicU32::new(0));
         let dummy_da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Err(anyhow::anyhow!("unused at the moment")),
                 notifier.clone(),
             ),
             None,
-            latest_l2_block,
+            Arc::clone(&latest_l2_height),
             None,
         );
         let da_service_runner = ServiceRunner::new(dummy_da_source);
         da_service_runner.start_and_await().await.unwrap();
         let latest_gas_price = LatestGasPrice::new(0, 0);
-        let latest_l2_height = latest_l2_height(0);
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -665,7 +667,7 @@ mod tests {
         algo_updater.last_profit = 10_000;
         algo_updater.new_scaled_da_gas_price = 10_000_000;
 
-        let latest_l2_block = latest_l2_height(block_height - 1);
+        let latest_l2_block = Arc::new(AtomicU32::new(block_height - 1));
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
@@ -678,7 +680,7 @@ mod tests {
                 notifier.clone(),
             ),
             Some(Duration::from_millis(1)),
-            latest_l2_block.clone(),
+            Arc::clone(&latest_l2_block),
             None,
         );
         let mut watcher = StateWatcher::started();
@@ -767,7 +769,7 @@ mod tests {
         algo_updater.last_profit = 10_000;
         algo_updater.new_scaled_da_gas_price = 10_000_000;
 
-        let latest_l2_height = latest_l2_height(block_height - 1);
+        let latest_l2_height = Arc::new(AtomicU32::new(block_height - 1));
         let notifier = Arc::new(tokio::sync::Notify::new());
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
@@ -780,7 +782,7 @@ mod tests {
                 notifier.clone(),
             ),
             Some(Duration::from_millis(1)),
-            latest_l2_height.clone(),
+            Arc::clone(&latest_l2_height),
             None,
         );
         let mut watcher = StateWatcher::started();
@@ -859,7 +861,7 @@ mod tests {
 
         let notifier = Arc::new(tokio::sync::Notify::new());
         let blob_cost_wei = 9000;
-        let latest_l2_height = latest_l2_height(block_height - 1);
+        let latest_l2_height = Arc::new(AtomicU32::new(block_height - 1));
         let da_source = DaSourceService::new(
             DummyDaBlockCosts::new(
                 Ok(DaBlockCosts {
@@ -871,7 +873,7 @@ mod tests {
                 notifier.clone(),
             ),
             Some(Duration::from_millis(1)),
-            latest_l2_height.clone(),
+            Arc::clone(&latest_l2_height),
             None,
         );
         let mut watcher = StateWatcher::started();

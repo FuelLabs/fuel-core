@@ -7,6 +7,10 @@ use fuel_core_services::{
 };
 use std::{
     sync::{
+        atomic::{
+            AtomicU32,
+            Ordering,
+        },
         Arc,
         Mutex,
     },
@@ -43,7 +47,7 @@ pub struct DaSourceService<Source> {
     poll_interval: Interval,
     source: Source,
     shared_state: SharedState,
-    latest_l2_height: Arc<Mutex<BlockHeight>>,
+    latest_l2_height: Arc<AtomicU32>,
     recorded_height: Option<BlockHeight>,
 }
 
@@ -57,7 +61,7 @@ where
     pub fn new(
         source: Source,
         poll_interval: Option<Duration>,
-        latest_l2_height: Arc<Mutex<BlockHeight>>,
+        latest_l2_height: Arc<AtomicU32>,
         recorded_height: Option<BlockHeight>,
     ) -> Self {
         let (sender, _) = tokio::sync::broadcast::channel(DA_BLOCK_COSTS_CHANNEL_SIZE);
@@ -77,7 +81,7 @@ where
     pub fn new_with_sender(
         source: Source,
         poll_interval: Option<Duration>,
-        latest_l2_height: Arc<Mutex<BlockHeight>>,
+        latest_l2_height: Arc<AtomicU32>,
         recorded_height: Option<BlockHeight>,
         sender: Sender<DaBlockCosts>,
     ) -> Self {
@@ -103,7 +107,7 @@ where
             .filter_costs_that_have_values_greater_than_l2_block_height(da_block_costs)?;
         tracing::debug!(
             "the latest l2 height is: {:?}",
-            *self.latest_l2_height.lock().unwrap()
+            self.latest_l2_height.load(Ordering::Acquire)
         );
         for da_block_costs in filtered_block_costs {
             tracing::debug!("Sending block costs: {:?}", da_block_costs);
@@ -124,12 +128,9 @@ where
         &self,
         da_block_costs: Vec<DaBlockCosts>,
     ) -> Result<impl Iterator<Item = DaBlockCosts>> {
-        let latest_l2_height = *self
-            .latest_l2_height
-            .lock()
-            .map_err(|err| anyhow::anyhow!("lock error: {:?}", err))?;
+        let latest_l2_height = self.latest_l2_height.load(Ordering::Acquire);
         let iter = da_block_costs.into_iter().filter(move |da_block_costs| {
-            let end = BlockHeight::from(*da_block_costs.l2_blocks.end());
+            let end = *da_block_costs.l2_blocks.end();
             end < latest_l2_height
         });
         Ok(iter)
@@ -206,11 +207,11 @@ where
     }
 }
 
-#[cfg(feature = "test-helpers")]
+#[cfg(any(test, feature = "test-helpers"))]
 pub fn new_da_service<S: DaBlockCostsSource>(
     da_source: S,
     poll_interval: Option<Duration>,
-    latest_l2_height: Arc<Mutex<BlockHeight>>,
+    latest_l2_height: Arc<AtomicU32>,
 ) -> ServiceRunner<DaSourceService<S>> {
     ServiceRunner::new(DaSourceService::new(
         da_source,
