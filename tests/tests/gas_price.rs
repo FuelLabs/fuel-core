@@ -615,11 +615,11 @@ fn produce_block__l1_committed_block_affects_gas_price() {
             tokio::time::sleep(Duration::from_millis(200)).await;
             // Produce new block to update gas price
             driver.client.produce_blocks(1, None).await.unwrap();
-            tokio::time::sleep(Duration::from_millis(20)).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
             // Produce new block to _use_ the updated gas price
             driver.client.produce_blocks(1, None).await.unwrap();
             // Wait for that block to be picked up by the gas price service and communicated to GraphQL
-            tokio::time::sleep(Duration::from_millis(20)).await;
+            tokio::time::sleep(Duration::from_millis(50)).await;
             let gas_price = driver.client.estimate_gas_price(0).await.unwrap().gas_price;
             // cleanup
             driver.kill().await;
