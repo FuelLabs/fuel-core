@@ -42,9 +42,6 @@ use crate::{
     },
 };
 
-#[cfg(test)]
-use std::collections::HashSet;
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TxPoolStats {
     pub tx_count: u64,
@@ -177,7 +174,7 @@ where
 
     fn update_stats(&self) {
         let _ = self.pool_stats_sender.send(TxPoolStats {
-            tx_count: self.tx_count() as u64,
+            tx_count: self.tx_id_to_storage_id.len() as u64,
             total_size: self.current_bytes_size as u64,
             total_gas: self.current_gas,
         });
@@ -258,7 +255,8 @@ where
         &mut self,
         constraints: Constraints,
     ) -> Vec<ArcPoolTx> {
-        self.selection_algorithm
+        let txs = self
+            .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage)
             .into_iter()
             .map(|storage_entry| {
@@ -269,7 +267,6 @@ where
             .collect::<Vec<_>>();
 
         self.update_stats();
-
         txs
     }
 

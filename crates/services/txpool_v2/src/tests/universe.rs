@@ -123,14 +123,6 @@ impl TestPoolUniverse {
         &self.mock_db
     }
 
-    pub fn latest_stats(&self) -> TxPoolStats {
-        if let Some(receiver) = &self.stats_receiver {
-            *receiver.borrow()
-        } else {
-            TxPoolStats::default()
-        }
-    }
-
     pub fn config(self, config: Config) -> Self {
         if self.pool.is_some() {
             panic!("Pool already built");
@@ -307,40 +299,6 @@ impl TestPoolUniverse {
         } else {
             panic!("Pool needs to be built first");
         }
-    }
-
-    pub fn assert_pool_integrity(&self, expected_txs: &[ArcPoolTx]) {
-        let stats = self.latest_stats();
-        assert_eq!(stats.tx_count, expected_txs.len() as u64);
-        let mut total_gas: u64 = 0;
-        let mut total_size: u64 = 0;
-        for tx in expected_txs {
-            total_gas = total_gas.checked_add(tx.max_gas()).unwrap();
-            total_size = total_gas
-                .checked_add(tx.metered_bytes_size() as u64)
-                .unwrap();
-        }
-        assert_eq!(stats.total_gas, total_gas);
-        assert_eq!(stats.total_size, total_size);
-        let pool = self.pool.as_ref().unwrap();
-        let pool = pool.read();
-        let storage_ids_dependencies = pool.storage.assert_integrity(expected_txs);
-        let txs_without_dependencies = expected_txs
-            .iter()
-            .zip(storage_ids_dependencies)
-            .filter_map(|(tx, (_, has_dependencies))| {
-                if !has_dependencies {
-                    Some(tx.clone())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        pool.selection_algorithm
-            .assert_integrity(&txs_without_dependencies);
-        pool.collision_manager.assert_integrity(expected_txs);
-        let txs: HashSet<TxId> = expected_txs.iter().map(|tx| tx.id()).collect();
-        pool.assert_integrity(txs);
     }
 
     pub fn get_pool(&self) -> Shared<TxPool> {
