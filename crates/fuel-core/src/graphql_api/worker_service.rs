@@ -32,7 +32,10 @@ use crate::{
             },
         },
     },
-    graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
+    graphql_api::{
+        query_costs,
+        storage::relayed_transactions::RelayedTransactionStatuses,
+    },
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
@@ -578,6 +581,10 @@ where
             coins_to_spend_indexation_enabled,
             asset_metadata_indexation_enabled,
             "Indexation availability status"
+        );
+        tracing::debug!(
+            balance_query = query_costs().balance_query,
+            "Indexation related query costs"
         );
 
         let InitializeTask {
