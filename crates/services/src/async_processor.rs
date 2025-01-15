@@ -129,9 +129,9 @@ mod tests {
     #[tokio::test]
     async fn one_spawn_single_tasks_works() {
         // Given
-        let number_of_pending_tasks = 1;
+        const NUMBER_OF_PENDING_TASKS: usize = 1;
         let heavy_task_processor =
-            AsyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", 1, NUMBER_OF_PENDING_TASKS).unwrap();
 
         // When
         let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -150,10 +150,10 @@ mod tests {
     #[tokio::test]
     async fn one_spawn_single_tasks_works__thread_id_is_different_than_main() {
         // Given
-        let max_number_of_threads = 10;
-        let number_of_pending_tasks = 10000;
+        const MAX_NUMBER_OF_THREADS: usize = 10;
+        const NUMBER_OF_PENDING_TASKS: usize = 10000;
         let heavy_task_processor =
-            AsyncProcessor::new("Test", max_number_of_threads, number_of_pending_tasks)
+            AsyncProcessor::new("Test", MAX_NUMBER_OF_THREADS, NUMBER_OF_PENDING_TASKS)
                 .unwrap();
         let main_handler = tokio::spawn(async move { std::thread::current().id() });
         let main_id = main_handler.await.unwrap();
@@ -164,7 +164,7 @@ mod tests {
                 .try_spawn(async move { std::thread::current().id() })
                 .unwrap()
         })
-        .take(number_of_pending_tasks)
+        .take(NUMBER_OF_PENDING_TASKS)
         .collect::<Vec<_>>();
 
         // Then
@@ -179,15 +179,15 @@ mod tests {
         // There's been at least one worker thread used.
         assert!(unique_thread_ids.len() > 1);
         // There were no more worker threads above the threshold.
-        assert!(unique_thread_ids.len() <= max_number_of_threads);
+        assert!(unique_thread_ids.len() <= MAX_NUMBER_OF_THREADS);
     }
 
     #[test]
     fn second_spawn_fails_when_limit_is_one_and_first_in_progress() {
         // Given
-        let number_of_pending_tasks = 1;
+        const NUMBER_OF_PENDING_TASKS: usize = 1;
         let heavy_task_processor =
-            AsyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", 1, NUMBER_OF_PENDING_TASKS).unwrap();
         let first_spawn_result = heavy_task_processor.try_spawn(async move {
             sleep(Duration::from_secs(1));
         });
@@ -205,9 +205,9 @@ mod tests {
 
     #[test]
     fn second_spawn_works_when_first_is_finished() {
-        let number_of_pending_tasks = 1;
+        const NUMBER_OF_PENDING_TASKS: usize = 1;
         let heavy_task_processor =
-            AsyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", 1, NUMBER_OF_PENDING_TASKS).unwrap();
 
         // Given
         let (sender, receiver) = tokio::sync::oneshot::channel();
@@ -232,11 +232,11 @@ mod tests {
     #[test]
     fn can_spawn_10_tasks_when_limit_is_10() {
         // Given
-        let number_of_pending_tasks = 10;
+        const NUMBER_OF_PENDING_TASKS: usize = 10;
         let heavy_task_processor =
-            AsyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
+            AsyncProcessor::new("Test", 1, NUMBER_OF_PENDING_TASKS).unwrap();
 
-        for _ in 0..number_of_pending_tasks {
+        for _ in 0..NUMBER_OF_PENDING_TASKS {
             // When
             let result = heavy_task_processor.try_spawn(async move {
                 tokio::time::sleep(Duration::from_secs(1)).await;
@@ -250,17 +250,17 @@ mod tests {
     #[tokio::test]
     async fn executes_5_tasks_for_5_seconds_with_one_thread() {
         // Given
-        let number_of_pending_tasks = 5;
-        let number_of_threads = 1;
+        const NUMBER_OF_PENDING_TASKS: usize = 5;
+        const NUMBER_OF_THREADS: usize = 1;
         let heavy_task_processor =
-            AsyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+            AsyncProcessor::new("Test", NUMBER_OF_THREADS, NUMBER_OF_PENDING_TASKS)
                 .unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
             tokio::sync::broadcast::channel(1024);
         let instant = Instant::now();
-        for _ in 0..number_of_pending_tasks {
+        for _ in 0..NUMBER_OF_PENDING_TASKS {
             let broadcast_sender = broadcast_sender.clone();
             let result = heavy_task_processor.try_spawn(async move {
                 sleep(Duration::from_secs(1));
@@ -289,17 +289,17 @@ mod tests {
     async fn executes_10_blocking_tasks_for_1_second_with_10_threads__records_busy_time()
     {
         // Given
-        let number_of_pending_tasks = 10;
-        let number_of_threads = 10;
+        const NUMBER_OF_PENDING_TASKS: usize = 10;
+        const NUMBER_OF_THREADS: usize = 10;
         let heavy_task_processor =
-            AsyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+            AsyncProcessor::new("Test", NUMBER_OF_THREADS, NUMBER_OF_PENDING_TASKS)
                 .unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
             tokio::sync::broadcast::channel(1024);
         let instant = Instant::now();
-        for _ in 0..number_of_pending_tasks {
+        for _ in 0..NUMBER_OF_PENDING_TASKS {
             let broadcast_sender = broadcast_sender.clone();
             let result = heavy_task_processor.try_spawn(async move {
                 sleep(Duration::from_secs(1));
@@ -328,17 +328,17 @@ mod tests {
     async fn executes_10_non_blocking_tasks_for_1_second_with_10_threads__records_idle_time(
     ) {
         // Given
-        let number_of_pending_tasks = 10;
-        let number_of_threads = 10;
+        const NUMBER_OF_PENDING_TASKS: usize = 10;
+        const NUMBER_OF_THREADS: usize = 10;
         let heavy_task_processor =
-            AsyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+            AsyncProcessor::new("Test", NUMBER_OF_THREADS, NUMBER_OF_PENDING_TASKS)
                 .unwrap();
 
         // When
         let (broadcast_sender, mut broadcast_receiver) =
             tokio::sync::broadcast::channel(1024);
         let instant = Instant::now();
-        for _ in 0..number_of_pending_tasks {
+        for _ in 0..NUMBER_OF_PENDING_TASKS {
             let broadcast_sender = broadcast_sender.clone();
             let result = heavy_task_processor.try_spawn(async move {
                 tokio::time::sleep(Duration::from_secs(1)).await;
