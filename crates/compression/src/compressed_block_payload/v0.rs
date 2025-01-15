@@ -29,7 +29,7 @@ pub struct CompressedBlockPayloadV0 {
 
 impl VersionedBlockPayload for CompressedBlockPayloadV0 {
     fn height(&self) -> &BlockHeight {
-        &self.header.height()
+        self.header.height()
     }
 
     fn consensus_header(&self) -> &ConsensusHeader<Empty> {
