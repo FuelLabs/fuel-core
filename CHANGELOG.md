@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- [2573](https://github.com/FuelLabs/fuel-core/pull/2573): Add txpool stats to the `node_info` GraphQL endpoint
+
 ## [Version 0.40.2]
 
 ### Fixed
