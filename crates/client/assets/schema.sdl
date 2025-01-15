@@ -1277,8 +1277,6 @@ type TxPoolStats {
 	totalGas: U64!
 }
 
-scalar U128
-
 scalar U16
 
 scalar U32
