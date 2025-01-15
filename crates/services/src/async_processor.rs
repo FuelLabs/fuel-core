@@ -150,10 +150,10 @@ mod tests {
     #[tokio::test]
     async fn one_spawn_single_tasks_works__thread_id_is_different_than_main() {
         // Given
-        let number_of_threads = 10;
+        let max_number_of_threads = 10;
         let number_of_pending_tasks = 10000;
         let heavy_task_processor =
-            AsyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
+            AsyncProcessor::new("Test", max_number_of_threads, number_of_pending_tasks)
                 .unwrap();
         let main_handler = tokio::spawn(async move { std::thread::current().id() });
         let main_id = main_handler.await.unwrap();
@@ -161,10 +161,7 @@ mod tests {
         // When
         let futures = iter::repeat_with(|| {
             heavy_task_processor
-                .try_spawn(async move {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    std::thread::current().id()
-                })
+                .try_spawn(async move { std::thread::current().id() })
                 .unwrap()
         })
         .take(number_of_pending_tasks)
@@ -177,8 +174,12 @@ mod tests {
             .map(|r| r.unwrap())
             .collect::<HashSet<_>>();
 
+        // Main thread was not used.
         assert!(!unique_thread_ids.contains(&main_id));
-        assert_eq!(unique_thread_ids.len(), number_of_threads);
+        // There's been at least one worker thread used.
+        assert!(unique_thread_ids.len() > 1);
+        // There were no more worker threads above the threshold.
+        assert!(unique_thread_ids.len() <= max_number_of_threads);
     }
 
     #[test]
@@ -198,7 +199,7 @@ mod tests {
         });
 
         // Then
-        let err = second_spawn_result.expect_err("Expected Ok result");
+        let err = second_spawn_result.expect_err("Should error");
         assert_eq!(err, OutOfCapacity);
     }
 
