@@ -1,6 +1,9 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+use async_graphql as _;
+use async_graphql_value as _;
+
 #[cfg(test)]
 mod backward_compatibility;
 #[cfg(test)]
