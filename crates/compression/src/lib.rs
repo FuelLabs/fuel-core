@@ -116,7 +116,7 @@ mod tests {
         height: u32,
         consensus_parameters_version: u32,
         state_transition_bytecode_version: u32,
-        registration_inputs: Vec<(RegistryKeyspace, RegistryKey, [u8; 32])>,
+        registrations: RegistrationsPerTable,
     }
 
     fn postcard_roundtrip_strategy() -> impl Strategy<Value = PostcardRoundtripStrategy> {
@@ -148,13 +148,39 @@ mod tests {
                     state_transition_bytecode_version,
                     registration_inputs,
                 )| {
+                    let mut registrations: RegistrationsPerTable = Default::default();
+                    for (ks, key, arr) in registration_inputs {
+                        let value_len_limit = (key.as_u32() % 32) as usize;
+                        match ks {
+                            RegistryKeyspace::Address => {
+                                registrations.address.push((key, arr.into()));
+                            }
+                            RegistryKeyspace::AssetId => {
+                                registrations.asset_id.push((key, arr.into()));
+                            }
+                            RegistryKeyspace::ContractId => {
+                                registrations.contract_id.push((key, arr.into()));
+                            }
+                            RegistryKeyspace::ScriptCode => {
+                                registrations
+                                    .script_code
+                                    .push((key, arr[..value_len_limit].to_vec().into()));
+                            }
+                            RegistryKeyspace::PredicateCode => {
+                                registrations
+                                    .predicate_code
+                                    .push((key, arr[..value_len_limit].to_vec().into()));
+                            }
+                        }
+                    }
+
                     PostcardRoundtripStrategy {
                         da_height,
                         prev_root,
                         height,
                         consensus_parameters_version,
                         state_transition_bytecode_version,
-                        registration_inputs,
+                        registrations,
                     }
                 },
             )
@@ -171,31 +197,8 @@ mod tests {
                 height,
                 consensus_parameters_version,
                 state_transition_bytecode_version,
-                registration_inputs,
+                registrations,
             } = strategy;
-
-
-            let mut registrations: RegistrationsPerTable = Default::default();
-                for (ks, key, arr) in registration_inputs {
-                let value_len_limit = (key.as_u32() % 32) as usize;
-                match ks {
-                    RegistryKeyspace::Address => {
-                        registrations.address.push((key, arr.into()));
-                    }
-                    RegistryKeyspace::AssetId => {
-                        registrations.asset_id.push((key, arr.into()));
-                    }
-                    RegistryKeyspace::ContractId => {
-                        registrations.contract_id.push((key, arr.into()));
-                    }
-                    RegistryKeyspace::ScriptCode => {
-                        registrations.script_code.push((key, arr[..value_len_limit].to_vec().into()));
-                    }
-                    RegistryKeyspace::PredicateCode => {
-                        registrations.predicate_code.push((key, arr[..value_len_limit].to_vec().into()));
-                    }
-                }
-            }
 
             let header = PartialBlockHeader {
                 application: ApplicationHeader {
@@ -254,30 +257,8 @@ mod tests {
                 height,
                 consensus_parameters_version,
                 state_transition_bytecode_version,
-                registration_inputs,
+                registrations,
             } = strategy;
-
-            let mut registrations: RegistrationsPerTable = Default::default();
-                for (ks, key, arr) in registration_inputs {
-                let value_len_limit = (key.as_u32() % 32) as usize;
-                match ks {
-                    RegistryKeyspace::Address => {
-                        registrations.address.push((key, arr.into()));
-                    }
-                    RegistryKeyspace::AssetId => {
-                        registrations.asset_id.push((key, arr.into()));
-                    }
-                    RegistryKeyspace::ContractId => {
-                        registrations.contract_id.push((key, arr.into()));
-                    }
-                    RegistryKeyspace::ScriptCode => {
-                        registrations.script_code.push((key, arr[..value_len_limit].to_vec().into()));
-                    }
-                    RegistryKeyspace::PredicateCode => {
-                        registrations.predicate_code.push((key, arr[..value_len_limit].to_vec().into()));
-                    }
-                }
-            }
 
             let header = CompressedBlockHeader {
                 application: ApplicationHeader {
