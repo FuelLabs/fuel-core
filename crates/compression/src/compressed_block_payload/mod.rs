@@ -1,4 +1,3 @@
-pub(crate) mod v0;
+pub mod v0;
 
-#[cfg(feature = "fault-proving")]
-pub(crate) mod v1;
+pub mod v1;
