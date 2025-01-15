@@ -98,8 +98,6 @@ mod tests {
         tai64::Tai64,
     };
     use proptest::prelude::*;
-    #[cfg(feature = "fault-proving")]
-    use std::str::FromStr;
 
     fn keyspace() -> impl Strategy<Value = RegistryKeyspace> {
         prop_oneof![
@@ -111,27 +109,74 @@ mod tests {
         ]
     }
 
-    proptest! {
-        /// Serialization for compressed transactions is already tested in fuel-vm,
-        /// but the rest of the block de/serialization is tested here.
-        #[test]
-        fn postcard_roundtrip(
-            da_height in 0..=u64::MAX,
-            prev_root in prop::array::uniform32(0..=u8::MAX),
-            height in 0..=u32::MAX,
-            consensus_parameters_version in 0..=u32::MAX,
-            state_transition_bytecode_version in 0..=u32::MAX,
-            registration_inputs in prop::collection::vec(
-                (keyspace(), prop::num::u16::ANY, prop::array::uniform32(0..=u8::MAX)).prop_map(|(ks, rk, arr)| {
-                    let k = RegistryKey::try_from(rk as u32).unwrap();
-                    (ks, k, arr)
-                }),
-                0..123
-            ),
-        ) {
-            let mut registrations: RegistrationsPerTable = Default::default();
+    #[derive(Debug)]
+    struct PostcardRoundtripStrategy {
+        da_height: u64,
+        prev_root: [u8; 32],
+        height: u32,
+        consensus_parameters_version: u32,
+        state_transition_bytecode_version: u32,
+        registration_inputs: Vec<(RegistryKeyspace, RegistryKey, [u8; 32])>,
+    }
 
-            for (ks, key, arr) in registration_inputs {
+    fn postcard_roundtrip_strategy() -> impl Strategy<Value = PostcardRoundtripStrategy> {
+        (
+            0..=u64::MAX,
+            prop::array::uniform32(0..=u8::MAX),
+            0..=u32::MAX,
+            0..=u32::MAX,
+            0..=u32::MAX,
+            prop::collection::vec(
+                (
+                    keyspace(),
+                    prop::num::u16::ANY,
+                    prop::array::uniform32(0..=u8::MAX),
+                )
+                    .prop_map(|(ks, rk, arr)| {
+                        let k = RegistryKey::try_from(rk as u32).unwrap();
+                        (ks, k, arr)
+                    }),
+                0..123,
+            ),
+        )
+            .prop_map(
+                |(
+                    da_height,
+                    prev_root,
+                    height,
+                    consensus_parameters_version,
+                    state_transition_bytecode_version,
+                    registration_inputs,
+                )| {
+                    PostcardRoundtripStrategy {
+                        da_height,
+                        prev_root,
+                        height,
+                        consensus_parameters_version,
+                        state_transition_bytecode_version,
+                        registration_inputs,
+                    }
+                },
+            )
+    }
+
+    /// Serialization for compressed transactions is already tested in fuel-vm,
+    /// but the rest of the block de/serialization is tested here.
+    #[test]
+    fn postcard_roundtrip_v0() {
+        proptest!(|(strat in postcard_roundtrip_strategy())| {
+            let PostcardRoundtripStrategy {
+                da_height,
+                prev_root,
+                height,
+                consensus_parameters_version,
+                state_transition_bytecode_version,
+                registration_inputs,
+            } = strat;
+
+
+            let mut registrations: RegistrationsPerTable = Default::default();
+                for (ks, key, arr) in registration_inputs {
                 let value_len_limit = (key.as_u32() % 32) as usize;
                 match ks {
                     RegistryKeyspace::Address => {
@@ -152,7 +197,6 @@ mod tests {
                 }
             }
 
-            #[cfg(not(feature = "fault-proving"))]
             let header = PartialBlockHeader {
                 application: ApplicationHeader {
                     da_height: da_height.into(),
@@ -167,7 +211,74 @@ mod tests {
                     generated: Empty
                 }
             };
-            #[cfg(feature = "fault-proving")]
+
+            let original = VersionedCompressedBlock::V0(CompressedBlockPayloadV0 {
+                registrations,
+                header,
+                transactions: vec![],
+            });
+
+            let compressed = postcard::to_allocvec(&original).unwrap();
+            let decompressed: VersionedCompressedBlock =
+                postcard::from_bytes(&compressed).unwrap();
+
+            let consensus_header = decompressed.consensus_header();
+            let application_header = decompressed.application_header();
+
+            assert_eq!(decompressed.registrations(), original.registrations());
+
+            assert_eq!(application_header.da_height, da_height.into());
+            assert_eq!(consensus_header.prev_root, prev_root.into());
+            assert_eq!(consensus_header.height, height.into());
+            assert_eq!(application_header.consensus_parameters_version, consensus_parameters_version);
+            assert_eq!(application_header.state_transition_bytecode_version, state_transition_bytecode_version);
+
+            assert!(decompressed.transactions().is_empty());
+        });
+    }
+
+    #[cfg(feature = "fault-proving")]
+    #[test]
+    fn postcard_roundtrip_v1() {
+        use compressed_block_payload::v1::{
+            CompressedBlockHeader,
+            CompressedBlockPayloadV1,
+        };
+        use fuel_core_types::blockchain::primitives::BlockId;
+        use std::str::FromStr;
+
+        proptest!(|(strat in postcard_roundtrip_strategy())| {
+            let PostcardRoundtripStrategy {
+                da_height,
+                prev_root,
+                height,
+                consensus_parameters_version,
+                state_transition_bytecode_version,
+                registration_inputs,
+            } = strat;
+
+            let mut registrations: RegistrationsPerTable = Default::default();
+                for (ks, key, arr) in registration_inputs {
+                let value_len_limit = (key.as_u32() % 32) as usize;
+                match ks {
+                    RegistryKeyspace::Address => {
+                        registrations.address.push((key, arr.into()));
+                    }
+                    RegistryKeyspace::AssetId => {
+                        registrations.asset_id.push((key, arr.into()));
+                    }
+                    RegistryKeyspace::ContractId => {
+                        registrations.contract_id.push((key, arr.into()));
+                    }
+                    RegistryKeyspace::ScriptCode => {
+                        registrations.script_code.push((key, arr[..value_len_limit].to_vec().into()));
+                    }
+                    RegistryKeyspace::PredicateCode => {
+                        registrations.predicate_code.push((key, arr[..value_len_limit].to_vec().into()));
+                    }
+                }
+            }
+
             let header = CompressedBlockHeader {
                 application: ApplicationHeader {
                     da_height: da_height.into(),
@@ -184,16 +295,10 @@ mod tests {
                 block_id: BlockId::from_str("0xecea85c17070bc2e65f911310dbd01198f4436052ebba96cded9ddf30c58dd1a").unwrap(),
             };
 
-            #[cfg(not(feature = "fault-proving"))]
-            let original = VersionedCompressedBlock::V0(CompressedBlockPayloadV0 {
-                registrations,
-                header,
-                transactions: vec![],
-            });
-            #[cfg(feature = "fault-proving")]
+
             let original = VersionedCompressedBlock::V1(CompressedBlockPayloadV1 {
-                registrations,
                 header,
+                registrations,
                 transactions: vec![]
             });
 
@@ -214,10 +319,11 @@ mod tests {
 
             assert!(decompressed.transactions().is_empty());
 
-            #[cfg(feature = "fault-proving")]
             if let VersionedCompressedBlock::V1(block) = decompressed {
                 assert_eq!(block.header.block_id, header.block_id);
+            } else {
+                panic!("Expected V1 block, got {:?}", decompressed);
             }
-        }
+        });
     }
 }
