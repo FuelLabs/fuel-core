@@ -18,6 +18,7 @@ description = "Compression and decompression of Fuel blocks for DA storage."
 
 [dependencies]
 anyhow = { workspace = true }
+enum_dispatch = "0.3.13"
 fuel-core-types = { workspace = true, features = [
   "alloc",
   "serde",
@@ -42,3 +43,4 @@ test-helpers = [
   "fuel-core-types/random",
   "fuel-core-types/std",
 ]
+fault-proving = []

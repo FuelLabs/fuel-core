@@ -5,6 +5,7 @@ use crate::{
         TemporalRegistry,
     },
     registry::TemporalRegistryAll,
+    VersionedBlockPayload,
     VersionedCompressedBlock,
 };
 use fuel_core_types::{
@@ -55,28 +56,26 @@ pub async fn decompress<D>(
 where
     D: DecompressDb,
 {
-    let VersionedCompressedBlock::V0(compressed) = block;
-
     // TODO: merkle root verification: https://github.com/FuelLabs/fuel-core/issues/2232
 
-    compressed
-        .registrations
-        .write_to_registry(&mut db, compressed.header.consensus.time)?;
+    block
+        .registrations()
+        .write_to_registry(&mut db, block.consensus_header().time)?;
 
     let ctx = DecompressCtx {
         config,
-        timestamp: compressed.header.consensus.time,
+        timestamp: block.consensus_header().time,
         db,
     };
 
     let transactions = <Vec<Transaction> as DecompressibleBy<_>>::decompress_with(
-        compressed.transactions,
+        block.transactions(),
         &ctx,
     )
     .await?;
 
     Ok(PartialFuelBlock {
-        header: compressed.header,
+        header: block.partial_block_header(),
         transactions,
     })
 }
