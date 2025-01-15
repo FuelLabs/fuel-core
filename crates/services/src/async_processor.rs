@@ -286,7 +286,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn executes_10_tasks_for_2_seconds_with_10_thread() {
+    async fn executes_10_blocking_tasks_for_1_second_with_10_threads__records_busy_time()
+    {
         // Given
         let number_of_pending_tasks = 10;
         let number_of_threads = 10;
@@ -310,7 +311,11 @@ mod tests {
 
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
-        assert!(instant.elapsed() <= Duration::from_secs(2));
+        // 10 blocking tasks running on 10 threads, each task taking 1 second,
+        // should complete in approximately 1 second overall.
+        // Allowing some LEEWAY to account for runtime overhead.
+        const LEEWAY: Duration = Duration::from_millis(300);
+        assert!(instant.elapsed() <= Duration::from_secs(1) + LEEWAY);
         // Wait for the metrics to be updated.
         tokio::time::sleep(Duration::from_secs(1)).await;
         let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
@@ -320,7 +325,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn executes_10_tasks_for_2_seconds_with_1_thread() {
+    async fn executes_10_non_blocking_tasks_for_1_second_with_10_threads__records_idle_time(
+    ) {
         // Given
         let number_of_pending_tasks = 10;
         let number_of_threads = 10;
@@ -344,7 +350,11 @@ mod tests {
 
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
-        assert!(instant.elapsed() <= Duration::from_secs(2));
+        // 10 blocking tasks running on 10 threads, each task taking 1 second,
+        // should complete in approximately 1 second overall.
+        // Allowing some LEEWAY to account for runtime overhead.
+        const LEEWAY: Duration = Duration::from_millis(300);
+        assert!(instant.elapsed() <= Duration::from_secs(1) + LEEWAY);
         // Wait for the metrics to be updated.
         tokio::time::sleep(Duration::from_secs(1)).await;
         let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
