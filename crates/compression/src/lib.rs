@@ -164,7 +164,7 @@ mod tests {
     /// but the rest of the block de/serialization is tested here.
     #[test]
     fn postcard_roundtrip_v0() {
-        proptest!(|(strat in postcard_roundtrip_strategy())| {
+        proptest!(|(strategy in postcard_roundtrip_strategy())| {
             let PostcardRoundtripStrategy {
                 da_height,
                 prev_root,
@@ -172,7 +172,7 @@ mod tests {
                 consensus_parameters_version,
                 state_transition_bytecode_version,
                 registration_inputs,
-            } = strat;
+            } = strategy;
 
 
             let mut registrations: RegistrationsPerTable = Default::default();
@@ -247,7 +247,7 @@ mod tests {
         use fuel_core_types::blockchain::primitives::BlockId;
         use std::str::FromStr;
 
-        proptest!(|(strat in postcard_roundtrip_strategy())| {
+        proptest!(|(strategy in postcard_roundtrip_strategy())| {
             let PostcardRoundtripStrategy {
                 da_height,
                 prev_root,
@@ -255,7 +255,7 @@ mod tests {
                 consensus_parameters_version,
                 state_transition_bytecode_version,
                 registration_inputs,
-            } = strat;
+            } = strategy;
 
             let mut registrations: RegistrationsPerTable = Default::default();
                 for (ks, key, arr) in registration_inputs {
