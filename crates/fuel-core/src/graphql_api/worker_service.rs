@@ -582,7 +582,7 @@ where
             asset_metadata_indexation_enabled,
             "Indexation availability status"
         );
-        tracing::info!(
+        tracing::debug!(
             balance_query = query_costs().balance_query,
             "Indexation related query costs"
         );
