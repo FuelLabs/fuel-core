@@ -23,8 +23,11 @@ pub struct NodeInfo {
     pub utxo_validation: bool,
     pub vm_backtrace: bool,
     pub max_tx: U64,
+    pub max_gas: U64,
+    pub max_size: U64,
     pub max_depth: U64,
     pub node_version: String,
+    pub tx_pool_stats: TxPoolStats,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -75,6 +78,14 @@ impl From<PeerInfo> for fuel_core_types::services::p2p::PeerInfo {
             app_score: info.app_score,
         }
     }
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug, PartialEq, Eq)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct TxPoolStats {
+    pub tx_count: U64,
+    pub total_gas: U64,
+    pub total_size: U64,
 }
 
 #[cfg(test)]
