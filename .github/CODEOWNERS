@@ -10,5 +10,24 @@ crates/services/txpool_v2 @xgreenx @Dentosal @MitchTurner @AurelienFT
 # Code owners for the gas price service (v0 & v1)
 crates/services/gas_price_service @xgreenx @Dentosal @MitchTurner @rymnc
 
+# Code owners for the GraphQL API
+crates/fuel-core/src/graphql_api @xgreenx @Dentosal @MitchTurner @netrome @acerone85
+crates/fuel-core/src/graphql_api.rs @xgreenx @Dentosal @MitchTurner @netrome @acerone85
+crates/fuel-core/src/schema.rs @xgreenx @Dentosal @MitchTurner @netrome @acerone85
+crates/fuel-core/src/schema.sdl @xgreenx @Dentosal @MitchTurner @netrome @acerone85
+crates/fuel-core/src/query @xgreenx @Dentosal @MitchTurner @netrome @acerone85
+
 # Code owners for the indexation
 crates/fuel-core/src/graphql_api/indexation @xgreenx @Dentosal @MitchTurner @rafal-ch
+
+# Code owners for the client
+crates/client @xgreenx @Dentosal @MitchTurner @netrome
+
+# Code owners for the integration tests
+tests/ @xgreenx @Dentosal @MitchTurner @netrome
+
+# Code owners for benches
+benches/ @xgreenx @Dentosal @MitchTurner @netrome
+
+# Code owners for docs
+docs/ @xgreenx @Dentosal @MitchTurner @netrome
