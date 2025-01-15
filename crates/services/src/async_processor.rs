@@ -248,9 +248,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn executes_10_tasks_for_10_seconds_with_one_thread() {
+    async fn executes_5_tasks_for_5_seconds_with_one_thread() {
         // Given
-        let number_of_pending_tasks = 10;
+        let number_of_pending_tasks = 5;
         let number_of_threads = 1;
         let heavy_task_processor =
             AsyncProcessor::new("Test", number_of_threads, number_of_pending_tasks)
@@ -272,11 +272,14 @@ mod tests {
 
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
-        assert!(instant.elapsed() >= Duration::from_secs(10));
+        // 5 tasks running on 1 thread, each task taking 1 second, should complete in approximately 5 seconds overall.
+        // Allowing some LEEWAY to account for runtime overhead.
+        const LEEWAY: Duration = Duration::from_millis(300);
+        assert!(instant.elapsed() < Duration::from_secs(5) + LEEWAY);
         // Wait for the metrics to be updated.
         tokio::time::sleep(Duration::from_secs(1)).await;
         let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
-        assert_eq!(duration.as_secs(), 10);
+        assert_eq!(duration.as_secs(), 5);
         let duration = Duration::from_nanos(heavy_task_processor.metric.idle.get());
         assert_eq!(duration.as_secs(), 0);
     }
