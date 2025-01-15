@@ -272,7 +272,8 @@ mod tests {
 
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
-        // 5 tasks running on 1 thread, each task taking 1 second, should complete in approximately 5 seconds overall.
+        // 5 tasks running on 1 thread, each task taking 1 second,
+        // should complete in approximately 5 seconds overall.
         // Allowing some LEEWAY to account for runtime overhead.
         const LEEWAY: Duration = Duration::from_millis(300);
         assert!(instant.elapsed() < Duration::from_secs(5) + LEEWAY);
