@@ -55,6 +55,7 @@ impl VersionedBlockPayload for CompressedBlockPayloadV0 {
 
 impl CompressedBlockPayloadV0 {
     /// Create a new compressed block payload V0.
+    #[allow(unused)]
     pub(crate) fn new(
         header: &BlockHeader,
         registrations: RegistrationsPerTable,
