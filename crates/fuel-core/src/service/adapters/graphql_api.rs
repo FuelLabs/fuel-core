@@ -130,7 +130,7 @@ impl BlockProducerPort for BlockProducerAdapter {
     async fn storage_read_replay(
         &self,
         height: BlockHeight,
-    ) -> anyhow::Result<Vec<Vec<StorageReadReplayEvent>>> {
+    ) -> anyhow::Result<Vec<StorageReadReplayEvent>> {
         self.block_producer.storage_read_replay(height).await
     }
 }

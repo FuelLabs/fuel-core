@@ -513,7 +513,7 @@ impl FuelClient {
     pub async fn storage_read_replay(
         &self,
         height: &BlockHeight,
-    ) -> io::Result<Vec<Vec<StorageReadReplayEvent>>> {
+    ) -> io::Result<Vec<StorageReadReplayEvent>> {
         let query: Operation<
             schema::storage_read_replay::StorageReadReplay,
             schema::storage_read_replay::StorageReadReplayArgs,
@@ -527,7 +527,7 @@ impl FuelClient {
             .await
             .map(|r| r.storage_read_replay)?
             .into_iter()
-            .map(|events| events.into_iter().map(Into::into).collect())
+            .map(Into::into)
             .collect())
     }
 

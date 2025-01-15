@@ -341,19 +341,14 @@ impl TxMutation {
         &self,
         ctx: &Context<'_>,
         height: U32,
-    ) -> async_graphql::Result<Vec<Vec<StorageReadReplayEvent>>> {
+    ) -> async_graphql::Result<Vec<StorageReadReplayEvent>> {
         let block_height = height.into();
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         Ok(block_producer
             .storage_read_replay(block_height)
             .await?
             .into_iter()
-            .map(|items| {
-                items
-                    .into_iter()
-                    .map(StorageReadReplayEvent::from)
-                    .collect()
-            })
+            .map(StorageReadReplayEvent::from)
             .collect())
     }
 

@@ -392,7 +392,7 @@ where
     pub async fn storage_read_replay(
         &self,
         height: BlockHeight,
-    ) -> anyhow::Result<Vec<Vec<StorageReadReplayEvent>>> {
+    ) -> anyhow::Result<Vec<StorageReadReplayEvent>> {
         let view = self.view_provider.latest_view()?;
 
         let block = view.get_block(&height)?;

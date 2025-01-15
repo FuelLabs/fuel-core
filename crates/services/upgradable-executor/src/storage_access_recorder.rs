@@ -7,18 +7,18 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::services::executor::StorageReadReplayEvent;
+use parking_lot::Mutex;
 use std::{
-    cell::RefCell,
     sync::Arc,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct StorageAccessRecorder<S>
 where
     S: KeyValueInspect,
 {
     pub storage: S,
-    pub record: Arc<RefCell<Vec<StorageReadReplayEvent>>>,
+    pub record: Arc<Mutex<Vec<StorageReadReplayEvent>>>,
 }
 
 impl<S> StorageAccessRecorder<S>
@@ -41,7 +41,7 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         let value = self.storage.get(key, column)?;
-        self.record.borrow_mut().push(StorageReadReplayEvent {
+        self.record.lock().push(StorageReadReplayEvent {
             column: column.name(),
             key: key.to_vec(),
             value: value.as_ref().map(|v| v.to_vec()),

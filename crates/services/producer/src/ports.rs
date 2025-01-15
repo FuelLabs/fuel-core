@@ -114,5 +114,5 @@ pub trait StorageReadReplayRecorder: Send + Sync {
     fn storage_read_replay(
         &self,
         block: &Block,
-    ) -> ExecutorResult<Vec<Vec<StorageReadReplayEvent>>>;
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>>;
 }

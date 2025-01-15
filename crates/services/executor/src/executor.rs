@@ -330,19 +330,6 @@ where
         Ok(UncommittedResult::new(result, changes))
     }
 
-    pub fn record_storage_reads_for(
-        self,
-        block: &Block,
-        tx_separator_callback: &mut dyn FnMut(usize) -> (),
-    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        let consensus_params_version = block.header().consensus_parameters_version;
-        let (block_executor, storage_tx) =
-            self.into_executor(consensus_params_version)?;
-        Ok(block_executor
-            .record_storage_reads_for(block, storage_tx, tx_separator_callback)?
-            .tx_status)
-    }
-
     pub fn validate_without_commit(
         self,
         block: &Block,

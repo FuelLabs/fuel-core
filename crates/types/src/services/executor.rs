@@ -1,5 +1,7 @@
 //! Types related to executor service.
 
+use core::fmt;
+
 use crate::{
     blockchain::{
         block::Block,
@@ -257,7 +259,7 @@ impl TransactionExecutionResult {
 }
 
 /// When storage in column:key was read, it contained this value.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StorageReadReplayEvent {
     /// Column in the storage, identified by name.
@@ -266,6 +268,15 @@ pub struct StorageReadReplayEvent {
     pub key: Vec<u8>,
     /// Value at the column:key pair. None if the key was not found.
     pub value: Option<Vec<u8>>,
+}
+impl fmt::Debug for StorageReadReplayEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StorageReadReplayEvent")
+            .field("column", &self.column)
+            .field("key", &hex::encode(&self.key))
+            .field("value", &self.value.as_ref().map(|v| hex::encode(v)))
+            .finish()
+    }
 }
 
 #[allow(missing_docs)]

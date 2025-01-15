@@ -133,7 +133,7 @@ impl fuel_core_producer::ports::StorageReadReplayRecorder for ExecutorAdapter {
     fn storage_read_replay(
         &self,
         block: &Block,
-    ) -> ExecutorResult<Vec<Vec<StorageReadReplayEvent>>> {
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
         self.executor.storage_read_replay(block)
     }
 }

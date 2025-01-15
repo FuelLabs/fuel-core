@@ -738,7 +738,7 @@ type Mutation {
 	"""
 	Get execution trace for an already-executed transaction.
 	"""
-	storageReadReplay(height: U32!): [[StorageReadReplayEvent!]!]!
+	storageReadReplay(height: U32!): [StorageReadReplayEvent!]!
 	"""
 	Submits transaction to the `TxPool`.
 	

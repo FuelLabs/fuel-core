@@ -39,7 +39,7 @@ pub struct StorageReadReplayArgs {
 )]
 pub struct StorageReadReplay {
     #[arguments(height: $height)]
-    pub storage_read_replay: Vec<Vec<StorageReadReplayEvent>>,
+    pub storage_read_replay: Vec<StorageReadReplayEvent>,
 }
 
 #[cfg(test)]

@@ -26,6 +26,7 @@ derive_more = { version = "0.99" }
 fuel-vm-private = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
+hex = { version = "0.4", default-features = false }
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }

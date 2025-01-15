@@ -3809,6 +3809,7 @@ dependencies = [
  "derivative",
  "derive_more 0.99.18",
  "fuel-vm 0.59.1",
+ "hex",
  "rand",
  "secrecy",
  "serde",

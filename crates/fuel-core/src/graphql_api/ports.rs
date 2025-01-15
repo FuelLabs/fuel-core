@@ -241,7 +241,7 @@ pub trait BlockProducerPort: Send + Sync {
     async fn storage_read_replay(
         &self,
         height: BlockHeight,
-    ) -> anyhow::Result<Vec<Vec<StorageReadReplayEvent>>>;
+    ) -> anyhow::Result<Vec<StorageReadReplayEvent>>;
 }
 
 #[async_trait::async_trait]

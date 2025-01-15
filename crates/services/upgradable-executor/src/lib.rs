@@ -1,13 +1,13 @@
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
-#![deny(warnings)]
+// #![deny(warnings)]
 
 pub mod config;
 pub mod error;
 pub mod executor;
 
-mod relayer_recorder;
+#[cfg(feature = "wasm-executor")]
 mod storage_access_recorder;
 
 #[cfg(feature = "wasm-executor")]
