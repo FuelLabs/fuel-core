@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2551](https://github.com/FuelLabs/fuel-core/pull/2551): Enhanced the DA compressed block header to include block id.
+- [2571](https://github.com/FuelLabs/fuel-core/pull/2571): Enhanced the DA compressed block header to include registry id.
 
 ## [Version 0.41.0]
 

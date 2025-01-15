@@ -1,5 +1,8 @@
 use crate::{
-    registry::RegistrationsPerTable,
+    registry::{
+        RegistrationsPerTable,
+        RegistryId,
+    },
     VersionedBlockPayload,
 };
 use fuel_core_types::{
@@ -31,10 +34,15 @@ pub struct CompressedBlockHeader {
     pub consensus: ConsensusHeader<Empty>,
     // The block id.
     pub block_id: BlockId,
+    // The registry id.
+    pub registry_id: RegistryId,
 }
 
-impl From<&BlockHeader> for CompressedBlockHeader {
-    fn from(header: &BlockHeader) -> Self {
+impl CompressedBlockHeader {
+    fn from_header_and_registry(
+        header: &BlockHeader,
+        registry: &RegistrationsPerTable,
+    ) -> Self {
         let ConsensusHeader {
             prev_root,
             height,
@@ -56,6 +64,7 @@ impl From<&BlockHeader> for CompressedBlockHeader {
                 generated: Empty {},
             },
             block_id: header.id(),
+            registry_id: registry.id(),
         }
     }
 }
@@ -114,7 +123,10 @@ impl CompressedBlockPayloadV1 {
         transactions: Vec<CompressedTransaction>,
     ) -> Self {
         Self {
-            header: CompressedBlockHeader::from(header),
+            header: CompressedBlockHeader::from_header_and_registry(
+                header,
+                &registrations,
+            ),
             registrations,
             transactions,
         }

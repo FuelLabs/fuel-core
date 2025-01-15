@@ -14,6 +14,9 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
+#[cfg(feature = "fault-proving")]
+pub type RegistryId = fuel_core_types::fuel_tx::Bytes32;
+
 macro_rules! tables {
     ($($ident:ty: $type:ty),*) => { paste::paste! {
         #[doc = "RegistryKey namespaces"]
@@ -90,10 +93,25 @@ macro_rules! tables {
 
                 Ok(())
             }
+
+            #[cfg(feature = "fault-proving")]
+            pub fn id(&self) -> RegistryId {
+                let mut hasher = fuel_crypto::Hasher::default();
+
+                $(
+                    for (key, value) in self.$ident.iter() {
+                        hasher.input(key);
+                        hasher.input(value);
+                    }
+                )*
+
+                hasher.digest()
+            }
         }
     }};
 }
 
+// Don't change the order of these, it will affect the order of hashing
 tables!(
     address: Address,
     asset_id: AssetId,

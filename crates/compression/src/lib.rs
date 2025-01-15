@@ -274,6 +274,7 @@ mod tests {
                     generated: Empty,
                 },
                 block_id: BlockId::from_str("0xecea85c17070bc2e65f911310dbd01198f4436052ebba96cded9ddf30c58dd1a").unwrap(),
+                registry_id: registrations.id(),
             };
 
 
@@ -302,6 +303,7 @@ mod tests {
 
             if let VersionedCompressedBlock::V1(block) = decompressed {
                 assert_eq!(block.header.block_id, header.block_id);
+                assert_eq!(block.header.registry_id, header.registry_id);
             } else {
                 panic!("Expected V1 block, got {:?}", decompressed);
             }

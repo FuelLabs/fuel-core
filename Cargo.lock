@@ -3582,6 +3582,7 @@ dependencies = [
  "enum_dispatch",
  "fuel-core-compression",
  "fuel-core-types 0.41.0",
+ "fuel-crypto 0.59.1",
  "paste",
  "postcard",
  "proptest",
