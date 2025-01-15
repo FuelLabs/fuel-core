@@ -11,6 +11,7 @@ use fuel_core::service::{
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::blockchain::header::LATEST_STATE_TRANSITION_VERSION;
+use test_case::test_case;
 use test_helpers::send_graph_ql_query;
 
 #[tokio::test]
@@ -719,4 +720,76 @@ async fn heavy_tasks_doesnt_block_graphql() {
     let result = result.expect("Health check timed out");
     let health = result.expect("Health check failed");
     assert!(health);
+}
+
+const BALANCES_QUERY_RS_SDK: &str = r#"
+      query {
+        balances(
+          filter: {
+            owner: "6b63804cfbf9856e68e5b6e7aef238dc8311ec55bec04df774003a2c96e0418e"
+          }
+        $COUNT
+        ) {
+          edges {
+            node {
+              owner
+              amount
+              assetId
+            }
+            cursor
+          }
+          pageInfo {
+            hasNextPage
+            hasPreviousPage
+            startCursor
+            endCursor
+          }
+        }
+      }
+    "#;
+
+// Currently, the TS SDK does not query for `cursor` and `owner` fields, which means
+// it's a little less complex. That's why we test the DoS against the more heavy
+// query issues by the Rust SDK and this one is currently unused.
+const _BALANCES_QUERY_TS_SDK: &str = r#"
+      query {
+        balances(
+          filter: {
+            owner: "6b63804cfbf9856e68e5b6e7aef238dc8311ec55bec04df774003a2c96e0418e"
+          }
+        $COUNT
+        ) {
+          edges {
+            node {
+              amount
+              assetId
+            }
+          }
+          pageInfo {
+            hasNextPage
+            hasPreviousPage
+            startCursor
+            endCursor
+          }
+        }
+      }
+    "#;
+
+#[test_case("first: 11000", "balances"; "should handle 11000, forward")]
+#[test_case("last: 11000", "balances"; "should handle 11000, backward")]
+#[test_case("first: 11500", "Query is too complex"; "should bail with 11500, forward")]
+#[test_case("last: 11500", "Query is too complex"; "should bail with 11500, backward")]
+#[tokio::test]
+async fn balances_complexity_handles_amount_queried_by_sdk(
+    count: &str,
+    result_substring: &str,
+) {
+    let query = BALANCES_QUERY_RS_SDK;
+    let query = query.replace("$COUNT", count);
+
+    let node = FuelService::new_node(Config::local_node()).await.unwrap();
+    let url = format!("http://{}/v1/graphql", node.bound_address);
+
+    let result = send_graph_ql_query(&url, &query).await;
+    assert!(result.contains(result_substring), "{:?}", result);
 }

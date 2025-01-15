@@ -156,9 +156,9 @@ pub struct AlgorithmUpdaterV1 {
     ///   Using `u16` because it can go above 100% and possibly over 255%
     pub max_da_gas_price_change_percent: u16,
     /// The cumulative reward from the DA portion of the gas price
-    pub total_da_rewards_excess: u128,
+    pub total_da_rewards: u128,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
-    pub latest_known_total_da_cost_excess: u128,
+    pub latest_known_total_da_cost: u128,
     /// The predicted cost of recording L2 blocks on the DA chain as of the last L2 block
     /// (This value is added on top of the `latest_known_total_da_cost` if the L2 height is higher)
     pub projected_total_da_cost: u128,
@@ -428,8 +428,7 @@ impl AlgorithmUpdaterV1 {
 
     fn update_da_rewards(&mut self, fee_wei: u128) {
         let block_da_reward = self.da_portion_of_fee(fee_wei);
-        self.total_da_rewards_excess =
-            self.total_da_rewards_excess.saturating_add(block_da_reward);
+        self.total_da_rewards = self.total_da_rewards.saturating_add(block_da_reward);
     }
 
     fn update_projected_da_cost(&mut self, block_bytes: u64) {
@@ -458,7 +457,7 @@ impl AlgorithmUpdaterV1 {
     }
 
     fn clamped_rewards_as_i128(&self) -> i128 {
-        i128::try_from(self.total_da_rewards_excess).unwrap_or(i128::MAX)
+        i128::try_from(self.total_da_rewards).unwrap_or(i128::MAX)
     }
 
     fn update_last_profit(&mut self, new_profit: i128) {
@@ -603,9 +602,9 @@ impl AlgorithmUpdaterV1 {
         self.update_unrecorded_block_bytes(heights, unrecorded_blocks)?;
 
         let new_da_block_cost = self
-            .latest_known_total_da_cost_excess
+            .latest_known_total_da_cost
             .saturating_add(recording_cost);
-        self.latest_known_total_da_cost_excess = new_da_block_cost;
+        self.latest_known_total_da_cost = new_da_block_cost;
 
         let compressed_cost_per_bytes = recording_cost
             .checked_div(recorded_bytes)
@@ -652,7 +651,7 @@ impl AlgorithmUpdaterV1 {
             .unrecorded_blocks_bytes
             .saturating_mul(self.latest_da_cost_per_byte);
         self.projected_total_da_cost = self
-            .latest_known_total_da_cost_excess
+            .latest_known_total_da_cost
             .saturating_add(projection_portion);
     }
 

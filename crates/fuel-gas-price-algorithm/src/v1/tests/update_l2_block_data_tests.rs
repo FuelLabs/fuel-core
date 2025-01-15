@@ -194,7 +194,7 @@ fn update_l2_block_data__updates_the_total_reward_value() {
     // then
     let expected = (fee * starting_da_gas_price as u128)
         .div_ceil(starting_da_gas_price as u128 + starting_exec_gas_price as u128);
-    let actual = updater.total_da_rewards_excess;
+    let actual = updater.total_da_rewards;
     assert_eq!(actual, expected);
 }
 
