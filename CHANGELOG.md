@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.41.0]
+
 ### Added
 - [2547](https://github.com/FuelLabs/fuel-core/pull/2547): Replace the old Graphql gas price provider adapter with the ArcGasPriceEstimate.
 - [2445](https://github.com/FuelLabs/fuel-core/pull/2445): Added GQL endpoint for querying asset details.
