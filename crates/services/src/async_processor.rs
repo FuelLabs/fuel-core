@@ -350,7 +350,7 @@ mod tests {
 
         // Then
         while broadcast_receiver.recv().await.is_ok() {}
-        // 10 blocking tasks running on 10 threads, each task taking 1 second,
+        // 10 non-blocking tasks running on 10 threads, each task taking 1 second,
         // should complete in approximately 1 second overall.
         // Allowing some LEEWAY to account for runtime overhead.
         const LEEWAY: Duration = Duration::from_millis(300);
