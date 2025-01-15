@@ -126,23 +126,25 @@ mod tests {
     };
     use tokio::time::Instant;
 
-    #[test]
-    fn one_spawn_single_tasks_works() {
+    #[tokio::test]
+    async fn one_spawn_single_tasks_works() {
         // Given
         let number_of_pending_tasks = 1;
         let heavy_task_processor =
             AsyncProcessor::new("Test", 1, number_of_pending_tasks).unwrap();
 
         // When
-        let (sender, mut receiver) = tokio::sync::oneshot::channel();
+        let (sender, receiver) = tokio::sync::oneshot::channel();
         let result = heavy_task_processor.try_spawn(async move {
             sender.send(()).unwrap();
         });
 
         // Then
         result.expect("Expected Ok result");
-        sleep(Duration::from_secs(1));
-        receiver.try_recv().unwrap();
+        tokio::time::timeout(Duration::from_secs(5), receiver)
+            .await
+            .unwrap()
+            .unwrap();
     }
 
     #[tokio::test]
