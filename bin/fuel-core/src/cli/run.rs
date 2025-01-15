@@ -14,6 +14,8 @@ use crate::{
 };
 use anyhow::Context;
 use clap::Parser;
+#[cfg(feature = "production")]
+use fuel_core::service::sub_services::DEFAULT_GAS_PRICE_CHANGE_PERCENT;
 use fuel_core::{
     chain_config::default_consensus_dev_key,
     combined_database::{
@@ -51,6 +53,7 @@ use fuel_core::{
         secrecy::Secret,
     },
 };
+
 use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
@@ -207,7 +210,7 @@ pub struct Command {
     /// The percentage change in gas price per block
     #[cfg_attr(
         feature = "production",
-        arg(long = "gas-price-change-percent", default_value = "10", env)
+        arg(long = "gas-price-change-percent", default_value_t = DEFAULT_GAS_PRICE_CHANGE_PERCENT, env)
     )]
     #[cfg_attr(
         not(feature = "production"),

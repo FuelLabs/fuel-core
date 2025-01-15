@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
+- [2551](https://github.com/FuelLabs/fuel-core/pull/2551): Enhanced the DA compressed block header to include block id.
+
+## [Version 0.41.0]
+
+### Added
+- [2547](https://github.com/FuelLabs/fuel-core/pull/2547): Replace the old Graphql gas price provider adapter with the ArcGasPriceEstimate.
 - [2445](https://github.com/FuelLabs/fuel-core/pull/2445): Added GQL endpoint for querying asset details.
 - [2442](https://github.com/FuelLabs/fuel-core/pull/2442): Add uninitialized task for V1 gas price service
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Added `Unknown` variant to `ConsensusParameters` graphql queries
@@ -31,16 +37,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2447](https://github.com/FuelLabs/fuel-core/pull/2447): Use new `expiration` policy in the transaction pool. Add a mechanism to prune the transactions when they expired.
 - [1922](https://github.com/FuelLabs/fuel-core/pull/1922): Added support for posting blocks to the shared sequencer.
 - [2033](https://github.com/FuelLabs/fuel-core/pull/2033): Remove `Option<BlockHeight>` in favor of `BlockHeightQuery` where applicable.
+- [2490](https://github.com/FuelLabs/fuel-core/pull/2490): Added pagination support for the `balances` GraphQL query, available only when 'balances indexation' is enabled.
 - [2439](https://github.com/FuelLabs/fuel-core/pull/2439): Add gas costs for the two new zk opcodes `ecop` and `eadd` and the benches that allow to calibrate them.
 - [2472](https://github.com/FuelLabs/fuel-core/pull/2472): Added the `amountU128` field to the `Balance` GraphQL schema, providing the total balance as a `U128`. The existing `amount` field clamps any balance exceeding `U64` to `u64::MAX`.
 - [2526](https://github.com/FuelLabs/fuel-core/pull/2526): Add possibility to not have any cache set for RocksDB. Add an option to either load the RocksDB columns families on creation of the database or when the column is used.
 - [2532](https://github.com/FuelLabs/fuel-core/pull/2532): Getters for inner rocksdb database handles.
 - [2524](https://github.com/FuelLabs/fuel-core/pull/2524): Adds a new lock type which is optimized for certain workloads to the txpool and p2p services.
 - [2535](https://github.com/FuelLabs/fuel-core/pull/2535): Expose `backup` and `restore` APIs on the `CombinedDatabase` struct to create portable backups and restore from them.
-- [2551](https://github.com/FuelLabs/fuel-core/pull/2551): Enhanced the DA compressed block header to include block id.
-
+- [2550](https://github.com/FuelLabs/fuel-core/pull/2550): Add statistics and more limits infos about txpool on the node_info endpoint
 
 ### Fixed
+- [2560](https://github.com/FuelLabs/fuel-core/pull/2560): Fix flaky test by increasing timeout
+- [2558](https://github.com/FuelLabs/fuel-core/pull/2558): Rename `cost` and `reward` to remove `excess` wording
 - [2469](https://github.com/FuelLabs/fuel-core/pull/2469): Improved the logic for syncing the gas price database with on_chain database
 - [2365](https://github.com/FuelLabs/fuel-core/pull/2365): Fixed the error during dry run in the case of race condition.
 - [2366](https://github.com/FuelLabs/fuel-core/pull/2366): The `importer_gas_price_for_block` metric is properly collected.
@@ -75,6 +83,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2154](https://github.com/FuelLabs/fuel-core/pull/2154): Transaction graphql endpoints use `TransactionType` instead of `fuel_tx::Transaction`.
 - [2446](https://github.com/FuelLabs/fuel-core/pull/2446): Use graphiql instead of graphql-playground due to known vulnerability and stale development.
 - [2379](https://github.com/FuelLabs/fuel-core/issues/2379): Change `kv_store::Value` to be `Arc<[u8]>` instead of `Arc<Vec<u8>>`.
+- [2490](https://github.com/FuelLabs/fuel-core/pull/2490): Updated GraphQL complexity calculation for `balances` query to account for pagination (`first`/`last`) and nested field complexity (`child_complexity`). Queries with large pagination values or deeply nested fields may have higher complexity costs.
 - [2463](https://github.com/FuelLabs/fuel-core/pull/2463): 'CoinsQueryError::MaxCoinsReached` variant has been removed. The `InsufficientCoins` variant has been renamed to `InsufficientCoinsForTheMax` and it now contains the additional `max` field
 - [2463](https://github.com/FuelLabs/fuel-core/pull/2463): The number of excluded ids in the `coinsToSpend` GraphQL query is now limited to the maximum number of inputs allowed in transaction.
 - [2463](https://github.com/FuelLabs/fuel-core/pull/2463): The `coinsToSpend` GraphQL query may now return different coins, depending whether the indexation is enabled or not. However, regardless of the differences, the returned coins will accurately reflect the current state of the database within the context of the query.

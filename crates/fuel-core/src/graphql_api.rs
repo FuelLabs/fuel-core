@@ -26,6 +26,8 @@ pub struct Config {
     pub debug: bool,
     pub vm_backtrace: bool,
     pub max_tx: usize,
+    pub max_gas: u64,
+    pub max_size: usize,
     pub max_txpool_dependency_chain_length: usize,
     pub chain_name: String,
 }
@@ -79,11 +81,11 @@ impl Default for Costs {
     }
 }
 
+const BALANCES_QUERY_COST_WITH_INDEXATION: usize = 0;
+const BALANCES_QUERY_COST_WITHOUT_INDEXATION: usize = 40001;
+
 pub const DEFAULT_QUERY_COSTS: Costs = Costs {
-    // TODO: The cost of the `balance`, `balances` and `coins_to_spend` query should depend on the
-    // values of respective flags in the OffChainDatabase. If additional indexation is enabled,
-    // the cost should be cheaper (https://github.com/FuelLabs/fuel-core/issues/2496)
-    balance_query: 40001,
+    balance_query: BALANCES_QUERY_COST_WITH_INDEXATION,
     coins_to_spend: 40001,
     get_peers: 40001,
     estimate_predicates: 40001,

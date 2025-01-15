@@ -133,13 +133,8 @@ impl Config {
         let utxo_validation = false;
 
         let combined_db_config = CombinedDatabaseConfig {
-            // Set the cache for tests = 10MB
             #[cfg(feature = "rocksdb")]
-            database_config: DatabaseConfig {
-                cache_capacity: Some(10 * 1024 * 1024),
-                columns_policy: Default::default(),
-                max_fds: 512,
-            },
+            database_config: DatabaseConfig::config_for_tests(),
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,

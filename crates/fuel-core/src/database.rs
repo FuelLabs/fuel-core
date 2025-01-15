@@ -67,10 +67,6 @@ pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
-use crate::database::database_description::{
-    gas_price::GasPriceDatabase,
-    indexation_availability,
-};
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
@@ -82,6 +78,13 @@ use crate::state::{
         DatabaseConfig,
         RocksDb,
     },
+};
+use crate::{
+    database::database_description::{
+        gas_price::GasPriceDatabase,
+        indexation_availability,
+    },
+    state::rocks_db::ColumnsPolicy,
 };
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -290,7 +293,7 @@ where
                 DatabaseConfig {
                     cache_capacity: None,
                     max_fds: 512,
-                    columns_policy: Default::default(),
+                    columns_policy: ColumnsPolicy::Lazy,
                 },
             )
             .expect("Failed to create a temporary database")

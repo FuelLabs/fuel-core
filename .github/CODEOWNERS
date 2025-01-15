@@ -9,3 +9,6 @@ crates/services/txpool_v2 @xgreenx @Dentosal @MitchTurner @AurelienFT
 
 # Code owners for the gas price service (v0 & v1)
 crates/services/gas_price_service @xgreenx @Dentosal @MitchTurner @rymnc
+
+# Code owners for the indexation
+crates/fuel-core/src/graphql_api/indexation @xgreenx @Dentosal @MitchTurner @rafal-ch

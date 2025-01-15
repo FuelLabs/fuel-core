@@ -155,11 +155,11 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn default_open_temp(capacity: Option<usize>) -> DatabaseResult<Self> {
+    pub fn default_open_temp() -> DatabaseResult<Self> {
         Self::default_open_temp_with_params(DatabaseConfig {
-            cache_capacity: capacity,
+            cache_capacity: None,
             max_fds: 512,
-            columns_policy: Default::default(),
+            columns_policy: ColumnsPolicy::Lazy,
         })
     }
 

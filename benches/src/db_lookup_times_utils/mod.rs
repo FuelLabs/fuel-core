@@ -23,7 +23,7 @@ mod tests {
     const TEST_TX_COUNT: u32 = 10;
 
     fn setup_test_db() -> RocksDb<BenchDatabase> {
-        RocksDb::default_open_temp(None).unwrap()
+        RocksDb::default_open_temp().unwrap()
     }
 
     #[test]

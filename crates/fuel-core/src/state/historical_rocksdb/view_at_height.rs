@@ -115,7 +115,7 @@ mod tests {
     #[test]
     fn historical_rocksdb_view_at_each_height_works() {
         // Given
-        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp().unwrap();
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::RewindFullRange).unwrap();
 
@@ -189,7 +189,7 @@ mod tests {
     #[test]
     fn historical_rocksdb_view_at_each_height_works_when_multiple_modifications() {
         // Given
-        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp().unwrap();
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::RewindFullRange).unwrap();
 
