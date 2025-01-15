@@ -69,12 +69,14 @@ impl ReadView {
     pub fn balances<'a>(
         &'a self,
         owner: &'a Address,
+        start: Option<AssetId>,
         direction: IterDirection,
         base_asset_id: &'a AssetId,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
         if self.balances_indexation_enabled {
             futures::future::Either::Left(self.balances_with_cache(
                 owner,
+                start,
                 base_asset_id,
                 direction,
             ))
@@ -140,17 +142,21 @@ impl ReadView {
     fn balances_with_cache<'a>(
         &'a self,
         owner: &'a Address,
-        base_asset_id: &AssetId,
+        start: Option<AssetId>,
+        base_asset_id: &'a AssetId,
         direction: IterDirection,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        stream::iter(self.off_chain.balances(owner, base_asset_id, direction))
-            .map(move |result| {
-                result.map(|(asset_id, amount)| AddressBalance {
-                    owner: *owner,
-                    asset_id,
-                    amount,
-                })
+        stream::iter(
+            self.off_chain
+                .balances(owner, start, base_asset_id, direction),
+        )
+        .map(move |result| {
+            result.map(|(asset_id, amount)| AddressBalance {
+                owner: *owner,
+                asset_id,
+                amount,
             })
-            .yield_each(self.batch_size)
+        })
+        .yield_each(self.batch_size)
     }
 }
