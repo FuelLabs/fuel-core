@@ -2,6 +2,11 @@
 #![deny(warnings)]
 
 #[cfg(test)]
+use async_graphql as _;
+#[cfg(test)]
+use async_graphql_value as _;
+
+#[cfg(test)]
 mod backward_compatibility;
 #[cfg(test)]
 mod forward_compatibility;

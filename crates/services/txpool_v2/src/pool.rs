@@ -42,6 +42,13 @@ use crate::{
     },
 };
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TxPoolStats {
+    pub tx_count: u64,
+    pub total_size: u64,
+    pub total_gas: u64,
+}
+
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
 /// and allowing the selection of transactions for inclusion in a block.
 pub struct Pool<S, SI, CM, SA> {
@@ -59,6 +66,8 @@ pub struct Pool<S, SI, CM, SA> {
     pub(crate) current_gas: u64,
     /// Current pool size in bytes.
     pub(crate) current_bytes_size: usize,
+    /// The current pool gas.
+    pub(crate) pool_stats_sender: tokio::sync::watch::Sender<TxPoolStats>,
 }
 
 impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
@@ -68,6 +77,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
         collision_manager: CM,
         selection_algorithm: SA,
         config: Config,
+        pool_stats_sender: tokio::sync::watch::Sender<TxPoolStats>,
     ) -> Self {
         Pool {
             storage,
@@ -77,6 +87,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             tx_id_to_storage_id: HashMap::new(),
             current_gas: 0,
             current_bytes_size: 0,
+            pool_stats_sender,
         }
     }
 
@@ -157,8 +168,16 @@ where
             .into_iter()
             .map(|data| data.transaction)
             .collect::<Vec<_>>();
-
+        self.update_stats();
         Ok(removed_transactions)
+    }
+
+    fn update_stats(&self) {
+        let _ = self.pool_stats_sender.send(TxPoolStats {
+            tx_count: self.tx_id_to_storage_id.len() as u64,
+            total_size: self.current_bytes_size as u64,
+            total_gas: self.current_gas,
+        });
     }
 
     /// Check if a transaction can be inserted into the pool.
@@ -236,7 +255,8 @@ where
         &mut self,
         constraints: Constraints,
     ) -> Vec<ArcPoolTx> {
-        self.selection_algorithm
+        let txs = self
+            .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage)
             .into_iter()
             .map(|storage_entry| {
@@ -244,7 +264,10 @@ where
 
                 storage_entry.transaction
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        self.update_stats();
+        txs
     }
 
     pub fn find_one(&self, tx_id: &TxId) -> Option<&StorageData> {
@@ -292,6 +315,8 @@ where
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
             }
         }
+
+        self.update_stats();
     }
 
     /// Check if the pool has enough space to store a transaction.
@@ -443,6 +468,9 @@ where
                     .extend(removed.into_iter().map(|data| data.transaction));
             }
         }
+
+        self.update_stats();
+
         removed_transactions
     }
 
@@ -456,6 +484,9 @@ where
             self.update_components_and_caches_on_removal(removed.iter());
             txs_removed.extend(removed.into_iter().map(|data| data.transaction));
         }
+
+        self.update_stats();
+
         txs_removed
     }
 

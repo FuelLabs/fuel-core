@@ -58,7 +58,10 @@ use crate::{
     config::Config,
     error::Error,
     new_service,
-    pool::Pool,
+    pool::{
+        Pool,
+        TxPoolStats,
+    },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     service::{
         memory::MemoryPool,
@@ -96,6 +99,7 @@ pub struct TestPoolUniverse {
     rng: StdRng,
     pub config: Config,
     pool: Option<Shared<TxPool>>,
+    stats_receiver: Option<tokio::sync::watch::Receiver<TxPoolStats>>,
 }
 
 impl Default for TestPoolUniverse {
@@ -105,6 +109,7 @@ impl Default for TestPoolUniverse {
             rng: StdRng::seed_from_u64(0),
             config: Default::default(),
             pool: None,
+            stats_receiver: None,
         }
     }
 }
@@ -126,6 +131,7 @@ impl TestPoolUniverse {
     }
 
     pub fn build_pool(&mut self) {
+        let (tx, rx) = tokio::sync::watch::channel(TxPoolStats::default());
         let pool = Arc::new(RwLock::new(Pool::new(
             GraphStorage::new(GraphConfig {
                 max_txs_chain_count: self.config.max_txs_chain_count,
@@ -133,7 +139,9 @@ impl TestPoolUniverse {
             BasicCollisionManager::new(),
             RatioTipGasSelection::new(),
             self.config.clone(),
+            tx,
         )));
+        self.stats_receiver = Some(rx);
         self.pool = Some(pool.clone());
     }
 
