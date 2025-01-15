@@ -1,7 +1,9 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+#[cfg(test)]
 use async_graphql as _;
+#[cfg(test)]
 use async_graphql_value as _;
 
 #[cfg(test)]
