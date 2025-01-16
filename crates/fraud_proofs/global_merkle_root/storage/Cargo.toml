@@ -23,9 +23,7 @@ fuel-core-storage = { workspace = true, features = ["alloc"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
 ] }
-mockall = { workspace = true, optional = true }
 num_enum = { workspace = true }
-rand = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 
@@ -35,4 +33,3 @@ alloc = ["fuel-core-storage/alloc", "fuel-core-types/alloc"]
 std = ["alloc", "fuel-core-storage/std", "fuel-core-types/std"]
 smt = []
 global-state-root = []
-test-helpers = ["dep:mockall", "dep:rand"]

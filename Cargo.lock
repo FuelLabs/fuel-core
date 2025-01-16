@@ -3689,9 +3689,7 @@ dependencies = [
  "enum-iterator",
  "fuel-core-storage",
  "fuel-core-types 0.41.0",
- "mockall",
  "num_enum",
- "rand",
  "strum 0.25.0",
  "strum_macros 0.25.3",
 ]
