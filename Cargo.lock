@@ -3686,19 +3686,12 @@ name = "fuel-core-global-merkle-root-storage"
 version = "0.41.0"
 dependencies = [
  "anyhow",
- "derive_more 0.99.18",
  "enum-iterator",
  "fuel-core-storage",
  "fuel-core-types 0.41.0",
- "impl-tools",
- "itertools 0.12.1",
  "mockall",
  "num_enum",
- "paste",
- "postcard",
- "primitive-types",
  "rand",
- "serde",
  "strum 0.25.0",
  "strum_macros 0.25.3",
 ]
