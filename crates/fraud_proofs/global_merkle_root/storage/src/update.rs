@@ -146,8 +146,6 @@ where
         // TODO: Insert blobs.
         // TODO: Insert raw code for created contracts.
 
-        // TODO: Process the type of the transaction (and figure out what that means ;) )
-
         Ok(())
     }
 
@@ -268,11 +266,6 @@ where
                 TransactionValidityError::InvalidContractInputIndex(utxo_id),
             ))?;
         }
-
-        // TODO: Think about it more: Maybe we want to create a global Merkle root
-        //  of roots for the contract.
-        //
-        // Comment(netrome): I don't see what we'd gain by this.
         Ok(())
     }
 }
