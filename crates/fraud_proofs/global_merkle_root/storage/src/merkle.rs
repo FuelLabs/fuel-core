@@ -93,6 +93,7 @@ where
 /// But this types shouldn't exist at all, because `BlueprintInspect::KeyCodec`
 /// and `BlueprintInspect::ValueCodec` shouldn't require a storage in a first place.
 /// This is a workaround to satisfy the compiler for now until we refactor the `BlueprintInspect`.
+#[derive(Default)]
 pub struct DummyStorage<Column>(core::marker::PhantomData<Column>);
 
 impl<Column> DummyStorage<Column> {
