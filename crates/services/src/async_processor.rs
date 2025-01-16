@@ -177,7 +177,7 @@ mod tests {
         // Main thread was not used.
         assert!(!unique_thread_ids.contains(&main_id));
         // There's been at least one worker thread used.
-        assert!(unique_thread_ids.len() >= 1);
+        assert!(!unique_thread_ids.is_empty());
         // There were no more worker threads above the threshold.
         assert!(unique_thread_ids.len() <= MAX_NUMBER_OF_THREADS);
     }
