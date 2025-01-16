@@ -1,7 +1,3 @@
-//! The module defines the `Column` and default tables used by the current `fuel-core` codebase.
-//! In the future, the `Column` enum should contain only the required tables for the execution.
-//! All other tables should live in the downstream creates in the place where they are really used.
-
 #[cfg(feature = "alloc")]
 use alloc::string::{
     String,
@@ -24,7 +20,7 @@ use fuel_core_storage::kv_store::StorageColumn;
     Hash,
     num_enum::TryFromPrimitive,
 )]
-pub enum TableColumns {
+pub enum TableColumn {
     /// Only can be proved with global root or a double spend proof.
     ContractsRawCode = 0,
     /// Only can be proved with global root or a double spend proof.
@@ -47,7 +43,7 @@ pub enum TableColumns {
     Blobs = 8,
 }
 
-impl TableColumns {
+impl TableColumn {
     /// The total count of variants in the enum.
     pub const COUNT: usize = <Self as strum::EnumCount>::COUNT;
 
@@ -61,15 +57,15 @@ impl TableColumns {
 /// in the case of malicious block.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Columns {
-    TableColumns(TableColumns),
-    MerkleMetadataColumns(TableColumns),
-    MerkleDataColumns(TableColumns),
+pub enum Column {
+    TableColumn(TableColumn),
+    MerkleMetadataColumn(TableColumn),
+    MerkleDataColumn(TableColumn),
 }
 
-impl Columns {
+impl Column {
     /// The total count of variants in the enum.
-    pub const COUNT: usize = TableColumns::COUNT + TableColumns::COUNT;
+    pub const COUNT: usize = TableColumn::COUNT + TableColumn::COUNT;
 
     /// The start of the merkle metadata columns.
     pub const MERKLE_METADATA_COLUMNS_START: u32 = u16::MAX as u32;
@@ -81,29 +77,29 @@ impl Columns {
     /// Returns the `usize` representation of the `Column`.
     pub fn as_u32(&self) -> u32 {
         match self {
-            Self::TableColumns(column) => column.as_u32(),
-            Self::MerkleMetadataColumns(column) => {
+            Self::TableColumn(column) => column.as_u32(),
+            Self::MerkleMetadataColumn(column) => {
                 Self::MERKLE_METADATA_COLUMNS_START + column.as_u32()
             }
-            Self::MerkleDataColumns(column) => {
+            Self::MerkleDataColumn(column) => {
                 Self::MERKLE_DATA_COLUMNS_START + column.as_u32()
             }
         }
     }
 }
 
-impl StorageColumn for Columns {
+impl StorageColumn for Column {
     fn name(&self) -> String {
         match self {
-            Self::TableColumns(column) => {
+            Self::TableColumn(column) => {
                 let str: &str = column.into();
                 str.to_string()
             }
-            Columns::MerkleMetadataColumns(column) => {
+            Column::MerkleMetadataColumn(column) => {
                 let str: &str = column.into();
                 format!("MerkleMetadata{}", str)
             }
-            Self::MerkleDataColumns(column) => {
+            Self::MerkleDataColumn(column) => {
                 let str: &str = column.into();
                 format!("Merkle{}", str)
             }

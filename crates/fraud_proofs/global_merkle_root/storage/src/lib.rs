@@ -1,9 +1,3 @@
-//! The crate `fuel-core-storage` contains storage types, primitives, tables used by `fuel-core`.
-//! This crate doesn't contain the actual implementation of the storage. It works around the
-//! `Database` and is used by services to provide a default implementation. Primitives
-//! defined here are used by services but are flexible enough to customize the
-//! logic when the `Database` is known.
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
@@ -15,7 +9,7 @@
 extern crate alloc;
 
 use crate::{
-    column::Columns,
+    column::Column,
     merkle::{
         DummyStorage,
         Merklized,
@@ -29,7 +23,6 @@ use fuel_core_storage::{
         StorageTransaction,
     },
     StorageAsMut,
-    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::block::Block,
@@ -89,15 +82,17 @@ pub type StateTransitionBytecodeVersions =
 pub type UploadedBytecodes = Merklized<fuel_core_storage::tables::UploadedBytecodes>;
 pub type Blobs = Merklized<fuel_core_storage::tables::BlobData>;
 
-fn process_block(block: &Block) -> anyhow::Result<()> {
+// TODO(netrome): Turn into method on struct with storage reference
+pub fn process_block(block: &Block) -> anyhow::Result<()> {
     // TODO: Get chain id from the consensus parameters, or hardcode it.
     let chain_id = ChainId::default();
     let mut storage = StorageTransaction::transaction(
-        DummyStorage::<Columns>::new(),
+        DummyStorage::<Column>::new(),
         ConflictPolicy::Fail,
         Changes::default(),
     );
 
+    // TODO(netrome): We (likely) need to validate the block heights.
     let block_height = *block.header().height();
 
     for (tx_idx, tx) in block.transactions().iter().enumerate() {
@@ -195,6 +190,8 @@ fn process_block(block: &Block) -> anyhow::Result<()> {
 
                     // TODO: Think about it more: Maybe we want to create a global Merkle root
                     //  of roots for the contract.
+                    //
+                    // Comment(netrome): I don't see what we'd gain by this.
                 }
                 Output::ContractCreated { contract_id, .. } => {
                     storage.storage::<ContractsLatestUtxo>().insert(

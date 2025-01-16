@@ -12,7 +12,7 @@ keywords = [
   "fuel-storage",
 ]
 license = { workspace = true }
-name = "fuel-core-global-storage"
+name = "fuel-core-global-merkle-root-storage"
 repository = { workspace = true }
 version = { workspace = true }
 
