@@ -20,6 +20,7 @@ version = { workspace = true }
 anyhow = { workspace = true }
 derive_more = { workspace = true }
 enum-iterator = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["alloc"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
 ] }
@@ -34,7 +35,6 @@ rand = { workspace = true, optional = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-fuel-core-storage = { workspace = true, features = ["alloc"] }
 
 [features]
 default = ["std"]
