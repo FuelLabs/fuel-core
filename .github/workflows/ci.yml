@@ -786,9 +786,10 @@ jobs:
           target: ${{ matrix.job.target }},"wasm32-unknown-unknown"
 
       - name: Install cross
-        uses: baptiste0928/cargo-install@v1
+        uses: baptiste0928/cargo-install@v3
         with:
           crate: cross
+          version: '=0.2.5'
           cache-key: '${{ matrix.job.target }}'
 
       - name: Build fuel-core and fuel-core-keygen
