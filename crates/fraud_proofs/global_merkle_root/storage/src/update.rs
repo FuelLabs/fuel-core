@@ -104,9 +104,8 @@ impl<'a, Storage> UpdateMerklizedTablesTransaction<'a, Storage>
 where
     Storage: KeyValueInspect<Column = Column>,
 {
-    // TODO: Proper result type
+    // TODO(#2588): Proper result type
     pub fn process_block(&mut self, block: &Block) -> anyhow::Result<()> {
-        // TODO: Validate block height?
         let block_height = *block.header().height();
 
         for (tx_idx, tx) in block.transactions().iter().enumerate() {
@@ -139,12 +138,11 @@ where
             self.process_output(tx_pointer, utxo_id, &inputs, output)?;
         }
 
-        // TODO: Add the transaction to the `ProcessedTransactions` table.
-
-        // TODO: Insert state transition bytecode and consensus parameter updates.
-        // TODO: Insert uplodade bytecodes.
-        // TODO: Insert blobs.
-        // TODO: Insert raw code for created contracts.
+        // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
+        // TODO(#2584): Insert state transition bytecode and consensus parameter updates.
+        // TODO(#2585): Insert uplodade bytecodes.
+        // TODO(#2586): Insert blobs.
+        // TODO(#2587): Insert raw code for created contracts.
 
         Ok(())
     }
@@ -166,7 +164,7 @@ where
             // message is not spend.
             Input::MessageDataSigned(MessageDataSigned { nonce, .. })
             | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
-                // TODO: Figure out how to know the status of the execution.
+                // TODO(#2589): Figure out how to know the status of the execution.
                 //  We definitely can do it via providing all receipts and verifying
                 //  the script root. But maybe we have less expensive way.
                 let success_status = false;
@@ -308,13 +306,6 @@ impl TransactionOutputs for Transaction {
     }
 }
 
-// TODO: Add tests
-// Unit tests:
-// - Coin insertion.
-// - Coin deletion.
-// - Contract creation (Raw code uploaded).
-// - Contract utxo updated.
-// - Message insertion & deletion
-// -
+// TODO(#2582): Add tests (https://github.com/FuelLabs/fuel-core/issues/2582)
 #[test]
 fn dummy() {}
