@@ -61,6 +61,7 @@ mod tests {
         fuel_tx::{
             consensus_parameters::gas::GasCostsValuesV1,
             field::{
+                Expiration,
                 InputContract,
                 Inputs,
                 MintAmount,
@@ -961,6 +962,63 @@ mod tests {
                 ExecutorError::CoinbaseAmountMismatch
             ));
         }
+    }
+
+    #[test]
+    fn executor_invalidates_expired_tx() {
+        let producer = create_executor(Default::default(), Default::default());
+        let validator = create_executor(Default::default(), Default::default());
+
+        // Given
+        let mut block = test_block(2u32.into(), 0u64.into(), 0);
+
+        let amount = 1;
+        let asset = AssetId::BASE;
+        let mut tx = TxBuilder::new(2322u64)
+            .script_gas_limit(10)
+            .coin_input(asset, (amount as Word) * 100)
+            .coin_output(asset, (amount as Word) * 50)
+            .change_output(asset)
+            .build()
+            .transaction()
+            .clone();
+
+        // When
+        tx.set_expiration(1u32.into());
+        block.transactions_mut().push(tx.clone().into());
+
+        let ExecutionResult {
+            skipped_transactions,
+            mut block,
+            ..
+        } = producer
+            .produce_without_commit(block.into())
+            .unwrap()
+            .into_result();
+
+        // Then
+        assert_eq!(skipped_transactions.len(), 1);
+        assert_eq!(
+            skipped_transactions[0].1,
+            ExecutorError::InvalidTransaction(CheckError::Validity(
+                ValidityError::TransactionExpiration
+            ))
+        );
+
+        // Produced block is valid
+        let _ = validator.validate(&block).unwrap().into_result();
+
+        // Make the block invalid by adding expired transaction
+        let len = block.transactions().len();
+        block.transactions_mut().insert(len - 1, tx.into());
+
+        let verify_error = validator.validate(&block).unwrap_err();
+        assert_eq!(
+            verify_error,
+            ExecutorError::InvalidTransaction(CheckError::Validity(
+                ValidityError::TransactionExpiration
+            ))
+        );
     }
 
     // Ensure tx has at least one input to cover gas

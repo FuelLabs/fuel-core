@@ -324,7 +324,7 @@ impl TestPoolUniverse {
         let mut total_size: u64 = 0;
         for tx in expected_txs {
             total_gas = total_gas.checked_add(tx.max_gas()).unwrap();
-            total_size = total_gas
+            total_size = total_size
                 .checked_add(tx.metered_bytes_size() as u64)
                 .unwrap();
         }

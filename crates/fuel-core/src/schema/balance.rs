@@ -79,9 +79,27 @@ impl BalanceQuery {
         Ok(balance)
     }
 
-    // TODO: This API should be migrated to the indexer for better support and
-    //  discontinued within fuel-core.
-    #[graphql(complexity = "query_costs().balance_query")]
+    // TODO: https://github.com/FuelLabs/fuel-core/issues/2496
+    // This is the complexity we want to use with "balances()" query, but it's not
+    // currently possible, because we need to handle queries with ~10k items.
+    // We use the temporary complexity until the SDKs are updated to not
+    // request such a large number of items.
+    // #[graphql(
+    // complexity = "query_costs().balance_query + query_costs().storage_iterator \
+    // + (query_costs().storage_read * first.unwrap_or_default() as usize) \
+    // + (child_complexity * first.unwrap_or_default() as usize) \
+    // + (query_costs().storage_read * last.unwrap_or_default() as usize) \
+    // + (child_complexity * last.unwrap_or_default() as usize)"
+    // )]
+
+    // The 0.66 factor is a Goldilocks approach to balancing the complexity of the query for the SDKs.
+    // Rust SDK sends a query with child_complexity ≅ 11 and we want to support slightly more
+    // than 10k items in a single query (so we target 11k). The total complexity would be 11k * 11 = 121k,
+    // but since our default limit is 80k, we need the 0.66 factor.
+    #[graphql(complexity = "query_costs().balance_query +
+        (child_complexity as f32 * first.unwrap_or_default() as f32 * 0.66) as usize + \
+        (child_complexity as f32 * last.unwrap_or_default() as f32 * 0.66) as usize
+    ")]
     async fn balances(
         &self,
         ctx: &Context<'_>,
@@ -92,18 +110,21 @@ impl BalanceQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
-        if before.is_some() || after.is_some() {
-            return Err(anyhow!("pagination is not yet supported").into())
-        }
         let query = ctx.read_view()?;
+        if !query.balances_indexation_enabled && (before.is_some() || after.is_some()) {
+            return Err(anyhow!(
+                "Can not use pagination when balances indexation is not available"
+            )
+            .into())
+        }
         let base_asset_id = *ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params()
             .base_asset_id();
         let owner = filter.owner.into();
-        crate::schema::query_pagination(after, before, first, last, |_, direction| {
+        crate::schema::query_pagination(after, before, first, last, |start, direction| {
             Ok(query
-                .balances(&owner, direction, &base_asset_id)
+                .balances(&owner, (*start).map(Into::into), direction, &base_asset_id)
                 .map(|result| {
                     result.map(|balance| (balance.asset_id.into(), balance.into()))
                 }))

@@ -67,7 +67,7 @@ git clone https://github.com/FuelLabs/fuel-core.git
 
 Go to the latest release tag for ignition on the `fuel-core` repository :
 ```
-git checkout v0.40.2
+git checkout v0.41.0
 ```
 
 Build your node binary:
