@@ -273,10 +273,7 @@ impl_temporal_registry!(ContractId);
 impl_temporal_registry!(ScriptCode);
 impl_temporal_registry!(PredicateCode);
 
-impl<'a, Tx> UtxoIdToPointer for CompressDbTx<'a, Tx>
-where
-    Tx: OffChainDatabaseTransaction,
-{
+impl<'a, Tx> UtxoIdToPointer for CompressDbTx<'a, Tx> {
     fn lookup(
         &self,
         utxo_id: fuel_core_types::fuel_tx::UtxoId,
@@ -301,7 +298,6 @@ where
 
 impl<'a, Tx, Onchain> HistoryLookup for DecompressDbTx<'a, Tx, Onchain>
 where
-    Tx: OffChainDatabaseTransaction,
     Onchain: StorageInspect<Coins, Error = fuel_core_storage::Error>
         + StorageInspect<Messages, Error = fuel_core_storage::Error>
         + StorageInspect<FuelBlocks, Error = fuel_core_storage::Error>,
@@ -314,13 +310,14 @@ where
             // This is a genesis coin, which is handled differently.
             // See CoinConfigGenerator::generate which generates the genesis coins.
             let mut bytes = [0u8; 32];
-            let tx_index = c.tx_pointer.tx_index();
-            bytes[..std::mem::size_of_val(&tx_index)]
-                .copy_from_slice(&tx_index.to_be_bytes());
-            return Ok(fuel_core_types::fuel_tx::UtxoId::new(
+            bytes[..size_of::<u16>()].copy_from_slice(&c.output_index.to_be_bytes());
+
+            let utxo_id = fuel_core_types::fuel_tx::UtxoId::new(
                 fuel_core_types::fuel_tx::TxId::from(bytes),
-                0,
-            ));
+                c.output_index,
+            );
+
+            return Ok(utxo_id);
         }
 
         let block_info = self
