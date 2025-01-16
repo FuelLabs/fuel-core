@@ -1,0 +1,45 @@
+[package]
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+description = "Storage types and primitives used by Fuel core protocol."
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = [
+  "blockchain",
+  "cryptocurrencies",
+  "fuel-client",
+  "fuel-core",
+  "fuel-storage",
+]
+license = { workspace = true }
+name = "fuel-core-global-storage"
+repository = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+derive_more = { workspace = true }
+enum-iterator = { workspace = true }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "serde",
+] }
+impl-tools = "0.10.3"
+itertools = { workspace = true, features = ["use_alloc"] }
+mockall = { workspace = true, optional = true }
+num_enum = { workspace = true }
+paste = { workspace = true }
+postcard = { workspace = true, features = ["alloc"] }
+primitive-types = { workspace = true, default-features = false }
+rand = { workspace = true, optional = true }
+serde = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["alloc"] }
+
+[features]
+default = ["std"]
+alloc = ["fuel-core-storage/alloc", "fuel-core-types/alloc"]
+std = ["alloc", "fuel-core-storage/std", "fuel-core-types/std"]
+smt = []
+global-state-root = []
+test-helpers = ["dep:mockall", "dep:rand"]
