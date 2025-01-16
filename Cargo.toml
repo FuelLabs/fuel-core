@@ -30,6 +30,7 @@ members = [
   "crates/services/upgradable-executor",
   "crates/services/upgradable-executor/wasm-executor",
   "crates/storage",
+  "crates/fraud_proofs/global_merkle_root/storage",
   "crates/trace",
   "crates/types",
   "tests",

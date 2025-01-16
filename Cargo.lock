@@ -3682,6 +3682,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-global-storage"
+version = "0.40.2"
+dependencies = [
+ "anyhow",
+ "derive_more 0.99.18",
+ "enum-iterator",
+ "fuel-core-storage",
+ "fuel-core-types 0.40.2",
+ "impl-tools",
+ "itertools 0.12.1",
+ "mockall",
+ "num_enum",
+ "paste",
+ "postcard",
+ "primitive-types",
+ "rand",
+ "serde",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
+]
+
+[[package]]
 name = "fuel-core-importer"
 version = "0.41.0"
 dependencies = [
