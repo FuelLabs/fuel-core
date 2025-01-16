@@ -157,7 +157,16 @@ impl<S, R> Executor<S, R> {
         ("0-39-0", 15),
         ("0-40-0", 16),
         ("0-40-1", 17),
-        ("0-40-2", LATEST_STATE_TRANSITION_VERSION),
+        // The release 0.40.2 and 0.40.3 has the same state transition function bytecode,
+        // because we don't do `cargo update` and use `Cargo.lock` file to generate
+        // the exact same WASM bytecode. And new release doesn't have any changes in the
+        // executor or related crates.
+        //
+        // Usually even in this condition we increment the version, but in this case of 0.40.3,
+        // we can't do that without hacks, because version 0.41.0 already is released.
+        // So we override 0.40.2 release with 0.40.3 release for now.
+        // ("0-40-2", 18),
+        ("0-40-3", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
