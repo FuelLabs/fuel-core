@@ -1,5 +1,5 @@
 use crate::{
-    column::Columns,
+    column::Column,
     merkle::MerklizedTableColumn,
 };
 use fuel_core_storage::{
@@ -30,10 +30,10 @@ where
     Table: MerklizedTableColumn,
 {
     type Blueprint = Plain<Raw, Postcard>;
-    type Column = Columns;
+    type Column = Column;
 
-    fn column() -> Columns {
-        Columns::MerkleDataColumns(Table::table_column())
+    fn column() -> Column {
+        Column::MerkleDataColumn(Table::table_column())
     }
 }
 
@@ -52,9 +52,9 @@ where
     Table: MerklizedTableColumn,
 {
     type Blueprint = Plain<Primitive<4>, Postcard>;
-    type Column = Columns;
+    type Column = Column;
 
-    fn column() -> Columns {
-        Columns::MerkleDataColumns(Table::table_column())
+    fn column() -> Column {
+        Column::MerkleDataColumn(Table::table_column())
     }
 }

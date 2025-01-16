@@ -1,5 +1,5 @@
 use crate::{
-    column::TableColumns,
+    column::TableColumn,
     merkle::MerklizedTableColumn,
 };
 use fuel_core_storage::tables::{
@@ -8,13 +8,13 @@ use fuel_core_storage::tables::{
 };
 
 impl MerklizedTableColumn for ContractsRawCode {
-    fn table_column() -> TableColumns {
-        TableColumns::ContractsRawCode
+    fn table_column() -> TableColumn {
+        TableColumn::ContractsRawCode
     }
 }
 
 impl MerklizedTableColumn for ContractsLatestUtxo {
-    fn table_column() -> TableColumns {
-        TableColumns::ContractsLatestUtxo
+    fn table_column() -> TableColumn {
+        TableColumn::ContractsLatestUtxo
     }
 }

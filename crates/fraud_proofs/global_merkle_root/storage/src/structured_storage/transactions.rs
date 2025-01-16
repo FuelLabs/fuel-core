@@ -1,11 +1,11 @@
 use crate::{
-    column::TableColumns,
+    column::TableColumn,
     merkle::MerklizedTableColumn,
 };
 use fuel_core_storage::tables::ProcessedTransactions;
 
 impl MerklizedTableColumn for ProcessedTransactions {
-    fn table_column() -> TableColumns {
-        TableColumns::ProcessedTransactions
+    fn table_column() -> TableColumn {
+        TableColumn::ProcessedTransactions
     }
 }

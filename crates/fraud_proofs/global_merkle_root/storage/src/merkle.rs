@@ -1,6 +1,6 @@
 use crate::column::{
-    Columns,
-    TableColumns,
+    Column,
+    TableColumn,
 };
 use fuel_core_storage::{
     blueprint::{
@@ -46,7 +46,7 @@ pub struct Merklized<Table>(core::marker::PhantomData<Table>);
 /// Implementation of this trait for the table, inherits
 /// the Merkle implementation for the [`Merklized`] table.
 pub trait MerklizedTableColumn {
-    fn table_column() -> TableColumns;
+    fn table_column() -> TableColumn;
 }
 
 impl<Table> Mappable for Merklized<Table>
@@ -61,19 +61,19 @@ where
 
 type KeyCodec<Table> = <<Table as TableWithBlueprint>::Blueprint as BlueprintInspect<
     Table,
-    DummyStorage<Columns>,
+    DummyStorage<Column>,
 >>::KeyCodec;
 
 type ValueCodec<Table> = <<Table as TableWithBlueprint>::Blueprint as BlueprintInspect<
     Table,
-    DummyStorage<Columns>,
+    DummyStorage<Column>,
 >>::ValueCodec;
 
 impl<Table> TableWithBlueprint for Merklized<Table>
 where
     Table: Mappable + MerklizedTableColumn,
     Table: TableWithBlueprint,
-    Table::Blueprint: BlueprintInspect<Table, DummyStorage<Columns>>,
+    Table::Blueprint: BlueprintInspect<Table, DummyStorage<Column>>,
 {
     type Blueprint = Sparse<
         KeyCodec<Table>,
@@ -82,10 +82,10 @@ where
         MerkleData<Table>,
         KeyConverter<Table>,
     >;
-    type Column = Columns;
+    type Column = Column;
 
     fn column() -> Self::Column {
-        Columns::TableColumns(Table::table_column())
+        Column::TableColumn(Table::table_column())
     }
 }
 

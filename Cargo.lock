@@ -3682,7 +3682,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-core-global-storage"
+name = "fuel-core-global-merkle-root-storage"
 version = "0.40.2"
 dependencies = [
  "anyhow",
