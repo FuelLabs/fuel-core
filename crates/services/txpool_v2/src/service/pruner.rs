@@ -6,6 +6,7 @@ use fuel_core_types::{
 use std::{
     collections::{
         BTreeMap,
+        HashSet,
         VecDeque,
     },
     time::SystemTime,
@@ -13,7 +14,7 @@ use std::{
 
 pub(super) struct TransactionPruner {
     pub time_txs_submitted: Shared<VecDeque<(SystemTime, TxId)>>,
-    pub height_expiration_txs: Shared<BTreeMap<BlockHeight, Vec<TxId>>>,
+    pub height_expiration_txs: Shared<BTreeMap<BlockHeight, HashSet<TxId>>>,
     pub ttl_timer: tokio::time::Interval,
     pub txs_ttl: tokio::time::Duration,
 }

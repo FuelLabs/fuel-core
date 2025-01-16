@@ -345,12 +345,24 @@ where
                 let expired_txs = height_expiration_txs.remove(&height);
                 if let Some(expired_txs) = expired_txs {
                     let mut tx_pool = self.pool.write();
-                    removed_txs
-                        .extend(tx_pool.remove_transaction_and_dependents(expired_txs));
+                    removed_txs.extend(
+                        tx_pool
+                            .remove_transaction_and_dependents(expired_txs.into_iter()),
+                    );
                 }
             }
         }
         for tx in removed_txs {
+            {
+                let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
+                let expiration = tx.expiration();
+                if expiration < u32::MAX.into() {
+                    if let Some(expired_txs) = height_expiration_txs.get_mut(&expiration)
+                    {
+                        expired_txs.remove(&tx.id());
+                    }
+                }
+            }
             self.shared_state
                 .tx_status_sender
                 .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
@@ -486,7 +498,7 @@ where
                     if expiration < u32::MAX.into() {
                         let mut lock = height_expiration_txs.write();
                         let block_height_expiration = lock.entry(expiration).or_default();
-                        block_height_expiration.push(tx_id);
+                        block_height_expiration.insert(tx_id);
                     }
 
                     let duration = submitted_time
@@ -662,10 +674,20 @@ where
         let removed;
         {
             let mut pool = self.pool.write();
-            removed = pool.remove_transaction_and_dependents(txs_to_remove);
+            removed = pool.remove_transaction_and_dependents(txs_to_remove.into_iter());
         }
 
         for tx in removed {
+            {
+                let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
+                let expiration = tx.expiration();
+                if expiration < u32::MAX.into() {
+                    if let Some(expired_txs) = height_expiration_txs.get_mut(&expiration)
+                    {
+                        expired_txs.remove(&tx.id());
+                    }
+                }
+            }
             self.shared_state
                 .tx_status_sender
                 .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));

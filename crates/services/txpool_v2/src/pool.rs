@@ -525,7 +525,7 @@ where
     /// Remove transaction and its dependents.
     pub fn remove_transaction_and_dependents(
         &mut self,
-        tx_ids: Vec<TxId>,
+        tx_ids: impl Iterator<Item = TxId>,
     ) -> Vec<ArcPoolTx> {
         let mut removed_transactions = vec![];
         for tx_id in tx_ids {
