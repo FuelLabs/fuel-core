@@ -79,10 +79,10 @@ impl Column {
         match self {
             Self::TableColumn(column) => column.as_u32(),
             Self::MerkleMetadataColumn(column) => {
-                Self::MERKLE_METADATA_COLUMNS_START + column.as_u32()
+                Self::MERKLE_METADATA_COLUMNS_START.wrapping_add(column.as_u32())
             }
             Self::MerkleDataColumn(column) => {
-                Self::MERKLE_DATA_COLUMNS_START + column.as_u32()
+                Self::MERKLE_DATA_COLUMNS_START.wrapping_add(column.as_u32())
             }
         }
     }

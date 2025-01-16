@@ -297,7 +297,7 @@ impl TransactionOutputs for Transaction {
             Transaction::Script(tx) => Cow::Borrowed(tx.outputs()),
             Transaction::Create(tx) => Cow::Borrowed(tx.outputs()),
             Transaction::Mint(tx) => {
-                Cow::Owned(vec![Output::Contract(tx.output_contract().clone())])
+                Cow::Owned(vec![Output::Contract(*tx.output_contract())])
             }
             Transaction::Upgrade(tx) => Cow::Borrowed(tx.outputs()),
             Transaction::Upload(tx) => Cow::Borrowed(tx.outputs()),
