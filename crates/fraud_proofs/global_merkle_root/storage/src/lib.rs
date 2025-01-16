@@ -10,19 +10,12 @@ extern crate alloc;
 
 use crate::{
     column::Column,
-    merkle::{
-        DummyStorage,
-        Merklized,
-    },
+    merkle::Merklized,
 };
 use alloc::borrow::Cow;
 use fuel_core_storage::{
     kv_store::KeyValueInspect,
-    transactional::{
-        Changes,
-        ConflictPolicy,
-        StorageTransaction,
-    },
+    transactional::StorageTransaction,
     StorageAsMut,
 };
 use fuel_core_types::{
@@ -54,14 +47,12 @@ use fuel_core_types::{
         },
         output::{
             self,
-            contract::Contract,
         },
         Address,
         AssetId,
         Input,
         Output,
         Transaction,
-        TxId,
         TxPointer,
         UniqueIdentifier,
         UtxoId,
@@ -162,6 +153,13 @@ where
             let utxo_id = UtxoId::new(tx_id, output_index);
             self.process_output(tx_pointer, utxo_id, &inputs, output)?;
         }
+
+        // TODO: Add the transaction to the `ProcessedTransactions` table.
+
+        // TODO: Insert state transition bytecode and consensus parameter updates.
+        // TODO: Insert uplodade bytecodes.
+        // TODO: Insert blobs.
+        // TODO: Insert raw code for created contracts.
 
         // TODO: Process the type of the transaction (and figure out what that means ;) )
 
@@ -333,6 +331,13 @@ impl TransactionOutputs for Transaction {
 }
 
 // TODO: Add tests
+// Unit tests:
+// - Coin insertion.
+// - Coin deletion.
+// - Contract creation (Raw code uploaded).
+// - Contract utxo updated.
+// - Message insertion & deletion
+// -
 #[test]
 fn dummy() {}
 
