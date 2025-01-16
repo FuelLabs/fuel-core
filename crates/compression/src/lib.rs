@@ -20,6 +20,7 @@ use crate::compressed_block_payload::v0::CompressedBlockPayloadV0;
 use crate::compressed_block_payload::v1::CompressedBlockPayloadV1;
 use fuel_core_types::{
     blockchain::{
+        block::PartialFuelBlock,
         header::{
             ApplicationHeader,
             BlockHeader,
@@ -29,7 +30,10 @@ use fuel_core_types::{
         primitives::Empty,
     },
     fuel_tx::CompressedTransaction,
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
 };
 use registry::RegistrationsPerTable;
 
@@ -44,6 +48,11 @@ pub trait VersionedBlockPayload {
     fn registrations(&self) -> &RegistrationsPerTable;
     fn transactions(&self) -> Vec<CompressedTransaction>;
     fn partial_block_header(&self) -> PartialBlockHeader;
+    fn validate_with(
+        &self,
+        partial_block: &PartialFuelBlock,
+        chain_id: &ChainId,
+    ) -> anyhow::Result<()>;
 }
 
 /// Versioned compressed block.
@@ -60,6 +69,8 @@ impl VersionedCompressedBlock {
         header: &BlockHeader,
         registrations: RegistrationsPerTable,
         transactions: Vec<CompressedTransaction>,
+        #[cfg(feature = "fault-proving")]
+        tx_ids: &[fuel_core_types::fuel_types::Bytes32],
     ) -> Self {
         #[cfg(not(feature = "fault-proving"))]
         return Self::V0(CompressedBlockPayloadV0::new(
@@ -72,6 +83,7 @@ impl VersionedCompressedBlock {
             header,
             registrations,
             transactions,
+            tx_ids,
         ))
     }
 }
@@ -274,6 +286,7 @@ mod tests {
                     generated: Empty,
                 },
                 block_id: BlockId::from_str("0xecea85c17070bc2e65f911310dbd01198f4436052ebba96cded9ddf30c58dd1a").unwrap(),
+                tx_commitment: Default::default(),
             };
 
 
@@ -302,6 +315,7 @@ mod tests {
 
             if let VersionedCompressedBlock::V1(block) = decompressed {
                 assert_eq!(block.header.block_id, header.block_id);
+                assert_eq!(block.header.tx_commitment, header.tx_commitment);
             } else {
                 panic!("Expected V1 block, got {:?}", decompressed);
             }

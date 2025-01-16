@@ -50,6 +50,7 @@ pub fn da_compress_block<T>(
     block: &Block,
     block_events: &[Event],
     db_tx: &mut T,
+    #[cfg(feature = "fault-proving")] chain_id: fuel_core_types::fuel_types::ChainId,
 ) -> anyhow::Result<()>
 where
     T: OffChainDatabaseTransaction,
@@ -61,6 +62,8 @@ where
             block_events,
         },
         block,
+        #[cfg(feature = "fault-proving")]
+        chain_id,
     )
     .now_or_never()
     .expect("The current implementation resolved all futures instantly")?;

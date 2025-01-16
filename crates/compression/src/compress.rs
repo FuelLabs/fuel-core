@@ -15,6 +15,9 @@ use crate::{
     VersionedCompressedBlock,
 };
 use anyhow::Context;
+#[cfg(feature = "fault-proving")]
+use fuel_core_types::fuel_tx::UniqueIdentifier;
+
 use fuel_core_types::{
     blockchain::block::Block,
     fuel_compression::{
@@ -51,11 +54,15 @@ pub async fn compress<D>(
     config: Config,
     mut db: D,
     block: &Block,
+    #[cfg(feature = "fault-proving")] chain_id: fuel_core_types::fuel_types::ChainId,
 ) -> anyhow::Result<VersionedCompressedBlock>
 where
     D: CompressDb,
 {
     let target = block.transactions_vec();
+
+    #[cfg(feature = "fault-proving")]
+    let tx_ids = target.iter().map(|tx| tx.id(&chain_id)).collect::<Vec<_>>();
 
     let mut prepare_ctx = PrepareCtx {
         config,
@@ -73,6 +80,8 @@ where
         block.header(),
         registrations,
         transactions,
+        #[cfg(feature = "fault-proving")]
+        &tx_ids,
     ))
 }
 

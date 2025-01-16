@@ -61,6 +61,11 @@ async fn can_fetch_da_compressed_block_from_graphql() {
         temporal_registry_retention: Duration::from_secs(3600),
     };
     config.da_compression = DaCompressionConfig::Enabled(compression_config);
+    let chain_id = config
+        .snapshot_reader
+        .chain_config()
+        .consensus_parameters
+        .chain_id();
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
@@ -124,7 +129,9 @@ async fn can_fetch_da_compressed_block_from_graphql() {
         },
         onchain_db: db.on_chain().view_at(&0u32.into()).unwrap(),
     };
-    let decompressed = decompress(compression_config, db_tx, block).await.unwrap();
+    let decompressed = decompress(compression_config, db_tx, block, &chain_id)
+        .await
+        .unwrap();
 
     assert!(decompressed.transactions.len() == 2);
 }

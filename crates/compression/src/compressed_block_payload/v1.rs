@@ -4,6 +4,7 @@ use crate::{
 };
 use fuel_core_types::{
     blockchain::{
+        block::PartialFuelBlock,
         header::{
             ApplicationHeader,
             BlockHeader,
@@ -15,9 +16,25 @@ use fuel_core_types::{
             Empty,
         },
     },
-    fuel_tx::CompressedTransaction,
-    fuel_types::BlockHeight,
+    fuel_crypto,
+    fuel_tx::{
+        Bytes32,
+        CompressedTransaction,
+        UniqueIdentifier,
+    },
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
 };
+
+pub fn generate_tx_commitment(tx_ids: &[Bytes32]) -> Bytes32 {
+    let mut hasher = fuel_crypto::Hasher::default();
+    for tx_id in tx_ids {
+        hasher.input(tx_id.as_ref());
+    }
+    hasher.digest()
+}
 
 /// A partially complete fuel block header that does not
 /// have any generated fields because it has not been executed yet.
@@ -31,10 +48,12 @@ pub struct CompressedBlockHeader {
     pub consensus: ConsensusHeader<Empty>,
     // The block id.
     pub block_id: BlockId,
+    // A commitment to all transaction ids in the block
+    pub tx_commitment: Bytes32,
 }
 
-impl From<&BlockHeader> for CompressedBlockHeader {
-    fn from(header: &BlockHeader) -> Self {
+impl CompressedBlockHeader {
+    fn new(header: &BlockHeader, tx_ids: &[Bytes32]) -> Self {
         let ConsensusHeader {
             prev_root,
             height,
@@ -56,6 +75,7 @@ impl From<&BlockHeader> for CompressedBlockHeader {
                 generated: Empty {},
             },
             block_id: header.id(),
+            tx_commitment: generate_tx_commitment(tx_ids),
         }
     }
 }
@@ -103,6 +123,26 @@ impl VersionedBlockPayload for CompressedBlockPayloadV1 {
     fn partial_block_header(&self) -> PartialBlockHeader {
         PartialBlockHeader::from(&self.header)
     }
+
+    fn validate_with(
+        &self,
+        partial_block: &PartialFuelBlock,
+        chain_id: &ChainId,
+    ) -> anyhow::Result<()> {
+        let txs = partial_block
+            .transactions
+            .iter()
+            .map(|tx| tx.id(chain_id))
+            .collect::<Vec<_>>();
+        let tx_commitment = generate_tx_commitment(&txs);
+        let expected = self.header.tx_commitment;
+        if tx_commitment != expected {
+            anyhow::bail!(
+                "Invalid tx commitment. got {tx_commitment}, expected {expected}"
+            );
+        }
+        Ok(())
+    }
 }
 
 impl CompressedBlockPayloadV1 {
@@ -112,9 +152,10 @@ impl CompressedBlockPayloadV1 {
         header: &BlockHeader,
         registrations: RegistrationsPerTable,
         transactions: Vec<CompressedTransaction>,
+        tx_ids: &[Bytes32],
     ) -> Self {
         Self {
-            header: CompressedBlockHeader::from(header),
+            header: CompressedBlockHeader::new(header, tx_ids),
             registrations,
             transactions,
         }

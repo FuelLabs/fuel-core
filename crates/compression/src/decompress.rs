@@ -39,6 +39,7 @@ use fuel_core_types::{
     },
     fuel_types::{
         Address,
+        ChainId,
         ContractId,
     },
     tai64::Tai64,
@@ -52,6 +53,7 @@ pub async fn decompress<D>(
     config: Config,
     mut db: D,
     block: VersionedCompressedBlock,
+    chain_id: &ChainId,
 ) -> anyhow::Result<PartialFuelBlock>
 where
     D: DecompressDb,
@@ -74,10 +76,14 @@ where
     )
     .await?;
 
-    Ok(PartialFuelBlock {
+    let partial_block = PartialFuelBlock {
         header: block.partial_block_header(),
         transactions,
-    })
+    };
+
+    block.validate_with(&partial_block, chain_id)?;
+
+    Ok(partial_block)
 }
 
 pub struct DecompressCtx<D> {

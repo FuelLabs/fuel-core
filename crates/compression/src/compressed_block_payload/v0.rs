@@ -4,6 +4,7 @@ use crate::{
 };
 use fuel_core_types::{
     blockchain::{
+        block::PartialFuelBlock,
         header::{
             ApplicationHeader,
             BlockHeader,
@@ -13,7 +14,10 @@ use fuel_core_types::{
         primitives::Empty,
     },
     fuel_tx::CompressedTransaction,
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
 };
 
 /// Compressed block, without the preceding version byte.
@@ -50,6 +54,10 @@ impl VersionedBlockPayload for CompressedBlockPayloadV0 {
 
     fn partial_block_header(&self) -> PartialBlockHeader {
         self.header
+    }
+
+    fn validate_with(&self, _: &PartialFuelBlock, _: &ChainId) -> anyhow::Result<()> {
+        Ok(())
     }
 }
 

@@ -188,7 +188,14 @@ where
         match self.da_compression_config {
             DaCompressionConfig::Disabled => {}
             DaCompressionConfig::Enabled(config) => {
-                da_compress_block(config, block, &result.events, &mut transaction)?;
+                da_compress_block(
+                    config,
+                    block,
+                    &result.events,
+                    &mut transaction,
+                    #[cfg(feature = "fault-proving")]
+                    self.chain_id,
+                )?;
             }
         }
 
