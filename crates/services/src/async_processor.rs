@@ -277,6 +277,8 @@ mod tests {
         // Allowing some LEEWAY to account for runtime overhead.
         const LEEWAY: Duration = Duration::from_millis(300);
         assert!(instant.elapsed() < Duration::from_secs(5) + LEEWAY);
+        // Make sure that the tasks were not executed in parallel.
+        assert!(instant.elapsed() >= Duration::from_secs(5));
         // Wait for the metrics to be updated.
         tokio::time::sleep(Duration::from_secs(1)).await;
         let duration = Duration::from_nanos(heavy_task_processor.metric.busy.get());
