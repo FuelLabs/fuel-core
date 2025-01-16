@@ -12,11 +12,11 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-async-graphql = { version = "7.0.11", features = [
+async-graphql = { version = "=7.0.11", features = [
   "playground",
   "tracing",
 ], default-features = false }
-async-graphql-value = "7.0.11"
+async-graphql-value = "=7.0.11"
 async-trait = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
