@@ -3683,13 +3683,13 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-global-merkle-root-storage"
-version = "0.40.2"
+version = "0.41.0"
 dependencies = [
  "anyhow",
  "derive_more 0.99.18",
  "enum-iterator",
  "fuel-core-storage",
- "fuel-core-types 0.40.2",
+ "fuel-core-types 0.41.0",
  "impl-tools",
  "itertools 0.12.1",
  "mockall",
