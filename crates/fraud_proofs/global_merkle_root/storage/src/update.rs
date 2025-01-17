@@ -65,18 +65,18 @@ use fuel_core_types::{
 
 pub trait UpdateMerkleizedTables {
     fn update_merklized_tables(
-        &mut self,
+        self,
         chain_id: ChainId,
         block: &Block,
     ) -> anyhow::Result<()>;
 }
 
-impl<Storage> UpdateMerkleizedTables for StorageTransaction<Storage>
+impl<Storage> UpdateMerkleizedTables for &mut StorageTransaction<Storage>
 where
     Storage: KeyValueInspect<Column = Column>,
 {
     fn update_merklized_tables(
-        &mut self,
+        self,
         chain_id: ChainId,
         block: &Block,
     ) -> anyhow::Result<()> {
@@ -305,6 +305,246 @@ impl TransactionOutputs for Transaction {
     }
 }
 
-// TODO(#2582): Add tests (https://github.com/FuelLabs/fuel-core/issues/2582)
-#[test]
-fn dummy() {}
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod tests {
+    use super::*;
+
+    use fuel_core_storage::{
+        structured_storage::test::InMemoryStorage,
+        transactional::{
+            ReadTransaction,
+            WriteTransaction,
+        },
+        StorageAsRef,
+    };
+    use fuel_core_types::fuel_tx::{
+        Bytes32,
+        ContractId,
+        TxId,
+    };
+
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        SeedableRng,
+    };
+
+    #[test]
+    fn process_output__should_insert_coin() {
+        let mut rng = StdRng::seed_from_u64(1337);
+
+        // Given
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut update_tx = storage_tx.update_transaction();
+
+        let tx_pointer = random_tx_pointer(&mut rng);
+        let utxo_id = random_utxo_id(&mut rng);
+        let inputs = vec![];
+
+        let output_amount = rng.gen();
+        let output_address = random_address(&mut rng);
+        let output = Output::Coin {
+            to: output_address,
+            amount: output_amount,
+            asset_id: AssetId::zeroed(),
+        };
+
+        // When
+        update_tx
+            .process_output(tx_pointer, utxo_id, &inputs, &output)
+            .unwrap();
+
+        storage_tx.commit().unwrap();
+
+        let inserted_coin = storage
+            .read_transaction()
+            .storage_as_ref::<Coins>()
+            .get(&utxo_id)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        // Then
+        assert_eq!(*inserted_coin.amount(), output_amount);
+        assert_eq!(*inserted_coin.owner(), output_address);
+    }
+
+    #[test]
+    fn process_output__should_insert_latest_contract_utxo_when_contract_created() {
+        let mut rng = StdRng::seed_from_u64(1337);
+
+        // Given
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut update_tx = storage_tx.update_transaction();
+
+        let tx_pointer = random_tx_pointer(&mut rng);
+        let utxo_id = random_utxo_id(&mut rng);
+        let inputs = vec![];
+
+        let contract_id = random_contract_id(&mut rng);
+        let output = Output::ContractCreated {
+            contract_id,
+            state_root: Bytes32::zeroed(),
+        };
+
+        // When
+        update_tx
+            .process_output(tx_pointer, utxo_id, &inputs, &output)
+            .unwrap();
+
+        storage_tx.commit().unwrap();
+
+        let inserted_contract_utxo = storage
+            .read_transaction()
+            .storage_as_ref::<ContractsLatestUtxo>()
+            .get(&contract_id)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        // Then
+        assert_eq!(inserted_contract_utxo.utxo_id(), &utxo_id);
+    }
+
+    #[test]
+    fn process_output__should_update_latest_contract_utxo_when_interacting_with_contract()
+    {
+        let mut rng = StdRng::seed_from_u64(1337);
+
+        // Given
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut update_tx = storage_tx.update_transaction();
+
+        let tx_pointer = random_tx_pointer(&mut rng);
+        let utxo_id = random_utxo_id(&mut rng);
+
+        let contract_id = random_contract_id(&mut rng);
+        let input_contract = input::contract::Contract {
+            contract_id,
+            ..Default::default()
+        };
+        let inputs = vec![Input::Contract(input_contract)];
+
+        let output_contract = output::contract::Contract {
+            input_index: 0,
+            ..Default::default()
+        };
+
+        let output = Output::Contract(output_contract);
+
+        // When
+        update_tx
+            .process_output(tx_pointer, utxo_id, &inputs, &output)
+            .unwrap();
+
+        storage_tx.commit().unwrap();
+
+        let inserted_contract_utxo = storage
+            .read_transaction()
+            .storage_as_ref::<ContractsLatestUtxo>()
+            .get(&contract_id)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        // Then
+        assert_eq!(inserted_contract_utxo.utxo_id(), &utxo_id);
+    }
+
+    #[test]
+    fn process_input__should_remove_coin() {
+        let mut rng = StdRng::seed_from_u64(1337);
+
+        // Given
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut update_tx = storage_tx.update_transaction();
+
+        let output_amount = rng.gen();
+        let output_address = random_address(&mut rng);
+        let tx_pointer = random_tx_pointer(&mut rng);
+        let utxo_id = random_utxo_id(&mut rng);
+        let inputs = vec![];
+
+        let output = Output::Coin {
+            to: output_address,
+            amount: output_amount,
+            asset_id: AssetId::zeroed(),
+        };
+
+        let input = Input::CoinSigned(CoinSigned {
+            utxo_id,
+            ..Default::default()
+        });
+
+        // When
+        update_tx
+            .process_output(tx_pointer, utxo_id, &inputs, &output)
+            .unwrap();
+
+        update_tx.process_input(&input).unwrap();
+
+        storage_tx.commit().unwrap();
+
+        // Then
+        assert!(storage
+            .read_transaction()
+            .storage_as_ref::<Coins>()
+            .get(&utxo_id)
+            .unwrap()
+            .is_none());
+    }
+
+    fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
+        let mut txid = TxId::default();
+        rng.fill_bytes(txid.as_mut());
+        let output_index = rng.gen();
+
+        UtxoId::new(txid, output_index)
+    }
+
+    fn random_tx_pointer(rng: &mut impl rand::RngCore) -> TxPointer {
+        let block_height = BlockHeight::new(rng.gen());
+        let tx_index = rng.gen();
+
+        TxPointer::new(block_height, tx_index)
+    }
+
+    fn random_address(rng: &mut impl rand::RngCore) -> Address {
+        let mut address = Address::default();
+        rng.fill_bytes(address.as_mut());
+
+        address
+    }
+
+    fn random_contract_id(rng: &mut impl rand::RngCore) -> ContractId {
+        let mut contract_id = ContractId::default();
+        rng.fill_bytes(contract_id.as_mut());
+
+        contract_id
+    }
+
+    trait UpdateTransaction<'a>: Sized + 'a {
+        type Storage;
+        fn update_transaction(
+            self,
+        ) -> UpdateMerklizedTablesTransaction<'a, Self::Storage>;
+    }
+
+    impl<'a, Storage> UpdateTransaction<'a> for &'a mut StorageTransaction<Storage> {
+        type Storage = Storage;
+
+        fn update_transaction(
+            self,
+        ) -> UpdateMerklizedTablesTransaction<'a, Self::Storage> {
+            UpdateMerklizedTablesTransaction {
+                chain_id: ChainId::default(),
+                storage: self,
+            }
+        }
+    }
+}
