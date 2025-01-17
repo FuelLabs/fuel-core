@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2551](https://github.com/FuelLabs/fuel-core/pull/2551): Enhanced the DA compressed block header to include block id.
+- [2595](https://github.com/FuelLabs/fuel-core/pull/2595): Added `indexation` field to the `nodeInfo` GraphQL endpoint to allow checking if a specific indexation is enabled.
 
 ## [Version 0.41.0]
 
