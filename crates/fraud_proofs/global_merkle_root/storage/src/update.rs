@@ -4,7 +4,11 @@ use crate::{
     ContractsLatestUtxo,
     Messages,
 };
-use alloc::borrow::Cow;
+use alloc::{
+    borrow::Cow,
+    vec,
+    vec::Vec,
+};
 use fuel_core_storage::{
     kv_store::KeyValueInspect,
     transactional::StorageTransaction,

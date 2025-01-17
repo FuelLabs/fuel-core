@@ -1,6 +1,9 @@
-use alloc::string::{
-    String,
-    ToString,
+use alloc::{
+    format,
+    string::{
+        String,
+        ToString,
+    },
 };
 use fuel_core_storage::kv_store::StorageColumn;
 
