@@ -2,6 +2,7 @@ use crate::column::{
     Column,
     TableColumn,
 };
+use alloc::borrow::Cow;
 use fuel_core_storage::{
     blueprint::{
         sparse::{
@@ -19,7 +20,6 @@ use fuel_core_storage::{
     Mappable,
     Result as StorageResult,
 };
-use std::borrow::Cow;
 
 mod smt;
 
