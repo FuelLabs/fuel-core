@@ -9,7 +9,6 @@ keywords = [
   "cryptocurrencies",
   "fuel-client",
   "fuel-core",
-  "fuel-storage",
 ]
 license = { workspace = true }
 name = "fuel-core-global-merkle-root-storage"
