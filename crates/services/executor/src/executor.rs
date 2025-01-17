@@ -1,11 +1,21 @@
-use crate::{
-    ports::{
-        MaybeCheckedTransaction,
-        RelayerPort,
-        TransactionsSource,
-    },
-    refs::ContractRef,
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
+#[cfg(feature = "alloc")]
+use alloc::{
+    format,
+    string::ToString,
+    vec,
+    vec::Vec,
 };
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
+use parking_lot::Mutex as ParkingMutex;
+use tracing::{
+    debug,
+    warn,
+};
+
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
@@ -141,25 +151,15 @@ use fuel_core_types::{
         relayer::Event,
     },
 };
-use parking_lot::Mutex as ParkingMutex;
-use tracing::{
-    debug,
-    warn,
-};
 
-#[cfg(feature = "std")]
-use std::borrow::Cow;
-
-#[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
-
-use crate::ports::TransactionExt;
-#[cfg(feature = "alloc")]
-use alloc::{
-    format,
-    string::ToString,
-    vec,
-    vec::Vec,
+use crate::{
+    ports::{
+        MaybeCheckedTransaction,
+        RelayerPort,
+        TransactionExt,
+        TransactionsSource,
+    },
+    refs::ContractRef,
 };
 
 /// The maximum amount of transactions that can be included in a block,

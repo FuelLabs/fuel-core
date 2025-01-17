@@ -130,10 +130,7 @@ fn draw_profits(
     let min_overall = min_predicted_profit.min(min_known_profit);
 
     let mut chart = ChartBuilder::on(upper)
-        .caption(
-            "Profit, Cost, and Reward Over Time",
-            ("sans-serif", 50).into_font(),
-        )
+        .caption("Profit Over Time", ("sans-serif", 50).into_font())
         .margin(5)
         .x_label_area_size(40)
         .y_label_area_size(60)

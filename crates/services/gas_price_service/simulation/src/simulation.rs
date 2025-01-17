@@ -164,7 +164,7 @@ async fn select_p_value(data: &Data, start_gas_price: u64) -> anyhow::Result<i64
             .collect();
 
         const TICK_TIME_SECONDS: u64 = 5;
-        const TIMEOUT_SECONDS: u64 = 60;
+        const TIMEOUT_SECONDS: u64 = 90;
         let future_res = tick_until_future_returns_or_timeout(
             futures::future::join_all(futures),
             TICK_TIME_SECONDS,
@@ -274,7 +274,7 @@ async fn select_d_value(
             .collect();
 
         const TICK_TIME_SECONDS: u64 = 5;
-        const TIMEOUT_SECONDS: u64 = 60;
+        const TIMEOUT_SECONDS: u64 = 90;
         let future_res = tick_until_future_returns_or_timeout(
             futures::future::join_all(futures),
             TICK_TIME_SECONDS,
