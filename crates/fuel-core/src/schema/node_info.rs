@@ -3,17 +3,24 @@ use super::scalars::{
     U64,
 };
 use crate::{
+    database::database_description::IndexationKind,
     fuel_core_graphql_api::{
         query_costs,
         Config as GraphQLConfig,
     },
-    graphql_api::api_service::TxPool,
+    graphql_api::{
+        api_service::TxPool,
+        database::ReadDatabase,
+    },
 };
 use async_graphql::{
     Context,
     Object,
 };
-use std::time::UNIX_EPOCH;
+use std::{
+    collections::HashSet,
+    time::UNIX_EPOCH,
+};
 
 pub struct NodeInfo {
     utxo_validation: bool,
@@ -23,6 +30,7 @@ pub struct NodeInfo {
     max_size: U64,
     max_depth: U64,
     node_version: String,
+    indexation: Indexation,
 }
 
 #[Object]
@@ -53,6 +61,10 @@ impl NodeInfo {
 
     async fn node_version(&self) -> String {
         self.node_version.to_owned()
+    }
+
+    async fn indexation(&self) -> &Indexation {
+        &self.indexation
     }
 
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
@@ -94,6 +106,27 @@ impl NodeQuery {
 
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+        let db = ctx.data_unchecked::<ReadDatabase>();
+        let read_view = db.view()?;
+        let indexation = HashSet::from_iter(
+            [
+                (
+                    read_view.balances_indexation_enabled,
+                    IndexationKind::Balances,
+                ),
+                (
+                    read_view.coins_to_spend_indexation_enabled,
+                    IndexationKind::CoinsToSpend,
+                ),
+                (
+                    read_view.asset_metadata_indexation_enabled,
+                    IndexationKind::AssetMetadata,
+                ),
+            ]
+            .into_iter()
+            .filter_map(|(enabled, kind)| enabled.then_some(kind)),
+        );
+
         Ok(NodeInfo {
             utxo_validation: config.utxo_validation,
             vm_backtrace: config.vm_backtrace,
@@ -102,6 +135,7 @@ impl NodeQuery {
             max_size: (config.max_size as u64).into(),
             max_depth: (config.max_txpool_dependency_chain_length as u64).into(),
             node_version: VERSION.to_owned(),
+            indexation: Indexation(indexation),
         })
     }
 }
@@ -166,5 +200,26 @@ impl TxPoolStats {
     /// The total gas of the transactions in the pool
     async fn total_gas(&self) -> U64 {
         self.0.total_gas.into()
+    }
+}
+
+#[derive(Clone)]
+struct Indexation(HashSet<IndexationKind>);
+
+#[Object]
+impl Indexation {
+    /// Is balances indexation enabled
+    async fn balances(&self) -> bool {
+        self.0.contains(&IndexationKind::Balances)
+    }
+
+    /// Is coins to spend indexation enabled
+    async fn coins_to_spend(&self) -> bool {
+        self.0.contains(&IndexationKind::CoinsToSpend)
+    }
+
+    /// Is asset metadata indexation enabled
+    async fn asset_metadata(&self) -> bool {
+        self.0.contains(&IndexationKind::AssetMetadata)
     }
 }
