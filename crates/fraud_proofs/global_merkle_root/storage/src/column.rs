@@ -1,4 +1,3 @@
-#[cfg(feature = "alloc")]
 use alloc::string::{
     String,
     ToString,
