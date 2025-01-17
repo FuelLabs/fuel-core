@@ -4,7 +4,6 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-#[cfg(feature = "alloc")]
 extern crate alloc;
 
 pub mod column;
