@@ -128,7 +128,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
         &self,
         l2_block_number: u32,
     ) -> DaBlockCostsResult<Vec<RawDaBlockCosts>> {
-        // Specific: http://localhost:8080/v1/costs?variant=specific&value=19098935&limit=5
+        // Specific: http://committer.url/v1/costs?variant=specific&value=19098935&limit=5
         if let Some(url) = &self.url {
             tracing::debug!("getting da costs by l2 block number: {l2_block_number}");
             let path = format!("/v1/costs?variant=specific&value={l2_block_number}&limit={NUMBER_OF_BUNDLES}");
