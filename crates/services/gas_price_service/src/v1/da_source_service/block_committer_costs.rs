@@ -131,8 +131,9 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
         // Specific: http://localhost:8080/v1/costs?variant=specific&value=19098935&limit=5
         if let Some(url) = &self.url {
             tracing::debug!("getting da costs by l2 block number: {l2_block_number}");
-            let formatted_url = format!("{url}/v1/costs?variant=specific&value={l2_block_number}&limit={NUMBER_OF_BUNDLES}");
-            let response = self.client.get(formatted_url).send().await?;
+            let path = format!("/v1/costs?variant=specific&value={l2_block_number}&limit={NUMBER_OF_BUNDLES}");
+            let full_path = url.join(&path)?;
+            let response = self.client.get(full_path).send().await?;
             let parsed = response.json::<Vec<RawDaBlockCosts>>().await?;
             Ok(parsed)
         } else {
@@ -147,6 +148,7 @@ mod test_block_committer_http_api {
 
     use super::*;
     use fake_server::FakeServer;
+    use url::Url;
 
     #[test]
     fn get_costs_by_l2_block_number__when_url_is_none__then_returns_empty_vec() {
