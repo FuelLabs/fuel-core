@@ -23,6 +23,7 @@ clap = { workspace = true, features = ["derive"] }
 cosmrs = { version = "0.21", optional = true }
 derive_more = { version = "0.99" }
 enum-iterator = { workspace = true }
+enumset = "1.1.5"
 fuel-core-chain-config = { workspace = true, features = ["std"] }
 fuel-core-compression = { workspace = true }
 fuel-core-consensus-module = { workspace = true }

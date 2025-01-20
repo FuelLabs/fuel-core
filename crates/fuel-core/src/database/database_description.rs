@@ -1,4 +1,5 @@
 use core::fmt::Debug;
+use enumset::EnumSetType;
 use fuel_core_storage::kv_store::StorageColumn;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -70,15 +71,7 @@ pub trait DatabaseDescription: 'static + Copy + Debug + Send + Sync {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    serde::Serialize,
-    serde::Deserialize,
-    Eq,
-    PartialEq,
-    Hash,
-    strum::EnumIter,
+    Debug, serde::Serialize, serde::Deserialize, Hash, strum::EnumIter, EnumSetType,
 )]
 pub enum IndexationKind {
     Balances,

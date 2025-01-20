@@ -17,10 +17,8 @@ use async_graphql::{
     Context,
     Object,
 };
-use std::{
-    collections::HashSet,
-    time::UNIX_EPOCH,
-};
+use enumset::EnumSet;
+use std::time::UNIX_EPOCH;
 
 pub struct NodeInfo {
     utxo_validation: bool,
@@ -108,7 +106,7 @@ impl NodeQuery {
 
         let db = ctx.data_unchecked::<ReadDatabase>();
         let read_view = db.view()?;
-        let indexation = HashSet::from_iter(
+        let indexation = EnumSet::from_iter(
             [
                 (
                     read_view.balances_indexation_enabled,
@@ -204,22 +202,22 @@ impl TxPoolStats {
 }
 
 #[derive(Clone)]
-struct Indexation(HashSet<IndexationKind>);
+struct Indexation(EnumSet<IndexationKind>);
 
 #[Object]
 impl Indexation {
     /// Is balances indexation enabled
     async fn balances(&self) -> bool {
-        self.0.contains(&IndexationKind::Balances)
+        self.0.contains(IndexationKind::Balances)
     }
 
     /// Is coins to spend indexation enabled
     async fn coins_to_spend(&self) -> bool {
-        self.0.contains(&IndexationKind::CoinsToSpend)
+        self.0.contains(IndexationKind::CoinsToSpend)
     }
 
     /// Is asset metadata indexation enabled
     async fn asset_metadata(&self) -> bool {
-        self.0.contains(&IndexationKind::AssetMetadata)
+        self.0.contains(IndexationKind::AssetMetadata)
     }
 }
