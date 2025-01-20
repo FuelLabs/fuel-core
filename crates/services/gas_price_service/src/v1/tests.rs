@@ -417,6 +417,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         da_service_runner,
         inner,
         latest_l2_height,
+        None,
     );
 
     let read_algo = service.next_block_algorithm();
@@ -475,6 +476,7 @@ async fn run__new_l2_block_saves_old_metadata() {
         da_service_runner,
         inner,
         latest_l2_height,
+        None,
     );
     let mut watcher = StateWatcher::started();
 
@@ -535,6 +537,7 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
         da_service_runner,
         inner,
         latest_l2_height,
+        None,
     );
     let mut watcher = StateWatcher::started();
 
@@ -594,6 +597,7 @@ async fn run__updates_da_service_latest_l2_height() {
         da_service_runner,
         inner,
         latest_l2_height,
+        None,
     );
     let mut watcher = StateWatcher::started();
 
@@ -976,7 +980,8 @@ async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
 }
 
 #[tokio::test]
-async fn uninitialized_task__init__sets_latest_recorded_height_to_l2_height_if_none() {
+async fn uninitialized_task__init__sets_initial_storage_height_to_match_l2_height_if_none(
+) {
     // given
     let metadata_height = 100;
     let l2_height = 200;
@@ -1018,11 +1023,8 @@ async fn uninitialized_task__init__sets_latest_recorded_height_to_l2_height_if_n
 
     // then
     // sleep to allow the service to sync
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let recorded_height = gas_price_service
-        .storage_tx_provider()
-        .get_recorded_height()
-        .unwrap();
-    assert_eq!(recorded_height, Some(l2_height.into()));
+    let initial_recorded_height = gas_price_service.initial_recorded_height();
+    assert_eq!(initial_recorded_height, Some(l2_height.into()));
 }

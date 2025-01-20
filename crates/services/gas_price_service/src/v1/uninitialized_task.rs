@@ -200,12 +200,7 @@ where
 
         let starting_recorded_height = match self.gas_price_db.get_recorded_height()? {
             Some(height) => height,
-            None => {
-                let mut storage_tx = self.gas_price_db.begin_transaction()?;
-                storage_tx.set_recorded_height(BlockHeight::from(latest_block_height))?;
-                AtomicStorage::commit_transaction(storage_tx)?;
-                BlockHeight::from(latest_block_height)
-            }
+            None => BlockHeight::from(latest_block_height),
         };
 
         let poll_duration = self.config.da_poll_interval;
@@ -229,6 +224,7 @@ where
                 da_service_runner,
                 self.gas_price_db,
                 Arc::clone(&latest_l2_height),
+                None,
             );
             Ok(service)
         } else {
@@ -256,6 +252,7 @@ where
                 da_service_runner,
                 self.gas_price_db,
                 Arc::clone(&latest_l2_height),
+                Some(starting_recorded_height),
             );
             Ok(service)
         }

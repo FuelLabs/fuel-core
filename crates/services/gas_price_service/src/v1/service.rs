@@ -117,6 +117,8 @@ where
     storage_tx_provider: AtomicStorage,
     /// communicates to the Da source service what the latest L2 block was
     latest_l2_block: Arc<AtomicU32>,
+    /// Initial Recorded Height
+    initial_recorded_height: Option<BlockHeight>,
 }
 
 impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
@@ -139,6 +141,11 @@ where
     #[cfg(test)]
     pub fn latest_l2_block(&self) -> &AtomicU32 {
         &self.latest_l2_block
+    }
+
+    #[cfg(test)]
+    pub fn initial_recorded_height(&self) -> Option<BlockHeight> {
+        self.initial_recorded_height
     }
 }
 
@@ -188,6 +195,7 @@ where
         da_source_adapter_handle: ServiceRunner<DaSourceService<DA>>,
         storage_tx_provider: AtomicStorage,
         latest_l2_block: Arc<AtomicU32>,
+        initial_recorded_height: Option<BlockHeight>,
     ) -> Self {
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
         Self {
@@ -200,6 +208,7 @@ where
             da_block_costs_buffer: Vec::new(),
             storage_tx_provider,
             latest_l2_block,
+            initial_recorded_height,
         }
     }
 
@@ -237,9 +246,21 @@ where
     ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
-        let mut latest_recorded_height = storage_tx
+        tracing::info!("Updating DA block costs and L2 block data");
+        let mut new_recorded_height = match storage_tx
             .get_recorded_height()
-            .map_err(|err| anyhow!(err))?;
+            .map_err(|err| anyhow!(err))?
+        {
+            Some(_) => None,
+            None => {
+                // Sets it on first run
+                tracing::info!(
+                    "Setting initial recorded height to: {:?}",
+                    self.initial_recorded_height
+                );
+                self.initial_recorded_height.take()
+            }
+        };
 
         for da_block_costs in &self.da_block_costs_buffer {
             tracing::debug!("Updating DA block costs: {:?}", da_block_costs);
@@ -251,10 +272,11 @@ where
                 da_block_costs.blob_cost_wei,
                 &mut storage_tx.as_unrecorded_blocks(),
             )?;
-            latest_recorded_height = Some(BlockHeight::from(end));
+            new_recorded_height = Some(BlockHeight::from(end));
         }
 
-        if let Some(recorded_height) = latest_recorded_height {
+        if let Some(recorded_height) = new_recorded_height {
+            tracing::info!("Setting recorded height: {:?}", recorded_height);
             storage_tx
                 .set_recorded_height(recorded_height)
                 .map_err(|err| anyhow!(err))?;
@@ -417,6 +439,7 @@ where
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::{
         num::NonZeroU64,
         sync::{
@@ -428,31 +451,11 @@ mod tests {
     };
     use tokio::sync::mpsc;
 
-    use fuel_core_services::{
-        RunnableTask,
-        Service,
-        ServiceRunner,
-        StateWatcher,
-    };
-    use fuel_core_storage::{
-        structured_storage::test::InMemoryStorage,
-        tables::merkle::DenseMetadataKey::Latest,
-        transactional::{
-            IntoTransaction,
-            StorageTransaction,
-            WriteTransaction,
-        },
-        StorageAsMut,
-    };
-    use fuel_core_types::fuel_types::BlockHeight;
-
     use crate::{
         common::{
             fuel_core_storage_adapter::storage::{
                 GasPriceColumn,
-                GasPriceColumn::UnrecordedBlocks,
                 GasPriceMetadata,
-                RecordedHeights,
                 UnrecordedBlocksTable,
             },
             gas_price_algorithm::SharedGasPriceAlgo,
@@ -464,8 +467,10 @@ mod tests {
             },
         },
         ports::{
+            GasPriceServiceAtomicStorage,
             GetLatestRecordedHeight,
             GetMetadataStorage,
+            SetLatestRecordedHeight,
             SetMetadataStorage,
         },
         v1::{
@@ -484,8 +489,28 @@ mod tests {
                 GasPriceServiceV1,
                 LatestGasPrice,
             },
-            uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
+            uninitialized_task::fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
         },
+    };
+    use fuel_core_services::{
+        RunnableTask,
+        Service,
+        ServiceRunner,
+        StateWatcher,
+    };
+    use fuel_core_storage::{
+        structured_storage::test::InMemoryStorage,
+        transactional::{
+            IntoTransaction,
+            StorageTransaction,
+            WriteTransaction,
+        },
+        StorageAsMut,
+    };
+    use fuel_core_types::fuel_types::BlockHeight;
+    use fuel_gas_price_algorithm::v1::{
+        Bytes,
+        Height,
     };
 
     struct FakeL2BlockSource {
@@ -535,6 +560,10 @@ mod tests {
 
     #[tokio::test]
     async fn run__updates_gas_price_with_l2_block_source() {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .try_init();
+
         // given
         let block_height = 1;
         let l2_block = BlockInfo::Block {
@@ -604,6 +633,7 @@ mod tests {
             da_service_runner,
             inner,
             latest_l2_height,
+            None,
         );
         let read_algo = service.next_block_algorithm();
         let mut watcher = StateWatcher::default();
@@ -699,6 +729,7 @@ mod tests {
             da_service_runner,
             inner,
             latest_l2_block,
+            None,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -802,6 +833,7 @@ mod tests {
             da_service_runner,
             inner,
             latest_l2_height,
+            None,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -894,6 +926,7 @@ mod tests {
             da_service_runner,
             inner,
             latest_l2_height,
+            None,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -917,5 +950,181 @@ mod tests {
         assert_eq!(metadata.latest_known_total_da_cost, blob_cost_wei);
 
         service.shutdown().await.unwrap();
+    }
+
+    fn arbitrary_config() -> V1AlgorithmConfig {
+        V1AlgorithmConfig {
+            new_exec_gas_price: 100,
+            min_exec_gas_price: 50,
+            exec_gas_price_change_percent: 20,
+            l2_block_fullness_threshold_percent: 20,
+            gas_price_factor: NonZeroU64::new(10).unwrap(),
+            min_da_gas_price: 10,
+            max_da_gas_price: 11,
+            max_da_gas_price_change_percent: 20,
+            da_p_component: 4,
+            da_d_component: 2,
+            normal_range_size: 10,
+            capped_range_size: 100,
+            decrease_range_size: 4,
+            block_activity_threshold: 20,
+            da_poll_interval: None,
+        }
+    }
+
+    #[derive(Clone)]
+    struct FakeAtomicStorage {
+        inner: Arc<Mutex<Option<BlockHeight>>>,
+    }
+
+    impl FakeAtomicStorage {
+        fn new() -> Self {
+            Self {
+                inner: Arc::new(Mutex::new(None)),
+            }
+        }
+    }
+
+    impl GasPriceServiceAtomicStorage for FakeAtomicStorage {
+        type Transaction<'a>
+            = Self
+        where
+            Self: 'a;
+
+        fn begin_transaction(&mut self) -> GasPriceResult<Self::Transaction<'_>> {
+            Ok(self.clone())
+        }
+
+        fn commit_transaction(transaction: Self::Transaction<'_>) -> GasPriceResult<()> {
+            Ok(())
+        }
+    }
+
+    impl GetLatestRecordedHeight for FakeAtomicStorage {
+        fn get_recorded_height(&self) -> GasPriceResult<Option<BlockHeight>> {
+            let height = self.inner.lock().unwrap().clone();
+            Ok(height)
+        }
+    }
+
+    impl SetLatestRecordedHeight for FakeAtomicStorage {
+        fn set_recorded_height(&mut self, height: BlockHeight) -> GasPriceResult<()> {
+            *self.inner.lock().unwrap() = Some(height);
+            Ok(())
+        }
+    }
+
+    impl AsUnrecordedBlocks for FakeAtomicStorage {
+        type Wrapper<'a> = OkUnrecordedBlocks;
+
+        fn as_unrecorded_blocks(&mut self) -> Self::Wrapper<'_> {
+            OkUnrecordedBlocks
+        }
+    }
+
+    struct OkUnrecordedBlocks;
+
+    impl UnrecordedBlocks for OkUnrecordedBlocks {
+        fn insert(&mut self, height: Height, bytes: Bytes) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn remove(&mut self, height: &Height) -> Result<Option<Bytes>, String> {
+            Ok(None)
+        }
+    }
+
+    impl GetMetadataStorage for FakeAtomicStorage {
+        fn get_metadata(
+            &self,
+            _: &BlockHeight,
+        ) -> GasPriceResult<Option<UpdaterMetadata>> {
+            Ok(None)
+        }
+    }
+
+    impl SetMetadataStorage for FakeAtomicStorage {
+        fn set_metadata(&mut self, _: &UpdaterMetadata) -> GasPriceResult<()> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn run__sets_the_latest_recorded_block_if_not_set() {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .try_init();
+
+        // given
+        let expected_recorded_height = BlockHeight::new(9999999);
+
+        let block_height = 1;
+        let l2_block = BlockInfo::Block {
+            height: block_height,
+            gas_used: 60,
+            block_gas_capacity: 100,
+            block_bytes: 100,
+            block_fees: 100,
+            gas_price: 100,
+        };
+
+        let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);
+        let l2_block_source = FakeL2BlockSource {
+            l2_block: l2_block_receiver,
+        };
+
+        let metadata_storage = FakeMetadata::empty();
+        let l2_block_height = 0;
+        let config = arbitrary_config();
+        let atomic_storage = FakeAtomicStorage::new();
+        let handle = atomic_storage.clone();
+        let (algo_updater, shared_algo) = initialize_algorithm(
+            &config,
+            l2_block_height,
+            l2_block_height,
+            &metadata_storage,
+        )
+        .unwrap();
+
+        let notifier = Arc::new(tokio::sync::Notify::new());
+        let latest_l2_height = Arc::new(AtomicU32::new(0));
+        let recorded_height = BlockHeight::new(0);
+
+        let dummy_da_source = DaSourceService::new(
+            DummyDaBlockCosts::new(
+                Err(anyhow::anyhow!("unused at the moment")),
+                notifier.clone(),
+            ),
+            None,
+            Arc::clone(&latest_l2_height),
+            recorded_height,
+        );
+        let da_service_runner = ServiceRunner::new(dummy_da_source);
+        da_service_runner.start_and_await().await.unwrap();
+        let latest_gas_price = LatestGasPrice::new(0, 0);
+
+        let mut service = GasPriceServiceV1::new(
+            l2_block_source,
+            shared_algo,
+            latest_gas_price,
+            algo_updater,
+            da_service_runner,
+            atomic_storage,
+            latest_l2_height,
+            Some(expected_recorded_height),
+        );
+        let read_algo = service.next_block_algorithm();
+        let initial_price = read_algo.next_gas_price();
+        let mut watcher = StateWatcher::default();
+
+        // when
+        service.run(&mut watcher).await;
+        l2_block_sender.send(l2_block).await.unwrap();
+        service.shutdown().await.unwrap();
+
+        // then
+        let actual = handle.get_recorded_height().unwrap().unwrap();
+
+        assert_eq!(expected_recorded_height, actual);
     }
 }
