@@ -105,8 +105,13 @@ impl Extension for RequiredFuelBlockHeightInner {
                         format!(
                             "The required fuel block height is higher than the current block height. \
                             Required: {}, Current: {}",
-                            required_block_height,
-                            current_block_height
+                            // required_block_height: &BlockHeight, dereference twice to get the 
+                            // corresponding value as u32. This is necessary because the Display 
+                            // implementation for BlockHeight displays values in hexadecimal format.
+                            **required_block_height,
+                            // curren_fuel_block_height: BlockHeight, dereference once to get the 
+                            // corresponding value as u32.
+                            *current_block_height
                         ),
                         Some(Pos {
                             line: line as usize,
