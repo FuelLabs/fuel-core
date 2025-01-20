@@ -18,7 +18,7 @@ use reqwest::{
 };
 
 #[tokio::test]
-async fn balance_with_block_height_header() {
+async fn request_with_required_block_height_extension_field_works() {
     let owner = Address::default();
     let asset_id = AssetId::BASE;
 
@@ -30,28 +30,22 @@ async fn balance_with_block_height_header() {
     let srv = FuelService::new_node(config).await.unwrap();
     let mut client: FuelClient = FuelClient::from(srv.bound_address);
 
-    client
-        .set_header("REQUIRED_FUEL_BLOCK_HEIGHT", "100")
-        .unwrap();
-
+    client.with_required_fuel_block_height(100);
     // Issue a request with wrong precondition
     let error = client.balance(&owner, Some(&asset_id)).await.unwrap_err();
 
-    let error_str = format!("{:?}", error);
-    assert_eq!(
-        error_str,
-        "Custom { kind: Other, error: ErrorResponse(412, \"\") }"
-    );
+    assert!(error.to_string().contains(
+        "The required fuel block height is higher than the current block height"
+    ),);
 
-    // Disable HEADER, otherwise requests fail with status code 412
-    client.remove_header("REQUIRED_FUEL_BLOCK_HEIGHT");
+    // Disable extension meratadata, otherwise the request fails
+    client.without_required_fuel_block_height();
+
     // Meet precondition on server side
     client.produce_blocks(100, None).await.unwrap();
 
     // Set the header and issue request again
-    client
-        .set_header("REQUIRED_FUEL_BLOCK_HEIGHT", "100")
-        .unwrap();
+    client.with_required_fuel_block_height(100);
     let result = client.balance(&owner, Some(&asset_id)).await;
 
     assert!(result.is_ok());

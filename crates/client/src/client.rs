@@ -39,7 +39,6 @@ use base64::prelude::{
 #[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
 use cynic::{
-    http::ReqwestExt,
     GraphQlResponse,
     Id,
     MutationBuilder,
@@ -83,6 +82,7 @@ use reqwest::header::{
     HeaderMap,
     HeaderValue,
     IntoHeaderName,
+    CONTENT_TYPE,
 };
 use schema::{
     assets::AssetInfoArg,
@@ -125,6 +125,7 @@ use schema::{
 #[cfg(feature = "subscriptions")]
 use std::future;
 use std::{
+    collections::HashMap,
     convert::TryInto,
     io::{
         self,
@@ -168,6 +169,11 @@ pub enum Error {
     Other(anyhow::Error),
 }
 
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct RequestExtensions {
+    pub required_fuel_block_height: Option<u64>,
+}
+
 #[derive(Debug, Clone)]
 pub struct FuelClient {
     client: reqwest::Client,
@@ -175,6 +181,7 @@ pub struct FuelClient {
     cookie: std::sync::Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
     headers: HeaderMap,
+    extensions: HashMap<&'static str, serde_json::Value>,
 }
 
 impl FromStr for FuelClient {
@@ -203,6 +210,7 @@ impl FromStr for FuelClient {
                 cookie,
                 url,
                 headers: HeaderMap::new(),
+                extensions: Default::default(),
             })
         }
 
@@ -263,6 +271,17 @@ impl FuelClient {
         self
     }
 
+    pub fn with_required_fuel_block_height(&mut self, height: u64) -> &mut Self {
+        self.extensions
+            .insert("required_fuel_block_height", height.into());
+        self
+    }
+
+    pub fn without_required_fuel_block_height(&mut self) -> &mut Self {
+        self.extensions.remove("required_fuel_block_height");
+        self
+    }
+
     /// Send the GraphQL query to the client.
     pub async fn query<ResponseData, Vars>(
         &self,
@@ -272,16 +291,33 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
+        let mut operation_json = serde_json::to_value(&q)?;
+        let operation_object = operation_json
+            .as_object_mut()
+            .expect("Graphql operation is a valid json object");
+        operation_object.insert(
+            "extensions".to_owned(),
+            serde_json::to_value(self.extensions.clone())?,
+        );
+
+        println!("{}", serde_json::to_string_pretty(&operation_json).unwrap());
         let request_builder = self
             .client
             .post(self.url.clone())
-            .headers(self.headers.clone());
+            .headers(self.headers.clone())
+            .header(CONTENT_TYPE, "application/json")
+            .body(serde_json::to_string(&operation_json)?);
 
         let response = request_builder
-            .run_graphql(q)
+            .send()
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+            .text()
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
+        println!("Response: {}", response);
+        let response = serde_json::from_str(&response)?;
         Self::decode_response(response)
     }
 

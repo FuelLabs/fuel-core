@@ -1,7 +1,7 @@
 use super::database::ReadView;
 use crate::fuel_core_graphql_api::api_service::{
-    CURRENT_FUEL_BLOCK_HEIGHT_HEADER,
-    REQUIRED_FUEL_BLOCK_HEIGHT_HEADER,
+    CURRENT_FUEL_BLOCK_HEIGHT,
+    REQUIRED_FUEL_BLOCK_HEIGHT,
 };
 use async_graphql::{
     extensions::{
@@ -67,7 +67,7 @@ impl Extension for RequiredFuelBlockHeightInner {
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
         let required_fuel_block_height =
-            request.extensions.get(REQUIRED_FUEL_BLOCK_HEIGHT_HEADER);
+            request.extensions.get(REQUIRED_FUEL_BLOCK_HEIGHT);
 
         if let Some(ConstValue::Number(required_fuel_block_height)) =
             required_fuel_block_height
@@ -115,7 +115,7 @@ impl Extension for RequiredFuelBlockHeightInner {
                     )]);
 
                     response.extensions.insert(
-                        CURRENT_FUEL_BLOCK_HEIGHT_HEADER.to_string(),
+                        CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
                         Value::Number((*current_block_height).into()),
                     );
 
@@ -131,7 +131,7 @@ impl Extension for RequiredFuelBlockHeightInner {
         if let Ok(current_block_height) = current_block_height {
             let current_block_height: u32 = *current_block_height;
             response.extensions.insert(
-                CURRENT_FUEL_BLOCK_HEIGHT_HEADER.to_string(),
+                CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
                 Value::Number(current_block_height.into()),
             );
         } else {
