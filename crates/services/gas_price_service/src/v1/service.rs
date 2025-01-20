@@ -246,7 +246,6 @@ where
     ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
-        tracing::info!("Updating DA block costs and L2 block data");
         let mut new_recorded_height = match storage_tx
             .get_recorded_height()
             .map_err(|err| anyhow!(err))?
@@ -254,10 +253,6 @@ where
             Some(_) => None,
             None => {
                 // Sets it on first run
-                tracing::info!(
-                    "Setting initial recorded height to: {:?}",
-                    self.initial_recorded_height
-                );
                 self.initial_recorded_height.take()
             }
         };
@@ -276,7 +271,6 @@ where
         }
 
         if let Some(recorded_height) = new_recorded_height {
-            tracing::info!("Setting recorded height: {:?}", recorded_height);
             storage_tx
                 .set_recorded_height(recorded_height)
                 .map_err(|err| anyhow!(err))?;
@@ -451,6 +445,23 @@ mod tests {
     };
     use tokio::sync::mpsc;
 
+    use fuel_core_services::{
+        RunnableTask,
+        Service,
+        ServiceRunner,
+        StateWatcher,
+    };
+    use fuel_core_storage::{
+        structured_storage::test::InMemoryStorage,
+        transactional::{
+            IntoTransaction,
+            StorageTransaction,
+            WriteTransaction,
+        },
+        StorageAsMut,
+    };
+    use fuel_core_types::fuel_types::BlockHeight;
+
     use crate::{
         common::{
             fuel_core_storage_adapter::storage::{
@@ -560,10 +571,6 @@ mod tests {
 
     #[tokio::test]
     async fn run__updates_gas_price_with_l2_block_source() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .try_init();
-
         // given
         let block_height = 1;
         let l2_block = BlockInfo::Block {
@@ -1051,10 +1058,6 @@ mod tests {
 
     #[tokio::test]
     async fn run__sets_the_latest_recorded_block_if_not_set() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .try_init();
-
         // given
         let expected_recorded_height = BlockHeight::new(9999999);
 
