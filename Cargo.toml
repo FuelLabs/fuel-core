@@ -152,3 +152,6 @@ insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
 url = "2.2"
+
+[patch.crates-io]
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm.git", rev="9aa2791182394ec6e494a6238ec58ff222a2d763" }
