@@ -102,7 +102,9 @@ pub async fn estimate_transaction(
 }
 
 pub async fn get_account_prefix(api_url: &str) -> anyhow::Result<String> {
-    let r = reqwest::get(format!("{api_url}/cosmos/auth/v1beta1/bech32")).await?;
+    let path = "/cosmos/auth/v1beta1/bech32";
+    let full_url = Url::parse(api_url)?.join(path).unwrap();
+    let r = reqwest::get(full_url).await?;
     let text = r.text().await?;
     let resp: api_types::AccountPrefix =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
@@ -110,10 +112,9 @@ pub async fn get_account_prefix(api_url: &str) -> anyhow::Result<String> {
 }
 
 pub async fn chain_id(api_url: &str) -> anyhow::Result<String> {
-    let r = reqwest::get(format!(
-        "{api_url}/cosmos/base/tendermint/v1beta1/node_info"
-    ))
-    .await?;
+    let path = "/cosmos/base/tendermint/v1beta1/node_info";
+    let full_url = Url::parse(api_url)?.join(path).unwrap();
+    let r = reqwest::get(full_url).await?;
     let text = r.text().await?;
     let resp: api_types::NodeInfo =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
@@ -121,7 +122,9 @@ pub async fn chain_id(api_url: &str) -> anyhow::Result<String> {
 }
 
 pub async fn config(api_url: &str) -> anyhow::Result<api_types::Config> {
-    let r = reqwest::get(format!("{api_url}/cosmos/base/node/v1beta1/config")).await?;
+    let path = "/cosmos/base/node/v1beta1/config";
+    let full_url = Url::parse(api_url)?.join(path).unwrap();
+    let r = reqwest::get(full_url).await?;
     let text = r.text().await?;
     let resp: api_types::Config =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
@@ -129,7 +132,9 @@ pub async fn config(api_url: &str) -> anyhow::Result<api_types::Config> {
 }
 
 pub async fn coin_denom(api_url: &str) -> anyhow::Result<String> {
-    let r = reqwest::get(format!("{api_url}/cosmos/staking/v1beta1/params")).await?;
+    let path = "/cosmos/staking/v1beta1/params";
+    let full_url = Url::parse(api_url)?.join(path).unwrap();
+    let r = reqwest::get(full_url).await?;
     let text = r.text().await?;
     let resp: api_types::StakingParams =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
@@ -140,7 +145,9 @@ pub async fn get_account(
     api_url: &str,
     id: AccountId,
 ) -> anyhow::Result<AccountMetadata> {
-    let r = reqwest::get(format!("{api_url}/cosmos/auth/v1beta1/accounts/{id}")).await?;
+    let path = format!("/cosmos/auth/v1beta1/accounts/{id}");
+    let full_url = Url::parse(api_url)?.join(&path).unwrap();
+    let r = reqwest::get(full_url).await?;
     let text = r.text().await?;
     let resp: api_types::AccountResponse =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
@@ -168,10 +175,9 @@ pub struct TopicInfo {
 
 pub async fn get_topic(api_url: &str, id: [u8; 32]) -> anyhow::Result<Option<TopicInfo>> {
     let id_b64 = BASE64_STANDARD.encode(id);
-    let r = reqwest::get(format!(
-        "{api_url}/fuelsequencer/sequencing/v1/topic/{id_b64}"
-    ))
-    .await?;
+    let path = format!("/fuelsequencer/sequencing/v1/topic/{id_b64}");
+    let full_url = Url::parse(api_url)?.join(&path).unwrap();
+    let r = reqwest::get(full_url).await?;
     if r.status() == 404 {
         return Ok(None);
     }
