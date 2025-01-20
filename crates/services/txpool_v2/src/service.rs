@@ -329,15 +329,12 @@ where
         };
         if !removed_transactions.is_empty() {
             let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
-            for tx in removed_transactions {
-                if let Some(tx) = tx {
-                    let expiration = tx.expiration();
-                    if expiration < u32::MAX.into() {
-                        if let Some(expired_txs) =
-                            height_expiration_txs.get_mut(&expiration)
-                        {
-                            expired_txs.remove(&tx.id());
-                        }
+            for tx in removed_transactions.into_iter().flatten() {
+                let expiration = tx.expiration();
+                if expiration < u32::MAX.into() {
+                    if let Some(expired_txs) = height_expiration_txs.get_mut(&expiration)
+                    {
+                        expired_txs.remove(&tx.id());
                     }
                 }
             }
