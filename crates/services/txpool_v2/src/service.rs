@@ -315,15 +315,31 @@ where
 {
     fn import_block(&mut self, result: SharedImportResult) {
         let new_height = *result.sealed_block.entity.header().height();
-        let executed_transaction = result.tx_status.iter().map(|s| s.id).collect();
+        let executed_transactions = result.tx_status.iter().map(|s| s.id).collect();
         // We don't want block importer way for us to process the result.
         drop(result);
 
-        {
+        let removed_transactions = {
             let mut tx_pool = self.pool.write();
-            tx_pool.remove_transaction(executed_transaction);
+            let removed_transactions = tx_pool.remove_transactions(executed_transactions);
             if !tx_pool.is_empty() {
                 self.shared_state.new_txs_notifier.send_replace(());
+            }
+            removed_transactions
+        };
+        if !removed_transactions.is_empty() {
+            let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
+            for tx in removed_transactions {
+                if let Some(tx) = tx {
+                    let expiration = tx.expiration();
+                    if expiration < u32::MAX.into() {
+                        if let Some(expired_txs) =
+                            height_expiration_txs.get_mut(&expiration)
+                        {
+                            expired_txs.remove(&tx.id());
+                        }
+                    }
+                }
             }
         }
 
@@ -352,14 +368,7 @@ where
                 }
             }
         }
-        let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
         for tx in removed_txs {
-            let expiration = tx.expiration();
-            if expiration < u32::MAX.into() {
-                if let Some(expired_txs) = height_expiration_txs.get_mut(&expiration) {
-                    expired_txs.remove(&tx.id());
-                }
-            }
             self.shared_state
                 .tx_status_sender
                 .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
@@ -674,7 +683,7 @@ where
             removed = pool.remove_transaction_and_dependents(txs_to_remove.into_iter());
         }
 
-        {
+        if !removed.is_empty() {
             let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
             for tx in removed {
                 let expiration = tx.expiration();

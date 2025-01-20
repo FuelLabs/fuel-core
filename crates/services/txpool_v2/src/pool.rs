@@ -354,7 +354,8 @@ where
 
     /// Remove transaction but keep its dependents.
     /// The dependents become executables.
-    pub fn remove_transaction(&mut self, tx_ids: Vec<TxId>) {
+    pub fn remove_transactions(&mut self, tx_ids: Vec<TxId>) -> Vec<Option<ArcPoolTx>> {
+        let mut removed_transactions = Vec::with_capacity(tx_ids.len());
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents: Vec<S::StorageIndex> =
@@ -383,10 +384,14 @@ where
                         .new_executable_transaction(dependent, storage_data);
                 }
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
+                removed_transactions.push(Some(transaction.transaction));
+            } else {
+                removed_transactions.push(None);
             }
         }
 
         self.update_stats();
+        removed_transactions
     }
 
     /// Check if the pool has enough space to store a transaction.
