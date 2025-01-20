@@ -1,6 +1,7 @@
 use anyhow::Context;
 use base64::prelude::*;
 use cosmrs::AccountId;
+use url::Url;
 
 mod api_types {
     use serde::Deserialize;
@@ -87,8 +88,10 @@ pub async fn estimate_transaction(
     let request = SimulateRequest {
         tx_bytes: tx_bytes.to_string(),
     };
+    let path = "/cosmos/tx/v1beta1/simulate";
+    let full_url = Url::parse(api_url)?.join(path).unwrap();
     let r = reqwest::Client::new()
-        .post(format!("{api_url}/cosmos/tx/v1beta1/simulate"))
+        .post(full_url)
         .json(&request)
         .send()
         .await?;
