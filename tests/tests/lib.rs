@@ -2,6 +2,8 @@
 #![deny(warnings)]
 
 #[cfg(not(feature = "only-p2p"))]
+mod assets;
+#[cfg(not(feature = "only-p2p"))]
 mod balances;
 #[cfg(not(feature = "only-p2p"))]
 mod blob;

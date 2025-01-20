@@ -1,3 +1,8 @@
+use super::storage::{
+    assets::AssetDetails,
+    balances::TotalBalanceAmount,
+};
+use crate::fuel_core_graphql_api::storage::coins::CoinsToSpendIndexKey;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
@@ -19,7 +24,10 @@ use fuel_core_storage::{
     StorageInspect,
     StorageRead,
 };
-use fuel_core_txpool::TxStatusMessage;
+use fuel_core_txpool::{
+    TxPoolStats,
+    TxStatusMessage,
+};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -64,7 +72,10 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-use super::storage::balances::TotalBalanceAmount;
+pub struct CoinsToSpendIndexIter<'a> {
+    pub big_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexKey, StorageError>>,
+    pub dust_coins_iter: BoxedIter<'a, Result<CoinsToSpendIndexKey, StorageError>>,
+}
 
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
@@ -80,12 +91,13 @@ pub trait OffChainDatabase: Send + Sync {
         base_asset_id: &AssetId,
     ) -> StorageResult<TotalBalanceAmount>;
 
-    fn balances(
-        &self,
+    fn balances<'a>(
+        &'a self,
         owner: &Address,
-        base_asset_id: &AssetId,
+        start: Option<AssetId>,
+        base_asset_id: &'a AssetId,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<(AssetId, TotalBalanceAmount)>>;
+    ) -> BoxedIter<'a, StorageResult<(AssetId, TotalBalanceAmount)>>;
 
     fn owned_coins_ids(
         &self,
@@ -108,6 +120,12 @@ pub trait OffChainDatabase: Send + Sync {
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
 
+    fn coins_to_spend_index(
+        &self,
+        owner: &Address,
+        asset_id: &AssetId,
+    ) -> CoinsToSpendIndexIter;
+
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 
     fn old_block(&self, height: &BlockHeight) -> StorageResult<CompressedBlock>;
@@ -128,6 +146,8 @@ pub trait OffChainDatabase: Send + Sync {
     ) -> StorageResult<Option<RelayedTransactionStatus>>;
 
     fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool>;
+
+    fn asset_info(&self, asset_id: &AssetId) -> StorageResult<Option<AssetDetails>>;
 }
 
 /// The on chain database port expected by GraphQL API service.
@@ -222,6 +242,8 @@ pub trait TxPoolPort: Send + Sync {
         &self,
         tx_id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>>;
+
+    fn latest_pool_stats(&self) -> TxPoolStats;
 }
 
 #[async_trait]
@@ -289,10 +311,12 @@ pub mod worker {
             },
         },
         graphql_api::storage::{
+            assets::AssetsInfo,
             balances::{
                 CoinBalances,
                 MessageBalances,
             },
+            coins::CoinsToSpendIndex,
             da_compression::*,
             old::{
                 OldFuelBlockConsensus,
@@ -337,8 +361,14 @@ pub mod worker {
         /// Creates a write database transaction.
         fn transaction(&mut self) -> Self::Transaction<'_>;
 
-        /// Checks if Balances cache functionality is available.
-        fn balances_enabled(&self) -> StorageResult<bool>;
+        /// Checks if Balances indexation functionality is available.
+        fn balances_indexation_enabled(&self) -> StorageResult<bool>;
+
+        /// Checks if CoinsToSpend indexation functionality is available.
+        fn coins_to_spend_indexation_enabled(&self) -> StorageResult<bool>;
+
+        /// Checks if AssetMetadata indexation functionality is available.
+        fn asset_metadata_indexation_enabled(&self) -> StorageResult<bool>;
     }
 
     /// Represents either the Genesis Block or a block at a specific height
@@ -362,6 +392,7 @@ pub mod worker {
         + StorageMutate<RelayedTransactionStatuses, Error = StorageError>
         + StorageMutate<CoinBalances, Error = StorageError>
         + StorageMutate<MessageBalances, Error = StorageError>
+        + StorageMutate<CoinsToSpendIndex, Error = StorageError>
         + StorageMutate<DaCompressedBlocks, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>
@@ -371,6 +402,7 @@ pub mod worker {
         + StorageMutate<DaCompressionTemporalRegistryIndex, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryTimestamps, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryEvictorCache, Error = StorageError>
+        + StorageMutate<AssetsInfo, Error = StorageError>
     {
         fn record_tx_id_owner(
             &mut self,

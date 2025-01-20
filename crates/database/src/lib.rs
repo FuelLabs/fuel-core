@@ -72,6 +72,18 @@ pub enum Error {
     #[display(fmt = "Reached the end of the history")]
     ReachedEndOfHistory,
 
+    #[cfg(feature = "backup")]
+    #[display(fmt = "BackupEngine initialization error: {}", _0)]
+    BackupEngineInitError(anyhow::Error),
+
+    #[cfg(feature = "backup")]
+    #[display(fmt = "Backup error: {}", _0)]
+    BackupError(anyhow::Error),
+
+    #[cfg(feature = "backup")]
+    #[display(fmt = "Restore error: {}", _0)]
+    RestoreError(anyhow::Error),
+
     /// Not related to database error.
     #[from]
     Other(anyhow::Error),

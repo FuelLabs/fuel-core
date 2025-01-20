@@ -164,11 +164,11 @@ use alloc::{
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
-#[cfg(not(feature = "test-helpers"))]
+#[cfg(not(feature = "limited-tx-count"))]
 pub const fn max_tx_count() -> u16 {
     u16::MAX.saturating_sub(1)
 }
-#[cfg(feature = "test-helpers")]
+#[cfg(feature = "limited-tx-count")]
 pub const fn max_tx_count() -> u16 {
     1024
 }
@@ -1156,11 +1156,20 @@ where
     ) -> ExecutorResult<CheckedTransaction> {
         let block_height = *header.height();
         let actual_version = header.consensus_parameters_version;
+        let expiration = tx.expiration();
         let checked_tx = match tx {
             MaybeCheckedTransaction::Transaction(tx) => tx
                 .into_checked_basic(block_height, &self.consensus_params)?
                 .into(),
             MaybeCheckedTransaction::CheckedTransaction(checked_tx, checked_version) => {
+                // If you plan to add an other check of validity like this one on the checked_tx
+                // then probably the `CheckedTransaction` type isn't useful anymore.
+                if block_height > expiration {
+                    return Err(ExecutorError::TransactionExpired(
+                        expiration,
+                        block_height,
+                    ));
+                }
                 if actual_version == checked_version {
                     checked_tx
                 } else {
@@ -1626,7 +1635,12 @@ where
             .iter()
             .map(|input| input.predicate_gas_used())
             .collect();
-        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
+        let ready_tx = checked_tx.into_ready(
+            gas_price,
+            gas_costs,
+            fee_params,
+            Some(*header.height()),
+        )?;
 
         let mut vm = Interpreter::with_storage(
             memory,

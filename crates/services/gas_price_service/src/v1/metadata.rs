@@ -3,7 +3,10 @@ use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     L2ActivityTracker,
 };
-use std::num::NonZeroU64;
+use std::{
+    num::NonZeroU64,
+    time::Duration,
+};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct V1Metadata {
@@ -18,9 +21,9 @@ pub struct V1Metadata {
     /// Scale factor for the gas price.
     pub gas_price_factor: NonZeroU64,
     /// The cumulative reward from the DA portion of the gas price
-    pub total_da_rewards_excess: u128,
+    pub total_da_rewards: u128,
     /// The cumulative cost of recording L2 blocks on the DA chain as of the last recorded block
-    pub latest_known_total_da_cost_excess: u128,
+    pub latest_known_total_da_cost: u128,
     /// The last profit
     pub last_profit: i128,
     /// The profit before last
@@ -46,8 +49,8 @@ impl V1Metadata {
                 .min_da_gas_price
                 .saturating_mul(config.gas_price_factor.get()),
             gas_price_factor: config.gas_price_factor,
-            total_da_rewards_excess: 0,
-            latest_known_total_da_cost_excess: 0,
+            total_da_rewards: 0,
+            latest_known_total_da_cost: 0,
             last_profit: 0,
             second_to_last_profit: 0,
             latest_da_cost_per_byte: 0,
@@ -67,6 +70,7 @@ pub struct V1AlgorithmConfig {
     // https://github.com/FuelLabs/fuel-core/issues/2481
     pub gas_price_factor: NonZeroU64,
     pub min_da_gas_price: u64,
+    pub max_da_gas_price: u64,
     pub max_da_gas_price_change_percent: u16,
     pub da_p_component: i64,
     pub da_d_component: i64,
@@ -74,9 +78,14 @@ pub struct V1AlgorithmConfig {
     pub capped_range_size: u16,
     pub decrease_range_size: u16,
     pub block_activity_threshold: u8,
+    /// The interval at which the `DaSourceService` polls for new data
+    pub da_poll_interval: Option<Duration>,
 }
 
-pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
+pub fn updater_from_config(
+    value: &V1AlgorithmConfig,
+    l2_block_height: u32,
+) -> AlgorithmUpdaterV1 {
     let l2_activity = L2ActivityTracker::new_full(
         value.normal_range_size,
         value.capped_range_size,
@@ -88,11 +97,13 @@ pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
         new_scaled_exec_price: value
             .new_exec_gas_price
             .saturating_mul(value.gas_price_factor.get()),
-        l2_block_height: 0,
-        new_scaled_da_gas_price: value.min_da_gas_price,
+        l2_block_height,
+        new_scaled_da_gas_price: value
+            .min_da_gas_price
+            .saturating_mul(value.gas_price_factor.get()),
         gas_price_factor: value.gas_price_factor,
-        total_da_rewards_excess: 0,
-        latest_known_total_da_cost_excess: 0,
+        total_da_rewards: 0,
+        latest_known_total_da_cost: 0,
         projected_total_da_cost: 0,
         last_profit: 0,
         second_to_last_profit: 0,
@@ -104,6 +115,7 @@ pub fn updater_from_config(value: &V1AlgorithmConfig) -> AlgorithmUpdaterV1 {
             .l2_block_fullness_threshold_percent
             .into(),
         min_da_gas_price: value.min_da_gas_price,
+        max_da_gas_price: value.max_da_gas_price,
         max_da_gas_price_change_percent: value.max_da_gas_price_change_percent,
         da_p_component: value.da_p_component,
         da_d_component: value.da_d_component,
@@ -118,8 +130,8 @@ impl From<AlgorithmUpdaterV1> for V1Metadata {
             l2_block_height: updater.l2_block_height,
             new_scaled_da_gas_price: updater.new_scaled_da_gas_price,
             gas_price_factor: updater.gas_price_factor,
-            total_da_rewards_excess: updater.total_da_rewards_excess,
-            latest_known_total_da_cost_excess: updater.latest_known_total_da_cost_excess,
+            total_da_rewards: updater.total_da_rewards,
+            latest_known_total_da_cost: updater.latest_known_total_da_cost,
             last_profit: updater.last_profit,
             second_to_last_profit: updater.second_to_last_profit,
             latest_da_cost_per_byte: updater.latest_da_cost_per_byte,
@@ -142,15 +154,15 @@ pub fn v1_algorithm_from_metadata(
     let projected_portion =
         unrecorded_blocks_bytes.saturating_mul(metadata.latest_da_cost_per_byte);
     let projected_total_da_cost = metadata
-        .latest_known_total_da_cost_excess
+        .latest_known_total_da_cost
         .saturating_add(projected_portion);
     AlgorithmUpdaterV1 {
         new_scaled_exec_price: metadata.new_scaled_exec_price,
         l2_block_height: metadata.l2_block_height,
         new_scaled_da_gas_price: metadata.new_scaled_da_gas_price,
         gas_price_factor: metadata.gas_price_factor,
-        total_da_rewards_excess: metadata.total_da_rewards_excess,
-        latest_known_total_da_cost_excess: metadata.latest_known_total_da_cost_excess,
+        total_da_rewards: metadata.total_da_rewards,
+        latest_known_total_da_cost: metadata.latest_known_total_da_cost,
         projected_total_da_cost,
         last_profit: metadata.last_profit,
         second_to_last_profit: metadata.second_to_last_profit,
@@ -162,6 +174,7 @@ pub fn v1_algorithm_from_metadata(
             .l2_block_fullness_threshold_percent
             .into(),
         min_da_gas_price: config.min_da_gas_price,
+        max_da_gas_price: config.max_da_gas_price,
         max_da_gas_price_change_percent: config.max_da_gas_price_change_percent,
         da_p_component: config.da_p_component,
         da_d_component: config.da_d_component,

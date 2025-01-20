@@ -1,10 +1,16 @@
 use crate::{
     self as fuel_core_txpool,
+    pool::TxPoolStats,
 };
 use fuel_core_services::TaskNextAction;
 
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
+    seqlock::{
+        SeqLock,
+        SeqLockReader,
+        SeqLockWriter,
+    },
     AsyncProcessor,
     RunnableService,
     RunnableTask,
@@ -80,6 +86,7 @@ use futures::StreamExt;
 use parking_lot::RwLock;
 use std::{
     collections::{
+        BTreeMap,
         HashSet,
         VecDeque,
     },
@@ -188,7 +195,8 @@ pub struct Task<View> {
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
     pool: Shared<TxPool>,
-    current_height: Shared<BlockHeight>,
+    current_height_writer: SeqLockWriter<BlockHeight>,
+    current_height_reader: SeqLockReader<BlockHeight>,
     tx_sync_history: Shared<HashSet<PeerId>>,
     shared_state: SharedState,
     metrics: bool,
@@ -320,8 +328,32 @@ where
         }
 
         {
-            let mut block_height = self.current_height.write();
-            *block_height = new_height;
+            self.current_height_writer.write(|data| {
+                *data = new_height;
+            });
+        }
+
+        // Remove expired transactions
+        let mut removed_txs = vec![];
+        {
+            let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
+            let range_to_remove = height_expiration_txs
+                .range(..=new_height)
+                .map(|(k, _)| *k)
+                .collect::<Vec<_>>();
+            for height in range_to_remove {
+                let expired_txs = height_expiration_txs.remove(&height);
+                if let Some(expired_txs) = expired_txs {
+                    let mut tx_pool = self.pool.write();
+                    removed_txs
+                        .extend(tx_pool.remove_transaction_and_dependents(expired_txs));
+                }
+            }
+        }
+        for tx in removed_txs {
+            self.shared_state
+                .tx_status_sender
+                .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
         }
     }
 
@@ -390,13 +422,14 @@ where
         let pool = self.pool.clone();
         let p2p = self.p2p.clone();
         let shared_state = self.shared_state.clone();
-        let current_height = self.current_height.clone();
+        let current_height_reader = self.current_height_reader.clone();
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
+        let height_expiration_txs = self.pruner.height_expiration_txs.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
 
         let insert_transaction_thread_pool_op = move || {
-            let current_height = *current_height.read();
+            let current_height = current_height_reader.read();
 
             // TODO: This should be removed if the checked transactions
             //  can work with Arc in it
@@ -431,6 +464,7 @@ where
             };
 
             let tx = Arc::new(checked_tx);
+            let expiration = tx.expiration();
 
             let result = {
                 let mut pool = pool.write();
@@ -448,6 +482,12 @@ where
                     time_txs_submitted
                         .write()
                         .push_front((submitted_time, tx_id));
+
+                    if expiration < u32::MAX.into() {
+                        let mut lock = height_expiration_txs.write();
+                        let block_height_expiration = lock.entry(expiration).or_default();
+                        block_height_expiration.push(tx_id);
+                    }
 
                     let duration = submitted_time
                         .duration_since(SystemTime::UNIX_EPOCH)
@@ -726,6 +766,8 @@ where
         mpsc::channel(1);
     let (read_pool_requests_sender, read_pool_requests_receiver) =
         mpsc::channel(config.service_channel_limits.max_pending_read_pool_requests);
+    let (pool_stats_sender, pool_stats_receiver) =
+        tokio::sync::watch::channel(TxPoolStats::default());
     let tx_status_sender = TxStatusChange::new(
         config.max_tx_update_subscriptions,
         // The connection should be closed automatically after the `SqueezedOut` event.
@@ -742,6 +784,7 @@ where
         select_transactions_requests_sender,
         read_pool_requests_sender,
         new_txs_notifier,
+        latest_stats: pool_stats_receiver,
     };
 
     let subscriptions = Subscriptions {
@@ -764,6 +807,7 @@ where
     let pruner = TransactionPruner {
         txs_ttl: config.max_txs_ttl,
         time_txs_submitted: Arc::new(RwLock::new(VecDeque::new())),
+        height_expiration_txs: Arc::new(RwLock::new(BTreeMap::new())),
         ttl_timer,
     };
 
@@ -791,7 +835,12 @@ where
         BasicCollisionManager::new(),
         RatioTipGasSelection::new(),
         config,
+        pool_stats_sender,
     );
+
+    // BlockHeight is < 64 bytes, so we can use SeqLock
+    let (current_height_writer, current_height_reader) =
+        unsafe { SeqLock::new(current_height) };
 
     Service::new(Task {
         chain_id,
@@ -802,7 +851,8 @@ where
         p2p_sync_process,
         pruner,
         p2p: Arc::new(p2p),
-        current_height: Arc::new(RwLock::new(current_height)),
+        current_height_writer,
+        current_height_reader,
         pool: Arc::new(RwLock::new(txpool)),
         shared_state,
         metrics,
