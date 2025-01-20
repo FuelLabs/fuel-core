@@ -187,6 +187,7 @@ where
     DA: DaBlockCostsSource,
     AtomicStorage: GasPriceServiceAtomicStorage,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         l2_block_source: L2,
         shared_algo: SharedV1Algorithm,
@@ -503,22 +504,6 @@ mod tests {
             uninitialized_task::fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
         },
     };
-    use fuel_core_services::{
-        RunnableTask,
-        Service,
-        ServiceRunner,
-        StateWatcher,
-    };
-    use fuel_core_storage::{
-        structured_storage::test::InMemoryStorage,
-        transactional::{
-            IntoTransaction,
-            StorageTransaction,
-            WriteTransaction,
-        },
-        StorageAsMut,
-    };
-    use fuel_core_types::fuel_types::BlockHeight;
     use fuel_gas_price_algorithm::v1::{
         Bytes,
         Height,
@@ -1009,8 +994,8 @@ mod tests {
 
     impl GetLatestRecordedHeight for FakeAtomicStorage {
         fn get_recorded_height(&self) -> GasPriceResult<Option<BlockHeight>> {
-            let height = self.inner.lock().unwrap().clone();
-            Ok(height)
+            let height = self.inner.lock().unwrap();
+            Ok(*height)
         }
     }
 
