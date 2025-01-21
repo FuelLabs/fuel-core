@@ -53,7 +53,7 @@ mod storage;
 mod tx_status_stream;
 mod update_sender;
 
-type GasPrice = Word;
+pub type GasPrice = Word;
 
 #[cfg(test)]
 mod tests;

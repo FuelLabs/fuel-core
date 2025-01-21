@@ -22,7 +22,10 @@ use fuel_core_importer::ImporterResult;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
-use fuel_core_txpool::BorrowedTxPool;
+use fuel_core_txpool::{
+    ports::GasPriceProvider as TxPoolGasPriceProvider,
+    BorrowedTxPool,
+};
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
@@ -104,7 +107,8 @@ mod arc_gas_price_estimate_tests {
         percentage: u16,
     ) {
         // given
-        let subject = ArcGasPriceEstimate::new(starting_height, gas_price, percentage);
+        let subject =
+            UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
 
         // when
         let target_height = starting_height.saturating_add(block_horizon);
@@ -154,7 +158,7 @@ mod arc_gas_price_estimate_tests {
             let rt = tokio::runtime::Runtime::new().unwrap();
 
             // given
-            let subject = ArcGasPriceEstimate::new(starting_height, gas_price, percentage);
+            let subject = UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
 
             // when
             let target_height = starting_height.saturating_add(block_horizon);
@@ -170,15 +174,15 @@ mod arc_gas_price_estimate_tests {
 /// Allows communication from other service with more recent gas price data
 /// `Height` refers to the height of the block at which the gas price was last updated
 /// `GasPrice` refers to the gas price at the last updated block
-#[allow(dead_code)]
-pub struct ArcGasPriceEstimate<Height, GasPrice> {
+#[derive(Clone, Debug)]
+pub struct UniversalGasPriceProvider<Height, GasPrice> {
     /// Shared state of latest gas price data
     latest_gas_price: LatestGasPrice<Height, GasPrice>,
     /// The max percentage the gas price can increase per block
     percentage: u16,
 }
 
-impl<Height, GasPrice> ArcGasPriceEstimate<Height, GasPrice> {
+impl<Height, GasPrice> UniversalGasPriceProvider<Height, GasPrice> {
     #[cfg(test)]
     pub fn new(height: Height, price: GasPrice, percentage: u16) -> Self {
         let latest_gas_price = LatestGasPrice::new(height, price);
@@ -199,14 +203,29 @@ impl<Height, GasPrice> ArcGasPriceEstimate<Height, GasPrice> {
     }
 }
 
-impl<Height: Copy, GasPrice: Copy> ArcGasPriceEstimate<Height, GasPrice> {
+impl<Height: Copy, GasPrice: Copy> UniversalGasPriceProvider<Height, GasPrice> {
     fn get_height_and_gas_price(&self) -> (Height, GasPrice) {
         self.latest_gas_price.get()
     }
 }
 
+impl TxPoolGasPriceProvider for UniversalGasPriceProvider<u32, u64> {
+    fn next_gas_price(&self) -> fuel_core_txpool::GasPrice {
+        let (best_height, best_gas_price) = self.get_height_and_gas_price();
+        let next_block = best_height.saturating_add(1);
+        let percentage = self.percentage;
+
+        cumulative_percentage_change(
+            best_gas_price,
+            best_height,
+            percentage as u64,
+            next_block,
+        )
+    }
+}
+
 #[async_trait::async_trait]
-impl GasPriceEstimate for ArcGasPriceEstimate<u32, u64> {
+impl GasPriceEstimate for UniversalGasPriceProvider<u32, u64> {
     async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
         let (best_height, best_gas_price) = self.get_height_and_gas_price();
         let percentage = self.percentage;
