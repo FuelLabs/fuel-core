@@ -205,7 +205,7 @@ impl FromStr for FuelClient {
                 cookie,
                 url,
                 headers: HeaderMap::new(),
-                extensions: Default::default(),
+                extensions: HashMap::new(),
             })
         }
 
@@ -216,7 +216,7 @@ impl FromStr for FuelClient {
                 client,
                 url,
                 headers: HeaderMap::new(),
-                extensions: Default::Default(),
+                extensions: HashMap::new(),
             })
         }
     }
