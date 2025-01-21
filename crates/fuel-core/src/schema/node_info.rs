@@ -18,6 +18,7 @@ use async_graphql::{
     Object,
 };
 use std::time::UNIX_EPOCH;
+use strum::IntoEnumIterator;
 
 pub struct NodeInfo {
     utxo_validation: bool,
@@ -106,14 +107,24 @@ impl NodeQuery {
         let db = ctx.data_unchecked::<ReadDatabase>();
         let read_view = db.view()?;
         let mut indexation = Indexation::new();
-        if read_view.coins_to_spend_indexation_enabled {
-            indexation.insert(IndexationKind::CoinsToSpend);
-        }
-        if read_view.balances_indexation_enabled {
-            indexation.insert(IndexationKind::Balances);
-        }
-        if read_view.asset_metadata_indexation_enabled {
-            indexation.insert(IndexationKind::AssetMetadata);
+        for kind in IndexationKind::iter() {
+            match kind {
+                IndexationKind::Balances => {
+                    if read_view.balances_indexation_enabled {
+                        indexation.insert(kind);
+                    }
+                }
+                IndexationKind::CoinsToSpend => {
+                    if read_view.coins_to_spend_indexation_enabled {
+                        indexation.insert(kind);
+                    }
+                }
+                IndexationKind::AssetMetadata => {
+                    if read_view.asset_metadata_indexation_enabled {
+                        indexation.insert(kind);
+                    }
+                }
+            }
         }
         Ok(NodeInfo {
             utxo_validation: config.utxo_validation,
