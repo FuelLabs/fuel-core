@@ -38,23 +38,20 @@ where
 }
 
 /// The metadata table for [`MerkleData`] table.
-pub struct MerkleMetadata<Table>(core::marker::PhantomData<Table>);
+pub struct MerkleMetadata;
 
-impl<Table> Mappable for MerkleMetadata<Table> {
+impl Mappable for MerkleMetadata {
     type Key = u32;
     type OwnedKey = Self::Key;
     type Value = SparseMerkleMetadata;
     type OwnedValue = Self::Value;
 }
 
-impl<Table> TableWithBlueprint for MerkleMetadata<Table>
-where
-    Table: MerkleizedTableColumn,
-{
+impl TableWithBlueprint for MerkleMetadata {
     type Blueprint = Plain<Primitive<4>, Postcard>;
     type Column = Column;
 
     fn column() -> Column {
-        Column::MerkleDataColumn(Table::table_column())
+        Column::MerkleMetadataColumn
     }
 }
