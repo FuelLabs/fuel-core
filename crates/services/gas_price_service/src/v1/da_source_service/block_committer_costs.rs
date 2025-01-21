@@ -135,6 +135,7 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
             let full_path = url.join(&path)?;
             let response = self.client.get(full_path).send().await?;
             let parsed = response.json::<Vec<RawDaBlockCosts>>().await.map_err(|e| { anyhow::anyhow!("Failed to get costs from block committer: {e} for the response {response}") })?;
+            Ok(parsed)
         } else {
             Ok(vec![])
         }
