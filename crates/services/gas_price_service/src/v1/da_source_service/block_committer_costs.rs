@@ -138,10 +138,10 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
                 let parsed = response.json::<Vec<RawDaBlockCosts>>().await?;
                 Ok(parsed)
             } else {
-                Err(anyhow!(
+                anyhow::bail!(
                     "Failed to get costs from block committer: {:?}",
                     response
-                ))
+                )
             }
         } else {
             Ok(vec![])
