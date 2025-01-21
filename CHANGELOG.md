@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2551](https://github.com/FuelLabs/fuel-core/pull/2551): Enhanced the DA compressed block header to include block id.
 
 ### Fixed
+- [2612](https://github.com/FuelLabs/fuel-core/pull/2612): Use latest gas price to estimate next block gas price in tx pool instead of using algorithm directly
 - [2599](https://github.com/FuelLabs/fuel-core/pull/2599): Use the proper `url` apis to construct full url path in `BlockCommitterHttpApi` client
 
 ## [Version 0.41.0]
