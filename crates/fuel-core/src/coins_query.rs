@@ -511,7 +511,7 @@ mod tests {
     use futures::TryStreamExt;
     use itertools::Itertools;
     use proptest::{
-        prop_assert,
+        prelude::*,
         proptest,
     };
     use rand::{
@@ -1568,7 +1568,8 @@ mod tests {
             factor in 1u16..10,
         ) {
             let max_dust_count = max_dust_count(max, number_of_big_coins, factor);
-            prop_assert!(max_dust_count <= max);
+            prop_assume!(number_of_big_coins <= max && number_of_big_coins >= 1);
+            prop_assert!(number_of_big_coins + max_dust_count <= max);
             prop_assert!(max_dust_count <= number_of_big_coins.saturating_mul(factor));
         }
     }
