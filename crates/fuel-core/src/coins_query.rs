@@ -425,10 +425,12 @@ fn is_excluded(key: &CoinsToSpendIndexKey, excluded_ids: &ExcludedCoinIds) -> bo
 
 fn max_dust_count(max: u16, big_coins_len: u16, dust_to_big_coins_factor: u16) -> u16 {
     let mut rng = rand::thread_rng();
-    let adjusted_max = big_coins_len
-        .saturating_mul(dust_to_big_coins_factor)
-        .min(max);
-    rng.gen_range(0..=adjusted_max.saturating_sub(big_coins_len))
+
+    let max_from_factor = big_coins_len.saturating_mul(dust_to_big_coins_factor);
+    let max_adjusted = max.saturating_sub(big_coins_len);
+    let upper_bound = max_from_factor.min(max_adjusted);
+
+    rng.gen_range(0..=upper_bound)
 }
 
 fn skip_big_coins_up_to_amount(
@@ -1567,8 +1569,15 @@ mod tests {
             number_of_big_coins in 1u16..255,
             factor in 1u16..10,
         ) {
-            let max_dust_count = max_dust_count(max, number_of_big_coins, factor);
+            // We're at the stage of the algorithm where we have already selected the big coins and
+            // we're trying to select the dust coins.
+            // So we're sure that the following assumptions hold:
+            // 1. number_of_big_coins <= max - big coin selection algo is capped at 'max'.
+            // 2. there must be at least one big coin selected, otherwise we'll break
+            //    with the `InsufficientCoinsForTheMax` error earlier.
             prop_assume!(number_of_big_coins <= max && number_of_big_coins >= 1);
+
+            let max_dust_count = max_dust_count(max, number_of_big_coins, factor);
             prop_assert!(number_of_big_coins + max_dust_count <= max);
             prop_assert!(max_dust_count <= number_of_big_coins.saturating_mul(factor));
         }
