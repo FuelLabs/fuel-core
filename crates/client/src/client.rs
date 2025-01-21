@@ -169,11 +169,6 @@ pub enum Error {
     Other(anyhow::Error),
 }
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
-pub struct RequestExtensions {
-    pub required_fuel_block_height: Option<u64>,
-}
-
 #[derive(Debug, Clone)]
 pub struct FuelClient {
     client: reqwest::Client,
@@ -221,6 +216,7 @@ impl FromStr for FuelClient {
                 client,
                 url,
                 headers: HeaderMap::new(),
+                extensions: Default::Default(),
             })
         }
     }
