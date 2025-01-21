@@ -77,9 +77,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-        },
+        block::Block,
         header::ConsensusParametersVersion,
     },
     fuel_tx::{
