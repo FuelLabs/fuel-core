@@ -159,7 +159,7 @@ where
         &mut self,
         l2_block_res: GasPriceResult<BlockInfo>,
     ) -> anyhow::Result<()> {
-        tracing::info!("Received L2 block result: {:?}", l2_block_res);
+        tracing::debug!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
 
         self.update_latest_gas_price(&block);
@@ -271,7 +271,9 @@ where
             new_recorded_height = Some(BlockHeight::from(end));
         }
 
+        tracing::info!("Updating recorded height to {:?}", new_recorded_height);
         if let Some(recorded_height) = new_recorded_height {
+            tracing::info!("inner {:?}", recorded_height);
             storage_tx
                 .set_recorded_height(recorded_height)
                 .map_err(|err| anyhow!(err))?;
@@ -590,6 +592,7 @@ mod tests {
             decrease_range_size: 4,
             block_activity_threshold: 20,
             da_poll_interval: None,
+            starting_recorded_height: None,
         };
         let inner = database();
         let (algo_updater, shared_algo) = initialize_algorithm(
@@ -677,6 +680,7 @@ mod tests {
             decrease_range_size: 4,
             block_activity_threshold: 20,
             da_poll_interval: None,
+            starting_recorded_height: None,
         };
         let mut inner = database();
         let mut tx = inner.write_transaction();
@@ -757,6 +761,7 @@ mod tests {
             decrease_range_size: 4,
             block_activity_threshold: 20,
             da_poll_interval: None,
+            starting_recorded_height: None,
         }
     }
 
@@ -961,6 +966,7 @@ mod tests {
             decrease_range_size: 4,
             block_activity_threshold: 20,
             da_poll_interval: None,
+            starting_recorded_height: None,
         }
     }
 

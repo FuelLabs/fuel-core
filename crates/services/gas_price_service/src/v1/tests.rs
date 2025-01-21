@@ -312,6 +312,7 @@ fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
         decrease_range_size: 0,
         block_activity_threshold: 0,
         da_poll_interval: None,
+        starting_recorded_height: None,
     }
 }
 
@@ -347,6 +348,7 @@ fn different_arb_config() -> V1AlgorithmConfig {
         decrease_range_size: 0,
         block_activity_threshold: 0,
         da_poll_interval: None,
+        starting_recorded_height: None,
     }
 }
 

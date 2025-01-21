@@ -34,6 +34,7 @@ use fuel_core_gas_price_service::{
     common::fuel_core_storage_adapter::storage::GasPriceMetadata,
     ports::{
         GasPriceData,
+        GetLatestRecordedHeight,
         GetMetadataStorage,
     },
     v1::{
@@ -66,6 +67,7 @@ use fuel_core_types::{
         Transaction,
         TransactionBuilder,
     },
+    fuel_types::BlockHeight,
     services::executor::TransactionExecutionResult,
 };
 use rand::{
@@ -992,4 +994,36 @@ async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
 
     assert_eq!(producer_block_height, validator_block_height);
     assert_eq!(gas_price, u64::from(validator_gas_price.gas_price));
+}
+
+#[tokio::test]
+async fn cli__starting_recorded_height_is_set_in_db() {
+    // given
+    let starting_recorded_height: u32 = 1000;
+    let as_str = &starting_recorded_height.to_string();
+    let args = vec![
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--starting-recorded-height",
+        as_str,
+    ];
+    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+    driver.client.produce_blocks(1, None).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // when
+    let actual = driver
+        .node
+        .shared
+        .database
+        .gas_price()
+        .get_recorded_height()
+        .unwrap()
+        .unwrap();
+
+    // then
+    let expected = BlockHeight::from(starting_recorded_height);
+    assert_eq!(expected, actual);
+    driver.kill().await;
 }
