@@ -94,7 +94,7 @@ impl StaticGasPrice {
 }
 
 #[cfg(test)]
-mod arc_gas_price_estimate_tests {
+mod universal_gas_price_provider_tests {
     #![allow(non_snake_case)]
 
     use super::*;
@@ -167,6 +167,42 @@ mod arc_gas_price_estimate_tests {
 
             // then
             // doesn't panic with an overflow
+        }
+    }
+
+    fn _next_gas_price__correctly_calculates_value(
+        gas_price: u64,
+        starting_height: u32,
+        percentage: u16,
+    ) {
+        // given
+        let subject =
+            UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
+
+        // when
+        let estimated = subject.next_gas_price();
+
+        // then
+        let change_amount = gas_price
+            .saturating_mul(percentage as u64)
+            .saturating_div(100);
+        let actual = gas_price.saturating_add(change_amount);
+
+        assert!(estimated >= actual);
+    }
+
+    proptest! {
+        #[test]
+        fn next_gas_price__correctly_calculates_value(
+            gas_price: u64,
+            starting_height: u32,
+            percentage: u16,
+        ) {
+            _next_gas_price__correctly_calculates_value(
+                gas_price,
+                starting_height,
+                percentage,
+            )
         }
     }
 }
