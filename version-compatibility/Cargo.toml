@@ -7,7 +7,3 @@ exclude = [
   "0.14.1-0.15.0/fuel-core-0.14.1-client-0.15.0",
   "0.14.1-0.15.0/fuel-core-0.15.0-client-0.14.1",
 ]
-
-# Remove when we upgrade rust version 
-[patch.crates-io]
-netlink-proto = { git = "https://github.com/rust-netlink/netlink-proto", tag = "v0.11.3" }
