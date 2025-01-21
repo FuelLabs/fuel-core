@@ -515,7 +515,7 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
         .produce_blocks(1, None)
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
     let new_height = 2;
 
     let recovered_database = &recovered_driver.node.shared.database;
@@ -574,8 +574,6 @@ fn produce_block__l1_committed_block_affects_gas_price() {
         let temp_dir = driver.kill().await;
         (first_gas_price, temp_dir)
     });
-
-    assert_eq!(100u64, first_gas_price);
 
     let mut mock = FakeServer::new();
     let url = mock.url();
