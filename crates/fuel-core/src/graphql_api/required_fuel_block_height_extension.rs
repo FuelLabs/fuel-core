@@ -109,7 +109,7 @@ impl Extension for RequiredFuelBlockHeightInner {
                             // corresponding value as u32. This is necessary because the Display 
                             // implementation for BlockHeight displays values in hexadecimal format.
                             **required_block_height,
-                            // curren_fuel_block_height: BlockHeight, dereference once to get the 
+                            // current_fuel_block_height: BlockHeight, dereference once to get the 
                             // corresponding value as u32.
                             *current_block_height
                         ),
