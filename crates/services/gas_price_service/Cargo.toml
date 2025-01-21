@@ -22,7 +22,7 @@ num_enum = { workspace = true }
 parking_lot = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
@@ -39,4 +39,4 @@ mockito = { version = "1.6.1" }
 serde_json = { workspace = true }
 
 [features]
-test-helpers = ["dep:mockito", "dep:serde_json"]
+test-helpers = ["dep:mockito"]
