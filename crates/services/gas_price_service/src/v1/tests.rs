@@ -5,7 +5,6 @@ use crate::{
             storage::{
                 GasPriceColumn,
                 GasPriceMetadata,
-                RecordedHeights,
             },
             GasPriceSettings,
             GasPriceSettingsProvider,
@@ -29,12 +28,10 @@ use crate::{
     },
     v1::{
         algorithm::SharedV1Algorithm,
-        da_source_service,
         da_source_service::{
             service::{
                 new_da_service,
                 DaBlockCostsSource,
-                DaSourceService,
             },
             DaBlockCosts,
         },
@@ -65,7 +62,6 @@ use fuel_core_services::{
     },
     RunnableTask,
     Service,
-    ServiceRunner,
     StateWatcher,
 };
 use fuel_core_storage::{
@@ -83,12 +79,9 @@ use fuel_core_types::{
     blockchain::{
         block::{
             Block,
-            BlockV1,
-            PartialFuelBlock,
         },
         header::ConsensusParametersVersion,
     },
-    fuel_asm::op::exp,
     fuel_tx::{
         Mint,
         Transaction,
@@ -102,7 +95,6 @@ use fuel_core_types::{
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     Bytes,
-    Error,
     Height,
     UnrecordedBlocks,
 };
