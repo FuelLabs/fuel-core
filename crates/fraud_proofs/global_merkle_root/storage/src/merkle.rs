@@ -23,7 +23,7 @@ use fuel_core_storage::{
 
 mod smt;
 
-pub type MerkleMetadata<T> = smt::MerkleMetadata<T>;
+pub type MerkleMetadata = smt::MerkleMetadata;
 pub type MerkleData<T> = smt::MerkleData<T>;
 
 pub struct KeyConverter<Table>(core::marker::PhantomData<Table>);
@@ -78,7 +78,7 @@ where
     type Blueprint = Sparse<
         KeyCodec<Table>,
         ValueCodec<Table>,
-        MerkleMetadata<Table>,
+        MerkleMetadata,
         MerkleData<Table>,
         KeyConverter<Table>,
     >;

@@ -61,31 +61,25 @@ impl TableColumn {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Column {
     TableColumn(TableColumn),
-    MerkleMetadataColumn(TableColumn),
     MerkleDataColumn(TableColumn),
+    MerkleMetadataColumn,
 }
 
 impl Column {
     /// The total count of variants in the enum.
-    pub const COUNT: usize = TableColumn::COUNT + TableColumn::COUNT;
-
-    /// The start of the merkle metadata columns.
-    pub const MERKLE_METADATA_COLUMNS_START: u32 = u16::MAX as u32;
+    pub const COUNT: usize = TableColumn::COUNT + TableColumn::COUNT + 1;
 
     /// The start of the merkle data columns.
-    pub const MERKLE_DATA_COLUMNS_START: u32 =
-        Self::MERKLE_METADATA_COLUMNS_START + u16::MAX as u32;
+    pub const MERKLE_DATA_COLUMNS_START: u32 = u16::MAX as u32;
 
     /// Returns the `usize` representation of the `Column`.
     pub fn as_u32(&self) -> u32 {
         match self {
             Self::TableColumn(column) => column.as_u32(),
-            Self::MerkleMetadataColumn(column) => {
-                Self::MERKLE_METADATA_COLUMNS_START.wrapping_add(column.as_u32())
-            }
             Self::MerkleDataColumn(column) => {
                 Self::MERKLE_DATA_COLUMNS_START.wrapping_add(column.as_u32())
             }
+            Self::MerkleMetadataColumn => u32::MAX,
         }
     }
 }
@@ -97,13 +91,12 @@ impl StorageColumn for Column {
                 let str: &str = column.into();
                 str.to_string()
             }
-            Column::MerkleMetadataColumn(column) => {
-                let str: &str = column.into();
-                format!("MerkleMetadata{}", str)
-            }
             Self::MerkleDataColumn(column) => {
                 let str: &str = column.into();
                 format!("Merkle{}", str)
+            }
+            Column::MerkleMetadataColumn => {
+                format!("MerkleMetadata")
             }
         }
     }
