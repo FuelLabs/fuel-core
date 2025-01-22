@@ -240,22 +240,22 @@ impl Indexation {
 #[test]
 fn test_indexation() {
     let mut indexation = Indexation::new();
-    assert_eq!(indexation.contains(&IndexationKind::Balances), false);
-    assert_eq!(indexation.contains(&IndexationKind::CoinsToSpend), false);
-    assert_eq!(indexation.contains(&IndexationKind::AssetMetadata), false);
+    assert!(!indexation.contains(&IndexationKind::Balances));
+    assert!(!indexation.contains(&IndexationKind::CoinsToSpend));
+    assert!(!indexation.contains(&IndexationKind::AssetMetadata));
 
     indexation.insert(IndexationKind::Balances);
-    assert_eq!(indexation.contains(&IndexationKind::Balances), true);
-    assert_eq!(indexation.contains(&IndexationKind::CoinsToSpend), false);
-    assert_eq!(indexation.contains(&IndexationKind::AssetMetadata), false);
+    assert!(indexation.contains(&IndexationKind::Balances));
+    assert!(!indexation.contains(&IndexationKind::CoinsToSpend));
+    assert!(!indexation.contains(&IndexationKind::AssetMetadata));
 
     indexation.insert(IndexationKind::CoinsToSpend);
-    assert_eq!(indexation.contains(&IndexationKind::Balances), true);
-    assert_eq!(indexation.contains(&IndexationKind::CoinsToSpend), true);
-    assert_eq!(indexation.contains(&IndexationKind::AssetMetadata), false);
+    assert!(indexation.contains(&IndexationKind::Balances));
+    assert!(indexation.contains(&IndexationKind::CoinsToSpend));
+    assert!(!indexation.contains(&IndexationKind::AssetMetadata));
 
     indexation.insert(IndexationKind::AssetMetadata);
-    assert_eq!(indexation.contains(&IndexationKind::Balances), true);
-    assert_eq!(indexation.contains(&IndexationKind::CoinsToSpend), true);
-    assert_eq!(indexation.contains(&IndexationKind::AssetMetadata), true);
+    assert!(indexation.contains(&IndexationKind::Balances));
+    assert!(indexation.contains(&IndexationKind::CoinsToSpend));
+    assert!(indexation.contains(&IndexationKind::AssetMetadata));
 }
