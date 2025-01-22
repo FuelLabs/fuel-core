@@ -1,7 +1,7 @@
 use crate::client::schema::{
     self,
     node_info::{
-        Indexation,
+        IndexationFlags,
         TxPoolStats,
     },
 };
@@ -15,7 +15,7 @@ pub struct NodeInfo {
     pub max_size: u64,
     pub max_depth: u64,
     pub node_version: String,
-    pub indexation: Indexation,
+    pub indexation: IndexationFlags,
     pub tx_pool_stats: TxPoolStats,
 }
 
