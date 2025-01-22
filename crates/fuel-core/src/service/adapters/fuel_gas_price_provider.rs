@@ -1,3 +1,4 @@
+use crate::service::adapters::UniversalGasPriceProvider;
 use fuel_core_gas_price_service::common::gas_price_algorithm::{
     GasPriceAlgorithm,
     SharedGasPriceAlgo,
@@ -26,39 +27,43 @@ mod tests;
 
 #[derive(Debug)]
 /// Receives the next gas price algorithm via a shared `BlockGasPriceAlgo` instance
-pub struct FuelGasPriceProvider<A> {
+pub struct FuelGasPriceProvider<A, Height, GasPrice> {
     algorithm: SharedGasPriceAlgo<A>,
+    latest_gas_price: UniversalGasPriceProvider<Height, GasPrice>,
 }
 
-impl<A> Clone for FuelGasPriceProvider<A> {
+impl<A, Height, GasPrice> Clone for FuelGasPriceProvider<A, Height, GasPrice> {
     fn clone(&self) -> Self {
         Self {
             algorithm: self.algorithm.clone(),
+            latest_gas_price: self.latest_gas_price.clone(),
         }
     }
 }
 
-impl<A> FuelGasPriceProvider<A> {
-    pub fn new(algorithm: SharedGasPriceAlgo<A>) -> Self {
-        Self { algorithm }
-    }
-}
-
-impl<A> FuelGasPriceProvider<A>
-where
-    A: GasPriceAlgorithm + Send + Sync,
-{
-    fn next_gas_price(&self) -> u64 {
-        self.algorithm.next_gas_price()
+impl<A, Height, GasPrice> FuelGasPriceProvider<A, Height, GasPrice> {
+    pub fn new(
+        algorithm: SharedGasPriceAlgo<A>,
+        latest_gas_price: UniversalGasPriceProvider<Height, GasPrice>,
+    ) -> Self {
+        Self {
+            algorithm,
+            latest_gas_price,
+        }
     }
 }
 
 #[async_trait::async_trait]
-impl<A> ProducerGasPriceProvider for FuelGasPriceProvider<A>
+impl<A> ProducerGasPriceProvider for FuelGasPriceProvider<A, u32, u64>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn next_gas_price(&self) -> anyhow::Result<u64> {
-        Ok(self.next_gas_price())
+    async fn production_gas_price(&self) -> anyhow::Result<u64> {
+        Ok(self.algorithm.next_gas_price())
+    }
+
+    async fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
+        let price = self.latest_gas_price.inner_next_gas_price();
+        Ok(price)
     }
 }
