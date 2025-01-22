@@ -80,6 +80,9 @@ impl From<Config> for V1AlgorithmConfig {
             block_activity_threshold: value.block_activity_threshold,
             da_poll_interval: value.da_poll_interval,
             gas_price_factor: value.da_gas_price_factor,
+            starting_recorded_height: value
+                .starting_recorded_height
+                .map(BlockHeight::from),
         }
     }
 }

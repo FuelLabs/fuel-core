@@ -22,7 +22,6 @@ use crate::{
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
-            ArcGasPriceEstimate,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ConsensusParametersProvider,
@@ -32,6 +31,7 @@ use crate::{
             SharedMemoryPool,
             SystemTime,
             TxPoolAdapter,
+            UniversalGasPriceProvider,
             VerifierAdapter,
         },
         Config,
@@ -203,7 +203,11 @@ pub fn init_sub_services(
         database.on_chain().clone(),
     )?;
     let (gas_price_algo, latest_gas_price) = gas_price_service_v1.shared.clone();
-    let gas_price_provider = FuelGasPriceProvider::new(gas_price_algo.clone());
+    let universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
+        latest_gas_price,
+        DEFAULT_GAS_PRICE_CHANGE_PERCENT,
+    );
+    let producer_gas_price_provider = FuelGasPriceProvider::new(gas_price_algo.clone());
 
     let txpool = fuel_core_txpool::new_service(
         chain_id,
@@ -213,7 +217,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         consensus_parameters_provider.clone(),
         last_height,
-        gas_price_provider.clone(),
+        universal_gas_price_provider.clone(),
         executor.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
@@ -241,7 +245,7 @@ pub fn init_sub_services(
         executor: Arc::new(executor.clone()),
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
-        gas_price_provider: gas_price_provider.clone(),
+        gas_price_provider: producer_gas_price_provider.clone(),
         consensus_parameters_provider: consensus_parameters_provider.clone(),
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
@@ -324,10 +328,6 @@ pub fn init_sub_services(
         chain_name,
     };
 
-    let graphql_gas_price_provider = ArcGasPriceEstimate::new_from_inner(
-        latest_gas_price,
-        DEFAULT_GAS_PRICE_CHANGE_PERCENT,
-    );
     let graph_ql = fuel_core_graphql_api::api_service::new_service(
         *genesis_block.header().height(),
         graphql_config,
@@ -338,7 +338,7 @@ pub fn init_sub_services(
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),
-        Box::new(graphql_gas_price_provider),
+        Box::new(universal_gas_price_provider),
         Box::new(consensus_parameters_provider),
         SharedMemoryPool::new(config.memory_pool_size),
     )?;

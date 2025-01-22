@@ -85,6 +85,7 @@ pub struct Config {
     /// The size of the memory pool in number of `MemoryInstance`s.
     pub memory_pool_size: usize,
     pub da_gas_price_factor: NonZeroU64,
+    pub starting_recorded_height: Option<u32>,
     pub min_da_gas_price: u64,
     pub max_da_gas_price: u64,
     pub max_da_gas_price_change_percent: u16,
@@ -208,6 +209,7 @@ impl Config {
             time_until_synced: Duration::ZERO,
             memory_pool_size: 4,
             da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
+            starting_recorded_height: None,
             min_da_gas_price: 0,
             max_da_gas_price: 1,
             max_da_gas_price_change_percent: 0,

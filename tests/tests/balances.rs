@@ -1,7 +1,7 @@
 use fuel_core::{
     chain_config::{
+        coin_config_helpers::CoinConfigGenerator,
         CoinConfig,
-        CoinConfigGenerator,
         MessageConfig,
         StateConfig,
     },
@@ -334,9 +334,9 @@ async fn first_5_balances() {
 mod pagination {
     use fuel_core::{
         chain_config::{
+            coin_config_helpers::CoinConfigGenerator,
             ChainConfig,
             CoinConfig,
-            CoinConfigGenerator,
             MessageConfig,
             StateConfig,
         },
