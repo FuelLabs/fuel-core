@@ -46,7 +46,7 @@ use serde::{
 use crate::SnapshotMetadata;
 
 #[cfg(feature = "test-helpers")]
-use crate::CoinConfigGenerator;
+use crate::coin_config_helpers::CoinConfigGenerator;
 #[cfg(feature = "test-helpers")]
 use bech32::{
     ToBase32,
