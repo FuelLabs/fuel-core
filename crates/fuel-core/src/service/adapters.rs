@@ -210,12 +210,21 @@ mod universal_gas_price_provider_tests {
 /// Allows communication from other service with more recent gas price data
 /// `Height` refers to the height of the block at which the gas price was last updated
 /// `GasPrice` refers to the gas price at the last updated block
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct UniversalGasPriceProvider<Height, GasPrice> {
     /// Shared state of latest gas price data
     latest_gas_price: LatestGasPrice<Height, GasPrice>,
     /// The max percentage the gas price can increase per block
     percentage: u16,
+}
+
+impl<Height, GasPrice> Clone for UniversalGasPriceProvider<Height, GasPrice> {
+    fn clone(&self) -> Self {
+        Self {
+            latest_gas_price: self.latest_gas_price.clone(),
+            percentage: self.percentage,
+        }
+    }
 }
 
 impl<Height, GasPrice> UniversalGasPriceProvider<Height, GasPrice> {
@@ -245,18 +254,22 @@ impl<Height: Copy, GasPrice: Copy> UniversalGasPriceProvider<Height, GasPrice> {
     }
 }
 
-impl TxPoolGasPriceProvider for UniversalGasPriceProvider<u32, u64> {
-    fn next_gas_price(&self) -> fuel_core_txpool::GasPrice {
-        let (best_height, best_gas_price) = self.get_height_and_gas_price();
-        let next_block = best_height.saturating_add(1);
+impl UniversalGasPriceProvider<u32, u64> {
+    pub fn inner_next_gas_price(&self) -> u64 {
+        let (_, latest_price) = self.get_height_and_gas_price();
         let percentage = self.percentage;
 
-        cumulative_percentage_change(
-            best_gas_price,
-            best_height,
-            percentage as u64,
-            next_block,
-        )
+        let change = latest_price
+            .saturating_mul(percentage as u64)
+            .saturating_div(100);
+
+        latest_price.saturating_add(change)
+    }
+}
+
+impl TxPoolGasPriceProvider for UniversalGasPriceProvider<u32, u64> {
+    fn next_gas_price(&self) -> fuel_core_txpool::GasPrice {
+        self.inner_next_gas_price()
     }
 }
 
