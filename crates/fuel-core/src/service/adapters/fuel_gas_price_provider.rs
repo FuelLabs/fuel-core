@@ -3,7 +3,6 @@ use fuel_core_gas_price_service::common::gas_price_algorithm::{
     SharedGasPriceAlgo,
 };
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
-use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 use fuel_core_types::fuel_types::BlockHeight;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -61,14 +60,5 @@ where
 {
     async fn next_gas_price(&self) -> anyhow::Result<u64> {
         Ok(self.next_gas_price())
-    }
-}
-
-impl<A> TxPoolGasPriceProvider for FuelGasPriceProvider<A>
-where
-    A: GasPriceAlgorithm + Send + Sync + 'static,
-{
-    fn next_gas_price(&self) -> u64 {
-        self.next_gas_price()
     }
 }
