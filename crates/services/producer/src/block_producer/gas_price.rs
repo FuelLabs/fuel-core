@@ -5,7 +5,9 @@ use std::sync::Arc;
 /// Interface for retrieving the gas price for a block
 pub trait GasPriceProvider {
     /// The gas price for all transactions in the block.
-    async fn next_gas_price(&self) -> anyhow::Result<u64>;
+    async fn production_gas_price(&self) -> anyhow::Result<u64>;
+
+    async fn dry_run_gas_price(&self) -> anyhow::Result<u64>;
 }
 
 /// Interface for retrieving the consensus parameters.
