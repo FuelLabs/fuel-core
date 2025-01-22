@@ -79,16 +79,18 @@ where
     let transaction_count = transactions.len();
 
     // patch mint transaction
-    for tx in transactions.iter_mut() {
-        if let Transaction::Mint(mint) = tx {
-            let tx_pointer = mint.tx_pointer_mut();
-            // this will break if we have multiple mints
-            *tx_pointer = FuelTxPointer::new(
-                block.consensus_header().height,
-                #[allow(clippy::arithmetic_side_effects)]
-                u16::try_from(transaction_count - 1)?,
-            );
-        }
+    let mint_tx = transactions
+        .last_mut()
+        .ok_or_else(|| anyhow::anyhow!("No transactions"))?;
+    if let Transaction::Mint(mint) = mint_tx {
+        let tx_pointer = mint.tx_pointer_mut();
+        *tx_pointer = FuelTxPointer::new(
+            block.consensus_header().height,
+            #[allow(clippy::arithmetic_side_effects)]
+            u16::try_from(transaction_count - 1)?,
+        );
+    } else {
+        anyhow::bail!("Last transaction is not a mint");
     }
 
     Ok(PartialFuelBlock {
