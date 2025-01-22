@@ -37,9 +37,10 @@ impl<S> AsUnrecordedBlocks for S
 where
     S: StorageMutate<UnrecordedBlocksTable, Error = StorageError>,
 {
-    type Wrapper<'a> = FuelStorageUnrecordedBlocks<&'a mut Self>
-        where
-            Self: 'a;
+    type Wrapper<'a>
+        = FuelStorageUnrecordedBlocks<&'a mut Self>
+    where
+        Self: 'a;
 
     fn as_unrecorded_blocks(&mut self) -> Self::Wrapper<'_> {
         FuelStorageUnrecordedBlocks::new(self)
