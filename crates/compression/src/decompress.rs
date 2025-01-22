@@ -18,6 +18,7 @@ use fuel_core_types::{
         RegistryKey,
     },
     fuel_tx::{
+        field::TxPointer,
         input::{
             coin::{
                 Coin,
@@ -35,6 +36,7 @@ use fuel_core_types::{
         Mint,
         ScriptCode,
         Transaction,
+        TxPointer as FuelTxPointer,
         UtxoId,
     },
     fuel_types::{
@@ -68,11 +70,28 @@ where
         db,
     };
 
-    let transactions = <Vec<Transaction> as DecompressibleBy<_>>::decompress_with(
+    let mut transactions = <Vec<Transaction> as DecompressibleBy<_>>::decompress_with(
         block.transactions(),
         &ctx,
     )
     .await?;
+
+    let transaction_count = transactions.len();
+
+    // patch mint transaction
+    let mint_tx = transactions
+        .last_mut()
+        .ok_or_else(|| anyhow::anyhow!("No transactions"))?;
+    if let Transaction::Mint(mint) = mint_tx {
+        let tx_pointer = mint.tx_pointer_mut();
+        *tx_pointer = FuelTxPointer::new(
+            block.consensus_header().height,
+            #[allow(clippy::arithmetic_side_effects)]
+            u16::try_from(transaction_count - 1)?,
+        );
+    } else {
+        anyhow::bail!("Last transaction is not a mint");
+    }
 
     Ok(PartialFuelBlock {
         header: block.partial_block_header(),
@@ -211,7 +230,7 @@ where
         ctx: &DecompressCtx<D>,
     ) -> anyhow::Result<Self> {
         Ok(Transaction::mint(
-            Default::default(), // TODO: what should this we do with this?
+            Default::default(), // TODO: what should we do with this?
             c.input_contract.decompress(ctx).await?,
             c.output_contract.decompress(ctx).await?,
             c.mint_amount.decompress(ctx).await?,
