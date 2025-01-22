@@ -2,8 +2,8 @@
 
 use crate::{
     chain_config::{
+        coin_config_helpers::CoinConfigGenerator,
         CoinConfig,
-        CoinConfigGenerator,
     },
     combined_database::CombinedDatabase,
     database::{
@@ -246,7 +246,7 @@ pub async fn make_nodes(
                     let initial_coin = CoinConfig {
                         // set idx to prevent overlapping utxo_ids when
                         // merging with existing coins from config
-                        output_index: 2,
+                        output_index: 10,
                         ..coin_generator.generate_with(secret, 10000)
                     };
                     let tx = TransactionBuilder::script(

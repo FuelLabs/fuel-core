@@ -207,6 +207,7 @@ pub fn init_sub_services(
         latest_gas_price,
         DEFAULT_GAS_PRICE_CHANGE_PERCENT,
     );
+
     let producer_gas_price_provider = FuelGasPriceProvider::new(
         gas_price_algo.clone(),
         universal_gas_price_provider.clone(),
