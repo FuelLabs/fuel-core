@@ -24,6 +24,7 @@ use fuel_core_compression::{
     VersionedCompressedBlock,
 };
 use fuel_core_storage::transactional::{
+    AtomicView,
     HistoricalView,
     IntoTransaction,
 };
@@ -39,6 +40,7 @@ use fuel_core_types::{
         Input,
         TransactionBuilder,
         TxPointer,
+        UniqueIdentifier,
     },
     secrecy::Secret,
     signer::SignMode,
@@ -73,19 +75,21 @@ async fn can_fetch_da_compressed_block_from_graphql() {
         SecretKey::from_str(TESTNET_WALLET_SECRETS[1]).expect("Expected valid secret");
     let wallet_address = Address::from(*wallet_secret.public_key().hash());
 
-    let coin = client
+    let coins = client
         .coins(
             &wallet_address,
             None,
             PaginationRequest {
                 cursor: None,
-                results: 1,
+                results: 10,
                 direction: fuel_core_client::client::pagination::PageDirection::Forward,
             },
         )
         .await
         .expect("Unable to get coins")
-        .results
+        .results;
+
+    let coin = coins
         .into_iter()
         .next()
         .expect("Expected at least one coin");
@@ -122,18 +126,37 @@ async fn can_fetch_da_compressed_block_from_graphql() {
 
     // Reuse the existing offchain db to decompress the block
     let db = &srv.shared.database;
+
+    let on_chain_before_execution = db.on_chain().view_at(&0u32.into()).unwrap();
     let mut tx_inner = db.off_chain().clone().into_transaction();
     let db_tx = DecompressDbTx {
         db_tx: DbTx {
             db_tx: &mut tx_inner,
         },
-        onchain_db: db.on_chain().view_at(&0u32.into()).unwrap(),
+        onchain_db: on_chain_before_execution,
     };
     let decompressed = decompress(compression_config, db_tx, block, &chain_id)
         .await
         .unwrap();
 
-    assert!(decompressed.transactions.len() == 2);
+    let block_from_on_chain_db = db
+        .on_chain()
+        .latest_view()
+        .unwrap()
+        .get_full_block(&block_height)
+        .unwrap()
+        .unwrap();
+
+    let db_transactions = block_from_on_chain_db.transactions();
+    let decompressed_transactions = decompressed.transactions;
+
+    assert_eq!(decompressed_transactions.len(), 2);
+    for (db_tx, decompressed_tx) in
+        db_transactions.iter().zip(decompressed_transactions.iter())
+    {
+        // ensure tx ids match
+        assert_eq!(db_tx.id(&chain_id), decompressed_tx.id(&chain_id));
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

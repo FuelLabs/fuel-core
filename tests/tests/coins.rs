@@ -24,8 +24,8 @@ use rand::{
 mod coin {
     use super::*;
     use fuel_core::chain_config::{
+        coin_config_helpers::CoinConfigGenerator,
         ChainConfig,
-        CoinConfigGenerator,
     };
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::fuel_crypto::SecretKey;
@@ -524,7 +524,7 @@ mod message_coin {
 
 // It is combination of coins and deposit coins test cases.
 mod all_coins {
-    use fuel_core::chain_config::CoinConfigGenerator;
+    use fuel_core::chain_config::coin_config_helpers::CoinConfigGenerator;
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::blockchain::primitives::DaBlockHeight;
 

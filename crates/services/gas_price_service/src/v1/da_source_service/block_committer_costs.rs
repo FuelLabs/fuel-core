@@ -128,12 +128,14 @@ impl BlockCommitterApi for BlockCommitterHttpApi {
         &self,
         l2_block_number: u32,
     ) -> DaBlockCostsResult<Vec<RawDaBlockCosts>> {
-        // Specific: http://localhost:8080/v1/costs?variant=specific&value=19098935&limit=5
+        // Specific: http://committer.url/v1/costs?variant=specific&value=19098935&limit=5
         if let Some(url) = &self.url {
             tracing::debug!("getting da costs by l2 block number: {l2_block_number}");
-            let formatted_url = format!("{url}/v1/costs?variant=specific&value={l2_block_number}&limit={NUMBER_OF_BUNDLES}");
-            let response = self.client.get(formatted_url).send().await?;
-            let parsed = response.json::<Vec<RawDaBlockCosts>>().await?;
+            let path = format!("/v1/costs?variant=specific&value={l2_block_number}&limit={NUMBER_OF_BUNDLES}");
+            let full_path = url.join(&path)?;
+            let response = self.client.get(full_path).send().await?;
+            let text = response.text().await?;
+            let parsed: Vec<RawDaBlockCosts> = serde_json::from_str(&text).map_err(|e| { anyhow::anyhow!("Failed to get costs from block committer: {e} for the response {text}") })?;
             Ok(parsed)
         } else {
             Ok(vec![])
