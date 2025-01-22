@@ -580,7 +580,7 @@ type HeavyOperation {
 scalar HexString
 
 
-type Indexation {
+type IndexationFlags {
 	"""
 	Is balances indexation enabled
 	"""
@@ -779,7 +779,7 @@ type NodeInfo {
 	maxSize: U64!
 	maxDepth: U64!
 	nodeVersion: String!
-	indexation: Indexation!
+	indexation: IndexationFlags!
 	txPoolStats: TxPoolStats!
 	peers: [PeerInfo!]!
 }
