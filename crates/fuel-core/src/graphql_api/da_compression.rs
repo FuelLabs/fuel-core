@@ -306,16 +306,14 @@ where
         &self,
         c: fuel_core_types::fuel_tx::CompressedUtxoId,
     ) -> anyhow::Result<fuel_core_types::fuel_tx::UtxoId> {
+        #[cfg(feature = "test-helpers")]
         if c.tx_pointer.block_height() == 0u32.into() {
             // This is a genesis coin, which is handled differently.
             // See CoinConfigGenerator::generate which generates the genesis coins.
-            let mut bytes = [0u8; 32];
-            bytes[..size_of::<u16>()].copy_from_slice(&c.output_index.to_be_bytes());
+            let tx_id =
+                fuel_core_chain_config::coin_config_helpers::tx_id(c.output_index);
 
-            let utxo_id = fuel_core_types::fuel_tx::UtxoId::new(
-                fuel_core_types::fuel_tx::TxId::from(bytes),
-                c.output_index,
-            );
+            let utxo_id = fuel_core_types::fuel_tx::UtxoId::new(tx_id, c.output_index);
 
             return Ok(utxo_id);
         }

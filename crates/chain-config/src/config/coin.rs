@@ -125,7 +125,10 @@ impl GenesisCommitment for Coin {
 pub mod coin_config_helpers {
     use crate::CoinConfig;
     use fuel_core_types::{
-        fuel_types::Address,
+        fuel_types::{
+            Address,
+            Bytes32,
+        },
         fuel_vm::SecretKey,
     };
 
@@ -137,17 +140,22 @@ pub mod coin_config_helpers {
         count: CoinCount,
     }
 
+    pub fn tx_id(count: CoinCount) -> Bytes32 {
+        let mut bytes = [0u8; 32];
+        bytes[..size_of::<CoinCount>()].copy_from_slice(&count.to_be_bytes());
+        bytes.into()
+    }
+
     impl CoinConfigGenerator {
         pub fn new() -> Self {
             Self { count: 0 }
         }
 
         pub fn generate(&mut self) -> CoinConfig {
-            let mut bytes = [0u8; 32];
-            bytes[..size_of::<CoinCount>()].copy_from_slice(&self.count.to_be_bytes());
+            let tx_id = tx_id(self.count);
 
             let config = CoinConfig {
-                tx_id: bytes.into(),
+                tx_id,
                 output_index: self.count,
                 ..Default::default()
             };
