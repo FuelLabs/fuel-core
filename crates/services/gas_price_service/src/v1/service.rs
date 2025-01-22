@@ -71,9 +71,17 @@ use std::{
 };
 use tokio::sync::broadcast::Receiver;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LatestGasPrice<Height, GasPrice> {
     inner: Arc<parking_lot::RwLock<(Height, GasPrice)>>,
+}
+
+impl<Height, GasPrice> Clone for LatestGasPrice<Height, GasPrice> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 impl<Height, GasPrice> LatestGasPrice<Height, GasPrice> {
@@ -442,7 +450,6 @@ mod tests {
         sync::{
             atomic::AtomicU32,
             Arc,
-            Mutex,
         },
         time::Duration,
     };
