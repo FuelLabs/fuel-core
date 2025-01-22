@@ -160,7 +160,6 @@ where
             _ => {}
         }
         // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
-        // TODO(#2584): Insert state transition bytecode and consensus parameter updates.
         // TODO(#2585): Insert uplodade bytecodes.
         // TODO(#2586): Insert blobs.
         // TODO(#2587): Insert raw code for created contracts.
