@@ -230,9 +230,7 @@ where
         ctx: &DecompressCtx<D>,
     ) -> anyhow::Result<Self> {
         Ok(Transaction::mint(
-            // we should probably include the mint TxPointer in the compression if we decide to support
-            // multiple assets for mints, i.e more than 1 mint tx per block
-            Default::default(), // TODO: what should this we do with this?
+            Default::default(), // TODO: what should we do with this?
             c.input_contract.decompress(ctx).await?,
             c.output_contract.decompress(ctx).await?,
             c.mint_amount.decompress(ctx).await?,
