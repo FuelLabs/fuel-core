@@ -71,9 +71,17 @@ use std::{
 };
 use tokio::sync::broadcast::Receiver;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct LatestGasPrice<Height, GasPrice> {
     inner: Arc<parking_lot::RwLock<(Height, GasPrice)>>,
+}
+
+impl<Height, GasPrice> Clone for LatestGasPrice<Height, GasPrice> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
 }
 
 impl<Height, GasPrice> LatestGasPrice<Height, GasPrice> {
@@ -422,7 +430,6 @@ mod tests {
         sync::{
             atomic::AtomicU32,
             Arc,
-            Mutex,
         },
         time::Duration,
     };
@@ -436,7 +443,6 @@ mod tests {
     };
     use fuel_core_storage::{
         structured_storage::test::InMemoryStorage,
-        tables::merkle::DenseMetadataKey::Latest,
         transactional::{
             IntoTransaction,
             StorageTransaction,
@@ -450,9 +456,7 @@ mod tests {
         common::{
             fuel_core_storage_adapter::storage::{
                 GasPriceColumn,
-                GasPriceColumn::UnrecordedBlocks,
                 GasPriceMetadata,
-                RecordedHeights,
                 UnrecordedBlocksTable,
             },
             gas_price_algorithm::SharedGasPriceAlgo,
@@ -484,7 +488,6 @@ mod tests {
                 GasPriceServiceV1,
                 LatestGasPrice,
             },
-            uninitialized_task::fuel_storage_unrecorded_blocks::FuelStorageUnrecordedBlocks,
         },
     };
 
