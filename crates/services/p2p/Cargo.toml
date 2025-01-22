@@ -39,8 +39,10 @@ libp2p = { version = "0.53.2", default-features = false, features = [
   "metrics",
 ] }
 libp2p-mplex = "0.41.0"
+
 # Remove when we upgrade rust version
-netlink-proto = "=0.11.3"
+netlink-proto = { version = "=0.11.3", optional = true }
+
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
 quick-protobuf = "0.8.1"
