@@ -39,6 +39,8 @@ libp2p = { version = "0.53.2", default-features = false, features = [
   "metrics",
 ] }
 libp2p-mplex = "0.41.0"
+# Remove when we upgrade rust version
+netlink-proto = "=0.11.3"
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
 quick-protobuf = "0.8.1"
@@ -55,8 +57,6 @@ thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 void = "1"
-# Remove when we upgrade rust version
-netlink-proto = "=0.11.3"
 
 [dev-dependencies]
 ctor = "0.1"
