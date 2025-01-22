@@ -10,7 +10,10 @@ use crate::{
     },
     graphql_api::{
         api_service::TxPool,
-        database::ReadDatabase,
+        database::{
+            IndexationFlags,
+            ReadDatabase,
+        },
     },
 };
 use async_graphql::{
@@ -18,7 +21,6 @@ use async_graphql::{
     Object,
 };
 use std::time::UNIX_EPOCH;
-use strum::IntoEnumIterator;
 
 pub struct NodeInfo {
     utxo_validation: bool,
@@ -28,7 +30,7 @@ pub struct NodeInfo {
     max_size: U64,
     max_depth: U64,
     node_version: String,
-    indexation: Indexation,
+    indexation: IndexationFlags,
 }
 
 #[Object]
@@ -61,7 +63,7 @@ impl NodeInfo {
         self.node_version.to_owned()
     }
 
-    async fn indexation(&self) -> &Indexation {
+    async fn indexation(&self) -> &IndexationFlags {
         &self.indexation
     }
 
@@ -106,26 +108,6 @@ impl NodeQuery {
 
         let db = ctx.data_unchecked::<ReadDatabase>();
         let read_view = db.view()?;
-        let mut indexation = Indexation::new();
-        for kind in IndexationKind::iter() {
-            match kind {
-                IndexationKind::Balances => {
-                    if read_view.balances_indexation_enabled {
-                        indexation.insert(kind);
-                    }
-                }
-                IndexationKind::CoinsToSpend => {
-                    if read_view.coins_to_spend_indexation_enabled {
-                        indexation.insert(kind);
-                    }
-                }
-                IndexationKind::AssetMetadata => {
-                    if read_view.asset_metadata_indexation_enabled {
-                        indexation.insert(kind);
-                    }
-                }
-            }
-        }
         Ok(NodeInfo {
             utxo_validation: config.utxo_validation,
             vm_backtrace: config.vm_backtrace,
@@ -134,7 +116,7 @@ impl NodeQuery {
             max_size: (config.max_size as u64).into(),
             max_depth: (config.max_txpool_dependency_chain_length as u64).into(),
             node_version: VERSION.to_owned(),
-            indexation,
+            indexation: read_view.indexation_flags,
         })
     }
 }
@@ -202,25 +184,8 @@ impl TxPoolStats {
     }
 }
 
-#[derive(Clone)]
-struct Indexation(u8);
-
-impl Indexation {
-    pub fn new() -> Self {
-        Self(0)
-    }
-
-    pub fn contains(&self, kind: &IndexationKind) -> bool {
-        self.0 & (1 << *kind as u8) != 0
-    }
-
-    pub fn insert(&mut self, kind: IndexationKind) {
-        self.0 |= 1 << kind as u8;
-    }
-}
-
 #[Object]
-impl Indexation {
+impl IndexationFlags {
     /// Is balances indexation enabled
     async fn balances(&self) -> bool {
         self.contains(&IndexationKind::Balances)
@@ -235,27 +200,4 @@ impl Indexation {
     async fn asset_metadata(&self) -> bool {
         self.contains(&IndexationKind::AssetMetadata)
     }
-}
-
-#[test]
-fn test_indexation() {
-    let mut indexation = Indexation::new();
-    assert!(!indexation.contains(&IndexationKind::Balances));
-    assert!(!indexation.contains(&IndexationKind::CoinsToSpend));
-    assert!(!indexation.contains(&IndexationKind::AssetMetadata));
-
-    indexation.insert(IndexationKind::Balances);
-    assert!(indexation.contains(&IndexationKind::Balances));
-    assert!(!indexation.contains(&IndexationKind::CoinsToSpend));
-    assert!(!indexation.contains(&IndexationKind::AssetMetadata));
-
-    indexation.insert(IndexationKind::CoinsToSpend);
-    assert!(indexation.contains(&IndexationKind::Balances));
-    assert!(indexation.contains(&IndexationKind::CoinsToSpend));
-    assert!(!indexation.contains(&IndexationKind::AssetMetadata));
-
-    indexation.insert(IndexationKind::AssetMetadata);
-    assert!(indexation.contains(&IndexationKind::Balances));
-    assert!(indexation.contains(&IndexationKind::CoinsToSpend));
-    assert!(indexation.contains(&IndexationKind::AssetMetadata));
 }

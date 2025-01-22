@@ -8,6 +8,7 @@ use crate::{
         ExcludedCoinIds,
         SpendQuery,
     },
+    database::database_description::IndexationKind,
     fuel_core_graphql_api::{
         query_costs,
         storage::coins::CoinsToSpendIndexKey,
@@ -289,7 +290,9 @@ impl CoinQuery {
         query_per_asset.truncate(max_input as usize);
 
         let read_view = ctx.read_view()?;
-        let indexation_available = read_view.coins_to_spend_indexation_enabled;
+        let indexation_available = read_view
+            .indexation_flags
+            .contains(&IndexationKind::CoinsToSpend);
         if indexation_available {
             coins_to_spend_with_cache(
                 owner,
