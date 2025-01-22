@@ -105,6 +105,7 @@ pub enum Error {
     UnsupportedConsensusVariant(String),
     ActiveBlockResultsSemaphoreClosed(tokio::sync::AcquireError),
     RayonTaskWasCanceled,
+    TaskError(String),
 }
 
 impl From<Error> for anyhow::Error {
@@ -121,7 +122,7 @@ impl PartialEq for Error {
 }
 
 pub struct Importer<D, E, V> {
-    database: Mutex<D>,
+    database: Arc<Mutex<D>>,
     executor: Arc<E>,
     verifier: Arc<V>,
     chain_id: ChainId,
@@ -156,7 +157,7 @@ impl<D, E, V> Importer<D, E, V> {
             .expect("Failed to create a thread pool for the block processing");
 
         Self {
-            database: Mutex::new(database),
+            database: Arc::new(Mutex::new(database)),
             executor: Arc::new(executor),
             verifier: Arc::new(verifier),
             chain_id,
@@ -261,7 +262,12 @@ where
                 .try_lock()
                 .expect("Semaphore prevents concurrent access to the database");
             let database = guard.deref_mut();
-            self._commit_result(result, permit, database)
+            let block_changes = create_block_changes(
+                &self.chain_id,
+                &result.result().sealed_block,
+                database,
+            )?;
+            self._commit_result(result, block_changes, permit, database)
         })
         .await?
     }
@@ -279,6 +285,7 @@ where
     fn _commit_result(
         &self,
         result: UncommittedResult<Changes>,
+        block_changes: Changes,
         permit: OwnedSemaphorePermit,
         database: &mut D,
     ) -> Result<(), Error> {
@@ -330,26 +337,13 @@ where
             ))
         }
 
-        // Importer expects that `UncommittedResult` contains the result of block
-        // execution without block itself.
-        let expected_block_root = database.latest_block_root()?;
+        let mut database_changes = database.storage_transaction(block_changes);
+        database_changes.add_changes(changes)?;
 
         #[cfg(feature = "test-helpers")]
-        let changes_clone = changes.clone();
-        let mut db_after_execution = database.storage_transaction(changes);
-        let actual_block_root = db_after_execution.latest_block_root()?;
-        if actual_block_root != expected_block_root {
-            return Err(Error::InvalidDatabaseStateAfterExecution(
-                expected_block_root,
-                actual_block_root,
-            ))
-        }
+        let changes_clone = database_changes.changes().clone();
 
-        if !db_after_execution.store_new_block(&self.chain_id, &result.sealed_block)? {
-            return Err(Error::NotUnique(expected_next_height))
-        }
-
-        db_after_execution.commit()?;
+        database_changes.commit()?;
 
         if self.metrics {
             Self::update_metrics(&result, &actual_next_height);
@@ -525,6 +519,19 @@ where
     ) -> Result<(), Error> {
         let _guard = self.lock()?;
 
+        let block_changes = std::thread::spawn({
+            let sealed_block = sealed_block.clone();
+            let database = self.database.clone();
+            let chain_id = self.chain_id;
+            move || {
+                let mut guard = database
+                    .try_lock()
+                    .expect("Semaphore prevents concurrent access to the database");
+                let database = guard.deref_mut();
+                create_block_changes(&chain_id, &sealed_block, database)
+            }
+        });
+
         let executor = self.executor.clone();
         let verifier = self.verifier.clone();
         let (result, execute_time) = self
@@ -541,6 +548,9 @@ where
             .await?;
 
         let result = result?;
+        let block_changes = block_changes.join().map_err(|e| {
+            Error::TaskError(format!("Error while waiting for block changes: {:?}", e))
+        })??;
 
         // Await until all receivers of the notification process the result.
         const TIMEOUT: u64 = 20;
@@ -568,7 +578,8 @@ where
                 let database = guard.deref_mut();
 
                 let start = Instant::now();
-                self._commit_result(result, permit, database).map(|_| start)
+                self._commit_result(result, block_changes, permit, database)
+                    .map(|_| start)
             })
             .await?;
 
@@ -606,4 +617,37 @@ impl Awaiter {
             _permit: permit,
         }
     }
+}
+
+fn create_block_changes<D: ImporterDatabase + Transactional>(
+    chain_id: &ChainId,
+    sealed_block: &SealedBlock,
+    database: &mut D,
+) -> Result<Changes, Error> {
+    // Importer expects that `UncommittedResult` contains the result of block
+    // execution without block itself.
+    let expected_block_root = database.latest_block_root()?;
+
+    let start_db = Instant::now();
+    let mut db_after_execution = database.storage_transaction(Default::default());
+    tracing::info!(
+        "Creating a transaction for the block took: {}ms",
+        start_db.elapsed().as_millis()
+    );
+    let start = Instant::now();
+    let actual_block_root = db_after_execution.latest_block_root()?;
+    tracing::info!(
+        "Getting the latest block root took: {}ms",
+        start.elapsed().as_millis()
+    );
+    if actual_block_root != expected_block_root {
+        return Err(Error::InvalidDatabaseStateAfterExecution(
+            expected_block_root,
+            actual_block_root,
+        ))
+    }
+
+    db_after_execution.store_new_block(chain_id, sealed_block)?;
+
+    Ok(db_after_execution.into_changes())
 }

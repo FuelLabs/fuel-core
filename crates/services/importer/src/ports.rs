@@ -89,6 +89,15 @@ pub trait DatabaseTransaction {
 
     /// Commits the changes to the underlying storage.
     fn commit(self) -> StorageResult<()>;
+
+    /// Returns the changes of the transaction.
+    fn into_changes(self) -> Changes;
+
+    /// Add new changes to the transaction.
+    fn add_changes(&mut self, changes: Changes) -> StorageResult<()>;
+
+    #[cfg(feature = "test-helpers")]
+    fn changes(&self) -> &Changes;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -160,5 +169,18 @@ where
     fn commit(self) -> StorageResult<()> {
         self.commit()?;
         Ok(())
+    }
+
+    fn into_changes(self) -> Changes {
+        self.into_changes()
+    }
+
+    fn add_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        self.commit_changes(changes)
+    }
+
+    #[cfg(feature = "test-helpers")]
+    fn changes(&self) -> &Changes {
+        self.changes()
     }
 }
