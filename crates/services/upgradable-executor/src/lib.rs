@@ -7,6 +7,8 @@ pub mod config;
 pub mod error;
 pub mod executor;
 
+pub use fuel_core_executor as native_executor;
+
 #[cfg(feature = "wasm-executor")]
 pub mod instance;
 
