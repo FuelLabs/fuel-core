@@ -72,8 +72,6 @@ use crate::database::database_description::{
     indexation_availability,
 };
 #[cfg(feature = "rocksdb")]
-use crate::state::rocks_db::ColumnsPolicy;
-#[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
         description::Historical,
@@ -81,6 +79,7 @@ use crate::state::{
         StateRewindPolicy,
     },
     rocks_db::{
+        ColumnsPolicy,
         DatabaseConfig,
         RocksDb,
     },
