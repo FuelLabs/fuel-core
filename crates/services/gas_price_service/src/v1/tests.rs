@@ -5,7 +5,6 @@ use crate::{
             storage::{
                 GasPriceColumn,
                 GasPriceMetadata,
-                RecordedHeights,
             },
             GasPriceSettings,
             GasPriceSettingsProvider,
@@ -29,12 +28,10 @@ use crate::{
     },
     v1::{
         algorithm::SharedV1Algorithm,
-        da_source_service,
         da_source_service::{
             service::{
                 new_da_service,
                 DaBlockCostsSource,
-                DaSourceService,
             },
             DaBlockCosts,
         },
@@ -65,7 +62,6 @@ use fuel_core_services::{
     },
     RunnableTask,
     Service,
-    ServiceRunner,
     StateWatcher,
 };
 use fuel_core_storage::{
@@ -81,14 +77,9 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            BlockV1,
-            PartialFuelBlock,
-        },
+        block::Block,
         header::ConsensusParametersVersion,
     },
-    fuel_asm::op::exp,
     fuel_tx::{
         Mint,
         Transaction,
@@ -102,7 +93,6 @@ use fuel_core_types::{
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     Bytes,
-    Error,
     Height,
     UnrecordedBlocks,
 };
@@ -237,9 +227,10 @@ impl GetLatestRecordedHeight for UnimplementedStorageTx {
 }
 
 impl AsUnrecordedBlocks for UnimplementedStorageTx {
-    type Wrapper<'a> = UnimplementedStorageTx
-        where
-            Self: 'a;
+    type Wrapper<'a>
+        = UnimplementedStorageTx
+    where
+        Self: 'a;
 
     fn as_unrecorded_blocks(&mut self) -> Self::Wrapper<'_> {
         UnimplementedStorageTx
@@ -311,6 +302,7 @@ fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
         decrease_range_size: 0,
         block_activity_threshold: 0,
         da_poll_interval: None,
+        starting_recorded_height: None,
     }
 }
 
@@ -346,6 +338,7 @@ fn different_arb_config() -> V1AlgorithmConfig {
         decrease_range_size: 0,
         block_activity_threshold: 0,
         da_poll_interval: None,
+        starting_recorded_height: None,
     }
 }
 
@@ -416,6 +409,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         da_service_runner,
         inner,
         latest_l2_height,
+        None,
     );
 
     let read_algo = service.next_block_algorithm();
@@ -474,6 +468,7 @@ async fn run__new_l2_block_saves_old_metadata() {
         da_service_runner,
         inner,
         latest_l2_height,
+        None,
     );
     let mut watcher = StateWatcher::started();
 
@@ -534,6 +529,7 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
         da_service_runner,
         inner,
         latest_l2_height,
+        None,
     );
     let mut watcher = StateWatcher::started();
 
@@ -593,6 +589,7 @@ async fn run__updates_da_service_latest_l2_height() {
         da_service_runner,
         inner,
         latest_l2_height,
+        None,
     );
     let mut watcher = StateWatcher::started();
 
@@ -972,4 +969,54 @@ async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
     let algo_updater_height = gas_price_service.algorithm_updater().l2_block_height;
 
     assert_eq!(on_chain_height, algo_updater_height);
+}
+
+#[tokio::test]
+async fn uninitialized_task__init__sets_initial_storage_height_to_match_l2_height_if_none(
+) {
+    // given
+    let metadata_height = 100;
+    let l2_height = 200;
+    let config = zero_threshold_arbitrary_config();
+
+    let metadata = V1Metadata {
+        new_scaled_exec_price: 100,
+        l2_block_height: metadata_height,
+        new_scaled_da_gas_price: 0,
+        gas_price_factor: NonZeroU64::new(100).unwrap(),
+        total_da_rewards: 0,
+        latest_known_total_da_cost: 0,
+        last_profit: 0,
+        second_to_last_profit: 0,
+        latest_da_cost_per_byte: 0,
+        unrecorded_block_bytes: 0,
+    };
+    let gas_price_db = gas_price_database_with_metadata(&metadata, None);
+    let mut onchain_db = FakeOnChainDb::new(l2_height);
+    for height in 1..=l2_height {
+        let block = arb_block();
+        onchain_db.blocks.insert(BlockHeight::from(height), block);
+    }
+
+    let service = UninitializedTask::new(
+        config,
+        Some(metadata_height.into()),
+        0.into(),
+        FakeSettings::default(),
+        empty_block_stream(),
+        gas_price_db,
+        FakeDABlockCost::never_returns(),
+        onchain_db.clone(),
+    )
+    .unwrap();
+
+    // when
+    let gas_price_service = service.init(&StateWatcher::started()).await.unwrap();
+
+    // then
+    // sleep to allow the service to sync
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let initial_recorded_height = gas_price_service.initial_recorded_height();
+    assert_eq!(initial_recorded_height, Some(l2_height.into()));
 }
