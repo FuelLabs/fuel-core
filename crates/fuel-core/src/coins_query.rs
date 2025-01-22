@@ -285,6 +285,20 @@ pub async fn select_coins_to_spend(
     // See also "let upper_target = target.saturating_mul(2);" in "fn random_improve()".
     const TOTAL_AMOUNT_ADJUSTMENT_FACTOR: u64 = 2;
 
+    // After selecting large coins that cover at least twice the required amount,
+    // we include a limited number of small (dust) coins. The maximum number of dust coins
+    // is determined by the multiplier defined below. Specifically, the number of dust coins
+    // will never exceed FACTOR times the number of large coins selected.
+    //
+    // This limit prevents excessive dust coins from being included in cases where
+    // the query lacks a specified maximum limit (defaulting to 255).
+    //
+    // Example:
+    // - If 3 large coins are selected (and FACTOR is 5), up to 15 dust coins may be included (0..=15).
+    // - Still, if the selected dust can cover the amount of some big coins, the
+    //   latter will be removed from the set
+    const DUST_TO_BIG_COINS_FACTOR: u16 = 5;
+
     if total == 0 || max == 0 {
         return Err(CoinsQueryError::IncorrectQueryParameters {
             provided_total: total,
@@ -327,7 +341,8 @@ pub async fn select_coins_to_spend(
         }
     })?;
 
-    let max_dust_count = max_dust_count(max, number_of_big_coins);
+    let max_dust_count =
+        max_dust_count(max, number_of_big_coins, DUST_TO_BIG_COINS_FACTOR);
     let (dust_coins_total, selected_dust_coins) = dust_coins(
         dust_coins_stream,
         last_selected_big_coin,
@@ -408,9 +423,14 @@ fn is_excluded(key: &CoinsToSpendIndexKey, excluded_ids: &ExcludedCoinIds) -> bo
     }
 }
 
-fn max_dust_count(max: u16, big_coins_len: u16) -> u16 {
+fn max_dust_count(max: u16, big_coins_len: u16, dust_to_big_coins_factor: u16) -> u16 {
     let mut rng = rand::thread_rng();
-    rng.gen_range(0..=max.saturating_sub(big_coins_len))
+
+    let max_from_factor = big_coins_len.saturating_mul(dust_to_big_coins_factor);
+    let max_adjusted = max.saturating_sub(big_coins_len);
+    let upper_bound = max_from_factor.min(max_adjusted);
+
+    rng.gen_range(0..=upper_bound)
 }
 
 fn skip_big_coins_up_to_amount(
@@ -442,6 +462,7 @@ mod tests {
     use crate::{
         coins_query::{
             largest_first,
+            max_dust_count,
             random_improve,
             CoinsQueryError,
             SpendQuery,
@@ -491,6 +512,10 @@ mod tests {
     };
     use futures::TryStreamExt;
     use itertools::Itertools;
+    use proptest::{
+        prelude::*,
+        proptest,
+    };
     use rand::{
         rngs::StdRng,
         Rng,
@@ -1535,6 +1560,27 @@ mod tests {
                 max: u16::MAX
             })
         )
+    }
+
+    proptest! {
+        #[test]
+        fn max_dust_count_respects_limits(
+            max in 1u16..255,
+            number_of_big_coins in 1u16..255,
+            factor in 1u16..10,
+        ) {
+            // We're at the stage of the algorithm where we have already selected the big coins and
+            // we're trying to select the dust coins.
+            // So we're sure that the following assumptions hold:
+            // 1. number_of_big_coins <= max - big coin selection algo is capped at 'max'.
+            // 2. there must be at least one big coin selected, otherwise we'll break
+            //    with the `InsufficientCoinsForTheMax` error earlier.
+            prop_assume!(number_of_big_coins <= max && number_of_big_coins >= 1);
+
+            let max_dust_count = max_dust_count(max, number_of_big_coins, factor);
+            prop_assert!(number_of_big_coins + max_dust_count <= max);
+            prop_assert!(max_dust_count <= number_of_big_coins.saturating_mul(factor));
+        }
     }
 
     #[test_case::test_case(
