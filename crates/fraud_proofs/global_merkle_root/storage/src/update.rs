@@ -12,7 +12,6 @@ use alloc::{
     vec::Vec,
 };
 use fuel_core_storage::{
-    iter::IterableStore,
     kv_store::KeyValueInspect,
     transactional::StorageTransaction,
     StorageAsMut,
@@ -89,7 +88,7 @@ pub trait UpdateMerkleizedTables {
 
 impl<Storage> UpdateMerkleizedTables for &mut StorageTransaction<Storage>
 where
-    Storage: KeyValueInspect<Column = Column> + IterableStore,
+    Storage: KeyValueInspect<Column = Column>,
 {
     fn update_merklized_tables(
         self,
@@ -118,7 +117,7 @@ struct UpdateMerklizedTablesTransaction<'a, Storage> {
 
 impl<'a, Storage> UpdateMerklizedTablesTransaction<'a, Storage>
 where
-    Storage: KeyValueInspect<Column = Column> + IterableStore,
+    Storage: KeyValueInspect<Column = Column>,
 {
     // TODO(#2588): Proper result type
     pub fn process_block(&mut self, block: &Block) -> anyhow::Result<()> {
