@@ -291,54 +291,10 @@ where
     ) -> Result<(), Error> {
         let (result, changes) = result.into();
         let block = &result.sealed_block.entity;
-        let consensus = &result.sealed_block.consensus;
         let actual_next_height = *block.header().height();
 
-        // During importing of the genesis block, the database should not be initialized
-        // and the genesis block defines the next height.
-        // During the production of the non-genesis block, the next height should be underlying
-        // database height + 1.
-        let expected_next_height = match consensus {
-            Consensus::Genesis(_) => {
-                let result = database.latest_block_height()?;
-                let found = result.is_some();
-                // Because the genesis block is not committed, it should return `None`.
-                // If we find the latest height, something is wrong with the state of the database.
-                if found {
-                    return Err(Error::InvalidUnderlyingDatabaseGenesisState)
-                }
-                actual_next_height
-            }
-            Consensus::PoA(_) => {
-                if actual_next_height == BlockHeight::from(0u32) {
-                    return Err(Error::ZeroNonGenericHeight)
-                }
-
-                let last_db_height = database
-                    .latest_block_height()?
-                    .ok_or(not_found!("Latest block height"))?;
-                last_db_height
-                    .checked_add(1u32)
-                    .ok_or(Error::Overflow)?
-                    .into()
-            }
-            _ => {
-                return Err(Error::UnsupportedConsensusVariant(format!(
-                    "{:?}",
-                    consensus
-                )))
-            }
-        };
-
-        if expected_next_height != actual_next_height {
-            return Err(Error::IncorrectBlockHeight(
-                expected_next_height,
-                actual_next_height,
-            ))
-        }
-
-        let mut database_changes = database.storage_transaction(block_changes);
-        database_changes.add_changes(changes)?;
+        let mut database_changes = database.storage_transaction(changes);
+        database_changes.add_changes(block_changes)?;
 
         #[cfg(feature = "test-helpers")]
         let changes_clone = database_changes.changes().clone();
@@ -624,22 +580,59 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
     sealed_block: &SealedBlock,
     database: &mut D,
 ) -> Result<Changes, Error> {
+    let consensus = &sealed_block.consensus;
+    let actual_next_height = *sealed_block.entity.header().height();
+
+    // During importing of the genesis block, the database should not be initialized
+    // and the genesis block defines the next height.
+    // During the production of the non-genesis block, the next height should be underlying
+    // database height + 1.
+    let expected_next_height = match consensus {
+        Consensus::Genesis(_) => {
+            let result = database.latest_block_height()?;
+            let found = result.is_some();
+            // Because the genesis block is not committed, it should return `None`.
+            // If we find the latest height, something is wrong with the state of the database.
+            if found {
+                return Err(Error::InvalidUnderlyingDatabaseGenesisState)
+            }
+            actual_next_height
+        }
+        Consensus::PoA(_) => {
+            if actual_next_height == BlockHeight::from(0u32) {
+                return Err(Error::ZeroNonGenericHeight)
+            }
+
+            let last_db_height = database
+                .latest_block_height()?
+                .ok_or(not_found!("Latest block height"))?;
+            last_db_height
+                .checked_add(1u32)
+                .ok_or(Error::Overflow)?
+                .into()
+        }
+        _ => {
+            return Err(Error::UnsupportedConsensusVariant(format!(
+                "{:?}",
+                consensus
+            )))
+        }
+    };
+
+    if expected_next_height != actual_next_height {
+        return Err(Error::IncorrectBlockHeight(
+            expected_next_height,
+            actual_next_height,
+        ))
+    }
+
     // Importer expects that `UncommittedResult` contains the result of block
     // execution without block itself.
     let expected_block_root = database.latest_block_root()?;
 
-    let start_db = Instant::now();
     let mut db_after_execution = database.storage_transaction(Default::default());
-    tracing::info!(
-        "Creating a transaction for the block took: {}ms",
-        start_db.elapsed().as_millis()
-    );
-    let start = Instant::now();
     let actual_block_root = db_after_execution.latest_block_root()?;
-    tracing::info!(
-        "Getting the latest block root took: {}ms",
-        start.elapsed().as_millis()
-    );
+
     if actual_block_root != expected_block_root {
         return Err(Error::InvalidDatabaseStateAfterExecution(
             expected_block_root,
