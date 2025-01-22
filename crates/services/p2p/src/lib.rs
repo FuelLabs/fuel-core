@@ -18,6 +18,8 @@ mod utils;
 
 mod cached_view;
 
+use netlink_proto as _;
+
 pub use gossipsub::config as gossipsub_config;
 pub use heartbeat::Config;
 

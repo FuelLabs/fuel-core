@@ -55,6 +55,8 @@ thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 void = "1"
+# Remove when we upgrade rust version
+netlink-proto = "=0.11.3"
 
 [dev-dependencies]
 ctor = "0.1"
