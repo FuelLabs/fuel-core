@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2551](https://github.com/FuelLabs/fuel-core/pull/2551): Enhanced the DA compressed block header to include block id.
 - [2579](https://github.com/FuelLabs/fuel-core/pull/2579): Clear expiration txs cache in transaction pool based on inserted transactions
 
+### Fixed
+- [2609](https://github.com/FuelLabs/fuel-core/pull/2609): Check response before trying to deserialize, return error instead
+- [2599](https://github.com/FuelLabs/fuel-core/pull/2599): Use the proper `url` apis to construct full url path in `BlockCommitterHttpApi` client
+- [2593](https://github.com/FuelLabs/fuel-core/pull/2593): Fixed utxo id decompression
+
 ## [Version 0.41.0]
 
 ### Added

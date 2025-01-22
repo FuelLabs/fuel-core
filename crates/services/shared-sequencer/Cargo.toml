@@ -28,6 +28,7 @@ serde_json = "1.0"
 tendermint-rpc = { version = "0.36", features = ["http-client"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
+url = { workspace = true }
 
 [features]
 test-helpers = []
