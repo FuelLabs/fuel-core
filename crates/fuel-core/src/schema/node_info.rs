@@ -17,10 +17,8 @@ use async_graphql::{
     Context,
     Object,
 };
-use std::{
-    collections::HashSet,
-    time::UNIX_EPOCH,
-};
+use std::time::UNIX_EPOCH;
+use strum::IntoEnumIterator;
 
 pub struct NodeInfo {
     utxo_validation: bool,
@@ -108,25 +106,26 @@ impl NodeQuery {
 
         let db = ctx.data_unchecked::<ReadDatabase>();
         let read_view = db.view()?;
-        let indexation = HashSet::from_iter(
-            [
-                (
-                    read_view.balances_indexation_enabled,
-                    IndexationKind::Balances,
-                ),
-                (
-                    read_view.coins_to_spend_indexation_enabled,
-                    IndexationKind::CoinsToSpend,
-                ),
-                (
-                    read_view.asset_metadata_indexation_enabled,
-                    IndexationKind::AssetMetadata,
-                ),
-            ]
-            .into_iter()
-            .filter_map(|(enabled, kind)| enabled.then_some(kind)),
-        );
-
+        let mut indexation = Indexation::new();
+        for kind in IndexationKind::iter() {
+            match kind {
+                IndexationKind::Balances => {
+                    if read_view.balances_indexation_enabled {
+                        indexation.insert(kind);
+                    }
+                }
+                IndexationKind::CoinsToSpend => {
+                    if read_view.coins_to_spend_indexation_enabled {
+                        indexation.insert(kind);
+                    }
+                }
+                IndexationKind::AssetMetadata => {
+                    if read_view.asset_metadata_indexation_enabled {
+                        indexation.insert(kind);
+                    }
+                }
+            }
+        }
         Ok(NodeInfo {
             utxo_validation: config.utxo_validation,
             vm_backtrace: config.vm_backtrace,
@@ -135,7 +134,7 @@ impl NodeQuery {
             max_size: (config.max_size as u64).into(),
             max_depth: (config.max_txpool_dependency_chain_length as u64).into(),
             node_version: VERSION.to_owned(),
-            indexation: Indexation(indexation),
+            indexation,
         })
     }
 }
@@ -204,22 +203,59 @@ impl TxPoolStats {
 }
 
 #[derive(Clone)]
-struct Indexation(HashSet<IndexationKind>);
+struct Indexation(u8);
+
+impl Indexation {
+    pub fn new() -> Self {
+        Self(0)
+    }
+
+    pub fn contains(&self, kind: &IndexationKind) -> bool {
+        self.0 & (1 << *kind as u8) != 0
+    }
+
+    pub fn insert(&mut self, kind: IndexationKind) {
+        self.0 |= 1 << kind as u8;
+    }
+}
 
 #[Object]
 impl Indexation {
     /// Is balances indexation enabled
     async fn balances(&self) -> bool {
-        self.0.contains(&IndexationKind::Balances)
+        self.contains(&IndexationKind::Balances)
     }
 
     /// Is coins to spend indexation enabled
     async fn coins_to_spend(&self) -> bool {
-        self.0.contains(&IndexationKind::CoinsToSpend)
+        self.contains(&IndexationKind::CoinsToSpend)
     }
 
     /// Is asset metadata indexation enabled
     async fn asset_metadata(&self) -> bool {
-        self.0.contains(&IndexationKind::AssetMetadata)
+        self.contains(&IndexationKind::AssetMetadata)
     }
+}
+
+#[test]
+fn test_indexation() {
+    let mut indexation = Indexation::new();
+    assert_eq!(indexation.contains(&IndexationKind::Balances), false);
+    assert_eq!(indexation.contains(&IndexationKind::CoinsToSpend), false);
+    assert_eq!(indexation.contains(&IndexationKind::AssetMetadata), false);
+
+    indexation.insert(IndexationKind::Balances);
+    assert_eq!(indexation.contains(&IndexationKind::Balances), true);
+    assert_eq!(indexation.contains(&IndexationKind::CoinsToSpend), false);
+    assert_eq!(indexation.contains(&IndexationKind::AssetMetadata), false);
+
+    indexation.insert(IndexationKind::CoinsToSpend);
+    assert_eq!(indexation.contains(&IndexationKind::Balances), true);
+    assert_eq!(indexation.contains(&IndexationKind::CoinsToSpend), true);
+    assert_eq!(indexation.contains(&IndexationKind::AssetMetadata), false);
+
+    indexation.insert(IndexationKind::AssetMetadata);
+    assert_eq!(indexation.contains(&IndexationKind::Balances), true);
+    assert_eq!(indexation.contains(&IndexationKind::CoinsToSpend), true);
+    assert_eq!(indexation.contains(&IndexationKind::AssetMetadata), true);
 }
