@@ -1,8 +1,10 @@
 use crate::{
     column::Column,
     Coins,
+    ConsensusParametersVersions,
     ContractsLatestUtxo,
     Messages,
+    StateTransitionBytecodeVersions,
 };
 use alloc::{
     borrow::Cow,
@@ -10,12 +12,19 @@ use alloc::{
     vec::Vec,
 };
 use fuel_core_storage::{
+    iter::IterableStore,
     kv_store::KeyValueInspect,
     transactional::StorageTransaction,
     StorageAsMut,
 };
 use fuel_core_types::{
-    blockchain::block::Block,
+    blockchain::{
+        block::Block,
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
+    },
     entities::{
         coins::coin::CompressedCoinV1,
         contract::ContractUtxoInfo,
@@ -27,6 +36,7 @@ use fuel_core_types::{
             Inputs,
             OutputContract,
             Outputs,
+            UpgradePurpose as _,
         },
         input::{
             self,
@@ -46,11 +56,15 @@ use fuel_core_types::{
         },
         Address,
         AssetId,
+        ChargeableTransaction,
         Input,
         Output,
         Transaction,
         TxPointer,
         UniqueIdentifier,
+        UpgradeBody,
+        UpgradeMetadata,
+        UpgradePurpose,
         UtxoId,
     },
     fuel_types::{
@@ -68,21 +82,27 @@ pub trait UpdateMerkleizedTables {
         self,
         chain_id: ChainId,
         block: &Block,
+        latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
+        latest_consensus_parameters_version: ConsensusParametersVersion,
     ) -> anyhow::Result<()>;
 }
 
 impl<Storage> UpdateMerkleizedTables for &mut StorageTransaction<Storage>
 where
-    Storage: KeyValueInspect<Column = Column>,
+    Storage: KeyValueInspect<Column = Column> + IterableStore,
 {
     fn update_merklized_tables(
         self,
         chain_id: ChainId,
         block: &Block,
+        latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
+        latest_consensus_parameters_version: ConsensusParametersVersion,
     ) -> anyhow::Result<()> {
         let mut update_transaction = UpdateMerklizedTablesTransaction {
             chain_id,
             storage: self,
+            latest_state_transition_bytecode_version,
+            latest_consensus_parameters_version,
         };
 
         update_transaction.process_block(block)
@@ -92,11 +112,13 @@ where
 struct UpdateMerklizedTablesTransaction<'a, Storage> {
     chain_id: ChainId,
     storage: &'a mut StorageTransaction<Storage>,
+    latest_consensus_parameters_version: ConsensusParametersVersion,
+    latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
 }
 
 impl<'a, Storage> UpdateMerklizedTablesTransaction<'a, Storage>
 where
-    Storage: KeyValueInspect<Column = Column>,
+    Storage: KeyValueInspect<Column = Column> + IterableStore,
 {
     // TODO(#2588): Proper result type
     pub fn process_block(&mut self, block: &Block) -> anyhow::Result<()> {
@@ -132,6 +154,12 @@ where
             self.process_output(tx_pointer, utxo_id, &inputs, output)?;
         }
 
+        match tx {
+            Transaction::Upgrade(tx) => {
+                self.process_upgrade_transaction(tx)?;
+            }
+            _ => {}
+        }
         // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
         // TODO(#2584): Insert state transition bytecode and consensus parameter updates.
         // TODO(#2585): Insert uplodade bytecodes.
@@ -263,6 +291,61 @@ where
                 TransactionValidityError::InvalidContractInputIndex(utxo_id),
             ))?;
         }
+        Ok(())
+    }
+
+    fn process_upgrade_transaction(
+        &mut self,
+        tx: &ChargeableTransaction<UpgradeBody, UpgradeMetadata>,
+    ) -> anyhow::Result<()> {
+        // This checks that the consensus parameters are valid.
+        // Do we need this check, or can we assume that because the
+        // transaction has been included into a block then the
+        // metadata is valid?
+        let Ok(metadata) = UpgradeMetadata::compute(tx) else {
+            return Err(anyhow::anyhow!("Invalid upgrade metadata"));
+        };
+
+        match metadata {
+            UpgradeMetadata::ConsensusParameters {
+                consensus_parameters,
+                calculated_checksum: _,
+            } => {
+                let Some(next_consensus_parameters_version) =
+                    self.latest_consensus_parameters_version.checked_add(1)
+                else {
+                    return Err(anyhow::anyhow!("Invalid consensus parameters version"));
+                };
+                self.latest_consensus_parameters_version =
+                    next_consensus_parameters_version;
+                self.storage
+                    .storage::<ConsensusParametersVersions>()
+                    .insert(
+                        &self.latest_consensus_parameters_version,
+                        &consensus_parameters,
+                    )?;
+            }
+            UpgradeMetadata::StateTransition => match tx.upgrade_purpose() {
+                UpgradePurpose::ConsensusParameters { .. } => panic!(
+                    "Upgrade with StateTransition metadata has StateTransition purpose"
+                ),
+                UpgradePurpose::StateTransition { root } => {
+                    let Some(next_state_transition_bytecode_version) =
+                        self.latest_state_transition_bytecode_version.checked_add(1)
+                    else {
+                        return Err(anyhow::anyhow!(
+                            "Invalid state transition bytecode version"
+                        ));
+                    };
+                    self.latest_state_transition_bytecode_version =
+                        next_state_transition_bytecode_version;
+                    self.storage
+                        .storage::<StateTransitionBytecodeVersions>()
+                        .insert(&self.latest_state_transition_bytecode_version, &root)?;
+                }
+            },
+        }
+
         Ok(())
     }
 }
