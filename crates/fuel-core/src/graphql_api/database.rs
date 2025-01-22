@@ -113,6 +113,12 @@ impl IndexationFlags {
     }
 }
 
+impl Default for IndexationFlags {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ReadDatabase {
     /// Creates a new [`ReadDatabase`] with the given on-chain and off-chain database view providers.
     pub fn new<OnChain, OffChain>(
