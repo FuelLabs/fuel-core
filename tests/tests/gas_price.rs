@@ -999,13 +999,13 @@ async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
 #[tokio::test]
 async fn cli__starting_recorded_height_is_set_in_db() {
     // given
-    let starting_recorded_height: u32 = 1000;
+    let starting_recorded_height: u32 = 1234;
     let as_str = &starting_recorded_height.to_string();
     let args = vec![
         "--debug",
         "--poa-instant",
         "true",
-        "--starting-recorded-height",
+        "--da-starting-recorded-height",
         as_str,
     ];
     let driver = FuelCoreDriver::spawn(&args).await.unwrap();

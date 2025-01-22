@@ -271,8 +271,8 @@ pub struct Command {
 
     /// The L2 height the Gas Price Service will assume is already recorded on DA
     /// i.e. If you want the Gas Price Service to look for the costs of block 1000, set to 999
-    #[arg(long = "starting-recorded-height", env)]
-    starting_recorded_height: Option<u32>,
+    #[arg(long = "da-starting-recorded-height", env)]
+    da_starting_recorded_height: Option<u32>,
 
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
@@ -382,7 +382,7 @@ impl Command {
             da_gas_price_d_component,
             da_committer_url,
             da_poll_interval,
-            starting_recorded_height,
+            da_starting_recorded_height: starting_recorded_height,
             consensus_key,
             #[cfg(feature = "aws-kms")]
             consensus_aws_kms,
