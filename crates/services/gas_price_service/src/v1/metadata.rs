@@ -1,4 +1,5 @@
 use crate::v0::metadata::V0Metadata;
+use fuel_core_types::fuel_types::BlockHeight;
 use fuel_gas_price_algorithm::v1::{
     AlgorithmUpdaterV1,
     L2ActivityTracker,
@@ -80,6 +81,7 @@ pub struct V1AlgorithmConfig {
     pub block_activity_threshold: u8,
     /// The interval at which the `DaSourceService` polls for new data
     pub da_poll_interval: Option<Duration>,
+    pub starting_recorded_height: Option<BlockHeight>,
 }
 
 pub fn updater_from_config(
