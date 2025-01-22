@@ -89,4 +89,8 @@ tracing = { workspace = true }
 default = ["fuel-core/default"]
 only-p2p = ["fuel-core-p2p"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]
-fault-proving = ["fuel-core-compression/fault-proving", "fuel-core/fault-proving", "fuel-core-bin/fault-proving"]
+fault-proving = [
+  "fuel-core-compression/fault-proving",
+  "fuel-core/fault-proving",
+  "fuel-core-bin/fault-proving",
+]
