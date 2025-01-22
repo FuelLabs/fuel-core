@@ -118,6 +118,24 @@ where
         })
     }
 
+    /// Opens the Historical DB in read-only mode.
+    pub fn open_read_only<P: AsRef<Path>>(
+        path: P,
+        database_config: DatabaseConfig,
+    ) -> DatabaseResult<Self> {
+        let db = RocksDb::<Historical<Description>>::open_read_only(
+            path,
+            vec![],
+            false,
+            database_config,
+        )?;
+
+        Ok(Self {
+            state_rewind_policy: StateRewindPolicy::NoRewind,
+            db,
+        })
+    }
+
     fn reverse_history_changes(&self, changes: &Changes) -> StorageResult<Changes> {
         let mut reverse_changes = Changes::default();
 

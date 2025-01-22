@@ -226,6 +226,18 @@ where
         Ok(Self::new(Arc::new(db)))
     }
 
+    /// useful to look at the database while the binary is running.
+    #[cfg(feature = "rocksdb")]
+    pub fn open_rocksdb_read_only(
+        path: &Path,
+        database_config: DatabaseConfig,
+    ) -> Result<Self> {
+        let db = HistoricalRocksDB::<Description>::open_read_only(path, database_config)
+            .map_err(anyhow::Error::from)?;
+
+        Ok(Self::new(Arc::new(db)))
+    }
+
     /// Converts the regular database to an unchecked database.
     ///
     /// Returns an error in the case regular database is initialized with the `GenesisDatabase`,

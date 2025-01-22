@@ -223,6 +223,23 @@ impl CombinedDatabase {
         })
     }
 
+    #[cfg(feature = "rocksdb")]
+    pub fn open_read_only(
+        path: &std::path::Path,
+        database_config: DatabaseConfig,
+    ) -> crate::database::Result<Self> {
+        let on_chain = Database::open_rocksdb_read_only(path, database_config)?;
+        let off_chain = Database::open_rocksdb_read_only(path, database_config)?;
+        let relayer = Database::open_rocksdb_read_only(path, database_config)?;
+        let gas_price = Database::open_rocksdb_read_only(path, database_config)?;
+        Ok(Self {
+            on_chain,
+            off_chain,
+            relayer,
+            gas_price,
+        })
+    }
+
     /// A test-only temporary rocksdb database with given rewind policy.
     #[cfg(feature = "rocksdb")]
     pub fn temp_database_with_state_rewind_policy(
