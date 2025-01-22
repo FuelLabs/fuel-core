@@ -152,3 +152,12 @@ insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
 url = "2.2"
+
+[patch.crates-io]
+fuel-asm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "rafal/display_on_recepits" }
+fuel-crypto = { git = "https://github.com/FuelLabs/fuel-vm", branch = "rafal/display_on_recepits" }
+fuel-merkle = { git = "https://github.com/FuelLabs/fuel-vm", branch = "rafal/display_on_recepits" }
+fuel-storage = { git = "https://github.com/FuelLabs/fuel-vm", branch = "rafal/display_on_recepits" }
+fuel-tx = { git = "https://github.com/FuelLabs/fuel-vm", branch = "rafal/display_on_recepits" }
+fuel-types = { git = "https://github.com/FuelLabs/fuel-vm", branch = "rafal/display_on_recepits" }
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "rafal/display_on_recepits" }
