@@ -122,9 +122,7 @@ pub trait GetMerkleizedTablesParameters:
 
 impl<Storage> GetMerkleizedTablesParameters for Storage
 where
-    Storage: KeyValueInspect<Column = Column>
-        + IterableStore<Column = Column>
-        + ReadTransaction,
+    Storage: KeyValueInspect<Column = Column> + IterableStore<Column = Column>,
 {
     fn get_latest_version<M>(&self) -> anyhow::Result<Option<M::OwnedKey>>
     where

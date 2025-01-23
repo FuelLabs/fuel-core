@@ -11,7 +11,14 @@ use fuel_core_storage::{
         },
         BlueprintInspect,
     },
+    iter::{
+        BoxedIter,
+        IterDirection,
+        IterableStore,
+    },
     kv_store::{
+        KVItem,
+        KeyItem,
         KeyValueInspect,
         StorageColumn,
         Value,
@@ -109,6 +116,29 @@ where
     type Column = Column;
 
     fn get(&self, _: &[u8], _: Self::Column) -> StorageResult<Option<Value>> {
+        unreachable!()
+    }
+}
+
+impl IterableStore for DummyStorage<Column> {
+    fn iter_store(
+        &self,
+        _column: Self::Column,
+        _prefix: Option<&[u8]>,
+        _start: Option<&[u8]>,
+        _direction: IterDirection,
+    ) -> BoxedIter<KVItem> {
+        unreachable!()
+    }
+
+    #[doc = " Returns an iterator over keys in the storage."]
+    fn iter_store_keys(
+        &self,
+        _column: Self::Column,
+        _prefix: Option<&[u8]>,
+        _start: Option<&[u8]>,
+        _direction: IterDirection,
+    ) -> BoxedIter<KeyItem> {
         unreachable!()
     }
 }
