@@ -79,10 +79,12 @@ async fn make_counter_contract(
     (contract_id, block_height)
 }
 
-async fn increment_counter(client: &FuelClient,
+async fn increment_counter(
+    client: &FuelClient,
     rng: &mut rand::rngs::StdRng,
-    
-     contract_id: ContractId) -> BlockHeight {
+
+    contract_id: ContractId,
+) -> BlockHeight {
     let gas_limit = 1_000_000;
     let maturity = Default::default();
 
