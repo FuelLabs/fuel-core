@@ -1,8 +1,11 @@
-use crate::fuel_core_graphql_api::{
-    database::arc_wrapper::ArcWrapper,
-    ports::{
-        OffChainDatabase,
-        OnChainDatabase,
+use crate::{
+    database::database_description::IndexationKind,
+    fuel_core_graphql_api::{
+        database::arc_wrapper::ArcWrapper,
+        ports::{
+            OffChainDatabase,
+            OnChainDatabase,
+        },
     },
 };
 use fuel_core_services::yield_stream::StreamYieldExt;
@@ -67,6 +70,7 @@ use std::{
     borrow::Cow,
     sync::Arc,
 };
+use strum::IntoEnumIterator;
 
 use super::ports::worker;
 
@@ -88,12 +92,31 @@ pub struct ReadDatabase {
     on_chain: Box<dyn AtomicView<LatestView = OnChainView>>,
     /// The off-chain database view provider.
     off_chain: Box<dyn AtomicView<LatestView = OffChainView>>,
-    /// The flag that indicates whether the Balances indexation is enabled.
-    balances_indexation_enabled: bool,
-    /// The flag that indicates whether the CoinsToSpend indexation is enabled.
-    coins_to_spend_indexation_enabled: bool,
-    /// The flag that indicates whether the AssetMetadata indexation is enabled.
-    asset_metadata_indexation_enabled: bool,
+    /// The flag indicating which indexation is enabled.
+    indexation_flags: IndexationFlags,
+}
+
+#[derive(Clone)]
+pub struct IndexationFlags(u8);
+
+impl IndexationFlags {
+    pub fn new() -> Self {
+        Self(0)
+    }
+
+    pub fn contains(&self, kind: &IndexationKind) -> bool {
+        self.0 & (1 << *kind as u8) != 0
+    }
+
+    pub fn insert(&mut self, kind: IndexationKind) {
+        self.0 |= 1 << kind as u8;
+    }
+}
+
+impl Default for IndexationFlags {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ReadDatabase {
@@ -110,20 +133,32 @@ impl ReadDatabase {
         OnChain::LatestView: OnChainDatabase,
         OffChain::LatestView: OffChainDatabase,
     {
-        let balances_indexation_enabled = off_chain.balances_indexation_enabled()?;
-        let coins_to_spend_indexation_enabled =
-            off_chain.coins_to_spend_indexation_enabled()?;
-        let asset_metadata_indexation_enabled =
-            off_chain.asset_metadata_indexation_enabled()?;
-
+        let mut indexation_flags = IndexationFlags::new();
+        for kind in IndexationKind::iter() {
+            match kind {
+                IndexationKind::Balances => {
+                    if off_chain.balances_indexation_enabled()? {
+                        indexation_flags.insert(kind);
+                    }
+                }
+                IndexationKind::CoinsToSpend => {
+                    if off_chain.coins_to_spend_indexation_enabled()? {
+                        indexation_flags.insert(kind);
+                    }
+                }
+                IndexationKind::AssetMetadata => {
+                    if off_chain.asset_metadata_indexation_enabled()? {
+                        indexation_flags.insert(kind);
+                    }
+                }
+            }
+        }
         Ok(Self {
             batch_size,
             genesis_height,
             on_chain: Box::new(ArcWrapper::new(on_chain)),
             off_chain: Box::new(ArcWrapper::new(off_chain)),
-            balances_indexation_enabled,
-            coins_to_spend_indexation_enabled,
-            asset_metadata_indexation_enabled,
+            indexation_flags,
         })
     }
 
@@ -137,9 +172,7 @@ impl ReadDatabase {
             genesis_height: self.genesis_height,
             on_chain: self.on_chain.latest_view()?,
             off_chain: self.off_chain.latest_view()?,
-            balances_indexation_enabled: self.balances_indexation_enabled,
-            coins_to_spend_indexation_enabled: self.coins_to_spend_indexation_enabled,
-            asset_metadata_indexation_enabled: self.asset_metadata_indexation_enabled,
+            indexation_flags: self.indexation_flags.clone(),
         })
     }
 
@@ -155,9 +188,7 @@ pub struct ReadView {
     pub(crate) genesis_height: BlockHeight,
     pub(crate) on_chain: OnChainView,
     pub(crate) off_chain: OffChainView,
-    pub(crate) balances_indexation_enabled: bool,
-    pub(crate) coins_to_spend_indexation_enabled: bool,
-    pub(crate) asset_metadata_indexation_enabled: bool,
+    pub(crate) indexation_flags: IndexationFlags,
 }
 
 impl ReadView {
@@ -407,4 +438,27 @@ impl ReadView {
     pub fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.off_chain.message_is_spent(nonce)
     }
+}
+
+#[test]
+fn test_indexation_flags() {
+    let mut indexation = IndexationFlags::new();
+    assert!(!indexation.contains(&IndexationKind::Balances));
+    assert!(!indexation.contains(&IndexationKind::CoinsToSpend));
+    assert!(!indexation.contains(&IndexationKind::AssetMetadata));
+
+    indexation.insert(IndexationKind::Balances);
+    assert!(indexation.contains(&IndexationKind::Balances));
+    assert!(!indexation.contains(&IndexationKind::CoinsToSpend));
+    assert!(!indexation.contains(&IndexationKind::AssetMetadata));
+
+    indexation.insert(IndexationKind::CoinsToSpend);
+    assert!(indexation.contains(&IndexationKind::Balances));
+    assert!(indexation.contains(&IndexationKind::CoinsToSpend));
+    assert!(!indexation.contains(&IndexationKind::AssetMetadata));
+
+    indexation.insert(IndexationKind::AssetMetadata);
+    assert!(indexation.contains(&IndexationKind::Balances));
+    assert!(indexation.contains(&IndexationKind::CoinsToSpend));
+    assert!(indexation.contains(&IndexationKind::AssetMetadata));
 }
