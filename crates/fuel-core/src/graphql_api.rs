@@ -89,7 +89,7 @@ pub const DEFAULT_QUERY_COSTS: Costs = Costs {
     get_peers: 40001,
     estimate_predicates: 40001,
     dry_run: 12000,
-    storage_read_replay: 1_000_000,
+    storage_read_replay: 12000,
     submit: 40001,
     submit_and_await: 40001,
     status_change: 40001,
