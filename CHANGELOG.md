@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.41.2]
+
+### Fixed
+
+- [2623](https://github.com/FuelLabs/fuel-core/pull/2623): Pinned netlink-proto's version.
+
 ## [Version 0.41.1]
 
 ### Added
