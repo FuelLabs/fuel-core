@@ -27,7 +27,10 @@ use fuel_core_storage::{
         },
         FuelBlocks,
     },
-    transactional::Changes,
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
     MerkleRoot,
     Result as StorageResult,
     StorageAsRef,
@@ -103,6 +106,14 @@ impl ImporterDatabase for Database {
             .storage_as_ref::<FuelBlockMerkleMetadata>()
             .get(&DenseMetadataKey::Latest)?
             .map(|cow| *cow.root()))
+    }
+
+    fn commit_changes(
+        &self,
+        height: BlockHeight,
+        changes: StorageChanges,
+    ) -> StorageResult<()> {
+        self.data.commit_changes(Some(height), changes)
     }
 }
 

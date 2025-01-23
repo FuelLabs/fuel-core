@@ -12,7 +12,10 @@ use crate::{
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
     not_found,
-    transactional::Changes,
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
     Error as StorageError,
     MerkleRoot,
 };
@@ -293,13 +296,17 @@ where
         let block = &result.sealed_block.entity;
         let actual_next_height = *block.header().height();
 
-        let mut database_changes = database.storage_transaction(changes);
-        database_changes.add_changes(block_changes)?;
-
         #[cfg(feature = "test-helpers")]
-        let changes_clone = database_changes.changes().clone();
+        let changes_clone = {
+            let mut changes_clone = changes.clone();
+            changes_clone.extend(block_changes.clone());
+            changes_clone
+        };
 
-        database_changes.commit()?;
+        database.commit_changes(
+            actual_next_height,
+            StorageChanges::ChangesList(vec![block_changes, changes]),
+        )?;
 
         if self.metrics {
             Self::update_metrics(&result, &actual_next_height);

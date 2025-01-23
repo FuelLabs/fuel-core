@@ -14,6 +14,7 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         Modifiable,
+        StorageChanges,
         StorageTransaction,
         WriteTransaction,
     },
@@ -68,6 +69,13 @@ pub trait ImporterDatabase: Send + Sync {
 
     /// Returns the latest block root.
     fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
+
+    /// Commit changes
+    fn commit_changes(
+        &self,
+        height: BlockHeight,
+        changes: StorageChanges,
+    ) -> StorageResult<()>;
 }
 
 /// The port of the storage transaction required by the importer.
@@ -92,12 +100,6 @@ pub trait DatabaseTransaction {
 
     /// Returns the changes of the transaction.
     fn into_changes(self) -> Changes;
-
-    /// Add new changes to the transaction.
-    fn add_changes(&mut self, changes: Changes) -> StorageResult<()>;
-
-    #[cfg(feature = "test-helpers")]
-    fn changes(&self) -> &Changes;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -173,14 +175,5 @@ where
 
     fn into_changes(self) -> Changes {
         self.into_changes()
-    }
-
-    fn add_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.commit_changes(changes)
-    }
-
-    #[cfg(feature = "test-helpers")]
-    fn changes(&self) -> &Changes {
-        self.changes()
     }
 }

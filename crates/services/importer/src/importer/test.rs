@@ -11,7 +11,10 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
-    transactional::Changes,
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
     Error as StorageError,
     MerkleRoot,
     Result as StorageResult,
@@ -58,6 +61,12 @@ mockall::mock! {
         fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
 
         fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
+
+        fn commit_changes(
+            &self,
+            height: BlockHeight,
+            changes: StorageChanges,
+        ) -> StorageResult<()>;
     }
 }
 

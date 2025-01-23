@@ -6,10 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
-## [Version 0.41.2]
-
 ### Changed
-- [2618](https://github.com/FuelLabs/fuel-core/pull/2618): Parallelise block/transaction changes creation in Importer
+- [2618](https://github.com/FuelLabs/fuel-core/pull/2618): Parallelize block/transaction changes creation in Importer
+
+## [Version 0.41.2]
 
 ### Fixed
 
