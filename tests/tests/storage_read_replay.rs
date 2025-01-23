@@ -23,7 +23,7 @@ use fuel_core_types::{
         TransactionBuilder,
     },
     fuel_types::BlockHeight,
-    fuel_vm::Salt,
+    fuel_vm::{Salt, SecretKey},
 };
 use futures::StreamExt;
 use rand::{
@@ -82,7 +82,6 @@ async fn make_counter_contract(
 async fn increment_counter(
     client: &FuelClient,
     rng: &mut rand::rngs::StdRng,
-
     contract_id: ContractId,
 ) -> BlockHeight {
     let gas_limit = 1_000_000;
@@ -102,9 +101,15 @@ async fn increment_counter(
     let tx = TransactionBuilder::script(script.into_iter().collect(), script_data)
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_fee_input()
-        .add_input(Input::contract(
+        .add_unsigned_coin_input(
+            SecretKey::random(rng),
+            rng.gen(),
+            u32::MAX as u64,
             Default::default(),
+            Default::default(),
+        )
+        .add_input(Input::contract(
+            rng.gen(),
             rng.gen(),
             rng.gen(),
             Default::default(),
