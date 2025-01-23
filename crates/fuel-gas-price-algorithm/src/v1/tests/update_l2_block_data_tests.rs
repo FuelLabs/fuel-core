@@ -194,17 +194,17 @@ fn update_l2_block_data__updates_the_total_reward_value() {
     // then
     let expected = (fee * starting_da_gas_price as u128)
         .div_ceil(starting_da_gas_price as u128 + starting_exec_gas_price as u128);
-    let actual = updater.total_da_rewards_excess;
+    let actual = updater.total_da_rewards;
     assert_eq!(actual, expected);
 }
 
 #[test]
-fn update_l2_block_data__even_threshold_will_not_change_exec_gas_price() {
+fn update_l2_block_data__even_threshold_will_increase_exec_gas_price() {
     // given
-    let starting_gas_price = 100;
+    let starting_exec_gas_price = 100;
     let unused_percent = 11;
     let mut updater = UpdaterBuilder::new()
-        .with_starting_exec_gas_price(starting_gas_price)
+        .with_starting_exec_gas_price(starting_exec_gas_price)
         .with_exec_gas_price_change_percent(unused_percent)
         .build();
 
@@ -221,7 +221,8 @@ fn update_l2_block_data__even_threshold_will_not_change_exec_gas_price() {
         .unwrap();
 
     // then
-    let expected = starting_gas_price;
+    let expected_change = starting_exec_gas_price * unused_percent as u64 / 100;
+    let expected = starting_exec_gas_price + expected_change;
     let actual = updater.new_scaled_exec_price;
     assert_eq!(actual, expected);
 }

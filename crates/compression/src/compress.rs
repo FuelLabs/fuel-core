@@ -12,7 +12,6 @@ use crate::{
         RegistrationsPerTable,
         TemporalRegistryAll,
     },
-    CompressedBlockPayloadV0,
     VersionedCompressedBlock,
 };
 use anyhow::Context;
@@ -70,11 +69,11 @@ where
     let transactions = target.compress_with(&mut ctx).await?;
     let registrations: RegistrationsPerTable = ctx.finalize()?;
 
-    Ok(VersionedCompressedBlock::V0(CompressedBlockPayloadV0 {
+    Ok(VersionedCompressedBlock::new(
+        block.header(),
         registrations,
-        header: block.header().into(),
         transactions,
-    }))
+    ))
 }
 
 /// Preparation pass through the block to collect all keys accessed during compression.

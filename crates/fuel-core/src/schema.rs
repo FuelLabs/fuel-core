@@ -30,6 +30,7 @@ use futures::{
 use std::borrow::Cow;
 use tokio_stream::StreamExt;
 
+pub mod assets;
 pub mod balance;
 pub mod blob;
 pub mod block;
@@ -51,6 +52,7 @@ pub mod relayed_tx;
 
 #[derive(MergedObject, Default)]
 pub struct Query(
+    assets::AssetInfoQuery,
     dap::DapQuery,
     balance::BalanceQuery,
     blob::BlobQuery,

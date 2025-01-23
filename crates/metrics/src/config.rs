@@ -13,7 +13,7 @@ pub enum Module {
     Importer,
     P2P,
     Producer,
-    TxPool, /* TODO[RC]: Not used. Add support in https://github.com/FuelLabs/fuel-core/pull/2321 */
+    TxPool,
     GraphQL, // TODO[RC]: Not used... yet.
 }
 

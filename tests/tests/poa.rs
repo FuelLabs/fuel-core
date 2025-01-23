@@ -12,13 +12,13 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_poa::signer::SignMode;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::consensus::Consensus,
     fuel_crypto::SecretKey,
     fuel_tx::Transaction,
     secrecy::Secret,
+    signer::SignMode,
 };
 use rand::{
     rngs::StdRng,
@@ -165,6 +165,7 @@ mod p2p {
             make_config,
             make_node,
             Bootstrap,
+            CustomizeConfig,
         },
     };
     use fuel_core_poa::{
@@ -195,11 +196,19 @@ mod p2p {
         let mut config = Config::local_node();
         update_signing_key(&mut config, pub_key);
 
-        let bootstrap_config = make_config("Bootstrap".to_string(), config.clone());
+        let bootstrap_config = make_config(
+            "Bootstrap".to_string(),
+            config.clone(),
+            CustomizeConfig::no_overrides(),
+        );
         let bootstrap = Bootstrap::new(&bootstrap_config).await.unwrap();
 
         let make_node_config = |name: &str| {
-            let mut config = make_config(name.to_string(), config.clone());
+            let mut config = make_config(
+                name.to_string(),
+                config.clone(),
+                CustomizeConfig::no_overrides(),
+            );
             config.debug = true;
             config.block_production = Trigger::Interval {
                 block_time: Duration::from_secs(1),

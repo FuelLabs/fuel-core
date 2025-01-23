@@ -206,7 +206,7 @@ where
             anyhow!("Failed to acquire the production lock, block production is already in progress")
         })?;
 
-        let gas_price = self.calculate_gas_price().await?;
+        let gas_price = self.production_gas_price().await?;
 
         let source = tx_source(gas_price, height).await?;
 
@@ -246,9 +246,16 @@ where
         Ok(result)
     }
 
-    async fn calculate_gas_price(&self) -> anyhow::Result<u64> {
+    async fn production_gas_price(&self) -> anyhow::Result<u64> {
         self.gas_price_provider
-            .next_gas_price()
+            .production_gas_price()
+            .await
+            .map_err(|e| anyhow!("No gas price found: {e:?}"))
+    }
+
+    async fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
+        self.gas_price_provider
+            .dry_run_gas_price()
             .await
             .map_err(|e| anyhow!("No gas price found: {e:?}"))
     }
@@ -340,7 +347,7 @@ where
         let gas_price = if let Some(inner) = gas_price {
             inner
         } else {
-            self.calculate_gas_price().await?
+            self.dry_run_gas_price().await?
         };
 
         // The dry run execution should use the state of the blockchain based on the

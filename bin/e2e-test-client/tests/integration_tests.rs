@@ -136,7 +136,7 @@ fn dev_config() -> Config {
     let reader = reader.with_chain_config(chain_config);
 
     let mut config = Config::local_node_with_reader(reader);
-    config.starting_gas_price = 1;
+    config.starting_exec_gas_price = 1;
     config.block_producer.coinbase_recipient = Some(
         ContractId::from_str(
             "0x7777777777777777777777777777777777777777777777777777777777777777",

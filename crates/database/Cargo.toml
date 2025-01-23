@@ -27,3 +27,4 @@ fuel-core-trace = { path = "../trace" }
 
 [features]
 test-helpers = []
+backup = []

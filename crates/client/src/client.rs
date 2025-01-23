@@ -16,6 +16,7 @@ use crate::client::{
         TransactionId,
     },
     types::{
+        asset::AssetDetail,
         gas_price::LatestGasPrice,
         message::MessageStatus,
         primitives::{
@@ -81,6 +82,7 @@ use pagination::{
     PaginationRequest,
 };
 use schema::{
+    assets::AssetInfoArg,
     balance::BalanceArgs,
     blob::BlobByIdArgs,
     block::BlockByIdArgs,
@@ -1215,6 +1217,14 @@ impl FuelClient {
             .map(|status| status.try_into())
             .transpose()?;
         Ok(status)
+    }
+
+    pub async fn asset_info(&self, asset_id: &AssetId) -> io::Result<AssetDetail> {
+        let query = schema::assets::AssetInfoQuery::build(AssetInfoArg {
+            id: (*asset_id).into(),
+        });
+        let asset_info = self.query(query).await?.asset_details.into();
+        Ok(asset_info)
     }
 }
 

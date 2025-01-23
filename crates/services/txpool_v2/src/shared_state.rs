@@ -20,6 +20,7 @@ use tokio::sync::{
 
 use crate::{
     error::Error,
+    pool::TxPoolStats,
     service::{
         BorrowTxPoolRequest,
         ReadPoolRequest,
@@ -54,6 +55,7 @@ pub struct SharedState {
     pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
+    pub(crate) latest_stats: tokio::sync::watch::Receiver<TxPoolStats>,
 }
 
 impl SharedState {
@@ -177,5 +179,9 @@ impl SharedState {
         let _ = self
             .write_pool_requests_sender
             .try_send(WritePoolRequest::RemoveCoinDependents { transactions });
+    }
+
+    pub fn latest_stats(&self) -> TxPoolStats {
+        *self.latest_stats.borrow()
     }
 }
