@@ -579,33 +579,27 @@ where
     fn commit_changes(
         &self,
         height: Option<Description::Height>,
-        changes: StorageChanges,
+        mut changes: StorageChanges,
     ) -> StorageResult<()> {
-        let mut storage_transaction = StorageTransaction::transaction(
-            &self.db,
-            ConflictPolicy::Overwrite,
-            Default::default(),
-        );
-
+        // When the history need to be process we need to have all the changes in one
+        // transaction to be able to write their reverse changes.
         if let Some(height) = height {
+            let all_changes = match changes {
+                StorageChanges::Changes(changes) => changes,
+                StorageChanges::ChangesList(list) => {
+                    list.into_iter().flat_map(|changes| changes).collect()
+                }
+            };
+            let mut storage_transaction = StorageTransaction::transaction(
+                &self.db,
+                ConflictPolicy::Overwrite,
+                all_changes,
+            );
             self.store_modifications_history(&mut storage_transaction, &height)?;
+            changes = StorageChanges::Changes(storage_transaction.into_changes());
         }
-        let history_changes = storage_transaction.into_changes();
 
-        let new_changes = match changes {
-            StorageChanges::ChangesList(mut changes_list) => {
-                changes_list.push(history_changes);
-                StorageChanges::ChangesList(changes_list)
-            }
-            StorageChanges::Changes(changes) => {
-                let mut changes_list = Vec::with_capacity(2);
-                changes_list.push(changes);
-                changes_list.push(history_changes);
-                StorageChanges::ChangesList(changes_list)
-            }
-        };
-
-        self.db.commit_changes(&new_changes)?;
+        self.db.commit_changes(&changes)?;
 
         Ok(())
     }
