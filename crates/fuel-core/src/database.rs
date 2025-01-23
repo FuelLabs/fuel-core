@@ -43,6 +43,7 @@ use fuel_core_storage::{
         ConflictPolicy,
         HistoricalView,
         Modifiable,
+        StorageChanges,
         StorageTransaction,
     },
     Error as StorageError,
@@ -67,6 +68,10 @@ pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
+use crate::database::database_description::{
+    gas_price::GasPriceDatabase,
+    indexation_availability,
+};
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
@@ -75,16 +80,10 @@ use crate::state::{
         StateRewindPolicy,
     },
     rocks_db::{
+        ColumnsPolicy,
         DatabaseConfig,
         RocksDb,
     },
-};
-use crate::{
-    database::database_description::{
-        gas_price::GasPriceDatabase,
-        indexation_availability,
-    },
-    state::rocks_db::ColumnsPolicy,
 };
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -413,19 +412,25 @@ impl Modifiable for Database<Relayer> {
 
 impl Modifiable for GenesisDatabase<OnChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(None, changes)
+        self.data
+            .as_ref()
+            .commit_changes(None, StorageChanges::Changes(changes))
     }
 }
 
 impl Modifiable for GenesisDatabase<OffChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(None, changes)
+        self.data
+            .as_ref()
+            .commit_changes(None, StorageChanges::Changes(changes))
     }
 }
 
 impl Modifiable for GenesisDatabase<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(None, changes)
+        self.data
+            .as_ref()
+            .commit_changes(None, StorageChanges::Changes(changes))
     }
 }
 
@@ -518,7 +523,9 @@ where
 
     // Atomically commit the changes to the database, and to the mutex-protected field.
     let mut guard = database.stage.height.lock();
-    database.data.commit_changes(new_height, updated_changes)?;
+    database
+        .data
+        .commit_changes(new_height, StorageChanges::Changes(updated_changes))?;
 
     // Update the block height
     if let Some(new_height) = new_height {

@@ -152,6 +152,8 @@ jobs:
             args: -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features
           - command: check
             args: -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features --features alloc
+          - command: check
+            args: -p fuel-core --no-default-features
       fail-fast: false
 
     # disallow any job that takes longer than 45 minutes

@@ -43,6 +43,7 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         ReadTransaction,
+        StorageChanges,
         StorageTransaction,
     },
     Error as StorageError,
@@ -353,8 +354,9 @@ where
         )
         .commit()?;
 
-        self.db
-            .commit_changes(&storage_transaction.into_changes())?;
+        self.db.commit_changes(&StorageChanges::Changes(
+            storage_transaction.into_changes(),
+        ))?;
 
         Ok(())
     }
@@ -577,17 +579,29 @@ where
     fn commit_changes(
         &self,
         height: Option<Description::Height>,
-        changes: Changes,
+        mut changes: StorageChanges,
     ) -> StorageResult<()> {
-        let mut storage_transaction =
-            StorageTransaction::transaction(&self.db, ConflictPolicy::Overwrite, changes);
-
+        // When the history need to be process we need to have all the changes in one
+        // transaction to be able to write their reverse changes.
         if let Some(height) = height {
-            self.store_modifications_history(&mut storage_transaction, &height)?;
+            if self.state_rewind_policy != StateRewindPolicy::NoRewind {
+                let all_changes = match changes {
+                    StorageChanges::Changes(changes) => changes,
+                    StorageChanges::ChangesList(list) => {
+                        list.into_iter().flatten().collect()
+                    }
+                };
+                let mut storage_transaction = StorageTransaction::transaction(
+                    &self.db,
+                    ConflictPolicy::Overwrite,
+                    all_changes,
+                );
+                self.store_modifications_history(&mut storage_transaction, &height)?;
+                changes = StorageChanges::Changes(storage_transaction.into_changes());
+            }
         }
 
-        self.db
-            .commit_changes(&storage_transaction.into_changes())?;
+        self.db.commit_changes(&changes)?;
 
         Ok(())
     }
@@ -681,7 +695,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // Set the value at height 2 to be 321.
@@ -691,7 +708,10 @@ mod tests {
             .insert(&key(), &321)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(2u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(2u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // When
@@ -721,7 +741,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // Set the value at height 2 to be 321.
@@ -731,7 +754,10 @@ mod tests {
             .insert(&key(), &321)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(2u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(2u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // When
@@ -760,7 +786,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // When
@@ -787,7 +816,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // When
@@ -815,7 +847,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // When
@@ -825,7 +860,10 @@ mod tests {
             .insert(&key(), &321)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(2u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(2u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // Then
@@ -862,7 +900,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
         let entries = historical_rocks_db
             .db
@@ -901,7 +942,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
         let v2_entries = historical_rocks_db
             .db
@@ -936,7 +980,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // Migrate the changes from V2 to V1.
@@ -959,7 +1006,9 @@ mod tests {
 
         historical_rocks_db
             .db
-            .commit_changes(&migration_transaction.into_changes())
+            .commit_changes(&StorageChanges::Changes(
+                migration_transaction.into_changes(),
+            ))
             .unwrap();
 
         // Check that the history has indeed been written to V1
@@ -1008,7 +1057,10 @@ mod tests {
                 .insert(&key(), &(123 + i as u64))
                 .unwrap();
             historical_rocks_db
-                .commit_changes(Some(i.into()), transaction.into_changes())
+                .commit_changes(
+                    Some(i.into()),
+                    StorageChanges::Changes(transaction.into_changes()),
+                )
                 .unwrap();
         }
         // We can now rollback the last block 1000 times.
@@ -1042,7 +1094,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
         historical_rocks_db.rollback_last_block().unwrap();
 
@@ -1080,7 +1135,10 @@ mod tests {
                 .insert(&key, &123)
                 .unwrap();
             historical_rocks_db
-                .commit_changes(Some(height.into()), transaction.into_changes())
+                .commit_changes(
+                    Some(height.into()),
+                    StorageChanges::Changes(transaction.into_changes()),
+                )
                 .unwrap();
         }
 

@@ -31,6 +31,7 @@ use fuel_core_storage::{
     transactional::{
         Changes,
         ReferenceBytesKey,
+        StorageChanges,
     },
     Result as StorageResult,
 };
@@ -117,6 +118,26 @@ where
 
         collection.into_iter().map(Ok)
     }
+
+    fn _insert_changes(&self, changes: Changes) {
+        for (column, btree) in changes.into_iter() {
+            let mut lock = self.inner[column as usize]
+                .lock()
+                .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))
+                .unwrap();
+
+            for (key, operation) in btree.into_iter() {
+                match operation {
+                    WriteOperation::Insert(value) => {
+                        lock.insert(key, value);
+                    }
+                    WriteOperation::Remove => {
+                        lock.remove(&key);
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<Description> KeyValueInspect for MemoryStore<Description>
@@ -167,24 +188,18 @@ where
     fn commit_changes(
         &self,
         _: Option<Description::Height>,
-        changes: Changes,
+        changes: StorageChanges,
     ) -> StorageResult<()> {
-        for (column, btree) in changes.into_iter() {
-            let mut lock = self.inner[column as usize]
-                .lock()
-                .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?;
-
-            for (key, operation) in btree.into_iter() {
-                match operation {
-                    WriteOperation::Insert(value) => {
-                        lock.insert(key, value);
-                    }
-                    WriteOperation::Remove => {
-                        lock.remove(&key);
-                    }
+        match changes {
+            StorageChanges::ChangesList(changes) => {
+                for changes in changes.into_iter() {
+                    self._insert_changes(changes);
                 }
             }
-        }
+            StorageChanges::Changes(changes) => {
+                self._insert_changes(changes);
+            }
+        };
         Ok(())
     }
 
@@ -237,7 +252,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(None, changes)?;
+            self.commit_changes(None, StorageChanges::Changes(changes))?;
             Ok(len)
         }
 
@@ -245,7 +260,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(None, changes)?;
+            self.commit_changes(None, StorageChanges::Changes(changes))?;
             Ok(())
         }
     }
