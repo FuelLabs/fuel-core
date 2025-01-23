@@ -23,7 +23,10 @@ use fuel_core_types::{
         TransactionBuilder,
     },
     fuel_types::BlockHeight,
-    fuel_vm::{Salt, SecretKey},
+    fuel_vm::{
+        Salt,
+        SecretKey,
+    },
 };
 use futures::StreamExt;
 use rand::{
