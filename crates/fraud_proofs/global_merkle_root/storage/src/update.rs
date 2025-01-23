@@ -367,11 +367,7 @@ where
         &mut self,
         tx: &ChargeableTransaction<UpgradeBody, UpgradeMetadata>,
     ) -> anyhow::Result<()> {
-        // This checks that the consensus parameters are valid.
-        // Do we need this check, or can we assume that because the
-        // transaction has been included into a block then the
-        // metadata is valid?
-        let Ok(metadata) = UpgradeMetadata::compute(tx) else {
+        let Some(metadata) = tx.metadata().clone().map(|metadata| metadata.body) else {
             return Err(anyhow::anyhow!("Invalid upgrade metadata"));
         };
 
