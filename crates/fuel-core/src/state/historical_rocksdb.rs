@@ -119,38 +119,40 @@ where
         })
     }
 
-    fn reverse_history_changes(&self, changes: &Changes) -> StorageResult<Changes> {
+    fn reverse_history_changes(&self, changes: &Vec<Changes>) -> StorageResult<Changes> {
         let mut reverse_changes = Changes::default();
 
-        for (column, column_changes) in changes {
-            let results = self
-                .db
-                .multi_get(*column, column_changes.iter().map(|(k, _)| k))?;
+        for changes in changes {
+            for (column, column_changes) in changes {
+                let results = self
+                    .db
+                    .multi_get(*column, column_changes.iter().map(|(k, _)| k))?;
 
-            let entry = reverse_changes
-                .entry(*column)
-                .or_insert_with(Default::default);
+                let entry = reverse_changes
+                    .entry(*column)
+                    .or_insert_with(Default::default);
 
-            for (was, (key, became)) in results.into_iter().zip(column_changes.iter()) {
-                match (was, became) {
-                    (None, WriteOperation::Remove) => {
-                        // Do nothing since it was not existing, and it was removed.
-                    }
-                    (None, WriteOperation::Insert(_)) => {
-                        entry.insert(key.clone(), WriteOperation::Remove);
-                    }
-                    (Some(old_value), WriteOperation::Remove) => {
-                        entry.insert(
-                            key.clone(),
-                            WriteOperation::Insert(old_value.into()),
-                        );
-                    }
-                    (Some(old_value), WriteOperation::Insert(new_value)) => {
-                        if *old_value != **new_value {
+                for (was, (key, became)) in results.into_iter().zip(column_changes.iter()) {
+                    match (was, became) {
+                        (None, WriteOperation::Remove) => {
+                            // Do nothing since it was not existing, and it was removed.
+                        }
+                        (None, WriteOperation::Insert(_)) => {
+                            entry.insert(key.clone(), WriteOperation::Remove);
+                        }
+                        (Some(old_value), WriteOperation::Remove) => {
                             entry.insert(
                                 key.clone(),
                                 WriteOperation::Insert(old_value.into()),
                             );
+                        }
+                        (Some(old_value), WriteOperation::Insert(new_value)) => {
+                            if *old_value != **new_value {
+                                entry.insert(
+                                    key.clone(),
+                                    WriteOperation::Insert(old_value.into()),
+                                );
+                            }
                         }
                     }
                 }
@@ -190,14 +192,16 @@ where
         Ok(ViewAtHeight::new(rollback_height, latest_view))
     }
 
-    fn store_modifications_history<T>(
+    fn store_modifications_history(
         &self,
-        storage_transaction: &mut StorageTransaction<T>,
+        changes: &mut Vec<Changes>,
         height: &Description::Height,
-    ) -> StorageResult<()>
-    where
-        T: KeyValueInspect<Column = Column<Description>>,
-    {
+    ) -> StorageResult<()> {
+        let mut storage_transaction = StorageTransaction::transaction(
+            &self.db,
+            ConflictPolicy::Overwrite,
+            Default::default(),
+        );
         let modifications_history_migration_in_progress = self.is_migration_in_progress();
 
         if self.state_rewind_policy == StateRewindPolicy::NoRewind {
@@ -206,11 +210,12 @@ where
         let height_u64 = height.as_u64();
 
         let reverse_changes =
-            self.reverse_history_changes(storage_transaction.changes())?;
+            self.reverse_history_changes(changes)?;
 
         cleanup_old_changes(
             &height_u64,
-            storage_transaction,
+            changes,
+            &mut storage_transaction,
             &self.state_rewind_policy,
             modifications_history_migration_in_progress,
         )?;
@@ -219,7 +224,7 @@ where
         // If the migration is in progress, we fallback to taking from
         // `ModificationsHistoryV1` when no old_changes for `ModificationsHistoryV2` are found.
         let old_changes = multiversion_replace(
-            storage_transaction,
+            &mut storage_transaction,
             height_u64,
             &reverse_changes,
             modifications_history_migration_in_progress,
@@ -232,7 +237,7 @@ where
             );
             remove_historical_modifications(
                 &height_u64,
-                storage_transaction,
+                changes,
                 &old_changes,
             )?;
         }
@@ -262,12 +267,7 @@ where
 
         // Combine removed old changes, all modifications for
         // the current height and historical changes.
-        StorageTransaction::transaction(
-            storage_transaction,
-            ConflictPolicy::Overwrite,
-            historical_changes,
-        )
-        .commit()?;
+        changes.push(historical_changes);
         Ok(())
     }
 
@@ -341,21 +341,16 @@ where
         )?
         .ok_or(not_found!(ModificationsHistoryV1<Description>))?;
 
+        let mut changes = vec![];
         remove_historical_modifications(
             &height_to_rollback,
-            &mut storage_transaction,
+            &mut changes,
             &last_changes,
         )?;
+        changes.push(last_changes);
 
-        StorageTransaction::transaction(
-            &mut storage_transaction,
-            ConflictPolicy::Overwrite,
-            last_changes,
-        )
-        .commit()?;
-
-        self.db.commit_changes(&StorageChanges::Changes(
-            storage_transaction.into_changes(),
+        self.db.commit_changes(&StorageChanges::ChangesList(
+            changes
         ))?;
 
         Ok(())
@@ -439,6 +434,7 @@ where
 
 fn cleanup_old_changes<Description, T>(
     height: &u64,
+    changes: &mut Vec<Changes>,
     storage_transaction: &mut StorageTransaction<T>,
     state_rewind_policy: &StateRewindPolicy,
     modifications_history_migration_in_progress: bool,
@@ -466,7 +462,7 @@ where
             if let Some(old_changes) = old_changes {
                 remove_historical_modifications(
                     &old_height,
-                    storage_transaction,
+                    changes,
                     &old_changes,
                 )?;
             }
@@ -475,15 +471,11 @@ where
     Ok(())
 }
 
-fn remove_historical_modifications<Description, T>(
+fn remove_historical_modifications(
     old_height: &u64,
-    storage_transaction: &mut StorageTransaction<T>,
+    list_changes: &mut Vec<Changes>,
     reverse_changes: &Changes,
-) -> StorageResult<()>
-where
-    Description: DatabaseDescription,
-    T: KeyValueInspect<Column = Column<Description>>,
-{
+) -> StorageResult<()> {
     let changes = reverse_changes
         .iter()
         .map(|(column, column_changes)| {
@@ -500,12 +492,7 @@ where
         })
         .collect();
 
-    StorageTransaction::transaction(
-        storage_transaction,
-        ConflictPolicy::Overwrite,
-        changes,
-    )
-    .commit()?;
+    list_changes.push(changes);
 
     Ok(())
 }
@@ -584,19 +571,12 @@ where
         // When the history need to be process we need to have all the changes in one
         // transaction to be able to write their reverse changes.
         if let Some(height) = height {
-            let all_changes = match changes {
-                StorageChanges::Changes(changes) => changes,
-                StorageChanges::ChangesList(list) => {
-                    list.into_iter().flat_map(|changes| changes).collect()
-                }
+            let mut new_changes = match changes {
+                StorageChanges::Changes(changes) => vec![changes],
+                StorageChanges::ChangesList(list) => list,
             };
-            let mut storage_transaction = StorageTransaction::transaction(
-                &self.db,
-                ConflictPolicy::Overwrite,
-                all_changes,
-            );
-            self.store_modifications_history(&mut storage_transaction, &height)?;
-            changes = StorageChanges::Changes(storage_transaction.into_changes());
+            self.store_modifications_history(&mut new_changes, &height)?;
+            changes = StorageChanges::ChangesList(new_changes);
         }
 
         self.db.commit_changes(&changes)?;
