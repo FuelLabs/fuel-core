@@ -10,6 +10,7 @@ use crate::{
             TxPool,
         },
         query_costs,
+        Config as GraphQLConfig,
         IntoApiResult,
     },
     graphql_api::{
@@ -336,12 +337,19 @@ impl TxMutation {
     }
 
     /// Get execution trace for an already-executed transaction.
-    #[graphql(complexity = "query_costs().dry_run + child_complexity")]
+    #[graphql(complexity = "query_costs().storage_read_replay + child_complexity")]
     async fn storage_read_replay(
         &self,
         ctx: &Context<'_>,
         height: U32,
     ) -> async_graphql::Result<Vec<StorageReadReplayEvent>> {
+        let config = ctx.data_unchecked::<GraphQLConfig>().clone();
+        if !config.debug {
+            return Err(
+                anyhow::anyhow!("`debug` must be enabled to use this endpoint").into(),
+            );
+        }
+
         let block_height = height.into();
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         Ok(block_producer

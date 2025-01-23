@@ -1,9 +1,9 @@
+use crate::config::Config;
 #[cfg(feature = "wasm-executor")]
 use crate::{
     error::UpgradableError,
     storage_access_recorder::StorageAccessRecorder,
 };
-use crate::config::Config;
 
 use fuel_core_executor::{
     executor::{
@@ -406,9 +406,7 @@ where
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
             match &self.execution_strategy {
-                ExecutionStrategy::Native => {
-                    self.native_storage_read_replay(block)
-                }
+                ExecutionStrategy::Native => self.native_storage_read_replay(block),
                 ExecutionStrategy::Wasm { module } => {
                     if let Some(module) = self.get_module(block_version).ok() {
                         self.wasm_storage_read_replay(&module, block)
@@ -453,8 +451,6 @@ where
         Ok(core::mem::take(&mut g))
     }
 
-
-
     #[cfg(feature = "wasm-executor")]
     fn wasm_storage_read_replay(
         &self,
@@ -466,7 +462,9 @@ where
 
         let instance = crate::instance::Instance::new(&self.engine).no_source()?;
 
-        let (instance, storage_rec) = if let Some(previous_block_height) = previous_block_height {
+        let (instance, storage_rec) = if let Some(previous_block_height) =
+            previous_block_height
+        {
             let storage = self.storage_view_provider.view_at(&previous_block_height)?;
             let storage = StorageAccessRecorder::new(storage);
             let storage_rec = storage.record.clone();
@@ -494,7 +492,7 @@ where
             }
             ReturnType::Validation(result) => {
                 let _ = result?;
-            },
+            }
         }
         let mut g = storage_rec.lock();
         Ok(core::mem::take(&mut g))
