@@ -12,8 +12,18 @@ use alloc::{
     vec::Vec,
 };
 use fuel_core_storage::{
+    blueprint::BlueprintInspect,
+    iter::{
+        IterableStore,
+        IteratorOverTable,
+    },
     kv_store::KeyValueInspect,
-    transactional::StorageTransaction,
+    structured_storage::TableWithBlueprint,
+    transactional::{
+        ReadTransaction,
+        StorageTransaction,
+    },
+    Mappable,
     StorageAsMut,
 };
 use fuel_core_types::{
@@ -86,9 +96,70 @@ pub trait UpdateMerkleizedTables {
     ) -> anyhow::Result<()>;
 }
 
+pub trait GetMerkleizedTablesParameters:
+    KeyValueInspect<Column = Column> + Sized
+{
+    fn get_latest_version<M>(&self) -> anyhow::Result<Option<M::OwnedKey>>
+    where
+        M: Mappable + TableWithBlueprint<Column = Column>,
+        M::Blueprint: BlueprintInspect<M, Self>,
+        M::OwnedKey: Ord;
+
+    fn get_latest_consensus_parameters_version(
+        &self,
+    ) -> anyhow::Result<ConsensusParametersVersion> {
+        self.get_latest_version::<ConsensusParametersVersions>()
+            .map(|version| version.unwrap_or_default())
+    }
+
+    fn get_latest_state_transition_bytecode_version(
+        &self,
+    ) -> anyhow::Result<StateTransitionBytecodeVersion> {
+        self.get_latest_version::<StateTransitionBytecodeVersions>()
+            .map(|version| version.unwrap_or_default())
+    }
+}
+
+impl<Storage> GetMerkleizedTablesParameters for Storage
+where
+    Storage: KeyValueInspect<Column = Column>
+        + IterableStore<Column = Column>
+        + ReadTransaction,
+{
+    fn get_latest_version<M>(&self) -> anyhow::Result<Option<M::OwnedKey>>
+    where
+        M: Mappable + TableWithBlueprint<Column = Column>,
+        M::Blueprint: BlueprintInspect<M, Storage>,
+        M::OwnedKey: Ord,
+    {
+        // Do not make any assumption the order of versions in the iterator.
+        // This can be optimized later on by taking into account how versions are sorted.
+        let keys_iterator =
+            <Storage as IteratorOverTable>::iter_all_keys::<M>(self, None);
+
+        let mut latest_key: Option<M::OwnedKey> = None;
+        for key in keys_iterator {
+            match key {
+                Ok(key) => {
+                    if let Some(previous_key) = latest_key {
+                        latest_key = Some(previous_key.max(key));
+                    } else {
+                        latest_key = Some(key);
+                    }
+                }
+                Err(err) => {
+                    return Err(err.into());
+                }
+            }
+        }
+
+        Ok(latest_key)
+    }
+}
+
 impl<Storage> UpdateMerkleizedTables for &mut StorageTransaction<Storage>
 where
-    Storage: KeyValueInspect<Column = Column>,
+    Storage: KeyValueInspect<Column = Column> + IterableStore<Column = Column>,
 {
     fn update_merklized_tables(
         self,
@@ -625,6 +696,8 @@ mod tests {
             UpdateMerklizedTablesTransaction {
                 chain_id: ChainId::default(),
                 storage: self,
+                latest_consensus_parameters_version: 0,
+                latest_state_transition_bytecode_version: 0,
             }
         }
     }
