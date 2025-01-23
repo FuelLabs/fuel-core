@@ -584,19 +584,21 @@ where
         // When the history need to be process we need to have all the changes in one
         // transaction to be able to write their reverse changes.
         if let Some(height) = height {
-            let all_changes = match changes {
-                StorageChanges::Changes(changes) => changes,
-                StorageChanges::ChangesList(list) => {
-                    list.into_iter().flat_map(|changes| changes).collect()
-                }
-            };
-            let mut storage_transaction = StorageTransaction::transaction(
-                &self.db,
-                ConflictPolicy::Overwrite,
-                all_changes,
-            );
-            self.store_modifications_history(&mut storage_transaction, &height)?;
-            changes = StorageChanges::Changes(storage_transaction.into_changes());
+            if self.state_rewind_policy != StateRewindPolicy::NoRewind {
+                let all_changes = match changes {
+                    StorageChanges::Changes(changes) => changes,
+                    StorageChanges::ChangesList(list) => {
+                        list.into_iter().flatten().collect()
+                    }
+                };
+                let mut storage_transaction = StorageTransaction::transaction(
+                    &self.db,
+                    ConflictPolicy::Overwrite,
+                    all_changes,
+                );
+                self.store_modifications_history(&mut storage_transaction, &height)?;
+                changes = StorageChanges::Changes(storage_transaction.into_changes());
+            }
         }
 
         self.db.commit_changes(&changes)?;
