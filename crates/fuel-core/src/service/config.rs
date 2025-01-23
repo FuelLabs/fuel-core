@@ -121,7 +121,6 @@ impl Config {
 
     #[cfg(feature = "test-helpers")]
     pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
-        use crate::state::rocks_db::DatabaseConfig;
         let block_importer = fuel_core_importer::Config::new(false);
         let latest_block = snapshot_reader.last_block_config();
         // In tests, we always want to use the native executor as a default configuration.
@@ -135,7 +134,7 @@ impl Config {
 
         let combined_db_config = CombinedDatabaseConfig {
             #[cfg(feature = "rocksdb")]
-            database_config: DatabaseConfig::config_for_tests(),
+            database_config: crate::state::rocks_db::DatabaseConfig::config_for_tests(),
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,
