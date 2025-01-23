@@ -1,4 +1,5 @@
 use crate::{
+    database::database_description::IndexationKind,
     fuel_core_graphql_api::{
         api_service::ConsensusProvider,
         query_costs,
@@ -111,7 +112,9 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
         let query = ctx.read_view()?;
-        if !query.balances_indexation_enabled && (before.is_some() || after.is_some()) {
+        if !query.indexation_flags.contains(&IndexationKind::Balances)
+            && (before.is_some() || after.is_some())
+        {
             return Err(anyhow!(
                 "Can not use pagination when balances indexation is not available"
             )
