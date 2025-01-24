@@ -71,11 +71,7 @@ pub trait ImporterDatabase: Send + Sync {
     fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
 
     /// Commit changes
-    fn commit_changes(
-        &self,
-        height: BlockHeight,
-        changes: StorageChanges,
-    ) -> StorageResult<()>;
+    fn commit_changes(&mut self, changes: StorageChanges) -> StorageResult<()>;
 }
 
 /// The port of the storage transaction required by the importer.

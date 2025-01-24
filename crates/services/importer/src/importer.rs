@@ -303,10 +303,8 @@ where
             changes_clone
         };
 
-        database.commit_changes(
-            actual_next_height,
-            StorageChanges::ChangesList(vec![block_changes, changes]),
-        )?;
+        database
+            .commit_changes(StorageChanges::ChangesList(vec![block_changes, changes]))?;
 
         if self.metrics {
             Self::update_metrics(&result, &actual_next_height);

@@ -1,5 +1,8 @@
 use crate::{
-    database::Database,
+    database::{
+        commit_changes_with_height_update,
+        Database,
+    },
     service::adapters::{
         BlockImporterAdapter,
         ExecutorAdapter,
@@ -55,6 +58,7 @@ use fuel_core_types::{
         UncommittedValidationResult,
     },
 };
+use itertools::Itertools;
 use std::sync::Arc;
 
 impl BlockImporterAdapter {
@@ -108,12 +112,11 @@ impl ImporterDatabase for Database {
             .map(|cow| *cow.root()))
     }
 
-    fn commit_changes(
-        &self,
-        height: BlockHeight,
-        changes: StorageChanges,
-    ) -> StorageResult<()> {
-        self.data.commit_changes(Some(height), changes)
+    fn commit_changes(&mut self, changes: StorageChanges) -> StorageResult<()> {
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
+                .try_collect()
+        })
     }
 }
 
