@@ -3175,10 +3175,14 @@ mod tests {
         };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
-            column::Column, iter::{
+            column::Column,
+            iter::{
                 changes_iterator::ChangesIterator,
                 IteratorOverTable,
-            }, tables::FuelBlocks, transactional::StorageChanges, StorageAsMut
+            },
+            tables::FuelBlocks,
+            transactional::StorageChanges,
+            StorageAsMut,
         };
         use fuel_core_types::{
             entities::RelayedTransaction,
