@@ -409,7 +409,7 @@ where
             match &self.execution_strategy {
                 ExecutionStrategy::Native => self.native_storage_read_replay(block),
                 ExecutionStrategy::Wasm { module } => {
-                    if let Some(module) = self.get_module(block_version).ok() {
+                    if let Ok(module) = self.get_module(block_version) {
                         self.wasm_storage_read_replay(&module, block)
                     } else {
                         self.wasm_storage_read_replay(module, block)
@@ -482,7 +482,7 @@ where
             .add_relayer(relayer)?
             .add_validation_input_data(block, options)?;
 
-        let output = instance.run(&module)?;
+        let output = instance.run(module)?;
 
         match output {
             ReturnType::ExecutionV0(result) => {
