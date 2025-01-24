@@ -1,6 +1,7 @@
+#[cfg(feature = "wasm-executor")]
+use crate::error::UpgradableError;
 use crate::{
     config::Config,
-    error::UpgradableError,
     storage_access_recorder::StorageAccessRecorder,
 };
 

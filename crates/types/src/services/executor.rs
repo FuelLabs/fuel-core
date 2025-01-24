@@ -274,7 +274,7 @@ impl fmt::Debug for StorageReadReplayEvent {
         f.debug_struct("StorageReadReplayEvent")
             .field("column", &self.column)
             .field("key", &hex::encode(&self.key))
-            .field("value", &self.value.as_ref().map(|v| hex::encode(v)))
+            .field("value", &self.value.as_ref().map(hex::encode))
             .finish()
     }
 }
