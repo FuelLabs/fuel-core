@@ -647,7 +647,9 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
         ))
     }
 
-    db_after_execution.store_new_block(chain_id, sealed_block)?;
+    if !db_after_execution.store_new_block(chain_id, sealed_block)? {
+        return Err(Error::NotUnique(actual_next_height))
+    }
 
     Ok(db_after_execution.into_changes())
 }
