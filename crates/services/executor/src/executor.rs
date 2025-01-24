@@ -712,6 +712,9 @@ where
     where
         D: KeyValueInspect<Column = Column>,
     {
+        // TODO: Refactor this function after https://github.com/FuelLabs/fuel-core/issues/2062
+        // has been implemented
+
         let mut data = ExecutionData::new();
 
         let partial_header = PartialBlockHeader::from(block.header());
@@ -722,6 +725,7 @@ where
         let (gas_price, coinbase_contract_id) =
             Self::get_coinbase_info_from_mint_tx(transactions)?;
 
+        // Fhe following code has been inlined below:
         // self.process_l1_txs(
         //     &mut partial_block,
         //     coinbase_contract_id,
@@ -740,6 +744,7 @@ where
             &mut memory,
         )?;
 
+        // Fhe following code has been inlined below:
         // self.process_relayed_txs(
         //     relayed_txs,
         //     block,
