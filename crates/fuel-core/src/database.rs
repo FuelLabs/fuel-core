@@ -422,7 +422,9 @@ impl Modifiable for Database<Relayer> {
 #[cfg(not(feature = "relayer"))]
 impl Modifiable for Database<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        commit_changes_with_height_update(self, changes, |_| Ok(vec![]))
+        commit_changes_with_height_update(self, StorageChanges::Changes(changes), |_| {
+            Ok(vec![])
+        })
     }
 }
 
