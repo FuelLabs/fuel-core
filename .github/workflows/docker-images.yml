@@ -2,6 +2,8 @@ name: Docker Images
 
 on:
   workflow_dispatch:
+  release:
+    types: [ published ]
 
 env:
   GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
