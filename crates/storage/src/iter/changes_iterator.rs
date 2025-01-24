@@ -103,12 +103,10 @@ where
                 changes_list
                     .iter()
                     .filter_map(move |changes| {
-                        if let Some(tree) = changes.get(&column) {
-                            Some(
-                                crate::iter::iterator(
+                        changes.get(&column).map(|tree| crate::iter::iterator(
                                     tree,
-                                    prefix.as_ref().map(|p| p.as_slice()),
-                                    start.as_ref().map(|p| p.as_slice()),
+                                    prefix.as_deref(),
+                                    start.as_deref(),
                                     direction,
                                 )
                                 .filter_map(|(key, value)| match value {
@@ -117,11 +115,7 @@ where
                                     }
                                     WriteOperation::Remove => None,
                                 })
-                                .map(Ok),
-                            )
-                        } else {
-                            None
-                        }
+                                .map(Ok))
                     })
                     .flatten()
                     .into_boxed()
@@ -163,23 +157,17 @@ where
                 changes_list
                     .iter()
                     .filter_map(move |changes| {
-                        if let Some(tree) = changes.get(&column) {
-                            Some(
-                                crate::iter::iterator(
+                        changes.get(&column).map(|tree| crate::iter::iterator(
                                     tree,
-                                    prefix.as_ref().map(|p| p.as_slice()),
-                                    start.as_ref().map(|p| p.as_slice()),
+                                    prefix.as_deref(),
+                                    start.as_deref(),
                                     direction,
                                 )
                                 .filter_map(|(key, value)| match value {
                                     WriteOperation::Insert(_) => Some(key.clone().into()),
                                     WriteOperation::Remove => None,
                                 })
-                                .map(Ok),
-                            )
-                        } else {
-                            None
-                        }
+                                .map(Ok))
                     })
                     .flatten()
                     .into_boxed()
