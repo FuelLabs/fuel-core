@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - [2491](https://github.com/FuelLabs/fuel-core/pull/2491): Storage read replays of historical blocks for execution tracing. Only available behind `--debug` flag.
 
+### Changed
+- [2630](https://github.com/FuelLabs/fuel-core/pull/2630): Removed some noisy `tracing::info!` logs
+
+## [Version 0.41.4]
+
+### Fixed
+- [2628](https://github.com/FuelLabs/fuel-core/pull/2628): Downgrade STF.
+
+## [Version 0.41.3]
+
+### Fixed
+- [2626](https://github.com/FuelLabs/fuel-core/pull/2626): Avoid needs of RocksDB features in tests modules.
+
 ## [Version 0.41.2]
 
 ### Fixed
