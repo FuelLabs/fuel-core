@@ -707,7 +707,7 @@ where
         mut self,
         block: &Block,
         mut block_storage_tx: StorageTransaction<D>,
-        tx_separator_callback: &mut dyn FnMut(usize) -> (),
+        tx_separator_callback: &mut dyn FnMut(usize),
     ) -> ExecutorResult<ExecutionData>
     where
         D: KeyValueInspect<Column = Column>,
