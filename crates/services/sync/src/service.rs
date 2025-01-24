@@ -27,6 +27,7 @@ use fuel_core_services::{
     ServiceRunner,
     SharedMutex,
     StateWatcher,
+    TaskNextAction,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;
@@ -118,9 +119,11 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    #[tracing::instrument(level = "debug", skip_all, err, ret)]
-    async fn run(&mut self, _: &mut StateWatcher) -> anyhow::Result<bool> {
-        Ok(self.sync_heights.sync().await.is_some())
+    async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
+        match self.sync_heights.sync().await {
+            None => TaskNextAction::Stop,
+            Some(_) => TaskNextAction::Continue,
+        }
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -175,9 +178,8 @@ where
     E: BlockImporterPort + Send + Sync + 'static,
     C: ConsensusPort + Send + Sync + 'static,
 {
-    #[tracing::instrument(level = "debug", skip_all, err, ret)]
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        self.0.import(watcher).await
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
+        self.0.import(watcher).await.into()
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {

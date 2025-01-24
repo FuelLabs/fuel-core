@@ -47,6 +47,9 @@ use super::{
     Collisions,
 };
 
+#[cfg(test)]
+use fuel_core_types::services::txpool::ArcPoolTx;
+
 pub struct BasicCollisionManager<StorageIndex> {
     /// Message -> Transaction that currently use the Message
     messages_spenders: HashMap<Nonce, StorageIndex>,
@@ -74,6 +77,81 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
             && self.coins_spenders.is_empty()
             && self.contracts_creators.is_empty()
             && self.blobs_users.is_empty()
+    }
+
+    #[cfg(test)]
+    /// Expected transactions are the transactions that must be populate all elements present in the collision manager.
+    /// This function will check if all elements present in the collision manager are present in the expected transactions and vice versa.
+    pub(crate) fn assert_integrity(&self, expected_txs: &[ArcPoolTx]) {
+        use std::ops::Deref;
+
+        let mut message_spenders = HashMap::new();
+        let mut coins_spenders = BTreeMap::new();
+        let mut contracts_creators = HashMap::new();
+        let mut blobs_users = HashMap::new();
+        for tx in expected_txs {
+            if let PoolTransaction::Blob(checked_tx, _) = tx.deref() {
+                let blob_id = checked_tx.transaction().blob_id();
+                blobs_users.insert(*blob_id, tx.id());
+            }
+            for input in tx.inputs() {
+                match input {
+                    Input::CoinSigned(CoinSigned { utxo_id, .. })
+                    | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                        coins_spenders.insert(*utxo_id, tx.id());
+                    }
+                    Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
+                    | Input::MessageCoinPredicate(MessageCoinPredicate {
+                        nonce, ..
+                    })
+                    | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
+                    | Input::MessageDataPredicate(MessageDataPredicate {
+                        nonce, ..
+                    }) => {
+                        message_spenders.insert(*nonce, tx.id());
+                    }
+                    Input::Contract { .. } => {}
+                }
+            }
+            for output in tx.outputs() {
+                if let Output::ContractCreated { contract_id, .. } = output {
+                    contracts_creators.insert(*contract_id, tx.id());
+                }
+            }
+        }
+        for nonce in self.messages_spenders.keys() {
+            message_spenders.remove(nonce).unwrap_or_else(|| panic!(
+                "A message ({}) spender is present on the collision manager that shouldn't be there.",
+                nonce
+            ));
+        }
+        assert!(
+            message_spenders.is_empty(),
+            "Some message spenders are missing from the collision manager: {:?}",
+            message_spenders
+        );
+        for utxo_id in self.coins_spenders.keys() {
+            coins_spenders.remove(utxo_id).unwrap_or_else(|| panic!(
+                "A coin ({}) spender is present on the collision manager that shouldn't be there.",
+                utxo_id
+            ));
+        }
+        assert!(
+            coins_spenders.is_empty(),
+            "Some coin senders are missing from the collision manager: {:?}",
+            coins_spenders
+        );
+        for contract_id in self.contracts_creators.keys() {
+            contracts_creators.remove(contract_id).unwrap_or_else(|| panic!(
+                "A contract ({}) creator is present on the collision manager that shouldn't be there.",
+                contract_id
+            ));
+        }
+        assert!(
+            contracts_creators.is_empty(),
+            "Some contract creators are missing from the collision manager: {:?}",
+            contracts_creators
+        );
     }
 }
 

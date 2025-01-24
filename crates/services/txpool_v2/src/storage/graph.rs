@@ -368,6 +368,94 @@ impl GraphStorage {
     fn has_dependent(&self, index: NodeIndex) -> bool {
         self.get_direct_dependents(index).next().is_some()
     }
+
+    #[cfg(test)]
+    pub(crate) fn assert_integrity(
+        &self,
+        expected_txs: &[ArcPoolTx],
+    ) -> Vec<(NodeIndex, bool)> {
+        use std::ops::Deref;
+
+        let mut txs_map: HashMap<TxId, ArcPoolTx> = expected_txs
+            .iter()
+            .map(|tx| (tx.id(), tx.clone()))
+            .collect();
+        let mut tx_id_node_id = HashMap::new();
+        let mut txs_info = Vec::new();
+
+        for node_id in self.graph.node_indices() {
+            let node = self
+                .graph
+                .node_weight(node_id)
+                .expect("A node not expected exists in storage");
+            let has_dependencies = Storage::has_dependencies(self, &node_id);
+            let tx_id = node.transaction.id();
+            let tx = txs_map
+                .remove(&tx_id)
+                .expect("A transaction not expected exists in storage");
+            assert_eq!(tx.deref(), node.transaction.deref());
+            tx_id_node_id.insert(tx_id, node_id);
+            txs_info.push((node_id, has_dependencies));
+        }
+        assert!(
+            txs_map.is_empty(),
+            "Some transactions are missing in storage {:?}",
+            txs_map.keys()
+        );
+
+        let mut coins_creators = HashMap::new();
+        let mut contracts_creators = HashMap::new();
+        for expected_tx in expected_txs {
+            for (i, output) in expected_tx.outputs().iter().enumerate() {
+                match output {
+                    Output::Coin { .. } => {
+                        let utxo_id =
+                            UtxoId::new(expected_tx.id(), i.try_into().unwrap());
+                        coins_creators.insert(utxo_id, expected_tx.id());
+                    }
+                    Output::ContractCreated { contract_id, .. } => {
+                        contracts_creators.insert(*contract_id, expected_tx.id());
+                    }
+                    Output::Contract(_)
+                    | Output::Change { .. }
+                    | Output::Variable { .. } => {}
+                }
+            }
+        }
+        for (utxo_id, node_id) in &self.coins_creators {
+            let tx_id = coins_creators.remove(utxo_id).unwrap_or_else(|| panic!("A coin creator (coin: {}) is present in the storage that shouldn't be there", utxo_id));
+            let expected_node_id = tx_id_node_id.get(&tx_id).unwrap_or_else(|| {
+                panic!("A node id is missing for a transaction (tx_id: {})", tx_id)
+            });
+            assert_eq!(
+                expected_node_id, node_id,
+                "The node id is different from the expected one"
+            );
+        }
+        assert!(
+            coins_creators.is_empty(),
+            "Some contract creators are missing in storage: {:?}",
+            coins_creators
+        );
+
+        for (contract_id, node_id) in &self.contracts_creators {
+            let tx_id = contracts_creators.remove(contract_id).unwrap_or_else(|| panic!("A contract creator (contract: {}) is present in the storage that shouldn't be there", contract_id));
+            let expected_node_id = tx_id_node_id.get(&tx_id).unwrap_or_else(|| {
+                panic!("A node id is missing for a transaction (tx_id: {})", tx_id)
+            });
+            assert_eq!(
+                expected_node_id, node_id,
+                "The node id is different from the expected one"
+            );
+        }
+        assert!(
+            contracts_creators.is_empty(),
+            "Some contract creators are missing in storage: {:?}",
+            contracts_creators
+        );
+
+        txs_info
+    }
 }
 
 impl Storage for GraphStorage {
@@ -618,10 +706,6 @@ impl Storage for GraphStorage {
         self.graph.remove_node(index).inspect(|storage_entry| {
             self.clear_cache(storage_entry);
         })
-    }
-
-    fn tx_count(&self) -> usize {
-        self.graph.node_count()
     }
 }
 

@@ -1,8 +1,9 @@
 ---
 source: crates/client/src/client/schema/chain.rs
 expression: operation.query
+snapshot_kind: text
 ---
-query {
+query ChainQuery {
   chain {
     daHeight
     name
@@ -165,6 +166,7 @@ query {
         wqmm
         xor
         xori
+        ecop
         alocDependentCost {
           __typename
           ... on LightOperation {
@@ -419,6 +421,17 @@ query {
           }
         }
         swwq {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        epar {
           __typename
           ... on LightOperation {
             base

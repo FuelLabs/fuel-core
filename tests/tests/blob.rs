@@ -183,7 +183,7 @@ async fn blob__cannot_post_already_existing_blob() {
 }
 
 #[tokio::test]
-async fn blob__accessing_nonexitent_blob_panics_vm() {
+async fn blob__accessing_nonexistent_blob_panics_vm() {
     // Given
     let ctx = TestContext::new().await;
     let blob_id = BlobId::new([0; 32]); // Nonexistent

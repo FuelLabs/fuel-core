@@ -29,12 +29,13 @@ fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
 fuel-core-compression = { workspace = true }
 fuel-core-metrics = { workspace = true }
-fuel-core-poa = { workspace = true }
+fuel-core-shared-sequencer = { workspace = true, optional = true }
 fuel-core-types = { workspace = true, features = ["std"] }
 hex = { workspace = true }
 humantime = "2.1"
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
+rlimit = "0.10.2"
 serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
@@ -44,7 +45,7 @@ tracing-subscriber = { workspace = true, features = [
   "env-filter",
   "json",
 ] }
-url = { version = "2.2", optional = true }
+url = { workspace = true, optional = true }
 
 [dev-dependencies]
 fuel-core = { workspace = true, features = ["test-helpers"] }
@@ -60,9 +61,13 @@ test-case = { workspace = true }
 
 [features]
 default = ["env", "relayer", "rocksdb"]
-aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-poa/aws-kms"]
+aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-types/aws-kms"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format"]
+shared-sequencer = [
+  "dep:fuel-core-shared-sequencer",
+  "fuel-core/shared-sequencer",
+]
 relayer = ["fuel-core/relayer", "dep:url"]
 parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb"]
@@ -73,6 +78,8 @@ production = [
   "relayer",
   "rocksdb-production",
   "p2p",
+  "shared-sequencer",
   "parquet",
   "aws-kms",
 ]
+fault-proving = ["fuel-core-compression/fault-proving"]

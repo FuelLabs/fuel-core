@@ -23,6 +23,7 @@ use fuel_core_types::{
     },
     services::executor::TransactionExecutionResult,
 };
+use futures::StreamExt;
 use libtest_mimic::Failed;
 use std::{
     path::Path,
@@ -137,7 +138,7 @@ pub async fn run_contract_large_state(ctx: &TestContext) -> Result<(), Failed> {
     if result?.is_none() {
         let deployment_request = ctx.bob.deploy_contract(contract_config, salt);
 
-        timeout(Duration::from_secs(20), deployment_request).await??;
+        timeout(Duration::from_secs(90), deployment_request).await??;
     }
 
     _dry_runs(ctx, &[dry_run], 100, DryRunResult::MayFail).await
@@ -199,10 +200,12 @@ async fn _dry_runs(
         });
     }
 
-    // All queries should be resolved for 60 seconds.
-    let queries =
-        tokio::time::timeout(Duration::from_secs(60), futures::future::join_all(queries))
-            .await?;
+    let stream = futures::stream::iter(queries.into_iter())
+        .buffered(10)
+        .collect::<Vec<_>>();
+
+    // All queries should be resolved for 90 seconds.
+    let queries = tokio::time::timeout(Duration::from_secs(90), stream).await?;
 
     let chain_info = ctx.alice.client.chain_info().await?;
     for query in queries {

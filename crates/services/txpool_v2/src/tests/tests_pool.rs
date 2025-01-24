@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use crate::{
     config::{
         Config,
@@ -74,10 +72,12 @@ fn insert_one_tx_succeeds() {
     let tx = universe.build_script_transaction(None, None, 0);
 
     // When
-    let result = universe.verify_and_insert(tx);
+    let result = universe.verify_and_insert(tx.clone());
 
     // Then
     assert!(result.is_ok());
+    let tx = result.unwrap().0;
+    universe.assert_pool_integrity(&[tx]);
 }
 
 #[test]
@@ -98,6 +98,7 @@ fn insert__tx_with_blacklisted_utxo_id() {
     assert!(
         matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedUTXO(id)) if id == utxo_id)
     );
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -118,6 +119,7 @@ fn insert__tx_with_blacklisted_owner() {
     assert!(
         matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedOwner(id)) if id == owner_addr)
     );
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -149,6 +151,7 @@ fn insert__tx_with_blacklisted_contract() {
     assert!(
         matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedContract(id)) if id == contract_id)
     );
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -169,6 +172,7 @@ fn insert__tx_with_blacklisted_message() {
     assert!(
         matches!(err, Error::Blacklisted(BlacklistedError::BlacklistedMessage(id)) if id == nonce)
     );
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -190,6 +194,7 @@ fn insert__tx2_succeeds_after_dependent_tx1() {
     // Then
     assert!(result1.is_ok());
     assert!(result2.is_ok());
+    universe.assert_pool_integrity(&[result1.unwrap().0, result2.unwrap().0]);
 }
 
 #[test]
@@ -227,7 +232,7 @@ fn insert__tx2_collided_on_contract_id() {
     .add_input(gas_coin)
     .add_output(create_contract_output(contract_id))
     .finalize_as_transaction();
-    universe.verify_and_insert(tx).unwrap();
+    let tx = universe.verify_and_insert(tx).unwrap().0;
 
     // When
     let result2 = universe.verify_and_insert(tx_faulty);
@@ -237,6 +242,7 @@ fn insert__tx2_collided_on_contract_id() {
     assert!(
         matches!(err, Error::Collided(CollisionReason::ContractCreation(id)) if id == contract_id)
     );
+    universe.assert_pool_integrity(&[tx]);
 }
 
 #[test]
@@ -263,7 +269,7 @@ fn insert__tx_with_dependency_on_invalid_utxo_type() {
         universe.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, Some(utxo_id));
     let tx_faulty =
         universe.build_script_transaction(Some(vec![random_predicate]), None, 0);
-    universe.verify_and_insert(tx).unwrap();
+    let tx = universe.verify_and_insert(tx).unwrap().0;
 
     // When
     let result2 = universe.verify_and_insert(tx_faulty);
@@ -274,6 +280,7 @@ fn insert__tx_with_dependency_on_invalid_utxo_type() {
     assert!(
         matches!(err, Error::InputValidation(InputValidationError::UtxoNotFound(id)) if id == utxo_id)
     );
+    universe.assert_pool_integrity(&[tx]);
 }
 
 #[test]
@@ -286,7 +293,7 @@ fn insert__already_known_tx_returns_error() {
 
     // Given
     let tx = universe.build_script_transaction(None, None, 0);
-    universe.verify_and_insert(tx.clone()).unwrap();
+    let pool_tx = universe.verify_and_insert(tx.clone()).unwrap().0;
 
     // When
     let result2 = universe.verify_and_insert(tx.clone());
@@ -296,6 +303,7 @@ fn insert__already_known_tx_returns_error() {
     assert!(
         matches!(err, Error::InputValidation(InputValidationError::DuplicateTxId(id)) if id == tx.id(&ChainId::default()))
     );
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -316,6 +324,7 @@ fn insert__unknown_utxo_returns_error() {
     assert!(
         matches!(err, Error::InputValidation(InputValidationError::UtxoNotFound(id)) if id == utxo_id)
     );
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -335,7 +344,8 @@ fn insert__higher_priced_tx_removes_lower_priced_tx() {
     let result = universe.verify_and_insert(tx2).unwrap();
 
     // Then
-    assert_eq!(result[0].id(), tx_id);
+    assert_eq!(result.1[0].id(), tx_id);
+    universe.assert_pool_integrity(&[result.0]);
 }
 
 #[test]
@@ -351,8 +361,8 @@ fn insert__colliding_dependent_and_underpriced_returns_error() {
     // Given
     let tx2 = universe.build_script_transaction(Some(vec![input.clone()]), None, 20);
     let tx3 = universe.build_script_transaction(Some(vec![input]), None, 10);
-    universe.verify_and_insert(tx1).unwrap();
-    universe.verify_and_insert(tx2).unwrap();
+    let tx1 = universe.verify_and_insert(tx1).unwrap().0;
+    let tx2 = universe.verify_and_insert(tx2).unwrap().0;
 
     // When
     let result3 = universe.verify_and_insert(tx3);
@@ -360,6 +370,7 @@ fn insert__colliding_dependent_and_underpriced_returns_error() {
     // Then
     let err = result3.unwrap_err();
     assert!(matches!(err, Error::Collided(CollisionReason::Utxo(id)) if id == utxo_id));
+    universe.assert_pool_integrity(&[tx1, tx2]);
 }
 
 #[test]
@@ -402,6 +413,7 @@ fn insert_dependent_contract_creation() {
     // Then
     assert!(result1.is_ok());
     assert!(result2.is_ok());
+    universe.assert_pool_integrity(&[result1.unwrap().0, result2.unwrap().0]);
 }
 
 #[test]
@@ -432,10 +444,11 @@ fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let result3 = universe.verify_and_insert(tx3);
 
     // Then
-    let removed_txs = result3.unwrap();
+    let (pool_tx, removed_txs) = result3.unwrap();
     assert_eq!(removed_txs.len(), 2);
     assert_eq!(removed_txs[0].id(), tx1_id);
     assert_eq!(removed_txs[1].id(), tx2_id);
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -464,13 +477,14 @@ fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
 
     // Then
     assert!(result2.is_ok());
-    let removed_txs = result2.unwrap();
+    let removed_txs = result2.unwrap().1;
     assert_eq!(removed_txs.len(), 1);
     assert_eq!(removed_txs[0].id(), tx1_id);
     assert!(result3.is_ok());
-    let removed_txs = result3.unwrap();
+    let (pool_tx, removed_txs) = result3.unwrap();
     assert_eq!(removed_txs.len(), 1);
     assert_eq!(removed_txs[0].id(), tx2_id);
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -488,7 +502,7 @@ fn insert__tx_limit_hit() {
     // Given
     let tx1 = universe.build_script_transaction(None, None, 10);
     let tx2 = universe.build_script_transaction(None, None, 0);
-    universe.verify_and_insert(tx1).unwrap();
+    let pool_tx = universe.verify_and_insert(tx1).unwrap().0;
 
     // When
     let result2 = universe.verify_and_insert(tx2);
@@ -496,6 +510,7 @@ fn insert__tx_limit_hit() {
     // Then
     let err = result2.unwrap_err();
     assert!(matches!(err, Error::NotInsertedLimitHit));
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -522,7 +537,7 @@ fn insert__tx_gas_limit() {
         ..Default::default()
     });
     universe.build_pool();
-    universe.verify_and_insert(tx1).unwrap();
+    let pool_tx = universe.verify_and_insert(tx1).unwrap().0;
 
     // When
     let result2 = universe.verify_and_insert(tx2);
@@ -530,6 +545,7 @@ fn insert__tx_gas_limit() {
     // Then
     let err = result2.unwrap_err();
     assert!(matches!(err, Error::NotInsertedLimitHit));
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -556,7 +572,7 @@ fn insert__tx_bytes_limit() {
         ..Default::default()
     });
     universe.build_pool();
-    universe.verify_and_insert(tx1).unwrap();
+    let pool_tx = universe.verify_and_insert(tx1).unwrap().0;
 
     // When
     let result2 = universe.verify_and_insert(tx2);
@@ -564,6 +580,7 @@ fn insert__tx_bytes_limit() {
     // Then
     let err = result2.unwrap_err();
     assert!(matches!(err, Error::NotInsertedLimitHit));
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -584,8 +601,8 @@ fn insert__dependency_chain_length_hit() {
     let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
 
     let tx3 = universe.build_script_transaction(Some(vec![input]), None, 0);
-    universe.verify_and_insert(tx1).unwrap();
-    universe.verify_and_insert(tx2).unwrap();
+    let tx1 = universe.verify_and_insert(tx1).unwrap().0;
+    let tx2 = universe.verify_and_insert(tx2).unwrap().0;
 
     // When
     let result3 = universe.verify_and_insert(tx3);
@@ -596,6 +613,7 @@ fn insert__dependency_chain_length_hit() {
         err,
         Error::Dependency(DependencyError::NotInsertedChainDependencyTooBig)
     ));
+    universe.assert_pool_integrity(&[tx1, tx2]);
 }
 
 #[test]
@@ -632,6 +650,7 @@ fn get_sorted_out_tx1_2_3() {
     assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
     assert_eq!(txs[1].id(), tx1_id, "Second should be tx1");
     assert_eq!(txs[2].id(), tx2_id, "Third should be tx2");
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -688,6 +707,7 @@ fn get_sorted_out_tx_same_tips() {
     assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
     assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
     assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -744,6 +764,7 @@ fn get_sorted_out_tx_profitable_ratios() {
     assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
     assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
     assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -786,6 +807,7 @@ fn get_sorted_out_tx_by_creation_instant() {
     assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
     assert_eq!(txs[2].id(), tx3_id, "Third should be tx3");
     assert_eq!(txs[3].id(), tx4_id, "Fourth should be tx4");
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -826,6 +848,7 @@ fn insert__tx_below_min_gas_price() {
 
     // Then
     assert!(matches!(err, Error::InsufficientMaxFee { .. }));
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -839,9 +862,10 @@ fn insert_tx_when_input_message_id_exists_in_db() {
     let tx = universe.build_script_transaction(Some(vec![input]), None, 0);
 
     // When
-    universe.verify_and_insert(tx)
+    let pool_tx = universe.verify_and_insert(tx)
     // Then
-    .unwrap();
+    .unwrap().0;
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -861,6 +885,7 @@ fn insert__tx_when_input_message_id_do_not_exists_in_db() {
         err,
         Error::InputValidation(InputValidationError::NotInsertedInputMessageUnknown(msg_id)) if msg_id == *message.id()
     ));
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -887,13 +912,14 @@ fn insert__tx_tip_lower_than_another_tx_with_same_message_id() {
     );
 
     // When
-    universe.verify_and_insert(tx_high).unwrap();
+    let pool_tx = universe.verify_and_insert(tx_high).unwrap().0;
     let err = universe.verify_and_insert(tx_low).unwrap_err();
 
     // Then
     assert!(
         matches!(err, Error::Collided(CollisionReason::Message(msg_id)) if msg_id == *message.id())
     );
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -927,9 +953,10 @@ fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
     // Then
     assert!(result1.is_ok());
     assert!(result2.is_ok());
-    let removed_txs = result2.unwrap();
+    let (pool_tx, removed_txs) = result2.unwrap();
     assert_eq!(removed_txs.len(), 1);
     assert_eq!(removed_txs[0].id(), tx_high_id);
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -965,6 +992,7 @@ fn insert_again_message_after_squeeze_with_even_lower_tip() {
     assert!(result1.is_ok());
     assert!(result2.is_ok());
     assert!(result3.is_ok());
+    universe.assert_pool_integrity(&[result2.unwrap().0, result3.unwrap().0]);
 }
 
 #[test]
@@ -993,6 +1021,7 @@ fn insert__tx_with_predicates_incorrect_owner() {
             ValidityError::InputPredicateOwner { index: 0 }
         ))
     ));
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -1035,6 +1064,7 @@ fn insert__tx_with_predicate_without_enough_gas() {
             PredicateVerificationFailed::OutOfGas
         ))
     ));
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -1068,6 +1098,7 @@ fn insert__tx_with_predicate_that_returns_false() {
             PredicateVerificationFailed::Panic(PanicReason::PredicateReturnedNonOne)
         ))
     ));
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -1089,9 +1120,10 @@ fn insert_tx_with_blob() {
     .finalize_as_transaction();
 
     // When
-    universe.verify_and_insert(tx)
+    let pool_tx = universe.verify_and_insert(tx)
     // Then
-    .unwrap();
+    .unwrap().0;
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -1113,7 +1145,7 @@ fn insert__tx_with_blob_already_inserted_at_higher_tip() {
     .add_fee_input()
     .finalize_as_transaction();
 
-    universe.verify_and_insert(tx).unwrap();
+    let pool_tx = universe.verify_and_insert(tx).unwrap().0;
 
     let same_blob_tx = TransactionBuilder::blob(BlobBody {
         id: blob_id,
@@ -1128,6 +1160,7 @@ fn insert__tx_with_blob_already_inserted_at_higher_tip() {
 
     // Then
     assert!(matches!(err, Error::Collided(CollisionReason::Blob(b)) if b == blob_id));
+    universe.assert_pool_integrity(&[pool_tx]);
 }
 
 #[test]
@@ -1166,6 +1199,7 @@ fn insert_tx_with_blob_already_insert_at_lower_tip() {
 
     // Then
     assert!(result.is_ok());
+    universe.assert_pool_integrity(&[result.unwrap().0]);
 }
 
 #[test]
@@ -1196,6 +1230,7 @@ fn insert__tx_blob_already_in_db() {
         err,
         Error::InputValidation(InputValidationError::NotInsertedBlobIdAlreadyTaken(b)) if b == blob_id
     ));
+    universe.assert_pool_integrity(&[]);
 }
 
 #[test]
@@ -1217,8 +1252,8 @@ fn insert__if_tx3_depends_and_collides_with_tx2() {
     // Given
     // tx3 {inputs: {coinA, coinB}, outputs:{}, tip: 20}
     let input_b = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
-    universe.verify_and_insert(tx1).unwrap();
-    universe.verify_and_insert(tx2).unwrap();
+    let tx1 = universe.verify_and_insert(tx1).unwrap().0;
+    let tx2 = universe.verify_and_insert(tx2).unwrap().0;
 
     let tx3 = universe.build_script_transaction(Some(vec![input_a, input_b]), None, 20);
 
@@ -1230,6 +1265,7 @@ fn insert__if_tx3_depends_and_collides_with_tx2() {
         err,
         Error::Dependency(DependencyError::DependentTransactionIsADiamondDeath)
     ));
+    universe.assert_pool_integrity(&[tx1, tx2]);
 }
 
 #[test]
@@ -1266,4 +1302,5 @@ fn insert__tx_upgrade_with_invalid_wasm() {
         result,
         Error::WasmValidity(WasmValidityError::NotEnabled)
     ));
+    universe.assert_pool_integrity(&[]);
 }

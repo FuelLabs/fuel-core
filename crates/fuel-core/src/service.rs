@@ -1,4 +1,43 @@
-use self::adapters::BlockImporterAdapter;
+use std::{
+    net::SocketAddr,
+    sync::Arc,
+};
+
+pub use config::{
+    Config,
+    DbType,
+    RelayerConsensusConfig,
+    VMConfig,
+};
+use fuel_core_chain_config::{
+    ConsensusConfig,
+    GenesisCommitment,
+};
+use fuel_core_poa::{
+    ports::BlockImporter,
+    verifier::verify_consensus,
+};
+pub use fuel_core_services::Service as ServiceTrait;
+use fuel_core_services::{
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    State,
+    StateWatcher,
+    TaskNextAction,
+};
+use fuel_core_storage::{
+    not_found,
+    tables::SealedBlockConsensus,
+    transactional::{
+        AtomicView,
+        ReadTransaction,
+    },
+    IsNotFound,
+    StorageAsMut,
+};
+use fuel_core_types::blockchain::consensus::Consensus;
+
 use crate::{
     combined_database::{
         CombinedDatabase,
@@ -13,44 +52,8 @@ use crate::{
         sub_services::TxPoolSharedState,
     },
 };
-use fuel_core_chain_config::{
-    ConsensusConfig,
-    GenesisCommitment,
-};
-use fuel_core_poa::{
-    ports::BlockImporter,
-    verifier::verify_consensus,
-};
-use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    State,
-    StateWatcher,
-};
-use fuel_core_storage::{
-    not_found,
-    tables::SealedBlockConsensus,
-    transactional::{
-        AtomicView,
-        ReadTransaction,
-    },
-    IsNotFound,
-    StorageAsMut,
-};
-use fuel_core_types::blockchain::consensus::Consensus;
-use std::{
-    net::SocketAddr,
-    sync::Arc,
-};
 
-pub use config::{
-    Config,
-    DbType,
-    RelayerConsensusConfig,
-    VMConfig,
-};
-pub use fuel_core_services::Service as ServiceTrait;
+use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
@@ -428,7 +431,7 @@ impl RunnableService for Task {
 #[async_trait::async_trait]
 impl RunnableTask for Task {
     #[tracing::instrument(skip_all)]
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         let mut stop_signals = vec![];
         for service in self.services.iter() {
             stop_signals.push(service.await_stop())
@@ -443,8 +446,7 @@ impl RunnableTask for Task {
 
         // We received the stop signal from any of one source, so stop this service and
         // all sub-services.
-        let should_continue = false;
-        Ok(should_continue)
+        TaskNextAction::Stop
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -518,6 +520,10 @@ mod tests {
         {
             // p2p & sync
             expected_services += 2;
+        }
+        #[cfg(feature = "shared-sequencer")]
+        {
+            expected_services += 1;
         }
 
         // # Dev-note: Update the `expected_services` when we add/remove a new/old service.

@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc 7c4e472cb1f611f337e2b9e029d79cad58b6e80786135c0cea9e37808467f109 # shrinks to (height, lower_height) = (53, 0)
 cc 34f1effd503ddfe54ad3da854765812601969db5335e6bf5c385a99a7ef59e90 # shrinks to (height, lower_height) = (64, 27)
+cc 46741826ecf4f441d17d822657a94fb33b941f19c222d181ccbb865b0b62b7fc # shrinks to (height, lower_height) = (4, 3)

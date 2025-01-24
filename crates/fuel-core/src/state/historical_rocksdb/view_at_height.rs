@@ -51,7 +51,13 @@ where
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         let read_history = &self.read_db;
         let height_key = height_key(key, &self.height);
-        let options = ReadOptions::default();
+        let mut options = ReadOptions::default();
+        // We need this option because our iterator will try to start in the `height_key` prefix section
+        // but if there is no data in this section, we expect the iterator to fetch data in an other prefix section.
+        // Without this option it's not guarantee that we fetch the correct next prefix section.
+        // Source : https://github.com/facebook/rocksdb/wiki/Prefix-Seek#how-to-ignore-prefix-bloom-filters-in-read
+        // and https://github.com/facebook/rocksdb/wiki/Prefix-Seek#general-prefix-seek-api
+        options.set_total_order_seek(true);
         let nearest_modification = read_history
             .iterator::<KeyAndValue>(
                 Column::HistoricalDuplicateColumn(column),
@@ -109,7 +115,7 @@ mod tests {
     #[test]
     fn historical_rocksdb_view_at_each_height_works() {
         // Given
-        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp().unwrap();
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::RewindFullRange).unwrap();
 
@@ -183,7 +189,7 @@ mod tests {
     #[test]
     fn historical_rocksdb_view_at_each_height_works_when_multiple_modifications() {
         // Given
-        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp(None).unwrap();
+        let rocks_db = RocksDb::<Historical<OnChain>>::default_open_temp().unwrap();
         let historical_rocks_db =
             HistoricalRocksDB::new(rocks_db, StateRewindPolicy::RewindFullRange).unwrap();
 

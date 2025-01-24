@@ -23,19 +23,20 @@ pub struct TxPoolMetrics {
     /// Time of transactions in the txpool in seconds
     pub transaction_time_in_txpool_secs: Histogram,
     /// Time actively spent by transaction insertion in the thread pool
-    pub transaction_insertion_time_in_thread_pool_milliseconds: Histogram,
+    pub transaction_insertion_time_in_thread_pool_microseconds: Histogram,
     /// How long it took for the selection algorithm to select transactions
-    pub select_transaction_time_nanoseconds: Histogram,
+    pub select_transactions_time_microseconds: Histogram,
 }
 
 impl Default for TxPoolMetrics {
     fn default() -> Self {
         let tx_size = Histogram::new(buckets(Buckets::TransactionSize));
-        let transaction_time_in_txpool_secs = Histogram::new(buckets(Buckets::Timing));
-        let select_transaction_time_nanoseconds =
-            Histogram::new(buckets(Buckets::TimingCoarseGrained));
-        let transaction_insertion_time_in_thread_pool_milliseconds =
-            Histogram::new(buckets(Buckets::TimingCoarseGrained));
+        let transaction_time_in_txpool_secs =
+            Histogram::new(buckets(Buckets::TransactionTimeInTxpool));
+        let select_transactions_time_microseconds =
+            Histogram::new(buckets(Buckets::SelectTransactionsTime));
+        let transaction_insertion_time_in_thread_pool_microseconds =
+            Histogram::new(buckets(Buckets::TransactionInsertionTimeInThreadPool));
 
         let number_of_transactions = Gauge::default();
         let number_of_transactions_pending_verification = Gauge::default();
@@ -47,8 +48,8 @@ impl Default for TxPoolMetrics {
             number_of_transactions_pending_verification,
             number_of_executable_transactions,
             transaction_time_in_txpool_secs,
-            transaction_insertion_time_in_thread_pool_milliseconds,
-            select_transaction_time_nanoseconds,
+            transaction_insertion_time_in_thread_pool_microseconds,
+            select_transactions_time_microseconds,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -83,16 +84,16 @@ impl Default for TxPoolMetrics {
         );
 
         registry.register(
-            "txpool_select_transaction_time_nanoseconds",
-            "The time it took to select transactions for inclusion in a block in nanoseconds",
-            metrics.select_transaction_time_nanoseconds.clone(),
+            "txpool_select_transactions_time_microseconds",
+            "The time it took to select transactions for inclusion in a block in microseconds",
+            metrics.select_transactions_time_microseconds.clone(),
         );
 
         registry.register(
-            "txpool_insert_transaction_time_milliseconds",
-            "The time it took to insert a transaction in the txpool in milliseconds",
+            "txpool_transaction_insertion_time_in_thread_pool_microseconds",
+            "The time it took to insert a transaction in the txpool in microseconds",
             metrics
-                .transaction_insertion_time_in_thread_pool_milliseconds
+                .transaction_insertion_time_in_thread_pool_microseconds
                 .clone(),
         );
 

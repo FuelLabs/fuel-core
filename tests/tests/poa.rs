@@ -12,13 +12,13 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_poa::signer::SignMode;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::consensus::Consensus,
     fuel_crypto::SecretKey,
     fuel_tx::Transaction,
     secrecy::Secret,
+    signer::SignMode,
 };
 use rand::{
     rngs::StdRng,
@@ -92,83 +92,6 @@ async fn can_get_sealed_block_from_poa_produced_block() {
         .expect("failed to verify signature");
 }
 
-#[tokio::test]
-#[cfg(feature = "aws-kms")]
-async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
-    use fuel_core_types::fuel_crypto::PublicKey;
-    use k256::pkcs8::DecodePublicKey;
-
-    // This test is only enabled if the environment variable is set
-    let Some(kms_arn) = option_env!("FUEL_CORE_TEST_AWS_KMS_ARN") else {
-        return;
-    };
-
-    // Get the public key for the KMS key
-    let config = aws_config::load_from_env().await;
-    let kms_client = aws_sdk_kms::Client::new(&config);
-    let poa_public_der = kms_client
-        .get_public_key()
-        .key_id(kms_arn)
-        .send()
-        .await
-        .expect("Unable to fetch public key from KMS")
-        .public_key
-        .unwrap()
-        .into_inner();
-    let poa_public = k256::PublicKey::from_public_key_der(&poa_public_der)
-        .expect("invalid DER public key from AWS KMS");
-    let poa_public = PublicKey::from(poa_public);
-
-    // start node with the kms enabled and produce some blocks
-    let num_blocks = 100;
-    let args = vec![
-        "--debug",
-        "--poa-instant",
-        "true",
-        "--consensus-aws-kms",
-        kms_arn,
-    ];
-    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
-    let _ = driver
-        .client
-        .produce_blocks(num_blocks, None)
-        .await
-        .unwrap();
-
-    // stop the node and just grab the database
-    let db_path = driver.kill().await;
-    let db =
-        CombinedDatabase::open(db_path.path(), 1024 * 1024, Default::default()).unwrap();
-
-    let view = db.on_chain().latest_view().unwrap();
-
-    // verify signatures and ensure that the block producer wont change
-    let mut block_producer = None;
-    for height in 1..=num_blocks {
-        let sealed_block = view
-            .get_sealed_block_by_height(&height.into())
-            .unwrap()
-            .expect("expected sealed block to be available");
-        let block_id = sealed_block.entity.id();
-        let signature = match sealed_block.consensus {
-            Consensus::PoA(ref poa) => poa.signature,
-            _ => panic!("Not expected consensus"),
-        };
-        signature
-            .verify(&poa_public, &block_id.into_message())
-            .expect("failed to verify signature");
-        let this_bp = sealed_block
-            .consensus
-            .block_producer(&block_id)
-            .expect("Block should have a block producer");
-        if let Some(bp) = block_producer {
-            assert_eq!(bp, this_bp, "Block producer changed");
-        } else {
-            block_producer = Some(this_bp);
-        }
-    }
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
 ) -> anyhow::Result<()> {
@@ -229,11 +152,10 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
         })
         .collect();
     assert_eq!(predefined_blocks, blocks_from_new_node);
-
+    new_core.kill().await;
     Ok(())
 }
 
-#[cfg(feature = "p2p")]
 #[cfg(not(coverage))] // too slow for coverage
 mod p2p {
     use super::*;
@@ -243,6 +165,7 @@ mod p2p {
             make_config,
             make_node,
             Bootstrap,
+            CustomizeConfig,
         },
     };
     use fuel_core_poa::{
@@ -259,10 +182,9 @@ mod p2p {
     // Then starts second_producer that uses the first one as a reserved peer.
     // second_producer should not produce blocks while the first one is producing
     // after the first_producer stops, second_producer should start producing blocks
-    #[ignore = "seems to be flaky, issue: https://github.com/FuelLabs/fuel-core/issues/2351"]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_poa_multiple_producers() {
-        const SYNC_TIMEOUT: u64 = 30;
+        const SYNC_TIMEOUT: u64 = 5;
         const TIME_UNTIL_SYNCED: u64 = SYNC_TIMEOUT + 10;
 
         let mut rng = StdRng::seed_from_u64(2222);
@@ -274,13 +196,23 @@ mod p2p {
         let mut config = Config::local_node();
         update_signing_key(&mut config, pub_key);
 
-        let bootstrap_config = make_config("Bootstrap".to_string(), config.clone());
+        let bootstrap_config = make_config(
+            "Bootstrap".to_string(),
+            config.clone(),
+            CustomizeConfig::no_overrides(),
+        );
         let bootstrap = Bootstrap::new(&bootstrap_config).await.unwrap();
 
         let make_node_config = |name: &str| {
-            let mut config = make_config(name.to_string(), config.clone());
+            let mut config = make_config(
+                name.to_string(),
+                config.clone(),
+                CustomizeConfig::no_overrides(),
+            );
             config.debug = true;
-            config.block_production = Trigger::Never;
+            config.block_production = Trigger::Interval {
+                block_time: Duration::from_secs(1),
+            };
             config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
             config.p2p.as_mut().unwrap().bootstrap_nodes = bootstrap.listeners();
             config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
@@ -295,7 +227,7 @@ mod p2p {
 
         let first_producer = make_node(first_producer_config, vec![]).await;
 
-        // The first producer should produce 3 blocks.
+        // The first producer should produce 1 block manually after `SYNC_TIMEOUT` seconds.
         first_producer
             .node
             .shared
@@ -303,14 +235,15 @@ mod p2p {
             .manually_produce_blocks(
                 None,
                 Mode::Blocks {
-                    number_of_blocks: 3,
+                    number_of_blocks: 1,
                 },
             )
             .await
-            .expect("The first should produce 3 blocks");
+            .expect("The first should produce 1 block manually");
 
-        // Start the second producer after 3 blocks.
-        // The second producer should synchronize 3 blocks produced by the first producer.
+        // After 1 manual block start the second producer.
+        // The first producer should produce 2 more blocks.
+        // The second producer should synchronize 3(1 manual and 2 produced) blocks.
         let second_producer = make_node(second_producer_config, vec![]).await;
         tokio::time::timeout(
             Duration::from_secs(SYNC_TIMEOUT),
@@ -337,11 +270,11 @@ mod p2p {
             .manually_produce_blocks(
                 None,
                 Mode::Blocks {
-                    number_of_blocks: 2,
+                    number_of_blocks: 1,
                 },
             )
             .await
-            .expect("The second should produce 2 blocks");
+            .expect("The second should produce 1 blocks");
         assert!(start_time.elapsed() >= Duration::from_secs(TIME_UNTIL_SYNCED));
 
         // Restart fresh first producer.
@@ -349,7 +282,7 @@ mod p2p {
         let first_producer =
             make_node(make_node_config("First Producer reborn"), vec![]).await;
         tokio::time::timeout(
-            Duration::from_secs(SYNC_TIMEOUT),
+            Duration::from_secs(TIME_UNTIL_SYNCED),
             first_producer.wait_for_blocks(5, false /* is_local */),
         )
         .await

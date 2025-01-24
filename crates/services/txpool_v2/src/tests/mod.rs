@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 mod mocks;
 mod stability_test;
 mod tests_e2e;

@@ -1,6 +1,9 @@
-use crate::common::gas_price_algorithm::GasPriceAlgorithm;
+use crate::common::gas_price_algorithm::{
+    GasPriceAlgorithm,
+    SharedGasPriceAlgo,
+};
 use fuel_core_types::fuel_types::BlockHeight;
-use fuel_gas_price_algorithm::v1::AlgorithmV1;
+pub use fuel_gas_price_algorithm::v1::AlgorithmV1;
 
 impl GasPriceAlgorithm for AlgorithmV1 {
     fn next_gas_price(&self) -> u64 {
@@ -11,3 +14,5 @@ impl GasPriceAlgorithm for AlgorithmV1 {
         self.worst_case(block_height.into())
     }
 }
+
+pub type SharedV1Algorithm = SharedGasPriceAlgo<AlgorithmV1>;

@@ -35,4 +35,4 @@ env = { "CARGO_MAKE_WORKSPACE_SKIP_MEMBERS" = ["fuel-core-tests"] }
 description = "Run tests on each workspace member"
 category = "Test"
 command = "cargo"
-args = ["test", "${@}"]
+args = ["nextest", "run", "${@}"]

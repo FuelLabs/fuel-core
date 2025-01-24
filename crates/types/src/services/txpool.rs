@@ -32,10 +32,10 @@ use crate::{
     },
     services::executor::TransactionExecutionResult,
 };
-use core::time::Duration;
 use fuel_vm_private::{
     checked_transaction::CheckedTransaction,
     fuel_types::BlockHeight,
+    prelude::field::Expiration,
 };
 use std::sync::Arc;
 use tai64::Tai64;
@@ -140,6 +140,17 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(_, metadata) => metadata.max_gas_price,
             PoolTransaction::Upload(_, metadata) => metadata.max_gas_price,
             PoolTransaction::Blob(_, metadata) => metadata.max_gas_price,
+        }
+    }
+
+    /// Returns the expiration block for a transaction.
+    pub fn expiration(&self) -> BlockHeight {
+        match self {
+            PoolTransaction::Script(tx, _) => tx.transaction().expiration(),
+            PoolTransaction::Create(tx, _) => tx.transaction().expiration(),
+            PoolTransaction::Upgrade(tx, _) => tx.transaction().expiration(),
+            PoolTransaction::Upload(tx, _) => tx.transaction().expiration(),
+            PoolTransaction::Blob(tx, _) => tx.transaction().expiration(),
         }
     }
 
@@ -317,18 +328,6 @@ impl From<&PoolTransaction> for CheckedTransaction {
             PoolTransaction::Blob(tx, _) => CheckedTransaction::Blob(tx.clone()),
         }
     }
-}
-
-/// The `removed` field contains the list of removed transactions during the insertion
-/// of the `inserted` transaction.
-#[derive(Debug, PartialEq, Eq)]
-pub struct InsertionResult {
-    /// This was inserted
-    pub inserted: ArcPoolTx,
-    /// The time the transaction was inserted.
-    pub submitted_time: Duration,
-    /// These were removed during the insertion
-    pub removed: Vec<ArcPoolTx>,
 }
 
 /// The status of the transaction during its life from the tx pool until the block.

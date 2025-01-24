@@ -78,7 +78,7 @@ macro_rules! tables {
 
 
         impl RegistrationsPerTable {
-            pub(crate) fn write_to_registry<R>(&self, registry: &mut R, timestamp: Tai64) -> anyhow::Result<()>
+            pub fn write_to_registry<R>(&self, registry: &mut R, timestamp: Tai64) -> anyhow::Result<()>
             where
                 R: TemporalRegistryAll
             {

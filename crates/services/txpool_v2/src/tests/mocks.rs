@@ -67,6 +67,8 @@ use std::{
         Mutex,
     },
 };
+use tokio::sync::mpsc::Receiver;
+use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Default)]
 pub struct Data {
@@ -126,16 +128,27 @@ impl StorageRead<BlobData> for MockDb {
     fn read(
         &self,
         key: &<BlobData as Mappable>::Key,
+        offset: usize,
         buf: &mut [u8],
     ) -> Result<Option<usize>, Self::Error> {
         let table = self.data.lock().unwrap();
         let bytes = table.blobs.get(key);
 
-        let len = bytes.map(|bytes| {
-            buf.copy_from_slice(bytes.0.as_slice());
-            bytes.0.len()
-        });
-        Ok(len)
+        bytes
+            .map(|bytes| {
+                let bytes_len = bytes.as_ref().len();
+                let start = offset;
+                let end = offset.saturating_add(buf.len());
+
+                if end > bytes_len {
+                    return Err(());
+                }
+
+                let starting_from_offset = &bytes.as_ref()[start..end];
+                buf[..].copy_from_slice(starting_from_offset);
+                Ok(buf.len())
+            })
+            .transpose()
     }
 
     fn read_alloc(
@@ -327,6 +340,14 @@ impl MockImporter {
             });
             Box::pin(stream)
         });
+        importer
+    }
+
+    pub fn with_block_provider(block_provider: Receiver<SharedImportResult>) -> Self {
+        let mut importer = MockImporter::default();
+        importer
+            .expect_block_events()
+            .return_once(move || Box::pin(ReceiverStream::new(block_provider)));
         importer
     }
 }

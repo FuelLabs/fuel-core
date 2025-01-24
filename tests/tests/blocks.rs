@@ -17,10 +17,7 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_poa::{
-    signer::SignMode,
-    Trigger,
-};
+use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     tables::{
         FuelBlocks,
@@ -37,6 +34,7 @@ use fuel_core_types::{
     },
     fuel_tx::*,
     secrecy::ExposeSecret,
+    signer::SignMode,
     tai64::Tai64,
 };
 use itertools::{
@@ -355,6 +353,7 @@ mod full_block {
         schema::{
             block::{
                 BlockByHeightArgs,
+                BlockByHeightArgsFields,
                 Consensus,
                 Header,
             },
@@ -365,7 +364,7 @@ mod full_block {
         },
         FuelClient,
     };
-    use fuel_core_executor::executor;
+    use fuel_core_executor::executor::max_tx_count;
     use fuel_core_txpool::config::{
         HeavyWorkConfig,
         PoolLimits,
@@ -479,7 +478,7 @@ mod full_block {
         let srv = FuelService::new_node(patched_node_config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
 
-        let tx_count: u64 = 66_000;
+        let tx_count: u64 = max_tx_count() as u64 + 100;
         let txs = (1..=tx_count)
             .map(|i| test_helpers::make_tx(&mut rng, i, max_gas_limit))
             .collect_vec();
@@ -505,11 +504,11 @@ mod full_block {
 
         assert_eq!(
             second_last_block.transactions.len(),
-            executor::MAX_TX_COUNT as usize + 1 // Mint transaction for one block
+            max_tx_count() as usize + 1 // Mint transaction for one block
         );
         assert_eq!(
             last_block.transactions.len(),
-            (tx_count as usize - (executor::MAX_TX_COUNT as usize)) + 1 /* Mint transaction for second block */
+            (tx_count as usize - (max_tx_count() as usize)) + 1 /* Mint transaction for second block */
         );
     }
 }

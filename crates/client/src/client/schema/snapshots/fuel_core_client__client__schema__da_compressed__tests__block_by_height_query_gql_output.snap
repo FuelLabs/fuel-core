@@ -2,7 +2,7 @@
 source: crates/client/src/client/schema/da_compressed.rs
 expression: operation.query
 ---
-query($height: U32!) {
+query DaCompressedBlockByHeightQuery($height: U32!) {
   daCompressedBlock(height: $height) {
     bytes
   }

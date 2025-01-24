@@ -104,4 +104,5 @@ async fn start_local_node_without_any_arguments() {
         block.header.state_transition_bytecode_version,
         LATEST_STATE_TRANSITION_VERSION
     );
+    service.kill().await;
 }

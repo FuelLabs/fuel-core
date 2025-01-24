@@ -9,6 +9,7 @@ use crate::{
     database::OnChainIterableKeyValueView,
     fuel_core_graphql_api::ports::{
         worker,
+        worker::BlockAt,
         BlockProducerPort,
         ConsensusProvider,
         DatabaseMessageProof,
@@ -29,7 +30,10 @@ use crate::{
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::TxStatusMessage;
+use fuel_core_txpool::{
+    TxPoolStats,
+    TxStatusMessage,
+};
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     entities::relayer::message::MerkleProof,
@@ -95,6 +99,10 @@ impl TxPoolPort for TxPoolAdapter {
         id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
         self.service.tx_update_subscribe(id)
+    }
+
+    fn latest_pool_stats(&self) -> TxPoolStats {
+        self.service.latest_stats()
     }
 }
 
@@ -218,7 +226,7 @@ impl worker::BlockImporter for GraphQLBlockImporter {
 
     fn block_event_at_height(
         &self,
-        height: Option<BlockHeight>,
+        height: BlockAt,
     ) -> anyhow::Result<SharedImportResult> {
         self.import_result_provider_adapter.result_at_height(height)
     }

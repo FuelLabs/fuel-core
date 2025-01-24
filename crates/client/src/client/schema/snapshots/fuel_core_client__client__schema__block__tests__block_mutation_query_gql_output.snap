@@ -2,8 +2,6 @@
 source: crates/client/src/client/schema/block.rs
 expression: operation.query
 ---
-mutation($startTimestamp: Tai64Timestamp, $blocksToProduce: U32!) {
+mutation BlockMutation($startTimestamp: Tai64Timestamp, $blocksToProduce: U32!) {
   produceBlocks(blocksToProduce: $blocksToProduce, startTimestamp: $startTimestamp)
 }
-
-

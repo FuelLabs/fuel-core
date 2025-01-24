@@ -1,10 +1,16 @@
 use crate::{
     self as fuel_core_txpool,
-    selection_algorithms::SelectionAlgorithm,
+    pool::TxPoolStats,
 };
+use fuel_core_services::TaskNextAction;
 
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
+    seqlock::{
+        SeqLock,
+        SeqLockReader,
+        SeqLockWriter,
+    },
     AsyncProcessor,
     RunnableService,
     RunnableTask,
@@ -71,7 +77,6 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
-            PoolTransaction,
             TransactionStatus,
         },
     },
@@ -81,6 +86,7 @@ use futures::StreamExt;
 use parking_lot::RwLock;
 use std::{
     collections::{
+        BTreeMap,
         HashSet,
         VecDeque,
     },
@@ -189,7 +195,8 @@ pub struct Task<View> {
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
     pool: Shared<TxPool>,
-    current_height: Shared<BlockHeight>,
+    current_height_writer: SeqLockWriter<BlockHeight>,
+    current_height_reader: SeqLockReader<BlockHeight>,
     tx_sync_history: Shared<HashSet<PeerId>>,
     shared_state: SharedState,
     metrics: bool,
@@ -226,55 +233,43 @@ impl<View> RunnableTask for Task<View>
 where
     View: TxPoolPersistentStorage,
 {
-    async fn run(&mut self, watcher: &mut StateWatcher) -> anyhow::Result<bool> {
-        // TODO: move this to the Task struct
-        if self.metrics {
-            let pool = self.pool.read();
-            let num_transactions = pool.storage.tx_count();
-
-            let executable_txs =
-                pool.selection_algorithm.number_of_executable_transactions();
-
-            record_number_of_transactions_in_txpool(num_transactions);
-            record_number_of_executable_transactions_in_txpool(executable_txs);
-        }
-
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                return Ok(false)
+                TaskNextAction::Stop
             }
 
             block_result = self.subscriptions.imported_blocks.next() => {
                 if let Some(result) = block_result {
                     self.import_block(result);
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Stop
                 }
             }
 
             select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
                     self.borrow_txpool(select_transaction_request);
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Stop
                 }
             }
 
             _ = self.pruner.ttl_timer.tick() => {
                 self.try_prune_transactions();
-                return Ok(true)
+                TaskNextAction::Continue
             }
 
             write_pool_request = self.subscriptions.write_pool.recv() => {
                 if let Some(write_pool_request) = write_pool_request {
                     self.process_write(write_pool_request);
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Continue
                 }
             }
 
@@ -283,27 +278,27 @@ where
                     if let Some(tx) = data {
                         self.manage_tx_from_p2p(tx, message_id, peer_id);
                     }
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Stop
                 }
             }
 
             new_peer_subscribed = self.subscriptions.new_tx_source.next() => {
                 if let Some(peer_id) = new_peer_subscribed {
                     self.manage_new_peer_subscribed(peer_id);
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Stop
                 }
             }
 
             read_pool_request = self.subscriptions.read_pool.recv() => {
                 if let Some(read_pool_request) = read_pool_request {
                     self.process_read(read_pool_request);
-                    return Ok(true)
+                    TaskNextAction::Continue
                 } else {
-                    return Ok(false)
+                    TaskNextAction::Stop
                 }
             }
         }
@@ -333,8 +328,32 @@ where
         }
 
         {
-            let mut block_height = self.current_height.write();
-            *block_height = new_height;
+            self.current_height_writer.write(|data| {
+                *data = new_height;
+            });
+        }
+
+        // Remove expired transactions
+        let mut removed_txs = vec![];
+        {
+            let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
+            let range_to_remove = height_expiration_txs
+                .range(..=new_height)
+                .map(|(k, _)| *k)
+                .collect::<Vec<_>>();
+            for height in range_to_remove {
+                let expired_txs = height_expiration_txs.remove(&height);
+                if let Some(expired_txs) = expired_txs {
+                    let mut tx_pool = self.pool.write();
+                    removed_txs
+                        .extend(tx_pool.remove_transaction_and_dependents(expired_txs));
+                }
+            }
+        }
+        for tx in removed_txs {
+            self.shared_state
+                .tx_status_sender
+                .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
         }
     }
 
@@ -392,18 +411,25 @@ where
         from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
     ) -> impl FnOnce() + Send + 'static {
+        let metrics = self.metrics;
+        if metrics {
+            txpool_metrics()
+                .number_of_transactions_pending_verification
+                .inc();
+        }
+
         let verification = self.verification.clone();
         let pool = self.pool.clone();
         let p2p = self.p2p.clone();
         let shared_state = self.shared_state.clone();
-        let current_height = self.current_height.clone();
+        let current_height_reader = self.current_height_reader.clone();
         let time_txs_submitted = self.pruner.time_txs_submitted.clone();
+        let height_expiration_txs = self.pruner.height_expiration_txs.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
-        let metrics = self.metrics;
 
         let insert_transaction_thread_pool_op = move || {
-            let current_height = *current_height.read();
+            let current_height = current_height_reader.read();
 
             // TODO: This should be removed if the checked transactions
             //  can work with Arc in it
@@ -416,6 +442,12 @@ where
                 current_height,
                 utxo_validation,
             );
+
+            if metrics {
+                txpool_metrics()
+                    .number_of_transactions_pending_verification
+                    .dec();
+            }
 
             p2p.process_insertion_result(from_peer_info, &result);
 
@@ -431,11 +463,8 @@ where
                 }
             };
 
-            if metrics {
-                record_tx_size(&checked_tx)
-            };
-
             let tx = Arc::new(checked_tx);
+            let expiration = tx.expiration();
 
             let result = {
                 let mut pool = pool.write();
@@ -453,6 +482,12 @@ where
                     time_txs_submitted
                         .write()
                         .push_front((submitted_time, tx_id));
+
+                    if expiration < u32::MAX.into() {
+                        let mut lock = height_expiration_txs.write();
+                        let block_height_expiration = lock.entry(expiration).or_default();
+                        block_height_expiration.push(tx_id);
+                    }
 
                     let duration = submitted_time
                         .duration_since(SystemTime::UNIX_EPOCH)
@@ -489,19 +524,12 @@ where
         };
         move || {
             if metrics {
-                let txpool_metrics = txpool_metrics();
-                txpool_metrics
-                    .number_of_transactions_pending_verification
-                    .inc();
                 let start_time = tokio::time::Instant::now();
                 insert_transaction_thread_pool_op();
-                let time_for_task_to_complete = start_time.elapsed().as_millis();
-                txpool_metrics
-                    .transaction_insertion_time_in_thread_pool_milliseconds
+                let time_for_task_to_complete = start_time.elapsed().as_micros();
+                txpool_metrics()
+                    .transaction_insertion_time_in_thread_pool_microseconds
                     .observe(time_for_task_to_complete as f64);
-                txpool_metrics
-                    .number_of_transactions_pending_verification
-                    .dec();
             } else {
                 insert_transaction_thread_pool_op();
             }
@@ -693,23 +721,6 @@ where
     }
 }
 
-fn record_tx_size(tx: &PoolTransaction) {
-    let size = tx.metered_bytes_size();
-    let txpool_metrics = txpool_metrics();
-    txpool_metrics.tx_size.observe(size as f64);
-}
-
-fn record_number_of_transactions_in_txpool(num_transactions: usize) {
-    txpool_metrics()
-        .number_of_transactions
-        .set(num_transactions as i64);
-}
-fn record_number_of_executable_transactions_in_txpool(executable_txs: usize) {
-    txpool_metrics()
-        .number_of_executable_transactions
-        .set(executable_txs as i64);
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn new_service<
     P2P,
@@ -755,6 +766,8 @@ where
         mpsc::channel(1);
     let (read_pool_requests_sender, read_pool_requests_receiver) =
         mpsc::channel(config.service_channel_limits.max_pending_read_pool_requests);
+    let (pool_stats_sender, pool_stats_receiver) =
+        tokio::sync::watch::channel(TxPoolStats::default());
     let tx_status_sender = TxStatusChange::new(
         config.max_tx_update_subscriptions,
         // The connection should be closed automatically after the `SqueezedOut` event.
@@ -771,6 +784,7 @@ where
         select_transactions_requests_sender,
         read_pool_requests_sender,
         new_txs_notifier,
+        latest_stats: pool_stats_receiver,
     };
 
     let subscriptions = Subscriptions {
@@ -793,6 +807,7 @@ where
     let pruner = TransactionPruner {
         txs_ttl: config.max_txs_ttl,
         time_txs_submitted: Arc::new(RwLock::new(VecDeque::new())),
+        height_expiration_txs: Arc::new(RwLock::new(BTreeMap::new())),
         ttl_timer,
     };
 
@@ -820,7 +835,12 @@ where
         BasicCollisionManager::new(),
         RatioTipGasSelection::new(),
         config,
+        pool_stats_sender,
     );
+
+    // BlockHeight is < 64 bytes, so we can use SeqLock
+    let (current_height_writer, current_height_reader) =
+        unsafe { SeqLock::new(current_height) };
 
     Service::new(Task {
         chain_id,
@@ -831,7 +851,8 @@ where
         p2p_sync_process,
         pruner,
         p2p: Arc::new(p2p),
-        current_height: Arc::new(RwLock::new(current_height)),
+        current_height_writer,
+        current_height_reader,
         pool: Arc::new(RwLock::new(txpool)),
         shared_state,
         metrics,

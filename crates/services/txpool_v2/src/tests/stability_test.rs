@@ -3,7 +3,6 @@
 //! correct(not in the unexpected state).
 //! It relies on the `debug_assert` which are present in the code.
 
-#![allow(non_snake_case)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::arithmetic_side_effects)]
 

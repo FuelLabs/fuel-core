@@ -6,14 +6,10 @@ mod tests {
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
-        executor::{
-            OnceTransactionsSource,
-            MAX_TX_COUNT,
-        },
+        executor::OnceTransactionsSource,
         ports::{
             MaybeCheckedTransaction,
             RelayerPort,
-            TransactionsSource,
         },
         refs::ContractRef,
     };
@@ -65,6 +61,7 @@ mod tests {
         fuel_tx::{
             consensus_parameters::gas::GasCostsValuesV1,
             field::{
+                Expiration,
                 InputContract,
                 Inputs,
                 MintAmount,
@@ -151,7 +148,6 @@ mod tests {
         Rng,
         SeedableRng,
     };
-    use std::sync::Mutex;
 
     #[derive(Clone, Debug, Default)]
     struct Config {
@@ -183,32 +179,6 @@ mod tests {
 
         fn latest_view(&self) -> StorageResult<Self::LatestView> {
             Ok(self.clone())
-        }
-    }
-
-    /// Bad transaction source: ignores the limit of `u16::MAX -1` transactions
-    /// that should be returned by [`TransactionsSource::next()`].
-    /// It is used only for testing purposes
-    pub struct BadTransactionsSource {
-        transactions: Mutex<Vec<MaybeCheckedTransaction>>,
-    }
-
-    impl BadTransactionsSource {
-        pub fn new(transactions: Vec<Transaction>) -> Self {
-            Self {
-                transactions: Mutex::new(
-                    transactions
-                        .into_iter()
-                        .map(MaybeCheckedTransaction::Transaction)
-                        .collect(),
-                ),
-            }
-        }
-    }
-
-    impl TransactionsSource for BadTransactionsSource {
-        fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
-            std::mem::take(&mut *self.transactions.lock().unwrap())
         }
     }
 
@@ -638,6 +608,7 @@ mod tests {
                 .next()
                 .unwrap()
                 .unwrap();
+
             assert_eq!(asset_id, AssetId::zeroed());
             assert_eq!(amount, expected_fee_amount_1 + expected_fee_amount_2);
         }
@@ -991,6 +962,63 @@ mod tests {
                 ExecutorError::CoinbaseAmountMismatch
             ));
         }
+    }
+
+    #[test]
+    fn executor_invalidates_expired_tx() {
+        let producer = create_executor(Default::default(), Default::default());
+        let validator = create_executor(Default::default(), Default::default());
+
+        // Given
+        let mut block = test_block(2u32.into(), 0u64.into(), 0);
+
+        let amount = 1;
+        let asset = AssetId::BASE;
+        let mut tx = TxBuilder::new(2322u64)
+            .script_gas_limit(10)
+            .coin_input(asset, (amount as Word) * 100)
+            .coin_output(asset, (amount as Word) * 50)
+            .change_output(asset)
+            .build()
+            .transaction()
+            .clone();
+
+        // When
+        tx.set_expiration(1u32.into());
+        block.transactions_mut().push(tx.clone().into());
+
+        let ExecutionResult {
+            skipped_transactions,
+            mut block,
+            ..
+        } = producer
+            .produce_without_commit(block.into())
+            .unwrap()
+            .into_result();
+
+        // Then
+        assert_eq!(skipped_transactions.len(), 1);
+        assert_eq!(
+            skipped_transactions[0].1,
+            ExecutorError::InvalidTransaction(CheckError::Validity(
+                ValidityError::TransactionExpiration
+            ))
+        );
+
+        // Produced block is valid
+        let _ = validator.validate(&block).unwrap().into_result();
+
+        // Make the block invalid by adding expired transaction
+        let len = block.transactions().len();
+        block.transactions_mut().insert(len - 1, tx.into());
+
+        let verify_error = validator.validate(&block).unwrap_err();
+        assert_eq!(
+            verify_error,
+            ExecutorError::InvalidTransaction(CheckError::Validity(
+                ValidityError::TransactionExpiration
+            ))
+        );
     }
 
     // Ensure tx has at least one input to cover gas
@@ -2599,7 +2627,6 @@ mod tests {
         // One of two transactions is skipped.
         assert_eq!(skipped_transactions.len(), 1);
         let err = &skipped_transactions[0].1;
-        dbg!(err);
         assert!(matches!(
             err,
             &ExecutorError::TransactionValidity(
@@ -3026,14 +3053,17 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "wasm-executor"))]
     fn block_producer_never_includes_more_than_max_tx_count_transactions() {
+        use fuel_core_executor::executor::max_tx_count;
+
         let block_height = 1u32;
         let block_da_height = 2u64;
 
         let mut consensus_parameters = ConsensusParameters::default();
 
         // Given
-        let transactions_in_tx_source = (MAX_TX_COUNT as usize) + 10;
+        let transactions_in_tx_source = (max_tx_count() as usize) + 10;
         consensus_parameters.set_block_gas_limit(u64::MAX);
         let config = Config {
             consensus_parameters,
@@ -3057,20 +3087,50 @@ mod tests {
         // Then
         assert_eq!(
             result.block.transactions().len(),
-            (MAX_TX_COUNT as usize + 1)
+            (max_tx_count() as usize + 1)
         );
     }
 
     #[test]
+    #[cfg(not(feature = "wasm-executor"))]
     fn block_producer_never_includes_more_than_max_tx_count_transactions_with_bad_tx_source(
     ) {
+        use fuel_core_executor::executor::max_tx_count;
+        use std::sync::Mutex;
+
+        /// Bad transaction source: ignores the limit of `u16::MAX -1` transactions
+        /// that should be returned by [`TransactionsSource::next()`].
+        /// It is used only for testing purposes
+        pub struct BadTransactionsSource {
+            transactions: Mutex<Vec<MaybeCheckedTransaction>>,
+        }
+
+        impl BadTransactionsSource {
+            pub fn new(transactions: Vec<Transaction>) -> Self {
+                Self {
+                    transactions: Mutex::new(
+                        transactions
+                            .into_iter()
+                            .map(MaybeCheckedTransaction::Transaction)
+                            .collect(),
+                    ),
+                }
+            }
+        }
+
+        impl fuel_core_executor::ports::TransactionsSource for BadTransactionsSource {
+            fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
+                std::mem::take(&mut *self.transactions.lock().unwrap())
+            }
+        }
+
         let block_height = 1u32;
         let block_da_height = 2u64;
 
         let mut consensus_parameters = ConsensusParameters::default();
 
         // Given
-        let transactions_in_tx_source = (MAX_TX_COUNT as usize) + 10;
+        let transactions_in_tx_source = (max_tx_count() as usize) + 10;
         consensus_parameters.set_block_gas_limit(u64::MAX);
         let config = Config {
             consensus_parameters,
@@ -3102,7 +3162,7 @@ mod tests {
         // Then
         assert_eq!(
             result.block.transactions().len(),
-            (MAX_TX_COUNT as usize + 1)
+            (max_tx_count() as usize + 1)
         );
     }
 

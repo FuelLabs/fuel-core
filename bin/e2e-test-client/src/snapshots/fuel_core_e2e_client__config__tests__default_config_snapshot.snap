@@ -3,7 +3,7 @@ source: bin/e2e-test-client/src/config.rs
 expression: serialized
 ---
 endpoint = "http://localhost:4000"
-wallet_sync_timeout = "10s"
+wallet_sync_timeout = "20s"
 full_test = false
 coinbase_contract_id = "7777777777777777777777777777777777777777777777777777777777777777"
 

@@ -5,7 +5,11 @@ use crate::db_lookup_times_utils::full_block_table::{
 use anyhow::anyhow;
 use fuel_core::{
     database::database_description::DatabaseDescription,
-    state::rocks_db::RocksDb,
+    state::rocks_db::{
+        ColumnsPolicy,
+        DatabaseConfig,
+        RocksDb,
+    },
 };
 use fuel_core_storage::kv_store::{
     KeyValueInspect,
@@ -39,7 +43,14 @@ pub fn get_random_block_height(
 pub fn open_rocks_db<Description: DatabaseDescription>(
     path: &Path,
 ) -> Result<RocksDb<Description>> {
-    let db = RocksDb::default_open(path, None)?;
+    let db = RocksDb::default_open(
+        path,
+        DatabaseConfig {
+            cache_capacity: Some(16 * 1024 * 1024 * 1024),
+            max_fds: -1,
+            columns_policy: ColumnsPolicy::OnCreation,
+        },
+    )?;
     Ok(db)
 }
 
@@ -75,7 +86,7 @@ fn get_block_full_block_method(
         .get(&height_key, BenchDbColumn::FullFuelBlocks)?
         .ok_or(anyhow!("empty raw full block"))?;
 
-    let block: Block = postcard::from_bytes(raw_block.as_slice())?;
+    let block: Block = postcard::from_bytes(&raw_block)?;
     Ok(block)
 }
 
@@ -88,7 +99,7 @@ fn get_block_multi_get_method(
     let raw_block = database
         .get(&height_key, BenchDbColumn::FuelBlocks)?
         .ok_or(anyhow!("empty raw block"))?;
-    let block: CompressedBlock = postcard::from_bytes(raw_block.as_slice())?;
+    let block: CompressedBlock = postcard::from_bytes(&raw_block)?;
     let tx_ids = block.transactions().iter();
     let raw_txs = database.multi_get(BenchDbColumn::Transactions.id(), tx_ids)?;
     let txs: Vec<Transaction> = raw_txs
@@ -109,7 +120,7 @@ fn get_block_headers_and_tx_method(
     let raw_block = database
         .get(&height_key, BenchDbColumn::FuelBlocks)?
         .ok_or(anyhow!("empty raw block"))?;
-    let block: CompressedBlock = postcard::from_bytes(raw_block.as_slice())?;
+    let block: CompressedBlock = postcard::from_bytes(&raw_block)?;
 
     let txs: Vec<Transaction> = block
         .transactions()
@@ -118,8 +129,7 @@ fn get_block_headers_and_tx_method(
             let raw_tx = database
                 .get(tx_id.as_slice(), BenchDbColumn::Transactions)?
                 .ok_or(anyhow!("empty transaction"))?;
-            postcard::from_bytes::<Transaction>(raw_tx.as_slice())
-                .map_err(|err| anyhow!(err))
+            postcard::from_bytes::<Transaction>(&raw_tx).map_err(|err| anyhow!(err))
         })
         .try_collect()?;
 

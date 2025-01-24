@@ -2,7 +2,7 @@
 source: crates/client/src/client/schema/block.rs
 expression: operation.query
 ---
-query($height: U32) {
+query BlockByHeightQuery($height: U32) {
   block(height: $height) {
     version
     id

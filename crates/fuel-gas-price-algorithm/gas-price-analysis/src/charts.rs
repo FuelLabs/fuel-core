@@ -80,11 +80,10 @@ pub fn draw_gas_prices(
     da_gas_prices: &[u64],
     title: &str,
 ) -> anyhow::Result<()> {
-    let gas_prices_gwei: Vec<_> = gas_prices.into_iter().map(|x| x / ONE_GWEI).collect();
+    let gas_prices_gwei: Vec<_> = gas_prices.iter().map(|x| x / ONE_GWEI).collect();
     let _exec_gas_prices_gwei: Vec<_> =
-        _exec_gas_prices.into_iter().map(|x| x / ONE_GWEI).collect();
-    let da_gas_prices_gwei: Vec<_> =
-        da_gas_prices.into_iter().map(|x| x / ONE_GWEI).collect();
+        _exec_gas_prices.iter().map(|x| x / ONE_GWEI).collect();
+    let da_gas_prices_gwei: Vec<_> = da_gas_prices.iter().map(|x| x / ONE_GWEI).collect();
     // const GAS_PRICE_COLOR: RGBColor = BLACK;
     // const EXEC_GAS_PRICE_COLOR: RGBColor = RED;
     const DA_GAS_PRICE_COLOR: RGBColor = BLUE;
@@ -146,7 +145,7 @@ pub fn draw_gas_prices(
 
 pub fn draw_fullness(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
-    fullness: &Vec<(u64, u64)>,
+    fullness: &[(u64, u64)],
     title: &str,
 ) -> anyhow::Result<()> {
     const FULLNESS_COLOR: RGBColor = BLACK;
@@ -192,16 +191,16 @@ pub fn draw_fullness(
 
 pub fn draw_bytes_and_cost_per_block(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
-    bytes_and_costs_per_block: &[(u64, u64)],
+    bytes_and_costs_per_block: &[(u32, u64)],
     title: &str,
 ) -> anyhow::Result<()> {
     const BYTES_PER_BLOCK_COLOR: RGBColor = BLACK;
-    let (bytes, costs): (Vec<u64>, Vec<u64>) =
+    let (bytes, costs): (Vec<u32>, Vec<u64>) =
         bytes_and_costs_per_block.iter().cloned().unzip();
     let costs_gwei: Vec<_> = costs.into_iter().map(|x| x / ONE_GWEI).collect();
 
     let min = 0;
-    let max_left = *bytes.iter().max().unwrap();
+    let max_left = *bytes.iter().max().unwrap() as u64;
     let max_right = *costs_gwei.iter().max().unwrap();
 
     let mut chart = ChartBuilder::on(drawing_area)
@@ -229,7 +228,7 @@ pub fn draw_bytes_and_cost_per_block(
 
     chart
         .draw_series(LineSeries::new(
-            bytes.iter().enumerate().map(|(x, y)| (x, *y)),
+            bytes.iter().enumerate().map(|(x, y)| (x, *y as u64)),
             BYTES_PER_BLOCK_COLOR,
         ))
         .unwrap()
@@ -257,6 +256,14 @@ pub fn draw_bytes_and_cost_per_block(
     Ok(())
 }
 
+fn one_gwei_i128() -> i128 {
+    i128::from(ONE_GWEI)
+}
+
+fn one_gwei_u128() -> u128 {
+    u128::from(ONE_GWEI)
+}
+
 pub fn draw_profit(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
     actual_profit: &[i128],
@@ -267,17 +274,15 @@ pub fn draw_profit(
     const ACTUAL_PROFIT_COLOR: RGBColor = BLACK;
     const PROJECTED_PROFIT_COLOR: RGBColor = RED;
     const PESSIMISTIC_BLOCK_COST_COLOR: RGBColor = BLUE;
-    let actual_profit_gwei: Vec<_> = actual_profit
-        .into_iter()
-        .map(|x| x / ONE_GWEI as i128)
-        .collect();
+    let actual_profit_gwei: Vec<_> =
+        actual_profit.iter().map(|x| x / one_gwei_i128()).collect();
     let projected_profit_gwei: Vec<_> = projected_profit
-        .into_iter()
-        .map(|x| x / ONE_GWEI as i128)
+        .iter()
+        .map(|x| x / one_gwei_i128())
         .collect();
     let pessimistic_block_costs_gwei: Vec<_> = pessimistic_block_costs
-        .into_iter()
-        .map(|x| x / ONE_GWEI as u128)
+        .iter()
+        .map(|x| x / one_gwei_u128())
         .collect();
     let min = *std::cmp::min(
         actual_profit_gwei

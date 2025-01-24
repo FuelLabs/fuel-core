@@ -44,7 +44,7 @@ impl<Storage> GenericDatabase<Storage> {
     }
 
     pub fn into_inner(self) -> Storage {
-        self.storage.into_inner()
+        self.storage.into_storage()
     }
 }
 
@@ -79,8 +79,13 @@ where
     M: Mappable,
     StructuredStorage<Storage>: StorageRead<M, Error = StorageError>,
 {
-    fn read(&self, key: &M::Key, buf: &mut [u8]) -> Result<Option<usize>, Self::Error> {
-        self.storage.storage::<M>().read(key, buf)
+    fn read(
+        &self,
+        key: &M::Key,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Self::Error> {
+        self.storage.storage::<M>().read(key, offset, buf)
     }
 
     fn read_alloc(&self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -124,9 +129,10 @@ where
         &self,
         key: &[u8],
         column: Self::Column,
+        offset: usize,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        KeyValueInspect::read(&self.storage, key, column, buf)
+        KeyValueInspect::read(&self.storage, key, column, offset, buf)
     }
 }
 

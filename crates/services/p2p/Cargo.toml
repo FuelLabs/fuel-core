@@ -43,6 +43,7 @@ postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
 quick-protobuf = "0.8.1"
 quick-protobuf-codec = "0.3.0"
+quick_cache = "0.6.9"
 rand = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -71,3 +72,7 @@ version = "0.3.0"
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]
+
+# Remove when we upgrade rust version
+[target.'cfg(target_os = "linux")'.dependencies]
+netlink-proto = { version = "=0.11.3", optional = true }

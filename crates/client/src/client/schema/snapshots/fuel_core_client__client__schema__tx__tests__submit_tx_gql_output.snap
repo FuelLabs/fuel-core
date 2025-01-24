@@ -2,10 +2,8 @@
 source: crates/client/src/client/schema/tx.rs
 expression: query.query
 ---
-mutation($tx: HexString!) {
+mutation Submit($tx: HexString!) {
   submit(tx: $tx) {
     id
   }
 }
-
-

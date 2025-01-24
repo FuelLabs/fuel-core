@@ -1,10 +1,9 @@
+use clap::ValueEnum;
 use std::{
+    num::NonZeroU64,
     path::PathBuf,
     time::Duration,
 };
-
-use clap::ValueEnum;
-use fuel_core_poa::signer::SignMode;
 use strum_macros::{
     Display,
     EnumString,
@@ -28,7 +27,10 @@ pub use fuel_core_poa::Trigger;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
 use fuel_core_txpool::config::Config as TxPoolConfig;
-use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
+use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
+    signer::SignMode,
+};
 
 use crate::{
     combined_database::CombinedDatabaseConfig,
@@ -57,10 +59,12 @@ pub struct Config {
     pub vm: VMConfig,
     pub txpool: TxPoolConfig,
     pub block_producer: fuel_core_producer::Config,
-    pub starting_gas_price: u64,
-    pub gas_price_change_percent: u64,
-    pub min_gas_price: u64,
-    pub gas_price_threshold_percent: u64,
+    pub starting_exec_gas_price: u64,
+    pub exec_gas_price_change_percent: u16,
+    pub min_exec_gas_price: u64,
+    pub exec_gas_price_threshold_percent: u8,
+    pub da_committer_url: Option<url::Url>,
+    pub da_poll_interval: Option<Duration>,
     pub da_compression: DaCompressionConfig,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -69,6 +73,8 @@ pub struct Config {
     pub p2p: Option<P2PConfig<NotInitialized>>,
     #[cfg(feature = "p2p")]
     pub sync: fuel_core_sync::Config,
+    #[cfg(feature = "shared-sequencer")]
+    pub shared_sequencer: fuel_core_shared_sequencer::Config,
     pub consensus_signer: SignMode,
     pub name: String,
     pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
@@ -78,6 +84,17 @@ pub struct Config {
     pub time_until_synced: Duration,
     /// The size of the memory pool in number of `MemoryInstance`s.
     pub memory_pool_size: usize,
+    pub da_gas_price_factor: NonZeroU64,
+    pub starting_recorded_height: Option<u32>,
+    pub min_da_gas_price: u64,
+    pub max_da_gas_price: u64,
+    pub max_da_gas_price_change_percent: u16,
+    pub da_gas_price_p_component: i64,
+    pub da_gas_price_d_component: i64,
+    pub activity_normal_range_size: u16,
+    pub activity_capped_range_size: u16,
+    pub activity_decrease_range_size: u16,
+    pub block_activity_threshold: u8,
 }
 
 impl Config {
@@ -116,8 +133,8 @@ impl Config {
         let utxo_validation = false;
 
         let combined_db_config = CombinedDatabaseConfig {
-            // Set the cache for tests = 10MB
-            max_database_cache_size: 10 * 1024 * 1024,
+            #[cfg(feature = "rocksdb")]
+            database_config: crate::state::rocks_db::DatabaseConfig::config_for_tests(),
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,
@@ -169,10 +186,10 @@ impl Config {
                 ..Default::default()
             },
             da_compression: DaCompressionConfig::Disabled,
-            starting_gas_price,
-            gas_price_change_percent,
-            min_gas_price,
-            gas_price_threshold_percent,
+            starting_exec_gas_price: starting_gas_price,
+            exec_gas_price_change_percent: gas_price_change_percent,
+            min_exec_gas_price: min_gas_price,
+            exec_gas_price_threshold_percent: gas_price_threshold_percent,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: None,
@@ -180,6 +197,8 @@ impl Config {
             p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer: fuel_core_shared_sequencer::Config::local_node(),
             consensus_signer: SignMode::Key(fuel_core_types::secrecy::Secret::new(
                 fuel_core_chain_config::default_consensus_dev_key().into(),
             )),
@@ -188,6 +207,19 @@ impl Config {
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
             memory_pool_size: 4,
+            da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
+            starting_recorded_height: None,
+            min_da_gas_price: 0,
+            max_da_gas_price: 1,
+            max_da_gas_price_change_percent: 0,
+            da_gas_price_p_component: 0,
+            da_gas_price_d_component: 0,
+            activity_normal_range_size: 0,
+            activity_capped_range_size: 0,
+            activity_decrease_range_size: 0,
+            da_committer_url: None,
+            block_activity_threshold: 0,
+            da_poll_interval: Some(Duration::from_secs(1)),
         }
     }
 
@@ -232,7 +264,7 @@ pub struct VMConfig {
 }
 
 #[derive(
-    Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
+    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
 )]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {

@@ -74,12 +74,14 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
         let tx = tx.into();
         client.submit_and_await_commit(&tx).await.unwrap();
         // verify that the tx returned from the api matches the submitted tx
-        let ret_tx = client
+        let ret_tx: Transaction = client
             .transaction(&tx.id(&ChainId::default()))
             .await
             .unwrap()
             .unwrap()
-            .transaction;
+            .transaction
+            .try_into()
+            .unwrap();
 
         let transaction_result = client
             .transaction_status(&ret_tx.id(&ChainId::default()))
@@ -127,10 +129,14 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
 
     assert!(result.is_err());
     let error = result.err().unwrap().to_string();
-    assert!(error.contains(
-        "The provided max fee can't cover the transaction cost. \
-            The minimal gas price should be 10, while it is 0"
-    ));
+    assert!(
+        error.contains(
+            "The provided max fee can't cover the transaction cost. \
+            The minimal gas price should be 11, while it is 0"
+        ),
+        "{}",
+        error
+    );
 }
 
 // verify that dry run can disable utxo_validation by simulating a transaction with unsigned

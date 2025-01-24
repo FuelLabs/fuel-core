@@ -15,7 +15,7 @@ use std::{
 };
 
 pub const CONFIG_FILE_KEY: &str = "FUEL_CORE_E2E_CONFIG";
-pub const SYNC_TIMEOUT: Duration = Duration::from_secs(10);
+pub const SYNC_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub mod config;
 pub mod test_context;
@@ -115,7 +115,7 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
             with_cloned(&config, |config| {
                 async_execute(async {
                     let ctx = TestContext::new(config).await;
-                    tests::transfers::transfer_back(&ctx).await
+                    tests::contracts::deploy_large_contract(&ctx).await
                 })
             }),
         ),

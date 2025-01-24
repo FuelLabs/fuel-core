@@ -28,22 +28,26 @@ cynic = { workspace = true }
 ethers = "2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
   "smt",
+  "p2p",
+  "relayer",
   "wasm-executor",
   "test-helpers",
+  "backup",
 ] }
 fuel-core-benches = { path = "../benches" }
 fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-compression = { path = "../crates/compression" }
-fuel-core-executor = { workspace = true }
-fuel-core-gas-price-service = { path = "../crates/services/gas_price_service" }
+fuel-core-gas-price-service = { path = "../crates/services/gas_price_service", features = [
+  "test-helpers",
+] }
 fuel-core-p2p = { path = "../crates/services/p2p", features = [
   "test-helpers",
 ], optional = true }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
 fuel-core-relayer = { path = "../crates/services/relayer", features = [
   "test-helpers",
-], optional = true }
+] }
 fuel-core-storage = { path = "../crates/storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "../crates/trace" }
 fuel-core-txpool = { path = "../crates/services/txpool_v2", features = [
@@ -72,15 +76,16 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
   "test-util",
 ] }
+tracing-subscriber = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
+fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
 pretty_assertions = "1.4"
 proptest = { workspace = true }
 tracing = { workspace = true }
 
 [features]
-default = ["fuel-core/default", "relayer"]
-p2p = ["fuel-core/p2p", "fuel-core-p2p"]
-relayer = ["fuel-core/relayer", "fuel-core-relayer"]
-wasm-executor = ["fuel-core/wasm-executor"]
+default = ["fuel-core/default"]
+only-p2p = ["fuel-core-p2p"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]

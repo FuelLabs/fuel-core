@@ -45,8 +45,10 @@ use fuel_core_types::{
         header::BlockHeader,
     },
     fuel_tx::TxId,
-    fuel_types,
-    fuel_types::BlockHeight,
+    fuel_types::{
+        self,
+        BlockHeight,
+    },
 };
 use futures::{
     Stream,

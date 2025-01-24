@@ -2,7 +2,7 @@ use super::Bytes32;
 use crate::client::schema::{
     schema,
     BlockId,
-    ConnectionArgs,
+    ConnectionArgsFields,
     PageInfo,
     Signature,
     Tai64Timestamp,
@@ -77,6 +77,8 @@ pub struct BlockEdge {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum BlockVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 /// Block with transaction ids
@@ -123,6 +125,8 @@ pub struct BlockMutation {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum HeaderVersion {
     V1,
+    #[cynic(fallback)]
+    Unknown,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -226,12 +230,13 @@ mod tests {
     #[test]
     fn blocks_connection_query_gql_output() {
         use cynic::QueryBuilder;
-        let operation = BlocksQuery::build(ConnectionArgs {
+        let args = crate::client::schema::ConnectionArgs {
             after: None,
             before: None,
             first: None,
             last: None,
-        });
+        };
+        let operation = BlocksQuery::build(args);
         insta::assert_snapshot!(operation.query)
     }
 }

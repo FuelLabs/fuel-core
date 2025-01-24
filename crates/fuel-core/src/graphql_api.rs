@@ -9,8 +9,9 @@ use std::{
 };
 
 pub mod api_service;
-mod da_compression;
+pub mod da_compression;
 pub mod database;
+pub(crate) mod indexation;
 pub(crate) mod metrics_extension;
 pub mod ports;
 pub mod storage;
@@ -25,6 +26,8 @@ pub struct Config {
     pub debug: bool,
     pub vm_backtrace: bool,
     pub max_tx: usize,
+    pub max_gas: u64,
+    pub max_size: usize,
     pub max_txpool_dependency_chain_length: usize,
     pub chain_name: String,
 }
@@ -78,8 +81,11 @@ impl Default for Costs {
     }
 }
 
+const BALANCES_QUERY_COST_WITH_INDEXATION: usize = 0;
+const BALANCES_QUERY_COST_WITHOUT_INDEXATION: usize = 40001;
+
 pub const DEFAULT_QUERY_COSTS: Costs = Costs {
-    balance_query: 40001,
+    balance_query: BALANCES_QUERY_COST_WITH_INDEXATION,
     coins_to_spend: 40001,
     get_peers: 40001,
     estimate_predicates: 40001,

@@ -219,7 +219,7 @@ where
                 .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 let value =
                     <M::Blueprint as BlueprintInspect<M, Self>>::ValueCodec::decode(
-                        value.as_slice(),
+                        &value,
                     )
                     .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 Ok((key, value))

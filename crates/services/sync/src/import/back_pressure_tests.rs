@@ -29,7 +29,7 @@ struct Input {
 )]
 #[test_case(
     Input {
-        headers: Duration::from_millis(10),
+        headers: Duration::from_millis(100),
         ..Default::default()
     },
     State::new(None, 0),
@@ -42,7 +42,7 @@ struct Input {
 )]
 #[test_case(
     Input {
-        headers: Duration::from_millis(10),
+        headers: Duration::from_millis(100),
         ..Default::default()
     },
     State::new(None, 1000),
@@ -55,7 +55,7 @@ struct Input {
 )]
 #[test_case(
     Input {
-        transactions: Duration::from_millis(10),
+        transactions: Duration::from_millis(100),
         ..Default::default()
     },
     State::new(None, 1000),
@@ -68,7 +68,7 @@ struct Input {
 )]
 #[test_case(
     Input {
-        consensus: Duration::from_millis(10),
+        consensus: Duration::from_millis(100),
         ..Default::default()
     },
     State::new(None, 1000),
@@ -81,7 +81,7 @@ struct Input {
 )]
 #[test_case(
     Input {
-        executes: Duration::from_millis(10),
+        executes: Duration::from_millis(20),
         ..Default::default()
     },
     State::new(None, 1000),
@@ -106,13 +106,14 @@ async fn test_back_pressure(input: Input, state: State, params: Config) -> Count
     let consensus = Arc::new(PressureConsensus::new(counts.clone(), input.consensus));
     let notify = Arc::new(Notify::new());
 
-    let import = Import {
+    let mut import = Import {
         state,
         notify,
         params,
         p2p,
         executor,
         consensus,
+        cache: Cache::new(),
     };
 
     import.notify.notify_one();

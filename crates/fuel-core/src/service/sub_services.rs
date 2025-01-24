@@ -31,6 +31,7 @@ use crate::{
             SharedMemoryPool,
             SystemTime,
             TxPoolAdapter,
+            UniversalGasPriceProvider,
             VerifierAdapter,
         },
         Config,
@@ -38,20 +39,23 @@ use crate::{
         SubServices,
     },
 };
-use fuel_core_gas_price_service::v0::uninitialized_task::{
-    new_gas_price_service_v0,
-    AlgorithmV0,
+use fuel_core_gas_price_service::v1::{
+    algorithm::AlgorithmV1,
+    da_source_service::block_committer_costs::{
+        BlockCommitterDaBlockCosts,
+        BlockCommitterHttpApi,
+    },
+    metadata::V1AlgorithmConfig,
+    uninitialized_task::new_gas_price_service_v1,
 };
-use fuel_core_poa::{
-    signer::SignMode,
-    Trigger,
-};
+use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     self,
     transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::signer::SignMode;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -70,11 +74,14 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
-    FuelGasPriceProvider<AlgorithmV0>,
+    FuelGasPriceProvider<AlgorithmV1, u32, u64>,
     ConsensusParametersProvider,
 >;
 
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
+
+// TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
+pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
 
 pub fn init_sub_services(
     config: &Config,
@@ -182,17 +189,30 @@ pub fn init_sub_services(
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    let gas_price_service_v0 = new_gas_price_service_v0(
-        config.clone().into(),
+    let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
+    let da_source = BlockCommitterDaBlockCosts::new(committer_api);
+    let v1_config = V1AlgorithmConfig::from(config.clone());
+
+    let gas_price_service_v1 = new_gas_price_service_v1(
+        v1_config,
         genesis_block_height,
         settings,
         block_stream,
         database.gas_price().clone(),
+        da_source,
         database.on_chain().clone(),
     )?;
+    let (gas_price_algo, latest_gas_price) = gas_price_service_v1.shared.clone();
+    let universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
+        latest_gas_price,
+        DEFAULT_GAS_PRICE_CHANGE_PERCENT,
+    );
 
-    let gas_price_provider =
-        FuelGasPriceProvider::new(gas_price_service_v0.shared.clone());
+    let producer_gas_price_provider = FuelGasPriceProvider::new(
+        gas_price_algo.clone(),
+        universal_gas_price_provider.clone(),
+    );
+
     let txpool = fuel_core_txpool::new_service(
         chain_id,
         config.txpool.clone(),
@@ -201,7 +221,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         consensus_parameters_provider.clone(),
         last_height,
-        gas_price_provider.clone(),
+        universal_gas_price_provider.clone(),
         executor.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
@@ -211,6 +231,7 @@ pub fn init_sub_services(
         |(p2p_config, (shared_state, request_receiver))| {
             fuel_core_p2p::service::new_service(
                 chain_id,
+                last_height,
                 p2p_config,
                 shared_state,
                 request_receiver,
@@ -228,7 +249,7 @@ pub fn init_sub_services(
         executor: Arc::new(executor.clone()),
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
-        gas_price_provider: gas_price_provider.clone(),
+        gas_price_provider: producer_gas_price_provider.clone(),
         consensus_parameters_provider: consensus_parameters_provider.clone(),
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
@@ -241,9 +262,22 @@ pub fn init_sub_services(
         tracing::info!("Enabled manual block production because of `debug` flag");
     }
 
+    let signer = Arc::new(FuelBlockSigner::new(config.consensus_signer.clone()));
+
+    #[cfg(feature = "shared-sequencer")]
+    let shared_sequencer = {
+        let config = config.shared_sequencer.clone();
+
+        fuel_core_shared_sequencer::service::new_service(
+            importer_adapter.clone(),
+            config,
+            signer.clone(),
+        )?
+    };
+
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
-    let poa = (production_enabled).then(|| {
+    let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
             &last_block_header,
             poa_config,
@@ -251,7 +285,7 @@ pub fn init_sub_services(
             producer_adapter.clone(),
             importer_adapter.clone(),
             p2p_adapter.clone(),
-            FuelBlockSigner::new(config.consensus_signer.clone()),
+            signer,
             predefined_blocks,
             SystemTime,
         )
@@ -281,9 +315,9 @@ pub fn init_sub_services(
         graphql_block_importer,
         database.on_chain().clone(),
         database.off_chain().clone(),
-        chain_id,
         config.da_compression.clone(),
         config.continue_on_error,
+        &chain_config.consensus_parameters,
     );
 
     let graphql_config = GraphQLConfig {
@@ -292,6 +326,8 @@ pub fn init_sub_services(
         debug: config.debug,
         vm_backtrace: config.vm.backtrace,
         max_tx: config.txpool.pool_limits.max_txs,
+        max_gas: config.txpool.pool_limits.max_gas,
+        max_size: config.txpool.pool_limits.max_bytes_size,
         max_txpool_dependency_chain_length: config.txpool.max_txs_chain_count,
         chain_name,
     };
@@ -306,7 +342,7 @@ pub fn init_sub_services(
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),
-        Box::new(gas_price_provider),
+        Box::new(universal_gas_price_provider),
         Box::new(consensus_parameters_provider),
         SharedMemoryPool::new(config.memory_pool_size),
     )?;
@@ -328,7 +364,7 @@ pub fn init_sub_services(
     #[allow(unused_mut)]
     // `FuelService` starts and shutdowns all sub-services in the `services` order
     let mut services: SubServices = vec![
-        Box::new(gas_price_service_v0),
+        Box::new(gas_price_service_v1),
         Box::new(txpool),
         Box::new(consensus_parameters_provider_service),
     ];
@@ -349,6 +385,8 @@ pub fn init_sub_services(
             services.push(Box::new(sync));
         }
     }
+    #[cfg(feature = "shared-sequencer")]
+    services.push(Box::new(shared_sequencer));
 
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
