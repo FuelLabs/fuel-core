@@ -63,8 +63,7 @@ mockall::mock! {
         fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
 
         fn commit_changes(
-            &self,
-            height: BlockHeight,
+            &mut self,
             changes: StorageChanges,
         ) -> StorageResult<()>;
     }
