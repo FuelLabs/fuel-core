@@ -103,19 +103,21 @@ where
                 changes_list
                     .iter()
                     .filter_map(move |changes| {
-                        changes.get(&column).map(|tree| crate::iter::iterator(
-                                    tree,
-                                    prefix.as_deref(),
-                                    start.as_deref(),
-                                    direction,
-                                )
-                                .filter_map(|(key, value)| match value {
-                                    WriteOperation::Insert(value) => {
-                                        Some((key.clone().into(), value.clone()))
-                                    }
-                                    WriteOperation::Remove => None,
-                                })
-                                .map(Ok))
+                        changes.get(&column).map(|tree| {
+                            crate::iter::iterator(
+                                tree,
+                                prefix.as_deref(),
+                                start.as_deref(),
+                                direction,
+                            )
+                            .filter_map(|(key, value)| match value {
+                                WriteOperation::Insert(value) => {
+                                    Some((key.clone().into(), value.clone()))
+                                }
+                                WriteOperation::Remove => None,
+                            })
+                            .map(Ok)
+                        })
                     })
                     .flatten()
                     .into_boxed()
@@ -157,17 +159,19 @@ where
                 changes_list
                     .iter()
                     .filter_map(move |changes| {
-                        changes.get(&column).map(|tree| crate::iter::iterator(
-                                    tree,
-                                    prefix.as_deref(),
-                                    start.as_deref(),
-                                    direction,
-                                )
-                                .filter_map(|(key, value)| match value {
-                                    WriteOperation::Insert(_) => Some(key.clone().into()),
-                                    WriteOperation::Remove => None,
-                                })
-                                .map(Ok))
+                        changes.get(&column).map(|tree| {
+                            crate::iter::iterator(
+                                tree,
+                                prefix.as_deref(),
+                                start.as_deref(),
+                                direction,
+                            )
+                            .filter_map(|(key, value)| match value {
+                                WriteOperation::Insert(_) => Some(key.clone().into()),
+                                WriteOperation::Remove => None,
+                            })
+                            .map(Ok)
+                        })
                     })
                     .flatten()
                     .into_boxed()
