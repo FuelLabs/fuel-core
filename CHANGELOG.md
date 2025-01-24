@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.41.4]
+
+### Fixed
+- [2628](https://github.com/FuelLabs/fuel-core/pull/2628): Downgrade STF.
+
 ## [Version 0.41.3]
 
 ### Fixed
