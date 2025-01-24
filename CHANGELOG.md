@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - [2618](https://github.com/FuelLabs/fuel-core/pull/2618): Parallelize block/transaction changes creation in Importer
 
-## [Version 0.41.3]
-
 ### Added
 - [2619](https://github.com/FuelLabs/fuel-core/pull/2691): Add possibility to submit list of changes to rocksdb.
+
+## [Version 0.41.3]
 
 ### Fixed
 - [2626](https://github.com/FuelLabs/fuel-core/pull/2626): Avoid needs of RocksDB features in tests modules.
