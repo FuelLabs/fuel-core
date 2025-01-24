@@ -129,7 +129,7 @@ where
             .returning(move || height().map(|v| v.map(u32_to_merkle_root)));
         db.expect_store_new_block()
             .returning(move |_, _| store_block());
-        db.expect_into_changes().returning(|| Changes::default());
+        db.expect_into_changes().returning(Changes::default);
         db
     }
 }
