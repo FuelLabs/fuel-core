@@ -1,13 +1,15 @@
 use fuel_core_types::blockchain::header::ConsensusParametersVersion;
-use std::sync::Arc;
+use std::{
+    future::Future,
+    sync::Arc,
+};
 
-#[async_trait::async_trait]
 /// Interface for retrieving the gas price for a block
 pub trait GasPriceProvider {
     /// The gas price for all transactions in the block.
-    async fn production_gas_price(&self) -> anyhow::Result<u64>;
+    fn production_gas_price(&self) -> impl Future<Output = anyhow::Result<u64>> + Send;
 
-    async fn dry_run_gas_price(&self) -> anyhow::Result<u64>;
+    fn dry_run_gas_price(&self) -> impl Future<Output = anyhow::Result<u64>> + Send;
 }
 
 /// Interface for retrieving the consensus parameters.

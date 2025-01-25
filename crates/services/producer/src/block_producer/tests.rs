@@ -70,7 +70,6 @@ impl MockProducerGasPrice {
     }
 }
 
-#[async_trait::async_trait]
 impl GasPriceProvider for MockProducerGasPrice {
     async fn production_gas_price(&self) -> anyhow::Result<u64> {
         self.gas_price

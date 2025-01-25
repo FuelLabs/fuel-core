@@ -53,7 +53,6 @@ impl<A, Height, GasPrice> FuelGasPriceProvider<A, Height, GasPrice> {
     }
 }
 
-#[async_trait::async_trait]
 impl<A> ProducerGasPriceProvider for FuelGasPriceProvider<A, u32, u64>
 where
     A: GasPriceAlgorithm + Send + Sync,
