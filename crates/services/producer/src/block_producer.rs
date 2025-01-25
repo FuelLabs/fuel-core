@@ -247,14 +247,12 @@ where
     async fn production_gas_price(&self) -> anyhow::Result<u64> {
         self.gas_price_provider
             .production_gas_price()
-            .await
             .map_err(|e| anyhow!("No gas price found: {e:?}"))
     }
 
     async fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
         self.gas_price_provider
             .dry_run_gas_price()
-            .await
             .map_err(|e| anyhow!("No gas price found: {e:?}"))
     }
 }
