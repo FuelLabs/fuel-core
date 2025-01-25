@@ -28,6 +28,8 @@ pub mod importer;
 pub mod p2p_metrics;
 pub mod txpool_metrics;
 
+pub mod gas_price_metrics;
+
 static GLOBAL_REGISTER: OnceLock<GlobalRegistry> = OnceLock::new();
 
 pub fn global_registry() -> &'static GlobalRegistry {
