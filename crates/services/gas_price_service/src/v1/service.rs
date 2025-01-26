@@ -40,6 +40,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
+use fuel_core_metrics::gas_price_metrics::gas_price_metrics;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -48,7 +49,10 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::{
+    fuel_types::BlockHeight,
+    services::txpool::Metadata,
+};
 use fuel_gas_price_algorithm::{
     v0::AlgorithmUpdaterV0,
     v1::{
@@ -252,6 +256,7 @@ where
         block_gas_capacity: u64,
         block_bytes: u64,
         block_fees: u64,
+        gas_price: u64,
     ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
@@ -305,9 +310,49 @@ where
         let new_algo = self.algorithm_updater.algorithm();
         tracing::debug!("Updating gas price: {}", &new_algo.calculate());
         self.shared_algo.update(new_algo).await;
+        Self::record_metrics(&metadata, gas_price);
         // Clear the buffer after committing changes
         self.da_block_costs_buffer.clear();
         Ok(())
+    }
+
+    fn record_metrics(metadata: &UpdaterMetadata, gas_price: u64) {
+        if let UpdaterMetadata::V1(v1_metadata) = metadata {
+            let metrics = gas_price_metrics();
+            let real_gas_price_i64 = gas_price.try_into().unwrap_or(i64::MAX);
+            let exec_gas_price_i64 = v1_metadata
+                .new_exec_gas_price()
+                .try_into()
+                .unwrap_or(i64::MAX);
+            let da_gas_price_i64 = v1_metadata
+                .new_da_gas_price()
+                .try_into()
+                .unwrap_or(i64::MAX);
+            let total_reward_i64 =
+                v1_metadata.total_da_rewards.try_into().unwrap_or(i64::MAX);
+            let total_known_costs_i64 = v1_metadata
+                .latest_known_total_da_cost
+                .try_into()
+                .unwrap_or(i64::MAX);
+            let predicted_profit_i64 =
+                v1_metadata.last_profit.try_into().unwrap_or(i64::MAX);
+            let unrecorded_bytes_i64 = v1_metadata
+                .unrecorded_block_bytes
+                .try_into()
+                .unwrap_or(i64::MAX);
+            let latest_cost_per_byte_i64 = v1_metadata
+                .latest_da_cost_per_byte
+                .try_into()
+                .unwrap_or(i64::MAX);
+            metrics.real_gas_price.set(real_gas_price_i64);
+            metrics.exec_gas_price.set(exec_gas_price_i64);
+            metrics.da_gas_price.set(da_gas_price_i64);
+            metrics.total_reward.set(total_reward_i64);
+            metrics.total_known_costs.set(total_known_costs_i64);
+            metrics.predicted_profit.set(predicted_profit_i64);
+            metrics.unrecorded_bytes.set(unrecorded_bytes_i64);
+            metrics.latest_cost_per_byte.set(latest_cost_per_byte_i64);
+        }
     }
 
     async fn apply_block_info_to_gas_algorithm(
@@ -329,6 +374,7 @@ where
                 block_gas_capacity,
                 block_bytes,
                 block_fees,
+                gas_price,
                 ..
             } => {
                 self.handle_normal_block(
@@ -337,6 +383,7 @@ where
                     block_gas_capacity,
                     block_bytes,
                     block_fees,
+                    gas_price,
                 )
                 .await?;
             }

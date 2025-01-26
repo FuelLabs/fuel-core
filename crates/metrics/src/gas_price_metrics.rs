@@ -1,6 +1,5 @@
-use std::sync::OnceLock;
 use prometheus_client::metrics::gauge::Gauge;
-
+use std::sync::OnceLock;
 
 #[derive(Debug, Default)]
 pub struct GasPriceMetrics {

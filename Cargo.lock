@@ -3661,6 +3661,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "enum-iterator",
+ "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types 0.41.4",
