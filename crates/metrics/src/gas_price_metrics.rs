@@ -1,6 +1,6 @@
+use crate::global_registry;
 use prometheus_client::metrics::gauge::Gauge;
 use std::sync::OnceLock;
-use crate::global_registry;
 
 #[derive(Debug)]
 pub struct GasPriceMetrics {
