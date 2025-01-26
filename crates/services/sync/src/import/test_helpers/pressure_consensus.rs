@@ -13,7 +13,6 @@ use std::time::Duration;
 
 pub struct PressureConsensus(MockConsensusPort, Duration, SharedCounts);
 
-#[async_trait::async_trait]
 impl ConsensusPort for PressureConsensus {
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
         self.0.check_sealed_header(header)

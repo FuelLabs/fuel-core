@@ -14,7 +14,6 @@ use std::time::Duration;
 
 pub struct PressureBlockImporter(MockBlockImporterPort, Duration, SharedCounts);
 
-#[async_trait::async_trait]
 impl BlockImporterPort for PressureBlockImporter {
     fn committed_height_stream(&self) -> BoxStream<BlockHeight> {
         self.0.committed_height_stream()
