@@ -72,7 +72,3 @@ version = "0.3.0"
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]
-
-# Remove when we upgrade rust version
-[target.'cfg(target_os = "linux")'.dependencies]
-netlink-proto = { version = "=0.11.3", optional = true }
