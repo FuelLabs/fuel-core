@@ -279,9 +279,8 @@ where
             new_recorded_height = Some(BlockHeight::from(end));
         }
 
-        tracing::info!("Updating recorded height to {:?}", new_recorded_height);
         if let Some(recorded_height) = new_recorded_height {
-            tracing::info!("inner {:?}", recorded_height);
+            tracing::debug!("Updating recorded height to {:?}", recorded_height);
             storage_tx
                 .set_recorded_height(recorded_height)
                 .map_err(|err| anyhow!(err))?;
@@ -522,7 +521,6 @@ mod tests {
         l2_block: mpsc::Receiver<BlockInfo>,
     }
 
-    #[async_trait::async_trait]
     impl L2BlockSource for FakeL2BlockSource {
         async fn get_l2_block(&mut self) -> GasPriceResult<BlockInfo> {
             let block = self.l2_block.recv().await.unwrap();
