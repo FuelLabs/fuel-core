@@ -53,16 +53,15 @@ impl<A, Height, GasPrice> FuelGasPriceProvider<A, Height, GasPrice> {
     }
 }
 
-#[async_trait::async_trait]
 impl<A> ProducerGasPriceProvider for FuelGasPriceProvider<A, u32, u64>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    async fn production_gas_price(&self) -> anyhow::Result<u64> {
+    fn production_gas_price(&self) -> anyhow::Result<u64> {
         Ok(self.algorithm.next_gas_price())
     }
 
-    async fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
+    fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
         let price = self.latest_gas_price.inner_next_gas_price();
         Ok(price)
     }

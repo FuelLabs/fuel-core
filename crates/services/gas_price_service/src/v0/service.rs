@@ -62,8 +62,8 @@ where
         self.shared_algo.clone()
     }
 
-    async fn update(&mut self, new_algorithm: AlgorithmV0) {
-        self.shared_algo.update(new_algorithm).await;
+    fn update(&mut self, new_algorithm: AlgorithmV0) {
+        self.shared_algo.update(new_algorithm);
     }
 
     fn validate_block_gas_capacity(
@@ -115,7 +115,7 @@ where
             }
         }
 
-        self.update(self.algorithm_updater.algorithm()).await;
+        self.update(self.algorithm_updater.algorithm());
         Ok(())
     }
 }
@@ -203,7 +203,6 @@ mod tests {
         l2_block: mpsc::Receiver<BlockInfo>,
     }
 
-    #[async_trait::async_trait]
     impl L2BlockSource for FakeL2BlockSource {
         async fn get_l2_block(&mut self) -> GasPriceResult<BlockInfo> {
             let block = self.l2_block.recv().await.unwrap();
