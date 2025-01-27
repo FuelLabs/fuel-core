@@ -1,5 +1,9 @@
 use crate::{
     self as fuel_core_txpool,
+    pool_worker::{
+        PoolRequest,
+        PoolWorkerInterface,
+    },
 };
 use fuel_core_services::TaskNextAction;
 
@@ -187,7 +191,7 @@ pub struct Task<View> {
     transaction_verifier_process: SyncProcessor,
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
-    pool: Shared<TxPool>,
+    pool_worker: PoolWorkerInterface,
     current_height: Shared<BlockHeight>,
     tx_sync_history: Shared<HashSet<PeerId>>,
     shared_state: SharedState,
@@ -312,11 +316,8 @@ where
         drop(result);
 
         {
-            let mut tx_pool = self.pool.write();
-            tx_pool.remove_transaction(executed_transaction);
-            if !tx_pool.is_empty() {
-                self.shared_state.new_txs_notifier.send_replace(());
-            }
+            self.pool_worker.remove(executed_transaction);
+            self.shared_state.new_txs_notifier.send_replace(());
         }
 
         {
@@ -392,16 +393,15 @@ where
         }
 
         let verification = self.verification.clone();
-        let pool = self.pool.clone();
+        let pool_request_sender = self.pool_worker.request_sender.clone();
         let p2p = self.p2p.clone();
         let shared_state = self.shared_state.clone();
         let current_height = self.current_height.clone();
-        let time_txs_submitted = self.pruner.time_txs_submitted.clone();
+        // let time_txs_submitted = self.pruner.time_txs_submitted.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
 
         let insert_transaction_thread_pool_op = move || {
-            let start_total_time = std::time::Instant::now();
             let current_height = *current_height.read();
 
             // TODO: This should be removed if the checked transactions
@@ -412,11 +412,14 @@ where
             let start_time = tokio::time::Instant::now();
             let result = verification.perform_all_verifications(
                 transaction,
-                &pool,
                 current_height,
                 utxo_validation,
             );
-            tracing::info!("Transaction (id: {}) took {} micros seconds to verify", &tx_id, start_time.elapsed().as_micros());
+            tracing::info!(
+                "Transaction (id: {}) took {} micros seconds to verify",
+                &tx_id,
+                start_time.elapsed().as_micros()
+            );
 
             if metrics {
                 txpool_metrics()
@@ -440,61 +443,47 @@ where
 
             let tx = Arc::new(checked_tx);
 
-            let result = {
-                let start_time = tokio::time::Instant::now();
-                let mut pool = pool.write();
-                tracing::info!("Transaction (id: {}) took {} micros seconds to acquire write lock", &tx_id, start_time.elapsed().as_micros());
-                let result = verification.persistent_storage_provider.latest_view();
+            pool_request_sender.send(PoolRequest::Insert { tx });
 
-                let start_time = tokio::time::Instant::now();
-                let res = match result {
-                    Ok(view) => pool.insert(tx, &view),
-                    Err(err) => Err(Error::Database(format!("{:?}", err))),
-                };
-                tracing::info!("Transaction (id: {}) took {} micros seconds to insert into the pool", &tx_id, start_time.elapsed().as_micros());
-                res
-            };
+            // let removed_txs = match result {
+            //     Ok(removed_txs) => {
+            //         let submitted_time = SystemTime::now();
+            //         time_txs_submitted
+            //             .write()
+            //             .push_front((submitted_time, tx_id));
 
-            let removed_txs = match result {
-                Ok(removed_txs) => {
-                    let submitted_time = SystemTime::now();
-                    time_txs_submitted
-                        .write()
-                        .push_front((submitted_time, tx_id));
+            //         let duration = submitted_time
+            //             .duration_since(SystemTime::UNIX_EPOCH)
+            //             .expect("Time can't be less than UNIX EPOCH");
 
-                    let duration = submitted_time
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .expect("Time can't be less than UNIX EPOCH");
+            //         shared_state.tx_status_sender.send_submitted(
+            //             tx_id,
+            //             Tai64::from_unix(duration.as_secs() as i64),
+            //         );
 
-                    shared_state.tx_status_sender.send_submitted(
-                        tx_id,
-                        Tai64::from_unix(duration.as_secs() as i64),
-                    );
+            //         if let Some(channel) = response_channel {
+            //             let _ = channel.send(Ok(()));
+            //         }
+            //         shared_state.new_txs_notifier.send_replace(());
 
-                    if let Some(channel) = response_channel {
-                        let _ = channel.send(Ok(()));
-                    }
-                    shared_state.new_txs_notifier.send_replace(());
+            //         removed_txs
+            //     }
+            //     Err(err) => {
+            //         if let Some(channel) = response_channel {
+            //             let _ = channel.send(Err(err.clone()));
+            //         }
 
-                    removed_txs
-                }
-                Err(err) => {
-                    if let Some(channel) = response_channel {
-                        let _ = channel.send(Err(err.clone()));
-                    }
+            //         shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
+            //         return
+            //     }
+            // };
 
-                    shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
-                    return
-                }
-            };
-
-            for tx in removed_txs {
-                shared_state.tx_status_sender.send_squeezed_out(
-                    tx.id(),
-                    Error::Removed(RemovedReason::LessWorth(tx.id())),
-                );
-            }
-            tracing::info!("Transaction (id: {}) took {} micros seconds to process insertion result", &tx_id, start_total_time.elapsed().as_micros());
+            // for tx in removed_txs {
+            //     shared_state.tx_status_sender.send_squeezed_out(
+            //         tx.id(),
+            //         Error::Removed(RemovedReason::LessWorth(tx.id())),
+            //     );
+            // }
         };
         move || {
             if metrics {
@@ -511,18 +500,7 @@ where
     }
 
     fn manage_remove_coin_dependents(&self, transactions: Vec<(TxId, String)>) {
-        for (tx_id, reason) in transactions {
-            let dependents = self.pool.write().remove_coin_dependents(tx_id);
-
-            for removed_tx in dependents {
-                self.shared_state.tx_status_sender.send_squeezed_out(
-                    removed_tx.id(),
-                    Error::SkippedTransaction(
-                        format!("Parent transaction with {tx_id}, was removed because of the {reason}")
-                    )
-                );
-            }
-        }
+        self.pool_worker.remove_coin_dependents(transactions);
     }
 
     fn manage_tx_from_p2p(
@@ -633,17 +611,10 @@ where
             }
         }
 
-        let removed;
-        {
-            let mut pool = self.pool.write();
-            removed = pool.remove_transaction_and_dependents(txs_to_remove);
-        }
-
-        for tx in removed {
-            self.shared_state
-                .tx_status_sender
-                .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
-        }
+        self.pool_worker.remove_and_coin_dependents((
+            txs_to_remove,
+            Error::Removed(RemovedReason::Ttl),
+        ));
 
         {
             // Each time when we prune transactions, clear the history of synchronization
@@ -767,8 +738,9 @@ where
         read_pool: read_pool_requests_receiver,
     };
 
+    let storage_provider = Arc::new(ps_provider);
     let verification = Verification {
-        persistent_storage_provider: Arc::new(ps_provider),
+        persistent_storage_provider: storage_provider.clone(),
         consensus_parameters_provider: Arc::new(consensus_parameters_provider),
         gas_price_provider: Arc::new(gas_price_provider),
         wasm_checker: Arc::new(wasm_checker),
@@ -807,6 +779,8 @@ where
         config,
     );
 
+    let pool_worker = PoolWorkerInterface::new(txpool, storage_provider);
+
     Service::new(Task {
         chain_id,
         utxo_validation,
@@ -817,7 +791,7 @@ where
         pruner,
         p2p: Arc::new(p2p),
         current_height: Arc::new(RwLock::new(current_height)),
-        pool: Arc::new(RwLock::new(txpool)),
+        pool_worker,
         shared_state,
         metrics,
         tx_sync_history: Default::default(),

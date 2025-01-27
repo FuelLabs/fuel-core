@@ -45,6 +45,7 @@ mod collision_manager;
 pub mod config;
 pub mod error;
 mod pool;
+mod pool_worker;
 pub mod ports;
 mod selection_algorithms;
 mod service;

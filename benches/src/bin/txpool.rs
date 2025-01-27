@@ -1,4 +1,3 @@
-
 use fuel_core::{
     service::config::Trigger,
     upgradable_executor::native_executor::ports::TransactionExt,
@@ -120,14 +119,14 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
 
 fn main() {
     let n = std::env::var("BENCH_TXS_NUMBER")
-    .ok()
-    .and_then(|s| s.parse::<u64>().ok())
-    .unwrap();
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap();
 
     let number_of_cores = std::env::var("FUEL_BENCH_CORES")
-    .ok()
-    .and_then(|s| s.parse::<usize>().ok())
-    .unwrap();
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap();
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
@@ -191,8 +190,8 @@ fn main() {
     test_builder.block_size_limit = Some(1_000_000_000_000_000);
     test_builder.max_txs = transactions.len();
     test_builder.number_threads_pool_verif = number_of_cores;
-     // spin up node
-     let _ = rt.block_on(async move {
+    // spin up node
+    let _ = rt.block_on(async move {
         // start the producer node
         let TestContext { srv, .. } = test_builder.finalize().await;
 

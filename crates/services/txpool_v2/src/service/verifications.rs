@@ -6,11 +6,7 @@ use crate::{
         TxPoolPersistentStorage,
         WasmChecker,
     },
-    service::{
-        memory::MemoryPool,
-        Shared,
-        TxPool,
-    },
+    service::memory::MemoryPool,
 };
 // use fuel_core_types::fuel_tx::UniqueIdentifier;
 use fuel_core_storage::transactional::AtomicView;
@@ -75,7 +71,6 @@ where
     pub fn perform_all_verifications(
         &self,
         tx: Transaction,
-        pool: &Shared<TxPool>,
         current_height: BlockHeight,
         utxo_validation: bool,
     ) -> Result<PoolTransaction, Error> {
@@ -103,7 +98,7 @@ where
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
 
         let inputs_verified_tx =
-            gas_price_verified_tx.perform_inputs_verifications(pool, &view, metadata)?;
+            gas_price_verified_tx.perform_inputs_verifications(&view, metadata)?;
 
         let fully_verified_tx = inputs_verified_tx
             .perform_input_computation_verifications(
@@ -181,14 +176,14 @@ impl BasicVerifiedTx {
 impl GasPriceVerifiedTx {
     pub fn perform_inputs_verifications<View>(
         self,
-        _pool: &Shared<TxPool>,
+        //_pool: &Shared<TxPool>,
         _view: &View,
         _metadata: Metadata,
     ) -> Result<InputDependenciesVerifiedTx, Error>
     where
         View: TxPoolPersistentStorage,
     {
-        //TODO: See in the end if it change something
+        // TODO: See in the end if it change something
 
         // let pool_tx = checked_tx_into_pool(self.0, metadata)?;
         // let tx_id = pool_tx.id();
