@@ -116,7 +116,6 @@ struct FakeL2BlockSource {
     l2_block: Receiver<BlockInfo>,
 }
 
-#[async_trait::async_trait]
 impl L2BlockSource for FakeL2BlockSource {
     async fn get_l2_block(&mut self) -> GasPriceResult<BlockInfo> {
         let block = self.l2_block.recv().await.unwrap();
