@@ -32,7 +32,7 @@ pub enum TableColumn {
     /// Only can be proved with list of events processed during the block
     /// and compared with the `event_inbox_root` in the block header.
     Messages = 3,
-    /// We need to prove that the transaction doesn't included into the table.
+    /// We need to prove that the transaction isn't included in the table.
     /// Only can be proved with global root or a double spend proof.
     ProcessedTransactions = 4,
     /// Only can be proved with global root or a double spend proof.
@@ -47,7 +47,7 @@ pub enum TableColumn {
 
 impl TableColumn {
     /// The total count of variants in the enum.
-    pub const COUNT: usize = <Self as strum::EnumCount>::COUNT;
+    const COUNT: usize = <Self as strum::EnumCount>::COUNT;
 
     /// Returns the `usize` representation of the `Column`.
     pub fn as_u32(&self) -> u32 {
@@ -97,7 +97,7 @@ impl StorageColumn for Column {
                 let str: &str = column.into();
                 str.to_string()
             }
-            Column::MerkleMetadataColumn(column) => {
+            Self::MerkleMetadataColumn(column) => {
                 let str: &str = column.into();
                 format!("MerkleMetadata{}", str)
             }
