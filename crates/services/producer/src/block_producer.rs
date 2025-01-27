@@ -188,7 +188,7 @@ where
         // prevent simultaneous block production calls, the guard will drop at the end of this fn.
         let _production_guard = self.lock.lock().await;
 
-        let gas_price = self.calculate_gas_price().await?;
+        let gas_price = self.calculate_gas_price()?;
 
         let source = tx_source(gas_price, height).await?;
 
@@ -216,10 +216,9 @@ where
         Ok(result)
     }
 
-    async fn calculate_gas_price(&self) -> anyhow::Result<u64> {
+    fn calculate_gas_price(&self) -> anyhow::Result<u64> {
         self.gas_price_provider
             .next_gas_price()
-            .await
             .map_err(|e| anyhow!("No gas price found: {e:?}"))
     }
 }
@@ -310,7 +309,7 @@ where
         let gas_price = if let Some(inner) = gas_price {
             inner
         } else {
-            self.calculate_gas_price().await?
+            self.calculate_gas_price()?
         };
 
         // The dry run execution should use the state of the blockchain based on the
