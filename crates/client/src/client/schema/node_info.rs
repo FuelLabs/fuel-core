@@ -27,6 +27,7 @@ pub struct NodeInfo {
     pub max_size: U64,
     pub max_depth: U64,
     pub node_version: String,
+    pub indexation: IndexationFlags,
     pub tx_pool_stats: TxPoolStats,
 }
 
@@ -86,6 +87,14 @@ pub struct TxPoolStats {
     pub tx_count: U64,
     pub total_gas: U64,
     pub total_size: U64,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug, PartialEq, Eq)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct IndexationFlags {
+    pub balances: bool,
+    pub coins_to_spend: bool,
+    pub asset_metadata: bool,
 }
 
 #[cfg(test)]

@@ -12,6 +12,11 @@ query QueryNodeInfo {
     maxSize
     maxDepth
     nodeVersion
+    indexation {
+      balances
+      coinsToSpend
+      assetMetadata
+    }
     txPoolStats {
       txCount
       totalGas

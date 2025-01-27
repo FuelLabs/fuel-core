@@ -6,11 +6,40 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- [2630](https://github.com/FuelLabs/fuel-core/pull/2630): Removed some noisy `tracing::info!` logs
+
 ### Added
-- [2551](https://github.com/FuelLabs/fuel-core/pull/2551): Enhanced the DA compressed block header to include block id.
 - [2617](https://github.com/FuelLabs/fuel-core/pull/2617): Add integration skeleton of parallel-executor.
 
+## [Version 0.41.4]
+
 ### Fixed
+- [2628](https://github.com/FuelLabs/fuel-core/pull/2628): Downgrade STF.
+
+## [Version 0.41.3]
+
+### Fixed
+- [2626](https://github.com/FuelLabs/fuel-core/pull/2626): Avoid needs of RocksDB features in tests modules.
+
+## [Version 0.41.2]
+
+### Fixed
+
+- [2623](https://github.com/FuelLabs/fuel-core/pull/2623): Pinned netlink-proto's version.
+
+## [Version 0.41.1]
+
+### Added
+- [2551](https://github.com/FuelLabs/fuel-core/pull/2551): Enhanced the DA compressed block header to include block id.
+- [2595](https://github.com/FuelLabs/fuel-core/pull/2595): Added `indexation` field to the `nodeInfo` GraphQL endpoint to allow checking if a specific indexation is enabled.
+
+### Changed
+- [2603](https://github.com/FuelLabs/fuel-core/pull/2603): Sets the latest recorded height on initialization, not just when DA costs are received
+
+### Fixed
+- [2612](https://github.com/FuelLabs/fuel-core/pull/2612): Use latest gas price to estimate next block gas price during dry runs 
+- [2612](https://github.com/FuelLabs/fuel-core/pull/2612): Use latest gas price to estimate next block gas price in tx pool instead of using algorithm directly
 - [2609](https://github.com/FuelLabs/fuel-core/pull/2609): Check response before trying to deserialize, return error instead
 - [2599](https://github.com/FuelLabs/fuel-core/pull/2599): Use the proper `url` apis to construct full url path in `BlockCommitterHttpApi` client
 - [2593](https://github.com/FuelLabs/fuel-core/pull/2593): Fixed utxo id decompression
