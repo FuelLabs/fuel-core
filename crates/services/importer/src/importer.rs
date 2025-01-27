@@ -297,11 +297,7 @@ where
         let actual_next_height = *block.header().height();
 
         #[cfg(feature = "test-helpers")]
-        let changes_clone = {
-            let mut changes_clone = changes.clone();
-            changes_clone.extend(block_changes.clone());
-            changes_clone
-        };
+        let changes_clone = changes.clone();
 
         database
             .commit_changes(StorageChanges::ChangesList(vec![block_changes, changes]))?;
