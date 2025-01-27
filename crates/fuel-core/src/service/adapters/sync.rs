@@ -142,7 +142,6 @@ impl PeerReport for P2PAdapterPeerReport {
     }
 }
 
-#[async_trait::async_trait]
 impl BlockImporterPort for BlockImporterAdapter {
     fn committed_height_stream(&self) -> BoxStream<BlockHeight> {
         use futures::StreamExt;
@@ -160,7 +159,6 @@ impl BlockImporterPort for BlockImporterAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl ConsensusPort for ConsensusAdapter {
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
         Ok(self.block_verifier.verify_consensus(header))
