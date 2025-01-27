@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - [2619](https://github.com/FuelLabs/fuel-core/pull/2691): Add possibility to submit list of changes to rocksdb.
 
+### Changed
+- [2630](https://github.com/FuelLabs/fuel-core/pull/2630): Removed some noisy `tracing::info!` logs
+
+## [Version 0.41.4]
+
+### Fixed
+- [2628](https://github.com/FuelLabs/fuel-core/pull/2628): Downgrade STF.
+
 ## [Version 0.41.3]
 
 ### Fixed
