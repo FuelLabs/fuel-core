@@ -44,6 +44,7 @@ pub struct CombinedDatabaseConfig {
     pub database_type: DbType,
     #[cfg(feature = "rocksdb")]
     pub database_config: DatabaseConfig,
+    #[cfg(feature = "rocksdb")]
     pub state_rewind_policy: StateRewindPolicy,
 }
 

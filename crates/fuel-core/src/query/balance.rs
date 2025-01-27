@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{
+    database::database_description::IndexationKind,
     fuel_core_graphql_api::database::ReadView,
     graphql_api::storage::balances::TotalBalanceAmount,
 };
@@ -41,7 +42,7 @@ impl ReadView {
         asset_id: AssetId,
         base_asset_id: AssetId,
     ) -> StorageResult<AddressBalance> {
-        let amount = if self.balances_indexation_enabled {
+        let amount = if self.indexation_flags.contains(&IndexationKind::Balances) {
             self.off_chain.balance(&owner, &asset_id, &base_asset_id)?
         } else {
             AssetQuery::new(
@@ -73,7 +74,7 @@ impl ReadView {
         direction: IterDirection,
         base_asset_id: &'a AssetId,
     ) -> impl Stream<Item = StorageResult<AddressBalance>> + 'a {
-        if self.balances_indexation_enabled {
+        if self.indexation_flags.contains(&IndexationKind::Balances) {
             futures::future::Either::Left(self.balances_with_cache(
                 owner,
                 start,

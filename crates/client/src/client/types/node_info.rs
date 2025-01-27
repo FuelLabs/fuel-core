@@ -1,6 +1,9 @@
 use crate::client::schema::{
     self,
-    node_info::TxPoolStats,
+    node_info::{
+        IndexationFlags,
+        TxPoolStats,
+    },
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -12,6 +15,7 @@ pub struct NodeInfo {
     pub max_size: u64,
     pub max_depth: u64,
     pub node_version: String,
+    pub indexation: IndexationFlags,
     pub tx_pool_stats: TxPoolStats,
 }
 
@@ -27,6 +31,7 @@ impl From<schema::node_info::NodeInfo> for NodeInfo {
             max_size: value.max_size.into(),
             max_depth: value.max_depth.into(),
             node_version: value.node_version,
+            indexation: value.indexation,
             tx_pool_stats: value.tx_pool_stats,
         }
     }

@@ -198,10 +198,22 @@ where
             self.block_stream,
         );
 
-        let starting_recorded_height = self
-            .gas_price_db
-            .get_recorded_height()?
-            .unwrap_or(BlockHeight::from(latest_block_height));
+        let starting_recorded_height = match self.gas_price_db.get_recorded_height()? {
+            Some(height) => height,
+            None => match self.config.starting_recorded_height {
+                Some(height) => {
+                    tracing::debug!(
+                        "Using provided starting recorded height: {:?}",
+                        height
+                    );
+                    height
+                }
+                None => {
+                    tracing::debug!("No starting recorded height provided, defaulting to latest block height");
+                    BlockHeight::from(latest_block_height)
+                }
+            },
+        };
 
         let poll_duration = self.config.da_poll_interval;
         let latest_l2_height = Arc::new(AtomicU32::new(latest_block_height));
@@ -224,6 +236,7 @@ where
                 da_service_runner,
                 self.gas_price_db,
                 Arc::clone(&latest_l2_height),
+                Some(starting_recorded_height),
             );
             Ok(service)
         } else {
@@ -251,6 +264,7 @@ where
                 da_service_runner,
                 self.gas_price_db,
                 Arc::clone(&latest_l2_height),
+                Some(starting_recorded_height),
             );
             Ok(service)
         }
