@@ -41,17 +41,17 @@ where
     }
 }
 
-pub struct Merklized<Table>(core::marker::PhantomData<Table>);
+pub struct Merkleized<Table>(core::marker::PhantomData<Table>);
 
 /// Implementation of this trait for the table, inherits
-/// the Merkle implementation for the [`Merklized`] table.
-pub trait MerklizedTableColumn {
+/// the Merkle implementation for the [`Merkleized`] table.
+pub trait MerkleizedTableColumn {
     fn table_column() -> TableColumn;
 }
 
-impl<Table> Mappable for Merklized<Table>
+impl<Table> Mappable for Merkleized<Table>
 where
-    Table: Mappable + MerklizedTableColumn,
+    Table: Mappable + MerkleizedTableColumn,
 {
     type Key = <Table as Mappable>::Key;
     type OwnedKey = <Table as Mappable>::OwnedKey;
@@ -69,9 +69,9 @@ type ValueCodec<Table> = <<Table as TableWithBlueprint>::Blueprint as BlueprintI
     DummyStorage<Column>,
 >>::ValueCodec;
 
-impl<Table> TableWithBlueprint for Merklized<Table>
+impl<Table> TableWithBlueprint for Merkleized<Table>
 where
-    Table: Mappable + MerklizedTableColumn,
+    Table: Mappable + MerkleizedTableColumn,
     Table: TableWithBlueprint,
     Table::Blueprint: BlueprintInspect<Table, DummyStorage<Column>>,
 {

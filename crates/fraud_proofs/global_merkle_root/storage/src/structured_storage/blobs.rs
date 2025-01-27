@@ -1,10 +1,10 @@
 use crate::{
     column::TableColumn,
-    merkle::MerklizedTableColumn,
+    merkle::MerkleizedTableColumn,
 };
 use fuel_core_storage::tables::BlobData;
 
-impl MerklizedTableColumn for BlobData {
+impl MerkleizedTableColumn for BlobData {
     fn table_column() -> TableColumn {
         TableColumn::Blobs
     }

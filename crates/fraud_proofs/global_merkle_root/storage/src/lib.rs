@@ -11,17 +11,17 @@ pub mod merkle;
 pub mod structured_storage;
 pub mod update;
 
-use crate::merkle::Merklized;
+use crate::merkle::Merkleized;
 
-pub type ContractsRawCode = Merklized<fuel_core_storage::tables::ContractsRawCode>;
-pub type ContractsLatestUtxo = Merklized<fuel_core_storage::tables::ContractsLatestUtxo>;
-pub type Coins = Merklized<fuel_core_storage::tables::Coins>;
-pub type Messages = Merklized<fuel_core_storage::tables::Messages>;
+pub type ContractsRawCode = Merkleized<fuel_core_storage::tables::ContractsRawCode>;
+pub type ContractsLatestUtxo = Merkleized<fuel_core_storage::tables::ContractsLatestUtxo>;
+pub type Coins = Merkleized<fuel_core_storage::tables::Coins>;
+pub type Messages = Merkleized<fuel_core_storage::tables::Messages>;
 pub type ProcessedTransactions =
-    Merklized<fuel_core_storage::tables::ProcessedTransactions>;
+    Merkleized<fuel_core_storage::tables::ProcessedTransactions>;
 pub type ConsensusParametersVersions =
-    Merklized<fuel_core_storage::tables::ConsensusParametersVersions>;
+    Merkleized<fuel_core_storage::tables::ConsensusParametersVersions>;
 pub type StateTransitionBytecodeVersions =
-    Merklized<fuel_core_storage::tables::StateTransitionBytecodeVersions>;
-pub type UploadedBytecodes = Merklized<fuel_core_storage::tables::UploadedBytecodes>;
-pub type Blobs = Merklized<fuel_core_storage::tables::BlobData>;
+    Merkleized<fuel_core_storage::tables::StateTransitionBytecodeVersions>;
+pub type UploadedBytecodes = Merkleized<fuel_core_storage::tables::UploadedBytecodes>;
+pub type Blobs = Merkleized<fuel_core_storage::tables::BlobData>;

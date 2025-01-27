@@ -1,10 +1,10 @@
 use crate::{
     column::TableColumn,
-    merkle::MerklizedTableColumn,
+    merkle::MerkleizedTableColumn,
 };
 use fuel_core_storage::tables::Coins;
 
-impl MerklizedTableColumn for Coins {
+impl MerkleizedTableColumn for Coins {
     fn table_column() -> TableColumn {
         TableColumn::Coins
     }

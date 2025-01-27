@@ -63,7 +63,7 @@ use fuel_core_types::{
     },
 };
 
-pub trait UpdateMerklizedTables {
+pub trait UpdateMerkleizedTables {
     fn update_merklized_tables(
         &mut self,
         chain_id: ChainId,
@@ -71,7 +71,7 @@ pub trait UpdateMerklizedTables {
     ) -> anyhow::Result<()>;
 }
 
-impl<Storage> UpdateMerklizedTables for StorageTransaction<Storage>
+impl<Storage> UpdateMerkleizedTables for StorageTransaction<Storage>
 where
     Storage: KeyValueInspect<Column = Column>,
 {

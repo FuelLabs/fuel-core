@@ -1,19 +1,19 @@
 use crate::{
     column::TableColumn,
-    merkle::MerklizedTableColumn,
+    merkle::MerkleizedTableColumn,
 };
 use fuel_core_storage::tables::{
     ContractsLatestUtxo,
     ContractsRawCode,
 };
 
-impl MerklizedTableColumn for ContractsRawCode {
+impl MerkleizedTableColumn for ContractsRawCode {
     fn table_column() -> TableColumn {
         TableColumn::ContractsRawCode
     }
 }
 
-impl MerklizedTableColumn for ContractsLatestUtxo {
+impl MerkleizedTableColumn for ContractsLatestUtxo {
     fn table_column() -> TableColumn {
         TableColumn::ContractsLatestUtxo
     }

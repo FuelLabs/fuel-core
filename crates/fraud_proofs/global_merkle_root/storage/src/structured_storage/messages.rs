@@ -1,10 +1,10 @@
 use crate::{
     column::TableColumn,
-    merkle::MerklizedTableColumn,
+    merkle::MerkleizedTableColumn,
 };
 use fuel_core_storage::tables::Messages;
 
-impl MerklizedTableColumn for Messages {
+impl MerkleizedTableColumn for Messages {
     fn table_column() -> TableColumn {
         TableColumn::Messages
     }

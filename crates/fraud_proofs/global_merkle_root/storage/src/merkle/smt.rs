@@ -1,6 +1,6 @@
 use crate::{
     column::Column,
-    merkle::MerklizedTableColumn,
+    merkle::MerkleizedTableColumn,
 };
 use fuel_core_storage::{
     blueprint::plain::Plain,
@@ -27,7 +27,7 @@ impl<Table> Mappable for MerkleData<Table> {
 
 impl<Table> TableWithBlueprint for MerkleData<Table>
 where
-    Table: MerklizedTableColumn,
+    Table: MerkleizedTableColumn,
 {
     type Blueprint = Plain<Raw, Postcard>;
     type Column = Column;
@@ -49,7 +49,7 @@ impl<Table> Mappable for MerkleMetadata<Table> {
 
 impl<Table> TableWithBlueprint for MerkleMetadata<Table>
 where
-    Table: MerklizedTableColumn,
+    Table: MerkleizedTableColumn,
 {
     type Blueprint = Plain<Primitive<4>, Postcard>;
     type Column = Column;

@@ -1,6 +1,6 @@
 use crate::{
     column::TableColumn,
-    merkle::MerklizedTableColumn,
+    merkle::MerkleizedTableColumn,
 };
 use fuel_core_storage::tables::{
     ConsensusParametersVersions,
@@ -8,19 +8,19 @@ use fuel_core_storage::tables::{
     UploadedBytecodes,
 };
 
-impl MerklizedTableColumn for ConsensusParametersVersions {
+impl MerkleizedTableColumn for ConsensusParametersVersions {
     fn table_column() -> TableColumn {
         TableColumn::ConsensusParametersVersions
     }
 }
 
-impl MerklizedTableColumn for StateTransitionBytecodeVersions {
+impl MerkleizedTableColumn for StateTransitionBytecodeVersions {
     fn table_column() -> TableColumn {
         TableColumn::StateTransitionBytecodeVersions
     }
 }
 
-impl MerklizedTableColumn for UploadedBytecodes {
+impl MerkleizedTableColumn for UploadedBytecodes {
     fn table_column() -> TableColumn {
         TableColumn::UploadedBytecodes
     }
