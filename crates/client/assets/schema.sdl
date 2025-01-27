@@ -580,6 +580,21 @@ type HeavyOperation {
 scalar HexString
 
 
+type IndexationFlags {
+	"""
+	Is balances indexation enabled
+	"""
+	balances: Boolean!
+	"""
+	Is coins to spend indexation enabled
+	"""
+	coinsToSpend: Boolean!
+	"""
+	Is asset metadata indexation enabled
+	"""
+	assetMetadata: Boolean!
+}
+
 union Input = InputCoin | InputContract | InputMessage
 
 type InputCoin {
@@ -764,6 +779,7 @@ type NodeInfo {
 	maxSize: U64!
 	maxDepth: U64!
 	nodeVersion: String!
+	indexation: IndexationFlags!
 	txPoolStats: TxPoolStats!
 	peers: [PeerInfo!]!
 }

@@ -85,6 +85,7 @@ pub struct Config {
     /// The size of the memory pool in number of `MemoryInstance`s.
     pub memory_pool_size: usize,
     pub da_gas_price_factor: NonZeroU64,
+    pub starting_recorded_height: Option<u32>,
     pub min_da_gas_price: u64,
     pub max_da_gas_price: u64,
     pub max_da_gas_price_change_percent: u16,
@@ -120,7 +121,6 @@ impl Config {
 
     #[cfg(feature = "test-helpers")]
     pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
-        use crate::state::rocks_db::DatabaseConfig;
         let block_importer = fuel_core_importer::Config::new(false);
         let latest_block = snapshot_reader.last_block_config();
         // In tests, we always want to use the native executor as a default configuration.
@@ -134,7 +134,7 @@ impl Config {
 
         let combined_db_config = CombinedDatabaseConfig {
             #[cfg(feature = "rocksdb")]
-            database_config: DatabaseConfig::config_for_tests(),
+            database_config: crate::state::rocks_db::DatabaseConfig::config_for_tests(),
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,
@@ -208,6 +208,7 @@ impl Config {
             time_until_synced: Duration::ZERO,
             memory_pool_size: 4,
             da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
+            starting_recorded_height: None,
             min_da_gas_price: 0,
             max_da_gas_price: 1,
             max_da_gas_price_change_percent: 0,
