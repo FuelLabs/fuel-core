@@ -233,7 +233,12 @@ where
             }
             .into();
 
-            self.storage.storage::<Coins>().insert(&utxo_id, &coin)?;
+            let previous_coin =
+                self.storage.storage::<Coins>().replace(&utxo_id, &coin)?;
+
+            // We should never overwrite coins.
+            // TODO(#2588): Return error instead.
+            assert!(previous_coin.is_none());
         }
 
         Ok(())
