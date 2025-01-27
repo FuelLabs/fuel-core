@@ -37,7 +37,7 @@ where
         self.0.read().next_gas_price()
     }
 
-    pub async fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64 {
+    pub fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64 {
         self.0.read().worst_case_gas_price(block_height)
     }
 }
