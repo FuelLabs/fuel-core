@@ -94,6 +94,7 @@ pub struct V1AlgorithmConfig {
     /// The interval at which the `DaSourceService` polls for new data
     pub da_poll_interval: Option<Duration>,
     pub starting_recorded_height: Option<BlockHeight>,
+    pub record_metrics: bool,
 }
 
 pub fn updater_from_config(

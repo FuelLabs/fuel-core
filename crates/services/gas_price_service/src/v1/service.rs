@@ -131,6 +131,8 @@ where
     latest_l2_block: Arc<AtomicU32>,
     /// Initial Recorded Height
     initial_recorded_height: Option<BlockHeight>,
+    /// Metrics will be recorded if true
+    record_metrics: bool,
 }
 
 impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
@@ -208,6 +210,7 @@ where
         storage_tx_provider: AtomicStorage,
         latest_l2_block: Arc<AtomicU32>,
         initial_recorded_height: Option<BlockHeight>,
+        record_metrics: bool,
     ) -> Self {
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
         Self {
@@ -221,6 +224,7 @@ where
             storage_tx_provider,
             latest_l2_block,
             initial_recorded_height,
+            record_metrics,
         }
     }
 
@@ -654,6 +658,7 @@ mod tests {
             block_activity_threshold: 20,
             da_poll_interval: None,
             starting_recorded_height: None,
+            record_metrics: false,
         };
         let inner = database();
         let (algo_updater, shared_algo) = initialize_algorithm(
@@ -690,6 +695,7 @@ mod tests {
             inner,
             latest_l2_height,
             None,
+            false,
         );
         let read_algo = service.next_block_algorithm();
         let mut watcher = StateWatcher::default();
@@ -742,6 +748,7 @@ mod tests {
             block_activity_threshold: 20,
             da_poll_interval: None,
             starting_recorded_height: None,
+            record_metrics: false,
         };
         let mut inner = database();
         let mut tx = inner.write_transaction();
@@ -787,6 +794,7 @@ mod tests {
             inner,
             latest_l2_block,
             None,
+            false,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -823,6 +831,7 @@ mod tests {
             block_activity_threshold: 20,
             da_poll_interval: None,
             starting_recorded_height: None,
+            record_metrics: false,
         }
     }
 
@@ -892,6 +901,7 @@ mod tests {
             inner,
             latest_l2_height,
             None,
+            false,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -985,6 +995,7 @@ mod tests {
             inner,
             latest_l2_height,
             None,
+            false,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -1028,6 +1039,7 @@ mod tests {
             block_activity_threshold: 20,
             da_poll_interval: None,
             starting_recorded_height: None,
+            record_metrics: false,
         }
     }
 
@@ -1167,6 +1179,7 @@ mod tests {
             atomic_storage,
             latest_l2_height,
             Some(expected_recorded_height),
+            false,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
