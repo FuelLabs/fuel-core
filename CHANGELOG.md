@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - [2639](https://github.com/FuelLabs/fuel-core/pull/2639): Refactor fetching `latest_height` from `OnChainIterableKeyValueView` to instead use height at the time of its creation.
 
+### Fixed
+
+- [2638](https://github.com/FuelLabs/fuel-core/pull/2638): Optimize the `cumulative_percent_change` function used in estimation of gas price, convert multiple async functions to sync.
+
 ## [Version 0.40.3]
 
 ### Added
