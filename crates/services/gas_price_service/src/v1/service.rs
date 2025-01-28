@@ -174,11 +174,11 @@ where
         tracing::debug!("Updating gas price algorithm");
         self.apply_block_info_to_gas_algorithm(block).await?;
 
-        self.notify_da_source_service_l2_block(block)?;
+        self.notify_da_source_service_l2_block(block);
         Ok(())
     }
 
-    fn notify_da_source_service_l2_block(&self, block: BlockInfo) -> anyhow::Result<()> {
+    fn notify_da_source_service_l2_block(&self, block: BlockInfo) {
         tracing::debug!("Notifying the Da source service of the latest L2 block");
         match block {
             BlockInfo::GenesisBlock => {}
@@ -186,7 +186,6 @@ where
                 self.latest_l2_block.store(height, Ordering::Release);
             }
         }
-        Ok(())
     }
 }
 
@@ -234,8 +233,8 @@ where
         &self.storage_tx_provider
     }
 
-    async fn update(&mut self, new_algorithm: AlgorithmV1) {
-        self.shared_algo.update(new_algorithm).await;
+    fn update(&mut self, new_algorithm: AlgorithmV1) {
+        self.shared_algo.update(new_algorithm);
     }
 
     fn validate_block_gas_capacity(
@@ -304,7 +303,7 @@ where
         AtomicStorage::commit_transaction(storage_tx)?;
         let new_algo = self.algorithm_updater.algorithm();
         tracing::debug!("Updating gas price: {}", &new_algo.calculate());
-        self.shared_algo.update(new_algo).await;
+        self.shared_algo.update(new_algo);
         // Clear the buffer after committing changes
         self.da_block_costs_buffer.clear();
         Ok(())
@@ -321,7 +320,7 @@ where
                 tx.set_metadata(&metadata).map_err(|err| anyhow!(err))?;
                 AtomicStorage::commit_transaction(tx)?;
                 let new_algo = self.algorithm_updater.algorithm();
-                self.shared_algo.update(new_algo).await;
+                self.shared_algo.update(new_algo);
             }
             BlockInfo::Block {
                 height,

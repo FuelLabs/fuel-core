@@ -65,17 +65,18 @@ pub trait PeerToPeerPort {
 }
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
-#[async_trait::async_trait]
 /// Port for communication with the consensus service.
 pub trait ConsensusPort {
     /// Check if the given sealed block header is valid.
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool>;
     /// await for this DA height to be sync'd.
-    async fn await_da_height(&self, da_height: &DaBlockHeight) -> anyhow::Result<()>;
+    fn await_da_height(
+        &self,
+        da_height: &DaBlockHeight,
+    ) -> impl core::future::Future<Output = anyhow::Result<()>> + Send;
 }
 
 #[cfg_attr(any(test, feature = "benchmarking"), mockall::automock)]
-#[async_trait::async_trait]
 /// Port for communication with the block importer.
 pub trait BlockImporterPort {
     /// Stream of newly committed block heights.
@@ -83,5 +84,8 @@ pub trait BlockImporterPort {
 
     /// Execute the given sealed block
     /// and commit it to the database.
-    async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()>;
+    fn execute_and_commit(
+        &self,
+        block: SealedBlock,
+    ) -> impl core::future::Future<Output = anyhow::Result<()>> + Send;
 }
