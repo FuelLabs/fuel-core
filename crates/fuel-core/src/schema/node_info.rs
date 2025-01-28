@@ -2,9 +2,19 @@ use super::scalars::{
     U32,
     U64,
 };
-use crate::fuel_core_graphql_api::{
-    query_costs,
-    Config as GraphQLConfig,
+use crate::{
+    database::database_description::IndexationKind,
+    fuel_core_graphql_api::{
+        query_costs,
+        Config as GraphQLConfig,
+    },
+    graphql_api::{
+        api_service::TxPool,
+        database::{
+            IndexationFlags,
+            ReadDatabase,
+        },
+    },
 };
 use async_graphql::{
     Context,
@@ -16,8 +26,11 @@ pub struct NodeInfo {
     utxo_validation: bool,
     vm_backtrace: bool,
     max_tx: U64,
+    max_gas: U64,
+    max_size: U64,
     max_depth: U64,
     node_version: String,
+    indexation: IndexationFlags,
 }
 
 #[Object]
@@ -34,12 +47,33 @@ impl NodeInfo {
         self.max_tx
     }
 
+    async fn max_gas(&self) -> U64 {
+        self.max_gas
+    }
+
+    async fn max_size(&self) -> U64 {
+        self.max_size
+    }
+
     async fn max_depth(&self) -> U64 {
         self.max_depth
     }
 
     async fn node_version(&self) -> String {
         self.node_version.to_owned()
+    }
+
+    async fn indexation(&self) -> &IndexationFlags {
+        &self.indexation
+    }
+
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn tx_pool_stats(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<TxPoolStats> {
+        let tx_pool = ctx.data_unchecked::<TxPool>();
+        Ok(TxPoolStats(tx_pool.latest_pool_stats()))
     }
 
     #[graphql(complexity = "query_costs().get_peers + child_complexity")]
@@ -72,12 +106,17 @@ impl NodeQuery {
 
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+        let db = ctx.data_unchecked::<ReadDatabase>();
+        let read_view = db.view()?;
         Ok(NodeInfo {
             utxo_validation: config.utxo_validation,
             vm_backtrace: config.vm_backtrace,
             max_tx: (config.max_tx as u64).into(),
+            max_gas: config.max_gas.into(),
+            max_size: (config.max_size as u64).into(),
             max_depth: (config.max_txpool_dependency_chain_length as u64).into(),
             node_version: VERSION.to_owned(),
+            indexation: read_view.indexation_flags,
         })
     }
 }
@@ -122,5 +161,43 @@ impl PeerInfo {
     /// The internal fuel p2p reputation of this peer
     async fn app_score(&self) -> f64 {
         self.0.app_score
+    }
+}
+
+struct TxPoolStats(fuel_core_txpool::TxPoolStats);
+
+#[Object]
+impl TxPoolStats {
+    /// The number of transactions in the pool
+    async fn tx_count(&self) -> U64 {
+        self.0.tx_count.into()
+    }
+
+    /// The total size of the transactions in the pool
+    async fn total_size(&self) -> U64 {
+        self.0.total_size.into()
+    }
+
+    /// The total gas of the transactions in the pool
+    async fn total_gas(&self) -> U64 {
+        self.0.total_gas.into()
+    }
+}
+
+#[Object]
+impl IndexationFlags {
+    /// Is balances indexation enabled
+    async fn balances(&self) -> bool {
+        self.contains(&IndexationKind::Balances)
+    }
+
+    /// Is coins to spend indexation enabled
+    async fn coins_to_spend(&self) -> bool {
+        self.contains(&IndexationKind::CoinsToSpend)
+    }
+
+    /// Is asset metadata indexation enabled
+    async fn asset_metadata(&self) -> bool {
+        self.contains(&IndexationKind::AssetMetadata)
     }
 }

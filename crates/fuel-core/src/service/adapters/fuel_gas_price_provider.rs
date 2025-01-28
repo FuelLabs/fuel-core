@@ -1,11 +1,9 @@
-use crate::fuel_core_graphql_api::ports::GasPriceEstimate as GraphqlGasPriceEstimate;
+use crate::service::adapters::UniversalGasPriceProvider;
 use fuel_core_gas_price_service::common::gas_price_algorithm::{
     GasPriceAlgorithm,
     SharedGasPriceAlgo,
 };
-
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
-use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 use fuel_core_types::fuel_types::BlockHeight;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -29,58 +27,42 @@ mod tests;
 
 #[derive(Debug)]
 /// Receives the next gas price algorithm via a shared `BlockGasPriceAlgo` instance
-pub struct FuelGasPriceProvider<A> {
+pub struct FuelGasPriceProvider<A, Height, GasPrice> {
     algorithm: SharedGasPriceAlgo<A>,
+    latest_gas_price: UniversalGasPriceProvider<Height, GasPrice>,
 }
 
-impl<A> Clone for FuelGasPriceProvider<A> {
+impl<A, Height, GasPrice> Clone for FuelGasPriceProvider<A, Height, GasPrice> {
     fn clone(&self) -> Self {
         Self {
             algorithm: self.algorithm.clone(),
+            latest_gas_price: self.latest_gas_price.clone(),
         }
     }
 }
 
-impl<A> FuelGasPriceProvider<A> {
-    pub fn new(algorithm: SharedGasPriceAlgo<A>) -> Self {
-        Self { algorithm }
+impl<A, Height, GasPrice> FuelGasPriceProvider<A, Height, GasPrice> {
+    pub fn new(
+        algorithm: SharedGasPriceAlgo<A>,
+        latest_gas_price: UniversalGasPriceProvider<Height, GasPrice>,
+    ) -> Self {
+        Self {
+            algorithm,
+            latest_gas_price,
+        }
     }
 }
 
-impl<A> FuelGasPriceProvider<A>
+impl<A> ProducerGasPriceProvider for FuelGasPriceProvider<A, u32, u64>
 where
     A: GasPriceAlgorithm + Send + Sync,
 {
-    fn next_gas_price(&self) -> u64 {
-        self.algorithm.next_gas_price()
+    fn production_gas_price(&self) -> anyhow::Result<u64> {
+        Ok(self.algorithm.next_gas_price())
     }
-}
 
-#[async_trait::async_trait]
-impl<A> ProducerGasPriceProvider for FuelGasPriceProvider<A>
-where
-    A: GasPriceAlgorithm + Send + Sync,
-{
-    async fn next_gas_price(&self) -> anyhow::Result<u64> {
-        Ok(self.next_gas_price())
-    }
-}
-
-impl<A> TxPoolGasPriceProvider for FuelGasPriceProvider<A>
-where
-    A: GasPriceAlgorithm + Send + Sync + 'static,
-{
-    fn next_gas_price(&self) -> u64 {
-        self.next_gas_price()
-    }
-}
-
-#[async_trait::async_trait]
-impl<A> GraphqlGasPriceEstimate for FuelGasPriceProvider<A>
-where
-    A: GasPriceAlgorithm + Send + Sync,
-{
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
-        Some(self.algorithm.worst_case_gas_price(height).await)
+    fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
+        let price = self.latest_gas_price.inner_next_gas_price();
+        Ok(price)
     }
 }

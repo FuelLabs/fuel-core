@@ -1,9 +1,9 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::storage::{
-            BundleIdTable,
             GasPriceColumn,
             GasPriceMetadata,
+            RecordedHeights,
         },
         updater_metadata::UpdaterMetadata,
         utils::{
@@ -14,9 +14,9 @@ use crate::{
     },
     ports::{
         GasPriceServiceAtomicStorage,
-        GetDaBundleId,
+        GetLatestRecordedHeight,
         GetMetadataStorage,
-        SetDaBundleId,
+        SetLatestRecordedHeight,
         SetMetadataStorage,
     },
 };
@@ -61,8 +61,7 @@ pub mod storage;
 
 impl<Storage> SetMetadataStorage for Storage
 where
-    Storage: Send + Sync,
-    Storage: Modifiable,
+    Storage: Send + Sync + Modifiable,
     for<'a> StorageTransaction<&'a mut Storage>:
         StorageMutate<GasPriceMetadata, Error = StorageError>,
 {
@@ -95,30 +94,35 @@ where
             .map_err(|err| GasPriceError::CouldNotFetchMetadata {
                 source_error: err.into(),
             })?;
-        Ok(metadata.map(|inner| inner.into_owned()))
+        Ok(metadata.map(std::borrow::Cow::into_owned))
     }
 }
 
-impl<Storage> GetDaBundleId for Storage
+impl<Storage> GetLatestRecordedHeight for Storage
 where
     Storage: Send + Sync,
-    Storage: StorageInspect<BundleIdTable, Error = StorageError>,
+    Storage: StorageInspect<RecordedHeights, Error = StorageError>,
 {
-    fn get_bundle_id(&self, block_height: &BlockHeight) -> GasPriceResult<Option<u32>> {
-        let bundle_id = self
-            .storage::<BundleIdTable>()
-            .get(block_height)
-            .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?
+    fn get_recorded_height(&self) -> GasPriceResult<Option<BlockHeight>> {
+        const KEY: &() = &();
+        let recorded_height = self
+            .storage::<RecordedHeights>()
+            .get(KEY)
+            .map_err(|err| GasPriceError::CouldNotFetchRecordedHeight(err.into()))?
             .map(|no| *no);
-        Ok(bundle_id)
+        Ok(recorded_height)
     }
 }
 
 impl<Storage> GasPriceServiceAtomicStorage for Storage
 where
-    Storage: 'static,
-    Storage: GetMetadataStorage + GetDaBundleId,
-    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
+    Storage: GetMetadataStorage
+        + GetLatestRecordedHeight
+        + KeyValueInspect<Column = GasPriceColumn>
+        + Modifiable
+        + Send
+        + Sync
+        + 'static,
 {
     type Transaction<'a> = StorageTransaction<&'a mut Storage> where Self: 'a;
 
@@ -135,19 +139,18 @@ where
     }
 }
 
-impl<Storage> SetDaBundleId for Storage
+impl<Storage> SetLatestRecordedHeight for Storage
 where
-    Storage: Send + Sync,
-    Storage: StorageMutate<BundleIdTable, Error = StorageError>,
+    Storage: Send + Sync + StorageMutate<RecordedHeights, Error = StorageError>,
 {
-    fn set_bundle_id(
+    fn set_recorded_height(
         &mut self,
-        block_height: &BlockHeight,
-        bundle_id: u32,
+        recorded_height: BlockHeight,
     ) -> GasPriceResult<()> {
-        self.storage_as_mut::<BundleIdTable>()
-            .insert(block_height, &bundle_id)
-            .map_err(|err| GasPriceError::CouldNotFetchDARecord(err.into()))?;
+        const KEY: &() = &();
+        self.storage_as_mut::<RecordedHeights>()
+            .insert(KEY, &recorded_height)
+            .map_err(|err| GasPriceError::CouldNotSetRecordedHeight(err.into()))?;
         Ok(())
     }
 }

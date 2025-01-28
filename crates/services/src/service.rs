@@ -84,6 +84,7 @@ pub trait RunnableService: Send {
 }
 
 /// The result of a single iteration of the service task
+#[derive(Debug)]
 pub enum TaskNextAction {
     /// Request the task to be run again
     Continue,
@@ -356,7 +357,7 @@ async fn run<S>(
     let mut task = service
         .into_task(&state, params)
         .await
-        .expect("The initialization of the service failed.");
+        .expect("The initialization of the service failed");
 
     sender.send_if_modified(|s| {
         if s.starting() {
@@ -427,7 +428,7 @@ where
     match shutdown.catch_unwind().await {
         Ok(Ok(_)) => {}
         Ok(Err(e)) => {
-            tracing::error!("Go an error during shutdown of the task: {e}");
+            tracing::error!("Got an error during shutdown of the task: {e}");
         }
         Err(e) => {
             if got_panic.is_some() {

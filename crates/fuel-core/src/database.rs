@@ -79,6 +79,7 @@ use crate::state::{
         StateRewindPolicy,
     },
     rocks_db::{
+        ColumnsPolicy,
         DatabaseConfig,
         RocksDb,
     },
@@ -207,18 +208,6 @@ where
         state_rewind_policy: StateRewindPolicy,
         database_config: DatabaseConfig,
     ) -> Result<Self> {
-        let db =
-            Self::open_as_historical_rocksdb(path, state_rewind_policy, database_config)?;
-
-        Ok(Self::new(Arc::new(db)))
-    }
-
-    #[cfg(feature = "rocksdb")]
-    pub fn open_as_historical_rocksdb(
-        path: &Path,
-        state_rewind_policy: StateRewindPolicy,
-        database_config: DatabaseConfig,
-    ) -> Result<HistoricalRocksDB<Description>> {
         use anyhow::Context;
 
         let db = HistoricalRocksDB::<Description>::default_open(
@@ -234,7 +223,7 @@ where
             )
         })?;
 
-        Ok(db)
+        Ok(Self::new(Arc::new(db)))
     }
 
     /// Converts the regular database to an unchecked database.
@@ -302,7 +291,7 @@ where
                 DatabaseConfig {
                     cache_capacity: None,
                     max_fds: 512,
-                    columns_policy: Default::default(),
+                    columns_policy: ColumnsPolicy::Lazy,
                 },
             )
             .expect("Failed to create a temporary database")

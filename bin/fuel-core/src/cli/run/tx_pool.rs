@@ -31,6 +31,7 @@ pub struct TxPoolArgs {
     #[clap(long = "tx-max-total-bytes", default_value = "131072000", env)]
     pub tx_max_total_bytes: usize,
 
+    /// The flag name is `tx-max-depth` for backward compatibility but the behavior is:
     /// The max number of tx in a chain of dependent transactions that supported by the `TxPool`.
     #[clap(long = "tx-max-depth", default_value = "32", env)]
     pub tx_max_chain_count: usize,

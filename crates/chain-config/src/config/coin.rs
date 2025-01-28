@@ -20,7 +20,6 @@ use fuel_core_types::{
         BlockHeight,
         Bytes32,
     },
-    fuel_vm::SecretKey,
 };
 use serde::{
     Deserialize,
@@ -75,41 +74,6 @@ impl From<CoinConfig> for TableEntry<Coins> {
     }
 }
 
-/// Generates a new coin config with a unique utxo id for testing
-#[derive(Default, Debug)]
-pub struct CoinConfigGenerator {
-    count: usize,
-}
-
-impl CoinConfigGenerator {
-    pub fn new() -> Self {
-        Self { count: 0 }
-    }
-
-    pub fn generate(&mut self) -> CoinConfig {
-        let mut bytes = [0u8; 32];
-        bytes[..std::mem::size_of::<usize>()].copy_from_slice(&self.count.to_be_bytes());
-
-        let config = CoinConfig {
-            tx_id: Bytes32::from(bytes),
-            ..Default::default()
-        };
-        self.count = self.count.checked_add(1).expect("Max coin count reached");
-
-        config
-    }
-
-    pub fn generate_with(&mut self, secret: SecretKey, amount: u64) -> CoinConfig {
-        let owner = Address::from(*secret.public_key().hash());
-
-        CoinConfig {
-            amount,
-            owner,
-            ..self.generate()
-        }
-    }
-}
-
 impl CoinConfig {
     pub fn utxo_id(&self) -> UtxoId {
         UtxoId::new(self.tx_id, self.output_index)
@@ -157,6 +121,62 @@ impl GenesisCommitment for Coin {
     }
 }
 
+#[cfg(feature = "test-helpers")]
+pub mod coin_config_helpers {
+    use crate::CoinConfig;
+    use fuel_core_types::{
+        fuel_types::{
+            Address,
+            Bytes32,
+        },
+        fuel_vm::SecretKey,
+    };
+
+    type CoinCount = u16;
+
+    /// Generates a new coin config with a unique utxo id for testing
+    #[derive(Default, Debug)]
+    pub struct CoinConfigGenerator {
+        count: CoinCount,
+    }
+
+    pub fn tx_id(count: CoinCount) -> Bytes32 {
+        let mut bytes = [0u8; 32];
+        bytes[..size_of::<CoinCount>()].copy_from_slice(&count.to_be_bytes());
+        bytes.into()
+    }
+
+    impl CoinConfigGenerator {
+        pub fn new() -> Self {
+            Self { count: 0 }
+        }
+
+        pub fn generate(&mut self) -> CoinConfig {
+            let tx_id = tx_id(self.count);
+
+            let config = CoinConfig {
+                tx_id,
+                output_index: self.count,
+                ..Default::default()
+            };
+
+            self.count = self.count.checked_add(1).expect("Max coin count reached");
+
+            config
+        }
+
+        pub fn generate_with(&mut self, secret: SecretKey, amount: u64) -> CoinConfig {
+            let owner = Address::from(*secret.public_key().hash());
+
+            CoinConfig {
+                amount,
+                owner,
+                ..self.generate()
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_generate_unique_utxo_id() {
-        let mut generator = CoinConfigGenerator::new();
+        let mut generator = coin_config_helpers::CoinConfigGenerator::new();
         let config1 = generator.generate();
         let config2 = generator.generate();
 
@@ -180,7 +200,7 @@ mod tests {
         let secret = SecretKey::random(&mut rng);
         let amount = 1000;
 
-        let mut generator = CoinConfigGenerator::new();
+        let mut generator = coin_config_helpers::CoinConfigGenerator::new();
         let config = generator.generate_with(secret, amount);
 
         assert_eq!(config.owner, Address::from(*secret.public_key().hash()));

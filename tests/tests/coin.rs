@@ -1,7 +1,7 @@
 use fuel_core::{
     chain_config::{
+        coin_config_helpers::CoinConfigGenerator,
         CoinConfig,
-        CoinConfigGenerator,
         StateConfig,
     },
     database::Database,

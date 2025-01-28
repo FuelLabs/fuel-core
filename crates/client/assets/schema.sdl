@@ -580,6 +580,21 @@ type HeavyOperation {
 scalar HexString
 
 
+type IndexationFlags {
+	"""
+	Is balances indexation enabled
+	"""
+	balances: Boolean!
+	"""
+	Is coins to spend indexation enabled
+	"""
+	coinsToSpend: Boolean!
+	"""
+	Is asset metadata indexation enabled
+	"""
+	assetMetadata: Boolean!
+}
+
 union Input = InputCoin | InputContract | InputMessage
 
 type InputCoin {
@@ -760,8 +775,12 @@ type NodeInfo {
 	utxoValidation: Boolean!
 	vmBacktrace: Boolean!
 	maxTx: U64!
+	maxGas: U64!
+	maxSize: U64!
 	maxDepth: U64!
 	nodeVersion: String!
+	indexation: IndexationFlags!
+	txPoolStats: TxPoolStats!
 	peers: [PeerInfo!]!
 }
 
@@ -1275,6 +1294,21 @@ enum TxParametersVersion {
 }
 
 scalar TxPointer
+
+type TxPoolStats {
+	"""
+	The number of transactions in the pool
+	"""
+	txCount: U64!
+	"""
+	The total size of the transactions in the pool
+	"""
+	totalSize: U64!
+	"""
+	The total gas of the transactions in the pool
+	"""
+	totalGas: U64!
+}
 
 scalar U128
 

@@ -5,7 +5,10 @@ use fuel_core::{
     combined_database::CombinedDatabase,
     state::{
         historical_rocksdb::StateRewindPolicy,
-        rocks_db::DatabaseConfig,
+        rocks_db::{
+            ColumnsPolicy,
+            DatabaseConfig,
+        },
     },
 };
 use rlimit::{
@@ -58,7 +61,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         DatabaseConfig {
             cache_capacity: Some(64 * 1024 * 1024),
             max_fds: command.rocksdb_max_fds,
-            columns_policy: Default::default(),
+            columns_policy: ColumnsPolicy::Lazy,
         },
     )
     .map_err(Into::<anyhow::Error>::into)

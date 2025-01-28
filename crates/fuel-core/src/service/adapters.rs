@@ -22,7 +22,10 @@ use fuel_core_importer::ImporterResult;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
-use fuel_core_txpool::BorrowedTxPool;
+use fuel_core_txpool::{
+    ports::GasPriceProvider as TxPoolGasPriceProvider,
+    BorrowedTxPool,
+};
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
@@ -91,27 +94,25 @@ impl StaticGasPrice {
 }
 
 #[cfg(test)]
-mod arc_gas_price_estimate_tests {
+mod universal_gas_price_provider_tests {
     #![allow(non_snake_case)]
 
     use super::*;
     use proptest::proptest;
 
-    async fn _worst_case__correctly_calculates_value(
+    fn _worst_case__correctly_calculates_value(
         gas_price: u64,
         starting_height: u32,
         block_horizon: u32,
         percentage: u16,
     ) {
         // given
-        let subject = ArcGasPriceEstimate::new(starting_height, gas_price, percentage);
+        let subject =
+            UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
 
         // when
         let target_height = starting_height.saturating_add(block_horizon);
-        let estimated = subject
-            .worst_case_gas_price(target_height.into())
-            .await
-            .unwrap();
+        let estimated = subject.worst_case_gas_price(target_height.into()).unwrap();
 
         // then
         let mut actual = gas_price;
@@ -133,13 +134,12 @@ mod arc_gas_price_estimate_tests {
             block_horizon in 0..10_000u32,
             percentage: u16,
         ) {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(_worst_case__correctly_calculates_value(
+            _worst_case__correctly_calculates_value(
                 gas_price,
                 starting_height,
                 block_horizon,
                 percentage,
-            ));
+            );
         }
     }
 
@@ -151,18 +151,52 @@ mod arc_gas_price_estimate_tests {
             block_horizon in 0..10_000u32,
             percentage: u16
         ) {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-
             // given
-            let subject = ArcGasPriceEstimate::new(starting_height, gas_price, percentage);
+            let subject = UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
 
             // when
             let target_height = starting_height.saturating_add(block_horizon);
 
-            let _ = rt.block_on(subject.worst_case_gas_price(target_height.into()));
+            let _ = subject.worst_case_gas_price(target_height.into());
 
             // then
             // doesn't panic with an overflow
+        }
+    }
+
+    fn _next_gas_price__correctly_calculates_value(
+        gas_price: u64,
+        starting_height: u32,
+        percentage: u16,
+    ) {
+        // given
+        let subject =
+            UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
+
+        // when
+        let estimated = subject.next_gas_price();
+
+        // then
+        let change_amount = gas_price
+            .saturating_mul(percentage as u64)
+            .saturating_div(100);
+        let actual = gas_price.saturating_add(change_amount);
+
+        assert!(estimated >= actual);
+    }
+
+    proptest! {
+        #[test]
+        fn next_gas_price__correctly_calculates_value(
+            gas_price: u64,
+            starting_height: u32,
+            percentage: u16,
+        ) {
+            _next_gas_price__correctly_calculates_value(
+                gas_price,
+                starting_height,
+                percentage,
+            )
         }
     }
 }
@@ -170,15 +204,24 @@ mod arc_gas_price_estimate_tests {
 /// Allows communication from other service with more recent gas price data
 /// `Height` refers to the height of the block at which the gas price was last updated
 /// `GasPrice` refers to the gas price at the last updated block
-#[allow(dead_code)]
-pub struct ArcGasPriceEstimate<Height, GasPrice> {
+#[derive(Debug)]
+pub struct UniversalGasPriceProvider<Height, GasPrice> {
     /// Shared state of latest gas price data
     latest_gas_price: LatestGasPrice<Height, GasPrice>,
     /// The max percentage the gas price can increase per block
     percentage: u16,
 }
 
-impl<Height, GasPrice> ArcGasPriceEstimate<Height, GasPrice> {
+impl<Height, GasPrice> Clone for UniversalGasPriceProvider<Height, GasPrice> {
+    fn clone(&self) -> Self {
+        Self {
+            latest_gas_price: self.latest_gas_price.clone(),
+            percentage: self.percentage,
+        }
+    }
+}
+
+impl<Height, GasPrice> UniversalGasPriceProvider<Height, GasPrice> {
     #[cfg(test)]
     pub fn new(height: Height, price: GasPrice, percentage: u16) -> Self {
         let latest_gas_price = LatestGasPrice::new(height, price);
@@ -199,15 +242,33 @@ impl<Height, GasPrice> ArcGasPriceEstimate<Height, GasPrice> {
     }
 }
 
-impl<Height: Copy, GasPrice: Copy> ArcGasPriceEstimate<Height, GasPrice> {
+impl<Height: Copy, GasPrice: Copy> UniversalGasPriceProvider<Height, GasPrice> {
     fn get_height_and_gas_price(&self) -> (Height, GasPrice) {
         self.latest_gas_price.get()
     }
 }
 
-#[async_trait::async_trait]
-impl GasPriceEstimate for ArcGasPriceEstimate<u32, u64> {
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
+impl UniversalGasPriceProvider<u32, u64> {
+    pub fn inner_next_gas_price(&self) -> u64 {
+        let (_, latest_price) = self.get_height_and_gas_price();
+        let percentage = self.percentage;
+
+        let change = latest_price
+            .saturating_mul(percentage as u64)
+            .saturating_div(100);
+
+        latest_price.saturating_add(change)
+    }
+}
+
+impl TxPoolGasPriceProvider for UniversalGasPriceProvider<u32, u64> {
+    fn next_gas_price(&self) -> fuel_core_txpool::GasPrice {
+        self.inner_next_gas_price()
+    }
+}
+
+impl GasPriceEstimate for UniversalGasPriceProvider<u32, u64> {
+    fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
         let (best_height, best_gas_price) = self.get_height_and_gas_price();
         let percentage = self.percentage;
 

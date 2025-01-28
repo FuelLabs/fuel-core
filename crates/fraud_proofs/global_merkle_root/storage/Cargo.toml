@@ -1,0 +1,29 @@
+[package]
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+description = "Storage types and primitives for computing global merkle roots."
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies", "fuel-client", "fuel-core"]
+license = { workspace = true }
+name = "fuel-core-global-merkle-root-storage"
+repository = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+enum-iterator = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["alloc"] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "serde",
+  "alloc",
+] }
+num_enum = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+
+[features]
+default = ["std"]
+std = ["fuel-core-storage/std", "fuel-core-types/std"]
+smt = []
+global-state-root = []

@@ -24,7 +24,10 @@ use fuel_core_storage::{
     StorageInspect,
     StorageRead,
 };
-use fuel_core_txpool::TxStatusMessage;
+use fuel_core_txpool::{
+    TxPoolStats,
+    TxStatusMessage,
+};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -88,12 +91,13 @@ pub trait OffChainDatabase: Send + Sync {
         base_asset_id: &AssetId,
     ) -> StorageResult<TotalBalanceAmount>;
 
-    fn balances(
-        &self,
+    fn balances<'a>(
+        &'a self,
         owner: &Address,
-        base_asset_id: &AssetId,
+        start: Option<AssetId>,
+        base_asset_id: &'a AssetId,
         direction: IterDirection,
-    ) -> BoxedIter<'_, StorageResult<(AssetId, TotalBalanceAmount)>>;
+    ) -> BoxedIter<'a, StorageResult<(AssetId, TotalBalanceAmount)>>;
 
     fn owned_coins_ids(
         &self,
@@ -238,6 +242,8 @@ pub trait TxPoolPort: Send + Sync {
         &self,
         tx_id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>>;
+
+    fn latest_pool_stats(&self) -> TxPoolStats;
 }
 
 #[async_trait]
@@ -278,10 +284,9 @@ pub trait P2pPort: Send + Sync {
 }
 
 /// Trait for defining how to estimate gas price for future blocks
-#[async_trait::async_trait]
 pub trait GasPriceEstimate: Send + Sync {
     /// The worst case scenario for gas price at a given horizon
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64>;
+    fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64>;
 }
 
 /// Trait for getting VM memory.

@@ -191,16 +191,16 @@ pub fn draw_fullness(
 
 pub fn draw_bytes_and_cost_per_block(
     drawing_area: &DrawingArea<BitMapBackend, Shift>,
-    bytes_and_costs_per_block: &[(u64, u64)],
+    bytes_and_costs_per_block: &[(u32, u64)],
     title: &str,
 ) -> anyhow::Result<()> {
     const BYTES_PER_BLOCK_COLOR: RGBColor = BLACK;
-    let (bytes, costs): (Vec<u64>, Vec<u64>) =
+    let (bytes, costs): (Vec<u32>, Vec<u64>) =
         bytes_and_costs_per_block.iter().cloned().unzip();
     let costs_gwei: Vec<_> = costs.into_iter().map(|x| x / ONE_GWEI).collect();
 
     let min = 0;
-    let max_left = *bytes.iter().max().unwrap();
+    let max_left = *bytes.iter().max().unwrap() as u64;
     let max_right = *costs_gwei.iter().max().unwrap();
 
     let mut chart = ChartBuilder::on(drawing_area)
@@ -228,7 +228,7 @@ pub fn draw_bytes_and_cost_per_block(
 
     chart
         .draw_series(LineSeries::new(
-            bytes.iter().enumerate().map(|(x, y)| (x, *y)),
+            bytes.iter().enumerate().map(|(x, y)| (x, *y as u64)),
             BYTES_PER_BLOCK_COLOR,
         ))
         .unwrap()

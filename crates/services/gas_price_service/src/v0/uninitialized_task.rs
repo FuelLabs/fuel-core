@@ -16,7 +16,6 @@ use crate::{
     },
     ports::{
         GasPriceData,
-        GasPriceServiceConfig,
         L2Data,
         SetMetadataStorage,
     },
@@ -249,9 +248,9 @@ where
 {
     let metadata = metadata_storage
         .get_metadata(&metadata_height.into())?
-        .ok_or(anyhow::anyhow!(
-            "Expected metadata to exist for height: {metadata_height}"
-        ))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("Expected metadata to exist for height: {metadata_height}")
+        })?;
 
     let mut algo_updater = if let UpdaterMetadata::V0(metadata) = metadata {
         Ok(AlgorithmUpdaterV0::new(
@@ -328,7 +327,7 @@ pub fn new_gas_price_service_v0<
     Metadata,
     SettingsProvider,
 >(
-    config: GasPriceServiceConfig,
+    v0_config: V0AlgorithmConfig,
     genesis_block_height: BlockHeight,
     settings: SettingsProvider,
     block_stream: BoxStream<SharedImportResult>,
@@ -347,7 +346,6 @@ where
     SettingsProvider: GasPriceSettingsProvider,
     Metadata: GetMetadataStorage + SetMetadataStorage,
 {
-    let v0_config = config.v0().ok_or(anyhow::anyhow!("Expected V0 config"))?;
     let gas_price_init = UninitializedTask::new(
         v0_config,
         genesis_block_height,
