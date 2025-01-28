@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 
 - [2638](https://github.com/FuelLabs/fuel-core/pull/2638): Optimize the `cumulative_percent_change` function used in estimation of gas price, convert multiple async functions to sync.
+- [2641](https://github.com/FuelLabs/fuel-core/pull/2641): Remove `txPoolStats` requirement from fuel core client
 
 ## [Version 0.40.3]
 
