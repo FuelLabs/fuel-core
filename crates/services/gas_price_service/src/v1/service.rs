@@ -174,11 +174,11 @@ where
         tracing::debug!("Updating gas price algorithm");
         self.apply_block_info_to_gas_algorithm(block).await?;
 
-        self.notify_da_source_service_l2_block(block)?;
+        self.notify_da_source_service_l2_block(block);
         Ok(())
     }
 
-    fn notify_da_source_service_l2_block(&self, block: BlockInfo) -> anyhow::Result<()> {
+    fn notify_da_source_service_l2_block(&self, block: BlockInfo) {
         tracing::debug!("Notifying the Da source service of the latest L2 block");
         match block {
             BlockInfo::GenesisBlock => {}
@@ -186,7 +186,6 @@ where
                 self.latest_l2_block.store(height, Ordering::Release);
             }
         }
-        Ok(())
     }
 }
 
