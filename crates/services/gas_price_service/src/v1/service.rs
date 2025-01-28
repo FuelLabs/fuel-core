@@ -309,7 +309,7 @@ where
         AtomicStorage::commit_transaction(storage_tx)?;
         let new_algo = self.algorithm_updater.algorithm();
         tracing::debug!("Updating gas price: {}", &new_algo.calculate());
-        self.shared_algo.update(new_algo).await;
+        self.shared_algo.update(new_algo);
         let best_recorded_height = new_recorded_height.or(old_recorded_height);
         Self::record_metrics(&metadata, gas_price, best_recorded_height);
         // Clear the buffer after committing changes
