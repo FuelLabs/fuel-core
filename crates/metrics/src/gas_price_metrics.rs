@@ -12,6 +12,7 @@ pub struct GasPriceMetrics {
     pub predicted_profit: Gauge,
     pub unrecorded_bytes: Gauge,
     pub latest_cost_per_byte: Gauge,
+    pub recorded_height: Gauge,
 }
 
 impl Default for GasPriceMetrics {
@@ -24,6 +25,7 @@ impl Default for GasPriceMetrics {
         let predicted_profit = Gauge::default();
         let unrecorded_bytes = Gauge::default();
         let latest_cost_per_byte = Gauge::default();
+        let recorded_height = Gauge::default();
 
         let metrics = GasPriceMetrics {
             real_gas_price,
@@ -34,6 +36,7 @@ impl Default for GasPriceMetrics {
             predicted_profit,
             unrecorded_bytes,
             latest_cost_per_byte,
+            recorded_height,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -76,6 +79,12 @@ impl Default for GasPriceMetrics {
             "gas_price_service_latest_cost_per_byte",
             "The latest cost per byte to record L2 blocks on DA",
             metrics.latest_cost_per_byte.clone(),
+        );
+
+        registry.register(
+            "gas_price_service_recorded_height",
+            "The height of the latest L2 block recorded on DA",
+            metrics.recorded_height.clone(),
         );
 
         metrics

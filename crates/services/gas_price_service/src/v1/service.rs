@@ -260,14 +260,15 @@ where
     ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
-        let mut new_recorded_height = match storage_tx
+        let (old_recorded_height, mut new_recorded_height) = match storage_tx
             .get_recorded_height()
             .map_err(|err| anyhow!(err))?
         {
-            Some(_) => None,
+            Some(old) => (Some(old), None),
             None => {
                 // Sets it on first run
-                self.initial_recorded_height.take()
+                let initial = self.initial_recorded_height.take();
+                (initial, initial)
             }
         };
 
@@ -310,13 +311,18 @@ where
         let new_algo = self.algorithm_updater.algorithm();
         tracing::debug!("Updating gas price: {}", &new_algo.calculate());
         self.shared_algo.update(new_algo).await;
-        Self::record_metrics(&metadata, gas_price);
+        let best_recorded_height = new_recorded_height.or(old_recorded_height);
+        Self::record_metrics(&metadata, gas_price, best_recorded_height);
         // Clear the buffer after committing changes
         self.da_block_costs_buffer.clear();
         Ok(())
     }
 
-    fn record_metrics(metadata: &UpdaterMetadata, gas_price: u64) {
+    fn record_metrics(
+        metadata: &UpdaterMetadata,
+        gas_price: u64,
+        recorded_height: Option<BlockHeight>,
+    ) {
         if let UpdaterMetadata::V1(v1_metadata) = metadata {
             let metrics = gas_price_metrics();
             let real_gas_price_i64 = gas_price.try_into().unwrap_or(i64::MAX);
@@ -352,6 +358,10 @@ where
             metrics.predicted_profit.set(predicted_profit_i64);
             metrics.unrecorded_bytes.set(unrecorded_bytes_i64);
             metrics.latest_cost_per_byte.set(latest_cost_per_byte_i64);
+            if let Some(height) = recorded_height {
+                let inner: u32 = height.into();
+                metrics.recorded_height.set(inner.into());
+            }
         }
     }
 
