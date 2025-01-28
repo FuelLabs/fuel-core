@@ -100,7 +100,7 @@ mod universal_gas_price_provider_tests {
     use super::*;
     use proptest::proptest;
 
-    async fn _worst_case__correctly_calculates_value(
+    fn _worst_case__correctly_calculates_value(
         gas_price: u64,
         starting_height: u32,
         block_horizon: u32,
@@ -112,10 +112,7 @@ mod universal_gas_price_provider_tests {
 
         // when
         let target_height = starting_height.saturating_add(block_horizon);
-        let estimated = subject
-            .worst_case_gas_price(target_height.into())
-            .await
-            .unwrap();
+        let estimated = subject.worst_case_gas_price(target_height.into()).unwrap();
 
         // then
         let mut actual = gas_price;
@@ -137,13 +134,12 @@ mod universal_gas_price_provider_tests {
             block_horizon in 0..10_000u32,
             percentage: u16,
         ) {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(_worst_case__correctly_calculates_value(
+            _worst_case__correctly_calculates_value(
                 gas_price,
                 starting_height,
                 block_horizon,
                 percentage,
-            ));
+            );
         }
     }
 
@@ -155,15 +151,13 @@ mod universal_gas_price_provider_tests {
             block_horizon in 0..10_000u32,
             percentage: u16
         ) {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-
             // given
             let subject = UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
 
             // when
             let target_height = starting_height.saturating_add(block_horizon);
 
-            let _ = rt.block_on(subject.worst_case_gas_price(target_height.into()));
+            let _ = subject.worst_case_gas_price(target_height.into());
 
             // then
             // doesn't panic with an overflow
@@ -273,9 +267,8 @@ impl TxPoolGasPriceProvider for UniversalGasPriceProvider<u32, u64> {
     }
 }
 
-#[async_trait::async_trait]
 impl GasPriceEstimate for UniversalGasPriceProvider<u32, u64> {
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
+    fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
         let (best_height, best_gas_price) = self.get_height_and_gas_price();
         let percentage = self.percentage;
 

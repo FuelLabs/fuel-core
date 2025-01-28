@@ -27,6 +27,7 @@ cargo check -p fuel-core-storage --target wasm32-unknown-unknown --no-default-fe
 cargo check -p fuel-core-client --target wasm32-unknown-unknown --no-default-features &&
 cargo check -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features &&
 cargo check -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features --features alloc &&
+cargo check -p fuel-core-global-merkle-root-storage --target wasm32-unknown-unknown --no-default-features &&
 cargo check -p fuel-core --no-default-features &&
 cargo make check --all-features --locked &&
 cargo make check --locked &&

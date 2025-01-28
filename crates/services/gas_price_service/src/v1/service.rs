@@ -178,11 +178,11 @@ where
         tracing::debug!("Updating gas price algorithm");
         self.apply_block_info_to_gas_algorithm(block).await?;
 
-        self.notify_da_source_service_l2_block(block)?;
+        self.notify_da_source_service_l2_block(block);
         Ok(())
     }
 
-    fn notify_da_source_service_l2_block(&self, block: BlockInfo) -> anyhow::Result<()> {
+    fn notify_da_source_service_l2_block(&self, block: BlockInfo) {
         tracing::debug!("Notifying the Da source service of the latest L2 block");
         match block {
             BlockInfo::GenesisBlock => {}
@@ -190,7 +190,6 @@ where
                 self.latest_l2_block.store(height, Ordering::Release);
             }
         }
-        Ok(())
     }
 }
 
@@ -238,8 +237,8 @@ where
         &self.storage_tx_provider
     }
 
-    async fn update(&mut self, new_algorithm: AlgorithmV1) {
-        self.shared_algo.update(new_algorithm).await;
+    fn update(&mut self, new_algorithm: AlgorithmV1) {
+        self.shared_algo.update(new_algorithm);
     }
 
     fn validate_block_gas_capacity(
@@ -376,7 +375,7 @@ where
                 tx.set_metadata(&metadata).map_err(|err| anyhow!(err))?;
                 AtomicStorage::commit_transaction(tx)?;
                 let new_algo = self.algorithm_updater.algorithm();
-                self.shared_algo.update(new_algo).await;
+                self.shared_algo.update(new_algo);
             }
             BlockInfo::Block {
                 height,
@@ -578,7 +577,6 @@ mod tests {
         l2_block: mpsc::Receiver<BlockInfo>,
     }
 
-    #[async_trait::async_trait]
     impl L2BlockSource for FakeL2BlockSource {
         async fn get_l2_block(&mut self) -> GasPriceResult<BlockInfo> {
             let block = self.l2_block.recv().await.unwrap();
