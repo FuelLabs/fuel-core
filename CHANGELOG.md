@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 
 - [2638](https://github.com/FuelLabs/fuel-core/pull/2638): Optimize the `cumulative_percent_change` function used in estimation of gas price, convert multiple async functions to sync.
+- [2642](https://github.com/FuelLabs/fuel-core/pull/2642): Before this fix when tip is zero, transactions that use 30M have the same priority as transactions with 1M gas. Now they are correctly ordered.
 
 ## [Version 0.40.3]
 
