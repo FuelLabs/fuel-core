@@ -132,6 +132,12 @@ pub type RelayerIterableKeyValueView =
 pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisStage>;
 
 impl OnChainIterableKeyValueView {
+    pub fn maybe_latest_height(&self) -> StorageResult<Option<BlockHeight>> {
+        self.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
+            .next()
+            .transpose()
+    }
+
     pub fn latest_height(&self) -> StorageResult<BlockHeight> {
         self.metadata()
             .cloned()
