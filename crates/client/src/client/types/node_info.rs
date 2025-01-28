@@ -1,7 +1,4 @@
-use crate::client::schema::{
-    self,
-    node_info::TxPoolStats,
-};
+use crate::client::schema;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NodeInfo {
@@ -12,7 +9,6 @@ pub struct NodeInfo {
     pub max_size: u64,
     pub max_depth: u64,
     pub node_version: String,
-    pub tx_pool_stats: TxPoolStats,
 }
 
 // GraphQL Translation
@@ -27,7 +23,6 @@ impl From<schema::node_info::NodeInfo> for NodeInfo {
             max_size: value.max_size.into(),
             max_depth: value.max_depth.into(),
             node_version: value.node_version,
-            tx_pool_stats: value.tx_pool_stats,
         }
     }
 }

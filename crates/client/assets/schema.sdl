@@ -755,7 +755,6 @@ type NodeInfo {
 	maxSize: U64!
 	maxDepth: U64!
 	nodeVersion: String!
-	txPoolStats: TxPoolStats!
 	peers: [PeerInfo!]!
 }
 
