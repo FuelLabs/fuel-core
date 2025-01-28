@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.40.4]
+
+### Changed
+
+- [2639](https://github.com/FuelLabs/fuel-core/pull/2639): Refactor fetching `latest_height` from `OnChainIterableKeyValueView` to instead use height at the time of its creation.
+
 ## [Version 0.40.3]
 
 ### Added
