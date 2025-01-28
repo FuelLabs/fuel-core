@@ -3759,7 +3759,6 @@ dependencies = [
  "libp2p",
  "libp2p-mplex",
  "libp2p-swarm-test",
- "netlink-proto",
  "postcard",
  "prometheus-client",
  "quick-protobuf",
