@@ -392,7 +392,7 @@ where
             }
             UpgradeMetadata::StateTransition => match tx.upgrade_purpose() {
                 UpgradePurpose::ConsensusParameters { .. } => panic!(
-                    "Upgrade with StateTransition metadata has StateTransition purpose"
+                    "Upgrade with StateTransition metadata should have StateTransition purpose"
                 ),
                 UpgradePurpose::StateTransition { root } => {
                     let Some(next_state_transition_bytecode_version) =
