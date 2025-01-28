@@ -19,10 +19,7 @@ use fuel_core_storage::{
     },
     kv_store::KeyValueInspect,
     structured_storage::TableWithBlueprint,
-    transactional::{
-        ReadTransaction,
-        StorageTransaction,
-    },
+    transactional::StorageTransaction,
     Mappable,
     StorageAsMut,
 };
