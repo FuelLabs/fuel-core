@@ -12,11 +12,6 @@ query {
     maxSize
     maxDepth
     nodeVersion
-    txPoolStats {
-      txCount
-      totalGas
-      totalSize
-    }
   }
 }
 
