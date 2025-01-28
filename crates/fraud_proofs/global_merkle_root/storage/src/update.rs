@@ -154,7 +154,7 @@ where
 
 impl<Storage> UpdateMerkleizedTables for &mut StorageTransaction<Storage>
 where
-    Storage: KeyValueInspect<Column = Column> + IterableStore<Column = Column>,
+    Storage: KeyValueInspect<Column = Column>,
 {
     fn update_merklized_tables(
         self,
