@@ -228,11 +228,7 @@ impl FuelService {
                 let on_chain_view = combined_database.on_chain().latest_view()?;
 
                 for override_height in poa.get_all_overrides().keys() {
-                    let Some(current_height) = on_chain_view.maybe_latest_height()?
-                    else {
-                        // Database is empty, nothing to rollback
-                        return Ok(());
-                    };
+                    let current_height = on_chain_view.latest_height()?;
 
                     if override_height > &current_height {
                         return Ok(());
