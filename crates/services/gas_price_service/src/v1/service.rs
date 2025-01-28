@@ -267,7 +267,7 @@ where
             None => {
                 // Sets it on first run
                 let initial = self.initial_recorded_height.take();
-                (initial, initial)
+                (None, initial)
             }
         };
 
