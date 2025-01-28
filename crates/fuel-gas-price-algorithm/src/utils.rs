@@ -698,6 +698,7 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
+    #[allow(clippy::cast_possible_truncation)]
     fn cumulative_percentage_change_plain(
         start_gas_price: u64,
         best_height: u32,
@@ -730,7 +731,7 @@ mod tests {
             offset in 0..20u32,
             percentage in 0..20u64,
         ) {
-
+            #[allow(clippy::arithmetic_side_effects)]
             let target_height = best_height + offset;
 
             let plain = cumulative_percentage_change_plain(start_gas_price, best_height, percentage, target_height);
