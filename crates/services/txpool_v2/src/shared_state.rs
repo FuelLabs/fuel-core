@@ -8,9 +8,8 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
-    services::txpool::TransactionStatus,
+    services::txpool::{ArcPoolTx, TransactionStatus},
 };
-use parking_lot::RwLockWriteGuard;
 use tokio::sync::{
     broadcast,
     mpsc,
@@ -21,12 +20,7 @@ use tokio::sync::{
 use crate::{
     error::Error,
     service::{
-        BorrowTxPoolRequest,
-        ReadPoolRequest,
-        Shared,
-        TxInfo,
-        TxPool,
-        WritePoolRequest,
+        ReadPoolRequest, SelectTransactionsRequest,TxInfo, WritePoolRequest
     },
     tx_status_stream::{
         TxStatusMessage,
@@ -35,22 +29,13 @@ use crate::{
     update_sender::{
         MpscChannel,
         TxStatusChange,
-    },
+    }, Constraints,
 };
-
-pub struct BorrowedTxPool(pub(crate) Shared<TxPool>);
-
-impl BorrowedTxPool {
-    /// Get a write lock on the TxPool.
-    pub fn exclusive_lock(&self) -> RwLockWriteGuard<TxPool> {
-        self.0.write()
-    }
-}
 
 #[derive(Clone)]
 pub struct SharedState {
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
-    pub(crate) select_transactions_requests_sender: mpsc::Sender<BorrowTxPoolRequest>,
+    pub(crate) select_transactions_requests_sender: mpsc::Sender<SelectTransactionsRequest>,
     pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
@@ -83,11 +68,12 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
-    pub async fn borrow_txpool(&self) -> Result<BorrowedTxPool, Error> {
+    pub async fn borrow_txpool(&self, constraints: Constraints) -> Result<Vec<ArcPoolTx>, Error> {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
-            .send(BorrowTxPoolRequest {
+            .send(SelectTransactionsRequest::SelectTransactions {
+                constraints,
                 response_channel: select_transactions_sender,
             })
             .await

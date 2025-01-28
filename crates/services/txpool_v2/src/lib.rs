@@ -67,8 +67,5 @@ pub use service::{
     new_service,
     Service,
 };
-pub use shared_state::{
-    BorrowedTxPool,
-    SharedState,
-};
+pub use shared_state::SharedState;
 pub use tx_status_stream::TxStatusMessage;
