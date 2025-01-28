@@ -7,7 +7,10 @@ use handler::{
     HeartbeatOutEvent,
 };
 use libp2p::{
-    core::Endpoint,
+    core::{
+        transport::PortUse,
+        Endpoint,
+    },
     swarm::{
         derive_prelude::ConnectionId,
         ConnectionDenied,
@@ -104,6 +107,7 @@ impl NetworkBehaviour for Behaviour {
         _peer: PeerId,
         _addr: &Multiaddr,
         _role_override: Endpoint,
+        _port_use: PortUse,
     ) -> Result<THandler<Self>, ConnectionDenied> {
         Ok(HeartbeatHandler::new(self.config.clone()))
     }
