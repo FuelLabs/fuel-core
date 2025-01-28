@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- [2638](https://github.com/FuelLabs/fuel-core/pull/2638): Optimize the `cumulative_percent_change` function used in estimation of gas price, convert multiple async functions to sync.
+
 ## [Version 0.40.3]
 
 ### Added

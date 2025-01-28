@@ -80,7 +80,7 @@ pub struct EstimateGasPriceQuery {}
 
 #[Object]
 impl EstimateGasPriceQuery {
-    #[graphql(complexity = "2 * query_costs().storage_read")]
+    #[graphql(complexity = "query_costs().storage_read")]
     async fn estimate_gas_price(
         &self,
         ctx: &Context<'_>,
@@ -101,7 +101,6 @@ impl EstimateGasPriceQuery {
         let gas_price_provider = ctx.data_unchecked::<GasPriceProvider>();
         let gas_price = gas_price_provider
             .worst_case_gas_price(target_block.into())
-            .await
             .ok_or(async_graphql::Error::new(format!(
                 "Failed to estimate gas price for block, algorithm not yet set: {target_block:?}"
             )))?;
