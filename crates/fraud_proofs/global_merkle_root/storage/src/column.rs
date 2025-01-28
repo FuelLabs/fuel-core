@@ -95,9 +95,7 @@ impl StorageColumn for Column {
                 let str: &str = column.into();
                 format!("Merkle{}", str)
             }
-            Column::MerkleMetadataColumn => {
-                format!("MerkleMetadata")
-            }
+            Column::MerkleMetadataColumn => "MerkleMetadata".to_string(),
         }
     }
 
