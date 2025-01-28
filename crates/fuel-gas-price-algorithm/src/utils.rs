@@ -678,7 +678,12 @@ pub(crate) fn cumulative_percentage_change(
         };
 
     let mut approx = new_exec_price as f64 * multiple;
-    // account for rounding errors and take a slightly higher value
+
+    // Account for rounding errors and take a slightly higher value
+    // Around the `ROUNDING_ERROR_CUTOFF` the rounding errors will cause the estimate to be too low.
+    // We increase by `ROUNDING_ERROR_COMPENSATION` to account for this.
+    // This is an unlikely situation in practice, but we want to guarantee that the actual
+    // gas price is always equal or less than the estimate given here
     const ROUNDING_ERROR_CUTOFF: f64 = 16948547188989277.0;
     if approx > ROUNDING_ERROR_CUTOFF {
         const ROUNDING_ERROR_COMPENSATION: f64 = 2000.0;
