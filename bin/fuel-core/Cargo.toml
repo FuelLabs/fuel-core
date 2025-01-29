@@ -82,5 +82,11 @@ production = [
   "parquet",
   "aws-kms",
 ]
-fault-proving = ["fuel-core-compression/fault-proving"]
 parallel-executor = ["fuel-core/parallel-executor"]
+fault-proving = [
+  "fuel-core-compression/fault-proving",
+  "fuel-core-storage/fault-proving",
+  "fuel-core-types/fault-proving",
+  "fuel-core-chain-config/fault-proving",
+  "fuel-core/fault-proving",
+]

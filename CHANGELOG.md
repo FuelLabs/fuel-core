@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- [2648](https://github.com/FuelLabs/fuel-core/pull/2648): Add feature-flagged field to block header `fault_proving_header` that contains a commitment to all transaction ids.
+
 ## [Version 0.41.6]
 
 ### Added

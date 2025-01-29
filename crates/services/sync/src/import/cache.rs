@@ -258,6 +258,8 @@ mod tests {
                 Vec::new(),
                 &[],
                 Bytes32::default(),
+                #[cfg(feature = "fault-proving")]
+                &Default::default(),
             )
             .unwrap(),
             consensus: Default::default(),
