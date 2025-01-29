@@ -523,16 +523,15 @@ pub mod test {
                     if let Some(prefix) = &prefix {
                         let (key, _) = item;
                         if key.starts_with(&prefix) {
-                            return Some(item);
-                        }
+                            Some(item)
+                        } else { None }
                     } else {
-                        return Some(item);
+                        Some(item)
                     }
-                    None
                 })
                 // Skip until you find the start element
                 .skip_while(move |(key, _item)| {
-                    start.as_ref().map(|start| { let key: &[u8] = key.as_ref(); key == start }).unwrap_or(true)
+                    start.as_ref().map(|start| { let key: &[u8] = key.as_ref(); key != start }).unwrap_or(false)
                 })
                 .map(|(key, value)| Ok((key.clone(), value.clone())));
 
