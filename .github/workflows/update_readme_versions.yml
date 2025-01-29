@@ -1,0 +1,120 @@
+name: Update Network Versions
+on:
+  schedule:
+    - cron: '0 * * * *'  # Runs every hour at the 0th minute
+  workflow_dispatch:     # Allows manual triggering
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Fetch current versions
+      id: get-versions
+      run: |
+        # Fetch versions from all networks
+        mainnet_version=$(curl -s -X POST -H "Content-Type: application/json" --data '{"query":"query { nodeInfo { nodeVersion }}"}' https://mainnet.fuel.network/v1/graphql | jq -r '.data.nodeInfo.nodeVersion')
+        testnet_version=$(curl -s -X POST -H "Content-Type: application/json" --data '{"query":"query { nodeInfo { nodeVersion }}"}' https://testnet.fuel.network/v1/graphql | jq -r '.data.nodeInfo.nodeVersion')
+        devnet_version=$(curl -s -X POST -H "Content-Type: application/json" --data '{"query":"query { nodeInfo { nodeVersion }}"}' https://devnet.fuel.network/v1/graphql | jq -r '.data.nodeInfo.nodeVersion')
+
+        echo "mainnet_version=$mainnet_version" >> $GITHUB_OUTPUT
+        echo "testnet_version=$testnet_version" >> $GITHUB_OUTPUT
+        echo "devnet_version=$devnet_version" >> $GITHUB_OUTPUT
+
+    - name: Extract current README versions
+      id: readme-versions
+      run: |
+        # Extract versions from README.md
+        mainnet_readme=$(grep -E '^\| Mainnet' README.md | awk -F '|' '{gsub(/ /, "", $3); print $3}')
+        testnet_readme=$(grep -E '^\| Testnet' README.md | awk -F '|' '{gsub(/ /, "", $3); print $3}')
+        devnet_readme=$(grep -E '^\| Devnet' README.md | awk -F '|' '{gsub(/ /, "", $3); print $3}')
+
+        echo "mainnet_readme=$mainnet_readme" >> $GITHUB_OUTPUT
+        echo "testnet_readme=$testnet_readme" >> $GITHUB_OUTPUT
+        echo "devnet_readme=$devnet_readme" >> $GITHUB_OUTPUT
+
+    - name: Update README if needed
+      id: update-readme
+      run: |
+        echo "Comparing versions..."
+        needs_update=false
+        tmp_file=$(mktemp)
+
+        # Create sed command file
+        {
+          if [ "${{ steps.get-versions.outputs.mainnet_version }}" != "${{ steps.readme-versions.outputs.mainnet_readme }}" ]; then
+            echo "s/^\| *Mainnet *\|.*\|/| Mainnet | ${{ steps.get-versions.outputs.mainnet_version }} |/"
+            needs_update=true
+          fi
+          
+          if [ "${{ steps.get-versions.outputs.testnet_version }}" != "${{ steps.readme-versions.outputs.testnet_readme }}" ]; then
+            echo "s/^\| *Testnet *\|.*\|/| Testnet | ${{ steps.get-versions.outputs.testnet_version }} |/"
+            needs_update=true
+          fi
+          
+          if [ "${{ steps.get-versions.outputs.devnet_version }}" != "${{ steps.readme-versions.outputs.devnet_readme }}" ]; then
+            echo "s/^\| *Devnet *\|.*\|/| Devnet | ${{ steps.get-versions.outputs.devnet_version }} |/"
+            needs_update=true
+          fi
+        } > sed_commands.txt
+
+        echo "Generated sed commands:"
+        cat sed_commands.txt
+        echo ""
+
+        if [ "$needs_update" = true ]; then
+          echo "Updating README.md..."
+          sed -E -f sed_commands.txt README.md > "$tmp_file"
+          mv "$tmp_file" README.md
+          
+          echo "Updated README content:"
+          cat README.md
+          echo "UPDATED=true" >> $GITHUB_ENV
+        else
+          echo "No version changes detected"
+          echo "UPDATED=false" >> $GITHUB_ENV
+        fi
+
+    - name: Create Pull Request
+      if: env.UPDATED == 'true'
+      run: |
+        # Check for existing PRs with specific label
+        existing_prs=$(gh pr list --state open --search 'in:title "Update network versions on README"' --json number --jq 'length')
+        if [ "$existing_prs" -gt 0 ]; then
+          echo "Existing PR found, skipping PR creation"
+          exit 0
+        fi
+
+        # Proceed with PR creation
+        echo "Creating PR..."
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+
+        branch_name="version-update-$(date +%s)"
+        git checkout -b "$branch_name"
+        git add README.md
+        git commit -m "Update network versions on README:
+        
+        - Mainnet: ${{ steps.get-versions.outputs.mainnet_version }}
+        - Testnet: ${{ steps.get-versions.outputs.testnet_version }}
+        - Devnet: ${{ steps.get-versions.outputs.devnet_version }}"
+
+        git push origin "$branch_name"
+
+        gh pr create \
+          --title "Update network versions on README" \
+          --body "Automated version updates:
+          - Mainnet: ${{ steps.get-versions.outputs.mainnet_version }}
+          - Testnet: ${{ steps.get-versions.outputs.testnet_version }}
+          - Devnet: ${{ steps.get-versions.outputs.devnet_version }}" \
+          --reviewer FuelLabs/client \
+          --base master \
+          --head "$branch_name"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
