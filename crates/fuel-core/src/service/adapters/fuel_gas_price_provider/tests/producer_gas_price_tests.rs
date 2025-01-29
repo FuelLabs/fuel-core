@@ -5,8 +5,8 @@ use fuel_core_gas_price_service::{
 };
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider;
 
-#[tokio::test]
-async fn production_gas_price__if_requested_block_height_is_latest_return_gas_price() {
+#[test]
+fn production_gas_price__if_requested_block_height_is_latest_return_gas_price() {
     // given
     let price = 33;
     let algo = StaticAlgorithm::new(price);
@@ -14,14 +14,14 @@ async fn production_gas_price__if_requested_block_height_is_latest_return_gas_pr
 
     // when
     let expected_price = algo.next_gas_price();
-    let actual_price = gas_price_provider.production_gas_price().await.unwrap();
+    let actual_price = gas_price_provider.production_gas_price().unwrap();
 
     // then
     assert_eq!(expected_price, actual_price);
 }
 
-#[tokio::test]
-async fn _dry_run_gas_price__calculates_correctly_based_on_percentage() {
+#[test]
+fn dry_run_gas_price__calculates_correctly_based_on_percentage() {
     // given
     let height = 123;
     let price = 33;
@@ -30,7 +30,7 @@ async fn _dry_run_gas_price__calculates_correctly_based_on_percentage() {
     let gas_price_provider = build_provider(algo.clone(), height, price, percentage);
 
     // when
-    let actual = gas_price_provider.dry_run_gas_price().await.unwrap();
+    let actual = gas_price_provider.dry_run_gas_price().unwrap();
 
     // then
     let change_amount = price.saturating_mul(percentage as u64).saturating_div(100);

@@ -23,6 +23,7 @@ mod buckets;
 pub mod config;
 pub mod core_metrics;
 pub mod futures;
+pub mod gas_price_metrics;
 pub mod graphql_metrics;
 pub mod importer;
 pub mod p2p_metrics;

@@ -3662,6 +3662,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "enum-iterator",
+ "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types 0.41.4",
@@ -3680,6 +3681,19 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "fuel-core-global-merkle-root-storage"
+version = "0.41.4"
+dependencies = [
+ "anyhow",
+ "enum-iterator",
+ "fuel-core-storage",
+ "fuel-core-types 0.41.4",
+ "num_enum",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
 ]
 
 [[package]]
@@ -3760,7 +3774,6 @@ dependencies = [
  "libp2p",
  "libp2p-mplex",
  "libp2p-swarm-test",
- "netlink-proto",
  "postcard",
  "prometheus-client",
  "quick-protobuf",

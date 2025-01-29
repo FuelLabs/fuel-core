@@ -36,7 +36,7 @@ async fn test_import_0_to_5() {
     consensus_port
         .expect_await_da_height()
         .times(1)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -86,7 +86,7 @@ async fn test_import_3_to_5() {
     consensus_port
         .expect_await_da_height()
         .times(1)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -150,7 +150,7 @@ async fn test_import_0_to_499() {
     consensus_port
         .expect_await_da_height()
         .times(times)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
 
@@ -207,7 +207,7 @@ async fn import__signature_fails_on_header_5_only() {
     consensus_port
         .expect_await_da_height()
         .times(1)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
         .times(1)
@@ -265,7 +265,7 @@ async fn import__keep_data_asked_in_fail_ask_header_cases() {
     consensus_port
         .expect_await_da_height()
         .times(3)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     let mut seq = Sequence::new();
@@ -368,7 +368,7 @@ async fn import__keep_data_asked_in_fail_ask_transactions_cases() {
     consensus_port
         .expect_await_da_height()
         .times(4)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     // Everything goes well on the headers part for all blocks
@@ -474,7 +474,7 @@ async fn import__keep_data_asked_in_fail_execution() {
     consensus_port
         .expect_await_da_height()
         .times(4)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     // Data is re-ask for the block 4 because his execution failed
@@ -512,15 +512,17 @@ async fn import__keep_data_asked_in_fail_execution() {
         .times(1)
         .in_sequence(&mut seq)
         .returning(|block| {
-            assert_eq!(block.entity.header().height(), &BlockHeight::new(4));
-            anyhow::bail!("Bad execution")
+            Box::pin(async move {
+                assert_eq!(block.entity.header().height(), &BlockHeight::new(4));
+                anyhow::bail!("Bad execution")
+            })
         });
     // Success execute the 3 after
     executor
         .expect_execute_and_commit()
         .times(3)
         .in_sequence(&mut seq)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
     let executor = Arc::new(executor);
     let consensus = Arc::new(consensus_port);
     let notify = Arc::new(Notify::new());
@@ -561,7 +563,7 @@ async fn import__signature_fails_on_header_4_only() {
     consensus_port
         .expect_await_da_height()
         .times(0)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -756,7 +758,7 @@ async fn import__transactions_not_found() {
     consensus_port
         .expect_await_da_height()
         .times(1)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -802,7 +804,7 @@ async fn import__transactions_not_found_for_header_4() {
     consensus_port
         .expect_await_da_height()
         .times(1)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -860,7 +862,7 @@ async fn import__transactions_not_found_for_header_5() {
     consensus_port
         .expect_await_da_height()
         .times(1)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -940,7 +942,7 @@ async fn import__p2p_error_on_4_transactions() {
     consensus_port
         .expect_await_da_height()
         .times(1)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -994,7 +996,7 @@ async fn import__consensus_error_on_4() {
     consensus_port
         .expect_await_da_height()
         .times(0)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -1044,7 +1046,7 @@ async fn import__consensus_error_on_5() {
     consensus_port
         .expect_await_da_height()
         .times(1)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -1096,7 +1098,7 @@ async fn import__execution_error_on_header_4() {
     consensus_port
         .expect_await_da_height()
         .times(1)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -1124,11 +1126,13 @@ async fn import__execution_error_on_header_4() {
         .expect_execute_and_commit()
         .times(1)
         .returning(|h| {
-            if **h.entity.header().height() == 4 {
-                Err(anyhow::anyhow!("Some execution error"))
-            } else {
-                Ok(())
-            }
+            Box::pin(async move {
+                if **h.entity.header().height() == 4 {
+                    Err(anyhow::anyhow!("Some execution error"))
+                } else {
+                    Ok(())
+                }
+            })
         });
 
     let state = State::new(3, 5).into();
@@ -1160,7 +1164,7 @@ async fn import__execution_error_on_header_5() {
     consensus_port
         .expect_await_da_height()
         .times(1)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -1188,11 +1192,13 @@ async fn import__execution_error_on_header_5() {
         .expect_execute_and_commit()
         .times(2)
         .returning(|h| {
-            if **h.entity.header().height() == 5 {
-                Err(anyhow::anyhow!("Some execution error"))
-            } else {
-                Ok(())
-            }
+            Box::pin(async move {
+                if **h.entity.header().height() == 5 {
+                    Err(anyhow::anyhow!("Some execution error"))
+                } else {
+                    Ok(())
+                }
+            })
         });
 
     let state = State::new(3, 5).into();
@@ -1255,7 +1261,7 @@ async fn import__can_work_in_two_loops() {
     consensus_port
         .expect_await_da_height()
         .times(2)
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers()
@@ -1411,7 +1417,7 @@ async fn import__execution_error_on_header_4_when_awaits_for_1000000_blocks() {
         .returning(|_| Ok(true));
     consensus_port
         .expect_await_da_height()
-        .returning(|_| Ok(()));
+        .returning(|_| Box::pin(async move { Ok(()) }));
 
     let mut p2p = MockPeerToPeerPort::default();
     p2p.expect_get_sealed_block_headers().returning(|range| {
@@ -1436,11 +1442,13 @@ async fn import__execution_error_on_header_4_when_awaits_for_1000000_blocks() {
         .expect_execute_and_commit()
         .times(1)
         .returning(|h| {
-            if **h.entity.header().height() == 4 {
-                Err(anyhow::anyhow!("Some execution error"))
-            } else {
-                Ok(())
-            }
+            Box::pin(async move {
+                if **h.entity.header().height() == 4 {
+                    Err(anyhow::anyhow!("Some execution error"))
+                } else {
+                    Ok(())
+                }
+            })
         });
 
     let state = State::new(3, 1000000).into();
@@ -1626,7 +1634,9 @@ impl PeerReportTestBuilder {
     fn executor(&self) -> Arc<MockBlockImporterPort> {
         let mut executor = MockBlockImporterPort::default();
 
-        executor.expect_execute_and_commit().returning(|_| Ok(()));
+        executor
+            .expect_execute_and_commit()
+            .returning(|_| Box::pin(async move { Ok(()) }));
 
         Arc::new(executor)
     }
@@ -1636,7 +1646,7 @@ impl PeerReportTestBuilder {
 
         consensus_port
             .expect_await_da_height()
-            .returning(|_| Ok(()));
+            .returning(|_| Box::pin(async move { Ok(()) }));
 
         let check_sealed_header = self.check_sealed_header.unwrap_or(true);
         consensus_port
@@ -1701,7 +1711,7 @@ impl DefaultMocks for MockConsensusPort {
         consensus_port
             .expect_await_da_height()
             .times(t.next().unwrap())
-            .returning(|_| Ok(()));
+            .returning(|_| Box::pin(async move { Ok(()) }));
         consensus_port
     }
 }
@@ -1747,7 +1757,7 @@ impl DefaultMocks for MockBlockImporterPort {
         executor
             .expect_execute_and_commit()
             .times(t)
-            .returning(move |_| Ok(()));
+            .returning(move |_| Box::pin(async move { Ok(()) }));
         executor
     }
 }
