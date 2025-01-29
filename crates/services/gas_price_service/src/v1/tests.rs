@@ -302,6 +302,7 @@ fn zero_threshold_arbitrary_config() -> V1AlgorithmConfig {
         block_activity_threshold: 0,
         da_poll_interval: None,
         starting_recorded_height: None,
+        record_metrics: false,
     }
 }
 
@@ -338,6 +339,7 @@ fn different_arb_config() -> V1AlgorithmConfig {
         block_activity_threshold: 0,
         da_poll_interval: None,
         starting_recorded_height: None,
+        record_metrics: false,
     }
 }
 
@@ -409,6 +411,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
         inner,
         latest_l2_height,
         None,
+        false,
     );
 
     let read_algo = service.next_block_algorithm();
@@ -468,6 +471,7 @@ async fn run__new_l2_block_saves_old_metadata() {
         inner,
         latest_l2_height,
         None,
+        false,
     );
     let mut watcher = StateWatcher::started();
 
@@ -529,6 +533,7 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
         inner,
         latest_l2_height,
         None,
+        false,
     );
     let mut watcher = StateWatcher::started();
 
@@ -589,6 +594,7 @@ async fn run__updates_da_service_latest_l2_height() {
         inner,
         latest_l2_height,
         None,
+        false,
     );
     let mut watcher = StateWatcher::started();
 
