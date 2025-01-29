@@ -8,10 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2491](https://github.com/FuelLabs/fuel-core/pull/2491): Storage read replays of historical blocks for execution tracing. Only available behind `--debug` flag.
+- [2635](https://github.com/FuelLabs/fuel-core/pull/2635): Add metrics to gas price service
 
 ### Changed
 - [2387](https://github.com/FuelLabs/fuel-core/pull/2387): Update description `tx-max-depth` flag.
 - [2630](https://github.com/FuelLabs/fuel-core/pull/2630): Removed some noisy `tracing::info!` logs
+
+### Added
+- [2553](https://github.com/FuelLabs/fuel-core/pull/2553): Scaffold global merkle root storage crate.
 
 ### Fixed
 - [2632](https://github.com/FuelLabs/fuel-core/pull/2632): Improved performance of certain async trait impls in the gas price service.

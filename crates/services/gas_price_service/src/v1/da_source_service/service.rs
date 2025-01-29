@@ -111,7 +111,7 @@ where
         tracing::debug!("Received block costs: {:?}", da_block_costs_res);
         let da_block_costs = da_block_costs_res?;
         let filtered_block_costs = self
-            .filter_costs_that_have_values_greater_than_l2_block_height(da_block_costs)?;
+            .filter_costs_that_have_values_greater_than_l2_block_height(da_block_costs);
         tracing::debug!(
             "the latest l2 height is: {:?}",
             self.latest_l2_height.load(Ordering::Acquire)
@@ -130,13 +130,12 @@ where
     fn filter_costs_that_have_values_greater_than_l2_block_height(
         &self,
         da_block_costs: Vec<DaBlockCosts>,
-    ) -> Result<impl Iterator<Item = DaBlockCosts>> {
+    ) -> impl Iterator<Item = DaBlockCosts> {
         let latest_l2_height = self.latest_l2_height.load(Ordering::Acquire);
-        let iter = da_block_costs.into_iter().filter(move |da_block_costs| {
+        da_block_costs.into_iter().filter(move |da_block_costs| {
             let end = *da_block_costs.l2_blocks.end();
             end < latest_l2_height
-        });
-        Ok(iter)
+        })
     }
 
     #[cfg(test)]

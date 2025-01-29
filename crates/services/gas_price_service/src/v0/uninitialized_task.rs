@@ -248,9 +248,9 @@ where
 {
     let metadata = metadata_storage
         .get_metadata(&metadata_height.into())?
-        .ok_or(anyhow::anyhow!(
-            "Expected metadata to exist for height: {metadata_height}"
-        ))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("Expected metadata to exist for height: {metadata_height}")
+        })?;
 
     let mut algo_updater = if let UpdaterMetadata::V0(metadata) = metadata {
         Ok(AlgorithmUpdaterV0::new(

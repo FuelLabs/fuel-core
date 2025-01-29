@@ -92,6 +92,7 @@ pub struct Config {
     pub max_da_gas_price_change_percent: u16,
     pub da_gas_price_p_component: i64,
     pub da_gas_price_d_component: i64,
+    pub gas_price_metrics: bool,
     pub activity_normal_range_size: u16,
     pub activity_capped_range_size: u16,
     pub activity_decrease_range_size: u16,
@@ -149,6 +150,7 @@ impl Config {
         let gas_price_change_percent = 0;
         let min_gas_price = 0;
         let gas_price_threshold_percent = 50;
+        let gas_price_metrics = false;
 
         Self {
             graphql_config: GraphQLConfig {
@@ -215,6 +217,7 @@ impl Config {
             max_da_gas_price_change_percent: 0,
             da_gas_price_p_component: 0,
             da_gas_price_d_component: 0,
+            gas_price_metrics,
             activity_normal_range_size: 0,
             activity_capped_range_size: 0,
             activity_decrease_range_size: 0,
