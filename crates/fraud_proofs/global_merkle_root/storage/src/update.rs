@@ -16,7 +16,6 @@ use fuel_core_storage::{
     kv_store::KeyValueInspect,
     transactional::StorageTransaction,
     StorageAsMut,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -706,6 +705,35 @@ mod tests {
         assert_eq!(consensus_parameters_version_before_upgrade, 1);
         assert_eq!(consensus_parameters_version_after_upgrade, 2);
         assert_eq!(consensus_parameters_after_upgrade, consensus_parameters);
+    }
+
+    #[test]
+    fn process_transaction__should_store_processed_transaction() {
+        // Given
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
+
+        let block_height = BlockHeight::new(0);
+        let tx_idx = 0;
+        let tx = Transaction::default_test_tx();
+        let tx_id = tx.id(&storage_update_tx.chain_id);
+
+        // When
+        storage_update_tx
+            .process_transaction(block_height, tx_idx, &tx)
+            .unwrap();
+
+        storage_tx.commit().unwrap();
+
+        // Then
+        assert!(storage
+            .read_transaction()
+            .storage_as_ref::<ProcessedTransactions>()
+            .get(&tx_id)
+            .unwrap()
+            .is_some());
     }
 
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
