@@ -68,7 +68,7 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
-    pub async fn borrow_txpool(&self, constraints: Constraints) -> Result<Vec<ArcPoolTx>, Error> {
+    pub async fn extract_transactions_for_block(&self, constraints: Constraints) -> Result<Vec<ArcPoolTx>, Error> {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
