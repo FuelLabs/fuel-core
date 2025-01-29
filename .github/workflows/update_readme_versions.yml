@@ -1,4 +1,4 @@
-name: Update Network Versions
+name: Update README Network Versions
 on:
   schedule:
     - cron: '0 * * * *'  # Runs every hour at the 0th minute
