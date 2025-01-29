@@ -4,6 +4,7 @@ use crate::{
     ConsensusParametersVersions,
     ContractsLatestUtxo,
     Messages,
+    ProcessedTransactions,
     StateTransitionBytecodeVersions,
 };
 use alloc::{
@@ -15,6 +16,7 @@ use fuel_core_storage::{
     kv_store::KeyValueInspect,
     transactional::StorageTransaction,
     StorageAsMut,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -50,14 +52,13 @@ use fuel_core_types::{
                 MessageDataSigned,
             },
         },
-        output::{
-            self,
-        },
+        output,
         Address,
         AssetId,
         Input,
         Output,
         Transaction,
+        TxId,
         TxPointer,
         UniqueIdentifier,
         Upgrade,
@@ -139,7 +140,9 @@ where
         tx_idx: u16,
         tx: &Transaction,
     ) -> anyhow::Result<()> {
+        let tx_id = tx.id(&self.chain_id);
         let inputs = tx.inputs();
+
         for input in inputs.iter() {
             self.process_input(input)?;
         }
@@ -149,7 +152,6 @@ where
             let output_index =
                 u16::try_from(output_index).map_err(|_| ExecutorError::TooManyOutputs)?;
 
-            let tx_id = tx.id(&self.chain_id);
             let utxo_id = UtxoId::new(tx_id, output_index);
             self.process_output(tx_pointer, utxo_id, &inputs, output)?;
         }
@@ -157,6 +159,9 @@ where
         if let Transaction::Upgrade(tx) = tx {
             self.process_upgrade_transaction(tx)?;
         }
+
+        self.store_processed_transaction(tx_id)?;
+
         // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
         // TODO(#2585): Insert uplodade bytecodes.
         // TODO(#2586): Insert blobs.
@@ -234,6 +239,17 @@ where
                 )?;
             }
         }
+        Ok(())
+    }
+
+    fn store_processed_transaction(&mut self, tx_id: TxId) -> anyhow::Result<()> {
+        let previous_tx = self
+            .storage
+            .storage_as_mut::<ProcessedTransactions>()
+            .replace(&tx_id, &())?;
+
+        assert!(previous_tx.is_none());
+
         Ok(())
     }
 
