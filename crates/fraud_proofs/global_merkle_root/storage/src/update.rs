@@ -378,7 +378,7 @@ mod tests {
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
+        let mut storage_update_tx = storage_tx.update_transaction();
 
         let tx_pointer = random_tx_pointer(&mut rng);
         let utxo_id = random_utxo_id(&mut rng);
@@ -391,7 +391,7 @@ mod tests {
         };
 
         // When
-        update_tx
+        storage_update_tx
             .process_output(tx_pointer, utxo_id, &inputs, &output)
             .unwrap();
 
@@ -417,7 +417,7 @@ mod tests {
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
+        let mut storage_update_tx = storage_tx.update_transaction();
 
         let tx_pointer = random_tx_pointer(&mut rng);
         let utxo_id = random_utxo_id(&mut rng);
@@ -437,7 +437,7 @@ mod tests {
         let output = Output::Contract(output_contract);
 
         // When
-        update_tx
+        storage_update_tx
             .process_output(tx_pointer, utxo_id, &inputs, &output)
             .unwrap();
 
@@ -462,7 +462,7 @@ mod tests {
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
+        let mut storage_update_tx = storage_tx.update_transaction();
 
         let output_amount = rng.gen();
         let output_address = random_address(&mut rng);
@@ -482,11 +482,11 @@ mod tests {
         });
 
         // When
-        update_tx
+        storage_update_tx
             .process_output(tx_pointer, utxo_id, &inputs, &output)
             .unwrap();
 
-        update_tx.process_input(&input).unwrap();
+        storage_update_tx.process_input(&input).unwrap();
 
         storage_tx.commit().unwrap();
 
