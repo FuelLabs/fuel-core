@@ -83,6 +83,7 @@ impl From<Config> for V1AlgorithmConfig {
             starting_recorded_height: value
                 .starting_recorded_height
                 .map(BlockHeight::from),
+            record_metrics: value.gas_price_metrics,
         }
     }
 }

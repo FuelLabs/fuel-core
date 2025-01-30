@@ -23,7 +23,7 @@ where
         Self(Arc::new(parking_lot::RwLock::new(algorithm)))
     }
 
-    pub async fn update(&mut self, new_algo: A) {
+    pub fn update(&mut self, new_algo: A) {
         let mut write_lock = self.0.write();
         *write_lock = new_algo;
     }
@@ -37,7 +37,7 @@ where
         self.0.read().next_gas_price()
     }
 
-    pub async fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64 {
+    pub fn worst_case_gas_price(&self, block_height: BlockHeight) -> u64 {
         self.0.read().worst_case_gas_price(block_height)
     }
 }

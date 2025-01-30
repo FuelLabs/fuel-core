@@ -562,6 +562,8 @@ impl Command {
             disabled_metrics.is_enabled(Module::Importer),
         );
 
+        let gas_price_metrics = disabled_metrics.is_enabled(Module::GasPrice);
+
         let da_compression = match da_compression {
             Some(retention) => {
                 DaCompressionConfig::Enabled(fuel_core_compression::Config {
@@ -710,6 +712,7 @@ impl Command {
             max_da_gas_price_change_percent: gas_price_change_percent,
             da_gas_price_p_component,
             da_gas_price_d_component,
+            gas_price_metrics,
             activity_normal_range_size: 100,
             activity_capped_range_size: 0,
             activity_decrease_range_size: 0,

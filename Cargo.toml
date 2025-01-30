@@ -10,6 +10,7 @@ members = [
   "crates/client",
   "crates/compression",
   "crates/database",
+  "crates/fraud_proofs/global_merkle_root/storage",
   "crates/fuel-core",
   "crates/fuel-gas-price-algorithm",
   "crates/keygen",
