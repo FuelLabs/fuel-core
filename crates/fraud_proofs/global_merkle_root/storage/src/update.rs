@@ -453,8 +453,6 @@ impl TransactionOutputs for Transaction {
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
-    use crate::column::TableColumn;
-
     use super::*;
 
     use fuel_core_storage::{
@@ -687,19 +685,22 @@ mod tests {
             .expect("InMemoryStorage does not return error");
 
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
-        update_tx.process_upgrade_transaction(&upgrade_tx).unwrap();
+        let mut storage_update_tx = storage_tx.update_transaction();
+        storage_update_tx
+            .process_upgrade_transaction(&upgrade_tx)
+            .unwrap();
         storage_tx.commit().unwrap();
         let state_transition_bytecode_version_after_upgrade = storage
             .get_latest_state_transition_bytecode_version()
             .expect("InMemoryStorage does not return error");
         let state_transition_bytecode_root_after_upgrade = storage
-            .get(
-                &[0, 0, 0, 1],
-                Column::TableColumn(TableColumn::StateTransitionBytecodeVersions),
-            )
-            .expect("In memory Storage should not return an error")
-            .expect("State transition bytecode version after upgrade should be present");
+            .read_transaction()
+            .storage_as_ref::<StateTransitionBytecodeVersions>()
+            .get(&1)
+            .expect("InMemoryStorage does not return error")
+            .expect("StateTransitionBytecodeVersion 1 should exist")
+            .into_owned();
+
         // Then
         assert_eq!(state_transition_bytecode_version_before_upgrade, 0);
         assert_eq!(state_transition_bytecode_version_after_upgrade, 1);
@@ -720,7 +721,7 @@ mod tests {
         let tx_witness = Witness::from(serialized_consensus_parameters.clone());
         let serialized_witness = tx_witness.as_vec();
         let checksum = Hasher::hash(serialized_witness);
-        let upgrade_tx =
+        let fuel_upgrade_tx =
             TransactionBuilder::upgrade(UpgradePurpose::ConsensusParameters {
                 witness_index: 0,
                 checksum,
@@ -736,27 +737,26 @@ mod tests {
             .expect("InMemoryStorage does not return error");
 
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
-        update_tx.process_upgrade_transaction(&upgrade_tx).unwrap();
+        let mut storage_update_tx = storage_tx.update_transaction();
+        storage_update_tx
+            .process_upgrade_transaction(&fuel_upgrade_tx)
+            .unwrap();
         storage_tx.commit().unwrap();
         let consensus_parameters_version_after_upgrade = storage
             .get_latest_consensus_parameters_version()
             .expect("InMemoryStorage does not return error");
-        let serialized_consensus_parameters_after_upgrade = storage
-            .get(
-                &[0, 0, 0, 1],
-                Column::TableColumn(TableColumn::ConsensusParametersVersions),
-            )
-            .expect("In memory Storage should not return an error")
-            .expect("State transition bytecode version after upgrade should be present");
+        let consensus_parameters_after_upgrade = storage
+            .read_transaction()
+            .storage_as_ref::<ConsensusParametersVersions>()
+            .get(&1)
+            .expect("InMemoryStorage does not return error")
+            .expect("ConsensusParametersVersion 1 should exist")
+            .into_owned();
 
         // Then
         assert_eq!(consensus_parameters_version_before_upgrade, 0);
         assert_eq!(consensus_parameters_version_after_upgrade, 1);
-        assert_eq!(
-            &*serialized_consensus_parameters_after_upgrade,
-            &serialized_consensus_parameters
-        );
+        assert_eq!(consensus_parameters_after_upgrade, consensus_parameters);
     }
 
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
