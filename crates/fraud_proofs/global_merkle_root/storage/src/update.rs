@@ -65,21 +65,21 @@ use fuel_core_types::{
 
 pub trait UpdateMerkleizedTables: Sized {
     fn update_merkleized_tables(
-        self,
+        &mut self,
         chain_id: ChainId,
         block: &Block,
-    ) -> anyhow::Result<Self>;
+    ) -> anyhow::Result<&mut Self>;
 }
 
-impl<Storage> UpdateMerkleizedTables for &mut StorageTransaction<Storage>
+impl<Storage> UpdateMerkleizedTables for StorageTransaction<Storage>
 where
     Storage: KeyValueInspect<Column = Column>,
 {
     fn update_merkleized_tables(
-        self,
+        &mut self,
         chain_id: ChainId,
         block: &Block,
-    ) -> anyhow::Result<Self> {
+    ) -> anyhow::Result<&mut Self> {
         let mut update_transaction = UpdateMerkleizedTablesTransaction {
             chain_id,
             storage: self,
