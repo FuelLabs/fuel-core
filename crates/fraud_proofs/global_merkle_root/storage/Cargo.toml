@@ -32,7 +32,6 @@ fuel-core-types = { workspace = true, features = [
 postcard = { workspace = true, features = ["alloc"] }
 rand = { workspace = true }
 
-
 [features]
 default = ["std"]
 std = ["fuel-core-storage/std", "fuel-core-types/std"]
