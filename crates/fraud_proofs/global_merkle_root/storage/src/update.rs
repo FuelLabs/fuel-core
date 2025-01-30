@@ -64,7 +64,7 @@ use fuel_core_types::{
 };
 
 pub trait UpdateMerkleizedTables: Sized {
-    fn update_merklized_tables(
+    fn update_merkleized_tables(
         self,
         chain_id: ChainId,
         block: &Block,
@@ -75,12 +75,12 @@ impl<Storage> UpdateMerkleizedTables for &mut StorageTransaction<Storage>
 where
     Storage: KeyValueInspect<Column = Column>,
 {
-    fn update_merklized_tables(
+    fn update_merkleized_tables(
         self,
         chain_id: ChainId,
         block: &Block,
     ) -> anyhow::Result<Self> {
-        let mut update_transaction = UpdateMerklizedTablesTransaction {
+        let mut update_transaction = UpdateMerkleizedTablesTransaction {
             chain_id,
             storage: self,
         };
@@ -91,12 +91,12 @@ where
     }
 }
 
-struct UpdateMerklizedTablesTransaction<'a, Storage> {
+struct UpdateMerkleizedTablesTransaction<'a, Storage> {
     chain_id: ChainId,
     storage: &'a mut StorageTransaction<Storage>,
 }
 
-impl<'a, Storage> UpdateMerklizedTablesTransaction<'a, Storage>
+impl<'a, Storage> UpdateMerkleizedTablesTransaction<'a, Storage>
 where
     Storage: KeyValueInspect<Column = Column>,
 {
@@ -547,7 +547,7 @@ mod tests {
         type Storage;
         fn update_transaction(
             self,
-        ) -> UpdateMerklizedTablesTransaction<'a, Self::Storage>;
+        ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage>;
     }
 
     impl<'a, Storage> UpdateTransaction<'a> for &'a mut StorageTransaction<Storage> {
@@ -555,8 +555,8 @@ mod tests {
 
         fn update_transaction(
             self,
-        ) -> UpdateMerklizedTablesTransaction<'a, Self::Storage> {
-            UpdateMerklizedTablesTransaction {
+        ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage> {
+            UpdateMerkleizedTablesTransaction {
                 chain_id: ChainId::default(),
                 storage: self,
             }
