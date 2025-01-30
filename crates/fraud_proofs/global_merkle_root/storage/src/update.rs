@@ -63,12 +63,12 @@ use fuel_core_types::{
     },
 };
 
-pub trait UpdateMerkleizedTables {
+pub trait UpdateMerkleizedTables: Sized {
     fn update_merklized_tables(
         self,
         chain_id: ChainId,
         block: &Block,
-    ) -> anyhow::Result<()>;
+    ) -> anyhow::Result<Self>;
 }
 
 impl<Storage> UpdateMerkleizedTables for &mut StorageTransaction<Storage>
@@ -79,13 +79,15 @@ where
         self,
         chain_id: ChainId,
         block: &Block,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Self> {
         let mut update_transaction = UpdateMerklizedTablesTransaction {
             chain_id,
             storage: self,
         };
 
-        update_transaction.process_block(block)
+        update_transaction.process_block(block)?;
+
+        Ok(self)
     }
 }
 
