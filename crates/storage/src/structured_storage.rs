@@ -504,12 +504,9 @@ pub mod test {
                 .storage
                 .iter()
                 // Remove items that don't belong to the column
+                // Clippy doesn't like the filter_map here, but it ca
                 .filter_map(move |((col, key), value)| {
-                    if *col == column.id() {
-                        Some((key, value))
-                    } else {
-                        None
-                    }
+                    (*col == column.id()).then_some((key, value))
                 })
                 // Sort according to iterator direction
                 .sorted_by(|(a, _), (b, _)| {
@@ -519,14 +516,11 @@ pub mod test {
                     }
                 })
                 // Remove keys that don't match the prefix
-                .filter_map(move |item| {
-                    if let Some(prefix) = &prefix {
-                        let (key, _) = item;
-                        if key.starts_with(&prefix) {
-                            Some(item)
-                        } else { None }
+                .filter(move |item| {
+                    if let Some(ref prefix) = prefix {
+                        item.0.starts_with(prefix)
                     } else {
-                        Some(item)
+                        true
                     }
                 })
                 // Skip until you find the start element
