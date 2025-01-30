@@ -331,6 +331,9 @@ mod tests {
     };
 
     #[test]
+    /// When encountering a transaction with a coin output,
+    /// `process_output` should ensure this coin is
+    /// populated in the `Coins` table.
     fn process_output__should_insert_coin() {
         let mut rng = StdRng::seed_from_u64(1337);
 
@@ -372,6 +375,9 @@ mod tests {
     }
 
     #[test]
+    /// When encountering a transaction with a contract created output,
+    /// `process_output` should ensure an appropriate contract UTxO is
+    /// populated in the `ContractCreated` table.
     fn process_output__should_insert_latest_contract_utxo_when_contract_created() {
         let mut rng = StdRng::seed_from_u64(1337);
 
@@ -410,6 +416,9 @@ mod tests {
     }
 
     #[test]
+    /// When encountering a transaction with a contract output,
+    /// `process_output` should ensure an appropriate contract UTxO is
+    /// populated in the `ContractCreated` table.
     fn process_output__should_update_latest_contract_utxo_when_interacting_with_contract()
     {
         let mut rng = StdRng::seed_from_u64(1337);
@@ -456,6 +465,10 @@ mod tests {
     }
 
     #[test]
+    /// When encountering a transaction with a coin input,
+    /// `process_input` should ensure this coin is
+    /// removed from the `Coins` table, as this coin is no longer
+    /// a part of the active UTxO set.
     fn process_input__should_remove_coin() {
         let mut rng = StdRng::seed_from_u64(1337);
 
