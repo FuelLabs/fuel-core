@@ -342,7 +342,8 @@ mod tests {
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.construct_update_merkleized_tables_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
 
         let tx_pointer = random_tx_pointer(&mut rng);
         let utxo_id = random_utxo_id(&mut rng);
@@ -357,7 +358,7 @@ mod tests {
         };
 
         // When
-        update_tx
+        storage_update_tx
             .process_output(tx_pointer, utxo_id, &inputs, &output)
             .unwrap();
 
