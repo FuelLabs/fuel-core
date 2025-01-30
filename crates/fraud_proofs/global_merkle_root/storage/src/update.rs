@@ -342,7 +342,7 @@ mod tests {
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
+        let mut update_tx = storage_tx.construct_update_merkleized_tables_transaction();
 
         let tx_pointer = random_tx_pointer(&mut rng);
         let utxo_id = random_utxo_id(&mut rng);
@@ -386,7 +386,8 @@ mod tests {
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut storage_update_tx = storage_tx.update_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
 
         let tx_pointer = random_tx_pointer(&mut rng);
         let utxo_id = random_utxo_id(&mut rng);
@@ -428,7 +429,8 @@ mod tests {
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut storage_update_tx = storage_tx.update_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
 
         let tx_pointer = random_tx_pointer(&mut rng);
         let utxo_id = random_utxo_id(&mut rng);
@@ -477,7 +479,8 @@ mod tests {
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut storage_update_tx = storage_tx.update_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
 
         let output_amount = rng.gen();
         let output_address = random_address(&mut rng);
@@ -543,17 +546,19 @@ mod tests {
         contract_id
     }
 
-    trait UpdateTransaction<'a>: Sized + 'a {
+    trait ConstructUpdateMerkleizedTablesTransactionForTests<'a>: Sized + 'a {
         type Storage;
-        fn update_transaction(
+        fn construct_update_merkleized_tables_transaction(
             self,
         ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage>;
     }
 
-    impl<'a, Storage> UpdateTransaction<'a> for &'a mut StorageTransaction<Storage> {
+    impl<'a, Storage> ConstructUpdateMerkleizedTablesTransactionForTests<'a>
+        for &'a mut StorageTransaction<Storage>
+    {
         type Storage = Storage;
 
-        fn update_transaction(
+        fn construct_update_merkleized_tables_transaction(
             self,
         ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage> {
             UpdateMerkleizedTablesTransaction {
