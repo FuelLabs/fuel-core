@@ -684,7 +684,7 @@ mod tests {
             .expect("InMemoryStorage does not return error");
 
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
+        let mut update_tx = storage_tx.construct_update_merkleized_tables_transaction();
         update_tx.process_upgrade_transaction(&upgrade_tx).unwrap();
         storage_tx.commit().unwrap();
         let state_transition_bytecode_version_after_upgrade = storage
@@ -733,7 +733,7 @@ mod tests {
             .expect("InMemoryStorage does not return error");
 
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
+        let mut update_tx = storage_tx.construct_update_merkleized_tables_transaction();
         update_tx.process_upgrade_transaction(&upgrade_tx).unwrap();
         storage_tx.commit().unwrap();
         let consensus_parameters_version_after_upgrade = storage
