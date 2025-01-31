@@ -918,7 +918,7 @@ mod tests {
         assert_eq!(stored_contract, Contract::from(contract_bytecode));
     }
 
-    // TODO: https://github.com/FuelLabs/fuel-core/issues/2654 
+    // TODO: https://github.com/FuelLabs/fuel-core/issues/2654
     // This code is copied from the executor. We should refactor it to be shared.
     fn create_contract(bytecode: &[u8], rng: &mut impl rand::RngCore) -> Create {
         let salt: Salt = rng.gen();
