@@ -22,11 +22,11 @@ use rand::Rng;
 /// let (tx, contract_id) = create_contract(contract_bytecode, &mut rng);
 /// ```
 pub fn create_contract<R: Rng>(
-    contract_code: Vec<u8>,
+    contract_code: &[u8],
     rng: &mut R,
 ) -> (Create, ContractId) {
     let salt: Salt = rng.gen();
-    let contract = Contract::from(contract_code.clone());
+    let contract = Contract::from(contract_code);
     let root = contract.root();
     let state_root = Contract::default_state_root();
     let contract_id = contract.id(&salt, &root, &state_root);
