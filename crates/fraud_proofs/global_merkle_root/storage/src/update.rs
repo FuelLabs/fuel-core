@@ -83,14 +83,14 @@ use fuel_core_types::{
     },
 };
 
-pub trait UpdateMerkleizedTables {
-    fn update_merklized_tables(
-        self,
+pub trait UpdateMerkleizedTables: Sized {
+    fn update_merkleized_tables(
+        &mut self,
         chain_id: ChainId,
         block: &Block,
         latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
         latest_consensus_parameters_version: ConsensusParametersVersion,
-    ) -> anyhow::Result<()>;
+    ) -> anyhow::Result<&mut Self>;
 }
 
 pub trait GetMerkleizedTablesParameters:
@@ -152,36 +152,38 @@ where
     }
 }
 
-impl<Storage> UpdateMerkleizedTables for &mut StorageTransaction<Storage>
+impl<Storage> UpdateMerkleizedTables for StorageTransaction<Storage>
 where
     Storage: KeyValueInspect<Column = Column>,
 {
-    fn update_merklized_tables(
-        self,
+    fn update_merkleized_tables(
+        &mut self,
         chain_id: ChainId,
         block: &Block,
         latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
         latest_consensus_parameters_version: ConsensusParametersVersion,
-    ) -> anyhow::Result<()> {
-        let mut update_transaction = UpdateMerklizedTablesTransaction {
+    ) -> anyhow::Result<&mut Self> {
+        let mut update_transaction = UpdateMerkleizedTablesTransaction {
             chain_id,
             storage: self,
             latest_state_transition_bytecode_version,
             latest_consensus_parameters_version,
         };
 
-        update_transaction.process_block(block)
+        update_transaction.process_block(block)?;
+
+        Ok(self)
     }
 }
 
-struct UpdateMerklizedTablesTransaction<'a, Storage> {
+struct UpdateMerkleizedTablesTransaction<'a, Storage> {
     chain_id: ChainId,
     storage: &'a mut StorageTransaction<Storage>,
     latest_consensus_parameters_version: ConsensusParametersVersion,
     latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
 }
 
-impl<'a, Storage> UpdateMerklizedTablesTransaction<'a, Storage>
+impl<'a, Storage> UpdateMerkleizedTablesTransaction<'a, Storage>
 where
     Storage: KeyValueInspect<Column = Column>,
 {
@@ -219,11 +221,8 @@ where
             self.process_output(tx_pointer, utxo_id, &inputs, output)?;
         }
 
-        match tx {
-            Transaction::Upgrade(tx) => {
-                self.process_upgrade_transaction(tx)?;
-            }
-            _ => {}
+        if let Transaction::Upgrade(tx) = tx {
+            self.process_upgrade_transaction(tx)?;
         }
         // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
         // TODO(#2585): Insert uplodade bytecodes.
@@ -401,7 +400,7 @@ where
                         next_state_transition_bytecode_version;
                     self.storage
                         .storage::<StateTransitionBytecodeVersions>()
-                        .insert(&self.latest_state_transition_bytecode_version, &root)?;
+                        .insert(&self.latest_state_transition_bytecode_version, root)?;
                 }
             },
         }
@@ -451,6 +450,8 @@ impl TransactionOutputs for Transaction {
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
+    use crate::column::TableColumn;
+
     use super::*;
 
     use fuel_core_storage::{
@@ -461,10 +462,17 @@ mod tests {
         },
         StorageAsRef,
     };
-    use fuel_core_types::fuel_tx::{
-        Bytes32,
-        ContractId,
-        TxId,
+    use fuel_core_types::{
+        fuel_crypto::Hasher,
+        fuel_tx::{
+            Bytes32,
+            ConsensusParameters,
+            ContractId,
+            Finalizable,
+            TransactionBuilder,
+            TxId,
+            Witness,
+        },
     };
 
     use rand::{
@@ -474,13 +482,17 @@ mod tests {
     };
 
     #[test]
+    /// When encountering a transaction with a coin output,
+    /// `process_output` should ensure this coin is
+    /// populated in the `Coins` table.
     fn process_output__should_insert_coin() {
         let mut rng = StdRng::seed_from_u64(1337);
 
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
 
         let tx_pointer = random_tx_pointer(&mut rng);
         let utxo_id = random_utxo_id(&mut rng);
@@ -495,7 +507,7 @@ mod tests {
         };
 
         // When
-        update_tx
+        storage_update_tx
             .process_output(tx_pointer, utxo_id, &inputs, &output)
             .unwrap();
 
@@ -515,13 +527,17 @@ mod tests {
     }
 
     #[test]
+    /// When encountering a transaction with a contract created output,
+    /// `process_output` should ensure an appropriate contract UTxO is
+    /// populated in the `ContractCreated` table.
     fn process_output__should_insert_latest_contract_utxo_when_contract_created() {
         let mut rng = StdRng::seed_from_u64(1337);
 
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
 
         let tx_pointer = random_tx_pointer(&mut rng);
         let utxo_id = random_utxo_id(&mut rng);
@@ -534,7 +550,7 @@ mod tests {
         };
 
         // When
-        update_tx
+        storage_update_tx
             .process_output(tx_pointer, utxo_id, &inputs, &output)
             .unwrap();
 
@@ -553,6 +569,9 @@ mod tests {
     }
 
     #[test]
+    /// When encountering a transaction with a contract output,
+    /// `process_output` should ensure an appropriate contract UTxO is
+    /// populated in the `ContractCreated` table.
     fn process_output__should_update_latest_contract_utxo_when_interacting_with_contract()
     {
         let mut rng = StdRng::seed_from_u64(1337);
@@ -560,7 +579,8 @@ mod tests {
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
 
         let tx_pointer = random_tx_pointer(&mut rng);
         let utxo_id = random_utxo_id(&mut rng);
@@ -580,7 +600,7 @@ mod tests {
         let output = Output::Contract(output_contract);
 
         // When
-        update_tx
+        storage_update_tx
             .process_output(tx_pointer, utxo_id, &inputs, &output)
             .unwrap();
 
@@ -599,13 +619,18 @@ mod tests {
     }
 
     #[test]
+    /// When encountering a transaction with a coin input,
+    /// `process_input` should ensure this coin is
+    /// removed from the `Coins` table, as this coin is no longer
+    /// a part of the active UTxO set.
     fn process_input__should_remove_coin() {
         let mut rng = StdRng::seed_from_u64(1337);
 
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.update_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
 
         let output_amount = rng.gen();
         let output_address = random_address(&mut rng);
@@ -625,11 +650,11 @@ mod tests {
         });
 
         // When
-        update_tx
+        storage_update_tx
             .process_output(tx_pointer, utxo_id, &inputs, &output)
             .unwrap();
 
-        update_tx.process_input(&input).unwrap();
+        storage_update_tx.process_input(&input).unwrap();
 
         storage_tx.commit().unwrap();
 
@@ -640,6 +665,95 @@ mod tests {
             .get(&utxo_id)
             .unwrap()
             .is_none());
+    }
+
+    #[test]
+    fn process_upgrade_transaction_should_update_latest_state_transition_bytecode_version_when_interacting_with_relevant_upgrade(
+    ) {
+        // Given
+        let upgrade_tx = TransactionBuilder::upgrade(UpgradePurpose::StateTransition {
+            root: Bytes32::zeroed(),
+        })
+        .finalize();
+
+        let mut storage = InMemoryStorage::default();
+
+        // When
+        let state_transition_bytecode_version_before_upgrade = storage
+            .get_latest_state_transition_bytecode_version()
+            .expect("InMemoryStorage does not return error");
+
+        let mut storage_tx = storage.write_transaction();
+        let mut update_tx = storage_tx.construct_update_merkleized_tables_transaction();
+        update_tx.process_upgrade_transaction(&upgrade_tx).unwrap();
+        storage_tx.commit().unwrap();
+        let state_transition_bytecode_version_after_upgrade = storage
+            .get_latest_state_transition_bytecode_version()
+            .expect("InMemoryStorage does not return error");
+        let state_transition_bytecode_root_after_upgrade = storage
+            .get(
+                &[0, 0, 0, 1],
+                Column::TableColumn(TableColumn::StateTransitionBytecodeVersions),
+            )
+            .expect("In memory Storage should not return an error")
+            .expect("State transition bytecode version after upgrade should be present");
+        // Then
+        assert_eq!(state_transition_bytecode_version_before_upgrade, 0);
+        assert_eq!(state_transition_bytecode_version_after_upgrade, 1);
+        assert_eq!(
+            &*state_transition_bytecode_root_after_upgrade,
+            Bytes32::zeroed().as_ref()
+        );
+    }
+
+    #[test]
+    fn process_upgrade_transaction_should_update_latest_consensus_parameters_version_when_interacting_with_relevant_upgrade(
+    ) {
+        // Given
+        let consensus_parameters = ConsensusParameters::default();
+        let serialized_consensus_parameters =
+            postcard::to_allocvec(&consensus_parameters)
+                .expect("Consensus parameters serialization should succeed");
+        let tx_witness = Witness::from(serialized_consensus_parameters.clone());
+        let serialized_witness = tx_witness.as_vec();
+        let checksum = Hasher::hash(serialized_witness);
+        let upgrade_tx =
+            TransactionBuilder::upgrade(UpgradePurpose::ConsensusParameters {
+                witness_index: 0,
+                checksum,
+            })
+            .add_witness(tx_witness)
+            .finalize();
+
+        let mut storage = InMemoryStorage::default();
+
+        // When
+        let consensus_parameters_version_before_upgrade = storage
+            .get_latest_consensus_parameters_version()
+            .expect("InMemoryStorage does not return error");
+
+        let mut storage_tx = storage.write_transaction();
+        let mut update_tx = storage_tx.construct_update_merkleized_tables_transaction();
+        update_tx.process_upgrade_transaction(&upgrade_tx).unwrap();
+        storage_tx.commit().unwrap();
+        let consensus_parameters_version_after_upgrade = storage
+            .get_latest_consensus_parameters_version()
+            .expect("InMemoryStorage does not return error");
+        let serialized_consensus_parameters_after_upgrade = storage
+            .get(
+                &[0, 0, 0, 1],
+                Column::TableColumn(TableColumn::ConsensusParametersVersions),
+            )
+            .expect("In memory Storage should not return an error")
+            .expect("State transition bytecode version after upgrade should be present");
+
+        // Then
+        assert_eq!(consensus_parameters_version_before_upgrade, 0);
+        assert_eq!(consensus_parameters_version_after_upgrade, 1);
+        assert_eq!(
+            &*serialized_consensus_parameters_after_upgrade,
+            &serialized_consensus_parameters
+        );
     }
 
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
@@ -671,24 +785,26 @@ mod tests {
         contract_id
     }
 
-    trait UpdateTransaction<'a>: Sized + 'a {
+    trait ConstructUpdateMerkleizedTablesTransactionForTests<'a>: Sized + 'a {
         type Storage;
-        fn update_transaction(
+        fn construct_update_merkleized_tables_transaction(
             self,
-        ) -> UpdateMerklizedTablesTransaction<'a, Self::Storage>;
+        ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage>;
     }
 
-    impl<'a, Storage> UpdateTransaction<'a> for &'a mut StorageTransaction<Storage> {
+    impl<'a, Storage> ConstructUpdateMerkleizedTablesTransactionForTests<'a>
+        for &'a mut StorageTransaction<Storage>
+    {
         type Storage = Storage;
 
-        fn update_transaction(
+        fn construct_update_merkleized_tables_transaction(
             self,
-        ) -> UpdateMerklizedTablesTransaction<'a, Self::Storage> {
-            UpdateMerklizedTablesTransaction {
+        ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage> {
+            UpdateMerkleizedTablesTransaction {
                 chain_id: ChainId::default(),
                 storage: self,
-                latest_consensus_parameters_version: 0,
-                latest_state_transition_bytecode_version: 0,
+                latest_consensus_parameters_version: Default::default(),
+                latest_state_transition_bytecode_version: Default::default(),
             }
         }
     }

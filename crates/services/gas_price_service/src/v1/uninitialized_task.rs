@@ -211,6 +211,7 @@ where
             ),
         };
 
+        let record_metrics = self.config.record_metrics;
         let poll_duration = self.config.da_poll_interval;
         let latest_l2_height = Arc::new(AtomicU32::new(latest_block_height));
 
@@ -233,6 +234,7 @@ where
                 self.gas_price_db,
                 Arc::clone(&latest_l2_height),
                 Some(starting_recorded_height),
+                record_metrics,
             );
             Ok(service)
         } else {
@@ -261,6 +263,7 @@ where
                 self.gas_price_db,
                 Arc::clone(&latest_l2_height),
                 Some(starting_recorded_height),
+                record_metrics,
             );
             Ok(service)
         }

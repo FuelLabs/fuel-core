@@ -24,6 +24,12 @@ strum_macros = { workspace = true }
 
 [dev-dependencies]
 fuel-core-storage = { workspace = true, features = ["alloc", "test-helpers"] }
+fuel-core-types = { workspace = true, features = [
+  "serde",
+  "alloc",
+  "test-helpers",
+] }
+postcard = { workspace = true, features = ["alloc"] }
 rand = { workspace = true }
 
 [features]

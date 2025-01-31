@@ -429,14 +429,25 @@ where
 #[cfg(feature = "test-helpers")]
 pub mod test {
     use crate as fuel_core_storage;
-    use crate::kv_store::{
-        KeyValueInspect,
-        StorageColumn,
+    use crate::{
+        iter::{
+            BoxedIter,
+            IntoBoxedIter,
+            IterDirection,
+            IterableStore,
+        },
+        kv_store::{
+            KVItem,
+            KeyItem,
+            KeyValueInspect,
+            StorageColumn,
+        },
     };
     use fuel_core_storage::{
         kv_store::Value,
         Result as StorageResult,
     };
+    use itertools::Itertools;
     use std::collections::HashMap;
 
     type Storage = HashMap<(u32, Vec<u8>), Value>;
@@ -473,6 +484,64 @@ pub mod test {
         fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
             let value = self.storage.get(&(column.id(), key.to_vec())).cloned();
             Ok(value)
+        }
+    }
+
+    impl<Column> IterableStore for InMemoryStorage<Column>
+    where
+        Column: StorageColumn,
+    {
+        fn iter_store(
+            &self,
+            column: Self::Column,
+            prefix: Option<&[u8]>,
+            start: Option<&[u8]>,
+            direction: IterDirection,
+        ) -> BoxedIter<KVItem> {
+            let prefix = prefix.map(|prefix| prefix.to_vec());
+            let start = start.map(|start| start.to_vec());
+            let iterator = self
+                .storage
+                .iter()
+                // Remove items that don't belong to the column
+                // Clippy doesn't like the filter_map here, but it ca
+                .filter_map(move |((col, key), value)| {
+                    (*col == column.id()).then_some((key, value))
+                })
+                // Sort according to iterator direction
+                .sorted_by(|(a, _), (b, _)| {
+                    match direction {
+                        IterDirection::Forward => a.cmp(b),
+                        IterDirection::Reverse => b.cmp(a),
+                    }
+                })
+                // Remove keys that don't match the prefix
+                .filter(move |item| {
+                    if let Some(ref prefix) = prefix {
+                        item.0.starts_with(prefix)
+                    } else {
+                        true
+                    }
+                })
+                // Skip until you find the start element
+                .skip_while(move |(key, _item)| {
+                    start.as_ref().map(|start| { let key: &[u8] = key.as_ref(); key != start }).unwrap_or(false)
+                })
+                .map(|(key, value)| Ok((key.clone(), value.clone())));
+
+            iterator.into_boxed()
+        }
+
+        fn iter_store_keys(
+            &self,
+            column: Self::Column,
+            prefix: Option<&[u8]>,
+            start: Option<&[u8]>,
+            direction: IterDirection,
+        ) -> BoxedIter<KeyItem> {
+            self.iter_store(column, prefix, start, direction)
+                .map(|res| res.map(|(key, _)| key))
+                .into_boxed()
         }
     }
 }
