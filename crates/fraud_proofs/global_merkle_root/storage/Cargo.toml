@@ -23,7 +23,10 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 
 [dev-dependencies]
-fuel-core-storage = { workspace = true, default-features = false, features = ["alloc", "test-helpers"] }
+fuel-core-storage = { workspace = true, default-features = false, features = [
+  "alloc",
+  "test-helpers",
+] }
 rand = { workspace = true }
 
 [features]
