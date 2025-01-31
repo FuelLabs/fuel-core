@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - [2387](https://github.com/FuelLabs/fuel-core/pull/2387): Update description `tx-max-depth` flag.
 - [2630](https://github.com/FuelLabs/fuel-core/pull/2630): Removed some noisy `tracing::info!` logs
+- [2643](https://github.com/FuelLabs/fuel-core/pull/2643): Before this fix when tip is zero, transactions that use 30M have the same priority as transactions with 1M gas. Now they are correctly ordered.
 
 ### Added
 - [2150](https://github.com/FuelLabs/fuel-core/pull/2150): Upgraded `libp2p` to `0.54.1` and introduced `ConnectionLimiter` to limit pending incoming/outgoing connections.
