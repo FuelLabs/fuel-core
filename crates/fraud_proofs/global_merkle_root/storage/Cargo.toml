@@ -22,6 +22,13 @@ num_enum = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 
+[dev-dependencies]
+fuel-core-storage = { workspace = true, default-features = false, features = [
+  "alloc",
+  "test-helpers",
+] }
+rand = { workspace = true }
+
 [features]
 default = ["std"]
 std = ["fuel-core-storage/std", "fuel-core-types/std"]
