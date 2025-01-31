@@ -108,7 +108,6 @@ mod tests {
             BlockHeight,
             ChainId,
             ContractId,
-            Salt,
             Word,
         },
         fuel_vm::{
@@ -140,6 +139,7 @@ mod tests {
             relayer::Event,
         },
         tai64::Tai64,
+        test_helpers::create_contract,
     };
     use fuel_core_upgradable_executor::executor::Executor;
     use itertools::Itertools;
@@ -311,24 +311,6 @@ mod tests {
             .transaction()
             .to_owned()
             .into()
-    }
-
-    pub(crate) fn create_contract<R: Rng>(
-        contract_code: Vec<u8>,
-        rng: &mut R,
-    ) -> (Create, ContractId) {
-        let salt: Salt = rng.gen();
-        let contract = Contract::from(contract_code.clone());
-        let root = contract.root();
-        let state_root = Contract::default_state_root();
-        let contract_id = contract.id(&salt, &root, &state_root);
-
-        let tx =
-            TransactionBuilder::create(contract_code.into(), salt, Default::default())
-                .add_fee_input()
-                .add_output(Output::contract_created(contract_id, state_root))
-                .finalize();
-        (tx, contract_id)
     }
 
     // Happy path test case that a produced block will also validate
