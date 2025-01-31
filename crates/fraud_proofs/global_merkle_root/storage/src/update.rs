@@ -186,7 +186,7 @@ where
     fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
         let bytecode_witness_index = tx.bytecode_witness_index();
         let witnesses = tx.witnesses();
-        let bytecode = witnesses[(*bytecode_witness_index) as usize].as_vec();
+        let bytecode = witnesses[usize::from(*bytecode_witness_index)].as_vec();
         let contract_id = tx
             .metadata()
             .as_ref()
