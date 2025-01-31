@@ -31,3 +31,6 @@ benches/ @xgreenx @Dentosal @MitchTurner @netrome
 
 # Code owners for docs
 docs/ @xgreenx @Dentosal @MitchTurner @netrome
+
+# Code owners for the fraud proofs
+crates/fraud_proofs @xgreenx @netrome @acerone85 @rymnc
