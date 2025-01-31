@@ -505,12 +505,12 @@ mod tests {
             .process_output(tx_pointer, utxo_id, &inputs, &output)
             .unwrap();
 
-        let coin_was_inserted_before_process_input = !storage_update_tx
+        let coin_was_inserted_before_process_input = storage_update_tx
             .storage
             .storage_as_ref::<Coins>()
             .get(&utxo_id)
             .unwrap()
-            .is_none();
+            .is_some();
 
         storage_update_tx.process_input(&input).unwrap();
 
