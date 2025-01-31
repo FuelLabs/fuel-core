@@ -12,15 +12,8 @@ use alloc::{
     vec::Vec,
 };
 use fuel_core_storage::{
-    blueprint::BlueprintInspect,
-    iter::{
-        IterableStore,
-        IteratorOverTable,
-    },
     kv_store::KeyValueInspect,
-    structured_storage::TableWithBlueprint,
     transactional::StorageTransaction,
-    Mappable,
     StorageAsMut,
 };
 use fuel_core_types::{
@@ -88,68 +81,7 @@ pub trait UpdateMerkleizedTables: Sized {
         &mut self,
         chain_id: ChainId,
         block: &Block,
-        latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
-        latest_consensus_parameters_version: ConsensusParametersVersion,
     ) -> anyhow::Result<&mut Self>;
-}
-
-pub trait GetMerkleizedTablesParameters:
-    KeyValueInspect<Column = Column> + Sized
-{
-    fn get_latest_version<M>(&self) -> anyhow::Result<Option<M::OwnedKey>>
-    where
-        M: Mappable + TableWithBlueprint<Column = Column>,
-        M::Blueprint: BlueprintInspect<M, Self>,
-        M::OwnedKey: Ord;
-
-    fn get_latest_consensus_parameters_version(
-        &self,
-    ) -> anyhow::Result<ConsensusParametersVersion> {
-        self.get_latest_version::<ConsensusParametersVersions>()
-            .map(|version| version.unwrap_or_default())
-    }
-
-    fn get_latest_state_transition_bytecode_version(
-        &self,
-    ) -> anyhow::Result<StateTransitionBytecodeVersion> {
-        self.get_latest_version::<StateTransitionBytecodeVersions>()
-            .map(|version| version.unwrap_or_default())
-    }
-}
-
-impl<Storage> GetMerkleizedTablesParameters for Storage
-where
-    Storage: KeyValueInspect<Column = Column> + IterableStore<Column = Column>,
-{
-    fn get_latest_version<M>(&self) -> anyhow::Result<Option<M::OwnedKey>>
-    where
-        M: Mappable + TableWithBlueprint<Column = Column>,
-        M::Blueprint: BlueprintInspect<M, Storage>,
-        M::OwnedKey: Ord,
-    {
-        // Do not make any assumption the order of versions in the iterator.
-        // This can be optimized later on by taking into account how versions are sorted.
-        let keys_iterator =
-            <Storage as IteratorOverTable>::iter_all_keys::<M>(self, None);
-
-        let mut latest_key: Option<M::OwnedKey> = None;
-        for key in keys_iterator {
-            match key {
-                Ok(key) => {
-                    if let Some(previous_key) = latest_key {
-                        latest_key = Some(previous_key.max(key));
-                    } else {
-                        latest_key = Some(key);
-                    }
-                }
-                Err(err) => {
-                    return Err(err.into());
-                }
-            }
-        }
-
-        Ok(latest_key)
-    }
 }
 
 impl<Storage> UpdateMerkleizedTables for StorageTransaction<Storage>
@@ -160,14 +92,16 @@ where
         &mut self,
         chain_id: ChainId,
         block: &Block,
-        latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
-        latest_consensus_parameters_version: ConsensusParametersVersion,
     ) -> anyhow::Result<&mut Self> {
         let mut update_transaction = UpdateMerkleizedTablesTransaction {
             chain_id,
             storage: self,
-            latest_state_transition_bytecode_version,
-            latest_consensus_parameters_version,
+            latest_state_transition_bytecode_version: block
+                .header()
+                .state_transition_bytecode_version,
+            latest_consensus_parameters_version: block
+                .header()
+                .consensus_parameters_version,
         };
 
         update_transaction.process_block(block)?;
@@ -385,7 +319,7 @@ where
                     )?;
             }
             UpgradeMetadata::StateTransition => match tx.upgrade_purpose() {
-                UpgradePurpose::ConsensusParameters { .. } => panic!(
+                UpgradePurpose::ConsensusParameters { .. } => unreachable!(
                     "Upgrade with StateTransition metadata should have StateTransition purpose"
                 ),
                 UpgradePurpose::StateTransition { root } => {
@@ -450,8 +384,6 @@ impl TransactionOutputs for Transaction {
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
-    use crate::column::TableColumn;
-
     use super::*;
 
     use fuel_core_storage::{
@@ -671,39 +603,38 @@ mod tests {
     fn process_upgrade_transaction_should_update_latest_state_transition_bytecode_version_when_interacting_with_relevant_upgrade(
     ) {
         // Given
+        let new_root = Bytes32::from([1; 32]);
         let upgrade_tx = TransactionBuilder::upgrade(UpgradePurpose::StateTransition {
-            root: Bytes32::zeroed(),
+            root: new_root,
         })
         .finalize();
 
         let mut storage = InMemoryStorage::default();
 
         // When
-        let state_transition_bytecode_version_before_upgrade = storage
-            .get_latest_state_transition_bytecode_version()
-            .expect("InMemoryStorage does not return error");
+        let state_transition_bytecode_version_before_upgrade = 1;
+        let state_transition_bytecode_version_after_upgrade =
+            state_transition_bytecode_version_before_upgrade + 1;
 
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.construct_update_merkleized_tables_transaction();
+        let mut update_tx = storage_tx
+            .construct_update_merkleized_tables_transaction_with_versions(
+                state_transition_bytecode_version_before_upgrade,
+                0,
+            );
         update_tx.process_upgrade_transaction(&upgrade_tx).unwrap();
-        storage_tx.commit().unwrap();
-        let state_transition_bytecode_version_after_upgrade = storage
-            .get_latest_state_transition_bytecode_version()
-            .expect("InMemoryStorage does not return error");
-        let state_transition_bytecode_root_after_upgrade = storage
-            .get(
-                &[0, 0, 0, 1],
-                Column::TableColumn(TableColumn::StateTransitionBytecodeVersions),
-            )
+
+        let state_transition_bytecode_root_after_upgrade = storage_tx
+            .storage_as_ref::<StateTransitionBytecodeVersions>()
+            .get(&state_transition_bytecode_version_after_upgrade)
             .expect("In memory Storage should not return an error")
-            .expect("State transition bytecode version after upgrade should be present");
+            .expect("State transition bytecode version after upgrade should be present")
+            .into_owned();
+
         // Then
-        assert_eq!(state_transition_bytecode_version_before_upgrade, 0);
-        assert_eq!(state_transition_bytecode_version_after_upgrade, 1);
-        assert_eq!(
-            &*state_transition_bytecode_root_after_upgrade,
-            Bytes32::zeroed().as_ref()
-        );
+        assert_eq!(state_transition_bytecode_version_before_upgrade, 1);
+        assert_eq!(state_transition_bytecode_version_after_upgrade, 2);
+        assert_eq!(state_transition_bytecode_root_after_upgrade, new_root);
     }
 
     #[test]
@@ -728,32 +659,30 @@ mod tests {
         let mut storage = InMemoryStorage::default();
 
         // When
-        let consensus_parameters_version_before_upgrade = storage
-            .get_latest_consensus_parameters_version()
-            .expect("InMemoryStorage does not return error");
+        let consensus_parameters_version_before_upgrade = 1;
+        let consensus_parameters_version_after_upgrade =
+            consensus_parameters_version_before_upgrade + 1;
 
         let mut storage_tx = storage.write_transaction();
-        let mut update_tx = storage_tx.construct_update_merkleized_tables_transaction();
+        let mut update_tx = storage_tx
+            .construct_update_merkleized_tables_transaction_with_versions(
+                0,
+                consensus_parameters_version_before_upgrade,
+            );
+
         update_tx.process_upgrade_transaction(&upgrade_tx).unwrap();
-        storage_tx.commit().unwrap();
-        let consensus_parameters_version_after_upgrade = storage
-            .get_latest_consensus_parameters_version()
-            .expect("InMemoryStorage does not return error");
-        let serialized_consensus_parameters_after_upgrade = storage
-            .get(
-                &[0, 0, 0, 1],
-                Column::TableColumn(TableColumn::ConsensusParametersVersions),
-            )
+
+        let consensus_parameters_after_upgrade = storage_tx
+            .storage_as_ref::<ConsensusParametersVersions>()
+            .get(&consensus_parameters_version_after_upgrade)
             .expect("In memory Storage should not return an error")
-            .expect("State transition bytecode version after upgrade should be present");
+            .expect("State transition bytecode version after upgrade should be present")
+            .into_owned();
 
         // Then
-        assert_eq!(consensus_parameters_version_before_upgrade, 0);
-        assert_eq!(consensus_parameters_version_after_upgrade, 1);
-        assert_eq!(
-            &*serialized_consensus_parameters_after_upgrade,
-            &serialized_consensus_parameters
-        );
+        assert_eq!(consensus_parameters_version_before_upgrade, 1);
+        assert_eq!(consensus_parameters_version_after_upgrade, 2);
+        assert_eq!(consensus_parameters_after_upgrade, consensus_parameters);
     }
 
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
@@ -790,6 +719,12 @@ mod tests {
         fn construct_update_merkleized_tables_transaction(
             self,
         ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage>;
+
+        fn construct_update_merkleized_tables_transaction_with_versions(
+            self,
+            latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
+            latest_consensus_parameters_version: ConsensusParametersVersion,
+        ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage>;
     }
 
     impl<'a, Storage> ConstructUpdateMerkleizedTablesTransactionForTests<'a>
@@ -805,6 +740,18 @@ mod tests {
                 storage: self,
                 latest_consensus_parameters_version: Default::default(),
                 latest_state_transition_bytecode_version: Default::default(),
+            }
+        }
+        fn construct_update_merkleized_tables_transaction_with_versions(
+            self,
+            latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
+            latest_consensus_parameters_version: ConsensusParametersVersion,
+        ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage> {
+            UpdateMerkleizedTablesTransaction {
+                chain_id: ChainId::default(),
+                storage: self,
+                latest_consensus_parameters_version,
+                latest_state_transition_bytecode_version,
             }
         }
     }
