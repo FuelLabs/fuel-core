@@ -55,13 +55,12 @@ use fuel_core_types::{
         },
         Address,
         AssetId,
-        ChargeableTransaction,
         Input,
         Output,
         Transaction,
         TxPointer,
         UniqueIdentifier,
-        UpgradeBody,
+        Upgrade,
         UpgradeMetadata,
         UpgradePurpose,
         UtxoId,
@@ -291,12 +290,10 @@ where
         Ok(())
     }
 
-    fn process_upgrade_transaction(
-        &mut self,
-        tx: &ChargeableTransaction<UpgradeBody, UpgradeMetadata>,
-    ) -> anyhow::Result<()> {
-        let Some(metadata) = tx.metadata().clone().map(|metadata| metadata.body) else {
-            return Err(anyhow::anyhow!("Invalid upgrade metadata"));
+    fn process_upgrade_transaction(&mut self, tx: &Upgrade) -> anyhow::Result<()> {
+        let metadata = match tx.metadata() {
+            Some(metadata) => metadata.body.clone(),
+            None => UpgradeMetadata::compute(tx).map_err(|e| anyhow::anyhow!(e))?,
         };
 
         match metadata {
