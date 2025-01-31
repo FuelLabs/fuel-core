@@ -19,7 +19,7 @@ use rand::Rng;
 /// ```
 /// let contract_bytecode = vec![];
 /// let mut rng = rand::thread_rng();
-/// let (tx, contract_id) = create_contract(contract_bytecode, &mut rng);
+/// let (tx, contract_id) = create_contract(&contract_bytecode, &mut rng);
 /// ```
 pub fn create_contract<R: Rng>(
     contract_code: &[u8],
