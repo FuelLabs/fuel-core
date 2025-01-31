@@ -505,17 +505,27 @@ mod tests {
             .process_output(tx_pointer, utxo_id, &inputs, &output)
             .unwrap();
 
+        let coin_was_inserted_before_process_input = !storage_update_tx
+            .storage
+            .storage_as_ref::<Coins>()
+            .get(&utxo_id)
+            .unwrap()
+            .is_none();
+
         storage_update_tx.process_input(&input).unwrap();
 
         storage_tx.commit().unwrap();
 
-        // Then
-        assert!(storage
+        let coin_doesnt_exist_after_process_input = storage
             .read_transaction()
             .storage_as_ref::<Coins>()
             .get(&utxo_id)
             .unwrap()
-            .is_none());
+            .is_none();
+
+        // Then
+        assert!(coin_was_inserted_before_process_input);
+        assert!(coin_doesnt_exist_after_process_input);
     }
 
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
