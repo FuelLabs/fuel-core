@@ -875,15 +875,11 @@ mod tests {
     fn process_create_transaction__should_insert_bytecode_for_contract_id() {
         // Given
         let contract_bytecode = vec![
-            // load amount of coins to 0x10
             op::addi(0x10, RegId::FP, CallFrame::a_offset().try_into().unwrap()),
             op::lw(0x10, 0x10, 0),
-            // load asset id to 0x11
             op::addi(0x11, RegId::FP, CallFrame::b_offset().try_into().unwrap()),
             op::lw(0x11, 0x11, 0),
-            // load address to 0x12
             op::addi(0x12, 0x11, 32),
-            // load output index (0) to 0x13
             op::addi(0x13, RegId::ZERO, 0),
             op::tro(0x12, 0x13, 0x10, 0x11),
             op::ret(RegId::ONE),
