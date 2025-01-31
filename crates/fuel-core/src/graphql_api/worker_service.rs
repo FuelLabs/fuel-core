@@ -141,6 +141,7 @@ where
     D: ports::worker::OffChainDatabase,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
+        let start_time = std::time::Instant::now();
         let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
@@ -169,13 +170,16 @@ where
         )?;
 
         match self.da_compression_config {
-            DaCompressionConfig::Disabled => {}
+            DaCompressionConfig::Disabled => {dbg!("DaCompressionConfig::Disabled");},
             DaCompressionConfig::Enabled(config) => {
+                dbg!("DaCompressionConfig::Enabled");
                 da_compress_block(config, block, &result.events, &mut transaction)?;
             }
         }
-
+        tracing::info!("Committing block {} in offchain", height);
+        let time = std::time::Instant::now();
         transaction.commit()?;
+        tracing::info!("Block {} committed in offchain in {}ms", height, time.elapsed().as_millis());
 
         for status in result.tx_status.iter() {
             let tx_id = status.id;
@@ -185,7 +189,7 @@ where
 
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
-
+        tracing::info!("Block {} processed in offchain in {}ms", height, start_time.elapsed().as_millis());
         Ok(())
     }
 }
