@@ -128,7 +128,9 @@ where
 pub type Database<Description = OnChain, Stage = RegularStage<Description>> =
     GenericDatabase<DataSource<Description, Stage>>;
 pub type OnChainIterableKeyValueView = IterableKeyValueView<ColumnType<OnChain>>;
+pub type OnChainKeyValueView = KeyValueView<ColumnType<OnChain>>;
 pub type OffChainIterableKeyValueView = IterableKeyValueView<ColumnType<OffChain>>;
+pub type OffChainKeyValueView = KeyValueView<ColumnType<OffChain>>;
 pub type RelayerIterableKeyValueView = IterableKeyValueView<ColumnType<Relayer>>;
 
 pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisStage>;

@@ -223,6 +223,11 @@ pub trait DatabaseContracts:
         start_asset: Option<AssetId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<ContractBalance>>;
+
+    fn contract_storage_slots(
+        &self,
+        contract: ContractId,
+    ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>>;
 }
 
 /// Trait that specifies all the getters required for chain metadata.
@@ -460,3 +465,13 @@ pub trait ConsensusProvider: Send + Sync {
         version: &ConsensusParametersVersion,
     ) -> anyhow::Result<Arc<ConsensusParameters>>;
 }
+
+pub trait OnChainDatabaseAt: Send + Sync {
+    fn contract_storage_values(
+        &self,
+        contract_id: ContractId,
+        storage_slots: Vec<Bytes32>,
+    ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>>;
+}
+
+pub trait OffChainDatabaseAt: Send + Sync {}

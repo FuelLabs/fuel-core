@@ -1025,6 +1025,7 @@ type Query {
 	consensusParameters(version: Int!): ConsensusParameters!
 	stateTransitionBytecodeByVersion(version: Int!): StateTransitionBytecode
 	stateTransitionBytecodeByRoot(root: HexString!): StateTransitionBytecode!
+	contractStorageValues(contractId: ContractId!, blockHeight: U32, storageSlots: [Bytes32!]!): [StorageSlot!]!
 }
 
 type Receipt {
@@ -1151,6 +1152,11 @@ type StateTransitionPurpose {
 	root: Bytes32!
 }
 
+type StorageSlot {
+	key: Bytes32!
+	value: HexString!
+}
+
 
 scalar SubId
 
@@ -1189,6 +1195,7 @@ type Subscription {
 	SubmittedStatus` as an intermediate state.
 	"""
 	submitAndAwaitStatus(tx: HexString!): TransactionStatus!
+	allStorageSlots(contractId: ContractId!): StorageSlot!
 }
 
 type SuccessStatus {

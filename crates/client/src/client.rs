@@ -11,6 +11,10 @@ use crate::client::{
         gas_price::EstimateGasPrice,
         message::MessageStatusArgs,
         relayed_tx::RelayedTransactionStatusArgs,
+        storage::{
+            AllStorageSlotsArgs,
+            ContractStorageValuesArgs,
+        },
         tx::DryRunArg,
         Tai64Timestamp,
         TransactionId,
@@ -613,6 +617,51 @@ impl FuelClient {
         );
 
         Ok(stream)
+    }
+
+    /// Requests all storage slots for the `contract_id`.
+    #[cfg(feature = "subscriptions")]
+    pub async fn all_storage_slots(
+        &self,
+        contract_id: &ContractId,
+    ) -> io::Result<impl Stream<Item = io::Result<(Bytes32, Vec<u8>)>>> {
+        use cynic::SubscriptionBuilder;
+        let s = schema::storage::AllStorageSlots::build(AllStorageSlotsArgs {
+            contract_id: (*contract_id).into(),
+        });
+
+        let stream = self.subscribe(s).await?.map(
+            |result: io::Result<schema::storage::AllStorageSlots>| {
+                let result: (Bytes32, Vec<u8>) = result?.all_storage_slots.into();
+                Result::<_, io::Error>::Ok(result)
+            },
+        );
+
+        Ok(stream)
+    }
+
+    pub async fn contract_storage_values(
+        &self,
+        contract_id: &ContractId,
+        block_height: Option<BlockHeight>,
+        requested_storage_slots: Vec<Bytes32>,
+    ) -> io::Result<Vec<(Bytes32, Vec<u8>)>> {
+        let query =
+            schema::storage::ContractStorageValues::build(ContractStorageValuesArgs {
+                contract_id: (*contract_id).into(),
+                block_height: block_height.map(|b| (*b).into()),
+                storage_slots: requested_storage_slots
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+            });
+
+        self.query(query).await.map(|r| {
+            r.contract_storage_values
+                .into_iter()
+                .map(Into::into)
+                .collect()
+        })
     }
 
     pub async fn start_session(&self) -> io::Result<String> {

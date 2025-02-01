@@ -49,6 +49,7 @@ pub mod scalars;
 pub mod tx;
 
 pub mod relayed_tx;
+pub mod storage;
 
 #[derive(MergedObject, Default)]
 pub struct Query(
@@ -70,13 +71,14 @@ pub struct Query(
     message::MessageQuery,
     relayed_tx::RelayedTransactionQuery,
     upgrades::UpgradeQuery,
+    storage::StorageQuery,
 );
 
 #[derive(MergedObject, Default)]
 pub struct Mutation(dap::DapMutation, tx::TxMutation, block::BlockMutation);
 
 #[derive(MergedSubscription, Default)]
-pub struct Subscription(tx::TxStatusSubscription);
+pub struct Subscription(tx::TxStatusSubscription, storage::StorageSubscription);
 
 pub type CoreSchema = Schema<Query, Mutation, Subscription>;
 pub type CoreSchemaBuilder = SchemaBuilder<Query, Mutation, Subscription>;

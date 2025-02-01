@@ -7,6 +7,7 @@ use crate::{
             ConsensusProvider as ConsensusProviderTrait,
             GasPriceEstimate,
             OffChainDatabase,
+            OffChainDatabaseAt,
             OnChainDatabase,
             P2pPort,
             TxPoolPort,
@@ -63,7 +64,7 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_storage::transactional::AtomicView;
+use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
 use hyper::rt::Executor;
@@ -88,7 +89,10 @@ use tower_http::{
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub use super::database::ReadDatabase;
-use super::ports::worker;
+use super::ports::{
+    worker,
+    OnChainDatabaseAt,
+};
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
@@ -231,10 +235,12 @@ pub fn new_service<OnChain, OffChain>(
     memory_pool: SharedMemoryPool,
 ) -> anyhow::Result<Service>
 where
-    OnChain: AtomicView + 'static,
-    OffChain: AtomicView + worker::OffChainDatabase + 'static,
+    OnChain: HistoricalView<Height = BlockHeight> + 'static,
+    OffChain: HistoricalView<Height = BlockHeight> + worker::OffChainDatabase + 'static,
     OnChain::LatestView: OnChainDatabase,
     OffChain::LatestView: OffChainDatabase,
+    OnChain::ViewAtHeight: OnChainDatabaseAt,
+    OffChain::ViewAtHeight: OffChainDatabaseAt,
 {
     let balances_indexation_enabled = off_database.balances_indexation_enabled()?;
 

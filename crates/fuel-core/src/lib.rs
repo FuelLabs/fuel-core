@@ -3,7 +3,11 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-use crate::service::genesis::NotifyCancel;
+use crate::{
+    schema::dap::Config,
+    service::genesis::NotifyCancel,
+};
+use async_graphql::Context;
 use tokio_util::sync::CancellationToken;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -105,5 +109,15 @@ impl NotifyCancel for ShutdownListener {
 impl combined_database::ShutdownListener for ShutdownListener {
     fn is_cancelled(&self) -> bool {
         self.token.is_cancelled()
+    }
+}
+
+pub fn require_debug(ctx: &Context<'_>) -> async_graphql::Result<()> {
+    let config = ctx.data_unchecked::<Config>();
+
+    if config.debug_enabled {
+        Ok(())
+    } else {
+        Err(async_graphql::Error::new("The 'debug' feature is disabled"))
     }
 }

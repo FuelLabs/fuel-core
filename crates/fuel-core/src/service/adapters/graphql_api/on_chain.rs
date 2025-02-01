@@ -3,6 +3,7 @@ use crate::{
         database_description::on_chain::OnChain,
         Database,
         OnChainIterableKeyValueView,
+        OnChainKeyValueView,
     },
     fuel_core_graphql_api::ports::{
         DatabaseBlocks,
@@ -10,6 +11,7 @@ use crate::{
         DatabaseContracts,
         DatabaseMessages,
         OnChainDatabase,
+        OnChainDatabaseAt,
     },
     graphql_api::ports::worker,
 };
@@ -22,10 +24,12 @@ use fuel_core_storage::{
     },
     not_found,
     tables::{
+        ContractsState,
         FuelBlocks,
         SealedBlockConsensus,
         Transactions,
     },
+    ContractsStateKey,
     Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
@@ -39,6 +43,7 @@ use fuel_core_types::{
     entities::relayer::message::Message,
     fuel_tx::{
         AssetId,
+        Bytes32,
         ContractId,
         Transaction,
         TxId,
@@ -124,6 +129,15 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
             .map(|res| res.map_err(StorageError::from))
             .into_boxed()
     }
+
+    fn contract_storage_slots(
+        &self,
+        contract: ContractId,
+    ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>> {
+        self.iter_all_by_prefix::<ContractsState, _>(Some(contract))
+            .map(|res| res.map(|(key, value)| (*key.state_key(), value.0)))
+            .into_boxed()
+    }
 }
 
 impl DatabaseChain for OnChainIterableKeyValueView {
@@ -139,5 +153,27 @@ impl OnChainDatabase for OnChainIterableKeyValueView {}
 impl worker::OnChainDatabase for Database<OnChain> {
     fn latest_height(&self) -> StorageResult<Option<BlockHeight>> {
         Ok(fuel_core_storage::transactional::HistoricalView::latest_height(self))
+    }
+}
+
+impl OnChainDatabaseAt for OnChainKeyValueView {
+    fn contract_storage_values(
+        &self,
+        contract_id: ContractId,
+        storage_slots: Vec<Bytes32>,
+    ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>> {
+        storage_slots
+            .into_iter()
+            .map(move |key| {
+                let double_key = ContractsStateKey::new(&contract_id, &key);
+                let value = self
+                    .storage::<ContractsState>()
+                    .get(&double_key)?
+                    .map(|v| v.into_owned().0);
+
+                Ok(value.map(|v| (key, v)))
+            })
+            .filter_map(|res| res.transpose())
+            .into_boxed()
     }
 }
