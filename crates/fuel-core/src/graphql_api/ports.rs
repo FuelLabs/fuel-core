@@ -228,6 +228,11 @@ pub trait DatabaseContracts:
         &self,
         contract: ContractId,
     ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>>;
+
+    fn contract_storage_balances(
+        &self,
+        contract: ContractId,
+    ) -> BoxedIter<StorageResult<ContractBalance>>;
 }
 
 /// Trait that specifies all the getters required for chain metadata.
@@ -466,11 +471,17 @@ pub trait ConsensusProvider: Send + Sync {
 }
 
 pub trait OnChainDatabaseAt: Send + Sync {
-    fn contract_storage_values(
+    fn contract_slot_values(
         &self,
         contract_id: ContractId,
         storage_slots: Vec<Bytes32>,
     ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>>;
+
+    fn contract_balance_values(
+        &self,
+        contract_id: ContractId,
+        assets: Vec<AssetId>,
+    ) -> BoxedIter<StorageResult<ContractBalance>>;
 }
 
 pub trait OffChainDatabaseAt: Send + Sync {}
