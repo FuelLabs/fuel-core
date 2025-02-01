@@ -19,7 +19,9 @@ where
         }
     }
 
-    pub fn insert(&mut self, k: T) -> bool {
+    // Will idempotently insert if there is room in the set.
+    // Redundant keys don't take up more room
+    pub fn insert_new_if_room(&mut self, k: T) -> bool {
         if self.inner.len() >= self.capacity && !self.inner.contains(&k) {
             false
         } else {

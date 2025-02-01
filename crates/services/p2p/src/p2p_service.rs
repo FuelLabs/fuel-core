@@ -616,7 +616,10 @@ impl FuelP2PService {
                 message,
                 message_id,
             } => {
-                if !self.gossipsub_peer_limiter.insert(propagation_source) {
+                if !self
+                    .gossipsub_peer_limiter
+                    .insert_new_if_room(propagation_source)
+                {
                     return None;
                 }
 
@@ -641,7 +644,7 @@ impl FuelP2PService {
                 }
             }
             gossipsub::Event::Subscribed { peer_id, topic } => {
-                if !self.gossipsub_peer_limiter.insert(peer_id) {
+                if !self.gossipsub_peer_limiter.insert_new_if_room(peer_id) {
                     return None;
                 }
                 let tag = self.get_topic_tag(&topic)?;
@@ -688,7 +691,7 @@ impl FuelP2PService {
                 // This is to ensure that the req/res protocol has a stable
                 // connection to the peer for the duration of the connection
                 // If a peer receives None, it will try a different peer for the same request
-                if !self.request_response_peer_limiter.insert(peer) {
+                if !self.request_response_peer_limiter.insert_new_if_room(peer) {
                     return None;
                 }
 
