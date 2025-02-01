@@ -403,6 +403,14 @@ impl ReadView {
             .yield_each(self.batch_size)
     }
 
+    pub fn contract_storage_balances(
+        &self,
+        contract: ContractId,
+    ) -> impl Stream<Item = StorageResult<ContractBalance>> + '_ {
+        futures::stream::iter(self.on_chain.contract_storage_balances(contract))
+            .yield_each(self.batch_size)
+    }
+
     pub fn da_height(&self) -> StorageResult<DaBlockHeight> {
         self.on_chain.da_height()
     }
@@ -494,16 +502,25 @@ pub struct ReadViewAt {
 }
 
 impl ReadViewAt {
-    pub fn contract_storage_values(
+    pub fn contract_slot_values(
         &self,
         contract_id: ContractId,
         storage_slots: Vec<Bytes32>,
     ) -> impl Stream<Item = StorageResult<(Bytes32, Vec<u8>)>> + '_ {
         futures::stream::iter(
             self.on_chain
-                .contract_storage_values(contract_id, storage_slots),
+                .contract_slot_values(contract_id, storage_slots),
         )
         .yield_each(self.batch_size)
+    }
+
+    pub fn contract_balance_values(
+        &self,
+        contract_id: ContractId,
+        assets: Vec<AssetId>,
+    ) -> impl Stream<Item = StorageResult<ContractBalance>> + '_ {
+        futures::stream::iter(self.on_chain.contract_balance_values(contract_id, assets))
+            .yield_each(self.batch_size)
     }
 }
 

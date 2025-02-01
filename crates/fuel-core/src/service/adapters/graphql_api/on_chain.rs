@@ -24,11 +24,13 @@ use fuel_core_storage::{
     },
     not_found,
     tables::{
+        ContractsAssets,
         ContractsState,
         FuelBlocks,
         SealedBlockConsensus,
         Transactions,
     },
+    ContractsAssetKey,
     ContractsStateKey,
     Error as StorageError,
     Result as StorageResult,
@@ -138,6 +140,21 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
             .map(|res| res.map(|(key, value)| (*key.state_key(), value.0)))
             .into_boxed()
     }
+
+    fn contract_storage_balances(
+        &self,
+        contract: ContractId,
+    ) -> BoxedIter<StorageResult<ContractBalance>> {
+        self.iter_all_by_prefix::<ContractsAssets, _>(Some(contract))
+            .map(|res| {
+                res.map(|(key, value)| ContractBalance {
+                    owner: *key.contract_id(),
+                    amount: value,
+                    asset_id: *key.asset_id(),
+                })
+            })
+            .into_boxed()
+    }
 }
 
 impl DatabaseChain for OnChainIterableKeyValueView {
@@ -157,7 +174,7 @@ impl worker::OnChainDatabase for Database<OnChain> {
 }
 
 impl OnChainDatabaseAt for OnChainKeyValueView {
-    fn contract_storage_values(
+    fn contract_slot_values(
         &self,
         contract_id: ContractId,
         storage_slots: Vec<Bytes32>,
@@ -172,6 +189,30 @@ impl OnChainDatabaseAt for OnChainKeyValueView {
                     .map(|v| v.into_owned().0);
 
                 Ok(value.map(|v| (key, v)))
+            })
+            .filter_map(|res| res.transpose())
+            .into_boxed()
+    }
+
+    fn contract_balance_values(
+        &self,
+        contract_id: ContractId,
+        assets: Vec<AssetId>,
+    ) -> BoxedIter<StorageResult<ContractBalance>> {
+        assets
+            .into_iter()
+            .map(move |asset| {
+                let double_key = ContractsAssetKey::new(&contract_id, &asset);
+                let value = self
+                    .storage::<ContractsAssets>()
+                    .get(&double_key)?
+                    .map(|v| v.into_owned());
+
+                Ok(value.map(|v| ContractBalance {
+                    owner: contract_id,
+                    amount: v,
+                    asset_id: asset,
+                }))
             })
             .filter_map(|res| res.transpose())
             .into_boxed()

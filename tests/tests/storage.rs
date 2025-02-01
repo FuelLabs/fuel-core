@@ -46,7 +46,7 @@ async fn all_storage_slots() {
         .submit_and_await_commit(&create.into())
         .await
         .unwrap();
-    let slots_stream = client.all_storage_slots(&contract_id).await.unwrap();
+    let slots_stream = client.contract_storage_slots(&contract_id).await.unwrap();
 
     // Then
     let actual_slots: Vec<_> = slots_stream.try_collect().await.unwrap();
@@ -86,7 +86,7 @@ async fn contract_storage_values_latest_block() {
         .await
         .unwrap();
     let actual_slots = client
-        .contract_storage_values(&contract_id, None, storage_to_request)
+        .contract_slots_values(&contract_id, None, storage_to_request)
         .await
         .unwrap();
 
@@ -138,7 +138,7 @@ async fn contract_storage_values_block_with_create_tx() {
         .header
         .height;
     let actual_slots = client
-        .contract_storage_values(
+        .contract_slots_values(
             &contract_id,
             Some(block_after_execution.into()),
             storage_to_request,
@@ -185,7 +185,7 @@ async fn contract_storage_values_block_before_create_tx() {
         .await
         .unwrap();
     let actual_slots = client
-        .contract_storage_values(&contract_id, Some(block_to_request), storage_to_request)
+        .contract_slots_values(&contract_id, Some(block_to_request), storage_to_request)
         .await
         .unwrap();
 

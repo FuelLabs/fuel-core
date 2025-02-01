@@ -12,8 +12,10 @@ use crate::client::{
         message::MessageStatusArgs,
         relayed_tx::RelayedTransactionStatusArgs,
         storage::{
-            AllStorageSlotsArgs,
-            ContractStorageValuesArgs,
+            ContractBalanceValuesArgs,
+            ContractSlotValuesArgs,
+            ContractStorageBalancesArgs,
+            ContractStorageSlotsArgs,
         },
         tx::DryRunArg,
         Tai64Timestamp,
@@ -31,6 +33,7 @@ use crate::client::{
             UtxoId,
         },
         upgrades::StateTransitionBytecode,
+        ContractBalance,
         RelayedTransactionStatus,
     },
 };
@@ -621,18 +624,18 @@ impl FuelClient {
 
     /// Requests all storage slots for the `contract_id`.
     #[cfg(feature = "subscriptions")]
-    pub async fn all_storage_slots(
+    pub async fn contract_storage_slots(
         &self,
         contract_id: &ContractId,
     ) -> io::Result<impl Stream<Item = io::Result<(Bytes32, Vec<u8>)>>> {
         use cynic::SubscriptionBuilder;
-        let s = schema::storage::AllStorageSlots::build(AllStorageSlotsArgs {
+        let s = schema::storage::ContractStorageSlots::build(ContractStorageSlotsArgs {
             contract_id: (*contract_id).into(),
         });
 
         let stream = self.subscribe(s).await?.map(
-            |result: io::Result<schema::storage::AllStorageSlots>| {
-                let result: (Bytes32, Vec<u8>) = result?.all_storage_slots.into();
+            |result: io::Result<schema::storage::ContractStorageSlots>| {
+                let result: (Bytes32, Vec<u8>) = result?.contract_storage_slots.into();
                 Result::<_, io::Error>::Ok(result)
             },
         );
@@ -640,24 +643,67 @@ impl FuelClient {
         Ok(stream)
     }
 
-    pub async fn contract_storage_values(
+    /// Requests all storage balances for the `contract_id`.
+    #[cfg(feature = "subscriptions")]
+    pub async fn contract_storage_balances(
+        &self,
+        contract_id: &ContractId,
+    ) -> io::Result<impl Stream<Item = io::Result<ContractBalance>>> {
+        use cynic::SubscriptionBuilder;
+        let s = schema::storage::ContractStorageBalances::build(
+            ContractStorageBalancesArgs {
+                contract_id: (*contract_id).into(),
+            },
+        );
+
+        let stream = self.subscribe(s).await?.map(
+            |result: io::Result<schema::storage::ContractStorageBalances>| {
+                let result: ContractBalance = result?.contract_storage_balances.into();
+                Result::<_, io::Error>::Ok(result)
+            },
+        );
+
+        Ok(stream)
+    }
+
+    pub async fn contract_slots_values(
         &self,
         contract_id: &ContractId,
         block_height: Option<BlockHeight>,
         requested_storage_slots: Vec<Bytes32>,
     ) -> io::Result<Vec<(Bytes32, Vec<u8>)>> {
+        let query = schema::storage::ContractSlotValues::build(ContractSlotValuesArgs {
+            contract_id: (*contract_id).into(),
+            block_height: block_height.map(|b| (*b).into()),
+            storage_slots: requested_storage_slots
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        });
+
+        self.query(query)
+            .await
+            .map(|r| r.contract_slot_values.into_iter().map(Into::into).collect())
+    }
+
+    pub async fn contract_balance_values(
+        &self,
+        contract_id: &ContractId,
+        block_height: Option<BlockHeight>,
+        requested_storage_slots: Vec<AssetId>,
+    ) -> io::Result<Vec<ContractBalance>> {
         let query =
-            schema::storage::ContractStorageValues::build(ContractStorageValuesArgs {
+            schema::storage::ContractBalanceValues::build(ContractBalanceValuesArgs {
                 contract_id: (*contract_id).into(),
                 block_height: block_height.map(|b| (*b).into()),
-                storage_slots: requested_storage_slots
+                assets: requested_storage_slots
                     .into_iter()
                     .map(Into::into)
                     .collect(),
             });
 
         self.query(query).await.map(|r| {
-            r.contract_storage_values
+            r.contract_balance_values
                 .into_iter()
                 .map(Into::into)
                 .collect()
