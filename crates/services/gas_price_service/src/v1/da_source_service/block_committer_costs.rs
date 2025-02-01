@@ -58,7 +58,7 @@ impl From<&RawDaBlockCosts> for DaBlockCosts {
             id: bundle_id,
             ..
         } = *raw_da_block_costs;
-        DaBlockCosts {
+        Self {
             bundle_id,
             // construct a vec of l2 blocks from the start_height to the end_height
             l2_blocks: start_height..=end_height,
@@ -90,10 +90,12 @@ where
         &mut self,
         last_recorded_height: &BlockHeight,
     ) -> DaBlockCostsResult<Vec<DaBlockCosts>> {
-        let next_height = last_recorded_height.succ().ok_or(anyhow!(
-            "Failed to increment the last recorded height: {:?}",
-            last_recorded_height
-        ))?;
+        let next_height = last_recorded_height.succ().ok_or_else(|| {
+            anyhow!(
+                "Failed to increment the last recorded height: {:?}",
+                last_recorded_height
+            )
+        })?;
 
         let raw_da_block_costs: Vec<_> = self
             .client
@@ -309,15 +311,14 @@ pub mod fake_server {
                             let guard = shared_responses.lock().unwrap();
                             let most_recent = guard
                                 .iter()
-                                .fold(None, |acc, x| match acc {
-                                    None => Some(x),
-                                    Some(acc) => {
+                                .fold(None, |acc, x| {
+                                    acc.map_or(Some(x), |acc: &RawDaBlockCosts| {
                                         if x.end_height > acc.end_height {
                                             Some(x)
                                         } else {
                                             Some(acc)
                                         }
-                                    }
+                                    })
                                 })
                                 .cloned();
                             let response: Vec<RawDaBlockCosts> =

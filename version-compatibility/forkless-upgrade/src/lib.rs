@@ -2,9 +2,6 @@
 #![deny(warnings)]
 
 #[cfg(test)]
-use netlink_proto as _;
-
-#[cfg(test)]
 mod backward_compatibility;
 #[cfg(test)]
 mod forward_compatibility;

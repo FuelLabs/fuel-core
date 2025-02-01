@@ -91,6 +91,7 @@ pub struct Config {
     pub max_da_gas_price_change_percent: u16,
     pub da_gas_price_p_component: i64,
     pub da_gas_price_d_component: i64,
+    pub gas_price_metrics: bool,
     pub activity_normal_range_size: u16,
     pub activity_capped_range_size: u16,
     pub activity_decrease_range_size: u16,
@@ -121,7 +122,6 @@ impl Config {
 
     #[cfg(feature = "test-helpers")]
     pub fn local_node_with_reader(snapshot_reader: SnapshotReader) -> Self {
-        use crate::state::rocks_db::DatabaseConfig;
         let block_importer = fuel_core_importer::Config::new(false);
         let latest_block = snapshot_reader.last_block_config();
         // In tests, we always want to use the native executor as a default configuration.
@@ -135,7 +135,7 @@ impl Config {
 
         let combined_db_config = CombinedDatabaseConfig {
             #[cfg(feature = "rocksdb")]
-            database_config: DatabaseConfig::config_for_tests(),
+            database_config: crate::state::rocks_db::DatabaseConfig::config_for_tests(),
             database_path: Default::default(),
             #[cfg(feature = "rocksdb")]
             database_type: DbType::RocksDb,
@@ -149,6 +149,7 @@ impl Config {
         let gas_price_change_percent = 0;
         let min_gas_price = 0;
         let gas_price_threshold_percent = 50;
+        let gas_price_metrics = false;
 
         Self {
             graphql_config: GraphQLConfig {
@@ -215,6 +216,7 @@ impl Config {
             max_da_gas_price_change_percent: 0,
             da_gas_price_p_component: 0,
             da_gas_price_d_component: 0,
+            gas_price_metrics,
             activity_normal_range_size: 0,
             activity_capped_range_size: 0,
             activity_decrease_range_size: 0,
