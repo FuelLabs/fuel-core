@@ -711,6 +711,63 @@ fn get_sorted_out_tx_same_tips() {
 }
 
 #[test]
+fn get_sorted_out_zero_tip() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    // Given
+    let gas_coin = universe.setup_coin().1;
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(0)
+        .script_gas_limit(GAS_LIMIT)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = universe.setup_coin();
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(0)
+        .script_gas_limit(GAS_LIMIT / 2)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let (_, gas_coin) = universe.setup_coin();
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .tip(10)
+        .max_fee_limit(0)
+        .script_gas_limit(GAS_LIMIT / 4)
+        .add_input(gas_coin)
+        .finalize_as_transaction();
+
+    let tx1_id = tx1.id(&ChainId::default());
+    let tx2_id = tx2.id(&ChainId::default());
+    let tx3_id = tx3.id(&ChainId::default());
+
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+    universe.verify_and_insert(tx3).unwrap();
+
+    // When
+    let txs = universe
+        .get_pool()
+        .write()
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            maximum_txs: u16::MAX,
+            maximum_block_size: u32::MAX,
+        });
+
+    // Then
+    assert_eq!(txs.len(), 3, "Should have 3 txs");
+    assert_eq!(txs[0].id(), tx3_id, "First should be tx3");
+    assert_eq!(txs[1].id(), tx2_id, "Second should be tx2");
+    assert_eq!(txs[2].id(), tx1_id, "Third should be tx1");
+    universe.assert_pool_integrity(&[]);
+}
+
+#[test]
 fn get_sorted_out_tx_profitable_ratios() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
