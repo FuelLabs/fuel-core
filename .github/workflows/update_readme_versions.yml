@@ -19,11 +19,11 @@ jobs:
       id: get-versions
       run: |
         # Fetch versions from all networks
-        mainnet_version=$(curl -s -X POST -H "Content-Type: application/json" --data '{"query":"query { nodeInfo { nodeVersion }}"}' https://mainnet.fuel.network/v1/graphql | jq -r '.data.nodeInfo.nodeVersion')
+        ignition_version=$(curl -s -X POST -H "Content-Type: application/json" --data '{"query":"query { nodeInfo { nodeVersion }}"}' https://mainnet.fuel.network/v1/graphql | jq -r '.data.nodeInfo.nodeVersion')
         testnet_version=$(curl -s -X POST -H "Content-Type: application/json" --data '{"query":"query { nodeInfo { nodeVersion }}"}' https://testnet.fuel.network/v1/graphql | jq -r '.data.nodeInfo.nodeVersion')
         devnet_version=$(curl -s -X POST -H "Content-Type: application/json" --data '{"query":"query { nodeInfo { nodeVersion }}"}' https://devnet.fuel.network/v1/graphql | jq -r '.data.nodeInfo.nodeVersion')
 
-        echo "mainnet_version=$mainnet_version" >> $GITHUB_OUTPUT
+        echo "ignition_version=$ignition_version" >> $GITHUB_OUTPUT
         echo "testnet_version=$testnet_version" >> $GITHUB_OUTPUT
         echo "devnet_version=$devnet_version" >> $GITHUB_OUTPUT
 
@@ -31,11 +31,11 @@ jobs:
       id: readme-versions
       run: |
         # Extract versions from README.md
-        mainnet_readme=$(grep -E '^\| Mainnet' README.md | awk -F '|' '{gsub(/ /, "", $3); print $3}')
+        ignition_readme=$(grep -E '^\| Fuel Ignition' README.md | awk -F '|' '{gsub(/ /, "", $3); print $3}')
         testnet_readme=$(grep -E '^\| Testnet' README.md | awk -F '|' '{gsub(/ /, "", $3); print $3}')
         devnet_readme=$(grep -E '^\| Devnet' README.md | awk -F '|' '{gsub(/ /, "", $3); print $3}')
 
-        echo "mainnet_readme=$mainnet_readme" >> $GITHUB_OUTPUT
+        echo "ignition_readme=$ignition_readme" >> $GITHUB_OUTPUT
         echo "testnet_readme=$testnet_readme" >> $GITHUB_OUTPUT
         echo "devnet_readme=$devnet_readme" >> $GITHUB_OUTPUT
 
@@ -48,8 +48,8 @@ jobs:
 
         # Create sed command file
         {
-          if [ "${{ steps.get-versions.outputs.mainnet_version }}" != "${{ steps.readme-versions.outputs.mainnet_readme }}" ]; then
-            echo "s/^\| *Mainnet *\|.*\|/| Mainnet | ${{ steps.get-versions.outputs.mainnet_version }} |/"
+          if [ "${{ steps.get-versions.outputs.ignition_version }}" != "${{ steps.readme-versions.outputs.ignition_readme }}" ]; then
+            echo "s/^\| *Fuel Ignition *\|.*\|/| Fuel Ignition | ${{ steps.get-versions.outputs.ignition_version }} |/"
             needs_update=true
           fi
           
@@ -101,7 +101,7 @@ jobs:
         git add README.md
         git commit -m "Update network versions on README:
         
-        - Mainnet: ${{ steps.get-versions.outputs.mainnet_version }}
+        - Fuel Ignition: ${{ steps.get-versions.outputs.ignition_version }}
         - Testnet: ${{ steps.get-versions.outputs.testnet_version }}
         - Devnet: ${{ steps.get-versions.outputs.devnet_version }}"
 
@@ -110,7 +110,7 @@ jobs:
         gh pr create \
           --title "Update network versions on README" \
           --body "Automated version updates:
-          - Mainnet: ${{ steps.get-versions.outputs.mainnet_version }}
+          - Fuel Ignition: ${{ steps.get-versions.outputs.ignition_version }}
           - Testnet: ${{ steps.get-versions.outputs.testnet_version }}
           - Devnet: ${{ steps.get-versions.outputs.devnet_version }}" \
           --reviewer FuelLabs/client \
