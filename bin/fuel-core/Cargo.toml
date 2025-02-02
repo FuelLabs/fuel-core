@@ -45,7 +45,7 @@ tracing-subscriber = { workspace = true, features = [
   "env-filter",
   "json",
 ] }
-url = { workspace = true, optional = true }
+url = { workspace = true }
 
 [dev-dependencies]
 fuel-core = { workspace = true, features = ["test-helpers"] }
@@ -68,7 +68,7 @@ shared-sequencer = [
   "dep:fuel-core-shared-sequencer",
   "fuel-core/shared-sequencer",
 ]
-relayer = ["fuel-core/relayer", "dep:url"]
+relayer = ["fuel-core/relayer"]
 parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production", "rocksdb"]

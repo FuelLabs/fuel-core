@@ -27,8 +27,6 @@ pub struct NodeInfo {
     pub max_size: U64,
     pub max_depth: U64,
     pub node_version: String,
-    pub indexation: IndexationFlags,
-    pub tx_pool_stats: TxPoolStats,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
