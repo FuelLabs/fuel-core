@@ -44,6 +44,15 @@ where
 
         for (collision, reason) in self.iter() {
             if !is_better_than_collision(tx, collision, storage)? {
+                tracing::info!(
+                    "Transaction {} collided with {} because of {:?}",
+                    tx.id(),
+                    storage
+                        .get(collision)
+                        .map(|d| d.transaction.id().to_string())
+                        .unwrap_or(String::from("Error")),
+                    reason
+                );
                 if let Some(reason) = reason.first() {
                     return Err(reason.clone());
                 } else {
