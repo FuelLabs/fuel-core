@@ -62,19 +62,19 @@ async fn max_discovery_peers_connected__nodes_will_discover_new_peers_if_first_p
     let mut rng = StdRng::seed_from_u64(1234);
 
     // given
-    let max = 2usize;
+    let max_discovery_peers = 2usize;
     let extra_validators = 2;
 
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
     let producer_overrides =
-        CustomizeConfig::no_overrides().max_discovery_peers_connected(max as u32);
+        CustomizeConfig::no_overrides().max_discovery_peers_connected(max_discovery_peers as u32);
     let producer_setup =
         ProducerSetup::new_with_overrides(secret, producer_overrides).with_name("Alice");
     let bootstrap = BootstrapSetup::new(pub_key);
-    let many_validators = (0..max + extra_validators).map(|_| {
+    let many_validators = (0..max_discovery_peers + extra_validators).map(|_| {
         let validator_overrides =
-            CustomizeConfig::no_overrides().max_discovery_peers_connected(max as u32);
+            CustomizeConfig::no_overrides().max_discovery_peers_connected(max_discovery_peers as u32);
         Some(ValidatorSetup::new_with_overrides(
             pub_key,
             validator_overrides,
