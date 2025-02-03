@@ -1,7 +1,9 @@
+#[cfg(feature = "parallel-executor")]
 use fuel_core::{
     parallel_executor::dependency_splitter::DependencySplitter,
     upgradable_executor::native_executor::ports::MaybeCheckedTransaction,
 };
+#[cfg(feature = "parallel-executor")]
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -36,13 +38,17 @@ use fuel_core_types::{
         predicate::EmptyStorage,
     },
 };
+#[cfg(feature = "parallel-executor")]
 use fuel_types::ChainId;
+#[cfg(feature = "parallel-executor")]
 use rand::{
     rngs::StdRng,
     Rng,
     SeedableRng,
 };
+#[cfg(feature = "parallel-executor")]
 use std::num::NonZeroUsize;
+#[cfg(feature = "parallel-executor")]
 use test_helpers::builder::local_chain_config;
 
 #[cfg(feature = "parallel-executor")]
@@ -78,6 +84,7 @@ fn main() {
     );
 }
 
+#[cfg(feature = "parallel-executor")]
 fn bench(
     mut splitter: DependencySplitter,
     transactions: Vec<MaybeCheckedTransaction>,
@@ -104,10 +111,12 @@ fn bench(
     dbg!(buckets.iter().map(|b| b.1.len()).collect::<Vec<_>>());
 }
 
+#[cfg(feature = "parallel-executor")]
 fn checked_parameters() -> CheckPredicateParams {
     local_chain_config().consensus_parameters.into()
 }
 
+#[cfg(feature = "parallel-executor")]
 fn generate_transactions(
     nb_txs: u64,
     rng: &mut StdRng,
