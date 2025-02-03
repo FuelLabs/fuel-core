@@ -3691,6 +3691,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-types 0.41.4",
  "num_enum",
+ "rand",
  "strum 0.25.0",
  "strum_macros 0.25.3",
 ]
