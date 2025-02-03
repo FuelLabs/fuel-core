@@ -302,10 +302,10 @@ impl FuelP2PService {
             outbound_requests_table: HashMap::default(),
             inbound_requests_table: HashMap::default(),
             gossipsub_peer_limiter: SizedHashset::new(
-                config.max_gossipsub_peers_connected as usize,
+                usize::try_from(config.max_gossipsub_peers_connected)?,
             ),
             request_response_peer_limiter: SizedHashset::new(
-                config.max_request_response_peers_connected as usize,
+                usize::try_from(config.max_request_response_peers_connected)?,
             ),
             network_metadata,
             metrics,
