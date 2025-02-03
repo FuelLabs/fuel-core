@@ -55,3 +55,68 @@ async fn max_discovery_peers_connected__node_will_not_discover_new_nodes_if_full
 
     assert_eq!(expected, actual);
 }
+
+#[tokio::test]
+async fn max_discovery_peers_connected__nodes_will_discover_new_peers_if_first_peer_is_full(
+) {
+    let mut rng = StdRng::seed_from_u64(1234);
+
+    // given
+    let max = 3usize;
+    let extra_validators = 2;
+
+    let secret = SecretKey::random(&mut rng);
+    let pub_key = Input::owner(&secret.public_key());
+    let producer_overrides =
+        CustomizeConfig::no_overrides().max_discovery_peers_connected(max as u32);
+    let producer_setup =
+        ProducerSetup::new_with_overrides(secret, producer_overrides).with_name("Alice");
+    let bootstrap = BootstrapSetup::new(pub_key);
+    let many_validators = (0..max + extra_validators).map(|_| {
+        let validator_overrides =
+            CustomizeConfig::no_overrides().max_discovery_peers_connected(max as u32);
+        Some(ValidatorSetup::new_with_overrides(
+            pub_key,
+            validator_overrides,
+        ))
+    });
+
+    // when
+    let nodes = make_nodes(
+        [Some(bootstrap)],
+        [Some(producer_setup)],
+        many_validators,
+        None,
+    )
+    .await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // then
+    let Nodes {
+        mut producers,
+        validators,
+        ..
+    } = nodes;
+    let producer = producers.pop().unwrap();
+    let client = FuelClient::from(producer.node.bound_address);
+    client.produce_blocks(10, None).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    for validator in validators {
+        println!("validator");
+        let client = FuelClient::from(validator.node.bound_address);
+        let connected_peer_count = client.connected_peers_info().await.unwrap().len();
+
+        assert!(connected_peer_count > 0);
+
+        let latest_block_height = client
+            .chain_info()
+            .await
+            .unwrap()
+            .latest_block
+            .header
+            .height;
+        println!("latest_block_height: {}", latest_block_height);
+        assert_eq!(latest_block_height, 10);
+    }
+}
