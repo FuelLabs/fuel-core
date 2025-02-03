@@ -62,24 +62,18 @@ async fn max_discovery_peers_connected__nodes_will_discover_new_peers_if_first_p
     let mut rng = StdRng::seed_from_u64(1234);
 
     // given
-    let max_discovery_peers = 2usize;
-    let extra_validators = 2;
+    // one for bootstrap, one for a single validator
+    let producer_max_peers = 2;
+    let new_blocks = 10;
 
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
-    let producer_overrides = CustomizeConfig::no_overrides()
-        .max_discovery_peers_connected(max_discovery_peers as u32);
+    let producer_overrides =
+        CustomizeConfig::no_overrides().max_discovery_peers_connected(producer_max_peers);
     let producer_setup =
         ProducerSetup::new_with_overrides(secret, producer_overrides).with_name("Alice");
     let bootstrap = BootstrapSetup::new(pub_key);
-    let many_validators = (0..max_discovery_peers + extra_validators).map(|_| {
-        let validator_overrides = CustomizeConfig::no_overrides()
-            .max_discovery_peers_connected(max_discovery_peers as u32);
-        Some(ValidatorSetup::new_with_overrides(
-            pub_key,
-            validator_overrides,
-        ))
-    });
+    let many_validators = (0..10).map(|_| Some(ValidatorSetup::new(pub_key)));
 
     // when
     let nodes = make_nodes(
@@ -99,31 +93,11 @@ async fn max_discovery_peers_connected__nodes_will_discover_new_peers_if_first_p
     } = nodes;
     let producer = producers.pop().unwrap();
     let client = FuelClient::from(producer.node.bound_address);
-    client.produce_blocks(10, None).await.unwrap();
-    tokio::time::sleep(Duration::from_secs(10)).await;
-    println!("producer");
-    let peering_info = client.connected_peers_info().await.unwrap();
-    println!(
-        "peering_info: {:?}",
-        peering_info
-            .into_iter()
-            .map(|p| hex::encode(p.id.as_ref()))
-            .collect::<Vec<_>>()
-    );
+    client.produce_blocks(new_blocks, None).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
     for validator in validators {
-        println!("validator");
         let client = FuelClient::from(validator.node.bound_address);
-        let peers = client.connected_peers_info().await.unwrap();
-
-        println!(
-            "peers: {:?}",
-            peers
-                .into_iter()
-                .map(|p| hex::encode(p.id.as_ref()))
-                .collect::<Vec<_>>()
-        );
-
         let latest_block_height = client
             .chain_info()
             .await
@@ -131,7 +105,6 @@ async fn max_discovery_peers_connected__nodes_will_discover_new_peers_if_first_p
             .latest_block
             .header
             .height;
-        println!("latest_block_height: {}", latest_block_height);
-        assert_eq!(latest_block_height, 10);
+        assert_eq!(latest_block_height, new_blocks);
     }
 }
