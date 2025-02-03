@@ -10,6 +10,7 @@ use crate::{
             TxPool,
         },
         query_costs,
+        Config as GraphQLConfig,
         IntoApiResult,
     },
     graphql_api::{
@@ -300,11 +301,19 @@ impl TxMutation {
         // Requires `--debug` flag to be enabled.
         block_height: Option<U32>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
+        let config = ctx.data_unchecked::<GraphQLConfig>().clone();
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let consensus_params = ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
         let block_gas_limit = consensus_params.block_gas_limit();
+
+        if block_height.is_some() && !config.debug {
+            return Err(anyhow::anyhow!(
+                "The `blockHeight` parameter requires the `--debug` option"
+            )
+            .into());
+        }
 
         let mut transactions = txs
             .iter()
