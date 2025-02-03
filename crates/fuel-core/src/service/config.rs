@@ -40,6 +40,9 @@ use crate::{
     },
 };
 
+#[cfg(feature = "parallel-executor")]
+use std::num::NonZeroUsize;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub graphql_config: GraphQLConfig,
@@ -54,6 +57,8 @@ pub struct Config {
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
+    #[cfg(feature = "parallel-executor")]
+    pub executor_number_of_cores: NonZeroUsize,
     pub block_production: Trigger,
     pub predefined_blocks_path: Option<PathBuf>,
     pub vm: VMConfig,
@@ -175,6 +180,8 @@ impl Config {
             debug: true,
             utxo_validation,
             native_executor_version: Some(native_executor_version),
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores: NonZeroUsize::new(1).expect("1 is not zero"),
             snapshot_reader,
             block_production: Trigger::Instant,
             predefined_blocks_path: None,
