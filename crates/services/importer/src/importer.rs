@@ -12,7 +12,10 @@ use crate::{
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
     not_found,
-    transactional::Changes,
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
     Error as StorageError,
     MerkleRoot,
 };
@@ -105,6 +108,7 @@ pub enum Error {
     UnsupportedConsensusVariant(String),
     ActiveBlockResultsSemaphoreClosed(tokio::sync::AcquireError),
     RayonTaskWasCanceled,
+    TaskError(String),
 }
 
 impl From<Error> for anyhow::Error {
@@ -121,7 +125,7 @@ impl PartialEq for Error {
 }
 
 pub struct Importer<D, E, V> {
-    database: Mutex<D>,
+    database: Arc<Mutex<D>>,
     executor: Arc<E>,
     verifier: Arc<V>,
     chain_id: ChainId,
@@ -156,7 +160,7 @@ impl<D, E, V> Importer<D, E, V> {
             .expect("Failed to create a thread pool for the block processing");
 
         Self {
-            database: Mutex::new(database),
+            database: Arc::new(Mutex::new(database)),
             executor: Arc::new(executor),
             verifier: Arc::new(verifier),
             chain_id,
@@ -261,7 +265,12 @@ where
                 .try_lock()
                 .expect("Semaphore prevents concurrent access to the database");
             let database = guard.deref_mut();
-            self._commit_result(result, permit, database)
+            let block_changes = create_block_changes(
+                &self.chain_id,
+                &result.result().sealed_block,
+                database,
+            )?;
+            self._commit_result(result, block_changes, permit, database)
         })
         .await?
     }
@@ -279,77 +288,19 @@ where
     fn _commit_result(
         &self,
         result: UncommittedResult<Changes>,
+        block_changes: Changes,
         permit: OwnedSemaphorePermit,
         database: &mut D,
     ) -> Result<(), Error> {
         let (result, changes) = result.into();
         let block = &result.sealed_block.entity;
-        let consensus = &result.sealed_block.consensus;
         let actual_next_height = *block.header().height();
-
-        // During importing of the genesis block, the database should not be initialized
-        // and the genesis block defines the next height.
-        // During the production of the non-genesis block, the next height should be underlying
-        // database height + 1.
-        let expected_next_height = match consensus {
-            Consensus::Genesis(_) => {
-                let result = database.latest_block_height()?;
-                let found = result.is_some();
-                // Because the genesis block is not committed, it should return `None`.
-                // If we find the latest height, something is wrong with the state of the database.
-                if found {
-                    return Err(Error::InvalidUnderlyingDatabaseGenesisState)
-                }
-                actual_next_height
-            }
-            Consensus::PoA(_) => {
-                if actual_next_height == BlockHeight::from(0u32) {
-                    return Err(Error::ZeroNonGenericHeight)
-                }
-
-                let last_db_height = database
-                    .latest_block_height()?
-                    .ok_or(not_found!("Latest block height"))?;
-                last_db_height
-                    .checked_add(1u32)
-                    .ok_or(Error::Overflow)?
-                    .into()
-            }
-            _ => {
-                return Err(Error::UnsupportedConsensusVariant(format!(
-                    "{:?}",
-                    consensus
-                )))
-            }
-        };
-
-        if expected_next_height != actual_next_height {
-            return Err(Error::IncorrectBlockHeight(
-                expected_next_height,
-                actual_next_height,
-            ))
-        }
-
-        // Importer expects that `UncommittedResult` contains the result of block
-        // execution without block itself.
-        let expected_block_root = database.latest_block_root()?;
 
         #[cfg(feature = "test-helpers")]
         let changes_clone = changes.clone();
-        let mut db_after_execution = database.storage_transaction(changes);
-        let actual_block_root = db_after_execution.latest_block_root()?;
-        if actual_block_root != expected_block_root {
-            return Err(Error::InvalidDatabaseStateAfterExecution(
-                expected_block_root,
-                actual_block_root,
-            ))
-        }
 
-        if !db_after_execution.store_new_block(&self.chain_id, &result.sealed_block)? {
-            return Err(Error::NotUnique(expected_next_height))
-        }
-
-        db_after_execution.commit()?;
+        database
+            .commit_changes(StorageChanges::ChangesList(vec![block_changes, changes]))?;
 
         if self.metrics {
             Self::update_metrics(&result, &actual_next_height);
@@ -525,6 +476,19 @@ where
     ) -> Result<(), Error> {
         let _guard = self.lock()?;
 
+        let block_changes = std::thread::spawn({
+            let sealed_block = sealed_block.clone();
+            let database = self.database.clone();
+            let chain_id = self.chain_id;
+            move || {
+                let mut guard = database
+                    .try_lock()
+                    .expect("Semaphore prevents concurrent access to the database");
+                let database = guard.deref_mut();
+                create_block_changes(&chain_id, &sealed_block, database)
+            }
+        });
+
         let executor = self.executor.clone();
         let verifier = self.verifier.clone();
         let (result, execute_time) = self
@@ -541,6 +505,9 @@ where
             .await?;
 
         let result = result?;
+        let block_changes = block_changes.join().map_err(|e| {
+            Error::TaskError(format!("Error while waiting for block changes: {:?}", e))
+        })??;
 
         // Await until all receivers of the notification process the result.
         const TIMEOUT: u64 = 20;
@@ -568,7 +535,8 @@ where
                 let database = guard.deref_mut();
 
                 let start = Instant::now();
-                self._commit_result(result, permit, database).map(|_| start)
+                self._commit_result(result, block_changes, permit, database)
+                    .map(|_| start)
             })
             .await?;
 
@@ -606,4 +574,76 @@ impl Awaiter {
             _permit: permit,
         }
     }
+}
+
+fn create_block_changes<D: ImporterDatabase + Transactional>(
+    chain_id: &ChainId,
+    sealed_block: &SealedBlock,
+    database: &mut D,
+) -> Result<Changes, Error> {
+    let consensus = &sealed_block.consensus;
+    let actual_next_height = *sealed_block.entity.header().height();
+
+    // During importing of the genesis block, the database should not be initialized
+    // and the genesis block defines the next height.
+    // During the production of the non-genesis block, the next height should be underlying
+    // database height + 1.
+    let expected_next_height = match consensus {
+        Consensus::Genesis(_) => {
+            let result = database.latest_block_height()?;
+            let found = result.is_some();
+            // Because the genesis block is not committed, it should return `None`.
+            // If we find the latest height, something is wrong with the state of the database.
+            if found {
+                return Err(Error::InvalidUnderlyingDatabaseGenesisState)
+            }
+            actual_next_height
+        }
+        Consensus::PoA(_) => {
+            if actual_next_height == BlockHeight::from(0u32) {
+                return Err(Error::ZeroNonGenericHeight)
+            }
+
+            let last_db_height = database
+                .latest_block_height()?
+                .ok_or(not_found!("Latest block height"))?;
+            last_db_height
+                .checked_add(1u32)
+                .ok_or(Error::Overflow)?
+                .into()
+        }
+        _ => {
+            return Err(Error::UnsupportedConsensusVariant(format!(
+                "{:?}",
+                consensus
+            )))
+        }
+    };
+
+    if expected_next_height != actual_next_height {
+        return Err(Error::IncorrectBlockHeight(
+            expected_next_height,
+            actual_next_height,
+        ))
+    }
+
+    // Importer expects that `UncommittedResult` contains the result of block
+    // execution without block itself.
+    let expected_block_root = database.latest_block_root()?;
+
+    let mut db_after_execution = database.storage_transaction(Default::default());
+    let actual_block_root = db_after_execution.latest_block_root()?;
+
+    if actual_block_root != expected_block_root {
+        return Err(Error::InvalidDatabaseStateAfterExecution(
+            expected_block_root,
+            actual_block_root,
+        ))
+    }
+
+    if !db_after_execution.store_new_block(chain_id, sealed_block)? {
+        return Err(Error::NotUnique(actual_next_height))
+    }
+
+    Ok(db_after_execution.into_changes())
 }
