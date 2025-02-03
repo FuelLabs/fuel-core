@@ -77,13 +77,7 @@ use pagination::{
     PaginatedResult,
     PaginationRequest,
 };
-use reqwest::header::{
-    AsHeaderName,
-    HeaderMap,
-    HeaderValue,
-    IntoHeaderName,
-    CONTENT_TYPE,
-};
+use reqwest::header::CONTENT_TYPE;
 use schema::{
     assets::AssetInfoArg,
     balance::BalanceArgs,
@@ -175,7 +169,6 @@ pub struct FuelClient {
     #[cfg(feature = "subscriptions")]
     cookie: std::sync::Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
-    headers: HeaderMap,
     extensions: HashMap<&'static str, serde_json::Value>,
 }
 
@@ -204,7 +197,6 @@ impl FromStr for FuelClient {
                 client,
                 cookie,
                 url,
-                headers: HeaderMap::new(),
                 extensions: HashMap::new(),
             })
         }
@@ -250,23 +242,6 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
-    pub fn set_header(
-        &mut self,
-        key: impl IntoHeaderName,
-        value: impl TryInto<HeaderValue>,
-    ) -> Result<&mut Self, Error> {
-        let header_value: HeaderValue = value
-            .try_into()
-            .map_err(|_err| anyhow::anyhow!("Cannot parse value for header"))?;
-        self.headers.insert(key, header_value);
-        Ok(self)
-    }
-
-    pub fn remove_header(&mut self, key: impl AsHeaderName) -> &mut Self {
-        self.headers.remove(key);
-        self
-    }
-
     pub fn with_required_fuel_block_height(&mut self, height: u64) -> &mut Self {
         self.extensions
             .insert("required_fuel_block_height", height.into());
@@ -288,9 +263,12 @@ impl FuelClient {
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
         let mut operation_json = serde_json::to_value(&q)?;
-        let operation_object = operation_json
-            .as_object_mut()
-            .expect("Graphql operation is a valid json object");
+        let Some(operation_object) = operation_json.as_object_mut() else {
+            return Err(from_strings_errors_to_std_error(vec![format!(
+                "Graphql operation is not  valid json object {}",
+                operation_json
+            )]))
+        };
         operation_object.insert(
             "extensions".to_owned(),
             serde_json::to_value(self.extensions.clone())?,
@@ -299,7 +277,6 @@ impl FuelClient {
         let request_builder = self
             .client
             .post(self.url.clone())
-            .headers(self.headers.clone())
             .header(CONTENT_TYPE, "application/json")
             .body(serde_json::to_string(&operation_json)?);
 
@@ -344,7 +321,17 @@ impl FuelClient {
         use reqwest::cookie::CookieStore;
         let mut url = self.url.clone();
         url.set_path("/v1/graphql-sub");
-        let json_query = serde_json::to_string(&q)?;
+        let mut json_query = serde_json::to_value(&q)?;
+        let Some(json_query) = json_query.as_object_mut() else {
+            return Err(from_strings_errors_to_std_error(vec![format!(
+                "Graphql operation is not  valid json object {}",
+                json_query
+            )]))
+        };
+        json_query.insert(
+            "extensions".to_owned(),
+            serde_json::to_value(self.extensions.clone())?,
+        );
         let mut client_builder = es::ClientBuilder::for_url(url.as_str())
             .map_err(|e| {
                 io::Error::new(
@@ -352,7 +339,7 @@ impl FuelClient {
                     format!("Failed to start client {e:?}"),
                 )
             })?
-            .body(json_query)
+            .body(serde_json::to_string(&json_query)?)
             .method("POST".to_string())
             .header("content-type", "application/json")
             .map_err(|e| {
