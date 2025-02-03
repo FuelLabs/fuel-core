@@ -311,7 +311,6 @@ impl FuelClient {
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-        println!("Response: {}", response);
         let response = serde_json::from_str(&response)?;
         Self::decode_response(response)
     }
