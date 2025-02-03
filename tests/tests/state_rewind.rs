@@ -534,7 +534,7 @@ async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
         .to_string();
     assert!(err.contains("Transaction id was already used"));
 
-    // At lastest height, a similar transaction with a different TxId should still fail
+    // At latest height, a similar transaction with a different TxId should still fail
     let third_tx = TransactionBuilder::script(vec![], vec![])
         .max_fee_limit(0)
         .script_gas_limit(1_000_001) // changed to make it a different transaction
