@@ -296,7 +296,6 @@ impl FuelClient {
             serde_json::to_value(self.extensions.clone())?,
         );
 
-        println!("{}", serde_json::to_string_pretty(&operation_json).unwrap());
         let request_builder = self
             .client
             .post(self.url.clone())
