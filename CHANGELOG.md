@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 - [2632](https://github.com/FuelLabs/fuel-core/pull/2632): Improved performance of certain async trait impls in the gas price service.
+- [2662](https://github.com/FuelLabs/fuel-core/pull/2662): Fix balances query endpoint cost without indexation and behavior coins to spend with one parameter at zero.
 
 ## [Version 0.41.4]
 
