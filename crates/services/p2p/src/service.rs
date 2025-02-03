@@ -869,7 +869,6 @@ where
 }
 
 // TODO: Add tests https://github.com/FuelLabs/fuel-core/issues/1275
-#[async_trait::async_trait]
 impl<P, V, B, T> RunnableTask for Task<P, V, B, T>
 where
     P: TaskP2PService + 'static,
@@ -878,6 +877,7 @@ where
     B: Broadcast + 'static,
     T: TxPool + 'static,
 {
+    #[allow(clippy::arithmetic_side_effects)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;

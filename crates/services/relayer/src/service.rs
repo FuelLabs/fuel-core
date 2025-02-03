@@ -213,7 +213,6 @@ where
     }
 }
 
-#[async_trait]
 impl<P, D> RunnableTask for Task<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,

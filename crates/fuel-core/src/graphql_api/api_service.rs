@@ -193,7 +193,6 @@ impl RunnableService for GraphqlService {
     }
 }
 
-#[async_trait::async_trait]
 impl RunnableTask for Task {
     async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
         match self.server.as_mut().await {
