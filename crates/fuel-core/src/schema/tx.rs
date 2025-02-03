@@ -1,4 +1,7 @@
-use super::scalars::U64;
+use super::scalars::{
+    U32,
+    U64,
+};
 use crate::{
     fuel_core_graphql_api::{
         api_service::{
@@ -293,6 +296,9 @@ impl TxMutation {
         // for read-only calls.
         utxo_validation: Option<bool>,
         gas_price: Option<U64>,
+        // This can be used to run the dry-run on top of a past block.
+        // Requires `--debug` flag to be enabled.
+        block_height: Option<U32>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let consensus_params = ctx
@@ -317,7 +323,7 @@ impl TxMutation {
         let tx_statuses = block_producer
             .dry_run_txs(
                 transactions,
-                None, // TODO(#1749): Pass parameter from API
+                block_height.map(|x| x.into()),
                 None, // TODO(#1749): Pass parameter from API
                 utxo_validation,
                 gas_price.map(|x| x.into()),
