@@ -19,11 +19,11 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
+use std::future::Future;
 use tokio_stream::StreamExt;
 
-#[async_trait::async_trait]
 pub trait L2BlockSource: Send + Sync {
-    async fn get_l2_block(&mut self) -> GasPriceResult<BlockInfo>;
+    fn get_l2_block(&mut self) -> impl Future<Output = GasPriceResult<BlockInfo>> + Send;
 }
 
 pub struct FuelL2BlockSource<Settings> {
@@ -46,7 +46,6 @@ impl<Settings> FuelL2BlockSource<Settings> {
     }
 }
 
-#[async_trait::async_trait]
 impl<Settings> L2BlockSource for FuelL2BlockSource<Settings>
 where
     Settings: GasPriceSettingsProvider + Send + Sync,

@@ -61,13 +61,15 @@ async fn test_new_service() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     importer.expect_execute_and_commit().returning(move |h| {
         tx.try_send(**h.entity.header().height()).unwrap();
-        Ok(())
+        Box::pin(async { Ok(()) })
     });
     let mut consensus = MockConsensusPort::default();
     consensus
         .expect_check_sealed_header()
         .returning(|_| Ok(true));
-    consensus.expect_await_da_height().returning(|_| Ok(()));
+    consensus
+        .expect_await_da_height()
+        .returning(|_| Box::pin(async { Ok(()) }));
     let params = Config {
         block_stream_buffer_size: 10,
         header_batch_size: 10,

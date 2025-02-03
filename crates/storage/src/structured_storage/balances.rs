@@ -22,6 +22,7 @@ mod smt {
         },
         Mappable,
     };
+    use alloc::borrow::Cow;
 
     /// The key convertor used to convert the key from the `ContractsAssets` table
     /// to the key of the `ContractsAssetsMerkleMetadata` table.
@@ -31,8 +32,8 @@ mod smt {
         type InputKey = <ContractsAssets as Mappable>::Key;
         type OutputKey = <ContractsAssetsMerkleMetadata as Mappable>::Key;
 
-        fn primary_key(key: &Self::InputKey) -> &Self::OutputKey {
-            key.contract_id()
+        fn primary_key(key: &Self::InputKey) -> Cow<Self::OutputKey> {
+            Cow::Borrowed(key.contract_id())
         }
     }
 

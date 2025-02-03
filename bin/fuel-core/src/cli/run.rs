@@ -95,6 +95,9 @@ use url::Url;
 #[cfg(feature = "rocksdb")]
 use fuel_core::state::historical_rocksdb::StateRewindPolicy;
 
+#[cfg(feature = "parallel-executor")]
+use std::num::NonZeroUsize;
+
 #[cfg(feature = "p2p")]
 mod p2p;
 
@@ -196,6 +199,11 @@ pub struct Command {
     #[arg(long = "native-executor-version", env)]
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
+    /// Number of cores to use for the parallel executor.
+    #[cfg(feature = "parallel-executor")]
+    #[arg(long = "executor-number-of-cores", env, default_value = "1")]
+    pub executor_number_of_cores: NonZeroUsize,
+
     /// The starting execution gas price for the network
     #[cfg_attr(
         feature = "production",
@@ -268,6 +276,11 @@ pub struct Command {
     /// The interval at which the `DaSourceService` polls for new data
     #[arg(long = "da-poll-interval", env)]
     pub da_poll_interval: Option<humantime::Duration>,
+
+    /// The L2 height the Gas Price Service will assume is already recorded on DA
+    /// i.e. If you want the Gas Price Service to look for the costs of block 1000, set to 999
+    #[arg(long = "da-starting-recorded-height", env)]
+    da_starting_recorded_height: Option<u32>,
 
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
@@ -367,6 +380,8 @@ impl Command {
             debug,
             utxo_validation,
             native_executor_version,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores,
             starting_gas_price,
             gas_price_change_percent,
             min_gas_price,
@@ -377,6 +392,7 @@ impl Command {
             da_gas_price_d_component,
             da_committer_url,
             da_poll_interval,
+            da_starting_recorded_height: starting_recorded_height,
             consensus_key,
             #[cfg(feature = "aws-kms")]
             consensus_aws_kms,
@@ -556,6 +572,8 @@ impl Command {
             disabled_metrics.is_enabled(Module::Importer),
         );
 
+        let gas_price_metrics = disabled_metrics.is_enabled(Module::GasPrice);
+
         let da_compression = match da_compression {
             Some(retention) => {
                 DaCompressionConfig::Enabled(fuel_core_compression::Config {
@@ -656,6 +674,8 @@ impl Command {
             native_executor_version,
             continue_on_error,
             utxo_validation,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores,
             block_production: trigger,
             predefined_blocks_path,
             vm: VMConfig {
@@ -698,11 +718,13 @@ impl Command {
             time_until_synced: time_until_synced.into(),
             memory_pool_size,
             da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
+            starting_recorded_height,
             min_da_gas_price,
             max_da_gas_price,
             max_da_gas_price_change_percent: gas_price_change_percent,
             da_gas_price_p_component,
             da_gas_price_d_component,
+            gas_price_metrics,
             activity_normal_range_size: 100,
             activity_capped_range_size: 0,
             activity_decrease_range_size: 0,

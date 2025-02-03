@@ -62,8 +62,8 @@ where
         self.shared_algo.clone()
     }
 
-    async fn update(&mut self, new_algorithm: AlgorithmV0) {
-        self.shared_algo.update(new_algorithm).await;
+    fn update(&mut self, new_algorithm: AlgorithmV0) {
+        self.shared_algo.update(new_algorithm);
     }
 
     fn validate_block_gas_capacity(
@@ -74,7 +74,7 @@ where
             .ok_or_else(|| anyhow!("Block gas capacity must be non-zero"))
     }
 
-    async fn set_metadata(&mut self) -> anyhow::Result<()> {
+    fn set_metadata(&mut self) -> anyhow::Result<()> {
         let metadata: UpdaterMetadata = self.algorithm_updater.clone().into();
         self.metadata_storage
             .set_metadata(&metadata)
@@ -92,7 +92,7 @@ where
         self.algorithm_updater
             .update_l2_block_data(height, gas_used, capacity)?;
 
-        self.set_metadata().await?;
+        self.set_metadata()?;
         Ok(())
     }
 
@@ -102,7 +102,7 @@ where
     ) -> anyhow::Result<()> {
         match l2_block {
             BlockInfo::GenesisBlock => {
-                self.set_metadata().await?;
+                self.set_metadata()?;
             }
             BlockInfo::Block {
                 height,
@@ -115,7 +115,7 @@ where
             }
         }
 
-        self.update(self.algorithm_updater.algorithm()).await;
+        self.update(self.algorithm_updater.algorithm());
         Ok(())
     }
 }
@@ -203,7 +203,6 @@ mod tests {
         l2_block: mpsc::Receiver<BlockInfo>,
     }
 
-    #[async_trait::async_trait]
     impl L2BlockSource for FakeL2BlockSource {
         async fn get_l2_block(&mut self) -> GasPriceResult<BlockInfo> {
             let block = self.l2_block.recv().await.unwrap();
