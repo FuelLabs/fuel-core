@@ -100,7 +100,8 @@ async fn current_fuel_block_height_header_is_present_on_failed_request() {
 
 #[tokio::test]
 async fn current_fuel_block_height_header_is_present_on_successful_request() {
-    // TODO: Figure out a way to get the current fuel block height from FuelClient queries
+    // TODO: https://github.com/FuelLabs/fuel-core/issues/2605 
+    // Figure out a way to get the current fuel block height from FuelClient queries
     let query = r#"{ "query": "{ contract(id:\"0x7e2becd64cd598da59b4d1064b711661898656c6b1f4918a787156b8965dc83c\") { id bytecode } }", "extensions": {"required_fuel_block_height": 0} }"#;
 
     // setup config
