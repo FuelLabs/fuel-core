@@ -314,7 +314,7 @@ impl FuelP2PService {
                 reserved_peers_updates,
                 reserved_peers,
                 connection_state_writer,
-                config.max_discovery_peers_connected as usize,
+                `usize::try_from(config.max_discovery_peers_connected`)?,
             ),
         })
     }
