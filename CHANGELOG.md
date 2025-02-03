@@ -8,14 +8,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2635](https://github.com/FuelLabs/fuel-core/pull/2635): Add metrics to gas price service
+- [2553](https://github.com/FuelLabs/fuel-core/pull/2553): Scaffold global merkle root storage crate.
+- [2598](https://github.com/FuelLabs/fuel-core/pull/2598): Add initial test suite for global merkle root storage updates.
+
 
 ### Changed
 - [2387](https://github.com/FuelLabs/fuel-core/pull/2387): Update description `tx-max-depth` flag.
 - [2630](https://github.com/FuelLabs/fuel-core/pull/2630): Removed some noisy `tracing::info!` logs
+- [2643](https://github.com/FuelLabs/fuel-core/pull/2643): Before this fix when tip is zero, transactions that use 30M have the same priority as transactions with 1M gas. Now they are correctly ordered.
 - [2653](https://github.com/FuelLabs/fuel-core/pull/2653): Added cleaner error for wasm-executor upon failed deserialization.
 
-### Added
-- [2553](https://github.com/FuelLabs/fuel-core/pull/2553): Scaffold global merkle root storage crate.
 
 ### Fixed
 - [2632](https://github.com/FuelLabs/fuel-core/pull/2632): Improved performance of certain async trait impls in the gas price service.
