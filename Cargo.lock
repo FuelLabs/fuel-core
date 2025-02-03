@@ -3391,6 +3391,7 @@ dependencies = [
  "fuel-core-importer",
  "fuel-core-metrics",
  "fuel-core-p2p",
+ "fuel-core-parallel-executor",
  "fuel-core-poa",
  "fuel-core-producer",
  "fuel-core-relayer",
@@ -3792,6 +3793,16 @@ dependencies = [
  "tracing-attributes",
  "tracing-subscriber",
  "void",
+]
+
+[[package]]
+name = "fuel-core-parallel-executor"
+version = "0.41.0"
+dependencies = [
+ "fuel-core-storage",
+ "fuel-core-types 0.41.0",
+ "fuel-core-upgradable-executor",
+ "tokio",
 ]
 
 [[package]]
