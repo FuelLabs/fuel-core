@@ -95,6 +95,9 @@ use url::Url;
 #[cfg(feature = "rocksdb")]
 use fuel_core::state::historical_rocksdb::StateRewindPolicy;
 
+#[cfg(feature = "parallel-executor")]
+use std::num::NonZeroUsize;
+
 #[cfg(feature = "p2p")]
 mod p2p;
 
@@ -195,6 +198,11 @@ pub struct Command {
     /// Overrides the version of the native executor.
     #[arg(long = "native-executor-version", env)]
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
+
+    /// Number of cores to use for the parallel executor.
+    #[cfg(feature = "parallel-executor")]
+    #[arg(long = "executor-number-of-cores", env, default_value = "1")]
+    pub executor_number_of_cores: NonZeroUsize,
 
     /// The starting execution gas price for the network
     #[cfg_attr(
@@ -372,6 +380,8 @@ impl Command {
             debug,
             utxo_validation,
             native_executor_version,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores,
             starting_gas_price,
             gas_price_change_percent,
             min_gas_price,
@@ -664,6 +674,8 @@ impl Command {
             native_executor_version,
             continue_on_error,
             utxo_validation,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores,
             block_production: trigger,
             predefined_blocks_path,
             vm: VMConfig {
