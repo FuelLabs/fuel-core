@@ -19,11 +19,12 @@ use crate::{
         MessageId,
     },
 };
+use educe::Educe;
 use tai64::Tai64;
 
 /// Version-able block header type
-#[derive(Clone, Debug, derivative::Derivative)]
-#[derivative(PartialEq, Eq)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BlockHeader {
     /// V1 BlockHeader
@@ -32,8 +33,8 @@ pub enum BlockHeader {
 
 /// A fuel block header that has all the fields generated because it
 /// has been executed.
-#[derive(Clone, Debug, derivative::Derivative)]
-#[derivative(PartialEq, Eq)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockHeaderV1 {
     /// The application header.
@@ -43,7 +44,7 @@ pub struct BlockHeaderV1 {
     /// The header metadata calculated during creation.
     /// The field is private to enforce the use of the [`PartialBlockHeader::generate`] method.
     #[cfg_attr(feature = "serde", serde(skip))]
-    #[derivative(PartialEq = "ignore")]
+    #[educe(PartialEq(ignore))]
     metadata: Option<BlockHeaderMetadata>,
 }
 

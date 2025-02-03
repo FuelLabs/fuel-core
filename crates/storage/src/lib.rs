@@ -65,13 +65,13 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// Error occurring during interaction with storage
 pub enum Error {
     /// Error occurred during serialization or deserialization of the entity.
-    #[display(fmt = "error performing serialization or deserialization `{_0}`")]
+    #[display("error performing serialization or deserialization `{_0}`")]
     Codec(anyhow::Error),
     /// Error occurred during interaction with database.
-    #[display(fmt = "error occurred in the underlying datastore `{_0:?}`")]
+    #[display("error occurred in the underlying datastore `{_0:?}`")]
     DatabaseError(Box<dyn core::fmt::Debug + Send + Sync>),
     /// This error should be created with `not_found` macro.
-    #[display(fmt = "resource was not found in table `{_0}` at the: {_1}")]
+    #[display("resource was not found in table `{_0}` at the: {_1}")]
     NotFound(&'static str, &'static str),
     // TODO: Do we need this type at all?
     /// Unknown or not expected(by architecture) error.

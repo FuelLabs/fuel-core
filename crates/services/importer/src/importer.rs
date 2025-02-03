@@ -71,34 +71,34 @@ pub mod test;
 
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
-    #[display(fmt = "The commit is already in the progress: {_0}.")]
+    #[display("The commit is already in the progress: {_0}.")]
     SemaphoreError(TryAcquireError),
-    #[display(
-        fmt = "The wrong state of database during insertion of the genesis block."
-    )]
+    #[display("The wrong state of database during insertion of the genesis block.")]
     InvalidUnderlyingDatabaseGenesisState,
-    #[display(fmt = "The wrong state of storage after execution of the block.\
-        The actual root is {_1:?}, when the expected root is {_0:?}.")]
+    #[display(
+        "The wrong state of storage after execution of the block.\
+        The actual root is {_1:?}, when the expected root is {_0:?}."
+    )]
     InvalidDatabaseStateAfterExecution(Option<MerkleRoot>, Option<MerkleRoot>),
-    #[display(fmt = "Got overflow during increasing the height.")]
+    #[display("Got overflow during increasing the height.")]
     Overflow,
-    #[display(fmt = "The non-generic block can't have zero height.")]
+    #[display("The non-generic block can't have zero height.")]
     ZeroNonGenericHeight,
-    #[display(fmt = "The actual height is {_1}, when the next expected height is {_0}.")]
+    #[display("The actual height is {_1}, when the next expected height is {_0}.")]
     IncorrectBlockHeight(BlockHeight, BlockHeight),
     #[display(
-        fmt = "Got another block id after validation of the block. Expected {_0} != Actual {_1}"
+        "Got another block id after validation of the block. Expected {_0} != Actual {_1}"
     )]
     BlockIdMismatch(BlockId, BlockId),
-    #[display(fmt = "Some of the block fields are not valid: {_0}.")]
+    #[display("Some of the block fields are not valid: {_0}.")]
     FailedVerification(anyhow::Error),
-    #[display(fmt = "The execution of the block failed: {_0}.")]
+    #[display("The execution of the block failed: {_0}.")]
     FailedExecution(executor::Error),
-    #[display(fmt = "It is not possible to execute the genesis block.")]
+    #[display("It is not possible to execute the genesis block.")]
     ExecuteGenesis,
-    #[display(fmt = "The database already contains the data at the height {_0}.")]
+    #[display("The database already contains the data at the height {_0}.")]
     NotUnique(BlockHeight),
-    #[display(fmt = "The previous block processing is not finished yet.")]
+    #[display("The previous block processing is not finished yet.")]
     PreviousBlockProcessingNotFinished,
     #[from]
     StorageError(StorageError),

@@ -3520,7 +3520,7 @@ dependencies = [
  "anyhow",
  "bech32",
  "bytes",
- "derivative",
+ "educe",
  "fuel-core-chain-config",
  "fuel-core-storage",
  "fuel-core-types 0.41.4",
@@ -3546,7 +3546,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "cynic",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "eventsource-client",
  "fuel-core-types 0.41.4",
  "futures",
@@ -3609,7 +3609,7 @@ name = "fuel-core-database"
 version = "0.41.4"
 dependencies = [
  "anyhow",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.41.4",
@@ -3701,7 +3701,7 @@ name = "fuel-core-importer"
 version = "0.41.4"
 dependencies = [
  "anyhow",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",
@@ -3822,7 +3822,7 @@ version = "0.41.4"
 dependencies = [
  "anyhow",
  "async-trait",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "fuel-core-producer",
  "fuel-core-storage",
  "fuel-core-trace",
@@ -3914,7 +3914,7 @@ name = "fuel-core-storage"
 version = "0.41.4"
 dependencies = [
  "anyhow",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "enum-iterator",
  "fuel-core-storage",
  "fuel-core-types 0.41.4",
@@ -4018,7 +4018,7 @@ version = "0.41.4"
 dependencies = [
  "anyhow",
  "async-trait",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
@@ -4062,8 +4062,8 @@ dependencies = [
  "aws-config",
  "aws-sdk-kms",
  "bs58",
- "derivative",
  "derive_more 0.99.18",
+ "educe",
  "fuel-vm 0.59.1",
  "k256",
  "rand",
@@ -4079,7 +4079,7 @@ name = "fuel-core-upgradable-executor"
 version = "0.41.4"
 dependencies = [
  "anyhow",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "fuel-core-executor",
  "fuel-core-storage",
  "fuel-core-types 0.41.4",
