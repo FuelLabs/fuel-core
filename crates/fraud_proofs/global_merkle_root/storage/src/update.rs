@@ -187,13 +187,21 @@ where
         let bytecode_witness_index = tx.bytecode_witness_index();
         let witnesses = tx.witnesses();
         let bytecode = witnesses[usize::from(*bytecode_witness_index)].as_vec();
-        let contract_id = tx
-            .metadata()
-            .as_ref()
-            .map(|metadata| metadata.body.contract_id)
-            .ok_or(anyhow::anyhow!(
-                "Create transaction does not have a contract ID in its metadata"
-            ))?;
+        // The Fuel specs mandate that each create transaction has exactly one output of type `Output::ContractCreated`.
+        // See https://docs.fuel.network/docs/specs/tx-format/transaction/#transactioncreate
+        let Some(Output::ContractCreated { contract_id, .. }) = tx
+            .outputs()
+            .iter()
+            .filter(|output| match output {
+                Output::ContractCreated { .. } => true,
+                _ => false,
+            })
+            .take(1)
+            .collect::<Vec<&Output>>()
+            .first()
+        else {
+            anyhow::bail!("Create transaction does not have contract created output")
+        };
 
         self.storage
             .storage_as_mut::<ContractsRawCode>()
