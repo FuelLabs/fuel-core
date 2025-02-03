@@ -83,3 +83,4 @@ production = [
   "aws-kms",
 ]
 fault-proving = ["fuel-core-compression/fault-proving"]
+parallel-executor = ["fuel-core/parallel-executor"]
