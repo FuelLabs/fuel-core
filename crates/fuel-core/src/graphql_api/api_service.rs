@@ -367,9 +367,7 @@ async fn graphql_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Json<Response> {
-    let response = schema.execute(req.0).await;
-
-    response.into()
+    schema.execute(req.0).await.into()
 }
 
 async fn graphql_subscription_handler(
