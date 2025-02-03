@@ -193,9 +193,7 @@ where
             .outputs()
             .iter()
             .filter(|output| matches!(output, Output::ContractCreated { .. }))
-            .take(1)
-            .collect::<Vec<&Output>>()
-            .first()
+            .next()
         else {
             anyhow::bail!("Create transaction does not have contract created output")
         };
