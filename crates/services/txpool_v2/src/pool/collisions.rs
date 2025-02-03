@@ -47,7 +47,10 @@ where
                 tracing::info!(
                     "Transaction {} collided with {} because of {:?}",
                     tx.id(),
-                    storage.get(collision).map(|d| d.transaction.id().to_string()).unwrap_or(String::from("Error")),
+                    storage
+                        .get(collision)
+                        .map(|d| d.transaction.id().to_string())
+                        .unwrap_or(String::from("Error")),
                     reason
                 );
                 if let Some(reason) = reason.first() {
