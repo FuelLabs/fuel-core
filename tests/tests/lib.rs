@@ -65,6 +65,7 @@ mod sync;
 #[cfg(feature = "only-p2p")]
 mod tx_gossip;
 
+#[cfg(feature = "only-p2p")]
 mod peering;
 
 #[cfg(feature = "aws-kms")]
