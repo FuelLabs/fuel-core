@@ -374,7 +374,6 @@ async fn graphql_subscription_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
-    let request = req.0;
     let stream = schema
         .execute_stream(request)
         .map(|r| Event::default().json_data(r));
