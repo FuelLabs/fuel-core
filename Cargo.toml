@@ -23,6 +23,7 @@ members = [
   "crates/services/gas_price_service",
   "crates/services/importer",
   "crates/services/p2p",
+  "crates/services/parallel-executor",
   "crates/services/producer",
   "crates/services/relayer",
   "crates/services/shared-sequencer",
@@ -81,6 +82,7 @@ fuel-core-executor = { version = "0.41.4", path = "./crates/services/executor", 
 fuel-core-importer = { version = "0.41.4", path = "./crates/services/importer" }
 fuel-core-gas-price-service = { version = "0.41.4", path = "crates/services/gas_price_service" }
 fuel-core-p2p = { version = "0.41.4", path = "./crates/services/p2p" }
+fuel-core-parallel-executor = { version = "0.41.4", path = "./crates/services/parallel-executor" }
 fuel-core-producer = { version = "0.41.4", path = "./crates/services/producer" }
 fuel-core-relayer = { version = "0.41.4", path = "./crates/services/relayer" }
 fuel-core-sync = { version = "0.41.4", path = "./crates/services/sync" }

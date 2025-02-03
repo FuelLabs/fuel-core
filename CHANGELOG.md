@@ -15,11 +15,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2643](https://github.com/FuelLabs/fuel-core/pull/2643): Before this fix when tip is zero, transactions that use 30M have the same priority as transactions with 1M gas. Now they are correctly ordered.
 
 ### Added
+- [2617](https://github.com/FuelLabs/fuel-core/pull/2617): Add integration skeleton of parallel-executor.
 - [2553](https://github.com/FuelLabs/fuel-core/pull/2553): Scaffold global merkle root storage crate.
 - [2598](https://github.com/FuelLabs/fuel-core/pull/2598): Add initial test suite for global merkle root storage updates.
 
 ### Fixed
 - [2632](https://github.com/FuelLabs/fuel-core/pull/2632): Improved performance of certain async trait impls in the gas price service.
+- [2662](https://github.com/FuelLabs/fuel-core/pull/2662): Fix balances query endpoint cost without indexation and behavior coins to spend with one parameter at zero.
 
 ## [Version 0.41.4]
 

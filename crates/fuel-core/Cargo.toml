@@ -32,6 +32,7 @@ fuel-core-gas-price-service = { workspace = true }
 fuel-core-importer = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-p2p = { workspace = true, optional = true }
+fuel-core-parallel-executor = { workspace = true, optional = true }
 fuel-core-poa = { workspace = true }
 fuel-core-producer = { workspace = true }
 fuel-core-relayer = { workspace = true, optional = true }
@@ -118,3 +119,4 @@ test-helpers = [
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
 wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
 fault-proving = ["fuel-core-compression/fault-proving"]
+parallel-executor = ["fuel-core-parallel-executor"]
