@@ -358,15 +358,10 @@ mod tests {
             Bytes32,
             Contract,
             ContractId,
-            Create,
-            Finalizable,
-            TransactionBuilder,
             TxId,
         },
-        fuel_vm::{
-            CallFrame,
-            Salt,
-        },
+        fuel_vm::CallFrame,
+        test_helpers::create_contract,
     };
 
     use rand::{
@@ -588,13 +583,8 @@ mod tests {
         .collect::<Vec<u8>>();
 
         let mut rng = StdRng::seed_from_u64(1337);
-        let create_contract_tx = create_contract(&contract_bytecode, &mut rng);
-        let contract_id = create_contract_tx
-            .metadata()
-            .as_ref()
-            .unwrap()
-            .body
-            .contract_id;
+        let (create_contract_tx, contract_id) =
+            create_contract(&contract_bytecode, &mut rng);
 
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
@@ -617,21 +607,6 @@ mod tests {
             .into_owned();
         // Then
         assert_eq!(stored_contract, Contract::from(contract_bytecode));
-    }
-
-    // TODO: https://github.com/FuelLabs/fuel-core/issues/2654
-    // This code is copied from the executor. We should refactor it to be shared.
-    fn create_contract(bytecode: &[u8], rng: &mut impl rand::RngCore) -> Create {
-        let salt: Salt = rng.gen();
-        let contract = Contract::from(bytecode);
-        let root = contract.root();
-        let state_root = Contract::default_state_root();
-        let contract_id = contract.id(&salt, &root, &state_root);
-
-        TransactionBuilder::create(bytecode.into(), salt, Default::default())
-            .add_fee_input()
-            .add_output(Output::contract_created(contract_id, state_root))
-            .finalize()
     }
 
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
