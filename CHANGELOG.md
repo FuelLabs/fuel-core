@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 - [2673](https://github.com/FuelLabs/fuel-core/pull/2673): Change read behavior on the InMemoryTransaction to use offset and allow not equal buf size (fix CCP and LDC broken from https://github.com/FuelLabs/fuel-vm/pull/847)
 
+### Added
+- [2666](https://github.com/FuelLabs/fuel-core/pull/2666) Added `--required-fuel-block-height-tolerance` CLI arg (default: `10`). Requests with `required_fuel_block_height` set will wait if within tolerance of `current_fuel_block_height` instead of failing.
+
 ## [Version 0.41.5]
 
 ### Changed
