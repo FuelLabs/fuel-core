@@ -123,7 +123,6 @@ impl From<Result<bool, anyhow::Error>> for TaskNextAction {
 
 /// The trait is implemented by the service task and contains a single iteration of the infinity
 /// loop.
-#[async_trait::async_trait]
 pub trait RunnableTask: Send {
     /// This function should contain the main business logic of the service task. It will run until
     /// the service either returns false, panics or a stop signal is received.
@@ -134,10 +133,13 @@ pub trait RunnableTask: Send {
     /// `State::Started`. So first, the `run` method should return a value, and after, the service
     /// will stop. If the service should react to the state change earlier, it should handle it in
     /// the `run` loop on its own. See [`StateWatcher::while_started`].
-    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction;
+    fn run(
+        &mut self,
+        watcher: &mut StateWatcher,
+    ) -> impl core::future::Future<Output = TaskNextAction> + Send;
 
     /// Gracefully shutdowns the task after the end of the execution cycle.
-    async fn shutdown(self) -> anyhow::Result<()>;
+    fn shutdown(self) -> impl core::future::Future<Output = anyhow::Result<()>> + Send;
 }
 
 /// The service runner manages the lifecycle, execution and error handling of a `RunnableService`.
@@ -458,7 +460,6 @@ fn panic_to_string(e: Box<dyn core::any::Any + Send>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures::future::BoxFuture;
 
     mockall::mock! {
         Service {}
@@ -480,16 +481,11 @@ mod tests {
     mockall::mock! {
         Task {}
 
-        #[async_trait::async_trait]
         impl RunnableTask for Task {
-            fn run<'_self, '_state, 'a>(
-                &'_self mut self,
-                state: &'_state mut StateWatcher
-            ) -> BoxFuture<'a, TaskNextAction>
-            where
-                '_self: 'a,
-                '_state: 'a,
-                Self: Sync + 'a;
+            fn run(
+                &mut self,
+                state: &mut StateWatcher
+            ) -> impl core::future::Future<Output = TaskNextAction> + Send;
 
             async fn shutdown(self) -> anyhow::Result<()>;
         }

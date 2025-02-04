@@ -669,7 +669,6 @@ where
     Ok(())
 }
 
-#[async_trait::async_trait]
 impl<TxPool, D> RunnableTask for Task<TxPool, D>
 where
     TxPool: ports::worker::TxPool,
