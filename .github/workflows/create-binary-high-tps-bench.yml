@@ -92,7 +92,7 @@ jobs:
           crate: cross
           cache-key: '${{ matrix.job.target }}'
 
-      - name: Build fuel-core and fuel-core-keygen
+      - name: Build bench binary
         run: |
           cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core-benches --features  parallel-executor --bin high_tps_public_bench
 
@@ -127,10 +127,11 @@ jobs:
           echo "version is: $FUEL_CORE_VERSION"
           # setup artifact filename
           ARTIFACT="fuel-core-$FUEL_CORE_VERSION-${{ env.TARGET }}"
-          ZIP_FILE_NAME="$ARTIFACT.tar.gz"
+          ZIP_FILE_NAME="high_tps_bench.tar.gz"
           echo "ZIP_FILE_NAME=$ZIP_FILE_NAME" >> $GITHUB_ENV
           # create zip file
           mkdir -pv "$ARTIFACT"
+          cp -r "./bin/fuel-core/chainspec/local-testnet" "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/high_tps_public_bench" "$ARTIFACT"
           tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
 
