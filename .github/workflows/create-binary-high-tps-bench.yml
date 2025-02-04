@@ -121,7 +121,7 @@ jobs:
           TARGET: ${{ matrix.job.target }}
         run: |
           # setup artifact filename
-          ARTIFACT="ben-high-tps-${{ matrix.job.target }}"
+          ARTIFACT="high-tps-bench-${{ matrix.job.target }}"
           ZIP_FILE_NAME="high_tps_bench-${{ matrix.job.target }}-${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}.tar.gz"
           echo "ZIP_FILE_NAME=$ZIP_FILE_NAME" >> $GITHUB_ENV
           # create zip file

@@ -52,12 +52,13 @@ use rand::{
     SeedableRng,
 };
 use test_helpers::builder::{
-    local_chain_config,
     TestContext,
     TestSetupBuilder,
 };
 fn checked_parameters() -> CheckPredicateParams {
-    local_chain_config().consensus_parameters.into()
+    let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
+    let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
+    chain_conf.consensus_parameters.into()
 }
 use clap::Parser;
 
