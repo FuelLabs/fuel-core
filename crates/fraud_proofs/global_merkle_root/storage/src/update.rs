@@ -8,6 +8,7 @@ use crate::{
     Messages,
     ProcessedTransactions,
     StateTransitionBytecodeVersions,
+    UploadedBytecodes,
 };
 use alloc::{
     borrow::Cow,
@@ -19,6 +20,7 @@ use fuel_core_storage::{
     kv_store::KeyValueInspect,
     transactional::StorageTransaction,
     StorageAsMut,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -35,6 +37,7 @@ use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx::{
         field::{
+            BytecodeRoot,
             BytecodeWitnessIndex,
             ChargeableBody,
             InputContract,
@@ -72,12 +75,14 @@ use fuel_core_types::{
         Upgrade,
         UpgradeMetadata,
         UpgradePurpose,
+        Upload,
         UtxoId,
     },
     fuel_types::{
         BlockHeight,
         ChainId,
     },
+    fuel_vm::UploadedBytecode,
     services::executor::{
         Error as ExecutorError,
         TransactionValidityError,
@@ -167,6 +172,14 @@ where
         if let Transaction::Upgrade(tx) = tx {
             self.process_upgrade_transaction(tx)?;
         }
+        // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
+        // TODO(#2584): Insert state transition bytecode and consensus parameter updates.
+        // TODO(#2585): Insert uplodade bytecodes.
+        if let Transaction::Upload(tx) = tx {
+            self.process_upload_transaction(tx)?;
+        }
+        // TODO(#2586): Insert blobs.
+        // TODO(#2587): Insert raw code for created contracts.
 
         self.store_processed_transaction(tx_id)?;
 
@@ -403,6 +416,61 @@ where
         self.storage
             .storage::<Blobs>()
             .insert(blob_id, blob.as_ref())?;
+
+        Ok(())
+    }
+
+    fn process_upload_transaction(&mut self, tx: &Upload) -> anyhow::Result<()> {
+        let bytecode_root = *tx.bytecode_root();
+        let uploaded_bytecode = self
+            .storage
+            .storage_as_ref::<UploadedBytecodes>()
+            .get(&bytecode_root)?
+            .map(Cow::into_owned)
+            .unwrap_or_else(|| UploadedBytecode::Uncompleted {
+                bytecode: Vec::new(),
+                uploaded_subsections_number: 0,
+            });
+
+        let UploadedBytecode::Uncompleted {
+            mut bytecode,
+            uploaded_subsections_number,
+        } = uploaded_bytecode
+        else {
+            anyhow::bail!("expected uncompleted bytecode")
+        };
+
+        let expected_subsection_index = uploaded_subsections_number;
+        if expected_subsection_index != tx.body().subsection_index {
+            anyhow::bail!("expected subsection index {expected_subsection_index}");
+        };
+
+        let witness_index = usize::from(*tx.bytecode_witness_index());
+        let new_bytecode = tx
+            .witnesses()
+            .get(witness_index)
+            .ok_or_else(|| anyhow!("expected witness with bytecode"))?;
+
+        bytecode.extend_from_slice(new_bytecode.as_ref());
+
+        let new_uploaded_subsections_number =
+            uploaded_subsections_number.checked_add(1).ok_or_else(|| {
+                anyhow!("overflow when incrementing uploaded subsection number")
+            })?;
+
+        let new_uploaded_bytecode =
+            if new_uploaded_subsections_number == tx.body().subsections_number {
+                UploadedBytecode::Completed(bytecode)
+            } else {
+                UploadedBytecode::Uncompleted {
+                    bytecode,
+                    uploaded_subsections_number: new_uploaded_subsections_number,
+                }
+            };
+
+        self.storage
+            .storage_as_mut::<UploadedBytecodes>()
+            .insert(&bytecode_root, &new_uploaded_bytecode)?;
 
         Ok(())
     }
