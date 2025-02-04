@@ -406,7 +406,6 @@ where
     }
 }
 
-#[async_trait]
 impl<L2, DA, AtomicStorage> RunnableTask for GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     L2: L2BlockSource,
