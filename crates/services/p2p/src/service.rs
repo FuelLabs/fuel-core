@@ -877,7 +877,6 @@ where
     B: Broadcast + 'static,
     T: TxPool + 'static,
 {
-    #[allow(clippy::arithmetic_side_effects)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
@@ -1019,8 +1018,14 @@ where
                         tracing::error!("Failed to perform peer heartbeat reputation checks: {:?}", e);
                     }
                 }
-                self.next_check_time += self.heartbeat_check_interval;
-                TaskNextAction::Continue
+
+                if let Some(next_check_time) = self.next_check_time.checked_add(self.heartbeat_check_interval) {
+                    self.next_check_time = next_check_time;
+                    TaskNextAction::Continue
+                } else {
+                    tracing::error!("Next check time overflowed");
+                    TaskNextAction::Stop
+                }
             }
         }
     }
