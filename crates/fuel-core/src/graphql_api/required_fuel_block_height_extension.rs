@@ -27,6 +27,10 @@ const REQUIRED_FUEL_BLOCK_HEIGHT: &str = "required_fuel_block_height";
 const CURRENT_FUEL_BLOCK_HEIGHT: &str = "current_fuel_block_height";
 const FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED: &str =
     "fuel_block_height_precondition_failed";
+// Hardcoded constant for the sleep duration while we wait for the current block height to be reached.
+// The value has been chosen to be 1 second because we do not expect for blocks to be produced
+// at a faster interval.
+pub const SLEEP_DURATION: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// The extension that implements the logic for checking whether
 /// the precondition that REQUIRED_FUEL_BLOCK_HEADER must
@@ -35,29 +39,35 @@ const FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED: &str =
 /// the request data by the graphql handler as a value of type
 /// `RequiredHeight`.
 #[derive(Debug, derive_more::Display, derive_more::From)]
-pub(crate) struct RequiredFuelBlockHeightExtension;
+pub(crate) struct RequiredFuelBlockHeightExtension {
+    tolerance_threshold: u32,
+}
 
 impl RequiredFuelBlockHeightExtension {
-    pub fn new() -> Self {
-        Self
+    pub fn new(tolerance_threshold: u32) -> Self {
+        Self {
+            tolerance_threshold,
+        }
     }
 }
 
 pub(crate) struct RequiredFuelBlockHeightInner {
     required_height: OnceLock<BlockHeight>,
+    tolerance_threshold: u32,
 }
 
 impl RequiredFuelBlockHeightInner {
-    pub fn new() -> Self {
+    pub fn new(tolerance_threshold: u32) -> Self {
         Self {
             required_height: OnceLock::new(),
+            tolerance_threshold,
         }
     }
 }
 
 impl ExtensionFactory for RequiredFuelBlockHeightExtension {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(RequiredFuelBlockHeightInner::new())
+        Arc::new(RequiredFuelBlockHeightInner::new(self.tolerance_threshold))
     }
 }
 
@@ -101,37 +111,51 @@ impl Extension for RequiredFuelBlockHeightInner {
         let current_block_height = view.latest_block_height();
 
         if let Some(required_block_height) = self.required_height.get() {
-            if let Ok(current_block_height) = current_block_height {
-                if *required_block_height > current_block_height {
+            if let Ok(mut current_block_height) = current_block_height {
+                // Check first that the node is not out of sync
+                let minimum_block_height: BlockHeight = required_block_height
+                    .saturating_sub(self.tolerance_threshold)
+                    .into();
+                if current_block_height < minimum_block_height {
                     let (line, column) = (line!(), column!());
-                    let mut response = Response::from_errors(vec![ServerError::new(
-                        format!(
-                            "The required fuel block height is higher than the current block height. \
-                            Required: {}, Current: {}",
-                            // required_block_height: &BlockHeight, dereference twice to get the 
-                            // corresponding value as u32. This is necessary because the Display 
-                            // implementation for BlockHeight displays values in hexadecimal format.
-                            **required_block_height,
-                            // current_fuel_block_height: BlockHeight, dereference once to get the 
-                            // corresponding value as u32.
-                            *current_block_height
-                        ),
-                        Some(Pos {
-                            line: line as usize,
-                            column: column as usize,
-                        }),
-                    )]);
-
-                    response.extensions.insert(
-                        CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
-                        Value::Number((*current_block_height).into()),
+                    return error_response(
+                        required_block_height,
+                        &current_block_height,
+                        line,
+                        column,
                     );
-                    response.extensions.insert(
-                        FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED.to_string(),
-                        Value::Boolean(true),
-                    );
+                }
 
-                    return response
+                // If the node is lagging behind w.r.t. the required fuel block height,
+                // but within an acceptable interval, wait until the current block height
+                // matches the required fuel block height.
+                while current_block_height < *required_block_height {
+                    tokio::time::sleep(SLEEP_DURATION).await;
+                    match view.latest_block_height() {
+                        Err(e) => {
+                            tracing::error!(
+                                "Failed to wait for the current block height: {}",
+                                e
+                            );
+                            let (line, column) = (line!(), column!());
+                            let response = Response::from_errors(vec![ServerError::new(
+                            format!(
+                                "Failed to fetch the current block height, the last observed value was {}, ", 
+                                // required_block_height: BlockHeight, dereference once to get the 
+                                // corresponding value as u32.
+                                *current_block_height
+                            ),
+                            Some(Pos {
+                                line: line as usize,
+                                column: column as usize,
+                            }),
+                        )]);
+                            return response
+                        }
+                        Ok(block_height) => {
+                            current_block_height = block_height;
+                        }
+                    }
                 }
             }
         }
@@ -164,4 +188,40 @@ impl Extension for RequiredFuelBlockHeightInner {
 
         response
     }
+}
+
+fn error_response(
+    required_block_height: &BlockHeight,
+    current_block_height: &BlockHeight,
+    line: u32,
+    column: u32,
+) -> Response {
+    let mut response = Response::from_errors(vec![ServerError::new(
+        format!(
+            "The required fuel block height is higher than the current block height. \
+            Required: {}, Current: {}",
+            // required_block_height: &BlockHeight, dereference twice to get the
+            // corresponding value as u32. This is necessary because the Display
+            // implementation for BlockHeight displays values in hexadecimal format.
+            **required_block_height,
+            // current_fuel_block_height: &BlockHeight, dereference twice to get the
+            // corresponding value as u32.
+            **current_block_height
+        ),
+        Some(Pos {
+            line: line as usize,
+            column: column as usize,
+        }),
+    )]);
+
+    response.extensions.insert(
+        CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
+        Value::Number((**current_block_height).into()),
+    );
+    response.extensions.insert(
+        FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED.to_string(),
+        Value::Boolean(true),
+    );
+
+    response
 }

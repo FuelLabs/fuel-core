@@ -71,7 +71,7 @@ pub struct GraphQLArgs {
         default_value = "10",
         env
     )]
-    pub required_fuel_block_height_tolerance: usize,
+    pub required_fuel_block_height_tolerance: u32,
 
     #[clap(flatten)]
     pub costs: QueryCosts,

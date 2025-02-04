@@ -261,6 +261,8 @@ where
     let max_queries_resolver_recursive_depth =
         config.config.max_queries_resolver_recursive_depth;
     let number_of_threads = config.config.number_of_threads;
+    let required_fuel_block_height_tolerance =
+        config.config.required_fuel_block_height_tolerance;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)
@@ -286,7 +288,7 @@ where
         .extension(ViewExtension::new())
         // `RequiredFuelBlockHeightExtension` uses the view set by the ViewExtension.
         // Do not reorder this line before adding the `ViewExtension`.
-        .extension(RequiredFuelBlockHeightExtension::new())
+        .extension(RequiredFuelBlockHeightExtension::new(required_fuel_block_height_tolerance))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";

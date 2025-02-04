@@ -48,7 +48,7 @@ pub struct ServiceConfig {
     pub request_body_bytes_limit: usize,
     /// Number of blocks that the node can be lagging behind the required fuel block height
     /// before it will be considered out of sync.
-    pub required_fuel_block_height_tolerance: usize,
+    pub required_fuel_block_height_tolerance: u32,
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
     pub api_request_timeout: Duration,
