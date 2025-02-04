@@ -93,7 +93,6 @@ impl ShutdownListener {
     }
 }
 
-#[async_trait::async_trait]
 impl NotifyCancel for ShutdownListener {
     async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
         self.token.cancelled().await;

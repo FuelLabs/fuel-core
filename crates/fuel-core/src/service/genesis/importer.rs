@@ -73,9 +73,9 @@ mod on_chain;
 
 const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 
-pub struct SnapshotImporter {
+pub struct SnapshotImporter<N = StateWatcher> {
     db: CombinedGenesisDatabase,
-    task_manager: TaskManager<()>,
+    task_manager: TaskManager<(), N>,
     genesis_block: Block,
     snapshot_reader: SnapshotReader,
     multi_progress_reporter: MultipleProgressReporter,
