@@ -361,7 +361,6 @@ where
     }
 
     fn insert_transactions(&self, transactions: Vec<Arc<Transaction>>) {
-        let start_time = std::time::Instant::now();
         for transaction in transactions {
             let Ok(reservation) = self.transaction_verifier_process.reserve() else {
                 tracing::error!("Failed to insert transactions: Out of capacity");
@@ -372,10 +371,6 @@ where
             self.transaction_verifier_process
                 .spawn_reserved(reservation, op);
         }
-        tracing::info!(
-            "Spawned insertions transactions in {:?} ms.",
-            start_time.elapsed()
-        );
     }
 
     fn insert_transaction(
@@ -401,7 +396,6 @@ where
         let utxo_validation = self.utxo_validation;
 
         let insert_transaction_thread_pool_op = move || {
-            let start_total_time = std::time::Instant::now();
             let current_height = *current_height.read();
 
             // TODO: This should be removed if the checked transactions
@@ -409,14 +403,12 @@ where
             //  (see https://github.com/FuelLabs/fuel-vm/issues/831)
             let transaction = Arc::unwrap_or_clone(transaction);
 
-            let start_time = tokio::time::Instant::now();
             let result = verification.perform_all_verifications(
                 transaction,
                 &pool,
                 current_height,
                 utxo_validation,
             );
-            tracing::info!("Transaction (id: {}) took {} micros seconds to verify", &tx_id, start_time.elapsed().as_micros());
 
             if metrics {
                 txpool_metrics()
@@ -441,17 +433,13 @@ where
             let tx = Arc::new(checked_tx);
 
             let result = {
-                let start_time = tokio::time::Instant::now();
                 let mut pool = pool.write();
-                tracing::info!("Transaction (id: {}) took {} micros seconds to acquire write lock", &tx_id, start_time.elapsed().as_micros());
                 let result = verification.persistent_storage_provider.latest_view();
 
-                let start_time = tokio::time::Instant::now();
                 let res = match result {
                     Ok(view) => pool.insert(tx, &view),
                     Err(err) => Err(Error::Database(format!("{:?}", err))),
                 };
-                tracing::info!("Transaction (id: {}) took {} micros seconds to insert into the pool", &tx_id, start_time.elapsed().as_micros());
                 res
             };
 
@@ -494,7 +482,6 @@ where
                     Error::Removed(RemovedReason::LessWorth(tx.id())),
                 );
             }
-            tracing::info!("Transaction (id: {}) took {} micros seconds to process insertion result", &tx_id, start_total_time.elapsed().as_micros());
         };
         move || {
             if metrics {

@@ -1,8 +1,15 @@
+// Define arguments
+
 use fuel_core::{
     service::config::Trigger,
     upgradable_executor::native_executor::ports::TransactionExt,
 };
-use fuel_core_chain_config::CoinConfig;
+use fuel_core_chain_config::{
+    ChainConfig,
+    CoinConfig,
+    SnapshotMetadata,
+};
+use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -52,8 +59,15 @@ use test_helpers::builder::{
 fn checked_parameters() -> CheckPredicateParams {
     local_chain_config().consensus_parameters.into()
 }
+use clap::Parser;
 
-fuel_core_trace::enable_tracing!();
+#[derive(Parser)]
+struct Args {
+    #[clap(short = 'c', long, default_value = "16")]
+    pub number_of_cores: usize,
+    #[clap(short = 't', long, default_value = "150000")]
+    pub number_of_transactions: u64,
+}
 
 fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
     let mut transactions = Vec::with_capacity(nb_txs as usize);
@@ -118,31 +132,24 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
 }
 
 fn main() {
-    let n = std::env::var("BENCH_TXS_NUMBER")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap();
-
-    let number_of_cores = std::env::var("FUEL_BENCH_CORES")
-        .ok()
-        .and_then(|s| s.parse::<usize>().ok())
-        .unwrap();
-
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
-
-    let start_transaction_generation = std::time::Instant::now();
-    let transactions = generate_transactions(n, &mut rng);
-    tracing::warn!(
-        "Generated {} transactions in {:?} ms.",
-        n,
-        start_transaction_generation.elapsed().as_millis()
-    );
-
+    let args = Args::parse();
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
     let _drop = rt.enter();
+
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+    let start_transaction_generation = std::time::Instant::now();
+    let transactions = generate_transactions(args.number_of_transactions, &mut rng);
+    let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
+    let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
+    tracing::info!(
+        "Generated {} transactions in {:?} ms.",
+        args.number_of_transactions,
+        start_transaction_generation.elapsed().as_millis()
+    );
 
     let mut test_builder = TestSetupBuilder::new(2322);
     // setup genesis block with coins that transactions can spend
@@ -184,37 +191,141 @@ fn main() {
             }),
     );
 
+    // disable automated block production
     test_builder.trigger = Trigger::Never;
     test_builder.utxo_validation = true;
-    test_builder.gas_limit = Some(10_000_000_000_000);
+    test_builder.gas_limit = Some(
+        transactions
+            .iter()
+            .filter_map(|tx| {
+                if tx.is_mint() {
+                    return None;
+                }
+                Some(tx.max_gas(&chain_conf.consensus_parameters).unwrap())
+            })
+            .sum(),
+    );
     test_builder.block_size_limit = Some(1_000_000_000_000_000);
     test_builder.max_txs = transactions.len();
-    test_builder.number_threads_pool_verif = number_of_cores;
+    #[cfg(feature = "parallel-executor")]
+    {
+        test_builder.number_threads_pool_verif = args.number_of_cores;
+        test_builder.executor_number_of_cores = args.number_of_cores;
+    }
+
     // spin up node
-    let _ = rt.block_on(async move {
-        // start the producer node
+    let block = rt.block_on({
+        let transactions = transactions.clone();
+        async move {
+            // start the producer node
+            let TestContext { srv, client, .. } = test_builder.finalize().await;
+
+            // insert all transactions
+            let mut subscriber = srv
+                .shared
+                .txpool_shared_state
+                .new_tx_notification_subscribe();
+            let mut nb_left = args.number_of_transactions;
+            let start_insertion = std::time::Instant::now();
+            srv.shared
+                .txpool_shared_state
+                .try_insert(transactions.clone())
+                .unwrap();
+            while nb_left > 0 {
+                let _ = subscriber.recv().await.unwrap();
+                nb_left -= 1;
+            }
+            tracing::info!(
+                "Inserted {} transactions in {:?} ms.",
+                args.number_of_transactions,
+                start_insertion.elapsed().as_millis()
+            );
+            client.produce_blocks(1, None).await.unwrap();
+            let block = srv
+                .shared
+                .database
+                .on_chain()
+                .latest_view()
+                .unwrap()
+                .get_sealed_block_by_height(&1.into())
+                .unwrap()
+                .unwrap();
+            block
+        }
+    });
+
+    let mut test_builder = TestSetupBuilder::new(2322);
+    // setup genesis block with coins that transactions can spend
+    // We don't use the function to not have to convert Script to transactions
+    test_builder.initial_coins.extend(
+        transactions
+            .iter()
+            .flat_map(|t| t.inputs().unwrap())
+            .filter_map(|input| {
+                if let Input::CoinSigned(CoinSigned {
+                    amount,
+                    owner,
+                    asset_id,
+                    utxo_id,
+                    tx_pointer,
+                    ..
+                })
+                | Input::CoinPredicate(CoinPredicate {
+                    amount,
+                    owner,
+                    asset_id,
+                    utxo_id,
+                    tx_pointer,
+                    ..
+                }) = input
+                {
+                    Some(CoinConfig {
+                        tx_id: *utxo_id.tx_id(),
+                        output_index: utxo_id.output_index(),
+                        tx_pointer_block_height: tx_pointer.block_height(),
+                        tx_pointer_tx_idx: tx_pointer.tx_index(),
+                        owner: *owner,
+                        amount: *amount,
+                        asset_id: *asset_id,
+                    })
+                } else {
+                    None
+                }
+            }),
+    );
+
+    // disable automated block production
+    test_builder.trigger = Trigger::Never;
+    test_builder.utxo_validation = true;
+    test_builder.gas_limit = Some(
+        transactions
+            .iter()
+            .filter_map(|tx| {
+                if tx.is_mint() {
+                    return None;
+                }
+                Some(tx.max_gas(&chain_conf.consensus_parameters).unwrap())
+            })
+            .sum(),
+    );
+    test_builder.block_size_limit = Some(1_000_000_000_000_000);
+    test_builder.max_txs = transactions.len();
+    #[cfg(feature = "parallel-executor")]
+    {
+        test_builder.number_threads_pool_verif = args.number_of_cores;
+        test_builder.executor_number_of_cores = args.number_of_cores;
+    }
+
+    rt.block_on(async move {
         let TestContext { srv, .. } = test_builder.finalize().await;
 
-        // insert all transactions
-        let mut subscriber = srv
-            .shared
-            .txpool_shared_state
-            .new_tx_notification_subscribe();
-        tracing::warn!("Inserting {} transactions.", n);
-        let mut nb_left = n;
-        let start_insertion = std::time::Instant::now();
+        let start = std::time::Instant::now();
+
         srv.shared
-            .txpool_shared_state
-            .try_insert(transactions)
-            .unwrap();
-        while nb_left > 0 {
-            let _ = subscriber.recv().await.unwrap();
-            nb_left -= 1;
-        }
-        tracing::warn!(
-            "Inserted {} transactions in {:?} ms.",
-            n,
-            start_insertion.elapsed().as_millis()
-        );
+            .block_importer
+            .execute_and_commit(block)
+            .await
+            .expect("Should validate the block");
+        println!("Block imported in {:?}ms", start.elapsed().as_millis());
     });
 }

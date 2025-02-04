@@ -188,7 +188,7 @@ impl GasPriceVerifiedTx {
     where
         View: TxPoolPersistentStorage,
     {
-        //TODO: See in the end if it change something
+        // TODO: See in the end if it change something
 
         // let pool_tx = checked_tx_into_pool(self.0, metadata)?;
         // let tx_id = pool_tx.id();
