@@ -134,12 +134,6 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
 
 fn main() {
     let args = Args::parse();
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    let _drop = rt.enter();
-
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     let start_transaction_generation = std::time::Instant::now();
@@ -215,9 +209,15 @@ fn main() {
     }
 
     // spin up node
+    let rt = tokio::runtime::Builder::new_current_thread()
+    .enable_all()
+    .build()
+    .unwrap();
+    let _drop = rt.enter();
     let block = rt.block_on({
         let transactions = transactions.clone();
         let chain_conf = chain_conf.clone();
+        let mut test_builder = test_builder.clone();
         async move {
             test_builder.set_chain_config(chain_conf);
             // start the producer node
@@ -256,68 +256,6 @@ fn main() {
             block
         }
     });
-
-    let mut test_builder = TestSetupBuilder::new(2322);
-    // setup genesis block with coins that transactions can spend
-    // We don't use the function to not have to convert Script to transactions
-    test_builder.initial_coins.extend(
-        transactions
-            .iter()
-            .flat_map(|t| t.inputs().unwrap())
-            .filter_map(|input| {
-                if let Input::CoinSigned(CoinSigned {
-                    amount,
-                    owner,
-                    asset_id,
-                    utxo_id,
-                    tx_pointer,
-                    ..
-                })
-                | Input::CoinPredicate(CoinPredicate {
-                    amount,
-                    owner,
-                    asset_id,
-                    utxo_id,
-                    tx_pointer,
-                    ..
-                }) = input
-                {
-                    Some(CoinConfig {
-                        tx_id: *utxo_id.tx_id(),
-                        output_index: utxo_id.output_index(),
-                        tx_pointer_block_height: tx_pointer.block_height(),
-                        tx_pointer_tx_idx: tx_pointer.tx_index(),
-                        owner: *owner,
-                        amount: *amount,
-                        asset_id: *asset_id,
-                    })
-                } else {
-                    None
-                }
-            }),
-    );
-
-    // disable automated block production
-    test_builder.trigger = Trigger::Never;
-    test_builder.utxo_validation = true;
-    test_builder.gas_limit = Some(
-        transactions
-            .iter()
-            .filter_map(|tx| {
-                if tx.is_mint() {
-                    return None;
-                }
-                Some(tx.max_gas(&chain_conf.consensus_parameters).unwrap())
-            })
-            .sum(),
-    );
-    test_builder.block_size_limit = Some(1_000_000_000_000_000);
-    test_builder.max_txs = transactions.len();
-    #[cfg(feature = "parallel-executor")]
-    {
-        test_builder.number_threads_pool_verif = args.number_of_cores;
-        test_builder.executor_number_of_cores = args.number_of_cores;
-    }
 
     rt.block_on(async move {
         test_builder.set_chain_config(chain_conf.clone());
