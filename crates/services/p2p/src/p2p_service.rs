@@ -3,6 +3,7 @@ use crate::{
         FuelBehaviour,
         FuelBehaviourEvent,
     },
+    bounded_hashset::BoundedHashset,
     codecs::{
         postcard::PostcardCodec,
         GossipsubCodec,
@@ -35,7 +36,6 @@ use crate::{
         ResponseSender,
         V2ResponseMessage,
     },
-    sized_hashset::SizedHashset,
     TryPeerId,
 };
 use fuel_core_metrics::{
@@ -139,10 +139,10 @@ pub struct FuelP2PService {
     peer_manager: PeerManager,
 
     /// Connection Limiter for gossipsub
-    gossipsub_peer_limiter: SizedHashset<PeerId>,
+    gossipsub_peer_limiter: BoundedHashset<PeerId>,
 
     /// Connection Limiter for request_response
-    request_response_peer_limiter: SizedHashset<PeerId>,
+    request_response_peer_limiter: BoundedHashset<PeerId>,
 }
 
 #[derive(Debug)]
@@ -301,10 +301,10 @@ impl FuelP2PService {
             network_codec: codec,
             outbound_requests_table: HashMap::default(),
             inbound_requests_table: HashMap::default(),
-            gossipsub_peer_limiter: SizedHashset::new(usize::try_from(
+            gossipsub_peer_limiter: BoundedHashset::new(usize::try_from(
                 config.max_gossipsub_peers_connected,
             )?),
-            request_response_peer_limiter: SizedHashset::new(usize::try_from(
+            request_response_peer_limiter: BoundedHashset::new(usize::try_from(
                 config.max_request_response_peers_connected,
             )?),
             network_metadata,

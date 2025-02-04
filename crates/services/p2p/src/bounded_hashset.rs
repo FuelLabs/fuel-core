@@ -3,12 +3,12 @@ use std::{
     hash::Hash,
 };
 
-pub struct SizedHashset<T> {
+pub struct BoundedHashset<T> {
     capacity: usize,
     inner: HashSet<T>,
 }
 
-impl<T> SizedHashset<T>
+impl<T> BoundedHashset<T>
 where
     T: Eq + Hash,
 {
