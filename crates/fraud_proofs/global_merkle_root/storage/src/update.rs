@@ -192,8 +192,7 @@ where
         let Some(Output::ContractCreated { contract_id, .. }) = tx
             .outputs()
             .iter()
-            .filter(|output| matches!(output, Output::ContractCreated { .. }))
-            .next()
+            .find(|output| matches!(output, Output::ContractCreated { .. }))
         else {
             anyhow::bail!("Create transaction does not have contract created output")
         };
