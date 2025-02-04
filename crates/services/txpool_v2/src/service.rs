@@ -1,5 +1,8 @@
 use crate::{
     self as fuel_core_txpool,
+    pool_worker::{
+        PoolInsertRequest, PoolNotification, PoolOtherRequest, PoolWorkerInterface
+    }, Constraints,
 };
 use fuel_core_services::TaskNextAction;
 
@@ -38,10 +41,7 @@ use fuel_core_txpool::{
         subscriptions::Subscriptions,
         verifications::Verification,
     },
-    shared_state::{
-        BorrowedTxPool,
-        SharedState,
-    },
+    shared_state::SharedState,
     storage::{
         graph::{
             GraphConfig,
@@ -120,9 +120,9 @@ pub type Service<View> = ServiceRunner<Task<View>>;
 #[derive(Debug)]
 pub struct TxInfo {
     /// The transaction
-    tx: ArcPoolTx,
+    pub(crate) tx: ArcPoolTx,
     /// The creation instant of the transaction
-    creation_instant: SystemTime,
+    pub(crate) creation_instant: SystemTime,
 }
 
 impl TxInfo {
@@ -150,8 +150,11 @@ impl TryFrom<TxInfo> for TransactionStatus {
     }
 }
 
-pub struct BorrowTxPoolRequest {
-    pub response_channel: oneshot::Sender<BorrowedTxPool>,
+pub enum SelectTransactionsRequest {
+    SelectTransactions {
+        constraints: Constraints,
+        response_channel: oneshot::Sender<Vec<ArcPoolTx>>,
+    },
 }
 
 pub enum WritePoolRequest {
@@ -187,7 +190,7 @@ pub struct Task<View> {
     transaction_verifier_process: SyncProcessor,
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
-    pool: Shared<TxPool>,
+    pool_worker: PoolWorkerInterface,
     current_height: Shared<BlockHeight>,
     tx_sync_history: Shared<HashSet<PeerId>>,
     shared_state: SharedState,
@@ -244,7 +247,7 @@ where
 
             select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
-                    self.borrow_txpool(select_transaction_request);
+                    self.process_select_request(select_transaction_request);
                     TaskNextAction::Continue
                 } else {
                     TaskNextAction::Stop
@@ -262,6 +265,15 @@ where
                     TaskNextAction::Continue
                 } else {
                     TaskNextAction::Continue
+                }
+            }
+
+            pool_notification = self.pool_worker.notification_receiver.recv() => {
+                if let Some(notification) = pool_notification {
+                    self.process_notification(notification);
+                    TaskNextAction::Continue
+                } else {
+                    TaskNextAction::Stop
                 }
             }
 
@@ -312,11 +324,8 @@ where
         drop(result);
 
         {
-            let mut tx_pool = self.pool.write();
-            tx_pool.remove_transaction(executed_transaction);
-            if !tx_pool.is_empty() {
-                self.shared_state.new_txs_notifier.send_replace(());
-            }
+            self.pool_worker.remove(executed_transaction);
+            self.shared_state.new_txs_notifier.send_replace(());
         }
 
         {
@@ -325,10 +334,22 @@ where
         }
     }
 
-    fn borrow_txpool(&self, request: BorrowTxPoolRequest) {
-        let BorrowTxPoolRequest { response_channel } = request;
-
-        let _ = response_channel.send(BorrowedTxPool(self.pool.clone()));
+    fn process_select_request(&self, select_transaction_request: SelectTransactionsRequest) {
+        match select_transaction_request {
+            SelectTransactionsRequest::SelectTransactions {
+                constraints,
+                response_channel,
+            } => {
+                let (response_sender, response_receiver) = std::sync::mpsc::channel();
+                self.pool_worker.get_block_transactions(constraints, response_sender);
+                let txs = response_receiver.recv().unwrap();
+                if response_channel.send(txs).is_err() {
+                    tracing::error!(
+                        "Failed to send the result back for `SelectTransactions` request"
+                    );
+                }
+            }
+        }
     }
 
     fn process_write(&self, write_pool_request: WritePoolRequest) {
@@ -360,6 +381,32 @@ where
         }
     }
 
+    fn process_notification(&mut self, notification: PoolNotification) {
+        match notification {
+            PoolNotification::Inserted { tx_id, time } => {
+                        self.pruner.time_txs_submitted.push_front((time, tx_id));
+    
+                        let duration = time
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .expect("Time can't be less than UNIX EPOCH");
+    
+                        self.shared_state.tx_status_sender.send_submitted(
+                            tx_id,
+                            Tai64::from_unix(duration.as_secs() as i64),
+                        );
+                        //TODO: Find a way to revive
+                        // if let Some(channel) = response_channel {
+                        //     let _ = channel.send(Ok(()));
+                        // }
+                        self.shared_state.new_txs_notifier.send_replace(());
+    
+            },
+            PoolNotification::Removed { tx_id, error } => {
+                self.shared_state.tx_status_sender.send_squeezed_out(tx_id, error);
+            }
+        }
+    }
+
     fn insert_transactions(&self, transactions: Vec<Arc<Transaction>>) {
         for transaction in transactions {
             let Ok(reservation) = self.transaction_verifier_process.reserve() else {
@@ -387,11 +434,11 @@ where
         }
 
         let verification = self.verification.clone();
-        let pool = self.pool.clone();
+        let pool_insert_request_sender = self.pool_worker.insert_request_sender.clone();
         let p2p = self.p2p.clone();
         let shared_state = self.shared_state.clone();
         let current_height = self.current_height.clone();
-        let time_txs_submitted = self.pruner.time_txs_submitted.clone();
+        // let time_txs_submitted = self.pruner.time_txs_submitted.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
 
@@ -405,7 +452,6 @@ where
 
             let result = verification.perform_all_verifications(
                 transaction,
-                &pool,
                 current_height,
                 utxo_validation,
             );
@@ -432,56 +478,8 @@ where
 
             let tx = Arc::new(checked_tx);
 
-            let result = {
-                let mut pool = pool.write();
-                let result = verification.persistent_storage_provider.latest_view();
-
-                let res = match result {
-                    Ok(view) => pool.insert(tx, &view),
-                    Err(err) => Err(Error::Database(format!("{:?}", err))),
-                };
-                res
-            };
-
-            let removed_txs = match result {
-                Ok(removed_txs) => {
-                    let submitted_time = SystemTime::now();
-                    time_txs_submitted
-                        .write()
-                        .push_front((submitted_time, tx_id));
-
-                    let duration = submitted_time
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .expect("Time can't be less than UNIX EPOCH");
-
-                    shared_state.tx_status_sender.send_submitted(
-                        tx_id,
-                        Tai64::from_unix(duration.as_secs() as i64),
-                    );
-
-                    if let Some(channel) = response_channel {
-                        let _ = channel.send(Ok(()));
-                    }
-                    shared_state.new_txs_notifier.send_replace(());
-
-                    removed_txs
-                }
-                Err(err) => {
-                    if let Some(channel) = response_channel {
-                        let _ = channel.send(Err(err.clone()));
-                    }
-
-                    shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
-                    return
-                }
-            };
-
-            for tx in removed_txs {
-                shared_state.tx_status_sender.send_squeezed_out(
-                    tx.id(),
-                    Error::Removed(RemovedReason::LessWorth(tx.id())),
-                );
-            }
+            // TODO: Unwrap
+            pool_insert_request_sender.send(PoolInsertRequest::Insert { tx }).unwrap();
         };
         move || {
             if metrics {
@@ -498,18 +496,7 @@ where
     }
 
     fn manage_remove_coin_dependents(&self, transactions: Vec<(TxId, String)>) {
-        for (tx_id, reason) in transactions {
-            let dependents = self.pool.write().remove_coin_dependents(tx_id);
-
-            for removed_tx in dependents {
-                self.shared_state.tx_status_sender.send_squeezed_out(
-                    removed_tx.id(),
-                    Error::SkippedTransaction(
-                        format!("Parent transaction with {tx_id}, was removed because of the {reason}")
-                    )
-                );
-            }
-        }
+        self.pool_worker.remove_coin_dependents(transactions);
     }
 
     fn manage_tx_from_p2p(
@@ -536,7 +523,7 @@ where
         // We are not affected if there is too many queued job and we don't manage this peer.
         let _ = self.p2p_sync_process.try_spawn({
             let p2p = self.p2p.clone();
-            let pool = self.pool.clone();
+            let request_sender = self.pool_worker.request_sender.clone();
             let txs_insert_sender = self.shared_state.write_pool_requests_sender.clone();
             let tx_sync_history = self.tx_sync_history.clone();
             async move {
@@ -563,13 +550,10 @@ where
                 if peer_tx_ids.is_empty() {
                     return;
                 }
-                let tx_ids_to_ask: Vec<TxId> = {
-                    let pool = pool.read();
-                    peer_tx_ids
-                        .into_iter()
-                        .filter(|tx_id| !pool.contains(tx_id))
-                        .collect()
-                };
+                let (response_sender, response_receiver) = std::sync::mpsc::channel();
+                request_sender.send(PoolOtherRequest::GetNonExistingTxs { tx_ids: peer_tx_ids, non_existing_txs: response_sender }).unwrap();
+                //TODO: Unwrap
+                let tx_ids_to_ask = response_receiver.recv().unwrap();
 
                 if tx_ids_to_ask.is_empty() {
                     return;
@@ -605,9 +589,8 @@ where
     fn try_prune_transactions(&mut self) {
         let mut txs_to_remove = vec![];
         {
-            let mut time_txs_submitted = self.pruner.time_txs_submitted.write();
             let now = SystemTime::now();
-            while let Some((time, _)) = time_txs_submitted.back() {
+            while let Some((time, _)) = self.pruner.time_txs_submitted.back() {
                 let Ok(duration) = now.duration_since(*time) else {
                     tracing::error!("Failed to calculate the duration since the transaction was submitted");
                     return;
@@ -616,21 +599,14 @@ where
                     break;
                 }
                 // SAFETY: We are removing the last element that we just checked
-                txs_to_remove.push(time_txs_submitted.pop_back().expect("qed").1);
+                txs_to_remove.push(self.pruner.time_txs_submitted.pop_back().expect("qed").1);
             }
         }
 
-        let removed;
-        {
-            let mut pool = self.pool.write();
-            removed = pool.remove_transaction_and_dependents(txs_to_remove);
-        }
-
-        for tx in removed {
-            self.shared_state
-                .tx_status_sender
-                .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
-        }
+        self.pool_worker.remove_and_coin_dependents((
+            txs_to_remove,
+            Error::Removed(RemovedReason::Ttl),
+        ));
 
         {
             // Each time when we prune transactions, clear the history of synchronization
@@ -646,10 +622,10 @@ where
                 max_txs,
                 response_channel,
             } => {
-                let tx_ids = {
-                    let pool = self.pool.read();
-                    pool.iter_tx_ids().take(max_txs).copied().collect()
-                };
+                // TODO: remove shenannigans
+                let (response_sender, response_receiver) = std::sync::mpsc::channel();
+                self.pool_worker.get_tx_ids(max_txs, response_sender);
+                let tx_ids = response_receiver.recv().unwrap();
                 if response_channel.send(tx_ids).is_err() {
                     tracing::error!(
                         "Failed to send the result back for `GetTxIds` request"
@@ -660,18 +636,9 @@ where
                 tx_ids,
                 response_channel,
             } => {
-                let txs = {
-                    let pool = self.pool.read();
-                    tx_ids
-                        .into_iter()
-                        .map(|tx_id| {
-                            pool.find_one(&tx_id).map(|stored_data| TxInfo {
-                                tx: stored_data.transaction.clone(),
-                                creation_instant: stored_data.creation_instant,
-                            })
-                        })
-                        .collect()
-                };
+                let (response_sender, response_receiver) = std::sync::mpsc::channel();
+                self.pool_worker.get_txs(tx_ids, response_sender);
+                let txs = response_receiver.recv().unwrap();
                 if response_channel.send(txs).is_err() {
                     tracing::error!(
                         "Failed to send the result back for `GetTxs` request"
@@ -754,8 +721,9 @@ where
         read_pool: read_pool_requests_receiver,
     };
 
+    let storage_provider = Arc::new(ps_provider);
     let verification = Verification {
-        persistent_storage_provider: Arc::new(ps_provider),
+        persistent_storage_provider: storage_provider.clone(),
         consensus_parameters_provider: Arc::new(consensus_parameters_provider),
         gas_price_provider: Arc::new(gas_price_provider),
         wasm_checker: Arc::new(wasm_checker),
@@ -764,7 +732,7 @@ where
 
     let pruner = TransactionPruner {
         txs_ttl: config.max_txs_ttl,
-        time_txs_submitted: Arc::new(RwLock::new(VecDeque::new())),
+        time_txs_submitted: VecDeque::new(),
         ttl_timer,
     };
 
@@ -794,6 +762,8 @@ where
         config,
     );
 
+    let pool_worker = PoolWorkerInterface::new(txpool, storage_provider);
+
     Service::new(Task {
         chain_id,
         utxo_validation,
@@ -804,7 +774,7 @@ where
         pruner,
         p2p: Arc::new(p2p),
         current_height: Arc::new(RwLock::new(current_height)),
-        pool: Arc::new(RwLock::new(txpool)),
+        pool_worker,
         shared_state,
         metrics,
         tx_sync_history: Default::default(),

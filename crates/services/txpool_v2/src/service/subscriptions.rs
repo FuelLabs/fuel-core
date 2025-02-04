@@ -1,7 +1,7 @@
 use crate::service::{
-    BorrowTxPoolRequest,
     ReadPoolRequest,
     WritePoolRequest,
+    SelectTransactionsRequest
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::services::{
@@ -18,7 +18,7 @@ pub(super) struct Subscriptions {
     pub new_tx: BoxStream<TransactionGossipData>,
     pub new_tx_source: BoxStream<PeerId>,
     pub imported_blocks: BoxStream<SharedImportResult>,
-    pub borrow_txpool: mpsc::Receiver<BorrowTxPoolRequest>,
+    pub borrow_txpool: mpsc::Receiver<SelectTransactionsRequest>,
     pub write_pool: mpsc::Receiver<WritePoolRequest>,
     pub read_pool: mpsc::Receiver<ReadPoolRequest>,
 }
