@@ -169,7 +169,6 @@ where
 
         // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
         // TODO(#2585): Insert uplodade bytecodes.
-        // TODO(#2586): Insert blobs.
         if let Transaction::Blob(tx) = tx {
             self.process_blob_transaction(tx)?;
         }
