@@ -217,7 +217,9 @@ fn main() {
     // spin up node
     let block = rt.block_on({
         let transactions = transactions.clone();
+        let chain_conf = chain_conf.clone();
         async move {
+            test_builder.set_chain_config(chain_conf);
             // start the producer node
             let TestContext { srv, client, .. } = test_builder.finalize().await;
 
@@ -318,6 +320,7 @@ fn main() {
     }
 
     rt.block_on(async move {
+        test_builder.set_chain_config(chain_conf.clone());
         let TestContext { srv, .. } = test_builder.finalize().await;
 
         let start = std::time::Instant::now();
