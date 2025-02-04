@@ -2,7 +2,7 @@ name: Create Binary High TPS Bench
 
 on:
   workflow_dispatch:
-  pull_request:
+  push:
 
 env:
     GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
