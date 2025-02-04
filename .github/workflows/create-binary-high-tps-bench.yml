@@ -120,14 +120,9 @@ jobs:
           PLATFORM_NAME: ${{ matrix.job.platform }}
           TARGET: ${{ matrix.job.target }}
         run: |
-          # trim refs/tags/ prefix
-          FUEL_CORE_VERSION="${GITHUB_REF#refs/tags/}"
-          # optionally trim v from tag prefix
-          FUEL_CORE_VERSION="${FUEL_CORE_VERSION#v}"
-          echo "version is: $FUEL_CORE_VERSION"
           # setup artifact filename
-          ARTIFACT="fuel-core-$FUEL_CORE_VERSION-${{ env.TARGET }}"
-          ZIP_FILE_NAME="high_tps_bench.tar.gz"
+          ARTIFACT="ben-high-tps-${{ matrix.job.target }}"
+          ZIP_FILE_NAME="high_tps_bench-${{ matrix.job.target }}-${{ github.run_id }}-${{ github.run_number }}-${{ github.run_attempt }}.tar.gz"
           echo "ZIP_FILE_NAME=$ZIP_FILE_NAME" >> $GITHUB_ENV
           # create zip file
           mkdir -pv "$ARTIFACT"
