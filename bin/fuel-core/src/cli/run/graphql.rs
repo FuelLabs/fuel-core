@@ -66,6 +66,13 @@ pub struct GraphQLArgs {
     #[clap(long = "api-request-timeout", default_value = "30s", env)]
     pub api_request_timeout: humantime::Duration,
 
+    #[clap(
+        long = "required-fuel-block-height-tolerance",
+        default_value = "10",
+        env
+    )]
+    pub required_fuel_block_height_tolerance: usize,
+
     #[clap(flatten)]
     pub costs: QueryCosts,
 }

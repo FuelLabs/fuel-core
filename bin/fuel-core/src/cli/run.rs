@@ -625,6 +625,8 @@ impl Command {
                         .state_transition_bytecode_read,
                     da_compressed_block_read: graphql.costs.da_compressed_block_read,
                 },
+                required_fuel_block_height_tolerance: graphql
+                    .required_fuel_block_height_tolerance,
             },
             combined_db_config,
             snapshot_reader,
