@@ -1,5 +1,6 @@
 use crate::{
     column::Column,
+    Blobs,
     Coins,
     ConsensusParametersVersions,
     ContractsLatestUtxo,
@@ -12,6 +13,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use anyhow::anyhow;
 use fuel_core_storage::{
     kv_store::KeyValueInspect,
     transactional::StorageTransaction,
@@ -32,11 +34,13 @@ use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx::{
         field::{
+            ChargeableBody,
             InputContract,
             Inputs,
             OutputContract,
             Outputs,
             UpgradePurpose as _,
+            Witnesses,
         },
         input::{
             self,
@@ -54,6 +58,8 @@ use fuel_core_types::{
         output,
         Address,
         AssetId,
+        Blob,
+        BlobBody,
         Input,
         Output,
         Transaction,
@@ -164,6 +170,9 @@ where
         // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
         // TODO(#2585): Insert uplodade bytecodes.
         // TODO(#2586): Insert blobs.
+        if let Transaction::Blob(tx) = tx {
+            self.process_blob_transaction(tx)?;
+        }
         // TODO(#2587): Insert raw code for created contracts.
 
         Ok(())
@@ -352,6 +361,25 @@ where
                 }
             },
         }
+
+        Ok(())
+    }
+
+    fn process_blob_transaction(&mut self, tx: &Blob) -> anyhow::Result<()> {
+        let BlobBody {
+            id: blob_id,
+            witness_index,
+        } = tx.body();
+
+        let blob = tx
+            .witnesses()
+            .get(usize::from(*witness_index))
+             // TODO(#2588): Proper error type
+            .ok_or_else(|| anyhow!("transaction should have blob payload"))?;
+
+        self.storage
+            .storage::<Blobs>()
+            .insert(blob_id, blob.as_ref())?;
 
         Ok(())
     }
