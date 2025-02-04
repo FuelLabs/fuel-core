@@ -75,7 +75,7 @@ use fuel_core_types::{
     },
 };
 
-pub trait UpdateMerkleizedTables: Sized {
+pub trait UpdateMerkleizedTables: {
     fn update_merkleized_tables(
         &mut self,
         chain_id: ChainId,
