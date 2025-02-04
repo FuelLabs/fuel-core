@@ -207,7 +207,6 @@ impl FromStr for FuelClient {
             Ok(Self {
                 client,
                 url,
-                headers: HeaderMap::new(),
                 extensions: HashMap::new(),
             })
         }
