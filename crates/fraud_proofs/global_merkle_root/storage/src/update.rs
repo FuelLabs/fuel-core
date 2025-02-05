@@ -781,6 +781,7 @@ mod tests {
         let mut storage_tx = storage.write_transaction();
         let mut storage_update_tx =
             storage_tx.construct_update_merkleized_tables_transaction();
+
         let block_height = BlockHeight::new(0);
         let tx_idx = 0;
         let tx = Transaction::default_test_tx();
@@ -792,6 +793,7 @@ mod tests {
             .unwrap();
 
         storage_tx.commit().unwrap();
+
         // Then
         assert!(storage
             .read_transaction()
