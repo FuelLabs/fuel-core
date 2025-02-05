@@ -400,11 +400,12 @@ where
                 WriteOperation::Insert(value) => {
                     let bytes_len = value.as_ref().len();
                     let start = offset;
+                    let buf_len = buf.len();
                     let end = offset.saturating_add(buf.len());
 
                     if end > bytes_len {
                         return Err(anyhow::anyhow!(
-                            "Offset `{offset}` is out of bounds `{bytes_len}` for key `{:?}`",
+                            "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}`",
                             key
                         )
                         .into());
@@ -412,7 +413,7 @@ where
 
                     let starting_from_offset = &value.as_ref()[start..end];
                     buf[..].copy_from_slice(starting_from_offset);
-                    Ok(Some(buf.len()))
+                    Ok(Some(buf_len))
                 }
                 WriteOperation::Remove => Ok(None),
             }
@@ -705,10 +706,9 @@ mod test {
             view.put(&key, Column::Metadata, expected.clone()).unwrap();
             // test
             let mut buf = [0; 4];
-            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
+            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap_err();
             // verify
-            assert_eq!(ret, Some(3));
-            assert_eq!(buf, [1, 2, 3, 0]);
+            assert_eq!(ret, crate::Error::Other(anyhow::anyhow!("Offset `0` + buf_len `4` read until 4 which is out of bounds `3` for key `[10, 11, 12]`".to_string())));
         }
 
         #[test]
@@ -721,10 +721,9 @@ mod test {
             view.put(&key, Column::Metadata, expected.clone()).unwrap();
             // test
             let mut buf = [0; 3];
-            let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap();
+            let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap_err();
             // verify
-            assert_eq!(ret, Some(2));
-            assert_eq!(buf, [2, 3, 0]);
+            assert_eq!(ret, crate::Error::Other(anyhow::anyhow!("Offset `1` + buf_len `3` read until 4 which is out of bounds `3` for key `[10, 11, 12]`".to_string())));
         }
 
         #[test]
