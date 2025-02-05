@@ -4,6 +4,7 @@ use crate::{
     ConsensusParametersVersions,
     ContractsLatestUtxo,
     Messages,
+    ProcessedTransactions,
     StateTransitionBytecodeVersions,
 };
 use alloc::{
@@ -50,14 +51,13 @@ use fuel_core_types::{
                 MessageDataSigned,
             },
         },
-        output::{
-            self,
-        },
+        output,
         Address,
         AssetId,
         Input,
         Output,
         Transaction,
+        TxId,
         TxPointer,
         UniqueIdentifier,
         Upgrade,
@@ -139,7 +139,9 @@ where
         tx_idx: u16,
         tx: &Transaction,
     ) -> anyhow::Result<()> {
+        let tx_id = tx.id(&self.chain_id);
         let inputs = tx.inputs();
+
         for input in inputs.iter() {
             self.process_input(input)?;
         }
@@ -149,7 +151,6 @@ where
             let output_index =
                 u16::try_from(output_index).map_err(|_| ExecutorError::TooManyOutputs)?;
 
-            let tx_id = tx.id(&self.chain_id);
             let utxo_id = UtxoId::new(tx_id, output_index);
             self.process_output(tx_pointer, utxo_id, &inputs, output)?;
         }
@@ -157,6 +158,9 @@ where
         if let Transaction::Upgrade(tx) = tx {
             self.process_upgrade_transaction(tx)?;
         }
+
+        self.store_processed_transaction(tx_id)?;
+
         // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
         // TODO(#2585): Insert uplodade bytecodes.
         // TODO(#2586): Insert blobs.
@@ -234,6 +238,19 @@ where
                 )?;
             }
         }
+        Ok(())
+    }
+
+    fn store_processed_transaction(&mut self, tx_id: TxId) -> anyhow::Result<()> {
+        let previous_tx = self
+            .storage
+            .storage_as_mut::<ProcessedTransactions>()
+            .replace(&tx_id, &())?;
+
+        if previous_tx.is_some() {
+            anyhow::bail!("duplicate transaction detected")
+        };
+
         Ok(())
     }
 
@@ -690,6 +707,63 @@ mod tests {
         assert_eq!(consensus_parameters_version_before_upgrade, 1);
         assert_eq!(consensus_parameters_version_after_upgrade, 2);
         assert_eq!(consensus_parameters_after_upgrade, consensus_parameters);
+    }
+
+    #[test]
+    /// After processing a transaction,
+    /// it should be stored in the `ProcessedTransactions` table.
+    fn process_transaction__should_store_processed_transaction() {
+        // Given
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
+
+        let block_height = BlockHeight::new(0);
+        let tx_idx = 0;
+        let tx = Transaction::default_test_tx();
+        let tx_id = tx.id(&storage_update_tx.chain_id);
+
+        // When
+        storage_update_tx
+            .process_transaction(block_height, tx_idx, &tx)
+            .unwrap();
+
+        storage_tx.commit().unwrap();
+
+        // Then
+        assert!(storage
+            .read_transaction()
+            .storage_as_ref::<ProcessedTransactions>()
+            .get(&tx_id)
+            .unwrap()
+            .is_some());
+    }
+
+    #[test]
+    /// We get an error if we encounter the same transaction
+    /// twice in `process_transaction`.
+    fn process_transaction__should_error_on_duplicate_transaction() {
+        // Given
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
+
+        let block_height = BlockHeight::new(0);
+        let tx_idx = 0;
+        let tx = Transaction::default_test_tx();
+
+        // When
+        storage_update_tx
+            .process_transaction(block_height, tx_idx, &tx)
+            .unwrap();
+
+        let result_after_second_call =
+            storage_update_tx.process_transaction(block_height, tx_idx, &tx);
+
+        // Then
+        assert!(result_after_second_call.is_err());
     }
 
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
