@@ -398,14 +398,22 @@ where
         if let Some(operation) = self.get_from_changes(key, column) {
             match operation {
                 WriteOperation::Insert(value) => {
-                    let read = value.len();
-                    if read != buf.len() {
-                        return Err(crate::Error::Other(anyhow::anyhow!(
-                            "Buffer size is not equal to the value size"
-                        )));
+                    let bytes_len = value.as_ref().len();
+                    let start = offset;
+                    let buf_len = buf.len();
+                    let end = offset.saturating_add(buf.len());
+
+                    if end > bytes_len {
+                        return Err(anyhow::anyhow!(
+                            "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}`",
+                            key
+                        )
+                        .into());
                     }
-                    buf.copy_from_slice(value.as_ref());
-                    Ok(Some(read))
+
+                    let starting_from_offset = &value.as_ref()[start..end];
+                    buf[..].copy_from_slice(starting_from_offset);
+                    Ok(Some(buf_len))
                 }
                 WriteOperation::Remove => Ok(None),
             }
@@ -655,6 +663,84 @@ mod test {
     mod key_value_functionality {
         use super::*;
         use crate::column::Column;
+
+        #[test]
+        fn read_returns_from_view_exact_size() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 3];
+            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
+            // verify
+            assert_eq!(ret, Some(3));
+            assert_eq!(buf, [1, 2, 3]);
+        }
+
+        #[test]
+        fn read_returns_from_view_buf_smaller() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 2];
+            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
+            // verify
+            assert_eq!(ret, Some(2));
+            assert_eq!(buf, [1, 2]);
+        }
+
+        #[test]
+        fn read_returns_from_view_with_offset() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 2];
+            let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap();
+            // verify
+            assert_eq!(ret, Some(2));
+            assert_eq!(buf, [2, 3]);
+        }
+
+        #[test]
+        fn read_returns_from_view_buf_bigger() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 4];
+            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap_err();
+            // verify
+            assert_eq!(ret, crate::Error::Other(anyhow::anyhow!("Offset `0` + buf_len `4` read until 4 which is out of bounds `3` for key `[10, 11, 12]`".to_string())));
+        }
+
+        #[test]
+        fn read_returns_from_view_buf_bigger_because_offset() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 3];
+            let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap_err();
+            // verify
+            assert_eq!(ret, crate::Error::Other(anyhow::anyhow!("Offset `1` + buf_len `3` read until 4 which is out of bounds `3` for key `[10, 11, 12]`".to_string())));
+        }
 
         #[test]
         fn get_returns_from_view() {
