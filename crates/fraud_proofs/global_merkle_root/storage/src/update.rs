@@ -181,8 +181,6 @@ where
         Ok(())
     }
 
-    // CreateBody is not publicly exported, so we need to use a generic type
-    // and ensure that all trait bounds are satisfied
     fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
         let bytecode_witness_index = tx.bytecode_witness_index();
         let witnesses = tx.witnesses();
