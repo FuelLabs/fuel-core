@@ -888,7 +888,7 @@ mod tests {
         .collect::<Vec<u8>>();
 
         let mut rng = StdRng::seed_from_u64(1337);
-        let create_contract_tx = create_contract(&contract_bytecode, &mut rng);
+        let create_contract_tx = create_contract_tx(&contract_bytecode, &mut rng);
         let contract_id = create_contract_tx
             .metadata()
             .as_ref()
@@ -920,7 +920,7 @@ mod tests {
 
     // TODO: https://github.com/FuelLabs/fuel-core/issues/2654
     // This code is copied from the executor. We should refactor it to be shared.
-    fn create_contract(bytecode: &[u8], rng: &mut impl rand::RngCore) -> Create {
+    fn create_contract_tx(bytecode: &[u8], rng: &mut impl rand::RngCore) -> Create {
         let salt: Salt = rng.gen();
         let contract = Contract::from(bytecode);
         let root = contract.root();
