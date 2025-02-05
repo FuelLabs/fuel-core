@@ -169,48 +169,16 @@ where
             self.process_output(tx_pointer, utxo_id, &inputs, output)?;
         }
 
-        if let Transaction::Upgrade(tx) = tx {
-            self.process_upgrade_transaction(tx)?;
-        }
-        // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
-        // TODO(#2584): Insert state transition bytecode and consensus parameter updates.
-        // TODO(#2585): Insert uplodade bytecodes.
-        if let Transaction::Upload(tx) = tx {
-            self.process_upload_transaction(tx)?;
-        }
-        // TODO(#2586): Insert blobs.
-        // TODO(#2587): Insert raw code for created contracts.
+        match tx {
+            Transaction::Create(tx) => self.process_create_transaction(tx)?,
+            Transaction::Upgrade(tx) => self.process_upgrade_transaction(tx)?,
+            Transaction::Upload(tx) => self.process_upload_transaction(tx)?,
+            Transaction::Blob(tx) => self.process_blob_transaction(tx)?,
+            Transaction::Script(_) | Transaction::Mint(_) => (),
+        };
 
         self.store_processed_transaction(tx_id)?;
 
-        // TODO(#2585): Insert uplodade bytecodes.
-        if let Transaction::Blob(tx) = tx {
-            self.process_blob_transaction(tx)?;
-        }
-        if let Transaction::Create(tx) = tx {
-            self.process_create_transaction(tx)?;
-        }
-
-        Ok(())
-    }
-
-    fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
-        let bytecode_witness_index = tx.bytecode_witness_index();
-        let witnesses = tx.witnesses();
-        let bytecode = witnesses[usize::from(*bytecode_witness_index)].as_vec();
-        // The Fuel specs mandate that each create transaction has exactly one output of type `Output::ContractCreated`.
-        // See https://docs.fuel.network/docs/specs/tx-format/transaction/#transactioncreate
-        let Some(Output::ContractCreated { contract_id, .. }) = tx
-            .outputs()
-            .iter()
-            .find(|output| matches!(output, Output::ContractCreated { .. }))
-        else {
-            anyhow::bail!("Create transaction does not have contract created output")
-        };
-
-        self.storage
-            .storage_as_mut::<ContractsRawCode>()
-            .insert(contract_id, bytecode)?;
         Ok(())
     }
 
@@ -352,6 +320,26 @@ where
         Ok(())
     }
 
+    fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
+        let bytecode_witness_index = tx.bytecode_witness_index();
+        let witnesses = tx.witnesses();
+        let bytecode = witnesses[usize::from(*bytecode_witness_index)].as_vec();
+        // The Fuel specs mandate that each create transaction has exactly one output of type `Output::ContractCreated`.
+        // See https://docs.fuel.network/docs/specs/tx-format/transaction/#transactioncreate
+        let Some(Output::ContractCreated { contract_id, .. }) = tx
+            .outputs()
+            .iter()
+            .find(|output| matches!(output, Output::ContractCreated { .. }))
+        else {
+            anyhow::bail!("Create transaction does not have contract created output")
+        };
+
+        self.storage
+            .storage_as_mut::<ContractsRawCode>()
+            .insert(contract_id, bytecode)?;
+        Ok(())
+    }
+
     fn process_upgrade_transaction(&mut self, tx: &Upgrade) -> anyhow::Result<()> {
         let metadata = match tx.metadata() {
             Some(metadata) => metadata.body.clone(),
@@ -397,25 +385,6 @@ where
                 }
             },
         }
-
-        Ok(())
-    }
-
-    fn process_blob_transaction(&mut self, tx: &Blob) -> anyhow::Result<()> {
-        let BlobBody {
-            id: blob_id,
-            witness_index,
-        } = tx.body();
-
-        let blob = tx
-            .witnesses()
-            .get(usize::from(*witness_index))
-             // TODO(#2588): Proper error type
-            .ok_or_else(|| anyhow!("transaction should have blob payload"))?;
-
-        self.storage
-            .storage::<Blobs>()
-            .insert(blob_id, blob.as_ref())?;
 
         Ok(())
     }
@@ -471,6 +440,25 @@ where
         self.storage
             .storage_as_mut::<UploadedBytecodes>()
             .insert(&bytecode_root, &new_uploaded_bytecode)?;
+
+        Ok(())
+    }
+
+    fn process_blob_transaction(&mut self, tx: &Blob) -> anyhow::Result<()> {
+        let BlobBody {
+            id: blob_id,
+            witness_index,
+        } = tx.body();
+
+        let blob = tx
+            .witnesses()
+            .get(usize::from(*witness_index))
+             // TODO(#2588): Proper error type
+            .ok_or_else(|| anyhow!("transaction should have blob payload"))?;
+
+        self.storage
+            .storage::<Blobs>()
+            .insert(blob_id, blob.as_ref())?;
 
         Ok(())
     }
