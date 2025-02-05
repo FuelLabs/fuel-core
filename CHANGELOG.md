@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [2668](https://github.com/FuelLabs/fuel-core/pull/2668): Expose gas price service test helpers
+
 ## [Version 0.41.5]
 
 ### Changed
