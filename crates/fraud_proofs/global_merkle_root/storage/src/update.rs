@@ -1,5 +1,6 @@
 use crate::{
     column::Column,
+    Blobs,
     Coins,
     ConsensusParametersVersions,
     ContractsLatestUtxo,
@@ -12,6 +13,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use anyhow::anyhow;
 use fuel_core_storage::{
     kv_store::KeyValueInspect,
     transactional::StorageTransaction,
@@ -32,11 +34,13 @@ use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx::{
         field::{
+            ChargeableBody,
             InputContract,
             Inputs,
             OutputContract,
             Outputs,
             UpgradePurpose as _,
+            Witnesses,
         },
         input::{
             self,
@@ -54,6 +58,8 @@ use fuel_core_types::{
         output,
         Address,
         AssetId,
+        Blob,
+        BlobBody,
         Input,
         Output,
         Transaction,
@@ -163,7 +169,9 @@ where
 
         // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
         // TODO(#2585): Insert uplodade bytecodes.
-        // TODO(#2586): Insert blobs.
+        if let Transaction::Blob(tx) = tx {
+            self.process_blob_transaction(tx)?;
+        }
         // TODO(#2587): Insert raw code for created contracts.
 
         Ok(())
@@ -355,6 +363,25 @@ where
 
         Ok(())
     }
+
+    fn process_blob_transaction(&mut self, tx: &Blob) -> anyhow::Result<()> {
+        let BlobBody {
+            id: blob_id,
+            witness_index,
+        } = tx.body();
+
+        let blob = tx
+            .witnesses()
+            .get(usize::from(*witness_index))
+             // TODO(#2588): Proper error type
+            .ok_or_else(|| anyhow!("transaction should have blob payload"))?;
+
+        self.storage
+            .storage::<Blobs>()
+            .insert(blob_id, blob.as_ref())?;
+
+        Ok(())
+    }
 }
 
 pub trait TransactionInputs {
@@ -411,6 +438,8 @@ mod tests {
     use fuel_core_types::{
         fuel_crypto::Hasher,
         fuel_tx::{
+            BlobId,
+            BlobIdExt,
             Bytes32,
             ConsensusParameters,
             ContractId,
@@ -764,6 +793,50 @@ mod tests {
 
         // Then
         assert!(result_after_second_call.is_err());
+    }
+
+    #[test]
+    /// When encountering a blob transaction,
+    /// `process_transaction` should insert the
+    /// corresponding blob.
+    fn process_transaction__should_insert_blob() {
+        let mut rng = StdRng::seed_from_u64(1337);
+
+        // Given
+        let blob = vec![1, 3, 3, 7];
+        let blob_id = BlobId::compute(&blob);
+        let body = BlobBody {
+            id: blob_id,
+            witness_index: 0,
+        };
+        let blob_tx = TransactionBuilder::blob(body)
+            .add_witness(Witness::from(blob.as_slice()))
+            .finalize_as_transaction();
+
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
+
+        let block_height = BlockHeight::new(rng.gen());
+        let tx_idx = rng.gen();
+
+        // When
+        storage_update_tx
+            .process_transaction(block_height, tx_idx, &blob_tx)
+            .unwrap();
+
+        storage_tx.commit().unwrap();
+
+        let read_tx = storage.read_transaction();
+        let blob_in_storage = read_tx
+            .storage_as_ref::<Blobs>()
+            .get(&blob_id)
+            .unwrap()
+            .unwrap();
+
+        // Then
+        assert_eq!(blob_in_storage.0.as_slice(), blob.as_slice());
     }
 
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
