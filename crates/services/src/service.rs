@@ -288,7 +288,7 @@ where
     let state = Shared::new(sender);
     let stop_sender = state.clone();
     // Spawned as a task to check if the service is already running and to capture any panics.
-    tokio::task::Builder::new().name(S::NAME).spawn(
+    tokio::task::spawn(
         async move {
             tracing::debug!("running");
             let run = std::panic::AssertUnwindSafe(run(
@@ -327,7 +327,7 @@ where
             }
         }
         .in_current_span(),
-    ).unwrap();
+    );
     state
 }
 
