@@ -4,6 +4,7 @@ use crate::{
     Coins,
     ConsensusParametersVersions,
     ContractsLatestUtxo,
+    ContractsRawCode,
     Messages,
     ProcessedTransactions,
     StateTransitionBytecodeVersions,
@@ -34,6 +35,7 @@ use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx::{
         field::{
+            BytecodeWitnessIndex,
             ChargeableBody,
             InputContract,
             Inputs,
@@ -60,6 +62,7 @@ use fuel_core_types::{
         AssetId,
         Blob,
         BlobBody,
+        Create,
         Input,
         Output,
         Transaction,
@@ -167,13 +170,34 @@ where
 
         self.store_processed_transaction(tx_id)?;
 
-        // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
         // TODO(#2585): Insert uplodade bytecodes.
         if let Transaction::Blob(tx) = tx {
             self.process_blob_transaction(tx)?;
         }
-        // TODO(#2587): Insert raw code for created contracts.
+        if let Transaction::Create(tx) = tx {
+            self.process_create_transaction(tx)?;
+        }
 
+        Ok(())
+    }
+
+    fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
+        let bytecode_witness_index = tx.bytecode_witness_index();
+        let witnesses = tx.witnesses();
+        let bytecode = witnesses[usize::from(*bytecode_witness_index)].as_vec();
+        // The Fuel specs mandate that each create transaction has exactly one output of type `Output::ContractCreated`.
+        // See https://docs.fuel.network/docs/specs/tx-format/transaction/#transactioncreate
+        let Some(Output::ContractCreated { contract_id, .. }) = tx
+            .outputs()
+            .iter()
+            .find(|output| matches!(output, Output::ContractCreated { .. }))
+        else {
+            anyhow::bail!("Create transaction does not have contract created output")
+        };
+
+        self.storage
+            .storage_as_mut::<ContractsRawCode>()
+            .insert(contract_id, bytecode)?;
         Ok(())
     }
 
@@ -436,17 +460,27 @@ mod tests {
         StorageAsRef,
     };
     use fuel_core_types::{
+        fuel_asm::{
+            op,
+            RegId,
+        },
         fuel_crypto::Hasher,
         fuel_tx::{
             BlobId,
             BlobIdExt,
             Bytes32,
             ConsensusParameters,
+            Contract,
             ContractId,
+            Create,
             Finalizable,
             TransactionBuilder,
             TxId,
             Witness,
+        },
+        fuel_vm::{
+            CallFrame,
+            Salt,
         },
     };
 
@@ -837,6 +871,68 @@ mod tests {
 
         // Then
         assert_eq!(blob_in_storage.0.as_slice(), blob.as_slice());
+    }
+
+    #[test]
+    fn process_create_transaction__should_insert_bytecode_for_contract_id() {
+        // Given
+        let contract_bytecode = vec![
+            op::addi(0x10, RegId::FP, CallFrame::a_offset().try_into().unwrap()),
+            op::lw(0x10, 0x10, 0),
+            op::addi(0x11, RegId::FP, CallFrame::b_offset().try_into().unwrap()),
+            op::lw(0x11, 0x11, 0),
+            op::addi(0x12, 0x11, 32),
+            op::addi(0x13, RegId::ZERO, 0),
+            op::tro(0x12, 0x13, 0x10, 0x11),
+            op::ret(RegId::ONE),
+        ]
+        .into_iter()
+        .collect::<Vec<u8>>();
+
+        let mut rng = StdRng::seed_from_u64(1337);
+        let create_contract_tx = create_contract_tx(&contract_bytecode, &mut rng);
+        let contract_id = create_contract_tx
+            .metadata()
+            .as_ref()
+            .unwrap()
+            .body
+            .contract_id;
+
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
+
+        // When
+        storage_update_tx
+            .process_create_transaction(&create_contract_tx)
+            .unwrap();
+
+        storage_tx.commit().unwrap();
+        let stored_contract = storage
+            .read_transaction()
+            .storage_as_ref::<ContractsRawCode>()
+            .get(&contract_id)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        // Then
+        assert_eq!(stored_contract, Contract::from(contract_bytecode));
+    }
+
+    // TODO: https://github.com/FuelLabs/fuel-core/issues/2654
+    // This code is copied from the executor. We should refactor it to be shared.
+    fn create_contract_tx(bytecode: &[u8], rng: &mut impl rand::RngCore) -> Create {
+        let salt: Salt = rng.gen();
+        let contract = Contract::from(bytecode);
+        let root = contract.root();
+        let state_root = Contract::default_state_root();
+        let contract_id = contract.id(&salt, &root, &state_root);
+
+        TransactionBuilder::create(bytecode.into(), salt, Default::default())
+            .add_fee_input()
+            .add_output(Output::contract_created(contract_id, state_root))
+            .finalize()
     }
 
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
