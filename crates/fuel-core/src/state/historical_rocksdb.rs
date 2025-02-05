@@ -988,7 +988,7 @@ mod tests {
 
         historical_rocks_db
             .db
-            .commit_changes(migration_transaction.into_storage_changes())
+            .commit_changes(vec![migration_transaction.into_changes()])
             .unwrap();
 
         // Check that the history has indeed been written to V1

@@ -181,11 +181,11 @@ where
     ConsensusProvider: ConsensusParametersProvider,
 {
     /// Produces and execute block for the specified height.
-    async fn produce_and_execute<TxSource, F>(
+    async fn produce_and_execute<TxSource: Send + 'static, F>(
         &self,
         height: BlockHeight,
         block_time: Tai64,
-        tx_source: impl FnOnce(u64, BlockHeight) -> F,
+        tx_source: impl FnOnce(u64, BlockHeight) -> F + Send,
     ) -> anyhow::Result<UncommittedResult<Changes>>
     where
         Executor: ports::BlockProducer<TxSource> + 'static,
@@ -234,11 +234,14 @@ where
         // Store the context string in case we error.
         let context_string =
             format!("Failed to produce block {height:?} due to execution failure");
-        let result = self
-            .executor
+        let executor = self
+        .executor.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            executor
             .produce_without_commit(component)
             .map_err(Into::<anyhow::Error>::into)
-            .context(context_string)?;
+            .context(context_string)
+        }).await??;
 
         debug!("Produced block with result: {:?}", result.result());
         Ok(result)
@@ -252,15 +255,15 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, TxSource, GasPriceProvider, ConsensusProvider>
+impl<ViewProvider, TxPool, Executor, TxSource: Send + 'static, GasPriceProvider, ConsensusProvider>
     Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
     Executor: ports::BlockProducer<TxSource> + 'static,
-    GasPriceProvider: GasPriceProviderConstraint,
-    ConsensusProvider: ConsensusParametersProvider,
+    GasPriceProvider: GasPriceProviderConstraint + Send + Sync + 'static,
+    ConsensusProvider: ConsensusParametersProvider + Send + Sync + 'static,
 {
     /// Produces and execute block for the specified height with transactions from the `TxPool`.
     pub async fn produce_and_execute_block_txpool(

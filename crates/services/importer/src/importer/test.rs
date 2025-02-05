@@ -70,6 +70,12 @@ mockall::mock! {
             &self,
             consensus_parameters_version: &ConsensusParametersVersion,
         ) -> StorageResult<Option<ChainId>>;
+
+        fn commit_changes(
+            &mut self,
+            new_height: BlockHeight,
+            changes: Vec<Changes>,
+        ) -> StorageResult<()>;
     }
 }
 

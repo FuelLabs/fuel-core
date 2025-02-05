@@ -245,7 +245,7 @@ where
                 }
             }
 
-            select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
+            select_transaction_request = self.subscriptions.select_transactions.recv() => {
                 if let Some(select_transaction_request) = select_transaction_request {
                     self.process_select_request(select_transaction_request);
                     TaskNextAction::Continue
@@ -320,7 +320,7 @@ where
     fn import_block(&mut self, result: SharedImportResult) {
         let new_height = *result.sealed_block.entity.header().height();
         let executed_transaction = result.tx_status.iter().map(|s| s.id).collect();
-        // We don't want block importer way for us to process the result.
+        // We don't want block importer wait for us to process the result.
         drop(result);
 
         {
@@ -691,7 +691,7 @@ where
             .max_pending_write_pool_requests,
     );
     let (select_transactions_requests_sender, select_transactions_requests_receiver) =
-        mpsc::channel(1);
+        mpsc::channel(10);
     let (read_pool_requests_sender, read_pool_requests_receiver) =
         mpsc::channel(config.service_channel_limits.max_pending_read_pool_requests);
     let tx_status_sender = TxStatusChange::new(
@@ -717,7 +717,7 @@ where
         new_tx: tx_from_p2p_stream,
         imported_blocks: block_importer.block_events(),
         write_pool: write_pool_requests_receiver,
-        borrow_txpool: select_transactions_requests_receiver,
+        select_transactions: select_transactions_requests_receiver,
         read_pool: read_pool_requests_receiver,
     };
 

@@ -178,7 +178,6 @@ mod tests {
         },
         tables::Coins,
         transactional::{
-            Changes,
             ListChanges,
             StorageTransaction,
         },
