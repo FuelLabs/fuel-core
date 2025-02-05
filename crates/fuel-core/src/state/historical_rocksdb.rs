@@ -581,41 +581,21 @@ where
         // TODO: Maybe too much optimized for not really better performance try to remove
         // the changes at the end.
         if self.state_rewind_policy == StateRewindPolicy::NoRewind {
-            let start = std::time::Instant::now();
             self.db.commit_changes(changes)?;
-            tracing::info!(
-                "Commit to rocksdb in commit_changes1 took {} milliseconds",
-                start.elapsed().as_millis()
-            );
             return Ok(());
         }
         if let Some(height) = height {
-            let start = std::time::Instant::now();
             let mut storage_transaction = StorageTransaction::transaction(
                 &self.db,
                 ConflictPolicy::Overwrite,
                 Default::default(),
             );
             self.store_modifications_history(&mut storage_transaction, &height)?;
-            tracing::info!(
-                "Transaction and Store modifications history in commit_changes took {} milliseconds",
-                start.elapsed().as_millis()
-            );
-            let start = std::time::Instant::now();
             let storage_transaction = storage_transaction.into_changes();
             changes.push(storage_transaction);
             self.db.commit_changes(changes)?;
-            tracing::info!(
-                "Commit to rocksdb in commit_changes2 took {} milliseconds",
-                start.elapsed().as_millis()
-            );
         } else {
-            let start = std::time::Instant::now();
             self.db.commit_changes(changes)?;
-            tracing::info!(
-                "Commit to rocksdb in commit_changes3 took {} milliseconds",
-                start.elapsed().as_millis()
-            );
         }
 
         Ok(())

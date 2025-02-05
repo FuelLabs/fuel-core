@@ -170,9 +170,8 @@ where
         )?;
 
         match self.da_compression_config {
-            DaCompressionConfig::Disabled => {dbg!("DaCompressionConfig::Disabled");},
+            DaCompressionConfig::Disabled => {},
             DaCompressionConfig::Enabled(config) => {
-                dbg!("DaCompressionConfig::Enabled");
                 da_compress_block(config, block, &result.events, &mut transaction)?;
             }
         }

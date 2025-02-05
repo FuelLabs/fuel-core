@@ -235,10 +235,10 @@ where
                     }))
                     .unwrap();
                 for tx in removed_txs {
-                    let tx_id = tx.id();
+                    let removed_tx_id = tx.id();
                     futures::executor::block_on(self.notification_sender
                         .send(PoolNotification::Removed {
-                            tx_id,
+                            tx_id: removed_tx_id,
                             error: Error::Removed(RemovedReason::LessWorth(tx_id)),
                         }))
                         .unwrap();

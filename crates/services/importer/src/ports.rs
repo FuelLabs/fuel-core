@@ -161,19 +161,13 @@ where
         let height = block.entity.header().height();
 
         // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576
-        let start = tokio::time::Instant::now();
         for (tx, tx_id) in block.entity.transactions().iter().zip(tx_ids.iter()) {
             // Maybe a debug insert
             self.storage_as_mut::<Transactions>().insert(tx_id, tx)?;
         }
-        tracing::info!(
-            "Insert transactions in store_new_block took {} milliseconds",
-            start.elapsed().as_millis()
-        );
 
         // Compress is really doing recomputation of id ? it shouldn't.
         // Should be fast
-        let start = tokio::time::Instant::now();
         let compressed_block = {
             let new_inner = BlockV1 {
                 header: block.entity.header().clone(),
@@ -181,24 +175,10 @@ where
             };
             Block::V1(new_inner)
         };
-        tracing::info!(
-            "Compress in store_new_block took {} milliseconds",
-            start.elapsed().as_millis()
-        );
-        let start = tokio::time::Instant::now();
         self.storage_as_mut::<FuelBlocks>()
             .insert(height, &compressed_block)?;
-        tracing::info!(
-            "Insert block in store_new_block took {} milliseconds (including compress)",
-            start.elapsed().as_millis()
-        );
-        let start = tokio::time::Instant::now();
         self.storage_as_mut::<SealedBlockConsensus>()
             .insert(height, &block.consensus)?;
-        tracing::info!(
-            "Insert consensus in store_new_block took {} milliseconds",
-            start.elapsed().as_millis()
-        );
 
         Ok(())
     }
