@@ -3798,17 +3798,10 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-parallel-executor"
-<<<<<<< HEAD
-version = "0.41.4"
-dependencies = [
- "fuel-core-storage",
- "fuel-core-types 0.41.4",
-=======
 version = "0.41.5"
 dependencies = [
  "fuel-core-storage",
  "fuel-core-types 0.41.5",
->>>>>>> master
  "fuel-core-upgradable-executor",
  "tokio",
 ]
