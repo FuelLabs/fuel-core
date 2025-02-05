@@ -152,12 +152,12 @@ where
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn latest_l2_block(&self) -> &AtomicU32 {
         &self.latest_l2_block
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn initial_recorded_height(&self) -> Option<BlockHeight> {
         self.initial_recorded_height
     }
@@ -236,7 +236,7 @@ where
         self.shared_algo.clone()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn storage_tx_provider(&self) -> &AtomicStorage {
         &self.storage_tx_provider
     }
@@ -406,7 +406,6 @@ where
     }
 }
 
-#[async_trait]
 impl<L2, DA, AtomicStorage> RunnableTask for GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     L2: L2BlockSource,

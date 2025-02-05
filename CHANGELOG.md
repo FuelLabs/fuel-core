@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Added
-- [2635](https://github.com/FuelLabs/fuel-core/pull/2635): Add metrics to gas price service
+- [2668](https://github.com/FuelLabs/fuel-core/pull/2668): Expose gas price service test helpers
+- [2621](https://github.com/FuelLabs/fuel-core/pull/2598): Global merkle root storage updates process upgrade transactions.
+- [2650](https://github.com/FuelLabs/fuel-core/pull/2650): Populate `ProcessedTransactions` table in global merkle root storage.
+- [2667](https://github.com/FuelLabs/fuel-core/pull/2667): Populate `Blobs` table in global merkle root storage.
+- [2652](https://github.com/FuelLabs/fuel-core/pull/2652): Global Merkle Root storage crate: Add Raw contract bytecode to global merkle root storage when processing Create transactions.
+
+## [Version 0.41.5]
 
 ### Changed
 - [2387](https://github.com/FuelLabs/fuel-core/pull/2387): Update description `tx-max-depth` flag.
@@ -21,9 +27,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2617](https://github.com/FuelLabs/fuel-core/pull/2617): Add integration skeleton of parallel-executor.
 - [2553](https://github.com/FuelLabs/fuel-core/pull/2553): Scaffold global merkle root storage crate.
 - [2598](https://github.com/FuelLabs/fuel-core/pull/2598): Add initial test suite for global merkle root storage updates.
+- [2635](https://github.com/FuelLabs/fuel-core/pull/2635): Add metrics to gas price service
+- [2664](https://github.com/FuelLabs/fuel-core/pull/2664): Add print with all information when a transaction is refused because of a collision.
 
 ### Fixed
 - [2632](https://github.com/FuelLabs/fuel-core/pull/2632): Improved performance of certain async trait impls in the gas price service.
+- [2662](https://github.com/FuelLabs/fuel-core/pull/2662): Fix balances query endpoint cost without indexation and behavior coins to spend with one parameter at zero.
 
 ## [Version 0.41.4]
 
