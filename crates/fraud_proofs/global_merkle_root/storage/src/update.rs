@@ -1,8 +1,10 @@
 use crate::{
     column::Column,
     Coins,
+    ConsensusParametersVersions,
     ContractsLatestUtxo,
     Messages,
+    StateTransitionBytecodeVersions,
 };
 use alloc::{
     borrow::Cow,
@@ -15,7 +17,13 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_core_types::{
-    blockchain::block::Block,
+    blockchain::{
+        block::Block,
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
+    },
     entities::{
         coins::coin::CompressedCoinV1,
         contract::ContractUtxoInfo,
@@ -27,6 +35,7 @@ use fuel_core_types::{
             Inputs,
             OutputContract,
             Outputs,
+            UpgradePurpose as _,
         },
         input::{
             self,
@@ -51,6 +60,9 @@ use fuel_core_types::{
         Transaction,
         TxPointer,
         UniqueIdentifier,
+        Upgrade,
+        UpgradeMetadata,
+        UpgradePurpose,
         UtxoId,
     },
     fuel_types::{
@@ -83,6 +95,12 @@ where
         let mut update_transaction = UpdateMerkleizedTablesTransaction {
             chain_id,
             storage: self,
+            latest_state_transition_bytecode_version: block
+                .header()
+                .state_transition_bytecode_version,
+            latest_consensus_parameters_version: block
+                .header()
+                .consensus_parameters_version,
         };
 
         update_transaction.process_block(block)?;
@@ -94,6 +112,8 @@ where
 struct UpdateMerkleizedTablesTransaction<'a, Storage> {
     chain_id: ChainId,
     storage: &'a mut StorageTransaction<Storage>,
+    latest_consensus_parameters_version: ConsensusParametersVersion,
+    latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
 }
 
 impl<'a, Storage> UpdateMerkleizedTablesTransaction<'a, Storage>
@@ -134,8 +154,10 @@ where
             self.process_output(tx_pointer, utxo_id, &inputs, output)?;
         }
 
+        if let Transaction::Upgrade(tx) = tx {
+            self.process_upgrade_transaction(tx)?;
+        }
         // TODO(#2583): Add the transaction to the `ProcessedTransactions` table.
-        // TODO(#2584): Insert state transition bytecode and consensus parameter updates.
         // TODO(#2585): Insert uplodade bytecodes.
         // TODO(#2586): Insert blobs.
         // TODO(#2587): Insert raw code for created contracts.
@@ -267,6 +289,55 @@ where
         }
         Ok(())
     }
+
+    fn process_upgrade_transaction(&mut self, tx: &Upgrade) -> anyhow::Result<()> {
+        let metadata = match tx.metadata() {
+            Some(metadata) => metadata.body.clone(),
+            None => UpgradeMetadata::compute(tx).map_err(|e| anyhow::anyhow!(e))?,
+        };
+
+        match metadata {
+            UpgradeMetadata::ConsensusParameters {
+                consensus_parameters,
+                calculated_checksum: _,
+            } => {
+                let Some(next_consensus_parameters_version) =
+                    self.latest_consensus_parameters_version.checked_add(1)
+                else {
+                    return Err(anyhow::anyhow!("Invalid consensus parameters version"));
+                };
+                self.latest_consensus_parameters_version =
+                    next_consensus_parameters_version;
+                self.storage
+                    .storage::<ConsensusParametersVersions>()
+                    .insert(
+                        &self.latest_consensus_parameters_version,
+                        &consensus_parameters,
+                    )?;
+            }
+            UpgradeMetadata::StateTransition => match tx.upgrade_purpose() {
+                UpgradePurpose::ConsensusParameters { .. } => unreachable!(
+                    "Upgrade with StateTransition metadata should have StateTransition purpose"
+                ),
+                UpgradePurpose::StateTransition { root } => {
+                    let Some(next_state_transition_bytecode_version) =
+                        self.latest_state_transition_bytecode_version.checked_add(1)
+                    else {
+                        return Err(anyhow::anyhow!(
+                            "Invalid state transition bytecode version"
+                        ));
+                    };
+                    self.latest_state_transition_bytecode_version =
+                        next_state_transition_bytecode_version;
+                    self.storage
+                        .storage::<StateTransitionBytecodeVersions>()
+                        .insert(&self.latest_state_transition_bytecode_version, root)?;
+                }
+            },
+        }
+
+        Ok(())
+    }
 }
 
 pub trait TransactionInputs {
@@ -320,10 +391,17 @@ mod tests {
         },
         StorageAsRef,
     };
-    use fuel_core_types::fuel_tx::{
-        Bytes32,
-        ContractId,
-        TxId,
+    use fuel_core_types::{
+        fuel_crypto::Hasher,
+        fuel_tx::{
+            Bytes32,
+            ConsensusParameters,
+            ContractId,
+            Finalizable,
+            TransactionBuilder,
+            TxId,
+            Witness,
+        },
     };
 
     use rand::{
@@ -528,6 +606,92 @@ mod tests {
         assert!(coin_doesnt_exist_after_process_input);
     }
 
+    #[test]
+    fn process_upgrade_transaction_should_update_latest_state_transition_bytecode_version_when_interacting_with_relevant_upgrade(
+    ) {
+        // Given
+        let new_root = Bytes32::from([1; 32]);
+        let upgrade_tx = TransactionBuilder::upgrade(UpgradePurpose::StateTransition {
+            root: new_root,
+        })
+        .finalize();
+
+        let mut storage = InMemoryStorage::default();
+
+        // When
+        let state_transition_bytecode_version_before_upgrade = 1;
+        let state_transition_bytecode_version_after_upgrade =
+            state_transition_bytecode_version_before_upgrade + 1;
+
+        let mut storage_tx = storage.write_transaction();
+        let mut update_tx = storage_tx
+            .construct_update_merkleized_tables_transaction_with_versions(
+                state_transition_bytecode_version_before_upgrade,
+                0,
+            );
+        update_tx.process_upgrade_transaction(&upgrade_tx).unwrap();
+
+        let state_transition_bytecode_root_after_upgrade = storage_tx
+            .storage_as_ref::<StateTransitionBytecodeVersions>()
+            .get(&state_transition_bytecode_version_after_upgrade)
+            .expect("In memory Storage should not return an error")
+            .expect("State transition bytecode version after upgrade should be present")
+            .into_owned();
+
+        // Then
+        assert_eq!(state_transition_bytecode_version_before_upgrade, 1);
+        assert_eq!(state_transition_bytecode_version_after_upgrade, 2);
+        assert_eq!(state_transition_bytecode_root_after_upgrade, new_root);
+    }
+
+    #[test]
+    fn process_upgrade_transaction_should_update_latest_consensus_parameters_version_when_interacting_with_relevant_upgrade(
+    ) {
+        // Given
+        let consensus_parameters = ConsensusParameters::default();
+        let serialized_consensus_parameters =
+            postcard::to_allocvec(&consensus_parameters)
+                .expect("Consensus parameters serialization should succeed");
+        let tx_witness = Witness::from(serialized_consensus_parameters.clone());
+        let serialized_witness = tx_witness.as_vec();
+        let checksum = Hasher::hash(serialized_witness);
+        let upgrade_tx =
+            TransactionBuilder::upgrade(UpgradePurpose::ConsensusParameters {
+                witness_index: 0,
+                checksum,
+            })
+            .add_witness(tx_witness)
+            .finalize();
+
+        let mut storage = InMemoryStorage::default();
+
+        // When
+        let consensus_parameters_version_before_upgrade = 1;
+        let consensus_parameters_version_after_upgrade =
+            consensus_parameters_version_before_upgrade + 1;
+
+        let mut storage_tx = storage.write_transaction();
+        let mut update_tx = storage_tx
+            .construct_update_merkleized_tables_transaction_with_versions(
+                0,
+                consensus_parameters_version_before_upgrade,
+            );
+
+        update_tx.process_upgrade_transaction(&upgrade_tx).unwrap();
+
+        let consensus_parameters_after_upgrade = storage_tx
+            .storage_as_ref::<ConsensusParametersVersions>()
+            .get(&consensus_parameters_version_after_upgrade)
+            .expect("In memory Storage should not return an error")
+            .expect("State transition bytecode version after upgrade should be present")
+            .into_owned();
+
+        // Then
+        assert_eq!(consensus_parameters_version_before_upgrade, 1);
+        assert_eq!(consensus_parameters_version_after_upgrade, 2);
+        assert_eq!(consensus_parameters_after_upgrade, consensus_parameters);
+    }
+
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
         let mut txid = TxId::default();
         rng.fill_bytes(txid.as_mut());
@@ -562,6 +726,12 @@ mod tests {
         fn construct_update_merkleized_tables_transaction(
             self,
         ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage>;
+
+        fn construct_update_merkleized_tables_transaction_with_versions(
+            self,
+            latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
+            latest_consensus_parameters_version: ConsensusParametersVersion,
+        ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage>;
     }
 
     impl<'a, Storage> ConstructUpdateMerkleizedTablesTransactionForTests<'a>
@@ -575,6 +745,20 @@ mod tests {
             UpdateMerkleizedTablesTransaction {
                 chain_id: ChainId::default(),
                 storage: self,
+                latest_consensus_parameters_version: Default::default(),
+                latest_state_transition_bytecode_version: Default::default(),
+            }
+        }
+        fn construct_update_merkleized_tables_transaction_with_versions(
+            self,
+            latest_state_transition_bytecode_version: StateTransitionBytecodeVersion,
+            latest_consensus_parameters_version: ConsensusParametersVersion,
+        ) -> UpdateMerkleizedTablesTransaction<'a, Self::Storage> {
+            UpdateMerkleizedTablesTransaction {
+                chain_id: ChainId::default(),
+                storage: self,
+                latest_consensus_parameters_version,
+                latest_state_transition_bytecode_version,
             }
         }
     }

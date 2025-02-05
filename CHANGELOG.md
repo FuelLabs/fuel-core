@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2668](https://github.com/FuelLabs/fuel-core/pull/2668): Expose gas price service test helpers
+- [2621](https://github.com/FuelLabs/fuel-core/pull/2598): Global merkle root storage updates process upgrade transactions.
 
 ## [Version 0.41.5]
 
