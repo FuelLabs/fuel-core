@@ -557,8 +557,6 @@ where
     loop {
         let off_chain_height = task.database.latest_height()?;
 
-        dbg!(off_chain_height);
-        dbg!(target_chain_height);
         if target_chain_height < off_chain_height {
             return Err(anyhow::anyhow!(
                 "The target chain height is lower than the off-chain database height"
