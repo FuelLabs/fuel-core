@@ -81,6 +81,7 @@ RUN apt-get update -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /root/fuel-core .
+COPY --from=builder /root/fuel-core-keygen .
 COPY --from=builder /root/fuel-core.d .
 COPY --from=builder /chain-config ./config
 
