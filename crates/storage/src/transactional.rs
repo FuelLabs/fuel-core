@@ -670,8 +670,8 @@ mod test {
             let storage = InMemoryStorage::<Column>::default();
             let mut view = storage.read_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Value::from([1, 2, 3]);
-            view.put(&key, Column::Metadata, expected.clone()).unwrap();
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
             // test
             let mut buf = [0; 3];
             let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
@@ -686,8 +686,8 @@ mod test {
             let storage = InMemoryStorage::<Column>::default();
             let mut view = storage.read_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Value::from([1, 2, 3]);
-            view.put(&key, Column::Metadata, expected.clone()).unwrap();
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
             // test
             let mut buf = [0; 2];
             let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
@@ -697,13 +697,29 @@ mod test {
         }
 
         #[test]
+        fn read_returns_from_view_with_offset() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 2];
+            let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap();
+            // verify
+            assert_eq!(ret, Some(2));
+            assert_eq!(buf, [2, 3]);
+        }
+
+        #[test]
         fn read_returns_from_view_buf_bigger() {
             // setup
             let storage = InMemoryStorage::<Column>::default();
             let mut view = storage.read_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Value::from([1, 2, 3]);
-            view.put(&key, Column::Metadata, expected.clone()).unwrap();
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
             // test
             let mut buf = [0; 4];
             let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap_err();
@@ -717,8 +733,8 @@ mod test {
             let storage = InMemoryStorage::<Column>::default();
             let mut view = storage.read_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Value::from([1, 2, 3]);
-            view.put(&key, Column::Metadata, expected.clone()).unwrap();
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
             // test
             let mut buf = [0; 3];
             let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap_err();
