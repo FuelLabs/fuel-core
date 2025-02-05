@@ -247,7 +247,9 @@ where
             .storage_as_mut::<ProcessedTransactions>()
             .replace(&tx_id, &())?;
 
-        assert!(previous_tx.is_none());
+        if previous_tx.is_some() {
+            anyhow::bail!("duplicate transaction detected")
+        };
 
         Ok(())
     }
@@ -708,6 +710,8 @@ mod tests {
     }
 
     #[test]
+    /// After processing a transaction,
+    /// it should be stored in the `ProcessedTransactions` table.
     fn process_transaction__should_store_processed_transaction() {
         // Given
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
@@ -734,6 +738,32 @@ mod tests {
             .get(&tx_id)
             .unwrap()
             .is_some());
+    }
+
+    #[test]
+    /// We get an error if we encounter the same transaction
+    /// twice in `process_transaction`.
+    fn process_transaction__should_error_on_duplicate_transaction() {
+        // Given
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
+
+        let block_height = BlockHeight::new(0);
+        let tx_idx = 0;
+        let tx = Transaction::default_test_tx();
+
+        // When
+        storage_update_tx
+            .process_transaction(block_height, tx_idx, &tx)
+            .unwrap();
+
+        let result_after_second_call =
+            storage_update_tx.process_transaction(block_height, tx_idx, &tx);
+
+        // Then
+        assert!(result_after_second_call.is_err());
     }
 
     fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
