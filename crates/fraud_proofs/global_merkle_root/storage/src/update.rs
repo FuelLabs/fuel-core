@@ -8,6 +8,7 @@ use crate::{
     Messages,
     ProcessedTransactions,
     StateTransitionBytecodeVersions,
+    UploadedBytecodes,
 };
 use alloc::{
     borrow::Cow,
@@ -19,6 +20,7 @@ use fuel_core_storage::{
     kv_store::KeyValueInspect,
     transactional::StorageTransaction,
     StorageAsMut,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -35,6 +37,7 @@ use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx::{
         field::{
+            BytecodeRoot,
             BytecodeWitnessIndex,
             ChargeableBody,
             InputContract,
@@ -72,12 +75,14 @@ use fuel_core_types::{
         Upgrade,
         UpgradeMetadata,
         UpgradePurpose,
+        Upload,
         UtxoId,
     },
     fuel_types::{
         BlockHeight,
         ChainId,
     },
+    fuel_vm::UploadedBytecode,
     services::executor::{
         Error as ExecutorError,
         TransactionValidityError,
@@ -164,40 +169,16 @@ where
             self.process_output(tx_pointer, utxo_id, &inputs, output)?;
         }
 
-        if let Transaction::Upgrade(tx) = tx {
-            self.process_upgrade_transaction(tx)?;
-        }
+        match tx {
+            Transaction::Create(tx) => self.process_create_transaction(tx)?,
+            Transaction::Upgrade(tx) => self.process_upgrade_transaction(tx)?,
+            Transaction::Upload(tx) => self.process_upload_transaction(tx)?,
+            Transaction::Blob(tx) => self.process_blob_transaction(tx)?,
+            Transaction::Script(_) | Transaction::Mint(_) => (),
+        };
 
         self.store_processed_transaction(tx_id)?;
 
-        // TODO(#2585): Insert uplodade bytecodes.
-        if let Transaction::Blob(tx) = tx {
-            self.process_blob_transaction(tx)?;
-        }
-        if let Transaction::Create(tx) = tx {
-            self.process_create_transaction(tx)?;
-        }
-
-        Ok(())
-    }
-
-    fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
-        let bytecode_witness_index = tx.bytecode_witness_index();
-        let witnesses = tx.witnesses();
-        let bytecode = witnesses[usize::from(*bytecode_witness_index)].as_vec();
-        // The Fuel specs mandate that each create transaction has exactly one output of type `Output::ContractCreated`.
-        // See https://docs.fuel.network/docs/specs/tx-format/transaction/#transactioncreate
-        let Some(Output::ContractCreated { contract_id, .. }) = tx
-            .outputs()
-            .iter()
-            .find(|output| matches!(output, Output::ContractCreated { .. }))
-        else {
-            anyhow::bail!("Create transaction does not have contract created output")
-        };
-
-        self.storage
-            .storage_as_mut::<ContractsRawCode>()
-            .insert(contract_id, bytecode)?;
         Ok(())
     }
 
@@ -339,6 +320,26 @@ where
         Ok(())
     }
 
+    fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
+        let bytecode_witness_index = tx.bytecode_witness_index();
+        let witnesses = tx.witnesses();
+        let bytecode = witnesses[usize::from(*bytecode_witness_index)].as_vec();
+        // The Fuel specs mandate that each create transaction has exactly one output of type `Output::ContractCreated`.
+        // See https://docs.fuel.network/docs/specs/tx-format/transaction/#transactioncreate
+        let Some(Output::ContractCreated { contract_id, .. }) = tx
+            .outputs()
+            .iter()
+            .find(|output| matches!(output, Output::ContractCreated { .. }))
+        else {
+            anyhow::bail!("Create transaction does not have contract created output")
+        };
+
+        self.storage
+            .storage_as_mut::<ContractsRawCode>()
+            .insert(contract_id, bytecode)?;
+        Ok(())
+    }
+
     fn process_upgrade_transaction(&mut self, tx: &Upgrade) -> anyhow::Result<()> {
         let metadata = match tx.metadata() {
             Some(metadata) => metadata.body.clone(),
@@ -384,6 +385,61 @@ where
                 }
             },
         }
+
+        Ok(())
+    }
+
+    fn process_upload_transaction(&mut self, tx: &Upload) -> anyhow::Result<()> {
+        let bytecode_root = *tx.bytecode_root();
+        let uploaded_bytecode = self
+            .storage
+            .storage_as_ref::<UploadedBytecodes>()
+            .get(&bytecode_root)?
+            .map(Cow::into_owned)
+            .unwrap_or_else(|| UploadedBytecode::Uncompleted {
+                bytecode: Vec::new(),
+                uploaded_subsections_number: 0,
+            });
+
+        let UploadedBytecode::Uncompleted {
+            mut bytecode,
+            uploaded_subsections_number,
+        } = uploaded_bytecode
+        else {
+            anyhow::bail!("expected uncompleted bytecode")
+        };
+
+        let expected_subsection_index = uploaded_subsections_number;
+        if expected_subsection_index != tx.body().subsection_index {
+            anyhow::bail!("expected subsection index {expected_subsection_index}");
+        };
+
+        let witness_index = usize::from(*tx.bytecode_witness_index());
+        let new_bytecode = tx
+            .witnesses()
+            .get(witness_index)
+            .ok_or_else(|| anyhow!("expected witness with bytecode"))?;
+
+        bytecode.extend_from_slice(new_bytecode.as_ref());
+
+        let new_uploaded_subsections_number =
+            uploaded_subsections_number.checked_add(1).ok_or_else(|| {
+                anyhow!("overflow when incrementing uploaded subsection number")
+            })?;
+
+        let new_uploaded_bytecode =
+            if new_uploaded_subsections_number == tx.body().subsections_number {
+                UploadedBytecode::Completed(bytecode)
+            } else {
+                UploadedBytecode::Uncompleted {
+                    bytecode,
+                    uploaded_subsections_number: new_uploaded_subsections_number,
+                }
+            };
+
+        self.storage
+            .storage_as_mut::<UploadedBytecodes>()
+            .insert(&bytecode_root, &new_uploaded_bytecode)?;
 
         Ok(())
     }
@@ -476,6 +532,7 @@ mod tests {
             Finalizable,
             TransactionBuilder,
             TxId,
+            UploadBody,
             Witness,
         },
         fuel_vm::{
@@ -874,6 +931,97 @@ mod tests {
     }
 
     #[test]
+    /// When encountering an upload transaction
+    /// `process_transaction` should store the
+    /// corresponding bytecode segment.
+    fn process_transaction__should_upload_bytecode() {
+        let mut rng = StdRng::seed_from_u64(1337);
+
+        // Given
+        let root = random_bytes(&mut rng);
+        let bytecode_segment_1 = vec![4, 2];
+        let bytecode_segment_2 = vec![1, 3, 3, 7];
+
+        let upload_body_1 = UploadBody {
+            root,
+            witness_index: 0,
+            subsection_index: 0,
+            subsections_number: 2,
+            proof_set: Vec::new(),
+        };
+
+        let upload_body_2 = UploadBody {
+            root,
+            witness_index: 0,
+            subsection_index: 1,
+            subsections_number: 2,
+            proof_set: Vec::new(),
+        };
+
+        let upload_tx_1 = TransactionBuilder::upload(upload_body_1)
+            .add_witness(bytecode_segment_1.clone().into())
+            .finalize_as_transaction();
+
+        let upload_tx_2 = TransactionBuilder::upload(upload_body_2)
+            .add_witness(bytecode_segment_2.clone().into())
+            .finalize_as_transaction();
+
+        let concatenated_bytecode: Vec<_> =
+            [bytecode_segment_1.clone(), bytecode_segment_2]
+                .into_iter()
+                .flatten()
+                .collect();
+
+        let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
+        let mut storage_tx = storage.write_transaction();
+        let mut storage_update_tx =
+            storage_tx.construct_update_merkleized_tables_transaction();
+
+        let block_height = BlockHeight::new(rng.gen());
+        let tx_idx = rng.gen();
+
+        // When
+        storage_update_tx
+            .process_transaction(block_height, tx_idx, &upload_tx_1)
+            .unwrap();
+
+        let UploadedBytecode::Uncompleted {
+            bytecode: returned_segment_1,
+            uploaded_subsections_number: 1,
+        } = storage_update_tx
+            .storage
+            .storage_as_ref::<UploadedBytecodes>()
+            .get(&root)
+            .unwrap()
+            .unwrap()
+            .into_owned()
+        else {
+            panic!("expected incomplete upload")
+        };
+
+        storage_update_tx
+            .process_transaction(block_height, tx_idx, &upload_tx_2)
+            .unwrap();
+
+        storage_tx.commit().unwrap();
+
+        let UploadedBytecode::Completed(returned_bytecode) = storage
+            .read_transaction()
+            .storage_as_ref::<UploadedBytecodes>()
+            .get(&root)
+            .unwrap()
+            .unwrap()
+            .into_owned()
+        else {
+            panic!("expected complete upload")
+        };
+
+        // Then
+        assert_eq!(returned_segment_1, bytecode_segment_1);
+        assert_eq!(returned_bytecode, concatenated_bytecode);
+    }
+
+    #[test]
     fn process_create_transaction__should_insert_bytecode_for_contract_id() {
         // Given
         let contract_bytecode = vec![
@@ -962,6 +1110,13 @@ mod tests {
         rng.fill_bytes(contract_id.as_mut());
 
         contract_id
+    }
+
+    fn random_bytes(rng: &mut impl rand::RngCore) -> Bytes32 {
+        let mut bytes = Bytes32::default();
+        rng.fill_bytes(bytes.as_mut());
+
+        bytes
     }
 
     trait ConstructUpdateMerkleizedTablesTransactionForTests<'a>: Sized + 'a {
