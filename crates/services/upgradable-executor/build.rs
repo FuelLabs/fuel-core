@@ -48,6 +48,9 @@ fn build_wasm() {
     #[cfg(feature = "smt")]
     args.extend(["--features".to_owned(), "smt".to_owned()]);
 
+    #[cfg(feature = "fault-proving")]
+    args.extend(["--features".to_owned(), "fault-proving".to_owned()]);
+
     let manifest_dir =
         env::var_os("CARGO_MANIFEST_DIR").expect("The manifest directory is not set");
     let manifest_path = Path::new(&manifest_dir);

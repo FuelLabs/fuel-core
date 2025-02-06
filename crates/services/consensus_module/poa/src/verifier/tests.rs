@@ -38,7 +38,13 @@ fn correct() -> Input {
         },
     };
     let block_header = partial_header
-        .generate(&txs, &[], Default::default())
+        .generate(
+            &txs,
+            &[],
+            Default::default(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap();
 
     Input {
