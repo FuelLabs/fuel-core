@@ -384,21 +384,17 @@ where
     fn process_notification(&mut self, notification: PoolNotification) {
         match notification {
             PoolNotification::Inserted { tx_id, time } => {
-                        self.pruner.time_txs_submitted.push_front((time, tx_id));
+                self.pruner.time_txs_submitted.push_front((time, tx_id));
     
-                        let duration = time
-                            .duration_since(SystemTime::UNIX_EPOCH)
-                            .expect("Time can't be less than UNIX EPOCH");
+                let duration = time
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .expect("Time can't be less than UNIX EPOCH");
     
-                        self.shared_state.tx_status_sender.send_submitted(
-                            tx_id,
-                            Tai64::from_unix(duration.as_secs() as i64),
-                        );
-                        //TODO: Find a way to revive
-                        // if let Some(channel) = response_channel {
-                        //     let _ = channel.send(Ok(()));
-                        // }
-                        self.shared_state.new_txs_notifier.send_replace(());
+                self.shared_state.tx_status_sender.send_submitted(
+                    tx_id,
+                    Tai64::from_unix(duration.as_secs() as i64),
+                );
+                self.shared_state.new_txs_notifier.send_replace(());
     
             },
             PoolNotification::Removed { tx_id, error } => {
@@ -479,7 +475,7 @@ where
             let tx = Arc::new(checked_tx);
 
             // TODO: Unwrap
-            pool_insert_request_sender.send(PoolInsertRequest::Insert { tx }).unwrap();
+            pool_insert_request_sender.send(PoolInsertRequest::Insert { tx, response_channel }).unwrap();
         };
         move || {
             if metrics {

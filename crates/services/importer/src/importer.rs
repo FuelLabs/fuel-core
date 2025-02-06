@@ -472,7 +472,6 @@ where
         verifier: Arc<V>,
         sealed_block: SealedBlock,
     ) -> Result<UncommittedResult<ListChanges>, Error> {
-        let start = tokio::time::Instant::now();
         let consensus = sealed_block.consensus;
         let block = sealed_block.entity;
         let sealed_block_id = block.id();
@@ -482,10 +481,6 @@ where
         if let Err(err) = result_of_verification {
             return Err(Error::FailedVerification(err))
         }
-        tracing::info!(
-            "Verification of the block fields took: {}ms",
-            start.elapsed().as_millis()
-        );
 
         // The current code has a separate function X to process `StateConfig`.
         // It is not possible to execute it via `Executor`.
@@ -494,15 +489,10 @@ where
             return Err(Error::ExecuteGenesis)
         }
 
-        let start_validate = tokio::time::Instant::now();
         let (ValidationResult { tx_status, events }, changes) = executor
             .validate(&block)
             .map_err(Error::FailedExecution)?
             .into();
-        tracing::info!(
-            "Validation of the block took: {}ms",
-            start_validate.elapsed().as_millis()
-        );
 
         let actual_block_id = block.id();
         if actual_block_id != sealed_block_id {
@@ -517,10 +507,6 @@ where
         };
         let import_result =
             ImportResult::new_from_network(sealed_block, tx_status, events);
-        tracing::info!(
-            "Verification and execution of the block took: {}ms",
-            start.elapsed().as_millis()
-        );
         Ok(Uncommitted::new(import_result, changes))
     }
 }
@@ -537,7 +523,6 @@ where
         &self,
         sealed_block: SealedBlock,
     ) -> Result<(), Error> {
-        let start = Instant::now();
         let _guard = self.lock()?;
 
         let block_changes = std::thread::spawn({
@@ -564,10 +549,6 @@ where
                     sealed_block.clone(),
                 );
                 let execute_time = start.elapsed().as_secs_f64();
-                tracing::info!(
-                    "Just verify and execute took: {}ms",
-                    start.elapsed().as_millis()
-                );
                 (result, execute_time)
             })
             .await?;
@@ -616,10 +597,6 @@ where
         };
 
         importer_metrics().execute_and_commit_duration.observe(time);
-        tracing::info!(
-            "Total execute and commit took: {}ms",
-            start.elapsed().as_millis()
-        );
         // return execution result
         commit_result.map(|_| ())
     }

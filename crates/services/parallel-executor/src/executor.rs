@@ -104,7 +104,6 @@ use std::{
         Arc,
         RwLock,
     },
-    time::Instant,
 };
 use tokio::runtime::Runtime;
 
@@ -470,7 +469,6 @@ where
         let block_height = *header_to_produce.height();
         let consensus_parameters = consensus_parameters.into_owned();
 
-        let start = Instant::now();
         let mut handlers = Vec::with_capacity(self.number_of_cores.get());
         let mut current_batch = Vec::with_capacity(tx_per_core);
         let mut i = 0;
@@ -546,20 +544,10 @@ where
             }
         }
 
-        tracing::info!(
-            "Building thread for checking transactions took: {}ms",
-            start.elapsed().as_millis()
-        );
-        let start = Instant::now();
         let results = futures::executor::block_on(async move {
             futures::future::join_all(handlers).await
         });
-        tracing::info!(
-            "Checking transactions took: {}ms",
-            start.elapsed().as_millis()
-        );
         // TODO: Use reference for `consensus_parameters`.
-        let start = Instant::now();
         let mut splitter = DependencySplitter::new(consensus_parameters.clone(), txs_len);
         // SAFETY: The `skipped_transactions_ids` is not shared between threads.
         let mut skipped_transactions_ids = Arc::try_unwrap(skipped_transactions_ids)
@@ -583,24 +571,13 @@ where
                 }
             }
         }
-        tracing::info!(
-            "Processing transactions took: {}ms",
-            start.elapsed().as_millis()
-        );
 
-        let start = Instant::now();
         let buckets = splitter
             .split_equally(self.number_of_cores, consensus_parameters.block_gas_limit());
-        tracing::info!(
-            "Splitting transactions took: {}ms",
-            start.elapsed().as_millis()
-        );
 
-        let start = Instant::now();
         let handlers = buckets
             .into_iter()
             .map(|(_, txs)| {
-                tracing::info!("Number of transactions in the bucket: {:?}", txs.len());
                 let part_of_the_block = Components {
                     header_to_produce,
                     transactions_source: OnceTransactionsSource::new_maybe_checked(txs),
@@ -636,11 +613,6 @@ where
             })
             .collect::<ExecutorResult<Vec<_>>>()?;
 
-        tracing::info!(
-            "Execution of transactions took: {}ms",
-            start.elapsed().as_millis()
-        );
-
         let components = Components {
             header_to_produce,
             transactions_source: (),
@@ -648,7 +620,6 @@ where
             gas_price,
         };
 
-        let start = Instant::now();
         let latest_view = executor.storage_view_provider.latest_view()?;
         let result = Self::merge_execution_results(
             runtime,
@@ -704,10 +675,6 @@ where
             let old_result = executor.produce_without_commit_with_source(components)?;
             assert_eq!(old_result.result(), result.result());
         }
-        tracing::info!(
-            "Merging of transactions took: {}ms",
-            start.elapsed().as_millis()
-        );
 
         Ok(result)
     }
@@ -994,19 +961,12 @@ where
             },
         );
 
-        let start = Instant::now();
 
         let results = futures::executor::block_on(async move {
             futures::future::join_all(handlers).await
         });
 
-        tracing::info!(
-            "Setting correct pointers and tx hash for Merkle root took: {}ms",
-            start.elapsed().as_millis()
-        );
-
         for part in results {
-            let start = std::time::Instant::now();
             let (shifted_changes, execution_data, transactions, tx_leaf_hashes) =
                 part.map_err(|e| {
                     ExecutorError::Other(format!(
@@ -1033,12 +993,7 @@ where
                 .ok_or(ExecutorError::TxSizeOverflow)?;
 
             // If `part_changes` to the database gas conflicts, `commit_changes` should fail.
-            let start_time = std::time::Instant::now();
             total_changes.push(shifted_changes);
-            tracing::info!(
-                "Committing changes to total storage took: {}ms",
-                start_time.elapsed().as_millis()
-            );
 
             total_data.tx_status.extend(execution_data.tx_status);
             total_data.events.extend(execution_data.events);
@@ -1052,10 +1007,6 @@ where
                 .map_err(|_| {
                 ExecutorError::BlockHeaderError(BlockHeaderError::TooManyTransactions)
             })?;
-            tracing::info!(
-                "Adding in global vec took: {}ms",
-                start.elapsed().as_millis()
-            );
         }
 
         let block_executor = native_executor::executor::BlockExecutor::new(
@@ -1096,8 +1047,6 @@ where
             ..
         } = total_data;
 
-        let start_time = std::time::Instant::now();
-
         let block = total_partial_block
             .generate(&message_ids[..], event_inbox_root, Some(total_tx_hashes))
             .map_err(ExecutorError::BlockHeaderError)?;
@@ -1105,16 +1054,12 @@ where
         let finalized_block_id = block.id();
 
         tracing::info!(
-            "Final block creation took: {}ms",
-            start_time.elapsed().as_millis()
-        );
-
-        tracing::debug!(
-            "Block {:#x} fees: {} gas: {} tx_size: {}",
+            "Block {:#x} fees: {} gas: {} tx_size: {}, tx_count: {}",
             finalized_block_id,
             coinbase,
             used_gas,
-            used_size
+            used_size,
+            block.transactions().len()
         );
 
         let result = ProductionResult {

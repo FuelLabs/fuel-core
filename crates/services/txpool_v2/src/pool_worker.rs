@@ -62,9 +62,9 @@ impl PoolWorkerInterface {
         }
     }
 
-    pub fn insert(&self, tx: ArcPoolTx) {
+    pub fn insert(&self, tx: ArcPoolTx, response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>) {
         self.insert_request_sender
-            .send(PoolInsertRequest::Insert { tx })
+            .send(PoolInsertRequest::Insert { tx, response_channel })
             .unwrap();
     }
 
@@ -119,7 +119,7 @@ impl PoolWorkerInterface {
 // 3. Removing txs / removing coins depedents ...
 // 4. Read API/P2P...
 pub enum PoolInsertRequest {
-    Insert { tx: ArcPoolTx },
+    Insert { tx: ArcPoolTx, response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>, },
 }
 
 pub enum PoolOtherRequest {
@@ -172,8 +172,8 @@ where
         'outer: loop {
             loop {
                 match self.insert_request_receiver.try_recv() {
-                    Ok(PoolInsertRequest::Insert { tx }) => {
-                        self.insert(tx);
+                    Ok(PoolInsertRequest::Insert { tx, response_channel }) => {
+                        self.insert(tx, response_channel);
                         continue;
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -217,7 +217,7 @@ where
         }
     }
 
-    fn insert(&mut self, tx: ArcPoolTx) {
+    fn insert(&mut self, tx: ArcPoolTx, response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>) {
         let tx_id = tx.id();
         let result = self.view_provider.latest_view();
         let start_time = std::time::Instant::now();
@@ -249,6 +249,9 @@ where
                     .send(PoolNotification::Removed { tx_id, error: err }))
                     .unwrap();
             }
+        }
+        if let Some(channel) = response_channel {
+            let _ = channel.send(Ok(()));
         }
         tracing::info!(
             "Transaction (id: {}) took {} micros seconds to insert into the pool",

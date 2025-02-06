@@ -428,18 +428,9 @@ impl PartialBlockHeader {
         outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
     ) -> Result<BlockHeader, BlockHeaderError> {
-        #[cfg(feature = "std")]
-        let start_time = std::time::Instant::now();
         // Generate the transaction merkle root.
         let transactions_root = generate_txns_root(transactions, precomputed_hashes);
-        #[cfg(feature = "std")]
-        tracing::info!(
-            "Generated transactions root in {:?}ms",
-            start_time.elapsed().as_millis()
-        );
 
-        #[cfg(feature = "std")]
-        let start_time = std::time::Instant::now();
         // Generate the message merkle root.
         let message_outbox_root = outbox_message_ids
             .iter()
@@ -449,11 +440,6 @@ impl PartialBlockHeader {
             })
             .root()
             .into();
-        #[cfg(feature = "std")]
-        tracing::info!(
-            "Generated message outbox root in {:?}ms",
-            start_time.elapsed().as_millis()
-        );
 
         let application = ApplicationHeader {
             da_height: self.application.da_height,

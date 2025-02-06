@@ -175,10 +175,7 @@ where
                 da_compress_block(config, block, &result.events, &mut transaction)?;
             }
         }
-        tracing::info!("Committing block {} in offchain", height);
-        let time = std::time::Instant::now();
         transaction.commit()?;
-        tracing::info!("Block {} committed in offchain in {}ms", height, time.elapsed().as_millis());
 
         for status in result.tx_status.iter() {
             let tx_id = status.id;
