@@ -22,7 +22,11 @@ use crate::{
         RemovedReason,
     },
     ports::TxPoolPersistentStorage,
-    service::{TxInfo, TxPool}, Constraints,
+    service::{
+        TxInfo,
+        TxPool,
+    },
+    Constraints,
 };
 
 pub struct PoolWorkerInterface {
@@ -42,7 +46,8 @@ impl PoolWorkerInterface {
     {
         let (request_sender, request_receiver) = std::sync::mpsc::channel();
         let (insert_request_sender, insert_request_receiver) = std::sync::mpsc::channel();
-        let (notification_sender, notification_receiver) = tokio::sync::mpsc::channel(100000);
+        let (notification_sender, notification_receiver) =
+            tokio::sync::mpsc::channel(100000);
 
         let handle = std::thread::spawn(move || {
             let mut worker = PoolWorker::new(
@@ -62,9 +67,16 @@ impl PoolWorkerInterface {
         }
     }
 
-    pub fn insert(&self, tx: ArcPoolTx, response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>) {
+    pub fn insert(
+        &self,
+        tx: ArcPoolTx,
+        response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>,
+    ) {
         self.insert_request_sender
-            .send(PoolInsertRequest::Insert { tx, response_channel })
+            .send(PoolInsertRequest::Insert {
+                tx,
+                response_channel,
+            })
             .unwrap();
     }
 
@@ -86,9 +98,16 @@ impl PoolWorkerInterface {
             .unwrap();
     }
 
-    pub fn get_block_transactions(&self, constraints: Constraints, blocks: Sender<Vec<ArcPoolTx>>) {
+    pub fn get_block_transactions(
+        &self,
+        constraints: Constraints,
+        blocks: Sender<Vec<ArcPoolTx>>,
+    ) {
         self.request_sender
-            .send(PoolOtherRequest::GetBlockTransactions { constraints, blocks })
+            .send(PoolOtherRequest::GetBlockTransactions {
+                constraints,
+                blocks,
+            })
             .unwrap();
     }
 
@@ -104,32 +123,60 @@ impl PoolWorkerInterface {
             .unwrap();
     }
 
-    pub fn get_non_existing_txs(&self, tx_ids: Vec<TxId>, non_existing_txs: Sender<Vec<TxId>>) {
+    pub fn get_non_existing_txs(
+        &self,
+        tx_ids: Vec<TxId>,
+        non_existing_txs: Sender<Vec<TxId>>,
+    ) {
         self.request_sender
-            .send(PoolOtherRequest::GetNonExistingTxs { tx_ids, non_existing_txs })
+            .send(PoolOtherRequest::GetNonExistingTxs {
+                tx_ids,
+                non_existing_txs,
+            })
             .unwrap();
     }
 }
 
 // In the real code we want to have more different channels to prioritise each type of query
 // We are only prioritising this one for bench for now
-// The order would probably be : 
+// The order would probably be :
 // 1. Getting txs for a block
 // 2. Inserting txs
 // 3. Removing txs / removing coins depedents ...
 // 4. Read API/P2P...
 pub enum PoolInsertRequest {
-    Insert { tx: ArcPoolTx, response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>, },
+    Insert {
+        tx: ArcPoolTx,
+        response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>,
+    },
 }
 
 pub enum PoolOtherRequest {
-    GetBlockTransactions { constraints: Constraints, blocks: Sender<Vec<ArcPoolTx>> },
-    Remove { tx_ids: Vec<TxId> },
-    RemoveCoinDependents { parent_txs: Vec<(TxId, String)> },
-    RemoveAndCoinDependents { tx_ids: (Vec<TxId>, Error) },
-    GetNonExistingTxs { tx_ids: Vec<TxId>, non_existing_txs: Sender<Vec<TxId>> },
-    GetTxs { tx_ids: Vec<TxId>, txs: Sender<Vec<Option<TxInfo>>> },
-    GetTxIds { max_txs: usize, tx_ids: Sender<Vec<TxId>> },
+    GetBlockTransactions {
+        constraints: Constraints,
+        blocks: Sender<Vec<ArcPoolTx>>,
+    },
+    Remove {
+        tx_ids: Vec<TxId>,
+    },
+    RemoveCoinDependents {
+        parent_txs: Vec<(TxId, String)>,
+    },
+    RemoveAndCoinDependents {
+        tx_ids: (Vec<TxId>, Error),
+    },
+    GetNonExistingTxs {
+        tx_ids: Vec<TxId>,
+        non_existing_txs: Sender<Vec<TxId>>,
+    },
+    GetTxs {
+        tx_ids: Vec<TxId>,
+        txs: Sender<Vec<Option<TxInfo>>>,
+    },
+    GetTxIds {
+        max_txs: usize,
+        tx_ids: Sender<Vec<TxId>>,
+    },
 }
 
 pub enum PoolNotification {
@@ -172,7 +219,10 @@ where
         'outer: loop {
             loop {
                 match self.insert_request_receiver.try_recv() {
-                    Ok(PoolInsertRequest::Insert { tx, response_channel }) => {
+                    Ok(PoolInsertRequest::Insert {
+                        tx,
+                        response_channel,
+                    }) => {
                         self.insert(tx, response_channel);
                         continue;
                     }
@@ -187,7 +237,10 @@ where
 
             match self.request_receiver.try_recv() {
                 Ok(request) => match request {
-                    PoolOtherRequest::GetBlockTransactions { constraints, blocks } => { 
+                    PoolOtherRequest::GetBlockTransactions {
+                        constraints,
+                        blocks,
+                    } => {
                         self.get_block_transactions(constraints, blocks);
                     }
                     PoolOtherRequest::Remove { tx_ids } => {
@@ -205,10 +258,13 @@ where
                     PoolOtherRequest::GetTxs { tx_ids, txs } => {
                         self.get_txs(tx_ids, txs);
                     }
-                    PoolOtherRequest::GetNonExistingTxs { tx_ids, non_existing_txs } => {
+                    PoolOtherRequest::GetNonExistingTxs {
+                        tx_ids,
+                        non_existing_txs,
+                    } => {
                         self.get_non_existing_txs(tx_ids, non_existing_txs);
                     }
-                }
+                },
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     break;
@@ -217,7 +273,11 @@ where
         }
     }
 
-    fn insert(&mut self, tx: ArcPoolTx, response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>) {
+    fn insert(
+        &mut self,
+        tx: ArcPoolTx,
+        response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>,
+    ) {
         let tx_id = tx.id();
         let result = self.view_provider.latest_view();
         let start_time = std::time::Instant::now();
@@ -228,26 +288,30 @@ where
 
         match res {
             Ok(removed_txs) => {
-                futures::executor::block_on(self.notification_sender
-                    .send(PoolNotification::Inserted {
+                futures::executor::block_on(self.notification_sender.send(
+                    PoolNotification::Inserted {
                         tx_id,
                         time: SystemTime::now(),
-                    }))
-                    .unwrap();
+                    },
+                ))
+                .unwrap();
                 for tx in removed_txs {
                     let removed_tx_id = tx.id();
-                    futures::executor::block_on(self.notification_sender
-                        .send(PoolNotification::Removed {
+                    futures::executor::block_on(self.notification_sender.send(
+                        PoolNotification::Removed {
                             tx_id: removed_tx_id,
                             error: Error::Removed(RemovedReason::LessWorth(tx_id)),
-                        }))
-                        .unwrap();
+                        },
+                    ))
+                    .unwrap();
                 }
             }
             Err(err) => {
-                futures::executor::block_on(self.notification_sender
-                    .send(PoolNotification::Removed { tx_id, error: err }))
-                    .unwrap();
+                futures::executor::block_on(
+                    self.notification_sender
+                        .send(PoolNotification::Removed { tx_id, error: err }),
+                )
+                .unwrap();
             }
         }
         if let Some(channel) = response_channel {
@@ -260,7 +324,11 @@ where
         );
     }
 
-    fn get_block_transactions(&mut self, constraints: Constraints, blocks: Sender<Vec<ArcPoolTx>>) {
+    fn get_block_transactions(
+        &mut self,
+        constraints: Constraints,
+        blocks: Sender<Vec<ArcPoolTx>>,
+    ) {
         let txs = self.pool.extract_transactions_for_block(constraints);
         // TODO: Unwrap
         blocks.send(txs).unwrap();
@@ -290,34 +358,46 @@ where
         let removed = self.pool.remove_transaction_and_dependents(tx_ids.0);
         for tx in removed {
             let tx_id = tx.id();
-            futures::executor::block_on(self.notification_sender
-                .send(PoolNotification::Removed {
+            futures::executor::block_on(self.notification_sender.send(
+                PoolNotification::Removed {
                     tx_id,
                     error: Error::SkippedTransaction(format!(
                         "Transaction with {tx_id}, was removed because of the {error}"
                     )),
-                }))
-                .unwrap();
+                },
+            ))
+            .unwrap();
         }
     }
 
     fn get_tx_ids(&mut self, max_txs: usize, tx_ids_sender: Sender<Vec<TxId>>) {
-        let tx_ids: Vec<TxId> = self.pool.iter_tx_ids().take(max_txs).map(|tx_id| *tx_id).collect();
+        let tx_ids: Vec<TxId> = self
+            .pool
+            .iter_tx_ids()
+            .take(max_txs)
+            .map(|tx_id| *tx_id)
+            .collect();
         tx_ids_sender.send(tx_ids).unwrap();
     }
 
     fn get_txs(&mut self, tx_ids: Vec<TxId>, txs_sender: Sender<Vec<Option<TxInfo>>>) {
         let txs: Vec<Option<TxInfo>> = tx_ids
             .into_iter()
-            .map(|tx_id| self.pool.find_one(&tx_id).map(|tx| TxInfo {
-                tx: tx.transaction.clone(),
-                creation_instant: tx.creation_instant
-            }))
+            .map(|tx_id| {
+                self.pool.find_one(&tx_id).map(|tx| TxInfo {
+                    tx: tx.transaction.clone(),
+                    creation_instant: tx.creation_instant,
+                })
+            })
             .collect();
         txs_sender.send(txs).unwrap();
     }
 
-    fn get_non_existing_txs(&mut self, tx_ids: Vec<TxId>, non_existing_txs_sender: Sender<Vec<TxId>>) {
+    fn get_non_existing_txs(
+        &mut self,
+        tx_ids: Vec<TxId>,
+        non_existing_txs_sender: Sender<Vec<TxId>>,
+    ) {
         let non_existing_txs: Vec<TxId> = tx_ids
             .into_iter()
             .filter(|tx_id| !self.pool.contains(tx_id))

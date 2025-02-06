@@ -13,8 +13,8 @@ use fuel_core_storage::{
     transactional::{
         Changes,
         ConflictPolicy,
-        ListChanges,
         Modifiable,
+        StorageChanges,
         StorageTransaction,
         WriteTransaction,
     },
@@ -52,7 +52,7 @@ pub trait Validator: Send + Sync {
     fn validate(
         &self,
         block: &Block,
-    ) -> ExecutorResult<UncommittedValidationResult<ListChanges>>;
+    ) -> ExecutorResult<UncommittedValidationResult<StorageChanges>>;
 }
 
 /// The trait indicates that the type supports storage transactions.
@@ -81,11 +81,7 @@ pub trait ImporterDatabase: Send + Sync {
     ) -> StorageResult<Option<ChainId>>;
 
     /// Commit changes
-    fn commit_changes(
-        &mut self,
-        new_height: BlockHeight,
-        changes: Vec<Changes>,
-    ) -> StorageResult<()>;
+    fn commit_changes(&mut self, changes: StorageChanges) -> StorageResult<()>;
 }
 
 /// The port of the storage transaction required by the importer.

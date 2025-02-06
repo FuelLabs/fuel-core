@@ -203,7 +203,10 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
-        let mut chain_conf = self.chain_config.clone().unwrap_or_else(|| local_chain_config());
+        let mut chain_conf = self
+            .chain_config
+            .clone()
+            .unwrap_or_else(|| local_chain_config());
 
         if let Some(gas_limit) = self.gas_limit {
             let tx_params = *chain_conf.consensus_parameters.tx_params();
@@ -303,7 +306,7 @@ impl Default for TestSetupBuilder {
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores: 1,
             state_rewind_policy: None,
-            chain_config: None
+            chain_config: None,
         }
     }
 }

@@ -1,5 +1,8 @@
 use crate::{
-    database::Database,
+    database::{
+        commit_changes_with_height_update,
+        Database,
+    },
     service::adapters::{
         BlockImporterAdapter,
         ExecutorAdapter,
@@ -28,7 +31,7 @@ use fuel_core_storage::{
         ConsensusParametersVersions,
         FuelBlocks,
     },
-    transactional::ListChanges,
+    transactional::StorageChanges,
     MerkleRoot,
     Result as StorageResult,
     StorageAsRef,
@@ -54,6 +57,7 @@ use fuel_core_types::{
         UncommittedValidationResult,
     },
 };
+use itertools::Itertools;
 use std::sync::Arc;
 
 impl BlockImporterAdapter {
@@ -122,12 +126,11 @@ impl ImporterDatabase for Database {
             .map(|cow| cow.chain_id()))
     }
 
-    fn commit_changes(
-        &mut self,
-        new_height: BlockHeight,
-        changes: Vec<fuel_core_storage::transactional::Changes>,
-    ) -> StorageResult<()> {
-        self.data.commit_changes(Some(new_height), changes)
+    fn commit_changes(&mut self, changes: StorageChanges) -> StorageResult<()> {
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
+                .try_collect()
+        })
     }
 }
 
@@ -135,7 +138,7 @@ impl Validator for ExecutorAdapter {
     fn validate(
         &self,
         block: &Block,
-    ) -> ExecutorResult<UncommittedValidationResult<ListChanges>> {
+    ) -> ExecutorResult<UncommittedValidationResult<StorageChanges>> {
         self.executor.validate(block)
     }
 }

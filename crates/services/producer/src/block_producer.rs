@@ -16,7 +16,7 @@ use anyhow::{
 };
 use fuel_core_storage::transactional::{
     AtomicView,
-    Changes,
+    StorageChanges,
 };
 use fuel_core_types::{
     blockchain::{
@@ -111,7 +111,7 @@ where
     pub async fn produce_and_execute_predefined(
         &self,
         predefined_block: &Block,
-    ) -> anyhow::Result<UncommittedResult<Changes>>
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>>
     where
         Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
     {
@@ -186,7 +186,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         tx_source: impl FnOnce(u64, BlockHeight) -> F + Send,
-    ) -> anyhow::Result<UncommittedResult<Changes>>
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>>
     where
         Executor: ports::BlockProducer<TxSource> + 'static,
         F: Future<Output = anyhow::Result<TxSource>>,
@@ -234,14 +234,14 @@ where
         // Store the context string in case we error.
         let context_string =
             format!("Failed to produce block {height:?} due to execution failure");
-        let executor = self
-        .executor.clone();
+        let executor = self.executor.clone();
         let result = tokio::task::spawn_blocking(move || {
             executor
-            .produce_without_commit(component)
-            .map_err(Into::<anyhow::Error>::into)
-            .context(context_string)
-        }).await??;
+                .produce_without_commit(component)
+                .map_err(Into::<anyhow::Error>::into)
+                .context(context_string)
+        })
+        .await??;
 
         debug!("Produced block with result: {:?}", result.result());
         Ok(result)
@@ -255,8 +255,14 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, TxSource: Send + 'static, GasPriceProvider, ConsensusProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+impl<
+        ViewProvider,
+        TxPool,
+        Executor,
+        TxSource: Send + 'static,
+        GasPriceProvider,
+        ConsensusProvider,
+    > Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
 where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
@@ -270,7 +276,7 @@ where
         &self,
         height: BlockHeight,
         block_time: Tai64,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         self.produce_and_execute::<TxSource, _>(
             height,
             block_time,
@@ -295,7 +301,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         transactions: Vec<Transaction>,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         self.produce_and_execute(height, block_time, |_, _| async { Ok(transactions) })
             .await
     }

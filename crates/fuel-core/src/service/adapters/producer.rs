@@ -34,7 +34,7 @@ use fuel_core_storage::{
         FuelBlocks,
         StateTransitionBytecodeVersions,
     },
-    transactional::Changes,
+    transactional::StorageChanges,
     Result as StorageResult,
     StorageAsRef,
 };
@@ -94,7 +94,7 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAd
     fn produce_without_commit(
         &self,
         component: Components<TransactionsSource>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         self.executor.produce_without_commit_with_source(component)
     }
 }
@@ -103,7 +103,7 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
     fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         self.produce_without_commit_from_vector(component)
     }
 }

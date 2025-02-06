@@ -23,10 +23,7 @@ use fuel_core_poa::{
     },
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::{
-    Changes,
-    ListChanges,
-};
+use fuel_core_storage::transactional::StorageChanges;
 use fuel_core_types::{
     blockchain::block::Block,
     fuel_tx::Bytes32,
@@ -97,7 +94,7 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         match source {
             TransactionsSource::TxPool => {
                 self.block_producer
@@ -115,7 +112,7 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
     async fn produce_predefined_block(
         &self,
         block: &Block,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         self.block_producer
             .produce_and_execute_predefined(block)
             .await
@@ -126,7 +123,7 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
 impl BlockImporter for BlockImporterAdapter {
     async fn commit_result(
         &self,
-        result: UncommittedImporterResult<ListChanges>,
+        result: UncommittedImporterResult<StorageChanges>,
     ) -> anyhow::Result<()> {
         self.block_importer
             .commit_result(result)

@@ -44,7 +44,7 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_storage::transactional::Changes;
+use fuel_core_storage::transactional::StorageChanges;
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -262,7 +262,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-    ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
+    ) -> anyhow::Result<UncommittedExecutionResult<StorageChanges>> {
         self.block_producer
             .produce_and_execute_block(height, block_time, source)
             .await
@@ -365,7 +365,7 @@ where
         self.block_importer
             .commit_result(Uncommitted::new(
                 ImportResult::new_from_local(block, tx_status, events),
-                vec![changes],
+                changes,
             ))
             .await?;
 
@@ -425,7 +425,7 @@ where
         self.block_importer
             .commit_result(Uncommitted::new(
                 ImportResult::new_from_local(sealed_block.clone(), tx_status, events),
-                vec![changes],
+                changes,
             ))
             .await?;
 

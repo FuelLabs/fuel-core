@@ -20,8 +20,8 @@ use fuel_core_storage::{
         AtomicView,
         Changes,
         HistoricalView,
-        ListChanges,
         Modifiable,
+        StorageChanges,
     },
 };
 #[cfg(feature = "wasm-executor")]
@@ -253,8 +253,15 @@ where
         block: &Block,
     ) -> fuel_core_types::services::executor::Result<ValidationResult> {
         let (result, changes) = self.validate(block)?.into();
-        self.storage_view_provider
-            .commit_changes(changes[0].clone())?;
+
+        match changes {
+            StorageChanges::Changes(changes) => {
+                self.storage_view_provider.commit_changes(changes)?;
+            }
+            StorageChanges::ChangesList(_) => {
+                panic!("Unexpected StorageChanges::ChangesList")
+            }
+        }
         Ok(result)
     }
 }
@@ -324,12 +331,15 @@ where
     pub fn produce_without_commit_with_source<TxSource>(
         &self,
         components: Components<TxSource>,
-    ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, StorageChanges>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(components, options)
+        self.produce_inner(components, options).map(|result| {
+            let (result, changes) = result.into();
+            Uncommitted::new(result, StorageChanges::Changes(changes))
+        })
     }
 
     /// Executes the block and returns the result of the execution without committing
@@ -361,11 +371,11 @@ where
     pub fn validate(
         &self,
         block: &Block,
-    ) -> ExecutorResult<Uncommitted<ValidationResult, ListChanges>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, StorageChanges>> {
         let options = self.config.as_ref().into();
         self.validate_inner(block, options).map(|result| {
             let (result, changes) = result.into();
-            Uncommitted::new(result, vec![changes])
+            Uncommitted::new(result, StorageChanges::Changes(changes))
         })
     }
 

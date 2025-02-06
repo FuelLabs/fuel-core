@@ -14,7 +14,7 @@ use fuel_core_storage::{
     not_found,
     transactional::{
         Changes,
-        ListChanges,
+        StorageChanges,
     },
     Error as StorageError,
     MerkleRoot,
@@ -32,7 +32,6 @@ use fuel_core_types::{
         field::MintGasPrice,
         Transaction,
         UniqueIdentifier,
-        ValidityError,
     },
     fuel_types::{
         BlockHeight,
@@ -99,8 +98,6 @@ pub enum Error {
     FailedVerification(anyhow::Error),
     #[display(fmt = "The execution of the block failed: {_0}.")]
     FailedExecution(executor::Error),
-    #[display(fmt = "The transaction is not valid: {_0}.")]
-    InvalidTransaction(ValidityError),
     #[display(fmt = "It is not possible to execute the genesis block.")]
     ExecuteGenesis,
     #[display(fmt = "The database already contains the data at the height {_0}.")]
@@ -242,7 +239,7 @@ where
     /// Returns an error if called while another call is in progress.
     pub async fn commit_result(
         &self,
-        result: UncommittedResult<ListChanges>,
+        result: UncommittedResult<StorageChanges>,
     ) -> Result<(), Error> {
         let _guard = self.lock()?;
 
@@ -285,68 +282,31 @@ where
         fields(
             block_id = %result.result().sealed_block.entity.id(),
             height = **result.result().sealed_block.entity.header().height(),
+            tx_status = ?result.result().tx_status,
         ),
         err
     )]
     fn _commit_result(
         &self,
-        result: UncommittedResult<ListChanges>,
+        result: UncommittedResult<StorageChanges>,
         block_changes: Changes,
         permit: OwnedSemaphorePermit,
         database: &mut D,
     ) -> Result<(), Error> {
         let (result, mut changes) = result.into();
-
         let block = &result.sealed_block.entity;
-        let consensus = &result.sealed_block.consensus;
         let actual_next_height = *block.header().height();
 
-        // During importing of the genesis block, the database should not be initialized
-        // and the genesis block defines the next height.
-        // During the production of the non-genesis block, the next height should be underlying
-        // database height + 1.
-        let expected_next_height = match consensus {
-            Consensus::Genesis(_) => {
-                let result = database.latest_block_height()?;
-                let found = result.is_some();
-                // Because the genesis block is not committed, it should return `None`.
-                // If we find the latest height, something is wrong with the state of the database.
-                if found {
-                    return Err(Error::InvalidUnderlyingDatabaseGenesisState)
-                }
-                actual_next_height
+        changes = match changes {
+            StorageChanges::Changes(changes) => {
+                StorageChanges::ChangesList(vec![changes, block_changes])
             }
-            Consensus::PoA(_) => {
-                if actual_next_height == BlockHeight::from(0u32) {
-                    return Err(Error::ZeroNonGenericHeight)
-                }
-
-                let last_db_height = database
-                    .latest_block_height()?
-                    .ok_or(not_found!("Latest block height"))?;
-                last_db_height
-                    .checked_add(1u32)
-                    .ok_or(Error::Overflow)?
-                    .into()
-            }
-            _ => {
-                return Err(Error::UnsupportedConsensusVariant(format!(
-                    "{:?}",
-                    consensus
-                )))
+            StorageChanges::ChangesList(mut changes) => {
+                changes.push(block_changes);
+                StorageChanges::ChangesList(changes)
             }
         };
-
-        if expected_next_height != actual_next_height {
-            return Err(Error::IncorrectBlockHeight(
-                expected_next_height,
-                actual_next_height,
-            ))
-        }
-
-        changes.push(block_changes);
-
-        database.commit_changes(expected_next_height, changes)?;
+        database.commit_changes(changes)?;
 
         if self.metrics {
             Self::update_metrics(&result, &actual_next_height);
@@ -454,7 +414,7 @@ where
     pub fn verify_and_execute_block(
         &self,
         sealed_block: SealedBlock,
-    ) -> Result<UncommittedResult<ListChanges>, Error> {
+    ) -> Result<UncommittedResult<StorageChanges>, Error> {
         Self::verify_and_execute_block_inner(
             self.executor.clone(),
             self.verifier.clone(),
@@ -466,7 +426,7 @@ where
         executor: Arc<E>,
         verifier: Arc<V>,
         sealed_block: SealedBlock,
-    ) -> Result<UncommittedResult<ListChanges>, Error> {
+    ) -> Result<UncommittedResult<StorageChanges>, Error> {
         let consensus = sealed_block.consensus;
         let block = sealed_block.entity;
         let sealed_block_id = block.id();
@@ -502,6 +462,7 @@ where
         };
         let import_result =
             ImportResult::new_from_network(sealed_block, tx_status, events);
+
         Ok(Uncommitted::new(import_result, changes))
     }
 }
@@ -625,11 +586,57 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
     sealed_block: &SealedBlock,
     database: &mut D,
 ) -> Result<Changes, Error> {
+    let consensus = &sealed_block.consensus;
+    let actual_next_height = *sealed_block.entity.header().height();
+
+    // During importing of the genesis block, the database should not be initialized
+    // and the genesis block defines the next height.
+    // During the production of the non-genesis block, the next height should be underlying
+    // database height + 1.
+    let expected_next_height = match consensus {
+        Consensus::Genesis(_) => {
+            let result = database.latest_block_height()?;
+            let found = result.is_some();
+            // Because the genesis block is not committed, it should return `None`.
+            // If we find the latest height, something is wrong with the state of the database.
+            if found {
+                return Err(Error::InvalidUnderlyingDatabaseGenesisState)
+            }
+            actual_next_height
+        }
+        Consensus::PoA(_) => {
+            if actual_next_height == BlockHeight::from(0u32) {
+                return Err(Error::ZeroNonGenericHeight)
+            }
+
+            let last_db_height = database
+                .latest_block_height()?
+                .ok_or(not_found!("Latest block height"))?;
+            last_db_height
+                .checked_add(1u32)
+                .ok_or(Error::Overflow)?
+                .into()
+        }
+        _ => {
+            return Err(Error::UnsupportedConsensusVariant(format!(
+                "{:?}",
+                consensus
+            )))
+        }
+    };
+
+    if expected_next_height != actual_next_height {
+        return Err(Error::IncorrectBlockHeight(
+            expected_next_height,
+            actual_next_height,
+        ))
+    }
+
     // Importer expects that `UncommittedResult` contains the result of block
     // execution without block itself.
     let expected_block_root = database.latest_block_root()?;
-    let mut db_after_execution = database.storage_transaction(Default::default());
 
+    let mut db_after_execution = database.storage_transaction(Default::default());
     let actual_block_root = db_after_execution.latest_block_root()?;
 
     if actual_block_root != expected_block_root {

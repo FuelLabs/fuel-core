@@ -42,8 +42,8 @@ use fuel_core_storage::{
     transactional::{
         Changes,
         ConflictPolicy,
-        ListChanges,
         ReadTransaction,
+        StorageChanges,
         StorageTransaction,
     },
     Error as StorageError,
@@ -354,8 +354,9 @@ where
         )
         .commit()?;
 
+        let storage_changes = StorageChanges::Changes(storage_transaction.into_changes());
         self.db
-            .commit_changes(vec![storage_transaction.into_changes()])?;
+            .commit_changes(&storage_changes)?;
 
         Ok(())
     }
@@ -576,27 +577,29 @@ where
     fn commit_changes(
         &self,
         height: Option<Description::Height>,
-        mut changes: ListChanges,
+        mut changes: StorageChanges,
     ) -> StorageResult<()> {
-        // TODO: Maybe too much optimized for not really better performance try to remove
-        // the changes at the end.
-        if self.state_rewind_policy == StateRewindPolicy::NoRewind {
-            self.db.commit_changes(changes)?;
-            return Ok(());
-        }
+        // When the history need to be process we need to have all the changes in one
+        // transaction to be able to write their reverse changes.
         if let Some(height) = height {
-            let mut storage_transaction = StorageTransaction::transaction(
-                &self.db,
-                ConflictPolicy::Overwrite,
-                Default::default(),
-            );
-            self.store_modifications_history(&mut storage_transaction, &height)?;
-            let storage_transaction = storage_transaction.into_changes();
-            changes.push(storage_transaction);
-            self.db.commit_changes(changes)?;
-        } else {
-            self.db.commit_changes(changes)?;
+            if self.state_rewind_policy != StateRewindPolicy::NoRewind {
+                let all_changes = match changes {
+                    StorageChanges::Changes(changes) => changes,
+                    StorageChanges::ChangesList(list) => {
+                        list.into_iter().flatten().collect()
+                    }
+                };
+                let mut storage_transaction = StorageTransaction::transaction(
+                    &self.db,
+                    ConflictPolicy::Overwrite,
+                    all_changes,
+                );
+                self.store_modifications_history(&mut storage_transaction, &height)?;
+                changes = StorageChanges::Changes(storage_transaction.into_changes());
+            }
         }
+
+        self.db.commit_changes(&changes)?;
 
         Ok(())
     }

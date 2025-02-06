@@ -220,11 +220,8 @@ impl TestPoolUniverse {
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                Default::default(),
-                true,
-            )?;
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
             let tx = Arc::new(tx);
             Ok((tx.clone(), pool.write().insert(tx, &self.mock_db)?))
         } else {
@@ -252,11 +249,8 @@ impl TestPoolUniverse {
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                Default::default(),
-                true,
-            )?;
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");
@@ -284,11 +278,8 @@ impl TestPoolUniverse {
                 wasm_checker: Arc::new(wasm_checker),
                 memory_pool: MemoryPool::new(),
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                Default::default(),
-                true,
-            )?;
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");

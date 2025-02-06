@@ -210,9 +210,9 @@ fn main() {
 
     // spin up node
     let rt = tokio::runtime::Builder::new_current_thread()
-    .enable_all()
-    .build()
-    .unwrap();
+        .enable_all()
+        .build()
+        .unwrap();
     let _drop = rt.enter();
     let block = rt.block_on({
         let transactions = transactions.clone();

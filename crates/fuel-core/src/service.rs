@@ -34,7 +34,7 @@ use fuel_core_storage::{
     tables::SealedBlockConsensus,
     transactional::{
         AtomicView,
-        ReadTransaction,
+        ReadTransaction, StorageChanges,
     },
     IsNotFound,
     StorageAsMut,
@@ -314,7 +314,7 @@ impl FuelService {
 
             self.shared.database.on_chain().data.commit_changes(
                 Some(genesis_block_height),
-                vec![database_tx.into_changes()],
+                StorageChanges::Changes(database_tx.into_changes()),
             )?;
         }
 
@@ -336,7 +336,7 @@ impl FuelService {
                 let (result, changes) = result.into();
                 self.shared
                     .block_importer
-                    .commit_result(Uncommitted::new(result, vec![changes]))
+                    .commit_result(Uncommitted::new(result, StorageChanges::Changes(changes)))
                     .await?;
             }
         }

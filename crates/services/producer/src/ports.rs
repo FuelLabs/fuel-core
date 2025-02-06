@@ -1,5 +1,5 @@
 use fuel_core_storage::{
-    transactional::Changes,
+    transactional::StorageChanges,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -88,7 +88,7 @@ pub trait BlockProducer<TxSource>: Send + Sync {
     fn produce_without_commit(
         &self,
         component: Components<TxSource>,
-    ) -> ExecutorResult<UncommittedResult<Changes>>;
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>>;
 }
 
 pub trait DryRunner: Send + Sync {

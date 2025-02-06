@@ -27,7 +27,7 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    transactional::ListChanges,
+    transactional::{Changes, StorageChanges},
     Result as StorageResult,
 };
 use itertools::Itertools;
@@ -820,25 +820,17 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn commit_changes(&self, changes: ListChanges) -> StorageResult<()> {
+    pub fn commit_changes(&self, changes: &StorageChanges) -> StorageResult<()> {
         let instant = std::time::Instant::now();
         let mut batch = WriteBatch::default();
-        for changes in changes.iter() {
-            for (column, ops) in changes.iter() {
-                let cf = self.cf_u32(*column);
-                let column_metrics = self.metrics.columns_write_statistic.get(column);
-                for (key, op) in ops {
-                    self.metrics.write_meter.inc();
-                    column_metrics.map(|metric| metric.inc());
-                    match op {
-                        WriteOperation::Insert(value) => {
-                            self.metrics.bytes_written.inc_by(value.len() as u64);
-                            batch.put_cf(&cf, key, value.as_ref());
-                        }
-                        WriteOperation::Remove => {
-                            batch.delete_cf(&cf, key);
-                        }
-                    }
+
+        match changes {
+            StorageChanges::Changes(changes) => {
+                self._populate_batch(&mut batch, changes);
+            }
+            StorageChanges::ChangesList(changes_list) => {
+                for changes in changes_list {
+                    self._populate_batch(&mut batch, changes);
                 }
             }
         }
@@ -852,12 +844,27 @@ where
                 .expect("The commit shouldn't take longer than `u64`"),
         );
 
-        // Deallocate all changes in a separate thread since it can be expensive.
-        std::thread::spawn(move || {
-            drop(changes);
-        });
-
         Ok(())
+    }
+
+    fn _populate_batch(&self, batch: &mut WriteBatch, changes: &Changes) {
+        for (column, ops) in changes {
+            let cf = self.cf_u32(*column);
+            let column_metrics = self.metrics.columns_write_statistic.get(column);
+            for (key, op) in ops {
+                self.metrics.write_meter.inc();
+                column_metrics.map(|metric| metric.inc());
+                match op {
+                    WriteOperation::Insert(value) => {
+                        self.metrics.bytes_written.inc_by(value.len() as u64);
+                        batch.put_cf(&cf, key, value.as_ref());
+                    }
+                    WriteOperation::Remove => {
+                        batch.delete_cf(&cf, key);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -893,7 +900,7 @@ pub mod test_helpers {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(vec![changes])?;
+            self.commit_changes(&StorageChanges::Changes(changes))?;
 
             Ok(len)
         }
@@ -902,7 +909,7 @@ pub mod test_helpers {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(vec![changes])?;
+            self.commit_changes(&StorageChanges::Changes(changes))?;
             Ok(())
         }
     }

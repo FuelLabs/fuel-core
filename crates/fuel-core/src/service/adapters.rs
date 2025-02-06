@@ -9,7 +9,7 @@ use fuel_core_poa::{
     signer::SignMode,
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::Changes;
+use fuel_core_storage::transactional::StorageChanges;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
@@ -156,7 +156,7 @@ impl ExecutorAdapter {
     pub fn produce_without_commit_from_vector(
         &self,
         component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         let new_components = Components {
             header_to_produce: component.header_to_produce,
             transactions_source: OnceTransactionsSource::new(

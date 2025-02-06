@@ -1,8 +1,12 @@
 use crate::{
     self as fuel_core_txpool,
     pool_worker::{
-        PoolInsertRequest, PoolNotification, PoolOtherRequest, PoolWorkerInterface
-    }, Constraints,
+        PoolInsertRequest,
+        PoolNotification,
+        PoolOtherRequest,
+        PoolWorkerInterface,
+    },
+    Constraints,
 };
 use fuel_core_services::TaskNextAction;
 
@@ -334,14 +338,18 @@ where
         }
     }
 
-    fn process_select_request(&self, select_transaction_request: SelectTransactionsRequest) {
+    fn process_select_request(
+        &self,
+        select_transaction_request: SelectTransactionsRequest,
+    ) {
         match select_transaction_request {
             SelectTransactionsRequest::SelectTransactions {
                 constraints,
                 response_channel,
             } => {
                 let (response_sender, response_receiver) = std::sync::mpsc::channel();
-                self.pool_worker.get_block_transactions(constraints, response_sender);
+                self.pool_worker
+                    .get_block_transactions(constraints, response_sender);
                 let txs = response_receiver.recv().unwrap();
                 if response_channel.send(txs).is_err() {
                     tracing::error!(
@@ -385,20 +393,20 @@ where
         match notification {
             PoolNotification::Inserted { tx_id, time } => {
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
-    
+
                 let duration = time
                     .duration_since(SystemTime::UNIX_EPOCH)
                     .expect("Time can't be less than UNIX EPOCH");
-    
-                self.shared_state.tx_status_sender.send_submitted(
-                    tx_id,
-                    Tai64::from_unix(duration.as_secs() as i64),
-                );
+
+                self.shared_state
+                    .tx_status_sender
+                    .send_submitted(tx_id, Tai64::from_unix(duration.as_secs() as i64));
                 self.shared_state.new_txs_notifier.send_replace(());
-    
-            },
+            }
             PoolNotification::Removed { tx_id, error } => {
-                self.shared_state.tx_status_sender.send_squeezed_out(tx_id, error);
+                self.shared_state
+                    .tx_status_sender
+                    .send_squeezed_out(tx_id, error);
             }
         }
     }
@@ -475,7 +483,12 @@ where
             let tx = Arc::new(checked_tx);
 
             // TODO: Unwrap
-            pool_insert_request_sender.send(PoolInsertRequest::Insert { tx, response_channel }).unwrap();
+            pool_insert_request_sender
+                .send(PoolInsertRequest::Insert {
+                    tx,
+                    response_channel,
+                })
+                .unwrap();
         };
         move || {
             if metrics {
@@ -547,8 +560,13 @@ where
                     return;
                 }
                 let (response_sender, response_receiver) = std::sync::mpsc::channel();
-                request_sender.send(PoolOtherRequest::GetNonExistingTxs { tx_ids: peer_tx_ids, non_existing_txs: response_sender }).unwrap();
-                //TODO: Unwrap
+                request_sender
+                    .send(PoolOtherRequest::GetNonExistingTxs {
+                        tx_ids: peer_tx_ids,
+                        non_existing_txs: response_sender,
+                    })
+                    .unwrap();
+                // TODO: Unwrap
                 let tx_ids_to_ask = response_receiver.recv().unwrap();
 
                 if tx_ids_to_ask.is_empty() {
@@ -595,7 +613,8 @@ where
                     break;
                 }
                 // SAFETY: We are removing the last element that we just checked
-                txs_to_remove.push(self.pruner.time_txs_submitted.pop_back().expect("qed").1);
+                txs_to_remove
+                    .push(self.pruner.time_txs_submitted.pop_back().expect("qed").1);
             }
         }
 

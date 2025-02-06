@@ -25,8 +25,8 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         HistoricalView,
-        ListChanges,
         Modifiable,
+        StorageChanges,
         StorageTransaction,
     },
     StorageAsMut,
@@ -51,6 +51,8 @@ use fuel_core_types::{
         Transaction,
         TxId,
         TxPointer,
+        UniqueIdentifier,
+        UtxoId,
     },
     fuel_types::{
         canonical::Serialize,
@@ -170,7 +172,7 @@ where
     ) -> fuel_core_types::services::executor::Result<ProductionResult> {
         use fuel_core_storage::transactional::WriteTransaction;
         use fuel_core_types::fuel_types::ChainId;
-        let (result, mut changes) = self.produce_without_commit(block)?.into();
+        let (result, changes) = self.produce_without_commit(block)?.into();
 
         let mut executor = self.executor.write().map_err(|e| {
             ExecutorError::Other(format!(
@@ -186,9 +188,20 @@ where
                 &result.block.compress(&ChainId::default()),
             )
             .unwrap();
-        changes.extend(tx.into_changes());
 
-        executor.storage_view_provider.commit_changes(changes)?;
+        let mut changes: Vec<Changes> = match changes {
+            StorageChanges::ChangesList(changes) => changes,
+            StorageChanges::Changes(changes) => vec![changes],
+        };
+        changes.push(tx.into_changes());
+        let mut final_changes = HashMap::new();
+        for changes in changes {
+            final_changes.extend(changes.into_iter());
+        }
+
+        executor
+            .storage_view_provider
+            .commit_changes(final_changes)?;
         Ok(result)
     }
 
@@ -200,7 +213,7 @@ where
     ) -> fuel_core_types::services::executor::Result<ValidationResult> {
         use fuel_core_storage::transactional::WriteTransaction;
         use fuel_core_types::fuel_types::ChainId;
-        let (result, mut changes) = self.validate(block)?.into();
+        let (result, changes) = self.validate(block)?.into();
 
         let mut executor = self.executor.write().map_err(|e| {
             ExecutorError::Other(format!(
@@ -215,7 +228,13 @@ where
                 &block.compress(&ChainId::default()),
             )
             .unwrap();
+
+        let mut changes: Vec<Changes> = match changes {
+            StorageChanges::ChangesList(changes) => changes,
+            StorageChanges::Changes(changes) => vec![changes],
+        };
         changes.push(tx.into_changes());
+
         let mut final_changes = HashMap::new();
         for changes in changes {
             final_changes.extend(changes.into_iter());
@@ -241,7 +260,8 @@ where
     pub fn produce_without_commit(
         &self,
         block: PartialFuelBlock,
-    ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
+    ) -> fuel_core_types::services::executor::Result<UncommittedResult<StorageChanges>>
+    {
         self.produce_without_commit_with_coinbase(block, Default::default(), 0)
     }
 
@@ -252,7 +272,8 @@ where
         block: PartialFuelBlock,
         coinbase_recipient: fuel_core_types::fuel_types::ContractId,
         gas_price: u64,
-    ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
+    ) -> fuel_core_types::services::executor::Result<UncommittedResult<StorageChanges>>
+    {
         let component = Components {
             header_to_produce: block.header,
             transactions_source: OnceTransactionsSource::new(block.transactions),
@@ -310,7 +331,7 @@ where
     pub fn produce_without_commit_with_source<TxSource>(
         &self,
         components: Components<TxSource>,
-    ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, StorageChanges>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -339,14 +360,14 @@ where
     pub fn validate(
         &self,
         block: &Block,
-    ) -> ExecutorResult<Uncommitted<ValidationResult, ListChanges>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, StorageChanges>> {
         self.validate_inner(block)
     }
 
     fn produce_inner<TxSource>(
         &self,
         components: Components<TxSource>,
-    ) -> ExecutorResult<Uncommitted<ProductionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, StorageChanges>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -395,7 +416,6 @@ where
 
             return executor.produce_without_commit_with_source(new_small_block)
         }
-        // TODO: Directly return vec
         self.produce_inner_without_da(
             components,
             consensus_parameters,
@@ -403,16 +423,8 @@ where
         )
         .map(|uncommitted| {
             let (result, changes) = uncommitted.into();
-            let mut tx_changes = StorageTransaction::transaction(
-                &view,
-                ConflictPolicy::Fail,
-                Default::default(),
-            );
-            for changes in changes {
-                tx_changes.commit_changes(changes)?;
-            }
-            Ok(Uncommitted::new(result, tx_changes.into_changes()))
-        })?
+            Uncommitted::new(result, changes)
+        })
     }
 
     fn produce_inner_without_da<TxSource>(
@@ -420,7 +432,7 @@ where
         components: Components<TxSource>,
         consensus_parameters: Cow<ConsensusParameters>,
         consensus_parameters_version: u32,
-    ) -> ExecutorResult<Uncommitted<ProductionResult, ListChanges>>
+    ) -> ExecutorResult<Uncommitted<ProductionResult, StorageChanges>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -682,7 +694,7 @@ where
     fn validate_inner(
         &self,
         block: &Block,
-    ) -> ExecutorResult<Uncommitted<ValidationResult, ListChanges>> {
+    ) -> ExecutorResult<Uncommitted<ValidationResult, StorageChanges>> {
         let (gas_price, coinbase_contract_id) = native_executor::executor::BlockExecutor::<
             (),
         >::get_coinbase_info_from_mint_tx(
@@ -759,7 +771,7 @@ where
         options: ExecutionOptions,
         uncommitted_results: Vec<ExecutionResult>,
         skipped_txs: Vec<(TxId, ExecutorError)>,
-    ) -> ExecutorResult<UncommittedResult<ListChanges>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         let partial_block_header = components.header_to_produce;
 
         let mut txs_count = 0usize;
@@ -877,7 +889,9 @@ where
                         execution_data.changes.clone(),
                     );
 
-                    let iter = ChangesIterator::<Column>::new(&execution_data.changes);
+                    let storage_changes =
+                        StorageChanges::Changes(execution_data.changes.clone());
+                    let iter = ChangesIterator::<Column>::new(&storage_changes);
                     let coins_iter = iter.iter_all::<Coins>(None);
                     let contracts_iter = iter.iter_all::<ContractsLatestUtxo>(None);
 
@@ -961,7 +975,6 @@ where
             },
         );
 
-
         let results = futures::executor::block_on(async move {
             futures::future::join_all(handlers).await
         });
@@ -1002,6 +1015,16 @@ where
                 .extend(execution_data.skipped_transactions);
             total_data.message_ids.extend(execution_data.message_ids);
 
+            for tx in transactions.iter() {
+                let outputs = tx.outputs()?;
+                for (idx, output) in outputs.iter().enumerate() {
+                    dbg!(UtxoId::new(
+                        tx.id(&consensus_parameters.chain_id()),
+                        idx as u16
+                    ));
+                    dbg!(output);
+                }
+            }
             total_partial_block.transactions.extend(transactions);
             total_data.tx_count = u32::try_from(total_partial_block.transactions.len())
                 .map_err(|_| {
@@ -1069,7 +1092,10 @@ where
             events,
         };
 
-        Ok(UncommittedResult::new(result, total_changes))
+        Ok(UncommittedResult::new(
+            result,
+            StorageChanges::ChangesList(total_changes),
+        ))
     }
 }
 

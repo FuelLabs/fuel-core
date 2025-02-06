@@ -170,7 +170,7 @@ where
         )?;
 
         match self.da_compression_config {
-            DaCompressionConfig::Disabled => {},
+            DaCompressionConfig::Disabled => {}
             DaCompressionConfig::Enabled(config) => {
                 da_compress_block(config, block, &result.events, &mut transaction)?;
             }
@@ -185,7 +185,11 @@ where
 
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
-        tracing::info!("Block {} processed in offchain in {}ms", height, start_time.elapsed().as_millis());
+        tracing::info!(
+            "Block {} processed in offchain in {}ms",
+            height,
+            start_time.elapsed().as_millis()
+        );
         Ok(())
     }
 }

@@ -1,7 +1,7 @@
 use crate::service::{
     ReadPoolRequest,
+    SelectTransactionsRequest,
     WritePoolRequest,
-    SelectTransactionsRequest
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::services::{

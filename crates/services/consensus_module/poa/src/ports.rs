@@ -1,9 +1,6 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    transactional::{
-        Changes,
-        ListChanges,
-    },
+    transactional::StorageChanges,
     Result as StorageResult,
 };
 use fuel_core_types::{
@@ -52,12 +49,12 @@ pub trait BlockProducer: Send + Sync {
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
+    ) -> anyhow::Result<UncommittedExecutionResult<StorageChanges>>;
 
     async fn produce_predefined_block(
         &self,
         block: &Block,
-    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
+    ) -> anyhow::Result<UncommittedExecutionResult<StorageChanges>>;
 }
 
 #[cfg_attr(test, mockall::automock)]
@@ -65,7 +62,7 @@ pub trait BlockProducer: Send + Sync {
 pub trait BlockImporter: Send + Sync {
     async fn commit_result(
         &self,
-        result: UncommittedImportResult<ListChanges>,
+        result: UncommittedImportResult<StorageChanges>,
     ) -> anyhow::Result<()>;
 
     fn block_stream(&self) -> BoxStream<BlockImportInfo>;
