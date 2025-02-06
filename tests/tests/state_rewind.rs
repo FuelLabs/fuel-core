@@ -633,5 +633,6 @@ async fn dry_run__correct_contract_state_in_past_blocks() -> anyhow::Result<()> 
         .await
         .expect_err("Should fail to dry-run at this height");
 
+    driver.kill().await;
     Ok(())
 }
