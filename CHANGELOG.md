@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2650](https://github.com/FuelLabs/fuel-core/pull/2650): Populate `ProcessedTransactions` table in global merkle root storage.
 - [2667](https://github.com/FuelLabs/fuel-core/pull/2667): Populate `Blobs` table in global merkle root storage.
 - [2652](https://github.com/FuelLabs/fuel-core/pull/2652): Global Merkle Root storage crate: Add Raw contract bytecode to global merkle root storage when processing Create transactions.
+- [2669](https://github.com/FuelLabs/fuel-core/pull/2669): Populate `UploadedBytecodes` table in global merkle root storage.
 
 ### Fixed
 - [2673](https://github.com/FuelLabs/fuel-core/pull/2673): Change read behavior on the InMemoryTransaction to use offset and allow not equal buf size (fix CCP and LDC broken from https://github.com/FuelLabs/fuel-vm/pull/847)
