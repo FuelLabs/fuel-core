@@ -232,6 +232,7 @@ where
                     increase_time(self.last_timestamp, duration)
                 }
                 Trigger::Interval { block_time } => {
+                    dbg!(block_time.as_millis());
                     increase_time(self.last_timestamp, block_time)
                 }
             },

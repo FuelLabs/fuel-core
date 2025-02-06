@@ -346,7 +346,7 @@ where
                 futures::executor::block_on(self.notification_sender.send(PoolNotification::Removed {
                     tx_id,
                     error: Error::SkippedTransaction(
-                        format!("Parent transaction with {tx_id}, was removed because of the {reason}")
+                        format!("Parent transaction with id: {tx_id}, was removed because of: {reason}")
                     )
                 })).unwrap();
             }
@@ -362,7 +362,7 @@ where
                 PoolNotification::Removed {
                     tx_id,
                     error: Error::SkippedTransaction(format!(
-                        "Transaction with {tx_id}, was removed because of the {error}"
+                        "Transaction with id: {tx_id}, was removed because of: {error}"
                     )),
                 },
             ))

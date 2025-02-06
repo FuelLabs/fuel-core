@@ -201,7 +201,7 @@ mod tests {
 
     #[cfg(not(feature = "parallel-executor"))]
     fn create_executor(
-        database: Database,
+        mut database: Database,
         config: Config,
     ) -> Executor<Database, DisabledRelayer> {
         let executor_config = fuel_core_upgradable_executor::config::Config {
@@ -210,7 +210,7 @@ mod tests {
             native_executor_version: None,
         };
 
-        add_consensus_parameters(database, &config.consensus_parameters);
+        add_consensus_parameters(&mut database, &config.consensus_parameters);
 
         Executor::new(database, DisabledRelayer, executor_config)
     }
@@ -481,7 +481,10 @@ mod tests {
         use super::*;
         use fuel_core_storage::{
             iter::IterDirection,
-            transactional::AtomicView,
+            transactional::{
+                AtomicView,
+                StorageChanges,
+            },
         };
         use fuel_core_types::services::graphql_api::ContractBalance;
 
@@ -595,7 +598,11 @@ mod tests {
                 .unwrap()
                 .into();
 
-            commit_changes(&mut producer, changes, &block);
+            let all_changes = match changes {
+                StorageChanges::Changes(changes) => changes,
+                StorageChanges::ChangesList(list) => list.into_iter().flatten().collect(),
+            };
+            commit_changes(&mut producer, all_changes, &block);
 
             assert_eq!(skipped_transactions.len(), 1);
             assert_eq!(block.transactions().len(), 2);
@@ -667,7 +674,11 @@ mod tests {
                 .unwrap()
                 .into();
 
-            commit_changes(&mut producer, changes, &block);
+            let all_changes = match changes {
+                StorageChanges::Changes(changes) => changes,
+                StorageChanges::ChangesList(list) => list.into_iter().flatten().collect(),
+            };
+            commit_changes(&mut producer, all_changes, &block);
 
             assert_eq!(skipped_transactions.len(), 0);
             assert_eq!(block.transactions().len(), 2);
@@ -878,7 +889,13 @@ mod tests {
                     .expect("Should execute the block")
                     .into();
 
-                commit_changes(&mut producer, changes, &block);
+                let all_changes = match changes {
+                    StorageChanges::Changes(changes) => changes,
+                    StorageChanges::ChangesList(list) => {
+                        list.into_iter().flatten().collect()
+                    }
+                };
+                commit_changes(&mut producer, all_changes, &block);
 
                 let receipts = tx_status[0].result.receipts();
 

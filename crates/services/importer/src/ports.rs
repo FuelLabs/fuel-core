@@ -99,7 +99,7 @@ pub trait DatabaseTransaction {
         &mut self,
         block: &SealedBlock,
         tx_ids: Vec<TxId>,
-    ) -> StorageResult<()>;
+    ) -> StorageResult<bool>;
 
     /// Commits the changes to the underlying storage.
     fn commit(self) -> StorageResult<()>;
@@ -152,16 +152,20 @@ where
         &mut self,
         block: &SealedBlock,
         tx_ids: Vec<TxId>,
-    ) -> StorageResult<()> {
+    ) -> StorageResult<bool> {
+        let mut storage = self.write_transaction();
+
         // Replace all with insert
         let height = block.entity.header().height();
-
+        let mut found = false;
         // TODO: Use `batch_insert` from https://github.com/FuelLabs/fuel-core/pull/1576
         for (tx, tx_id) in block.entity.transactions().iter().zip(tx_ids.iter()) {
             // Maybe a debug insert
-            self.storage_as_mut::<Transactions>().insert(tx_id, tx)?;
+            found |= storage
+                .storage_as_mut::<Transactions>()
+                .replace(tx_id, tx)?
+                .is_some();
         }
-
         // Compress is really doing recomputation of id ? it shouldn't.
         // Should be fast
         let compressed_block = {
@@ -171,12 +175,17 @@ where
             };
             Block::V1(new_inner)
         };
-        self.storage_as_mut::<FuelBlocks>()
-            .insert(height, &compressed_block)?;
-        self.storage_as_mut::<SealedBlockConsensus>()
-            .insert(height, &block.consensus)?;
+        found |= storage
+            .storage_as_mut::<FuelBlocks>()
+            .replace(height, &compressed_block)?
+            .is_some();
+        found |= storage
+            .storage_as_mut::<SealedBlockConsensus>()
+            .replace(height, &block.consensus)?
+            .is_some();
 
-        Ok(())
+        storage.commit()?;
+        Ok(!found)
     }
 
     fn commit(self) -> StorageResult<()> {

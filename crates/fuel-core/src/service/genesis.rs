@@ -160,7 +160,6 @@ pub async fn execute_genesis_block(
             .storage_as_mut::<GenesisMetadata<OnChain>>()
             .remove(&key)?;
     }
-
     let result = UncommittedImportResult::new(
         ImportResult::new_from_local(block, vec![], vec![]),
         database_transaction_on_chain.into_changes(),
@@ -325,6 +324,7 @@ mod tests {
         Randomize,
         StateConfig,
     };
+    use fuel_core_poa::Trigger;
     use fuel_core_producer::ports::BlockProducerDatabase;
     use fuel_core_storage::{
         tables::{
@@ -360,7 +360,7 @@ mod tests {
     #[tokio::test]
     async fn config_initializes_block_height_of_genesis_block() {
         let block_height = BlockHeight::from(99u32);
-        let service_config = Config::local_node_with_state_config(StateConfig {
+        let mut service_config = Config::local_node_with_state_config(StateConfig {
             last_block: Some(LastBlockConfig {
                 block_height,
                 state_transition_version: 0,
@@ -368,6 +368,7 @@ mod tests {
             }),
             ..Default::default()
         });
+        service_config.block_production = Trigger::Never;
 
         let db = Database::default();
         FuelService::from_database(db.clone(), service_config)
@@ -530,10 +531,11 @@ mod tests {
         let contract_id = contract.contract_id;
         let states = contract.states.clone();
 
-        let service_config = Config::local_node_with_state_config(StateConfig {
+        let mut service_config = Config::local_node_with_state_config(StateConfig {
             contracts: vec![contract],
             ..Default::default()
         });
+        service_config.block_production = Trigger::Never;
         let db = Database::default();
 
         // when
@@ -601,10 +603,11 @@ mod tests {
         let contract = given_contract_config(&mut rng);
         let contract_id = contract.contract_id;
         let balances = contract.balances.clone();
-        let service_config = Config::local_node_with_state_config(StateConfig {
+        let mut service_config = Config::local_node_with_state_config(StateConfig {
             contracts: vec![contract],
             ..Default::default()
         });
+        service_config.block_production = Trigger::Never;
 
         let db = Database::default();
         FuelService::from_database(db.clone(), service_config)
@@ -639,7 +642,8 @@ mod tests {
             }),
             ..Default::default()
         };
-        let service_config = Config::local_node_with_state_config(state);
+        let mut service_config = Config::local_node_with_state_config(state);
+        service_config.block_production = Trigger::Never;
 
         let db = CombinedDatabase::default();
         let mut shutdown = ShutdownListener::spawn();
@@ -707,7 +711,9 @@ mod tests {
             contracts: vec![given_contract_config(&mut rng)],
             ..Default::default()
         };
-        let service_config = Config::local_node_with_state_config(initial_state.clone());
+        let mut service_config =
+            Config::local_node_with_state_config(initial_state.clone());
+        service_config.block_production = Trigger::Never;
 
         let db = CombinedDatabase::default();
         FuelService::from_combined_database(db.clone(), service_config)

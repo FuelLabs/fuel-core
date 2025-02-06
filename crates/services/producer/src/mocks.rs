@@ -10,7 +10,7 @@ use fuel_core_storage::{
     not_found,
     transactional::{
         AtomicView,
-        Changes,
+        StorageChanges,
     },
     Result as StorageResult,
 };
@@ -128,7 +128,7 @@ impl BlockProducer<Vec<Transaction>> for MockExecutor {
     fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         let block = arc_pool_tx_comp_to_block(&component);
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
@@ -143,7 +143,7 @@ impl BlockProducer<Vec<Transaction>> for MockExecutor {
                 tx_status: vec![],
                 events: vec![],
             },
-            Default::default(),
+            StorageChanges::Changes(Default::default()),
         ))
     }
 }
@@ -154,7 +154,7 @@ impl BlockProducer<Vec<Transaction>> for FailingMockExecutor {
     fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
@@ -168,7 +168,7 @@ impl BlockProducer<Vec<Transaction>> for FailingMockExecutor {
                     tx_status: vec![],
                     events: vec![],
                 },
-                Default::default(),
+                StorageChanges::Changes(Default::default()),
             ))
         }
     }
@@ -183,7 +183,7 @@ impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture {
     fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         let block = arc_pool_tx_comp_to_block(&component);
         *self.captured.lock().unwrap() = Some(component);
         Ok(UncommittedResult::new(
@@ -193,7 +193,7 @@ impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture {
                 tx_status: vec![],
                 events: vec![],
             },
-            Default::default(),
+            StorageChanges::Changes(Default::default()),
         ))
     }
 }

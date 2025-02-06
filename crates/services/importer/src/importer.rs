@@ -299,10 +299,10 @@ where
 
         changes = match changes {
             StorageChanges::Changes(changes) => {
-                StorageChanges::ChangesList(vec![changes, block_changes])
+                StorageChanges::ChangesList(vec![block_changes, changes])
             }
             StorageChanges::ChangesList(mut changes) => {
-                changes.push(block_changes);
+                changes.insert(0, block_changes);
                 StorageChanges::ChangesList(changes)
             }
         };
@@ -646,7 +646,7 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
         ))
     }
 
-    db_after_execution.store_new_block(
+    if !db_after_execution.store_new_block(
         &sealed_block,
         sealed_block
             .entity
@@ -654,7 +654,9 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
             .iter()
             .map(|tx| tx.id(chain_id))
             .collect(),
-    )?;
+    )? {
+        return Err(Error::NotUnique(expected_next_height))
+    }
 
     Ok(db_after_execution.into_changes())
 }

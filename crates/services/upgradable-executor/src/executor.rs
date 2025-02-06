@@ -241,8 +241,11 @@ where
         block: PartialFuelBlock,
     ) -> fuel_core_types::services::executor::Result<ProductionResult> {
         let (result, changes) = self.produce_without_commit(block)?.into();
-
-        self.storage_view_provider.commit_changes(changes)?;
+        let all_changes = match changes {
+            StorageChanges::Changes(changes) => changes,
+            StorageChanges::ChangesList(list) => list.into_iter().flatten().collect(),
+        };
+        self.storage_view_provider.commit_changes(all_changes)?;
         Ok(result)
     }
 
@@ -279,7 +282,8 @@ where
     pub fn produce_without_commit(
         &self,
         block: PartialFuelBlock,
-    ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
+    ) -> fuel_core_types::services::executor::Result<UncommittedResult<StorageChanges>>
+    {
         self.produce_without_commit_with_coinbase(block, Default::default(), 0)
     }
 
@@ -290,7 +294,8 @@ where
         block: PartialFuelBlock,
         coinbase_recipient: fuel_core_types::fuel_types::ContractId,
         gas_price: u64,
-    ) -> fuel_core_types::services::executor::Result<UncommittedResult<Changes>> {
+    ) -> fuel_core_types::services::executor::Result<UncommittedResult<StorageChanges>>
+    {
         let component = Components {
             header_to_produce: block.header,
             transactions_source:
@@ -302,7 +307,10 @@ where
         };
 
         let options = self.config.as_ref().into();
-        self.produce_inner(component, options)
+        self.produce_inner(component, options).map(|result| {
+            let (result, changes) = result.into();
+            Uncommitted::new(result, StorageChanges::Changes(changes))
+        })
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.

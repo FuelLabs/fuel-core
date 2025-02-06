@@ -329,7 +329,7 @@ where
 
         {
             self.pool_worker.remove(executed_transaction);
-            self.shared_state.new_txs_notifier.send_replace(());
+            // self.shared_state.new_txs_notifier.send_replace(());
         }
 
         {

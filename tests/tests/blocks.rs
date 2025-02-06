@@ -62,8 +62,10 @@ async fn block() {
     let height = 1.into();
     block.header_mut().set_block_height(height);
     let mut db = Database::default();
+    let mut config = Config::local_node();
+    config.block_production = Trigger::Never;
     // setup server & client
-    let srv = FuelService::from_database(db.clone(), Config::local_node())
+    let srv = FuelService::from_database(db.clone(), config)
         .await
         .unwrap();
     let client = FuelClient::from(srv.bound_address);

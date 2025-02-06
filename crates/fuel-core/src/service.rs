@@ -34,7 +34,8 @@ use fuel_core_storage::{
     tables::SealedBlockConsensus,
     transactional::{
         AtomicView,
-        ReadTransaction, StorageChanges,
+        ReadTransaction,
+        StorageChanges,
     },
     IsNotFound,
     StorageAsMut,
@@ -302,6 +303,7 @@ impl FuelService {
                     "The genesis block height is not found in the database \
                     during overriding the chain config hash."
                 ))?;
+            dbg!(genesis_block_height);
             let mut database_tx = on_chain_view.read_transaction();
 
             initialized_genesis.chain_config_hash = chain_config_hash;
@@ -336,7 +338,10 @@ impl FuelService {
                 let (result, changes) = result.into();
                 self.shared
                     .block_importer
-                    .commit_result(Uncommitted::new(result, StorageChanges::Changes(changes)))
+                    .commit_result(Uncommitted::new(
+                        result,
+                        StorageChanges::Changes(changes),
+                    ))
                     .await?;
             }
         }

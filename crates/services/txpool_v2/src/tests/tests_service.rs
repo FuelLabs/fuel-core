@@ -301,7 +301,7 @@ async fn simple_insert_removal_subscription() {
     assert_eq!(
         update,
         TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            reason: "Transaction is removed: Transaction expired because it exceeded the configured time to live `tx-pool-ttl`."
+            reason: "Transaction has been skipped during block insertion: Transaction with id: f7ea1dc0c1ce4450fddfe84dabc103d3cc66060a81ee15a76f20624ef0be3cc3, was removed because of: Transaction is removed: Transaction expired because it exceeded the configured time to live `tx-pool-ttl`."
                 .to_string()
         }),
         "Second message in tx1 stream should be squeezed out"
@@ -311,7 +311,7 @@ async fn simple_insert_removal_subscription() {
     assert_eq!(
         update,
         TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            reason: "Transaction is removed: Transaction expired because it exceeded the configured time to live `tx-pool-ttl`."
+            reason: "Transaction has been skipped during block insertion: Transaction with id: b497780760761e5869ac8e4a7fb3ecb169fba7e613cd675eb8b0c7739b7c2d00, was removed because of: Transaction is removed: Transaction expired because it exceeded the configured time to live `tx-pool-ttl`."
                 .to_string()
         }),
         "Second message in tx2 stream should be squeezed out"

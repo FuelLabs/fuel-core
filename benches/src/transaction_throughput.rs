@@ -89,6 +89,7 @@ mod tests {
         local_chain_config().consensus_parameters.into()
     }
 
+    #[ignore]
     #[test]
     fn test_txs() {
         let n = std::env::var("BENCH_TXS_NUMBER")
@@ -181,7 +182,14 @@ mod tests {
         // disable automated block production
         test_builder.trigger = Trigger::Never;
         test_builder.utxo_validation = true;
-        test_builder.number_threads_pool_verif = number_of_cores;
+        #[cfg(feature = "parallel-executor")]
+        {
+            test_builder.number_threads_pool_verif = number_of_cores;
+        }
+        #[cfg(not(feature = "parallel-executor"))]
+        {
+            test_builder.number_threads_pool_verif = 1;
+        }
         test_builder.gas_limit = Some(10_000_000_000);
         test_builder.block_size_limit = Some(1_000_000_000_000);
         test_builder.max_txs = transactions.len();

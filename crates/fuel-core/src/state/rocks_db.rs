@@ -27,7 +27,10 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    transactional::{Changes, StorageChanges},
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
     Result as StorageResult,
 };
 use itertools::Itertools;
@@ -1023,7 +1026,8 @@ mod tests {
             )]),
         )];
 
-        db.commit_changes(vec![HashMap::from_iter(ops)]).unwrap();
+        db.commit_changes(&StorageChanges::Changes(HashMap::from_iter(ops)))
+            .unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
@@ -1039,7 +1043,8 @@ mod tests {
             Column::Metadata.id(),
             BTreeMap::from_iter(vec![(key.clone().into(), WriteOperation::Remove)]),
         )];
-        db.commit_changes(vec![HashMap::from_iter(ops)]).unwrap();
+        db.commit_changes(&StorageChanges::Changes(HashMap::from_iter(ops)))
+            .unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }

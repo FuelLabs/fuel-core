@@ -355,8 +355,7 @@ where
         .commit()?;
 
         let storage_changes = StorageChanges::Changes(storage_transaction.into_changes());
-        self.db
-            .commit_changes(&storage_changes)?;
+        self.db.commit_changes(&storage_changes)?;
 
         Ok(())
     }
@@ -693,7 +692,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // Set the value at height 2 to be 321.
@@ -703,7 +705,10 @@ mod tests {
             .insert(&key(), &321)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(2u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(2u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // When
@@ -733,7 +738,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // Set the value at height 2 to be 321.
@@ -743,7 +751,10 @@ mod tests {
             .insert(&key(), &321)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(2u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(2u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // When
@@ -772,7 +783,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // When
@@ -799,7 +813,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // When
@@ -827,7 +844,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // When
@@ -837,7 +857,10 @@ mod tests {
             .insert(&key(), &321)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(2u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(2u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // Then
@@ -874,7 +897,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
         let entries = historical_rocks_db
             .db
@@ -913,7 +939,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
         let v2_entries = historical_rocks_db
             .db
@@ -948,7 +977,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
 
         // Migrate the changes from V2 to V1.
@@ -971,7 +1003,9 @@ mod tests {
 
         historical_rocks_db
             .db
-            .commit_changes(vec![migration_transaction.into_changes()])
+            .commit_changes(&StorageChanges::Changes(
+                migration_transaction.into_changes(),
+            ))
             .unwrap();
 
         // Check that the history has indeed been written to V1
@@ -1020,7 +1054,10 @@ mod tests {
                 .insert(&key(), &(123 + i as u64))
                 .unwrap();
             historical_rocks_db
-                .commit_changes(Some(i.into()), vec![transaction.into_changes()])
+                .commit_changes(
+                    Some(i.into()),
+                    StorageChanges::Changes(transaction.into_changes()),
+                )
                 .unwrap();
         }
         // We can now rollback the last block 1000 times.
@@ -1054,7 +1091,10 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), vec![transaction.into_changes()])
+            .commit_changes(
+                Some(1u32.into()),
+                StorageChanges::Changes(transaction.into_changes()),
+            )
             .unwrap();
         historical_rocks_db.rollback_last_block().unwrap();
 
@@ -1092,7 +1132,10 @@ mod tests {
                 .insert(&key, &123)
                 .unwrap();
             historical_rocks_db
-                .commit_changes(Some(height.into()), vec![transaction.into_changes()])
+                .commit_changes(
+                    Some(height.into()),
+                    StorageChanges::Changes(transaction.into_changes()),
+                )
                 .unwrap();
         }
 

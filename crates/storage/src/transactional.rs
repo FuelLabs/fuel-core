@@ -217,11 +217,18 @@ pub type Changes =
     std::collections::HashMap<u32, BTreeMap<ReferenceBytesKey, WriteOperation>>;
 
 /// A type that allows to iterate over the changes in the storage.
+#[derive(Debug)]
 pub enum StorageChanges {
     /// A single changeset.
     Changes(Changes),
     /// A list of changesets.
     ChangesList(Vec<Changes>),
+}
+
+impl Default for StorageChanges {
+    fn default() -> Self {
+        StorageChanges::Changes(Default::default())
+    }
 }
 
 impl<Storage> From<StorageTransaction<Storage>> for Changes {

@@ -178,8 +178,8 @@ async fn blob__cannot_post_already_existing_blob() {
     let result = ctx.new_blob(payload).await;
 
     // Then
-    let err = result.expect_err("Should fail because of the same blob id");
-    assert!(err.to_string().contains("BlobId is already taken"));
+    let (status, _) = result.expect("Should fail because of the same blob id");
+    assert!(format!("{:?}", status).contains("BlobId is already taken"));
 }
 
 #[tokio::test]
