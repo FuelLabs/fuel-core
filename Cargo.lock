@@ -432,8 +432,8 @@ dependencies = [
  "futures-io",
  "futures-lite",
  "parking",
- "polling 3.7.4",
- "rustix 0.38.44",
+ "polling",
+ "rustix",
  "slab",
  "tracing",
  "windows-sys 0.59.0",
@@ -475,8 +475,8 @@ dependencies = [
  "blocking",
  "cfg-if",
  "event-listener 5.4.0",
- "futures-lite 2.6.0",
- "rustix 0.38.44",
+ "futures-lite",
+ "rustix",
  "tracing",
 ]
 
@@ -492,7 +492,7 @@ dependencies = [
  "cfg-if",
  "futures-core",
  "futures-io",
- "rustix 0.38.44",
+ "rustix",
  "signal-hook-registry",
  "slab",
  "windows-sys 0.59.0",
@@ -5742,7 +5742,6 @@ dependencies = [
  "futures",
  "futures-timer",
  "getrandom 0.2.15",
- "instant",
  "libp2p-allow-block-list",
  "libp2p-connection-limits",
  "libp2p-core 0.42.0",
@@ -6084,7 +6083,7 @@ dependencies = [
  "rand",
  "ring 0.17.8",
  "rustls 0.23.22",
- "socket2 0.5.8",
+ "socket2",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
@@ -6524,7 +6523,7 @@ version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2cffa4ad52c6f791f4f8b15f0c05f9824b2ced1160e88cc393d64fff9a8ac64"
 dependencies = [
- "rustix 0.38.44",
+ "rustix",
 ]
 
 [[package]]
@@ -7483,7 +7482,7 @@ dependencies = [
  "concurrent-queue",
  "hermit-abi 0.4.0",
  "pin-project-lite",
- "rustix 0.38.44",
+ "rustix",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -7951,8 +7950,8 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls 0.23.22",
- "socket2 0.5.8",
-  "thiserror 2.0.11",
+ "socket2",
+ "thiserror 2.0.11",
  "tokio",
  "tracing",
 ]
@@ -8482,20 +8481,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf0c4a6ece9950b9abdb62b1cfcf2a68b3b67a10ba445b3bb85be2a293d0632"
 dependencies = [
  "nom",
-]
-
-[[package]]
-name = "rustix"
-version = "0.37.28"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "519165d378b97752ca44bbe15047d5d3409e875f39327546b42ac81d7e18c1b6"
-dependencies = [
- "bitflags 1.3.2",
- "errno",
- "io-lifetimes",
- "libc",
- "linux-raw-sys 0.3.8",
- "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -9541,10 +9526,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "38c246215d7d24f48ae091a2902398798e05d978b24315d6efbc00ede9a8bb91"
 dependencies = [
  "cfg-if",
- "fastrand 2.3.0",
+ "fastrand",
  "getrandom 0.3.1",
  "once_cell",
- "rustix 0.38.44",
+ "rustix",
  "windows-sys 0.59.0",
 ]
 
@@ -10747,7 +10732,7 @@ dependencies = [
  "postcard",
  "psm",
  "rayon",
- "rustix 0.38.44",
+ "rustix",
  "serde",
  "serde_derive",
  "smallvec",
@@ -10785,7 +10770,7 @@ dependencies = [
  "directories-next",
  "log",
  "postcard",
- "rustix 0.38.44",
+ "rustix",
  "serde",
  "serde_derive",
  "sha2 0.10.8",
