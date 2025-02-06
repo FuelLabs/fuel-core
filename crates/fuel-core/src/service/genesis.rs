@@ -293,6 +293,12 @@ pub fn create_genesis_block(config: &Config) -> Block {
         transactions_ids,
         message_ids,
         events,
+        #[cfg(feature = "fault-proving")]
+        &config
+            .snapshot_reader
+            .chain_config()
+            .consensus_parameters
+            .chain_id(),
     )
     .expect("The block is valid; qed")
 }

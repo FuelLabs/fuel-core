@@ -4077,6 +4077,7 @@ dependencies = [
  "bs58",
  "derivative",
  "derive_more 0.99.19",
+ "enum_dispatch",
  "fuel-vm 0.59.1",
  "k256",
  "rand",

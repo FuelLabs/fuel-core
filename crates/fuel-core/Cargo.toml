@@ -118,5 +118,13 @@ test-helpers = [
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
 wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
-fault-proving = ["fuel-core-compression/fault-proving"]
 parallel-executor = ["fuel-core-parallel-executor"]
+fault-proving = [
+  "fuel-core-compression/fault-proving",
+  "fuel-core-types/fault-proving",
+  "fuel-core-executor/fault-proving",
+  "fuel-core-storage/fault-proving",
+  "fuel-core-chain-config/fault-proving",
+  "fuel-core-database/fault-proving",
+  "fuel-core-sync/fault-proving",
+]

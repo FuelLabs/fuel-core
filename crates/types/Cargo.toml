@@ -24,6 +24,7 @@ derivative = { version = "2", default-features = false, optional = true, feature
   "use_core",
 ] }
 derive_more = { version = "0.99" }
+enum_dispatch = { workspace = true }
 fuel-vm-private = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
@@ -48,3 +49,4 @@ std = ["alloc", "fuel-vm-private/std", "bs58"]
 random = ["dep:rand", "fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers"]
 aws-kms = ["dep:aws-sdk-kms"]
+fault-proving = []
