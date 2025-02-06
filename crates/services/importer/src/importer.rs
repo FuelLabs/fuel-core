@@ -344,12 +344,7 @@ where
             ))
         }
 
-        let start = Instant::now();
         changes.push(block_changes);
-        tracing::info!(
-            "Storing the block in the database took: {}ms",
-            start.elapsed().as_millis()
-        );
 
         database.commit_changes(expected_next_height, changes)?;
 
@@ -633,19 +628,10 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
     // Importer expects that `UncommittedResult` contains the result of block
     // execution without block itself.
     let expected_block_root = database.latest_block_root()?;
-
-    let start_db = Instant::now();
     let mut db_after_execution = database.storage_transaction(Default::default());
-    tracing::info!(
-        "Creating a transaction for the block took: {}ms",
-        start_db.elapsed().as_millis()
-    );
-    let start = Instant::now();
+
     let actual_block_root = db_after_execution.latest_block_root()?;
-    tracing::info!(
-        "Getting the latest block root took: {}ms",
-        start.elapsed().as_millis()
-    );
+
     if actual_block_root != expected_block_root {
         return Err(Error::InvalidDatabaseStateAfterExecution(
             expected_block_root,
