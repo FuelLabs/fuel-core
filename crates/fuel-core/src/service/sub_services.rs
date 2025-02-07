@@ -196,7 +196,8 @@ pub fn init_sub_services(
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
+    let committer_api =
+        BlockCommitterHttpApi::new(config.gas_price_config.da_committer_url.clone());
     let da_source = BlockCommitterDaBlockCosts::new(committer_api);
     let v1_config = V1AlgorithmConfig::from(config.clone());
 

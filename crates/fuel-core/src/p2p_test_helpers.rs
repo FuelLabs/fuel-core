@@ -468,7 +468,7 @@ pub fn make_config(
     node_config.utxo_validation = true;
     node_config.name = name;
     if let Some(min_gas_price) = config_overrides.min_exec_gas_price {
-        node_config.min_exec_gas_price = min_gas_price;
+        node_config.gas_price_config.min_exec_gas_price = min_gas_price;
     }
     if let Some(max_discovery_peers_connected) =
         config_overrides.max_discovery_peers_connected
