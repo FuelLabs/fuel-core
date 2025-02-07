@@ -125,6 +125,7 @@ pub struct BlockMutation {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum HeaderVersion {
     V1,
+    V2,
     #[cynic(fallback)]
     Unknown,
 }
@@ -146,6 +147,7 @@ pub struct Header {
     pub prev_root: Bytes32,
     pub time: Tai64Timestamp,
     pub application_hash: Bytes32,
+    pub tx_id_commitment: Option<Bytes32>,
 }
 
 #[derive(cynic::InlineFragments, Clone, Debug)]

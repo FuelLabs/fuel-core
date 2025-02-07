@@ -958,7 +958,12 @@ mod test {
             )
             .into()],
         )
-        .generate(&[], Bytes32::zeroed())
+        .generate(
+            &[],
+            Bytes32::zeroed(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap()
     }
 

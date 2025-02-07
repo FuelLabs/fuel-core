@@ -287,8 +287,12 @@ where
         TxSource: TransactionsSource,
     {
         let consensus_params_version = components.consensus_parameters_version();
+
         let (block_executor, storage_tx) =
             self.into_executor(consensus_params_version)?;
+
+        #[cfg(feature = "fault-proving")]
+        let chain_id = block_executor.consensus_params.chain_id();
 
         let (partial_block, execution_data) = if dry_run {
             block_executor.dry_run_block(components, storage_tx)?
@@ -310,7 +314,12 @@ where
         } = execution_data;
 
         let block = partial_block
-            .generate(&message_ids[..], event_inbox_root)
+            .generate(
+                &message_ids[..],
+                event_inbox_root,
+                #[cfg(feature = "fault-proving")]
+                &chain_id,
+            )
             .map_err(ExecutorError::BlockHeaderError)?;
 
         let finalized_block_id = block.id();
@@ -844,13 +853,14 @@ where
             ..
         } = &data;
 
+        let chain_id = self.consensus_params.chain_id();
+
         new_partial_block
             .transactions
             .iter()
             .zip(old_block.transactions())
             .try_for_each(|(new_tx, old_tx)| {
                 if new_tx != old_tx {
-                    let chain_id = self.consensus_params.chain_id();
                     let transaction_id = old_tx.id(&chain_id);
 
                     tracing::info!(
@@ -867,7 +877,12 @@ where
             })?;
 
         let new_block = new_partial_block
-            .generate(&message_ids[..], *event_inbox_root)
+            .generate(
+                &message_ids[..],
+                *event_inbox_root,
+                #[cfg(feature = "fault-proving")]
+                &chain_id,
+            )
             .map_err(ExecutorError::BlockHeaderError)?;
         if new_block.header() != old_block.header() {
             tracing::info!(
