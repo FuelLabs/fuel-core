@@ -553,6 +553,7 @@ mod tests {
     fn chain_gql_query_output() {
         use cynic::QueryBuilder;
         let operation = ChainQuery::build(());
+
         insta::assert_snapshot!(operation.query)
     }
 }

@@ -166,6 +166,7 @@ impl Block {
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum HeaderVersion {
     V1,
+    V2,
 }
 
 #[Object]
@@ -174,6 +175,8 @@ impl Header {
     async fn version(&self) -> HeaderVersion {
         match self.0 {
             BlockHeader::V1(_) => HeaderVersion::V1,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(_) => HeaderVersion::V2,
         }
     }
 
@@ -241,6 +244,11 @@ impl Header {
     /// Hash of the application header.
     async fn application_hash(&self) -> Bytes32 {
         (*self.0.application_hash()).into()
+    }
+
+    /// Transaction ID Commitment
+    async fn tx_id_commitment(&self) -> Option<Bytes32> {
+        self.0.tx_id_commitment().map(Into::into)
     }
 }
 

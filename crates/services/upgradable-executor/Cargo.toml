@@ -60,3 +60,9 @@ test-helpers = [
   "fuel-core-types/test-helpers",
 ]
 limited-tx-count = ["fuel-core-executor/limited-tx-count"]
+fault-proving = [
+  "fuel-core-executor/fault-proving",
+  "fuel-core-storage/fault-proving",
+  "fuel-core-types/fault-proving",
+  "fuel-core-wasm-executor?/fault-proving",
+]

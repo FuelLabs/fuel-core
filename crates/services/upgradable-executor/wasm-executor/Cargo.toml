@@ -44,3 +44,8 @@ proptest = { workspace = true }
 default = ["std"]
 std = ["fuel-core-types-v0"]
 smt = ["fuel-core-storage/smt", "fuel-core-executor/smt"]
+fault-proving = [
+  "fuel-core-storage/fault-proving",
+  "fuel-core-types/fault-proving",
+  "fuel-core-executor/fault-proving",
+]
