@@ -109,7 +109,8 @@ where
 
     fn key(store_entry: &StorageData) -> Key {
         let transaction = &store_entry.transaction;
-        let tip_gas_ratio = RatioTipGas::new(transaction.tip(), transaction.max_gas());
+        let tip_gas_ratio =
+            RatioTipGas::new(transaction.tip().saturating_add(1), transaction.max_gas());
 
         Key {
             ratio: tip_gas_ratio,

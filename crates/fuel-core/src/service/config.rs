@@ -40,6 +40,9 @@ use crate::{
     },
 };
 
+#[cfg(feature = "parallel-executor")]
+use std::num::NonZeroUsize;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub graphql_config: GraphQLConfig,
@@ -55,17 +58,14 @@ pub struct Config {
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
+    #[cfg(feature = "parallel-executor")]
+    pub executor_number_of_cores: NonZeroUsize,
     pub block_production: Trigger,
     pub predefined_blocks_path: Option<PathBuf>,
     pub vm: VMConfig,
     pub txpool: TxPoolConfig,
     pub block_producer: fuel_core_producer::Config,
-    pub starting_exec_gas_price: u64,
-    pub exec_gas_price_change_percent: u16,
-    pub min_exec_gas_price: u64,
-    pub exec_gas_price_threshold_percent: u8,
-    pub da_committer_url: Option<url::Url>,
-    pub da_poll_interval: Option<Duration>,
+    pub gas_price_config: GasPriceConfig,
     pub da_compression: DaCompressionConfig,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -85,18 +85,6 @@ pub struct Config {
     pub time_until_synced: Duration,
     /// The size of the memory pool in number of `MemoryInstance`s.
     pub memory_pool_size: usize,
-    pub da_gas_price_factor: NonZeroU64,
-    pub starting_recorded_height: Option<u32>,
-    pub min_da_gas_price: u64,
-    pub max_da_gas_price: u64,
-    pub max_da_gas_price_change_percent: u16,
-    pub da_gas_price_p_component: i64,
-    pub da_gas_price_d_component: i64,
-    pub gas_price_metrics: bool,
-    pub activity_normal_range_size: u16,
-    pub activity_capped_range_size: u16,
-    pub activity_decrease_range_size: u16,
-    pub block_activity_threshold: u8,
 }
 
 impl Config {
@@ -146,11 +134,8 @@ impl Config {
             state_rewind_policy:
                 crate::state::historical_rocksdb::StateRewindPolicy::RewindFullRange,
         };
-        let starting_gas_price = 0;
-        let gas_price_change_percent = 0;
-        let min_gas_price = 0;
-        let gas_price_threshold_percent = 50;
-        let gas_price_metrics = false;
+
+        let gas_price_config = GasPriceConfig::local_node();
 
         Self {
             graphql_config: GraphQLConfig {
@@ -176,6 +161,8 @@ impl Config {
             debug: true,
             utxo_validation,
             native_executor_version: Some(native_executor_version),
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores: NonZeroUsize::new(1).expect("1 is not zero"),
             snapshot_reader,
             block_production: Trigger::Instant,
             predefined_blocks_path: None,
@@ -189,10 +176,7 @@ impl Config {
                 ..Default::default()
             },
             da_compression: DaCompressionConfig::Disabled,
-            starting_exec_gas_price: starting_gas_price,
-            exec_gas_price_change_percent: gas_price_change_percent,
-            min_exec_gas_price: min_gas_price,
-            exec_gas_price_threshold_percent: gas_price_threshold_percent,
+            gas_price_config,
             block_importer,
             #[cfg(feature = "relayer")]
             relayer: None,
@@ -210,20 +194,6 @@ impl Config {
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
             memory_pool_size: 4,
-            da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
-            starting_recorded_height: None,
-            min_da_gas_price: 0,
-            max_da_gas_price: 1,
-            max_da_gas_price_change_percent: 0,
-            da_gas_price_p_component: 0,
-            da_gas_price_d_component: 0,
-            gas_price_metrics,
-            activity_normal_range_size: 0,
-            activity_capped_range_size: 0,
-            activity_decrease_range_size: 0,
-            da_committer_url: None,
-            block_activity_threshold: 0,
-            da_poll_interval: Some(Duration::from_secs(1)),
         }
     }
 
@@ -274,4 +244,58 @@ pub struct VMConfig {
 pub enum DbType {
     InMemory,
     RocksDb,
+}
+
+#[derive(Clone, Debug)]
+pub struct GasPriceConfig {
+    pub starting_exec_gas_price: u64,
+    pub exec_gas_price_change_percent: u16,
+    pub min_exec_gas_price: u64,
+    pub exec_gas_price_threshold_percent: u8,
+    pub da_committer_url: Option<url::Url>,
+    pub da_poll_interval: Option<Duration>,
+    pub da_gas_price_factor: NonZeroU64,
+    pub starting_recorded_height: Option<u32>,
+    pub min_da_gas_price: u64,
+    pub max_da_gas_price: u64,
+    pub max_da_gas_price_change_percent: u16,
+    pub da_gas_price_p_component: i64,
+    pub da_gas_price_d_component: i64,
+    pub gas_price_metrics: bool,
+    pub activity_normal_range_size: u16,
+    pub activity_capped_range_size: u16,
+    pub activity_decrease_range_size: u16,
+    pub block_activity_threshold: u8,
+}
+
+impl GasPriceConfig {
+    #[cfg(feature = "test-helpers")]
+    pub fn local_node() -> GasPriceConfig {
+        let starting_gas_price = 0;
+        let gas_price_change_percent = 0;
+        let min_gas_price = 0;
+        let gas_price_threshold_percent = 50;
+        let gas_price_metrics = false;
+
+        GasPriceConfig {
+            starting_exec_gas_price: starting_gas_price,
+            exec_gas_price_change_percent: gas_price_change_percent,
+            min_exec_gas_price: min_gas_price,
+            exec_gas_price_threshold_percent: gas_price_threshold_percent,
+            da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
+            starting_recorded_height: None,
+            min_da_gas_price: 0,
+            max_da_gas_price: 1,
+            max_da_gas_price_change_percent: 0,
+            da_gas_price_p_component: 0,
+            da_gas_price_d_component: 0,
+            gas_price_metrics,
+            activity_normal_range_size: 0,
+            activity_capped_range_size: 0,
+            activity_decrease_range_size: 0,
+            da_committer_url: None,
+            block_activity_threshold: 0,
+            da_poll_interval: Some(Duration::from_secs(1)),
+        }
+    }
 }

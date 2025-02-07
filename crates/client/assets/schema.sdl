@@ -566,10 +566,15 @@ type Header {
 	Hash of the application header.
 	"""
 	applicationHash: Bytes32!
+	"""
+	Transaction ID Commitment
+	"""
+	txIdCommitment: Bytes32
 }
 
 enum HeaderVersion {
 	V1
+	V2
 }
 
 type HeavyOperation {

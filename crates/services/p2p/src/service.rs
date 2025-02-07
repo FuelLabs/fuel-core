@@ -869,7 +869,6 @@ where
 }
 
 // TODO: Add tests https://github.com/FuelLabs/fuel-core/issues/1275
-#[async_trait::async_trait]
 impl<P, V, B, T> RunnableTask for Task<P, V, B, T>
 where
     P: TaskP2PService + 'static,
@@ -1019,8 +1018,14 @@ where
                         tracing::error!("Failed to perform peer heartbeat reputation checks: {:?}", e);
                     }
                 }
-                self.next_check_time += self.heartbeat_check_interval;
-                TaskNextAction::Continue
+
+                if let Some(next_check_time) = self.next_check_time.checked_add(self.heartbeat_check_interval) {
+                    self.next_check_time = next_check_time;
+                    TaskNextAction::Continue
+                } else {
+                    tracing::error!("Next check time overflowed");
+                    TaskNextAction::Stop
+                }
             }
         }
     }
