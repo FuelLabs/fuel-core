@@ -28,7 +28,7 @@ enum_dispatch = { workspace = true }
 fuel-vm-private = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
-hex = { version = "0.4", default-features = false }
+hex = { workspace = true }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 rand = { workspace = true, optional = true }
 secrecy = "0.8"

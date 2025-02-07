@@ -96,6 +96,10 @@ use schema::{
     },
     da_compressed::DaCompressedBlockByHeightArgs,
     gas_price::BlockHorizonArgs,
+    storage_read_replay::{
+        StorageReadReplay,
+        StorageReadReplayArgs,
+    },
     tx::{
         TransactionsByOwnerConnectionArgs,
         TxArg,
@@ -516,14 +520,10 @@ impl FuelClient {
         &self,
         height: &BlockHeight,
     ) -> io::Result<Vec<StorageReadReplayEvent>> {
-        let query: Operation<
-            schema::storage_read_replay::StorageReadReplay,
-            schema::storage_read_replay::StorageReadReplayArgs,
-        > = schema::storage_read_replay::StorageReadReplay::build(
-            schema::storage_read_replay::StorageReadReplayArgs {
+        let query: Operation<StorageReadReplay, StorageReadReplayArgs> =
+            StorageReadReplay::build(StorageReadReplayArgs {
                 height: (*height).into(),
-            },
-        );
+            });
         Ok(self
             .query(query)
             .await

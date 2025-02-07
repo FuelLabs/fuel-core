@@ -3,7 +3,7 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::{
-    types::TransactionStatus,
+    types::StatusWithTransaction,
     FuelClient,
 };
 use fuel_core_types::{
@@ -28,7 +28,6 @@ use fuel_core_types::{
         SecretKey,
     },
 };
-use futures::StreamExt;
 use rand::{
     Rng,
     SeedableRng,
@@ -69,15 +68,9 @@ async fn make_counter_contract(
 
     let contract_id = CreateMetadata::compute(&tx).unwrap().contract_id;
 
-    let mut status_stream = client.submit_and_await_status(&tx.into()).await.unwrap();
-    let intermediate_status = status_stream.next().await.unwrap().unwrap();
-    assert!(matches!(
-        intermediate_status,
-        TransactionStatus::Submitted { .. }
-    ));
-    let final_status = status_stream.next().await.unwrap().unwrap();
-    let TransactionStatus::Success { block_height, .. } = final_status else {
-        panic!("Tx wasn't included in a block: {:?}", final_status);
+    let status = client.submit_and_await_commit_with_tx(&tx.into()).await;
+    let Ok(StatusWithTransaction::Success { block_height, .. }) = status else {
+        panic!("Tx wasn't included in a block: {status:?}");
     };
     (contract_id, block_height)
 }
@@ -121,25 +114,31 @@ async fn increment_counter(
         .add_output(Output::contract(1, Default::default(), Default::default()))
         .finalize_as_transaction();
 
-    let mut status_stream = client.submit_and_await_status(&tx).await.unwrap();
-    let intermediate_status = status_stream.next().await.unwrap().unwrap();
-    assert!(matches!(
-        intermediate_status,
-        TransactionStatus::Submitted { .. }
-    ));
-    let final_status = status_stream.next().await.unwrap().unwrap();
-    let TransactionStatus::Success { block_height, .. } = final_status else {
-        panic!("Tx wasn't included in a block: {:?}", final_status);
+    let status = client.submit_and_await_commit_with_tx(&tx.into()).await;
+    let Ok(StatusWithTransaction::Success { block_height, .. }) = status else {
+        panic!("Tx wasn't included in a block: {status:?}");
     };
     block_height
+}
+
+fn get_counter_from_storage_bytes(storage_bytes: &[u8]) -> u64 {
+    assert!(storage_bytes.len() == 32, "Storage slot size mismatch");
+    assert!(
+        storage_bytes[8..].iter().all(|v| *v == 0),
+        "Counter values cannot be over u64::MAX"
+    );
+    let mut buffer = [0; 8];
+    buffer.copy_from_slice(&storage_bytes[..8]);
+    u64::from_be_bytes(buffer)
 }
 
 /// Create a counter contract.
 /// Increment it multiple times, and make sure the replay gives correct storage state every time.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_storage_read_replay_returns_counter_state() {
+async fn storage_read_replay__returns_counter_state() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(0xBAADF00D);
 
+    // given
     let mut node_config = Config::local_node();
     node_config.debug = true;
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
@@ -156,6 +155,7 @@ async fn test_storage_read_replay_returns_counter_state() {
     storage_slot_key.extend(Bytes32::zeroed().to_vec());
 
     for i in 0..10u64 {
+        // when
         let block_height = increment_counter(&client, &mut rng, contract_id).await;
 
         let replay = client
@@ -163,16 +163,19 @@ async fn test_storage_read_replay_returns_counter_state() {
             .await
             .expect("Failed to replay storage read");
 
-        let value = replay
+        // then
+        let storage_bytes = replay
             .iter()
             .find(|item| item.column == "ContractsState" && item.key == storage_slot_key)
             .expect("No storage read found")
             .value
-            .clone();
+            .clone()
+            .expect("Storage read was unexpectedly empty");
 
-        let mut expected_value = [0; 32];
-        expected_value[..8].copy_from_slice(&i.to_be_bytes());
-
-        assert!(value == Some(expected_value.to_vec()));
+        assert_eq!(
+            i,
+            get_counter_from_storage_bytes(&storage_bytes),
+            "Counter value mismatch"
+        );
     }
 }

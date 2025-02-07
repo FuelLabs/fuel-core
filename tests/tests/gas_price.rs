@@ -326,8 +326,7 @@ async fn produce_block__dont_raises_gas_price_with_default_parameters() {
         .await
         .unwrap()
         .unwrap()
-        .base_asset_id()
-        .clone();
+        .base_asset_id();
 
     // when
     let arb_tx_count = 20;

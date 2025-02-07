@@ -48,7 +48,7 @@ pub mod tests {
     use fuel_core_types::fuel_types::BlockHeight;
 
     #[test]
-    fn execution_trace_block_tx_gql_output() {
+    fn storage_read_replay_gql_output() {
         use cynic::MutationBuilder;
         let query = StorageReadReplay::build(StorageReadReplayArgs {
             height: BlockHeight::new(1234).into(),
