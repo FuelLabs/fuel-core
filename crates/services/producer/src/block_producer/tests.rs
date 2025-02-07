@@ -137,7 +137,12 @@ mod produce_and_execute_block_txpool {
             },
             transactions: vec![],
         }
-        .generate(&[], Default::default())
+        .generate(
+            &[],
+            Default::default(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap()
         .compress(&Default::default());
 
@@ -179,7 +184,12 @@ mod produce_and_execute_block_txpool {
             },
             transactions: vec![],
         }
-        .generate(&[], Default::default())
+        .generate(
+            &[],
+            Default::default(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap()
         .compress(&Default::default());
 
@@ -232,7 +242,12 @@ mod produce_and_execute_block_txpool {
             },
             transactions: vec![],
         }
-        .generate(&[], Default::default())
+        .generate(
+            &[],
+            Default::default(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap()
         .compress(&Default::default());
 
@@ -723,7 +738,13 @@ prop_compose! {
         };
         let outbox_message_ids = vec![];
         let event_inbox_root = Bytes32::default();
-        Block::new(header, txs, &outbox_message_ids, event_inbox_root).unwrap()
+        Block::new(
+            header,
+            txs,
+            &outbox_message_ids,
+            event_inbox_root,
+            #[cfg(feature = "fault-proving")] &Default::default(),
+        ).unwrap()
     }
 }
 
@@ -1060,7 +1081,12 @@ impl TestContextBuilder {
             },
             transactions: vec![],
         }
-        .generate(&[], Default::default())
+        .generate(
+            &[],
+            Default::default(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap()
         .compress(&Default::default());
 

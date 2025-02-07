@@ -112,7 +112,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<P, E, C> RunnableTask for SyncTask<P, E, C>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
@@ -171,7 +170,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<P, E, C> RunnableTask for ImportTask<P, E, C>
 where
     P: PeerToPeerPort + Send + Sync + 'static,
