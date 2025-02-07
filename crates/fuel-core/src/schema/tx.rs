@@ -308,9 +308,9 @@ impl TxMutation {
             .latest_consensus_params();
         let block_gas_limit = consensus_params.block_gas_limit();
 
-        if block_height.is_some() && !config.debug {
+        if block_height.is_some() && !config.historical_execution {
             return Err(anyhow::anyhow!(
-                "The `blockHeight` parameter requires the `--debug` option"
+                "The `blockHeight` parameter requires the `--historical-execution` option"
             )
             .into());
         }

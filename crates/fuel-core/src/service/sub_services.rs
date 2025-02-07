@@ -337,6 +337,7 @@ pub fn init_sub_services(
         config: config.graphql_config.clone(),
         utxo_validation: config.utxo_validation,
         debug: config.debug,
+        historical_execution: config.historical_execution,
         vm_backtrace: config.vm.backtrace,
         max_tx: config.txpool.pool_limits.max_txs,
         max_gas: config.txpool.pool_limits.max_gas,
