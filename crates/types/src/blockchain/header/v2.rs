@@ -186,7 +186,7 @@ pub struct GeneratedApplicationFieldsV2 {
     pub message_outbox_root: Bytes32,
     /// Root hash of all imported events from L1
     pub event_inbox_root: Bytes32,
-    /// tx id commitment
+    /// TxID commitment
     pub tx_id_commitment: Bytes32,
 }
 
