@@ -19,6 +19,8 @@ use fuel_core_consensus_module::{
 use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_gas_price_service::v1::service::LatestGasPrice;
 use fuel_core_importer::ImporterResult;
+// #[cfg(feature = "parallel-executor")]
+// use fuel_core_parallel_executor::executor::Executor;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
@@ -49,6 +51,7 @@ use fuel_core_types::{
     signer::SignMode,
     tai64::Tai64,
 };
+//#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
 
@@ -346,6 +349,9 @@ impl ExecutorAdapter {
     pub fn new(
         database: Database,
         relayer_database: Database<Relayer>,
+        // #[cfg(feature = "parallel-executor")]
+        // config: fuel_core_parallel_executor::config::Config,
+        // #[cfg(not(feature = "parallel-executor"))]
         config: fuel_core_upgradable_executor::config::Config,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);

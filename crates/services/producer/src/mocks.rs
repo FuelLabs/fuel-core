@@ -119,6 +119,8 @@ fn arc_pool_tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block 
         transactions,
         &[],
         Default::default(),
+        #[cfg(feature = "fault-proving")]
+        &Default::default(),
     )
     .unwrap()
 }

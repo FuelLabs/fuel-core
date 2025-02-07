@@ -915,19 +915,19 @@ where
             .map(|value| {
                 let bytes_len = value.len();
                 let start = offset;
-                let end = offset.saturating_add(buf.len());
+                let buf_len = buf.len();
+                let end = offset.saturating_add(buf_len);
 
                 if end > bytes_len {
                     return Err(StorageError::Other(anyhow::anyhow!(
-                        "Offset `{offset}` is out of bounds `{bytes_len}` \
-                        for key `{:?}` and column `{column:?}`",
+                        "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}` and column `{column:?}`",
                         key
                     )));
                 }
 
                 let starting_from_offset = &value[start..end];
                 buf[..].copy_from_slice(starting_from_offset);
-                Ok(buf.len())
+                Ok(buf_len)
             })
             .transpose()?;
 
