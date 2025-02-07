@@ -169,7 +169,6 @@ where
     }
 }
 
-#[async_trait]
 impl<S> RunnableTask for Task<S>
 where
     S: Signer + 'static,

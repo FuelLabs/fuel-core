@@ -65,11 +65,6 @@ pub enum CoinsQueryError {
     IncorrectMessageForeignKeyInIndex,
     #[error("error while processing the query: {0}")]
     UnexpectedInternalState(&'static str),
-    #[error("both total and max must be greater than 0 (provided total: {provided_total}, provided max: {provided_max})")]
-    IncorrectQueryParameters {
-        provided_total: u64,
-        provided_max: u16,
-    },
     #[error("coins to spend index contains incorrect key")]
     IncorrectCoinsToSpendIndexKey,
 }
@@ -300,10 +295,7 @@ pub async fn select_coins_to_spend(
     const DUST_TO_BIG_COINS_FACTOR: u16 = 5;
 
     if total == 0 || max == 0 {
-        return Err(CoinsQueryError::IncorrectQueryParameters {
-            provided_total: total,
-            provided_max: max,
-        });
+        return Ok(vec![])
     }
 
     let adjusted_total = total.saturating_mul(TOTAL_AMOUNT_ADJUSTMENT_FACTOR);
@@ -1412,8 +1404,7 @@ mod tests {
             .await;
 
             // Then
-            assert!(matches!(result, Err(actual_error)
-                if CoinsQueryError::IncorrectQueryParameters{ provided_total: 101, provided_max: 0 } == actual_error));
+            assert_eq!(result, Ok(Vec::new()));
         }
 
         #[tokio::test]
@@ -1440,8 +1431,7 @@ mod tests {
             .await;
 
             // Then
-            assert!(matches!(result, Err(actual_error)
-                if CoinsQueryError::IncorrectQueryParameters{ provided_total: 0, provided_max: 101 } == actual_error));
+            assert_eq!(result, Ok(Vec::new()));
         }
 
         #[tokio::test]

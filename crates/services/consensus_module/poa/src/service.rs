@@ -506,7 +506,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<T, B, I, S, PB, C> RunnableTask for MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,

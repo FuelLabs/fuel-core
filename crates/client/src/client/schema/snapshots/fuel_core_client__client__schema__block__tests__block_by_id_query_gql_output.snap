@@ -21,6 +21,7 @@ query BlockByIdQuery($id: BlockId) {
       prevRoot
       time
       applicationHash
+      txIdCommitment
     }
     consensus {
       __typename
