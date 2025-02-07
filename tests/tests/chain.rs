@@ -5,6 +5,7 @@ use fuel_core::{
         StateConfig,
     },
     service::{
+        config::GasPriceConfig,
         Config,
         FuelService,
     },
@@ -138,10 +139,14 @@ async fn network_operates_with_non_zero_base_asset_id() {
     chain_config
         .consensus_parameters
         .set_base_asset_id(new_base_asset_id);
+    let gas_price_config = GasPriceConfig {
+        starting_exec_gas_price: starting_gas_price,
+        ..GasPriceConfig::local_node()
+    };
     let node_config = Config {
         debug: true,
         utxo_validation: true,
-        starting_exec_gas_price: starting_gas_price,
+        gas_price_config,
         ..Config::local_node_with_configs(chain_config, state_config)
     };
 
