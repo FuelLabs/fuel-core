@@ -51,8 +51,6 @@ use fuel_core_types::{
         Transaction,
         TxId,
         TxPointer,
-        UniqueIdentifier,
-        UtxoId,
     },
     fuel_types::{
         canonical::Serialize,
@@ -1014,17 +1012,6 @@ where
                 .skipped_transactions
                 .extend(execution_data.skipped_transactions);
             total_data.message_ids.extend(execution_data.message_ids);
-
-            for tx in transactions.iter() {
-                let outputs = tx.outputs()?;
-                for (idx, output) in outputs.iter().enumerate() {
-                    dbg!(UtxoId::new(
-                        tx.id(&consensus_parameters.chain_id()),
-                        idx as u16
-                    ));
-                    dbg!(output);
-                }
-            }
             total_partial_block.transactions.extend(transactions);
             total_data.tx_count = u32::try_from(total_partial_block.transactions.len())
                 .map_err(|_| {

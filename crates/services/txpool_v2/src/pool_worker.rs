@@ -280,7 +280,7 @@ where
     ) {
         let tx_id = tx.id();
         let result = self.view_provider.latest_view();
-        let start_time = std::time::Instant::now();
+        // let start_time = std::time::Instant::now();
         let res = match result {
             Ok(view) => self.pool.insert(tx, &view),
             Err(err) => Err(Error::Database(format!("{:?}", err))),
@@ -317,11 +317,11 @@ where
         if let Some(channel) = response_channel {
             let _ = channel.send(Ok(()));
         }
-        tracing::info!(
-            "Transaction (id: {}) took {} micros seconds to insert into the pool",
-            &tx_id,
-            start_time.elapsed().as_micros()
-        );
+        // tracing::info!(
+        //     "Transaction (id: {}) took {} micros seconds to insert into the pool",
+        //     &tx_id,
+        //     start_time.elapsed().as_micros()
+        // );
     }
 
     fn get_block_transactions(

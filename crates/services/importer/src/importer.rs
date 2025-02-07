@@ -282,7 +282,7 @@ where
         fields(
             block_id = %result.result().sealed_block.entity.id(),
             height = **result.result().sealed_block.entity.header().height(),
-            tx_status = ?result.result().tx_status,
+            //tx_status = ?result.result().tx_status,
         ),
         err
     )]
