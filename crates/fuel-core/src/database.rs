@@ -365,8 +365,9 @@ where
     type LatestView = IterableKeyValueView<ColumnType<Description>, Description::Height>;
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
-        let height = *self.inner_storage().stage.height.lock();
-        self.latest_view_with_height(height)
+        let lock = self.inner_storage().stage.height.lock();
+        let view = self.latest_view_with_height(*lock)?;
+        Ok(view)
     }
 }
 
