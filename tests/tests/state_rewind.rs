@@ -568,6 +568,7 @@ async fn dry_run__correct_contract_state_in_past_blocks() -> anyhow::Result<()> 
     let mut rng = StdRng::seed_from_u64(1234);
     let driver = FuelCoreDriver::spawn_feeless(&[
         "--debug",
+        "--historical-execution",
         "--poa-instant",
         "true",
         "--state-rewind-duration",
