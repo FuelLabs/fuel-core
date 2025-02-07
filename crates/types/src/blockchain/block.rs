@@ -17,6 +17,7 @@ use crate::{
     blockchain::header::{
         BlockHeaderError,
         BlockHeaderV1,
+        GetBlockHeaderFields,
     },
     fuel_tx::{
         Transaction,
@@ -116,12 +117,21 @@ impl Block<Transaction> {
         header: BlockHeader,
         transactions: Vec<Transaction>,
     ) -> Option<Self> {
-        header
-            .validate_transactions(&transactions)
-            .then_some(Block::V1(BlockV1 {
-                header,
-                transactions,
-            }))
+        match header {
+            BlockHeader::V1(ref header_v1) => header_v1
+                .validate_transactions(&transactions)
+                .then_some(Block::V1(BlockV1 {
+                    header,
+                    transactions,
+                })),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(ref header_v2) => header_v2
+                .validate_transactions(&transactions)
+                .then_some(Block::V1(BlockV1 {
+                    header,
+                    transactions,
+                })),
+        }
     }
 
     /// Compresses the fuel block and replaces transactions with hashes.
@@ -178,8 +188,18 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
         // identifier on the fly.
         //
         // This assertion is a double-checks that this behavior is not changed.
-        debug_assert_eq!(self.header().id(), self.header().hash());
-        self.header().id()
+        let header = self.header();
+        match header {
+            BlockHeader::V1(header_v1) => {
+                debug_assert_eq!(header_v1.id(), header_v1.hash());
+                header_v1.id()
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header_v2) => {
+                debug_assert_eq!(header_v2.id(), header_v2.hash());
+                header_v2.id()
+            }
+        }
     }
 
     /// Get the executed transactions.

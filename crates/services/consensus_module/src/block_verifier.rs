@@ -106,7 +106,7 @@ fn verify_genesis_block_fields(
         "The genesis time should be unix epoch time"
     );
     ensure!(
-        header.da_height == expected_genesis_da_height,
+        header.da_height() == expected_genesis_da_height,
         "The genesis `da_height` is not as expected"
     );
     ensure!(

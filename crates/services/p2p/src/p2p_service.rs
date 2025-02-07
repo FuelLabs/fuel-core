@@ -122,10 +122,10 @@ pub struct FuelP2PService {
     /// to the peer that requested it.
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<V2ResponseMessage>>,
 
-    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages    
+    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages
     network_codec: PostcardCodec,
 
-    /// Stores additional p2p network info    
+    /// Stores additional p2p network info
     network_metadata: NetworkMetadata,
 
     /// Whether or not metrics collection is enabled
@@ -875,7 +875,10 @@ mod tests {
                 poa::PoAConsensus,
                 Consensus,
             },
-            header::BlockHeader,
+            header::{
+                BlockHeader,
+                GetBlockHeaderFields,
+            },
             SealedBlockHeader,
         },
         fuel_tx::{
@@ -1716,8 +1719,18 @@ mod tests {
 
     // Metadata gets skipped during serialization, so this is the fuzzy way to compare blocks
     fn eq_except_metadata(a: &SealedBlockHeader, b: &SealedBlockHeader) -> bool {
-        a.entity.application() == b.entity.application()
-            && a.entity.consensus() == b.entity.consensus()
+        let app_eq = match (&a.entity, &b.entity) {
+            (BlockHeader::V1(a), BlockHeader::V1(b)) => {
+                a.application() == b.application()
+            }
+            #[cfg(feature = "fault-proving")]
+            (BlockHeader::V2(a), BlockHeader::V2(b)) => {
+                a.application() == b.application()
+            }
+            #[cfg_attr(not(feature = "fault-proving"), allow(unreachable_patterns))]
+            _ => false,
+        };
+        app_eq && a.entity.consensus() == b.entity.consensus()
     }
 
     async fn request_response_works_with(request_msg: RequestMessage) {
