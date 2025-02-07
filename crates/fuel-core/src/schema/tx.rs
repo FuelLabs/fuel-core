@@ -298,7 +298,7 @@ impl TxMutation {
         utxo_validation: Option<bool>,
         gas_price: Option<U64>,
         // This can be used to run the dry-run on top of a past block.
-        // Requires `--debug` flag to be enabled.
+        // Requires `--historical-execution` flag to be enabled.
         block_height: Option<U32>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();

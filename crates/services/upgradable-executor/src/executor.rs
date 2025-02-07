@@ -351,6 +351,12 @@ where
         utxo_validation: Option<bool>,
         at_height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+        if at_height.is_some() && !self.config.allow_historical_execution {
+            return Err(ExecutorError::Other(
+                "The historical execution is not allowed".to_string(),
+            ));
+        }
+
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation =
             utxo_validation.unwrap_or(self.config.utxo_validation_default);
