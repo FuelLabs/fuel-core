@@ -1,6 +1,6 @@
 # Gas Price Analysis Data Fetcher
 
-Binary allowing retrieveing the L1 blob and L2 block data needed by the gas price simulation binary. 
+Binary allowing retrieving the L1 blob and L2 block data needed by the gas price simulation binary. 
 It requires being able to connect to the block committer, and either being able to connect to a sentry node or access to the database of a mainnet synched node.
 
 ## Usage
