@@ -22,6 +22,7 @@ use rand::{
 };
 
 pub mod builder;
+pub mod counter_contract;
 pub mod fuel_core_driver;
 
 pub async fn send_graph_ql_query(url: &str, query: &str) -> String {

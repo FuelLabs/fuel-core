@@ -760,7 +760,7 @@ type Mutation {
 	"""
 	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
 	"""
-	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64): [DryRunTransactionExecutionStatus!]!
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]!
 	"""
 	Submits transaction to the `TxPool`.
 	
