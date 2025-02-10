@@ -433,6 +433,7 @@ pub struct DryRunArg {
     pub txs: Vec<HexString>,
     pub utxo_validation: Option<bool>,
     pub gas_price: Option<U64>,
+    pub block_height: Option<U32>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -442,7 +443,7 @@ pub struct DryRunArg {
     variables = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(txs: $txs, utxoValidation: $utxo_validation, gasPrice: $gas_price)]
+    #[arguments(txs: $txs, utxoValidation: $utxo_validation, gasPrice: $gas_price, blockHeight: $block_height)]
     pub dry_run: Vec<DryRunTransactionExecutionStatus>,
 }
 
@@ -560,6 +561,7 @@ pub mod tests {
             txs: vec![HexString(Bytes(tx.to_bytes()))],
             utxo_validation: Some(true),
             gas_price: Some(123u64.into()),
+            block_height: Some(456u32.into()),
         });
         insta::assert_snapshot!(query.query)
     }

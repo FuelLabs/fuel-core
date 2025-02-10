@@ -363,7 +363,7 @@ where
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let tx_statuses = tokio_rayon::spawn_fifo(
             move || -> anyhow::Result<Vec<TransactionExecutionStatus>> {
-                Ok(executor.dry_run(component, utxo_validation)?)
+                Ok(executor.dry_run(component, utxo_validation, height)?)
             },
         )
         .await?;

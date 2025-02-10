@@ -6,6 +6,7 @@ use super::{
         P2PAdapter,
     },
     genesis::create_genesis_block,
+    DbType,
 };
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
@@ -102,10 +103,19 @@ pub fn init_sub_services(
 
     let last_height = *last_block_header.height();
 
+    if config.historical_execution
+        && config.combined_db_config.database_type != DbType::RocksDb
+    {
+        return Err(anyhow::anyhow!(
+            "Historical execution is only supported with RocksDB"
+        ));
+    }
+
     let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
         backtrace: config.vm.backtrace,
         utxo_validation_default: config.utxo_validation,
         native_executor_version: config.native_executor_version,
+        allow_historical_execution: config.historical_execution,
     };
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
@@ -332,6 +342,7 @@ pub fn init_sub_services(
         config: config.graphql_config.clone(),
         utxo_validation: config.utxo_validation,
         debug: config.debug,
+        historical_execution: config.historical_execution,
         vm_backtrace: config.vm.backtrace,
         max_tx: config.txpool.pool_limits.max_txs,
         max_gas: config.txpool.pool_limits.max_gas,
