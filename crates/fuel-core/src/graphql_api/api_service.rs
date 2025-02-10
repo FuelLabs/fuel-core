@@ -292,7 +292,7 @@ where
         .extension(ViewExtension::new())
         // `RequiredFuelBlockHeightExtension` uses the view set by the ViewExtension.
         // Do not reorder this line before adding the `ViewExtension`.
-        .extension(RequiredFuelBlockHeightExtension::new(required_fuel_block_height_tolerance))
+        .extension(RequiredFuelBlockHeightExtension::new(required_fuel_block_height_tolerance, block_height_subscription_handle))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";
