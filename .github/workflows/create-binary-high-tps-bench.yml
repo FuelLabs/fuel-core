@@ -126,6 +126,7 @@ jobs:
           echo "ZIP_FILE_NAME=$ZIP_FILE_NAME" >> $GITHUB_ENV
           # create zip file
           mkdir -pv "$ARTIFACT"
+          cp "./benches/src/bin/README.md" "$ARTIFACT"
           cp -r "./bin/fuel-core/chainspec/local-testnet" "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/high_tps_public_bench" "$ARTIFACT"
           tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
