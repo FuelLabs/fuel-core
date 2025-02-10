@@ -8,9 +8,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2648](https://github.com/FuelLabs/fuel-core/pull/2648): Add feature-flagged field to block header `fault_proving_header` that contains a commitment to all transaction ids.
+- [2150](https://github.com/FuelLabs/fuel-core/pull/2150): Upgraded `libp2p` to `0.54.1` and introduced `ConnectionLimiter` to limit pending incoming/outgoing connections.
+- [2648](https://github.com/FuelLabs/fuel-core/pull/2648): Add feature-flagged field to block header `fault_proving_header` that contains a commitment to all transaction ids.
 
 ### Fixed
 - [2646](https://github.com/FuelLabs/fuel-core/pull/2646): Improved performance of fetching block height by caching it when the view is created.
+
+### Changed
+
+- [2653](https://github.com/FuelLabs/fuel-core/pull/2653): Added cleaner error for wasm-executor upon failed deserialization.
+
 
 ## [Version 0.41.6]
 
@@ -31,6 +38,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2387](https://github.com/FuelLabs/fuel-core/pull/2387): Update description `tx-max-depth` flag.
 - [2630](https://github.com/FuelLabs/fuel-core/pull/2630): Removed some noisy `tracing::info!` logs
 - [2643](https://github.com/FuelLabs/fuel-core/pull/2643): Before this fix when tip is zero, transactions that use 30M have the same priority as transactions with 1M gas. Now they are correctly ordered.
+
+### Breaking 
+- [2661](https://github.com/FuelLabs/fuel-core/pull/2661): Dry run now supports running in past blocks. `dry_run_opt` method now takes block number as the last argument. To retain old behavior, simply pass in `None` for the last argument.
 
 ### Added
 - [2617](https://github.com/FuelLabs/fuel-core/pull/2617): Add integration skeleton of parallel-executor.

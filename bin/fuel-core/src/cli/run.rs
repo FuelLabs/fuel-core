@@ -187,6 +187,11 @@ pub struct Command {
     #[arg(long = "debug", env)]
     pub debug: bool,
 
+    /// Allows execution of transactions based on past block, such as:
+    /// - Dry run in the past
+    #[arg(long = "historical-execution", env)]
+    pub historical_execution: bool,
+
     /// Enable logging of backtraces from vm errors
     #[arg(long = "vm-backtrace", env)]
     pub vm_backtrace: bool,
@@ -305,6 +310,7 @@ impl Command {
             continue_on_error,
             vm_backtrace,
             debug,
+            historical_execution,
             utxo_validation,
             native_executor_version,
             #[cfg(feature = "parallel-executor")]
@@ -623,6 +629,7 @@ impl Command {
             combined_db_config,
             snapshot_reader,
             debug,
+            historical_execution,
             native_executor_version,
             continue_on_error,
             utxo_validation,
