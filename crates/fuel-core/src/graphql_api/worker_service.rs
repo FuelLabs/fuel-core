@@ -40,7 +40,6 @@ use crate::{
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
     stream::BoxStream,
-    EmptyShared,
     RunnableService,
     RunnableTask,
     ServiceRunner,
@@ -129,6 +128,7 @@ pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
     on_chain_database: OnChain,
     off_chain_database: OffChain,
     base_asset_id: AssetId,
+    tx_block_height: tokio::sync::watch::Sender<BlockHeight>,
 }
 
 /// The off-chain GraphQL API worker task processes the imported blocks
@@ -144,6 +144,7 @@ pub struct Task<TxPool, D> {
     coins_to_spend_indexation_enabled: bool,
     asset_metadata_indexation_enabled: bool,
     base_asset_id: AssetId,
+    tx_block_height: tokio::sync::watch::Sender<BlockHeight>,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -199,6 +200,10 @@ where
             let status = from_executor_to_status(block, status.result.clone());
             self.tx_pool.send_complete(tx_id, height, status);
         }
+
+        // Broadcast the block height to subscribers. No need to handle the error
+        // if there are no subscribers.
+        self.tx_block_height.send(*height).ok();
 
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
@@ -539,6 +544,31 @@ where
     Ok(())
 }
 
+#[derive(Clone, Debug)]
+pub struct BlockHeightSubscriptionHandle {
+    rx_block_height: tokio::sync::watch::Receiver<BlockHeight>,
+}
+
+impl BlockHeightSubscriptionHandle {
+    pub async fn wait_for_block_height(
+        &mut self,
+        height: BlockHeight,
+    ) -> anyhow::Result<()> {
+        loop {
+            let current_height = *self.rx_block_height.borrow_and_update();
+            if current_height >= height {
+                break;
+            }
+            self.rx_block_height.changed().await?;
+        }
+        Ok(())
+    }
+
+    pub fn latest_seen_block_height(&self) -> BlockHeight {
+        *self.rx_block_height.borrow()
+    }
+}
+
 #[async_trait::async_trait]
 impl<TxPool, BlockImporter, OnChain, OffChain> RunnableService
     for InitializeTask<TxPool, BlockImporter, OnChain, OffChain>
@@ -549,12 +579,14 @@ where
     OffChain: ports::worker::OffChainDatabase,
 {
     const NAME: &'static str = "GraphQL_Off_Chain_Worker";
-    type SharedData = EmptyShared;
+    type SharedData = BlockHeightSubscriptionHandle;
     type Task = Task<TxPool, OffChain>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        EmptyShared
+        BlockHeightSubscriptionHandle {
+            rx_block_height: self.tx_block_height.subscribe(),
+        }
     }
 
     async fn into_task(
@@ -597,6 +629,7 @@ where
             off_chain_database,
             continue_on_error,
             base_asset_id,
+            tx_block_height,
         } = self;
 
         let mut task = Task {
@@ -610,6 +643,7 @@ where
             coins_to_spend_indexation_enabled,
             asset_metadata_indexation_enabled,
             base_asset_id,
+            tx_block_height,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;
@@ -744,5 +778,7 @@ where
         da_compression_config,
         continue_on_error,
         base_asset_id: *consensus_parameters.base_asset_id(),
+        // TODO: Should we recover the block height from the DB?
+        tx_block_height: tokio::sync::watch::Sender::new(BlockHeight::from(0)),
     })
 }

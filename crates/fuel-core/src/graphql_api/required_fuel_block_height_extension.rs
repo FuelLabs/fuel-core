@@ -1,6 +1,8 @@
-use super::database::ReadView;
+use super::{
+    database::ReadView,
+    worker_service::BlockHeightSubscriptionHandle,
+};
 
-use crate::fuel_core_graphql_api::database::ReadDatabase;
 use async_graphql::{
     extensions::{
         Extension,
@@ -22,6 +24,7 @@ use std::sync::{
     Arc,
     OnceLock,
 };
+use tokio::sync::Mutex;
 
 const REQUIRED_FUEL_BLOCK_HEIGHT: &str = "required_fuel_block_height";
 const CURRENT_FUEL_BLOCK_HEIGHT: &str = "current_fuel_block_height";
@@ -39,14 +42,23 @@ pub const SLEEP_DURATION: std::time::Duration = std::time::Duration::from_secs(1
 /// the request data by the graphql handler as a value of type
 /// `RequiredHeight`.
 #[derive(Debug, derive_more::Display, derive_more::From)]
+#[display(
+    fmt = "RequiredFuelBlockHeightExtension(tolerance: {})",
+    tolerance_threshold
+)]
 pub(crate) struct RequiredFuelBlockHeightExtension {
     tolerance_threshold: u32,
+    block_height_subscription_handle: BlockHeightSubscriptionHandle,
 }
 
 impl RequiredFuelBlockHeightExtension {
-    pub fn new(tolerance_threshold: u32) -> Self {
+    pub fn new(
+        tolerance_threshold: u32,
+        block_height_subscription_handle: BlockHeightSubscriptionHandle,
+    ) -> Self {
         Self {
             tolerance_threshold,
+            block_height_subscription_handle,
         }
     }
 }
@@ -54,20 +66,31 @@ impl RequiredFuelBlockHeightExtension {
 pub(crate) struct RequiredFuelBlockHeightInner {
     required_height: OnceLock<BlockHeight>,
     tolerance_threshold: u32,
+    // It would be nice not to wrap this in a Mutex, but I need mutable access to the handle.
+    block_height_subscription_handle: Mutex<BlockHeightSubscriptionHandle>,
 }
 
 impl RequiredFuelBlockHeightInner {
-    pub fn new(tolerance_threshold: u32) -> Self {
+    pub fn new(
+        tolerance_threshold: u32,
+        block_height_subscription_handle: &BlockHeightSubscriptionHandle,
+    ) -> Self {
         Self {
             required_height: OnceLock::new(),
             tolerance_threshold,
+            block_height_subscription_handle: Mutex::new(
+                block_height_subscription_handle.clone(),
+            ),
         }
     }
 }
 
 impl ExtensionFactory for RequiredFuelBlockHeightExtension {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(RequiredFuelBlockHeightInner::new(self.tolerance_threshold))
+        Arc::new(RequiredFuelBlockHeightInner::new(
+            self.tolerance_threshold,
+            &self.block_height_subscription_handle,
+        ))
     }
 }
 
@@ -111,7 +134,7 @@ impl Extension for RequiredFuelBlockHeightInner {
         let current_block_height = view.latest_block_height();
 
         if let Some(required_block_height) = self.required_height.get() {
-            if let Ok(mut current_block_height) = current_block_height {
+            if let Ok(current_block_height) = current_block_height {
                 // Check first that the node is not out of sync
                 let minimum_block_height: BlockHeight = required_block_height
                     .saturating_sub(self.tolerance_threshold)
@@ -129,61 +152,34 @@ impl Extension for RequiredFuelBlockHeightInner {
                 // If the node is lagging behind w.r.t. the required fuel block height,
                 // but within an acceptable interval, wait until the current block height
                 // matches the required fuel block height.
-                while current_block_height < *required_block_height {
-                    tokio::time::sleep(SLEEP_DURATION).await;
-                    match view.latest_block_height() {
-                        Err(e) => {
-                            tracing::error!(
-                                "Failed to wait for the current block height: {}",
-                                e
-                            );
-                            let (line, column) = (line!(), column!());
-                            let response = Response::from_errors(vec![ServerError::new(
-                            format!(
-                                "Failed to fetch the current block height, the last observed value was {}, ", 
-                                // required_block_height: BlockHeight, dereference once to get the 
-                                // corresponding value as u32.
-                                *current_block_height
-                            ),
-                            Some(Pos {
-                                line: line as usize,
-                                column: column as usize,
-                            }),
-                        )]);
-                            return response
-                        }
-                        Ok(block_height) => {
-                            current_block_height = block_height;
-                        }
-                    }
-                }
+                // TODO: Add a timeout to prevent the node from waiting indefinitely.
+                if current_block_height < *required_block_height {
+                    self.block_height_subscription_handle
+                        .lock()
+                        .await
+                        .wait_for_block_height(*required_block_height)
+                        .await;
+                };
             }
         }
 
         let mut response = next.run(ctx, operation_name).await;
 
-        // TODO: After https://github.com/FuelLabs/fuel-core/pull/2682
-        //  request the latest block height from the `ReadDatabase` directly.
-        let database: &ReadDatabase = ctx.data_unchecked();
-        let view = database.view();
-        let current_block_height = view.and_then(|view| view.latest_block_height());
-
-        if let Ok(current_block_height) = current_block_height {
-            let current_block_height: u32 = *current_block_height;
+        let current_block_height = self
+            .block_height_subscription_handle
+            .lock()
+            .await
+            .latest_seen_block_height();
+        let current_block_height: u32 = *current_block_height;
+        response.extensions.insert(
+            CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
+            Value::Number(current_block_height.into()),
+        );
+        if self.required_height.get().is_some() {
             response.extensions.insert(
-                CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
-                Value::Number(current_block_height.into()),
+                FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED.to_string(),
+                Value::Boolean(false),
             );
-            // If the request contained a required fuel block height, add a field signalling that
-            // the precondition was met.
-            if self.required_height.get().is_some() {
-                response.extensions.insert(
-                    FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED.to_string(),
-                    Value::Boolean(false),
-                );
-            }
-        } else {
-            tracing::error!("Failed to get the current block height");
         }
 
         response

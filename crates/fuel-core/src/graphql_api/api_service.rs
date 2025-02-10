@@ -91,7 +91,10 @@ use tower_http::{
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub use super::database::ReadDatabase;
-use super::ports::worker;
+use super::{
+    ports::worker,
+    worker_service::BlockHeightSubscriptionHandle,
+};
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
@@ -231,6 +234,7 @@ pub fn new_service<OnChain, OffChain>(
     gas_price_provider: GasPriceProvider,
     consensus_parameters_provider: ConsensusProvider,
     memory_pool: SharedMemoryPool,
+    block_height_subscription_handle: BlockHeightSubscriptionHandle,
 ) -> anyhow::Result<Service>
 where
     OnChain: AtomicView + 'static,
