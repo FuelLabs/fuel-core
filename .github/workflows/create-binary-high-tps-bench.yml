@@ -47,7 +47,7 @@ jobs:
 
       - name: Set up Docker Buildx
         if: matrix.job.cross_image
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to the ghcr.io registry
         if: matrix.job.os == 'buildjet-4vcpu-ubuntu-2204'
