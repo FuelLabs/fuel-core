@@ -19,6 +19,8 @@ use crate::{
     fuel_types::ChainId,
 };
 
+use educe::Educe;
+
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
@@ -50,8 +52,8 @@ pub struct FaultProvingHeader {
 /// has been executed.
 /// differences from V1:
 /// - adds the tx_id_commitment field
-#[derive(Clone, Debug, derivative::Derivative)]
-#[derivative(PartialEq, Eq)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct BlockHeaderV2 {
@@ -62,7 +64,7 @@ pub struct BlockHeaderV2 {
     /// The header metadata calculated during creation.
     /// The field is private to enforce the use of the [`PartialBlockHeader::generate`] method.
     #[cfg_attr(feature = "serde", serde(skip))]
-    #[derivative(PartialEq = "ignore")]
+    #[educe(PartialEq(ignore))]
     pub(crate) metadata: Option<BlockHeaderMetadata>,
     /// fault proving relevant data
     pub fault_proving: FaultProvingHeader,

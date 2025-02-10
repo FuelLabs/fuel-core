@@ -105,7 +105,7 @@ async-trait = "0.1"
 aws-sdk-kms = "1.37"
 cynic = { version = "3.1.0", features = ["http-reqwest"] }
 clap = "4.4"
-educe = { version = "0.6", features = ["Eq", "PartialEq", "Hash", "Debug"] }
+educe = { version = "0.6", default-features = false, features = ["Eq", "PartialEq", "Hash", "Debug"] }
 derive_more = { version = "1", features = ["into", "from", "display"] }
 enum_dispatch = "0.3.13"
 enum-iterator = "1.2"
