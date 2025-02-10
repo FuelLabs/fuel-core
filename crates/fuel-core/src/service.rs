@@ -428,7 +428,6 @@ impl RunnableService for Task {
     }
 }
 
-#[async_trait::async_trait]
 impl RunnableTask for Task {
     #[tracing::instrument(skip_all)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {

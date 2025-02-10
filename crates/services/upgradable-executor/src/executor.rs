@@ -158,7 +158,9 @@ impl<S, R> Executor<S, R> {
         ("0-40-0", 16),
         ("0-40-1", 17),
         ("0-40-2", 18),
-        ("0-41-4", LATEST_STATE_TRANSITION_VERSION),
+        ("0-41-4", 19),
+        ("0-41-5", 20),
+        ("0-41-6", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
@@ -938,7 +940,12 @@ mod test {
             )
             .into()],
         )
-        .generate(&[], Bytes32::zeroed())
+        .generate(
+            &[],
+            Bytes32::zeroed(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap()
     }
 

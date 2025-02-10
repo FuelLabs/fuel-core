@@ -37,3 +37,7 @@ test-helpers = [
   "fuel-core-storage/test-helpers",
 ]
 limited-tx-count = []
+fault-proving = [
+  "fuel-core-types/fault-proving",
+  "fuel-core-storage/fault-proving",
+]

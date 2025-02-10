@@ -29,3 +29,7 @@ rand = { workspace = true }
 
 [features]
 test-helpers = ["dep:mockall", "fuel-core-types/test-helpers"]
+fault-proving = [
+  "fuel-core-types/fault-proving",
+  "fuel-core-storage/fault-proving",
+]
