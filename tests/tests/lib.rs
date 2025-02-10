@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 #![deny(unused_must_use)]
 #![deny(warnings)]
 
