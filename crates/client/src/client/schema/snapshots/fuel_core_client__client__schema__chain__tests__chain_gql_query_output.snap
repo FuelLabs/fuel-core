@@ -1,7 +1,6 @@
 ---
 source: crates/client/src/client/schema/chain.rs
 expression: operation.query
-snapshot_kind: text
 ---
 query ChainQuery {
   chain {
@@ -25,6 +24,7 @@ query ChainQuery {
         prevRoot
         time
         applicationHash
+        txIdCommitment
       }
       consensus {
         __typename
