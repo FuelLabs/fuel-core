@@ -369,14 +369,10 @@ fn display_results(nb_txs: u64, duration: std::time::Duration) {
         3,
     )
     .unwrap();
-    let text4 = text_to_ascii_art::to_art(
-        format!("{} TPS", (nb_txs as u128 / duration.as_millis()) * 1000),
-        "default",
-        10,
-        1,
-        10,
-    )
-    .unwrap();
+    let tps = (nb_txs as f64 / duration.as_secs_f64()).round();
+    let text4 =
+        text_to_ascii_art::to_art(format!("{:.0} TPS", tps), "default", 10, 1, 10)
+            .unwrap();
     println!("\x1b[92m{text3}\x1b[39m");
     println!("\x1b[92m{text4}\x1b[39m");
 }

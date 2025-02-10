@@ -74,6 +74,8 @@ jobs:
           load: true
           cache-from: type=registry,ref=ghcr.io/fuellabs/${{ matrix.job.cross_image }}-build-cache:latest
           cache-to: type=registry,ref=ghcr.io/fuellabs/${{ matrix.job.cross_image }}-build-cache:latest,mode=max
+        env:
+          DOCKER_BUILD_SUMMARY: false
 
       - name: Install packages (macOS)
         if: matrix.job.os == 'macos-latest'
