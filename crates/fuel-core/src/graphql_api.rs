@@ -24,6 +24,7 @@ pub struct Config {
     pub config: ServiceConfig,
     pub utxo_validation: bool,
     pub debug: bool,
+    pub historical_execution: bool,
     pub vm_backtrace: bool,
     pub max_tx: usize,
     pub max_gas: u64,

@@ -55,6 +55,9 @@ pub struct Config {
     /// - Enables storage read replay for historical blocks.
     /// - Allows setting `utxo_validation` to `false`.
     pub debug: bool,
+    /// When `true`:
+    /// - Enables dry run in the past.
+    pub historical_execution: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
@@ -159,6 +162,7 @@ impl Config {
             combined_db_config,
             continue_on_error: false,
             debug: true,
+            historical_execution: true,
             utxo_validation,
             native_executor_version: Some(native_executor_version),
             #[cfg(feature = "parallel-executor")]

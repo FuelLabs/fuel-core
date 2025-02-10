@@ -455,7 +455,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
         total_gas,
         ..
     } = client
-        .dry_run_opt(&[tx.clone()], Some(false), None)
+        .dry_run_opt(&[tx.clone()], Some(false), None, None)
         .await
         .unwrap()
         .pop()
@@ -470,7 +470,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
         total_gas: total_gas_zero_gas_price,
         ..
     } = client
-        .dry_run_opt(&[tx], Some(false), Some(0))
+        .dry_run_opt(&[tx], Some(false), Some(0), None)
         .await
         .unwrap()
         .pop()

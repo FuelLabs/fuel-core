@@ -204,6 +204,7 @@ impl DryRunner for MockExecutorWithCapture {
         &self,
         block: Components<Vec<Transaction>>,
         _utxo_validation: Option<bool>,
+        _height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         *self.captured.lock().unwrap() = Some(block);
 
