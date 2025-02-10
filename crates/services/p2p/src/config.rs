@@ -92,10 +92,14 @@ pub struct Config<State = Initialized> {
     /// Max number of unique peers connected
     /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
-    pub max_peers_connected: u32,
-    /// Max number of connections per single peer
-    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
-    pub max_connections_per_peer: u32,
+    pub max_discovery_peers_connected: u32,
+
+    /// Max number of gossipsub peers
+    pub max_gossipsub_peers_connected: u32,
+
+    /// Max number of request/response peers
+    pub max_request_response_peers_connected: u32,
+
     /// The interval at which identification requests are sent to
     /// the remote on established connections after the first request
     pub identify_interval: Option<Duration>,
@@ -162,8 +166,10 @@ impl Config<NotInitialized> {
             max_txs_per_request: self.max_txs_per_request,
             bootstrap_nodes: self.bootstrap_nodes,
             enable_mdns: self.enable_mdns,
-            max_peers_connected: self.max_peers_connected,
-            max_connections_per_peer: self.max_connections_per_peer,
+            max_discovery_peers_connected: self.max_discovery_peers_connected,
+            max_gossipsub_peers_connected: self.max_gossipsub_peers_connected,
+            max_request_response_peers_connected: self
+                .max_request_response_peers_connected,
             allow_private_addresses: self.allow_private_addresses,
             random_walk: self.random_walk,
             connection_idle_timeout: self.connection_idle_timeout,
@@ -214,8 +220,9 @@ impl Config<NotInitialized> {
             max_txs_per_request: MAX_TXS_PER_REQUEST,
             bootstrap_nodes: vec![],
             enable_mdns: false,
-            max_peers_connected: 50,
-            max_connections_per_peer: 3,
+            max_discovery_peers_connected: 50,
+            max_gossipsub_peers_connected: 50,
+            max_request_response_peers_connected: 50,
             allow_private_addresses: true,
             random_walk: Some(Duration::from_millis(500)),
             connection_idle_timeout: Some(Duration::from_secs(120)),

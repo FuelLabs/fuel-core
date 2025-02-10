@@ -81,6 +81,17 @@ enum ExecutionStrategy {
     },
 }
 
+enum ProduceBlockMode {
+    Produce,
+    DryRunLatest,
+    DryRunAt { height: BlockHeight },
+}
+impl ProduceBlockMode {
+    fn is_dry_run(&self) -> bool {
+        matches!(self, Self::DryRunLatest | Self::DryRunAt { .. })
+    }
+}
+
 /// The upgradable executor supports the WASM version of the state transition function.
 /// If the block has a version the same as a native executor, we will use it.
 /// If not, the WASM version of the state transition function will be used
@@ -296,7 +307,7 @@ where
         };
 
         let options = self.config.as_ref().into();
-        self.produce_inner(component, options, false)
+        self.produce_inner(component, options, ProduceBlockMode::Produce)
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
@@ -308,7 +319,7 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(block, options, true)
+        self.produce_inner(block, options, ProduceBlockMode::DryRunLatest)
     }
 }
 
@@ -329,7 +340,7 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(components, options, false)
+        self.produce_inner(components, options, ProduceBlockMode::Produce)
     }
 
     /// Executes the block and returns the result of the execution without committing
@@ -338,7 +349,14 @@ where
         &self,
         component: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
+        at_height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+        if at_height.is_some() && !self.config.allow_historical_execution {
+            return Err(ExecutorError::Other(
+                "The historical execution is not allowed".to_string(),
+            ));
+        }
+
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation =
             utxo_validation.unwrap_or(self.config.utxo_validation_default);
@@ -361,7 +379,16 @@ where
             skipped_transactions,
             tx_status,
             ..
-        } = self.produce_inner(component, options, true)?.into_result();
+        } = self
+            .produce_inner(
+                component,
+                options,
+                match at_height {
+                    Some(height) => ProduceBlockMode::DryRunAt { height },
+                    None => ProduceBlockMode::DryRunLatest,
+                },
+            )?
+            .into_result();
 
         // If one of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
@@ -384,7 +411,7 @@ where
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
-        dry_run: bool,
+        mode: ProduceBlockMode,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -394,20 +421,20 @@ where
         if block_version == native_executor_version {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => {
-                    self.native_produce_inner(block, options, dry_run)
+                    self.native_produce_inner(block, options, mode)
                 }
                 ExecutionStrategy::Wasm { module } => {
                     let maybe_blocks_module = self.get_module(block_version).ok();
                     if let Some(blocks_module) = maybe_blocks_module {
-                        self.wasm_produce_inner(&blocks_module, block, options, dry_run)
+                        self.wasm_produce_inner(&blocks_module, block, options, mode)
                     } else {
-                        self.wasm_produce_inner(module, block, options, dry_run)
+                        self.wasm_produce_inner(module, block, options, mode)
                     }
                 }
             }
         } else {
             let module = self.get_module(block_version)?;
-            self.wasm_produce_inner(&module, block, options, dry_run)
+            self.wasm_produce_inner(&module, block, options, mode)
         }
     }
 
@@ -416,7 +443,7 @@ where
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
-        dry_run: bool,
+        mode: ProduceBlockMode,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -424,7 +451,7 @@ where
         let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
-            self.native_produce_inner(block, options, dry_run)
+            self.native_produce_inner(block, options, mode)
         } else {
             Err(ExecutorError::Other(format!(
                 "Not supported version `{block_version}`. Expected version is `{}`",
@@ -493,7 +520,7 @@ where
         module: &wasmtime::Module,
         component: Components<TxSource>,
         options: ExecutionOptions,
-        dry_run: bool,
+        mode: ProduceBlockMode,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -517,19 +544,16 @@ where
             gas_price,
         };
 
-        let previous_block_height = if !dry_run {
-            block.header_to_produce.height().pred()
-        } else {
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/2062
-            None
+        let db_height = match mode {
+            ProduceBlockMode::Produce => block.header_to_produce.height().pred(),
+            ProduceBlockMode::DryRunLatest => None,
+            ProduceBlockMode::DryRunAt { height } => height.pred(),
         };
 
         let instance_without_input =
             crate::instance::Instance::new(&self.engine).add_source(source)?;
 
-        let instance_without_input = if let Some(previous_block_height) =
-            previous_block_height
-        {
+        let instance_without_input = if let Some(previous_block_height) = db_height {
             let storage = self.storage_view_provider.view_at(&previous_block_height)?;
             instance_without_input.add_storage(storage)?
         } else {
@@ -540,7 +564,7 @@ where
         let relayer = self.relayer_view_provider.latest_view()?;
         let instance_without_input = instance_without_input.add_relayer(relayer)?;
 
-        let instance = if dry_run {
+        let instance = if mode.is_dry_run() {
             instance_without_input.add_dry_run_input_data(block, options)?
         } else {
             instance_without_input.add_production_input_data(block, options)?
@@ -609,27 +633,27 @@ where
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
-        dry_run: bool,
+        mode: ProduceBlockMode,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let previous_block_height = if !dry_run {
-            block.header_to_produce.height().pred()
-        } else {
-            // TODO: https://github.com/FuelLabs/fuel-core/issues/2062
-            None
-        };
         let relayer = self.relayer_view_provider.latest_view()?;
 
-        if let Some(previous_block_height) = previous_block_height {
+        let db_height = match mode {
+            ProduceBlockMode::Produce => block.header_to_produce.height().pred(),
+            ProduceBlockMode::DryRunLatest => None,
+            ProduceBlockMode::DryRunAt { height } => height.pred(),
+        };
+
+        if let Some(previous_block_height) = db_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, dry_run)
+                .produce_without_commit(block, mode.is_dry_run())
         } else {
             let database = self.storage_view_provider.latest_view()?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, dry_run)
+                .produce_without_commit(block, mode.is_dry_run())
         }
     }
 
