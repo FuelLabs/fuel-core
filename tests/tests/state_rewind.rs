@@ -2,6 +2,7 @@
 
 use clap::Parser;
 use fuel_core::{
+    chain_config::TESTNET_WALLET_SECRETS,
     combined_database::CombinedDatabase,
     schema::tx::types::TransactionStatus,
     service::{
@@ -9,18 +10,34 @@ use fuel_core::{
         FuelService,
     },
 };
+use fuel_core_client::client::{
+    pagination::PaginationRequest,
+    types::{
+        Coin,
+        TransactionStatus as ClientTransactionStatus,
+    },
+    FuelClient,
+};
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::{
+        Address,
         AssetId,
+        GasCosts,
         Input,
         Output,
+        Receipt,
         Transaction,
         TransactionBuilder,
         TxId,
+        TxPointer,
         UniqueIdentifier,
     },
     fuel_types::BlockHeight,
+    fuel_vm::SecretKey,
+    secrecy::Secret,
+    services::executor::TransactionExecutionResult,
+    signer::SignMode,
 };
 use futures::StreamExt;
 use itertools::Itertools;
@@ -29,9 +46,14 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::collections::BTreeSet;
+use std::{
+    collections::BTreeSet,
+    str::FromStr,
+    vec,
+};
 use tempfile::TempDir;
 use test_helpers::{
+    counter_contract,
     fuel_core_driver::FuelCoreDriver,
     produce_block_with_tx,
 };
@@ -376,6 +398,241 @@ async fn backup_and_restore__should_work_with_state_rewind() -> anyhow::Result<(
         let actual_changes = result.into_changes();
         assert_eq!(&actual_changes, expected_changes);
     }
+
+    driver.kill().await;
+    Ok(())
+}
+
+/// Get arbitrary coin from a wallet
+async fn get_wallet_coin(client: &FuelClient, wallet_address: &Address) -> Coin {
+    let coins = client
+        .coins(
+            wallet_address,
+            None,
+            PaginationRequest {
+                cursor: None,
+                results: 10,
+                direction: fuel_core_client::client::pagination::PageDirection::Forward,
+            },
+        )
+        .await
+        .expect("Unable to get coins")
+        .results;
+    coins
+        .into_iter()
+        .next()
+        .expect("Expected at least one coin")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
+    let mut rng = StdRng::seed_from_u64(1234);
+    let poa_secret = SecretKey::random(&mut rng);
+
+    let mut config = fuel_core::service::Config::local_node();
+    config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
+    config.utxo_validation = true;
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // First, distribute one test wallet to multiple addresses
+    let wallet_secret =
+        SecretKey::from_str(TESTNET_WALLET_SECRETS[1]).expect("Expected valid secret");
+    let wallet_address = Address::from(*wallet_secret.public_key().hash());
+    let coin = get_wallet_coin(&client, &wallet_address).await;
+
+    let wallets: Vec<SecretKey> = (0..2).map(|_| SecretKey::random(&mut rng)).collect();
+
+    let mut tx = TransactionBuilder::script(vec![], vec![]);
+    tx.max_fee_limit(0)
+        .script_gas_limit(1_000_000)
+        .with_gas_costs(GasCosts::free())
+        .add_unsigned_coin_input(
+            wallet_secret,
+            coin.utxo_id,
+            coin.amount,
+            coin.asset_id,
+            TxPointer::new(coin.block_created.into(), coin.tx_created_idx),
+        );
+    for key in wallets.iter() {
+        let public = key.public_key();
+        let owner: [u8; Address::LEN] = public.hash().into();
+
+        tx.add_output(Output::Coin {
+            to: owner.into(),
+            amount: coin.amount / (wallets.len() as u64),
+            asset_id: coin.asset_id,
+        });
+    }
+    let first_tx = tx.finalize_as_transaction();
+    let status = client.submit_and_await_commit(&first_tx).await.unwrap();
+    let ClientTransactionStatus::Success {
+        block_height: bh_first,
+        ..
+    } = status
+    else {
+        panic!("unexpected result {status:?}")
+    };
+
+    // Then, transfer one of these coins to anyther wallet
+    let source_public = wallets[0].public_key();
+    let source_owner: [u8; Address::LEN] = source_public.hash().into();
+    let source_coin = get_wallet_coin(&client, &source_owner.into()).await;
+    let target_public = wallets[1].public_key();
+    let target_owner: [u8; Address::LEN] = target_public.hash().into();
+    let second_tx = TransactionBuilder::script(vec![], vec![])
+        .max_fee_limit(0)
+        .script_gas_limit(1_000_000)
+        .with_gas_costs(GasCosts::free())
+        .add_unsigned_coin_input(
+            wallets[0],
+            source_coin.utxo_id,
+            source_coin.amount,
+            source_coin.asset_id,
+            TxPointer::new(source_coin.block_created.into(), source_coin.tx_created_idx),
+        )
+        .add_output(Output::Coin {
+            to: target_owner.into(),
+            amount: source_coin.amount,
+            asset_id: source_coin.asset_id,
+        })
+        .finalize_as_transaction();
+    let status = client.submit_and_await_commit(&second_tx).await.unwrap();
+    let ClientTransactionStatus::Success {
+        block_height: bh_second,
+        ..
+    } = status
+    else {
+        panic!("unexpected result {status:?}")
+    };
+
+    // Then attempt to dry run the transfer again at different heights
+
+    // At the first block, the coin doesn't exist, so it should fail
+    let err = client
+        .dry_run_opt(&[second_tx.clone()], None, None, Some(bh_first))
+        .await
+        .expect_err("should fail")
+        .to_string();
+    assert!(err.contains("The specified coin") && err.contains("doesn't exist"));
+
+    // Just before the second transfer, the coin should exist and dry-run should succeed
+    let status = client
+        .dry_run_opt(&[second_tx.clone()], None, None, Some(bh_second))
+        .await
+        .expect("should succeed")[0]
+        .clone();
+    let TransactionExecutionResult::Success { .. } = status.result else {
+        panic!("unexpected result {status:?}")
+    };
+
+    // At latest height, attempting to dry-run the same transaction again should fail
+    let err = client
+        .dry_run_opt(&[second_tx.clone()], None, None, None)
+        .await
+        .expect_err("should fail")
+        .to_string();
+    assert!(err.contains("Transaction id was already used"));
+
+    // At latest height, a similar transaction with a different TxId should still fail
+    let third_tx = TransactionBuilder::script(vec![], vec![])
+        .max_fee_limit(0)
+        .script_gas_limit(1_000_001) // changed to make it a different transaction
+        .with_gas_costs(GasCosts::free())
+        .add_unsigned_coin_input(
+            wallets[0],
+            source_coin.utxo_id,
+            source_coin.amount,
+            source_coin.asset_id,
+            TxPointer::new(source_coin.block_created.into(), source_coin.tx_created_idx),
+        )
+        .add_output(Output::Coin {
+            to: target_owner.into(),
+            amount: source_coin.amount,
+            asset_id: source_coin.asset_id,
+        })
+        .finalize_as_transaction();
+
+    let err = client
+        .dry_run_opt(&[third_tx.clone()], None, None, None)
+        .await
+        .expect_err("should fail")
+        .to_string();
+    assert!(err.contains("The specified coin") && err.contains("doesn't exist"));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn dry_run__correct_contract_state_in_past_blocks() -> anyhow::Result<()> {
+    let mut rng = StdRng::seed_from_u64(1234);
+    let driver = FuelCoreDriver::spawn_feeless(&[
+        "--debug",
+        "--historical-execution",
+        "--poa-instant",
+        "true",
+        "--state-rewind-duration",
+        "7d",
+    ])
+    .await?;
+
+    let (deployed_height, contract_id) =
+        counter_contract::deploy(&driver.client, &mut rng).await;
+
+    // Make one unrelated block
+    produce_block_with_tx(&mut rng, &driver.client).await;
+    let after_deploy_height = deployed_height.succ().unwrap();
+
+    let (incr1_height, value1) =
+        counter_contract::increment(&driver.client, &mut rng, contract_id).await;
+    let (incr2_height, value2) =
+        counter_contract::increment(&driver.client, &mut rng, contract_id).await;
+
+    // Check that the contract works as expected when not dry-running
+    assert!(incr1_height < incr2_height);
+    assert_eq!(value1, 1);
+    assert_eq!(value2, 2);
+
+    // Dry-run at multiple points and check that the correct state is used
+    for (block_height, expected_value) in [
+        (Some(after_deploy_height), 1),
+        (Some(incr1_height), 1),
+        (Some(incr2_height), 2),
+        (None, 3),
+    ] {
+        let res = driver
+            .client
+            .dry_run_opt(
+                &[counter_contract::increment_tx(&mut rng, contract_id)],
+                None,
+                None,
+                block_height,
+            )
+            .await?[0]
+            .result
+            .clone();
+
+        let TransactionExecutionResult::Success { receipts, .. } = res else {
+            panic!("Expected a successful execution");
+        };
+        assert!(receipts.len() > 2);
+        let Receipt::Return { val, .. } = receipts[receipts.len() - 2] else {
+            panic!("Expected a return receipt: {:?}", receipts);
+        };
+        assert_eq!(val, expected_value);
+    }
+
+    // Dry run just before the contract has been deployed to see that it fails
+    driver
+        .client
+        .dry_run_opt(
+            &[counter_contract::increment_tx(&mut rng, contract_id)],
+            None,
+            None,
+            Some(deployed_height),
+        )
+        .await
+        .expect_err("Should fail to dry-run at this height");
 
     driver.kill().await;
     Ok(())
