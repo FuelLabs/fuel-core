@@ -24,7 +24,6 @@ use std::sync::{
     Arc,
     OnceLock,
 };
-use tokio::sync::Mutex;
 
 const REQUIRED_FUEL_BLOCK_HEIGHT: &str = "required_fuel_block_height";
 const CURRENT_FUEL_BLOCK_HEIGHT: &str = "current_fuel_block_height";
@@ -66,8 +65,7 @@ impl RequiredFuelBlockHeightExtension {
 pub(crate) struct RequiredFuelBlockHeightInner {
     required_height: OnceLock<BlockHeight>,
     tolerance_threshold: u32,
-    // It would be nice not to wrap this in a Mutex, but I need mutable access to the handle.
-    block_height_subscription_handle: Mutex<BlockHeightSubscriptionHandle>,
+    block_height_subscription_handle: BlockHeightSubscriptionHandle,
 }
 
 impl RequiredFuelBlockHeightInner {
@@ -78,9 +76,7 @@ impl RequiredFuelBlockHeightInner {
         Self {
             required_height: OnceLock::new(),
             tolerance_threshold,
-            block_height_subscription_handle: Mutex::new(
-                block_height_subscription_handle.clone(),
-            ),
+            block_height_subscription_handle: block_height_subscription_handle.clone(),
         }
     }
 }
@@ -155,8 +151,7 @@ impl Extension for RequiredFuelBlockHeightInner {
                 // TODO: Add a timeout to prevent the node from waiting indefinitely.
                 if current_block_height < *required_block_height {
                     self.block_height_subscription_handle
-                        .lock()
-                        .await
+                        .clone()
                         .wait_for_block_height(*required_block_height)
                         .await;
                 };
@@ -167,8 +162,6 @@ impl Extension for RequiredFuelBlockHeightInner {
 
         let current_block_height = self
             .block_height_subscription_handle
-            .lock()
-            .await
             .latest_seen_block_height();
         let current_block_height: u32 = *current_block_height;
         response.extensions.insert(
