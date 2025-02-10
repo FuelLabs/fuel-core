@@ -1,5 +1,9 @@
 // Define arguments
 
+use console::{
+    style,
+    Emoji,
+};
 use fuel_core::{
     service::config::Trigger,
     upgradable_executor::native_executor::ports::TransactionExt,
@@ -46,6 +50,10 @@ use fuel_core_types::{
         predicate::EmptyStorage,
     },
 };
+use indicatif::{
+    ProgressBar,
+    ProgressStyle,
+};
 use rand::{
     rngs::StdRng,
     Rng,
@@ -71,8 +79,14 @@ struct Args {
 }
 
 fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
+    let spinner_style =
+        ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
+            .unwrap()
+            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+    let pb = ProgressBar::new(nb_txs);
+    pb.set_style(spinner_style.clone());
     let mut transactions = Vec::with_capacity(nb_txs as usize);
-    for _ in 0..nb_txs {
+    for i in 0..nb_txs {
         let ed19_secret = ed25519_dalek::SigningKey::generate(rng);
         let public = ed19_secret.verifying_key();
 
@@ -128,24 +142,44 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
         )
         .expect("Predicate check failed");
         transactions.push(tx.into());
+        pb.inc(1);
+        pb.set_message(format!("[{}/{}]", i + 1, nb_txs));
     }
+    pb.finish_and_clear();
     transactions
 }
+
+static TRUCK: Emoji<'_, '_> = Emoji("🚚  ", "");
+static CLIP: Emoji<'_, '_> = Emoji("🔗  ", "");
+static SPARKLE: Emoji<'_, '_> = Emoji("✨ ", ":-)");
+static ROCKET: Emoji<'_, '_> = Emoji("🚀 ", ":-)");
 
 fn main() {
     let args = Args::parse();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
-    let start_transaction_generation = std::time::Instant::now();
+    let spinner_style =
+        ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
+            .unwrap()
+            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+
+    println!(
+        "{} {}Generating {} transactions...",
+        style("[1/4]").bold().dim(),
+        TRUCK,
+        args.number_of_transactions
+    );
     let transactions = generate_transactions(args.number_of_transactions, &mut rng);
     let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
     let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
-    tracing::info!(
-        "Generated {} transactions in {:?} ms.",
-        args.number_of_transactions,
-        start_transaction_generation.elapsed().as_millis()
-    );
 
+    println!(
+        "{} {}Creating initial coins for transactions inputs...",
+        style("[2/4]").bold().dim(),
+        CLIP
+    );
+    let pb = ProgressBar::new(args.number_of_transactions);
+    pb.set_style(spinner_style.clone());
     let mut test_builder = TestSetupBuilder::new(2322);
     // setup genesis block with coins that transactions can spend
     // We don't use the function to not have to convert Script to transactions
@@ -153,8 +187,9 @@ fn main() {
         transactions
             .iter()
             .flat_map(|t| t.inputs().unwrap())
-            .filter_map(|input| {
-                if let Input::CoinSigned(CoinSigned {
+            .enumerate()
+            .filter_map(|(i, input)| {
+                let res = if let Input::CoinSigned(CoinSigned {
                     amount,
                     owner,
                     asset_id,
@@ -182,9 +217,13 @@ fn main() {
                     })
                 } else {
                     None
-                }
+                };
+                pb.inc(1);
+                pb.set_message(format!("[{}/{}]", i + 1, args.number_of_transactions));
+                res
             }),
     );
+    pb.finish_and_clear();
 
     // disable automated block production
     test_builder.trigger = Trigger::Never;
@@ -210,14 +249,15 @@ fn main() {
 
     // spin up node
     let rt = tokio::runtime::Builder::new_current_thread()
-    .enable_all()
-    .build()
-    .unwrap();
+        .enable_all()
+        .build()
+        .unwrap();
     let _drop = rt.enter();
     let block = rt.block_on({
         let transactions = transactions.clone();
         let chain_conf = chain_conf.clone();
         let mut test_builder = test_builder.clone();
+        let spinner_style = spinner_style.clone();
         async move {
             test_builder.set_chain_config(chain_conf);
             // start the producer node
@@ -228,21 +268,28 @@ fn main() {
                 .shared
                 .txpool_shared_state
                 .new_tx_notification_subscribe();
+            let pb = ProgressBar::new(args.number_of_transactions);
+            pb.set_style(spinner_style.clone());
             let mut nb_left = args.number_of_transactions;
-            let start_insertion = std::time::Instant::now();
+            println!(
+                "{} {}Inserting transactions in the mempool...",
+                style("[3/4]").bold().dim(),
+                ROCKET
+            );
             srv.shared
                 .txpool_shared_state
                 .try_insert(transactions.clone())
                 .unwrap();
             while nb_left > 0 {
                 let _ = subscriber.recv().await.unwrap();
+                pb.inc(1);
+                pb.set_message(format!(
+                    "[{}/{}]",
+                    args.number_of_transactions - nb_left,
+                    args.number_of_transactions
+                ));
                 nb_left -= 1;
             }
-            tracing::info!(
-                "Inserted {} transactions in {:?} ms.",
-                args.number_of_transactions,
-                start_insertion.elapsed().as_millis()
-            );
             client.produce_blocks(1, None).await.unwrap();
             let block = srv
                 .shared
@@ -253,21 +300,83 @@ fn main() {
                 .get_sealed_block_by_height(&1.into())
                 .unwrap()
                 .unwrap();
+            pb.finish_and_clear();
             block
         }
     });
 
-    rt.block_on(async move {
+    let duration = rt.block_on(async move {
         test_builder.set_chain_config(chain_conf.clone());
         let TestContext { srv, .. } = test_builder.finalize().await;
 
+        println!(
+            "{} {}Execute and commit block...",
+            style("[4/4]").bold().dim(),
+            SPARKLE
+        );
+        let pb = ProgressBar::new(args.number_of_transactions);
+        pb.set_style(spinner_style.clone());
         let start = std::time::Instant::now();
-
         srv.shared
             .block_importer
             .execute_and_commit(block)
             .await
             .expect("Should validate the block");
-        println!("Block imported in {:?}ms", start.elapsed().as_millis());
+        pb.finish_and_clear();
+        println!(
+            "{} Block committed in {:?}ms",
+            SPARKLE,
+            start.elapsed().as_millis()
+        );
+        start.elapsed()
     });
+    display_results(args.number_of_transactions, duration);
+}
+
+fn display_results(nb_txs: u64, duration: std::time::Duration) {
+    use console::{
+        pad_str,
+        Alignment,
+    };
+
+    let width = 25;
+    let text = "                                                                                                                                                                                                                                                                                  
+             :=========================:.     =@@@@@@@@@@@@@@@@%. .%@@+            -@@@-  .*@@@@@@@@@@@@@@@@*.  .@@@:                          
+             -=========================:.    .*@@@@@@@@@@@@@@@%-  .%@@+            -@@@-  :%@@@@@@@@@@@@@@@*.   .@@@:                          
+             -==+@@@@@@@@@@@@+=#@@%+===:.    .*@@*.               .%@@+            -@@@-  :%@@-                 .@@@:                          
+             -===+@@@@@@@@@+=#@@@======:.    .*@@*.               .%@@+            -@@@-  :%@@-                 .@@@:                          
+             -====*@@@@@@*=*@@@*=======:.    .*@@*.               .%@@+            -@@@-  :%@@-                 .@@@:                          
+             -=====#@@@*=*@@@*=========:.    .*@@*.               .%@@+            -@@@-  :%@@-                 .@@@:                          
+             -======#*==#%#*===========:.    .*@@@@@@@@@@@@@@@*   .%@@+            -@@@-  :%@@@@@@@@@@@@@@%-    .@@@:                          
+             -==+%%%%%%%%+=============:.    .*@@@@@@@@@@@@@@@*   .%@@+            -@@@-  :%@@@@@@@@@@@@@@%-    .@@@:                          
+             -==*@@@@@@#===============:.    .*@@*.               .%@@+            -@@@-  :%@@-                 .@@@:                          
+             -==*@@@@#=================:.    .*@@*.               .%@@+            -@@@-  :%@@-                 .@@@:                          
+             -==*@@%===================:.    .*@@*.               .%@@+            -@@@-  :%@@-                 .@@@:                          
+             -==*%+====================:.    .*@@*.               .%@@+            -@@@-  :%@@-                 .@@@:                          
+             -========================-.     .*@@*.               .%@@@%%%%%%%%%%%%@@@@-  :%@@@%%%%%%%%%%%%%%.  .@@@@%%%%%%%%%%%%%             
+             -======================-.       .*@@*.                +@@@@@@@@@@@@@@@@@@#:  .#@@@@@@@@@@@@@@@@@.   #@@@@@@@@@@@@@@@@             
+";
+    let text2 = format!("\x1b[92m{}\x1b[39m", text);
+
+    let text2 = pad_str(&text2, width, Alignment::Center, None);
+
+    println!("{text2}");
+    let text3 = text_to_ascii_art::to_art(
+        format!("{} TXs executed in {} ms", nb_txs, duration.as_millis()),
+        "small",
+        3,
+        0,
+        3,
+    )
+    .unwrap();
+    let text4 = text_to_ascii_art::to_art(
+        format!("{} TPS", (nb_txs as u128 / duration.as_millis()) * 1000),
+        "default",
+        10,
+        1,
+        10,
+    )
+    .unwrap();
+    println!("\x1b[92m{text3}\x1b[39m");
+    println!("\x1b[92m{text4}\x1b[39m");
 }

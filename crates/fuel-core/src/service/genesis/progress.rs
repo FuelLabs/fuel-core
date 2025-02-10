@@ -1,7 +1,4 @@
-use std::{
-    borrow::Cow,
-    io::IsTerminal,
-};
+use std::borrow::Cow;
 
 use indicatif::{
     HumanDuration,
@@ -87,7 +84,7 @@ pub struct MultipleProgressReporter {
 
 impl MultipleProgressReporter {
     fn should_display_bars() -> bool {
-        std::io::stderr().is_terminal() && !cfg!(test)
+        false
     }
 
     pub fn new(span: Span) -> MultipleProgressReporter {
