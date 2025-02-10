@@ -9,6 +9,7 @@ use fuel_core::{
         StateConfig,
     },
     service::{
+        config::GasPriceConfig,
         Config,
         DbType,
         FuelService,
@@ -244,11 +245,16 @@ impl TestSetupBuilder {
         };
         txpool.heavy_work.size_of_verification_queue = self.max_txs;
 
+        let gas_price_config = GasPriceConfig {
+            starting_exec_gas_price: self.starting_gas_price,
+            ..GasPriceConfig::local_node()
+        };
+
         let mut config = Config {
             utxo_validation: self.utxo_validation,
             txpool,
             block_production: self.trigger,
-            starting_exec_gas_price: self.starting_gas_price,
+            gas_price_config,
             ..Config::local_node_with_configs(chain_conf, state)
         };
         config.combined_db_config.database_config = self.database_config;
