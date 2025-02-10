@@ -110,7 +110,7 @@ educe = { version = "0.6", default-features = false, features = [
   "PartialEq",
   "Hash",
   "Debug",
-]}
+] }
 derive_more = { version = "1", features = ["into", "from", "display"] }
 enum_dispatch = "0.3.13"
 enum-iterator = "1.2"
