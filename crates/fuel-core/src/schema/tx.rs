@@ -355,10 +355,11 @@ impl TxMutation {
         height: U32,
     ) -> async_graphql::Result<Vec<StorageReadReplayEvent>> {
         let config = ctx.data_unchecked::<GraphQLConfig>();
-        if !config.debug {
-            return Err(
-                anyhow::anyhow!("`debug` must be enabled to use this endpoint").into(),
-            );
+        if !config.historical_execution {
+            return Err(anyhow::anyhow!(
+                "`--historical-execution` is required for this operation"
+            )
+            .into());
         }
 
         let block_height = height.into();
