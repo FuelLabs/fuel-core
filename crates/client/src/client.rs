@@ -480,7 +480,7 @@ impl FuelClient {
         &self,
         txs: &[Transaction],
     ) -> io::Result<Vec<TransactionExecutionStatus>> {
-        self.dry_run_opt(txs, None, None).await
+        self.dry_run_opt(txs, None, None, None).await
     }
 
     /// Dry run with options to override the node behavior
@@ -490,6 +490,7 @@ impl FuelClient {
         // Disable utxo input checks (exists, unspent, and valid signature)
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
+        at_height: Option<BlockHeight>,
     ) -> io::Result<Vec<TransactionExecutionStatus>> {
         let txs = txs
             .iter()
@@ -500,6 +501,7 @@ impl FuelClient {
                 txs,
                 utxo_validation,
                 gas_price: gas_price.map(|gp| gp.into()),
+                block_height: at_height.map(|bh| bh.into()),
             });
         let tx_statuses = self.query(query).await.map(|r| r.dry_run)?;
         tx_statuses
