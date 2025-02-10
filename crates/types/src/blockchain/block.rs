@@ -17,7 +17,6 @@ use crate::{
     blockchain::header::{
         BlockHeaderError,
         BlockHeaderV1,
-        GetBlockHeaderFields,
     },
     fuel_tx::{
         Transaction,
@@ -117,21 +116,12 @@ impl Block<Transaction> {
         header: BlockHeader,
         transactions: Vec<Transaction>,
     ) -> Option<Self> {
-        match header {
-            BlockHeader::V1(ref header_v1) => header_v1
-                .validate_transactions(&transactions)
-                .then_some(Block::V1(BlockV1 {
-                    header,
-                    transactions,
-                })),
-            #[cfg(feature = "fault-proving")]
-            BlockHeader::V2(ref header_v2) => header_v2
-                .validate_transactions(&transactions)
-                .then_some(Block::V1(BlockV1 {
-                    header,
-                    transactions,
-                })),
-        }
+        header
+            .validate_transactions(&transactions)
+            .then_some(Block::V1(BlockV1 {
+                header,
+                transactions,
+            }))
     }
 
     /// Compresses the fuel block and replaces transactions with hashes.

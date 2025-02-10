@@ -44,26 +44,6 @@ pub enum BlockHeader {
     V2(BlockHeaderV2),
 }
 
-/// Helpful methods for all variants of the block header.
-pub trait GetBlockHeaderFields<GAF> {
-    /// Get the consensus portion of the header.
-    fn consensus(&self) -> &ConsensusHeader<GeneratedConsensusFields>;
-    /// Get the application portion of the header.
-    fn application(&self) -> &ApplicationHeader<GAF>;
-    /// Get the metadata of the header.
-    fn metadata(&self) -> &Option<BlockHeaderMetadata>;
-    /// Re-generate the header metadata.
-    fn recalculate_metadata(&mut self);
-    /// Get the hash of the fuel header.
-    fn hash(&self) -> BlockId;
-    /// Get the transaction ID Commitment
-    fn tx_id_commitment(&self) -> Option<Bytes32>;
-    /// Get the block ID
-    fn id(&self) -> BlockId;
-    /// Validate the transactions match the header.
-    fn validate_transactions(&self, transactions: &[Transaction]) -> bool;
-}
-
 impl BlockHeader {
     /// Get the da height
     pub fn da_height(&self) -> DaBlockHeight {
@@ -314,36 +294,6 @@ impl BlockHeader {
             }
         }
     }
-}
-
-/// Helpful test methods for all variants of the block header.
-#[cfg(any(test, feature = "test-helpers"))]
-pub trait BlockHeaderDataTestHelpers<GAF> {
-    /// Mutable getter for consensus portion of header
-    fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields>;
-    /// Set the entire consensus header
-    fn set_consensus_header(
-        &mut self,
-        consensus: ConsensusHeader<GeneratedConsensusFields>,
-    );
-    /// Mutable getter for application portion of header
-    fn application_mut(&mut self) -> &mut ApplicationHeader<GAF>;
-    /// Set the entire application header
-    fn set_application_header(&mut self, application: ApplicationHeader<GAF>);
-    /// Set the block height for the header
-    fn set_block_height(&mut self, height: BlockHeight);
-    /// Set the previous root for the header
-    fn set_previous_root(&mut self, root: Bytes32);
-    /// Set the time for the header
-    fn set_time(&mut self, time: Tai64);
-    /// Set the transaction root for the header
-    fn set_transaction_root(&mut self, root: Bytes32);
-    /// Set the DA height for the header
-    fn set_da_height(&mut self, da_height: DaBlockHeight);
-    /// Set the consensus parameters version
-    fn set_consensus_parameters_version(&mut self, version: ConsensusParametersVersion);
-    /// Set the application hash
-    fn set_application_hash(&mut self, hash: Bytes32);
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

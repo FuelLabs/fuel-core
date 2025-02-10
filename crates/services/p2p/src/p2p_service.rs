@@ -875,10 +875,7 @@ mod tests {
                 poa::PoAConsensus,
                 Consensus,
             },
-            header::{
-                BlockHeader,
-                GetBlockHeaderFields,
-            },
+            header::BlockHeader,
             SealedBlockHeader,
         },
         fuel_tx::{

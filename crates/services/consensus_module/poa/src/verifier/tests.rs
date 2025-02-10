@@ -4,7 +4,6 @@ use fuel_core_poa::ports::MockDatabase;
 use fuel_core_types::{
     blockchain::header::{
         ApplicationHeader,
-        BlockHeaderDataTestHelpers,
         ConsensusHeader,
         PartialBlockHeader,
     },

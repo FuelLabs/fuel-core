@@ -5,10 +5,7 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::poa::PoAConsensus,
-        header::{
-            BlockHeader,
-            GetBlockHeaderFields,
-        },
+        header::BlockHeader,
     },
     fuel_tx::Input,
 };

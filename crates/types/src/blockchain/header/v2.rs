@@ -6,7 +6,6 @@ use crate::{
             BlockHeaderMetadata,
             ConsensusHeader,
             GeneratedConsensusFields,
-            GetBlockHeaderFields,
         },
         primitives::BlockId,
     },
@@ -57,37 +56,38 @@ pub struct BlockHeaderV2 {
     pub(crate) metadata: Option<BlockHeaderMetadata>,
 }
 
-impl GetBlockHeaderFields<GeneratedApplicationFieldsV2> for BlockHeaderV2 {
-    fn consensus(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
+impl BlockHeaderV2 {
+    pub(crate) fn consensus(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
         &self.consensus
     }
 
-    fn application(&self) -> &ApplicationHeader<GeneratedApplicationFieldsV2> {
+    /// Returns a reference to the application header.
+    pub fn application(&self) -> &ApplicationHeader<GeneratedApplicationFieldsV2> {
         &self.application
     }
 
-    fn metadata(&self) -> &Option<BlockHeaderMetadata> {
+    pub(crate) fn metadata(&self) -> &Option<BlockHeaderMetadata> {
         &self.metadata
     }
 
-    fn recalculate_metadata(&mut self) {
+    pub(crate) fn recalculate_metadata(&mut self) {
         let application_hash = self.application().hash();
         self.consensus.generated.application_hash = application_hash;
         let id = self.hash();
         self.metadata = Some(BlockHeaderMetadata { id });
     }
 
-    fn hash(&self) -> BlockId {
+    pub(crate) fn hash(&self) -> BlockId {
         debug_assert_eq!(&self.consensus.application_hash, &self.application().hash());
         // This internally hashes the hash of the application header.
         self.consensus().hash()
     }
 
-    fn tx_id_commitment(&self) -> Option<Bytes32> {
+    pub(crate) fn tx_id_commitment(&self) -> Option<Bytes32> {
         Some(self.application().tx_id_commitment)
     }
 
-    fn id(&self) -> BlockId {
+    pub(crate) fn id(&self) -> BlockId {
         if let Some(ref metadata) = self.metadata() {
             metadata.id
         } else {
@@ -95,7 +95,7 @@ impl GetBlockHeaderFields<GeneratedApplicationFieldsV2> for BlockHeaderV2 {
         }
     }
 
-    fn validate_transactions(&self, transactions: &[Transaction]) -> bool {
+    pub(crate) fn validate_transactions(&self, transactions: &[Transaction]) -> bool {
         let transactions_root = generate_txns_root(transactions);
 
         transactions_root == self.application().transactions_root
@@ -104,59 +104,64 @@ impl GetBlockHeaderFields<GeneratedApplicationFieldsV2> for BlockHeaderV2 {
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
-impl crate::blockchain::header::BlockHeaderDataTestHelpers<GeneratedApplicationFieldsV2>
-    for BlockHeaderV2
-{
-    fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+impl BlockHeaderV2 {
+    pub(crate) fn consensus_mut(
+        &mut self,
+    ) -> &mut ConsensusHeader<GeneratedConsensusFields> {
         &mut self.consensus
     }
 
-    fn set_consensus_header(
+    pub(crate) fn set_consensus_header(
         &mut self,
         consensus: ConsensusHeader<GeneratedConsensusFields>,
     ) {
         self.consensus = consensus;
     }
 
-    fn application_mut(
+    /// Returns a mutable reference to the application header.
+    pub fn application_mut(
         &mut self,
     ) -> &mut ApplicationHeader<GeneratedApplicationFieldsV2> {
         &mut self.application
     }
 
-    fn set_application_header(
+    /// Sets the application header.
+    pub fn set_application_header(
         &mut self,
         application: ApplicationHeader<GeneratedApplicationFieldsV2>,
     ) {
         self.application = application;
     }
 
-    fn set_block_height(&mut self, height: crate::fuel_types::BlockHeight) {
+    pub(crate) fn set_block_height(&mut self, height: crate::fuel_types::BlockHeight) {
         self.consensus_mut().height = height;
         self.recalculate_metadata();
     }
 
-    fn set_previous_root(&mut self, root: crate::fuel_tx::Bytes32) {
+    pub(crate) fn set_previous_root(&mut self, root: crate::fuel_tx::Bytes32) {
         self.consensus_mut().prev_root = root;
         self.recalculate_metadata();
     }
 
-    fn set_time(&mut self, time: tai64::Tai64) {
+    pub(crate) fn set_time(&mut self, time: tai64::Tai64) {
         self.consensus_mut().time = time;
         self.recalculate_metadata();
     }
 
-    fn set_transaction_root(&mut self, root: crate::fuel_tx::Bytes32) {
+    pub(crate) fn set_transaction_root(&mut self, root: crate::fuel_tx::Bytes32) {
         self.application_mut().generated.transactions_root = root;
         self.recalculate_metadata();
     }
 
-    fn set_da_height(&mut self, da_height: crate::blockchain::primitives::DaBlockHeight) {
+    pub(crate) fn set_da_height(
+        &mut self,
+        da_height: crate::blockchain::primitives::DaBlockHeight,
+    ) {
         self.application_mut().da_height = da_height;
         self.recalculate_metadata();
     }
 
-    fn set_consensus_parameters_version(
+    pub(crate) fn set_consensus_parameters_version(
         &mut self,
         version: super::ConsensusParametersVersion,
     ) {
@@ -164,7 +169,7 @@ impl crate::blockchain::header::BlockHeaderDataTestHelpers<GeneratedApplicationF
         self.recalculate_metadata();
     }
 
-    fn set_application_hash(&mut self, hash: Bytes32) {
+    pub(crate) fn set_application_hash(&mut self, hash: Bytes32) {
         self.consensus_mut().generated.application_hash = hash;
     }
 }
