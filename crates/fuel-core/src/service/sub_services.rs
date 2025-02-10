@@ -103,14 +103,19 @@ pub fn init_sub_services(
 
     let last_height = *last_block_header.height();
 
-    let allow_historical_execution = config.combined_db_config.database_type
-        == DbType::RocksDb
-        && config.historical_execution;
+    if config.historical_execution
+        && config.combined_db_config.database_type != DbType::RocksDb
+    {
+        return Err(anyhow::anyhow!(
+            "Historical execution is only supported with RocksDB"
+        ));
+    }
+
     let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
         backtrace: config.vm.backtrace,
         utxo_validation_default: config.utxo_validation,
         native_executor_version: config.native_executor_version,
-        allow_historical_execution,
+        allow_historical_execution: config.historical_execution,
     };
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
