@@ -28,27 +28,36 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
-pub struct GenericDatabase<Storage> {
+pub struct GenericDatabase<Storage, Metadata> {
     storage: StructuredStorage<Storage>,
+    metadata: Option<Metadata>,
 }
 
-impl<Storage> GenericDatabase<Storage> {
+impl<Storage, Metadata> GenericDatabase<Storage, Metadata> {
     pub fn inner_storage(&self) -> &Storage {
         self.storage.as_ref()
     }
 
-    pub fn from_storage(storage: Storage) -> Self {
+    pub fn metadata(&self) -> Option<&Metadata> {
+        self.metadata.as_ref()
+    }
+
+    pub fn from_storage_and_metadata(
+        storage: Storage,
+        metadata: Option<Metadata>,
+    ) -> Self {
         Self {
             storage: StructuredStorage::new(storage),
+            metadata,
         }
     }
 
-    pub fn into_inner(self) -> Storage {
-        self.storage.into_storage()
+    pub fn into_inner(self) -> (Storage, Option<Metadata>) {
+        (self.storage.into_storage(), self.metadata)
     }
 }
 
-impl<M, Storage> StorageInspect<M> for GenericDatabase<Storage>
+impl<M, Storage, Metadata> StorageInspect<M> for GenericDatabase<Storage, Metadata>
 where
     M: Mappable,
     StructuredStorage<Storage>: StorageInspect<M, Error = StorageError>,
@@ -64,7 +73,7 @@ where
     }
 }
 
-impl<Storage, M> StorageSize<M> for GenericDatabase<Storage>
+impl<M, Storage, Metadata> StorageSize<M> for GenericDatabase<Storage, Metadata>
 where
     M: Mappable,
     StructuredStorage<Storage>: StorageSize<M, Error = StorageError>,
@@ -74,7 +83,7 @@ where
     }
 }
 
-impl<Storage, M> StorageRead<M> for GenericDatabase<Storage>
+impl<M, Storage, Metadata> StorageRead<M> for GenericDatabase<Storage, Metadata>
 where
     M: Mappable,
     StructuredStorage<Storage>: StorageRead<M, Error = StorageError>,
@@ -93,7 +102,8 @@ where
     }
 }
 
-impl<Key, M, Storage> MerkleRootStorage<Key, M> for GenericDatabase<Storage>
+impl<Key, M, Storage, Metadata> MerkleRootStorage<Key, M>
+    for GenericDatabase<Storage, Metadata>
 where
     M: Mappable,
     StructuredStorage<Storage>: MerkleRootStorage<Key, M, Error = StorageError>,
@@ -103,7 +113,7 @@ where
     }
 }
 
-impl<Storage> KeyValueInspect for GenericDatabase<Storage>
+impl<Storage, Metadata> KeyValueInspect for GenericDatabase<Storage, Metadata>
 where
     Storage: KeyValueInspect,
 {
@@ -136,7 +146,7 @@ where
     }
 }
 
-impl<Storage> IterableStore for GenericDatabase<Storage>
+impl<Storage, Metadata> IterableStore for GenericDatabase<Storage, Metadata>
 where
     Storage: IterableStore,
 {
@@ -162,19 +172,19 @@ where
     }
 }
 
-impl<Storage> AsRef<Storage> for GenericDatabase<Storage> {
+impl<Storage, Metadata> AsRef<Storage> for GenericDatabase<Storage, Metadata> {
     fn as_ref(&self) -> &Storage {
         self.storage.as_ref()
     }
 }
 
-impl<Storage> AsMut<Storage> for GenericDatabase<Storage> {
+impl<Storage, Metadata> AsMut<Storage> for GenericDatabase<Storage, Metadata> {
     fn as_mut(&mut self) -> &mut Storage {
         self.storage.as_mut()
     }
 }
 
-impl<Storage> core::ops::Deref for GenericDatabase<Storage> {
+impl<Storage, Metadata> core::ops::Deref for GenericDatabase<Storage, Metadata> {
     type Target = Storage;
 
     fn deref(&self) -> &Self::Target {
@@ -182,13 +192,14 @@ impl<Storage> core::ops::Deref for GenericDatabase<Storage> {
     }
 }
 
-impl<Storage> core::ops::DerefMut for GenericDatabase<Storage> {
+impl<Storage, Metadata> core::ops::DerefMut for GenericDatabase<Storage, Metadata> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.as_mut()
     }
 }
 
-impl<Storage, Error> PredicateStorageRequirements for GenericDatabase<Storage>
+impl<Storage, Error, Metadata> PredicateStorageRequirements
+    for GenericDatabase<Storage, Metadata>
 where
     Self: StorageRead<BlobData, Error = Error>,
     Error: Debug,

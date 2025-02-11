@@ -139,7 +139,6 @@ impl Cache {
                 ))
             }
             (CachedDataBatch::Headers(mut batch), CachedData::Header(data)) => {
-                tracing::warn!("Header data range in cache is not continuous.");
                 debug_assert_eq!(batch.range.end, height);
                 debug_assert!(batch.range.len() <= max_chunk_size);
 
@@ -158,7 +157,6 @@ impl Cache {
                 }
             }
             (CachedDataBatch::Blocks(mut batch), CachedData::Block(data)) => {
-                tracing::warn!("Block data range in cache is not continuous.");
                 debug_assert_eq!(batch.range.end, height);
                 debug_assert!(batch.range.len() <= max_chunk_size);
 
@@ -258,6 +256,8 @@ mod tests {
                 Vec::new(),
                 &[],
                 Bytes32::default(),
+                #[cfg(feature = "fault-proving")]
+                &Default::default(),
             )
             .unwrap(),
             consensus: Default::default(),

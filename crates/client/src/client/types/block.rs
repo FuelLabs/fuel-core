@@ -48,6 +48,7 @@ pub struct Header {
     pub prev_root: MerkleRoot,
     pub time: Tai64,
     pub application_hash: Hash,
+    pub tx_id_commitment: Option<Hash>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -94,6 +95,25 @@ impl TryFrom<schema::block::Header> for Header {
                 prev_root: value.prev_root.into(),
                 time: value.time.0,
                 application_hash: value.application_hash.into(),
+                tx_id_commitment: None,
+            }),
+            HeaderVersion::V2 => Ok(Self {
+                id: value.id.into(),
+                da_height: value.da_height.into(),
+                consensus_parameters_version: value.consensus_parameters_version.into(),
+                state_transition_bytecode_version: value
+                    .state_transition_bytecode_version
+                    .into(),
+                transactions_count: value.transactions_count.into(),
+                message_receipt_count: value.message_receipt_count.into(),
+                transactions_root: value.transactions_root.into(),
+                message_outbox_root: value.message_outbox_root.into(),
+                event_inbox_root: value.event_inbox_root.into(),
+                height: value.height.into(),
+                prev_root: value.prev_root.into(),
+                time: value.time.0,
+                application_hash: value.application_hash.into(),
+                tx_id_commitment: value.tx_id_commitment.map(Into::into),
             }),
             _ => Err(ConversionError::UnknownVariant("HeaderVersion")),
         }

@@ -26,7 +26,7 @@ use test_case::test_case;
         let mut h = BlockHeader::default();
         h.set_previous_root(Bytes32::zeroed());
         h.set_time(Tai64::UNIX_EPOCH);
-        h.application_mut().da_height = 1234u64.into();
+        h.set_da_height(1234u64.into());
         h
     },
     0, 1234 => matches Ok(_) ; "Correct header at `1234` da height"
@@ -37,7 +37,7 @@ use test_case::test_case;
         h.set_previous_root(Bytes32::zeroed());
         h.set_time(Tai64::UNIX_EPOCH);
         h.set_block_height(113u32.into());
-        h.application_mut().da_height = 1234u64.into();
+        h.set_da_height(1234u64.into());
         h
     },
     113, 1234 => matches Ok(_) ; "Correct header at `113` height and at `1234` da height"
@@ -67,7 +67,7 @@ use test_case::test_case;
         let mut h = BlockHeader::default();
         h.set_previous_root(Bytes32::zeroed());
         h.set_time(Tai64::UNIX_EPOCH);
-        h.application_mut().da_height = 1234u64.into();
+        h.set_da_height(1234u64.into());
         h
     },
     0, 0 => matches Err(_) ; "wrong header da height"

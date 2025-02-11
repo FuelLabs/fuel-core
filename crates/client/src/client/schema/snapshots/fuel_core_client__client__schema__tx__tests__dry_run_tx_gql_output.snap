@@ -2,8 +2,8 @@
 source: crates/client/src/client/schema/tx.rs
 expression: query.query
 ---
-mutation DryRun($txs: [HexString!]!, $utxoValidation: Boolean, $gasPrice: U64) {
-  dryRun(txs: $txs, utxoValidation: $utxoValidation, gasPrice: $gasPrice) {
+mutation DryRun($txs: [HexString!]!, $utxoValidation: Boolean, $gasPrice: U64, $blockHeight: U32) {
+  dryRun(txs: $txs, utxoValidation: $utxoValidation, gasPrice: $gasPrice, blockHeight: $blockHeight) {
     id
     status {
       __typename
