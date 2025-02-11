@@ -191,7 +191,7 @@ where
     fn view_at_height(
         &self,
         _: &Description::Height,
-    ) -> StorageResult<KeyValueView<Self::Column>> {
+    ) -> StorageResult<KeyValueView<Self::Column, Description::Height>> {
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
         Err(
             anyhow::anyhow!("The historical view is not implemented for `MemoryStore`")
@@ -199,10 +199,13 @@ where
         )
     }
 
-    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
+    fn latest_view(
+        &self,
+    ) -> StorageResult<IterableKeyValueView<Self::Column, Description::Height>> {
         let view = self.create_view();
-        Ok(IterableKeyValueView::from_storage(
+        Ok(IterableKeyValueView::from_storage_and_metadata(
             IterableKeyValueViewWrapper::new(view),
+            None,
         ))
     }
 
