@@ -127,7 +127,7 @@ where
 
         let block_time = predefined_block.header().consensus().time;
 
-        let da_height = predefined_block.header().application().da_height;
+        let da_height = predefined_block.header().da_height();
 
         let view = self.view_provider.latest_view()?;
 
@@ -545,7 +545,7 @@ where
 
         Ok(PreviousBlockInfo {
             prev_root,
-            da_height: previous_block.header().da_height,
+            da_height: previous_block.header().da_height(),
         })
     }
 }

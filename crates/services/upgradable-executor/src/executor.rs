@@ -588,7 +588,7 @@ where
         block: &Block,
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
-        let block_version = block.header().state_transition_bytecode_version;
+        let block_version = block.header().state_transition_bytecode_version();
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
             match &self.execution_strategy {
@@ -624,7 +624,7 @@ where
         block: &Block,
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
-        let block_version = block.header().state_transition_bytecode_version;
+        let block_version = block.header().state_transition_bytecode_version();
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
             self.native_validate_inner(block, options)
@@ -718,7 +718,7 @@ where
         options: ExecutionOptions,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         self.trace_block_version_warning(
-            block.header().state_transition_bytecode_version,
+            block.header().state_transition_bytecode_version(),
         );
         let previous_block_height = block.header().height().pred();
 

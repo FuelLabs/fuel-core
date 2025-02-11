@@ -111,10 +111,10 @@ where
             storage: self,
             latest_state_transition_bytecode_version: block
                 .header()
-                .state_transition_bytecode_version,
+                .state_transition_bytecode_version(),
             latest_consensus_parameters_version: block
                 .header()
-                .consensus_parameters_version,
+                .consensus_parameters_version(),
         };
 
         update_transaction.process_block(block)?;

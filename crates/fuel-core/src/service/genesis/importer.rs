@@ -179,7 +179,7 @@ impl SnapshotImporter {
         }
 
         let block_height = *self.genesis_block.header().height();
-        let da_block_height = self.genesis_block.header().da_height;
+        let da_block_height = self.genesis_block.header().da_height();
         let db = self.db.on_chain().clone();
 
         let migration_name = migration_name::<TableBeingWritten, TableBeingWritten>();
@@ -233,7 +233,7 @@ impl SnapshotImporter {
         }
 
         let block_height = *self.genesis_block.header().height();
-        let da_block_height = self.genesis_block.header().da_height;
+        let da_block_height = self.genesis_block.header().da_height();
 
         let db = self.db.off_chain().clone();
 

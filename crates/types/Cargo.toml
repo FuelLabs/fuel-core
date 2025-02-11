@@ -24,7 +24,6 @@ derivative = { version = "2", default-features = false, optional = true, feature
   "use_core",
 ] }
 derive_more = { version = "0.99" }
-enum_dispatch = { workspace = true }
 fuel-vm-private = { workspace = true, default-features = false, features = [
   "alloc",
 ] }

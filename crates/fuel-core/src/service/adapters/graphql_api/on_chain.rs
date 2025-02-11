@@ -129,7 +129,7 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
 impl DatabaseChain for OnChainIterableKeyValueView {
     fn da_height(&self) -> StorageResult<DaBlockHeight> {
         self.latest_compressed_block()?
-            .map(|block| block.header().da_height)
+            .map(|block| block.header().da_height())
             .ok_or(not_found!("DaBlockHeight"))
     }
 }
