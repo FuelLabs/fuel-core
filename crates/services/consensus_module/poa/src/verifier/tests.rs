@@ -5,8 +5,6 @@ use fuel_core_types::{
     blockchain::header::{
         ApplicationHeader,
         ConsensusHeader,
-        GeneratedApplicationFields,
-        GeneratedConsensusFields,
         PartialBlockHeader,
     },
     fuel_tx::Transaction,
@@ -18,8 +16,7 @@ struct Input {
     block_header_merkle_root: [u8; 32],
     prev_header_time: Tai64,
     prev_header_da_height: u64,
-    ch: ConsensusHeader<GeneratedConsensusFields>,
-    ah: ApplicationHeader<GeneratedApplicationFields>,
+    bh: BlockHeader,
     txs: Vec<Transaction>,
 }
 
@@ -51,8 +48,7 @@ fn correct() -> Input {
         block_header_merkle_root: [2u8; 32],
         prev_header_time: Tai64(2),
         prev_header_da_height: 2,
-        ch: *block_header.consensus(),
-        ah: *block_header.application(),
+        bh: block_header,
         txs,
     }
 }
@@ -61,35 +57,35 @@ fn correct() -> Input {
 #[test_case(
     {
         let mut i = correct();
-        i.ch.height = 0u32.into();
+        i.bh.set_block_height(0u32.into());
         i
     } => matches Err(_) ; "Height 0"
 )]
 #[test_case(
     {
         let mut i = correct();
-        i.ch.prev_root = [3u8; 32].into();
+        i.bh.set_previous_root([3u8; 32].into());
         i
     } => matches Err(_) ; "genesis verify prev root mismatch should error"
 )]
 #[test_case(
     {
         let mut i = correct();
-        i.ah.da_height = 1u64.into();
+        i.bh.set_da_height(1u64.into());
         i
     } => matches Err(_) ; "genesis verify da height lower then prev header should error"
 )]
 #[test_case(
     {
         let mut i = correct();
-        i.ch.generated.application_hash = [0u8; 32].into();
+        i.bh.set_application_hash([0u8; 32].into());
         i
     } => matches Err(_) ; "genesis verify application hash mismatch should error"
 )]
 #[test_case(
     {
         let mut i = correct();
-        i.ch.time = Tai64(1);
+        i.bh.set_time(Tai64(1));
         i
     } => matches Err(_) ; "genesis verify time before prev header should error"
 )]
@@ -105,8 +101,7 @@ fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
         block_header_merkle_root,
         prev_header_time,
         prev_header_da_height,
-        ch,
-        ah,
+        bh,
         txs,
     } = input;
     let mut d = MockDatabase::default();
@@ -119,8 +114,18 @@ fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
         Ok(h)
     });
     let mut b = Block::default();
-    b.header_mut().set_consensus_header(ch);
-    b.header_mut().set_application_header(ah);
+    b.header_mut().set_consensus_header(*bh.consensus());
+    match (bh, b.header_mut()) {
+        (BlockHeader::V1(bh), BlockHeader::V1(ref mut h)) => {
+            h.set_application_header(*bh.application())
+        }
+        #[cfg(feature = "fault-proving")]
+        (BlockHeader::V2(bh), BlockHeader::V2(ref mut h)) => {
+            h.set_application_header(*bh.application())
+        }
+        #[cfg_attr(not(feature = "fault-proving"), allow(unreachable_patterns))]
+        _ => unreachable!(),
+    }
     *b.transactions_mut() = txs;
     verify_block_fields(&d, &b)
 }
