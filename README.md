@@ -7,6 +7,14 @@
 
 Fuel client implementation.
 
+## Versions currently used in networks
+
+| Network  | Version |
+|----------|---------|
+| Fuel Ignition | 0.40.4 |
+| Testnet | 0.40.4 |
+| Devnet | 0.41.4 |
+
 ## Contributing
 
 If you are interested in contributing to Fuel, see our [CONTRIBUTING.md](CONTRIBUTING.md) guidelines for coding standards and review process.
