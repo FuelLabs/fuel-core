@@ -45,6 +45,30 @@ pub(crate) struct RequiredFuelBlockHeightExtension {
     block_height_subscription_handle: BlockHeightSubscriptionHandle,
 }
 
+enum BlockHeightComparison {
+    TooFarBehind,
+    WithinTolerance,
+    Ahead,
+}
+
+impl BlockHeightComparison {
+    fn from_block_heights(
+        required_block_height: &BlockHeight,
+        current_block_height: &BlockHeight,
+        tolerance_threshold: u32,
+    ) -> Self {
+        if **current_block_height
+            < required_block_height.saturating_sub(tolerance_threshold)
+        {
+            BlockHeightComparison::TooFarBehind
+        } else if current_block_height < required_block_height {
+            BlockHeightComparison::WithinTolerance
+        } else {
+            BlockHeightComparison::Ahead
+        }
+    }
+}
+
 impl RequiredFuelBlockHeightExtension {
     pub fn new(
         tolerance_threshold: u32,
@@ -136,38 +160,36 @@ impl Extension for RequiredFuelBlockHeightInner {
         let awaited_block_height = match self.required_height.get() {
             None => current_block_height,
             Some(required_block_height) => {
-                // Check first that the node is not out of sync
-                let minimum_block_height: BlockHeight = required_block_height
-                    .saturating_sub(self.tolerance_threshold)
-                    .into();
-                if current_block_height < minimum_block_height {
-                    let (line, column) = (line!(), column!());
-                    return error_response(
-                        required_block_height,
-                        &current_block_height,
-                        line,
-                        column,
-                    );
-                }
+                match BlockHeightComparison::from_block_heights(
+                    &required_block_height,
+                    &current_block_height,
+                    self.tolerance_threshold,
+                ) {
+                    BlockHeightComparison::TooFarBehind => {
+                        let (line, column) = (line!(), column!());
+                        return error_response(
+                            required_block_height,
+                            &current_block_height,
+                            line,
+                            column,
+                        );
+                    }
+                    BlockHeightComparison::WithinTolerance => {
+                        match self
+                            .block_height_subscription_handle
+                            .wait_for_block_height(*required_block_height)
+                            .await
+                        {
+                            Ok(height) => height,
 
-                // If the node is lagging behind w.r.t. the required fuel block height,
-                // but within an acceptable interval, wait until the current block height
-                // matches the required fuel block height.
-                // TODO: Add a timeout to prevent the node from waiting indefinitely.
-                if current_block_height < *required_block_height {
-                    match self
-                        .block_height_subscription_handle
-                        .wait_for_block_height(*required_block_height)
-                        .await
-                    {
-                        Ok(height) => height,
+                            Err(e) => {
+                                let (line, column) = (line!(), column!());
+                                tracing::error!(
+                                    "Cannot receive block height notification {:?}",
+                                    e
+                                );
 
-                        Err(e) => {
-                            let (line, column) = (line!(), column!());
-                            tracing::error!(
-                            "The producer of fuel_block_heights updates has been dropped {:?}", e
-                            );
-                            return Response::from_errors(vec![ServerError::new(
+                                return Response::from_errors(vec![ServerError::new(
                                 format!(
                                     "Internal server error while waiting for the required fuel block height: {}",
                                     *required_block_height
@@ -177,10 +199,10 @@ impl Extension for RequiredFuelBlockHeightInner {
                                     column: column as usize,
                                 }),
                             )]);
+                            }
                         }
                     }
-                } else {
-                    current_block_height
+                    BlockHeightComparison::Ahead => current_block_height,
                 }
             }
         };
