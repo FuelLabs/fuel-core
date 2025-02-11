@@ -103,11 +103,13 @@ use futures::{
     FutureExt,
     StreamExt,
 };
+use parking_lot::Mutex;
 use std::{
     borrow::Cow,
+    collections::BTreeMap,
     ops::Deref,
+    sync::Arc,
 };
-
 #[cfg(test)]
 mod tests;
 
@@ -128,7 +130,14 @@ pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
     on_chain_database: OnChain,
     off_chain_database: OffChain,
     base_asset_id: AssetId,
-    tx_block_height: tokio::sync::watch::Sender<BlockHeight>,
+    block_height_subscriptions: Arc<
+        Mutex<
+            BTreeMap<
+                Reverse<BlockHeight>,
+                Vec<tokio::sync::oneshot::Sender<BlockHeight>>,
+            >,
+        >,
+    >,
 }
 
 /// The off-chain GraphQL API worker task processes the imported blocks
@@ -144,7 +153,14 @@ pub struct Task<TxPool, D> {
     coins_to_spend_indexation_enabled: bool,
     asset_metadata_indexation_enabled: bool,
     base_asset_id: AssetId,
-    tx_block_height: tokio::sync::watch::Sender<BlockHeight>,
+    block_height_subscriptions: Arc<
+        Mutex<
+            BTreeMap<
+                Reverse<BlockHeight>,
+                Vec<tokio::sync::oneshot::Sender<BlockHeight>>,
+            >,
+        >,
+    >,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -201,9 +217,11 @@ where
             self.tx_pool.send_complete(tx_id, height, status);
         }
 
-        // Broadcast the block height to subscribers. No need to handle the error
-        // if there are no subscribers.
-        self.tx_block_height.send(*height).ok();
+        // Get all the subscribers that need to be notified that the block height
+        // has been reached.
+        self.block_height_subscriptions
+            .lock()
+            .split_off(&Reverse(*height));
 
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
@@ -544,28 +562,59 @@ where
     Ok(())
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+struct Reverse<T>(T);
+
+impl<T> PartialOrd<Reverse<T>> for Reverse<T>
+where
+    T: PartialOrd,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        other.0.partial_cmp(&self.0)
+    }
+}
+
+impl<T> Ord for Reverse<T>
+where
+    T: Ord,
+{
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.0.cmp(&self.0)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct BlockHeightSubscriptionHandle {
-    rx_block_height: tokio::sync::watch::Receiver<BlockHeight>,
+    // We use Reverse<BlockHeight> as the map key to take advantage of BTreeMap::split_off.
+    // This way we can easily remove all the subscribers that need to be notified that the block height
+    // has been reached, while keeping the others in the map.
+    handlers_map: Arc<
+        Mutex<
+            BTreeMap<
+                Reverse<BlockHeight>,
+                Vec<tokio::sync::oneshot::Sender<BlockHeight>>,
+            >,
+        >,
+    >,
 }
 
 impl BlockHeightSubscriptionHandle {
+    // TODO: Would be better to split initialization and execution.
+    // But in this case it does not matter, as we have no
     pub async fn wait_for_block_height(
-        &mut self,
+        &self,
         height: BlockHeight,
-    ) -> anyhow::Result<()> {
-        loop {
-            let current_height = *self.rx_block_height.borrow_and_update();
-            if current_height >= height {
-                break;
-            }
-            self.rx_block_height.changed().await?;
+    ) -> anyhow::Result<BlockHeight> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        {
+            let mut handlers_map = self.handlers_map.lock();
+            let handlers = handlers_map.entry(Reverse(height)).or_default();
+            handlers.push(tx);
+            // Drop the lock guard before we await to avoid deadlocks
         }
-        Ok(())
-    }
 
-    pub fn latest_seen_block_height(&self) -> BlockHeight {
-        *self.rx_block_height.borrow()
+        let block_height = rx.await?;
+        Ok(block_height)
     }
 }
 
@@ -584,9 +633,8 @@ where
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        BlockHeightSubscriptionHandle {
-            rx_block_height: self.tx_block_height.subscribe(),
-        }
+        let handlers_map = Arc::new(Mutex::new(BTreeMap::new()));
+        BlockHeightSubscriptionHandle { handlers_map }
     }
 
     async fn into_task(
@@ -629,7 +677,7 @@ where
             off_chain_database,
             continue_on_error,
             base_asset_id,
-            tx_block_height,
+            block_height_subscriptions,
         } = self;
 
         let mut task = Task {
@@ -643,7 +691,7 @@ where
             coins_to_spend_indexation_enabled,
             asset_metadata_indexation_enabled,
             base_asset_id,
-            tx_block_height,
+            block_height_subscriptions,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;
@@ -779,6 +827,6 @@ where
         continue_on_error,
         base_asset_id: *consensus_parameters.base_asset_id(),
         // TODO: Should we recover the block height from the DB?
-        tx_block_height: tokio::sync::watch::Sender::new(BlockHeight::from(0)),
+        block_height_subscriptions: Arc::new(Mutex::new(BTreeMap::new())),
     })
 }

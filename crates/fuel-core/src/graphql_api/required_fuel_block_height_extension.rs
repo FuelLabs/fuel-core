@@ -122,10 +122,20 @@ impl Extension for RequiredFuelBlockHeightInner {
     ) -> Response {
         let view: &ReadView = ctx.data_unchecked();
 
-        let current_block_height = view.latest_block_height();
+        let Ok(current_block_height) = view.latest_block_height() else {
+            let (line, column) = (line!(), column!());
+            return Response::from_errors(vec![ServerError::new(
+                "Internal server error while fetching the current block height",
+                Some(Pos {
+                    line: line as usize,
+                    column: column as usize,
+                }),
+            )]);
+        };
 
-        if let Some(required_block_height) = self.required_height.get() {
-            if let Ok(current_block_height) = current_block_height {
+        let awaited_block_height = match self.required_height.get() {
+            None => current_block_height,
+            Some(required_block_height) => {
                 // Check first that the node is not out of sync
                 let minimum_block_height: BlockHeight = required_block_height
                     .saturating_sub(self.tolerance_threshold)
@@ -145,17 +155,19 @@ impl Extension for RequiredFuelBlockHeightInner {
                 // matches the required fuel block height.
                 // TODO: Add a timeout to prevent the node from waiting indefinitely.
                 if current_block_height < *required_block_height {
-                    if let Err(e) = self
+                    match self
                         .block_height_subscription_handle
-                        .clone()
                         .wait_for_block_height(*required_block_height)
                         .await
                     {
-                        let (line, column) = (line!(), column!());
-                        tracing::error!(
+                        Ok(height) => height,
+
+                        Err(e) => {
+                            let (line, column) = (line!(), column!());
+                            tracing::error!(
                             "The producer of fuel_block_heights updates has been dropped {:?}", e
-                        );
-                        return Response::from_errors(vec![ServerError::new(
+                            );
+                            return Response::from_errors(vec![ServerError::new(
                                 format!(
                                     "Internal server error while waiting for the required fuel block height: {}",
                                     *required_block_height
@@ -165,16 +177,17 @@ impl Extension for RequiredFuelBlockHeightInner {
                                     column: column as usize,
                                 }),
                             )]);
+                        }
                     }
-                };
+                } else {
+                    current_block_height
+                }
             }
-        }
+        };
 
         let mut response = next.run(ctx, operation_name).await;
 
-        let current_block_height = self
-            .block_height_subscription_handle
-            .latest_seen_block_height();
+        let current_block_height = awaited_block_height;
         let current_block_height: u32 = *current_block_height;
         response.extensions.insert(
             CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
