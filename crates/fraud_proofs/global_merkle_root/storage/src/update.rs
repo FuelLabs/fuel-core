@@ -111,10 +111,10 @@ where
             storage: self,
             latest_state_transition_bytecode_version: block
                 .header()
-                .state_transition_bytecode_version,
+                .state_transition_bytecode_version(),
             latest_consensus_parameters_version: block
                 .header()
-                .consensus_parameters_version,
+                .consensus_parameters_version(),
         };
 
         update_transaction.process_block(block)?;
@@ -323,7 +323,11 @@ where
     fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
         let bytecode_witness_index = tx.bytecode_witness_index();
         let witnesses = tx.witnesses();
-        let bytecode = witnesses[usize::from(*bytecode_witness_index)].as_vec();
+        let bytecode = witnesses
+            .get(usize::from(*bytecode_witness_index))
+            .ok_or_else(|| anyhow!("invalid witness index {bytecode_witness_index}"))?
+            .as_vec();
+
         // The Fuel specs mandate that each create transaction has exactly one output of type `Output::ContractCreated`.
         // See https://docs.fuel.network/docs/specs/tx-format/transaction/#transactioncreate
         let Some(Output::ContractCreated { contract_id, .. }) = tx

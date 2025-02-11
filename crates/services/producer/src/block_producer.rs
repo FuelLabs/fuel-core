@@ -125,7 +125,7 @@ where
 
         let block_time = predefined_block.header().consensus().time;
 
-        let da_height = predefined_block.header().application().da_height;
+        let da_height = predefined_block.header().da_height();
 
         let view = self.view_provider.latest_view()?;
 
@@ -363,7 +363,7 @@ where
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let tx_statuses = tokio_rayon::spawn_fifo(
             move || -> anyhow::Result<Vec<TransactionExecutionStatus>> {
-                Ok(executor.dry_run(component, utxo_validation)?)
+                Ok(executor.dry_run(component, utxo_validation, height)?)
             },
         )
         .await?;
@@ -522,7 +522,7 @@ where
 
         Ok(PreviousBlockInfo {
             prev_root,
-            da_height: previous_block.header().da_height,
+            da_height: previous_block.header().da_height(),
         })
     }
 }

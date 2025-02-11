@@ -88,9 +88,6 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-pub(crate) const REQUIRED_FUEL_BLOCK_HEIGHT: &str = "required_fuel_block_height";
-pub(crate) const CURRENT_FUEL_BLOCK_HEIGHT: &str = "current_fuel_block_height";
-
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub use super::database::ReadDatabase;

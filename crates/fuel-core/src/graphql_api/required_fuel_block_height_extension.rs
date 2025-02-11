@@ -1,8 +1,5 @@
 use super::database::ReadView;
-use crate::fuel_core_graphql_api::api_service::{
-    CURRENT_FUEL_BLOCK_HEIGHT,
-    REQUIRED_FUEL_BLOCK_HEIGHT,
-};
+
 use async_graphql::{
     extensions::{
         Extension,
@@ -24,6 +21,11 @@ use std::sync::{
     Arc,
     OnceLock,
 };
+
+const REQUIRED_FUEL_BLOCK_HEIGHT: &str = "required_fuel_block_height";
+const CURRENT_FUEL_BLOCK_HEIGHT: &str = "current_fuel_block_height";
+const FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED: &str =
+    "fuel_block_height_precondition_failed";
 
 /// The extension that implements the logic for checking whether
 /// the precondition that REQUIRED_FUEL_BLOCK_HEADER must
@@ -123,6 +125,10 @@ impl Extension for RequiredFuelBlockHeightInner {
                         CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
                         Value::Number((*current_block_height).into()),
                     );
+                    response.extensions.insert(
+                        FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED.to_string(),
+                        Value::Boolean(true),
+                    );
 
                     return response
                 }
@@ -139,6 +145,14 @@ impl Extension for RequiredFuelBlockHeightInner {
                 CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
                 Value::Number(current_block_height.into()),
             );
+            // If the request contained a required fuel block height, add a field signalling that
+            // the precondition was met.
+            if self.required_height.get().is_some() {
+                response.extensions.insert(
+                    FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED.to_string(),
+                    Value::Boolean(false),
+                );
+            }
         } else {
             tracing::error!("Failed to get the current block height");
         }

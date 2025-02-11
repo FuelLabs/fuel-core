@@ -43,10 +43,10 @@ impl From<&BlockHeader> for CompressedBlockHeader {
         } = *header.consensus();
         CompressedBlockHeader {
             application: ApplicationHeader {
-                da_height: header.da_height,
-                consensus_parameters_version: header.consensus_parameters_version,
+                da_height: header.da_height(),
+                consensus_parameters_version: header.consensus_parameters_version(),
                 state_transition_bytecode_version: header
-                    .state_transition_bytecode_version,
+                    .state_transition_bytecode_version(),
                 generated: Empty {},
             },
             consensus: ConsensusHeader {

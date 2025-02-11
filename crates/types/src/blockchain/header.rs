@@ -24,24 +24,18 @@ use crate::{
         MessageId,
     },
 };
-use enum_dispatch::enum_dispatch;
 use tai64::Tai64;
 pub use v1::BlockHeaderV1;
+use v1::GeneratedApplicationFieldsV1;
 #[cfg(feature = "fault-proving")]
-pub use v2::{
-    BlockHeaderV2,
-    FaultProvingHeader,
-};
+pub use v2::BlockHeaderV2;
+#[cfg(feature = "fault-proving")]
+use v2::GeneratedApplicationFieldsV2;
 
 /// Version-able block header type
 #[derive(Clone, Debug, derivative::Derivative)]
 #[derivative(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[enum_dispatch(GetBlockHeaderFields)]
-#[cfg_attr(
-    any(test, feature = "test-helpers"),
-    enum_dispatch(BlockHeaderDataTestHelpers)
-)]
 pub enum BlockHeader {
     /// V1 BlockHeader
     V1(BlockHeaderV1),
@@ -50,159 +44,255 @@ pub enum BlockHeader {
     V2(BlockHeaderV2),
 }
 
-/// Helpful methods for all variants of the block header.
-#[enum_dispatch]
-pub(crate) trait GetBlockHeaderFields {
-    /// Get the consensus portion of the header.
-    fn consensus(&self) -> &ConsensusHeader<GeneratedConsensusFields>;
-    /// Get the application portion of the header.
-    fn application(&self) -> &ApplicationHeader<GeneratedApplicationFields>;
-    /// Get the metadata of the header.
-    fn metadata(&self) -> &Option<BlockHeaderMetadata>;
-    /// Re-generate the header metadata.
-    fn recalculate_metadata(&mut self);
-    /// Get the hash of the fuel header.
-    fn hash(&self) -> BlockId;
-    /// Get the transaction ID Commitment
-    fn tx_id_commitment(&self) -> Option<Bytes32>;
-}
-
-// reimplement GetBlockHeaderFields but with plain impl
-// since both v1 and v2 support the fields, each function can just do
-// GetBlockHeaderFields::fn(&self)
 impl BlockHeader {
-    /// Get the consensus portion of the header.
-    pub fn consensus(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
-        GetBlockHeaderFields::consensus(self)
-    }
-
-    /// Get the application portion of the header.
-    pub fn application(&self) -> &ApplicationHeader<GeneratedApplicationFields> {
-        GetBlockHeaderFields::application(self)
-    }
-
-    /// Get the metadata of the header.
-    pub fn metadata(&self) -> &Option<BlockHeaderMetadata> {
-        GetBlockHeaderFields::metadata(self)
-    }
-
-    /// Re-generate the header metadata.
-    pub fn recalculate_metadata(&mut self) {
-        GetBlockHeaderFields::recalculate_metadata(self)
-    }
-
-    /// Get the hash of the fuel header.
-    pub fn hash(&self) -> BlockId {
-        GetBlockHeaderFields::hash(self)
-    }
-
-    /// Get the cached fuel header hash.
-    pub fn id(&self) -> BlockId {
-        if let Some(ref metadata) = self.metadata() {
-            metadata.id
-        } else {
-            self.hash()
+    /// Get the da height
+    pub fn da_height(&self) -> DaBlockHeight {
+        match self {
+            BlockHeader::V1(header) => header.application().da_height,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.application().da_height,
         }
     }
 
-    /// Validate the transactions match the header.
+    /// Get the consensus parameters version
+    pub fn consensus_parameters_version(&self) -> ConsensusParametersVersion {
+        match self {
+            BlockHeader::V1(header) => header.application().consensus_parameters_version,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.application().consensus_parameters_version,
+        }
+    }
+
+    /// Get the state transition bytecode version
+    pub fn state_transition_bytecode_version(&self) -> StateTransitionBytecodeVersion {
+        match self {
+            BlockHeader::V1(header) => {
+                header.application().state_transition_bytecode_version
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.application().state_transition_bytecode_version
+            }
+        }
+    }
+
+    /// Get the consensus portion of the header.
+    pub fn consensus(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
+        match self {
+            BlockHeader::V1(header) => header.consensus(),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.consensus(),
+        }
+    }
+
+    /// Get the Block ID
+    pub fn id(&self) -> BlockId {
+        match self {
+            BlockHeader::V1(header) => header.id(),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.id(),
+        }
+    }
+
+    /// Validate the transactions
     pub fn validate_transactions(&self, transactions: &[Transaction]) -> bool {
-        let transactions_root = generate_txns_root(transactions);
-
-        transactions_root == self.application().transactions_root
-            && transactions.len() == self.application().transactions_count as usize
+        match self {
+            BlockHeader::V1(header) => header.validate_transactions(transactions),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.validate_transactions(transactions),
+        }
     }
 
-    /// Getter for the tx id commitment
+    /// Recalculate the metadata
+    pub fn recalculate_metadata(&mut self) {
+        match self {
+            BlockHeader::V1(header) => header.recalculate_metadata(),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.recalculate_metadata(),
+        }
+    }
+
+    /// Getter for the transactions root
+    pub fn transactions_root(&self) -> Bytes32 {
+        match self {
+            BlockHeader::V1(header) => header.application().transactions_root,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.application().transactions_root,
+        }
+    }
+
+    /// Getter for the transactions count
+    pub fn transactions_count(&self) -> u16 {
+        match self {
+            BlockHeader::V1(header) => header.application().transactions_count,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.application().transactions_count,
+        }
+    }
+
+    /// Getter for the message receipt count
+    pub fn message_receipt_count(&self) -> u32 {
+        match self {
+            BlockHeader::V1(header) => header.application().message_receipt_count,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.application().message_receipt_count,
+        }
+    }
+
+    /// Getter for the message outbox root
+    pub fn message_outbox_root(&self) -> Bytes32 {
+        match self {
+            BlockHeader::V1(header) => header.application().message_outbox_root,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.application().message_outbox_root,
+        }
+    }
+
+    /// Getter for the event inbox root
+    pub fn event_inbox_root(&self) -> Bytes32 {
+        match self {
+            BlockHeader::V1(header) => header.application().event_inbox_root,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.application().event_inbox_root,
+        }
+    }
+
+    /// Getter for the transaction ID commitment
     pub fn tx_id_commitment(&self) -> Option<Bytes32> {
-        GetBlockHeaderFields::tx_id_commitment(self)
+        match self {
+            BlockHeader::V1(header) => header.tx_id_commitment(),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.tx_id_commitment(),
+        }
+    }
+
+    /// Alias the application header into an empty one.
+    pub fn as_empty_application_header(&self) -> ApplicationHeader<Empty> {
+        match self {
+            BlockHeader::V1(header) => ApplicationHeader {
+                da_height: header.application().da_height,
+                consensus_parameters_version: header
+                    .application()
+                    .consensus_parameters_version,
+                state_transition_bytecode_version: header
+                    .application()
+                    .state_transition_bytecode_version,
+                generated: Empty {},
+            },
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => ApplicationHeader {
+                da_height: header.application().da_height,
+                consensus_parameters_version: header
+                    .application()
+                    .consensus_parameters_version,
+                state_transition_bytecode_version: header
+                    .application()
+                    .state_transition_bytecode_version,
+                generated: Empty {},
+            },
+        }
     }
 }
 
-/// Helpful test methods for all variants of the block header.
-#[cfg(any(test, feature = "test-helpers"))]
-#[enum_dispatch]
-pub(crate) trait BlockHeaderDataTestHelpers {
-    /// Mutable getter for consensus portion of header
-    fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields>;
-    /// Set the entire consensus header
-    fn set_consensus_header(
-        &mut self,
-        consensus: ConsensusHeader<GeneratedConsensusFields>,
-    );
-    /// Mutable getter for application portion of header
-    fn application_mut(&mut self) -> &mut ApplicationHeader<GeneratedApplicationFields>;
-    /// Set the entire application header
-    fn set_application_header(
-        &mut self,
-        application: ApplicationHeader<GeneratedApplicationFields>,
-    );
-    /// Set the block height for the header
-    fn set_block_height(&mut self, height: BlockHeight);
-    /// Set the previous root for the header
-    fn set_previous_root(&mut self, root: Bytes32);
-    /// Set the time for the header
-    fn set_time(&mut self, time: Tai64);
-    /// Set the transaction root for the header
-    fn set_transaction_root(&mut self, root: Bytes32);
-    /// Set the DA height for the header
-    fn set_da_height(&mut self, da_height: DaBlockHeight);
-}
-
-/// Reimplement helpers so that its easy to import
 #[cfg(any(test, feature = "test-helpers"))]
 impl BlockHeader {
-    /// Mutable getter for consensus portion of header
-    pub fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
-        BlockHeaderDataTestHelpers::consensus_mut(self)
+    /// Set the time for the header
+    pub fn set_time(&mut self, time: Tai64) {
+        match self {
+            BlockHeader::V1(header) => header.set_time(time),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.set_time(time),
+        }
     }
 
-    /// Set the entire consensus header
+    /// Set the da height for the header
+    pub fn set_da_height(&mut self, da_height: DaBlockHeight) {
+        match self {
+            BlockHeader::V1(header) => header.set_da_height(da_height),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.set_da_height(da_height),
+        }
+    }
+
+    /// Set the consensus header
     pub fn set_consensus_header(
         &mut self,
         consensus: ConsensusHeader<GeneratedConsensusFields>,
     ) {
-        BlockHeaderDataTestHelpers::set_consensus_header(self, consensus)
-    }
-
-    /// Mutable getter for application portion of header
-    pub fn application_mut(
-        &mut self,
-    ) -> &mut ApplicationHeader<GeneratedApplicationFields> {
-        BlockHeaderDataTestHelpers::application_mut(self)
-    }
-
-    /// Set the entire application header
-    pub fn set_application_header(
-        &mut self,
-        application: ApplicationHeader<GeneratedApplicationFields>,
-    ) {
-        BlockHeaderDataTestHelpers::set_application_header(self, application)
-    }
-
-    /// Set the block height for the header
-    pub fn set_block_height(&mut self, height: BlockHeight) {
-        BlockHeaderDataTestHelpers::set_block_height(self, height)
+        match self {
+            BlockHeader::V1(header) => header.set_consensus_header(consensus),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.set_consensus_header(consensus),
+        }
     }
 
     /// Set the previous root for the header
     pub fn set_previous_root(&mut self, root: Bytes32) {
-        BlockHeaderDataTestHelpers::set_previous_root(self, root)
+        match self {
+            BlockHeader::V1(header) => header.set_previous_root(root),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.set_previous_root(root),
+        }
     }
 
-    /// Set the time for the header
-    pub fn set_time(&mut self, time: Tai64) {
-        BlockHeaderDataTestHelpers::set_time(self, time)
+    /// Set the block height for the header
+    pub fn set_block_height(&mut self, height: BlockHeight) {
+        match self {
+            BlockHeader::V1(header) => header.set_block_height(height),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.set_block_height(height),
+        }
+    }
+
+    /// Mutable getter for consensus portion of header
+    pub fn consensus_mut(&mut self) -> &mut ConsensusHeader<GeneratedConsensusFields> {
+        match self {
+            BlockHeader::V1(header) => header.consensus_mut(),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.consensus_mut(),
+        }
     }
 
     /// Set the transaction root for the header
     pub fn set_transaction_root(&mut self, root: Bytes32) {
-        BlockHeaderDataTestHelpers::set_transaction_root(self, root)
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_transaction_root(root);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_transaction_root(root);
+            }
+        }
     }
 
-    /// Set the DA height for the header
-    pub fn set_da_height(&mut self, da_height: DaBlockHeight) {
-        BlockHeaderDataTestHelpers::set_da_height(self, da_height)
+    /// Set the consensus parameters version
+    pub fn set_consensus_parameters_version(
+        &mut self,
+        version: ConsensusParametersVersion,
+    ) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_consensus_parameters_version(version);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_consensus_parameters_version(version);
+            }
+        }
+    }
+
+    /// Set the application hash
+    pub fn set_application_hash(&mut self, hash: Bytes32) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_application_hash(hash);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_application_hash(hash);
+            }
+        }
     }
 }
 
@@ -260,22 +350,24 @@ where
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
-/// Concrete generated application header fields.
-/// These are generated once the full block has been run.
-pub struct GeneratedApplicationFields {
-    /// Number of transactions in this block.
-    pub transactions_count: u16,
-    /// Number of message receipts in this block.
-    pub message_receipt_count: u32,
-    /// Merkle root of transactions.
-    pub transactions_root: Bytes32,
-    /// Merkle root of message receipts in this block.
-    pub message_outbox_root: Bytes32,
-    /// Root hash of all imported events from L1
-    pub event_inbox_root: Bytes32,
+#[cfg(feature = "fault-proving")]
+impl From<&ApplicationHeader<GeneratedApplicationFieldsV2>>
+    for ApplicationHeader<GeneratedApplicationFieldsV1>
+{
+    fn from(value: &ApplicationHeader<GeneratedApplicationFieldsV2>) -> Self {
+        Self {
+            da_height: value.da_height,
+            consensus_parameters_version: value.consensus_parameters_version,
+            state_transition_bytecode_version: value.state_transition_bytecode_version,
+            generated: GeneratedApplicationFieldsV1 {
+                transactions_count: value.transactions_count,
+                message_receipt_count: value.message_receipt_count,
+                transactions_root: value.transactions_root,
+                message_outbox_root: value.message_outbox_root,
+                event_inbox_root: value.event_inbox_root,
+            },
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -315,9 +407,22 @@ pub struct BlockHeaderMetadata {
 #[cfg(any(test, feature = "test-helpers"))]
 impl Default for BlockHeader {
     fn default() -> Self {
-        let mut default: BlockHeader = BlockHeaderV1::default().into();
-        default.recalculate_metadata();
-        default
+        match () {
+            #[cfg(feature = "fault-proving")]
+            () => {
+                let mut default = BlockHeaderV2::default();
+                default.recalculate_metadata();
+
+                BlockHeader::V2(default)
+            }
+            #[cfg(not(feature = "fault-proving"))]
+            () => {
+                let mut default = BlockHeaderV1::default();
+                default.recalculate_metadata();
+
+                BlockHeader::V1(default)
+            }
+        }
     }
 }
 
@@ -327,9 +432,19 @@ impl BlockHeader {
     /// The method should be used only for tests.
     pub fn new_block(height: BlockHeight, time: Tai64) -> Self {
         let mut default = Self::default();
-        default.consensus_mut().height = height;
-        default.consensus_mut().time = time;
-        default.recalculate_metadata();
+        match default {
+            BlockHeader::V1(ref mut header) => {
+                header.consensus_mut().height = height;
+                header.consensus_mut().time = time;
+                header.recalculate_metadata();
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(ref mut header) => {
+                header.consensus_mut().height = height;
+                header.consensus_mut().time = time;
+                header.recalculate_metadata();
+            }
+        }
         default
     }
 }
@@ -338,19 +453,35 @@ impl BlockHeader {
 impl BlockHeader {
     /// Merkle root of all previous block header hashes.
     pub fn prev_root(&self) -> &Bytes32 {
-        &self.as_ref().prev_root
+        match self {
+            BlockHeader::V1(header) => &header.consensus().prev_root,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => &header.consensus().prev_root,
+        }
     }
     /// Fuel block height.
     pub fn height(&self) -> &BlockHeight {
-        &self.as_ref().height
+        match self {
+            BlockHeader::V1(header) => &header.consensus().height,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => &header.consensus().height,
+        }
     }
     /// The block producer time.
     pub fn time(&self) -> Tai64 {
-        self.as_ref().time
+        match self {
+            BlockHeader::V1(header) => header.consensus().time,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.consensus().time,
+        }
     }
     /// The hash of the application header.
     pub fn application_hash(&self) -> &Bytes32 {
-        &self.as_ref().application_hash
+        match self {
+            BlockHeader::V1(header) => &header.consensus().application_hash,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => &header.consensus().application_hash,
+        }
     }
 
     /// The type of consensus this header is using.
@@ -386,12 +517,17 @@ impl From<&BlockHeader> for PartialBlockHeader {
             time,
             ..
         } = *header.consensus();
+
+        let da_height = header.da_height();
+        let consensus_parameters_version = header.consensus_parameters_version();
+        let state_transition_bytecode_version =
+            header.state_transition_bytecode_version();
+
         PartialBlockHeader {
             application: ApplicationHeader {
-                da_height: header.da_height,
-                consensus_parameters_version: header.consensus_parameters_version,
-                state_transition_bytecode_version: header
-                    .state_transition_bytecode_version,
+                da_height,
+                consensus_parameters_version,
+                state_transition_bytecode_version,
                 generated: Empty {},
             },
             consensus: ConsensusHeader {
@@ -448,26 +584,26 @@ impl PartialBlockHeader {
             .root()
             .into();
 
-        let application = ApplicationHeader {
-            da_height: self.application.da_height,
-            consensus_parameters_version: self.application.consensus_parameters_version,
-            state_transition_bytecode_version: self
-                .application
-                .state_transition_bytecode_version,
-            generated: GeneratedApplicationFields {
-                transactions_count: u16::try_from(transactions.len())
-                    .map_err(|_| BlockHeaderError::TooManyTransactions)?,
-                message_receipt_count: u32::try_from(outbox_message_ids.len())
-                    .map_err(|_| BlockHeaderError::TooManyMessages)?,
-                transactions_root,
-                message_outbox_root,
-                event_inbox_root,
-            },
-        };
-
         #[cfg(not(feature = "fault-proving"))]
-        let mut header: BlockHeader = BlockHeaderV1 {
-            application,
+        let mut header: BlockHeader = BlockHeader::V1(BlockHeaderV1 {
+            application: ApplicationHeader {
+                da_height: self.application.da_height,
+                consensus_parameters_version: self
+                    .application
+                    .consensus_parameters_version,
+                state_transition_bytecode_version: self
+                    .application
+                    .state_transition_bytecode_version,
+                generated: GeneratedApplicationFieldsV1 {
+                    transactions_count: u16::try_from(transactions.len())
+                        .map_err(|_| BlockHeaderError::TooManyTransactions)?,
+                    message_receipt_count: u32::try_from(outbox_message_ids.len())
+                        .map_err(|_| BlockHeaderError::TooManyMessages)?,
+                    transactions_root,
+                    message_outbox_root,
+                    event_inbox_root,
+                },
+            },
             consensus: ConsensusHeader {
                 prev_root: self.consensus.prev_root,
                 height: self.consensus.height,
@@ -478,12 +614,32 @@ impl PartialBlockHeader {
                 },
             },
             metadata: None,
-        }
-        .into();
+        });
 
         #[cfg(feature = "fault-proving")]
-        let mut header: BlockHeader = BlockHeaderV2 {
-            application,
+        let mut header: BlockHeader = BlockHeader::V2(BlockHeaderV2 {
+            application: ApplicationHeader {
+                da_height: self.application.da_height,
+                consensus_parameters_version: self
+                    .application
+                    .consensus_parameters_version,
+                state_transition_bytecode_version: self
+                    .application
+                    .state_transition_bytecode_version,
+                generated: GeneratedApplicationFieldsV2 {
+                    transactions_count: u16::try_from(transactions.len())
+                        .map_err(|_| BlockHeaderError::TooManyTransactions)?,
+                    message_receipt_count: u32::try_from(outbox_message_ids.len())
+                        .map_err(|_| BlockHeaderError::TooManyMessages)?,
+                    transactions_root,
+                    message_outbox_root,
+                    event_inbox_root,
+                    tx_id_commitment: v2::generate_tx_id_commitment(
+                        transactions,
+                        chain_id,
+                    ),
+                },
+            },
             consensus: ConsensusHeader {
                 prev_root: self.consensus.prev_root,
                 height: self.consensus.height,
@@ -494,11 +650,7 @@ impl PartialBlockHeader {
                 },
             },
             metadata: None,
-            fault_proving: FaultProvingHeader {
-                tx_id_commitment: v2::generate_tx_id_commitment(transactions, chain_id),
-            },
-        }
-        .into();
+        });
 
         // Cache the hash.
         header.recalculate_metadata();
@@ -515,39 +667,6 @@ fn generate_txns_root(transactions: &[Transaction]) -> Bytes32 {
         transaction_tree.push(id.as_ref());
     }
     transaction_tree.root().into()
-}
-
-impl ApplicationHeader<GeneratedApplicationFields> {
-    /// Hash the application header.
-    pub fn hash(&self) -> Bytes32 {
-        // Order matters and is the same as the spec.
-        let mut hasher = crate::fuel_crypto::Hasher::default();
-        let Self {
-            da_height,
-            consensus_parameters_version,
-            state_transition_bytecode_version,
-            generated:
-                GeneratedApplicationFields {
-                    transactions_count,
-                    message_receipt_count,
-                    transactions_root,
-                    message_outbox_root,
-                    event_inbox_root,
-                },
-        } = self;
-
-        hasher.input(da_height.to_be_bytes());
-        hasher.input(consensus_parameters_version.to_be_bytes());
-        hasher.input(state_transition_bytecode_version.to_be_bytes());
-
-        hasher.input(transactions_count.to_be_bytes());
-        hasher.input(message_receipt_count.to_be_bytes());
-        hasher.input(transactions_root.as_ref());
-        hasher.input(message_outbox_root.as_ref());
-        hasher.input(event_inbox_root.as_ref());
-
-        hasher.digest()
-    }
 }
 
 impl ConsensusHeader<GeneratedConsensusFields> {
@@ -586,14 +705,6 @@ where
     }
 }
 
-impl core::ops::Deref for BlockHeader {
-    type Target = ApplicationHeader<GeneratedApplicationFields>;
-
-    fn deref(&self) -> &Self::Target {
-        self.application()
-    }
-}
-
 impl core::ops::Deref for PartialBlockHeader {
     type Target = ApplicationHeader<Empty>;
 
@@ -602,25 +713,11 @@ impl core::ops::Deref for PartialBlockHeader {
     }
 }
 
-impl core::ops::Deref for ApplicationHeader<GeneratedApplicationFields> {
-    type Target = GeneratedApplicationFields;
-
-    fn deref(&self) -> &Self::Target {
-        &self.generated
-    }
-}
-
 impl core::ops::Deref for ConsensusHeader<GeneratedConsensusFields> {
     type Target = GeneratedConsensusFields;
 
     fn deref(&self) -> &Self::Target {
         &self.generated
-    }
-}
-
-impl core::convert::AsRef<ConsensusHeader<GeneratedConsensusFields>> for BlockHeader {
-    fn as_ref(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
-        self.consensus()
     }
 }
 

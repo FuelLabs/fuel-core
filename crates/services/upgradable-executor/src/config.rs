@@ -13,6 +13,9 @@ pub struct Config {
     /// When a block version matches the native executor version, we use
     /// the native executor; otherwise, we use the WASM executor.
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
+    /// Allow execution using blocks in the past.
+    /// This is rather expensive and not needed for most use cases, so it can be disabled.
+    pub allow_historical_execution: bool,
 }
 
 impl From<&Config> for ExecutionOptions {
