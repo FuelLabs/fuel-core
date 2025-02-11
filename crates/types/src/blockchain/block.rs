@@ -94,12 +94,15 @@ impl Block<Transaction> {
         transactions: Vec<Transaction>,
         outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
+        #[cfg(feature = "fault-proving")] chain_id: &ChainId,
     ) -> Result<Self, BlockHeaderError> {
         let inner = BlockV1 {
             header: header.generate(
                 &transactions,
                 outbox_message_ids,
                 event_inbox_root,
+                #[cfg(feature = "fault-proving")]
+                chain_id,
             )?,
             transactions,
         };
@@ -175,8 +178,18 @@ impl<TransactionRepresentation> Block<TransactionRepresentation> {
         // identifier on the fly.
         //
         // This assertion is a double-checks that this behavior is not changed.
-        debug_assert_eq!(self.header().id(), self.header().hash());
-        self.header().id()
+        let header = self.header();
+        match header {
+            BlockHeader::V1(header_v1) => {
+                debug_assert_eq!(header_v1.id(), header_v1.hash());
+                header_v1.id()
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header_v2) => {
+                debug_assert_eq!(header_v2.id(), header_v2.hash());
+                header_v2.id()
+            }
+        }
     }
 
     /// Get the executed transactions.
@@ -242,12 +255,15 @@ impl PartialFuelBlock {
         self,
         outbox_message_ids: &[MessageId],
         event_inbox_root: Bytes32,
+        #[cfg(feature = "fault-proving")] chain_id: &ChainId,
     ) -> Result<Block, BlockHeaderError> {
         Block::new(
             self.header,
             self.transactions,
             outbox_message_ids,
             event_inbox_root,
+            #[cfg(feature = "fault-proving")]
+            chain_id,
         )
     }
 }
@@ -258,6 +274,44 @@ impl From<Block> for PartialFuelBlock {
             Block::V1(BlockV1 {
                 header:
                     BlockHeader::V1(BlockHeaderV1 {
+                        application:
+                            ApplicationHeader {
+                                da_height,
+                                consensus_parameters_version,
+                                state_transition_bytecode_version,
+                                ..
+                            },
+                        consensus:
+                            ConsensusHeader {
+                                prev_root,
+                                height,
+                                time,
+                                ..
+                            },
+                        ..
+                    }),
+                transactions,
+            }) => Self {
+                header: PartialBlockHeader {
+                    application: ApplicationHeader {
+                        da_height,
+                        consensus_parameters_version,
+                        state_transition_bytecode_version,
+                        generated: Empty {},
+                    },
+                    consensus: ConsensusHeader {
+                        prev_root,
+                        height,
+                        time,
+                        generated: Empty {},
+                    },
+                },
+                transactions,
+            },
+            #[cfg(feature = "fault-proving")]
+            Block::V1(BlockV1 {
+                header:
+                    BlockHeader::V2(crate::blockchain::header::BlockHeaderV2 {
                         application:
                             ApplicationHeader {
                                 da_height,

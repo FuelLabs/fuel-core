@@ -11,7 +11,6 @@ use crate::{
     v0::algorithm::SharedV0Algorithm,
 };
 use anyhow::anyhow;
-use async_trait::async_trait;
 use fuel_core_services::{
     RunnableTask,
     StateWatcher,
@@ -137,7 +136,6 @@ where
         Ok(())
     }
 }
-#[async_trait]
 impl<L2, Metadata> RunnableTask for GasPriceServiceV0<L2, Metadata>
 where
     L2: L2BlockSource,

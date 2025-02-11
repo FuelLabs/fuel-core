@@ -296,7 +296,7 @@ where
         let block = view
             .get_block(&height.into())?
             .ok_or(not_found!("FullBlock"))?;
-        let param_version = block.header().consensus_parameters_version;
+        let param_version = block.header().consensus_parameters_version();
 
         let GasPriceSettings {
             gas_price_factor,

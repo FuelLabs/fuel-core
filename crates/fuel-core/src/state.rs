@@ -30,23 +30,25 @@ pub mod rocks_db;
 pub mod rocks_db_key_iterator;
 
 pub type ColumnType<Description> = <Description as DatabaseDescription>::Column;
+pub type HeightType<Description> = <Description as DatabaseDescription>::Height;
 
 /// A type extends the `KeyValueView`, allowing iteration over the storage.
-pub type IterableKeyValueView<Column> =
-    GenericDatabase<IterableKeyValueViewWrapper<Column>>;
+pub type IterableKeyValueView<Column, BlockHeight> =
+    GenericDatabase<IterableKeyValueViewWrapper<Column>, BlockHeight>;
 
 /// The basic view available for the key value storage.
-pub type KeyValueView<Column> = GenericDatabase<KeyValueViewWrapper<Column>>;
+pub type KeyValueView<Column, BlockHeight> =
+    GenericDatabase<KeyValueViewWrapper<Column>, BlockHeight>;
 
-impl<Column> IterableKeyValueView<Column>
+impl<Column, Height> IterableKeyValueView<Column, Height>
 where
     Column: StorageColumn + 'static,
 {
     /// Downgrades the `IterableKeyValueView` into the `KeyValueView`.
-    pub fn into_key_value_view(self) -> KeyValueView<Column> {
-        let iterable = self.into_inner();
+    pub fn into_key_value_view(self) -> KeyValueView<Column, Height> {
+        let (iterable, metadata) = self.into_inner();
         let storage = KeyValueViewWrapper::new(iterable);
-        KeyValueView::from_storage(storage)
+        KeyValueView::from_storage_and_metadata(storage, metadata)
     }
 }
 
@@ -61,9 +63,9 @@ pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
     fn view_at_height(
         &self,
         height: &Height,
-    ) -> StorageResult<KeyValueView<Self::Column>>;
+    ) -> StorageResult<KeyValueView<Self::Column, Height>>;
 
-    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>>;
+    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column, Height>>;
 
     fn rollback_block_to(&self, height: &Height) -> StorageResult<()>;
 }
@@ -79,14 +81,16 @@ where
         unimplemented!()
     }
 
-    fn view_at_height(&self, _: &Height) -> StorageResult<KeyValueView<Self::Column>> {
+    fn view_at_height(
+        &self,
+        _: &Height,
+    ) -> StorageResult<KeyValueView<Self::Column, Height>> {
         unimplemented!()
     }
 
-    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
+    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column, Height>> {
         unimplemented!()
     }
-
     fn rollback_block_to(&self, _: &Height) -> StorageResult<()> {
         unimplemented!()
     }

@@ -47,7 +47,6 @@ use fuel_core_types::{
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx,
     fuel_tx::{
         ConsensusParameters,
         Transaction,
@@ -117,10 +116,11 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
 impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
     fn dry_run(
         &self,
-        block: Components<Vec<fuel_tx::Transaction>>,
+        block: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
+        at_height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        self.executor.dry_run(block, utxo_validation)
+        self.executor.dry_run(block, utxo_validation, at_height)
     }
 }
 

@@ -65,25 +65,26 @@ use super::{
     NotifyCancel,
 };
 
-pub struct Exporter<Fun> {
+pub struct Exporter<Fun, N> {
     db: CombinedDatabase,
     prev_chain_config: ChainConfig,
     writer: Fun,
     group_size: usize,
-    task_manager: TaskManager<SnapshotFragment>,
+    task_manager: TaskManager<SnapshotFragment, N>,
     multi_progress: MultipleProgressReporter,
 }
 
-impl<Fun> Exporter<Fun>
+impl<Fun, N> Exporter<Fun, N>
 where
     Fun: Fn() -> anyhow::Result<SnapshotWriter>,
+    N: NotifyCancel + Send + Sync + Clone + 'static,
 {
     pub fn new(
         db: CombinedDatabase,
         prev_chain_config: ChainConfig,
         writer: Fun,
         group_size: usize,
-        cancel_token: impl NotifyCancel + Send + Sync + 'static,
+        cancel_token: N,
     ) -> Self {
         Self {
             db,
