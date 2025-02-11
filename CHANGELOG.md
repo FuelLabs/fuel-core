@@ -12,7 +12,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2619](https://github.com/FuelLabs/fuel-core/pull/2691): Add possibility to submit list of changes to rocksdb.
-- [2635](https://github.com/FuelLabs/fuel-core/pull/2635): Add metrics to gas price service
 - [2150](https://github.com/FuelLabs/fuel-core/pull/2150): Upgraded `libp2p` to `0.54.1` and introduced `ConnectionLimiter` to limit pending incoming/outgoing connections.
 
 ### Fixed
