@@ -415,7 +415,7 @@ where
         &self,
         block: &Block,
     ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
-        let block_version = block.header().state_transition_bytecode_version;
+        let block_version = block.header().state_transition_bytecode_version();
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
             self.native_storage_read_replay(block)
@@ -432,7 +432,7 @@ where
         &self,
         block: &Block,
     ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
-        let block_version = block.header().state_transition_bytecode_version;
+        let block_version = block.header().state_transition_bytecode_version();
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
             match &self.execution_strategy {
