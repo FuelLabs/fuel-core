@@ -29,11 +29,6 @@ const REQUIRED_FUEL_BLOCK_HEIGHT: &str = "required_fuel_block_height";
 const CURRENT_FUEL_BLOCK_HEIGHT: &str = "current_fuel_block_height";
 const FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED: &str =
     "fuel_block_height_precondition_failed";
-// Hardcoded constant for the sleep duration while we wait for the current block height to be reached.
-// The value has been chosen to be 1 second because we do not expect for blocks to be produced
-// at a faster interval.
-pub const SLEEP_DURATION: std::time::Duration = std::time::Duration::from_secs(1);
-
 /// The extension that implements the logic for checking whether
 /// the precondition that REQUIRED_FUEL_BLOCK_HEADER must
 /// be higher than the current block height is met.
@@ -150,10 +145,27 @@ impl Extension for RequiredFuelBlockHeightInner {
                 // matches the required fuel block height.
                 // TODO: Add a timeout to prevent the node from waiting indefinitely.
                 if current_block_height < *required_block_height {
-                    self.block_height_subscription_handle
+                    if let Err(e) = self
+                        .block_height_subscription_handle
                         .clone()
                         .wait_for_block_height(*required_block_height)
-                        .await;
+                        .await
+                    {
+                        let (line, column) = (line!(), column!());
+                        tracing::error!(
+                            "The producer of fuel_block_heights updates has been dropped {:?}", e
+                        );
+                        return Response::from_errors(vec![ServerError::new(
+                                format!(
+                                    "Internal server error while waiting for the required fuel block height: {}",
+                                    *required_block_height
+                                ),
+                                Some(Pos {
+                                    line: line as usize,
+                                    column: column as usize,
+                                }),
+                            )]);
+                    }
                 };
             }
         }
