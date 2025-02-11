@@ -136,7 +136,7 @@ pub async fn execute_genesis_block(
     database_transaction_on_chain
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(
-            &genesis_block.header().consensus_parameters_version,
+            &genesis_block.header().consensus_parameters_version(),
             &chain_config.consensus_parameters,
         )?;
 
@@ -144,7 +144,7 @@ pub async fn execute_genesis_block(
     database_transaction_on_chain
         .storage_as_mut::<StateTransitionBytecodeVersions>()
         .insert(
-            &genesis_block.header().state_transition_bytecode_version,
+            &genesis_block.header().state_transition_bytecode_version(),
             &bytecode_root,
         )?;
     database_transaction_on_chain
@@ -723,7 +723,7 @@ mod tests {
             .latest_block()
             .unwrap()
             .header()
-            .state_transition_bytecode_version;
+            .state_transition_bytecode_version();
         last_block.blocks_root = view
             .block_header_merkle_root(&last_block.block_height)
             .unwrap();

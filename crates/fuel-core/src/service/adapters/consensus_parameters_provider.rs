@@ -124,8 +124,7 @@ impl RunnableTask for Task {
                     .sealed_block
                     .entity
                     .header()
-                    .application()
-                    .consensus_parameters_version;
+                    .consensus_parameters_version();
 
                 if new_version > *self.shared_state.latest_consensus_parameters_version.lock() {
                     match self.shared_state.cache_consensus_parameters(new_version) {
@@ -296,10 +295,7 @@ mod tests {
         version: ConsensusParametersVersion,
     ) -> SharedImportResult {
         let mut block = Block::default();
-        block
-            .header_mut()
-            .application_mut()
-            .consensus_parameters_version = version;
+        block.header_mut().set_consensus_parameters_version(version);
         let sealed_block = SealedBlock {
             entity: block,
             consensus: Default::default(),

@@ -343,7 +343,7 @@ where
         self,
         block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
-        let consensus_params_version = block.header().consensus_parameters_version;
+        let consensus_params_version = block.header().consensus_parameters_version();
         let (block_executor, storage_tx) =
             self.into_executor(consensus_params_version)?;
 
@@ -916,7 +916,7 @@ where
             .storage::<FuelBlocks>()
             .get(&prev_block_height)?
             .ok_or(ExecutorError::PreviousBlockIsNotFound)?;
-        let previous_da_height = prev_block_header.header().da_height;
+        let previous_da_height = prev_block_header.header().da_height();
         let Some(next_unprocessed_da_height) = previous_da_height.0.checked_add(1) else {
             return Err(ExecutorError::DaHeightExceededItsLimit)
         };

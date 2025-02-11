@@ -105,13 +105,9 @@ impl LastBlockConfig {
     pub fn from_header(header: &BlockHeader, blocks_root: Bytes32) -> Self {
         Self {
             block_height: *header.height(),
-            da_block_height: header.application().da_height,
-            consensus_parameters_version: header
-                .application()
-                .consensus_parameters_version,
-            state_transition_version: header
-                .application()
-                .state_transition_bytecode_version,
+            da_block_height: header.da_height(),
+            consensus_parameters_version: header.consensus_parameters_version(),
+            state_transition_version: header.state_transition_bytecode_version(),
             blocks_root,
         }
     }

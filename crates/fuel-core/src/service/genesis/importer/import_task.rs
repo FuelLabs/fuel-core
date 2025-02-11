@@ -582,11 +582,13 @@ mod tests {
         fn view_at_height(
             &self,
             _: &BlockHeight,
-        ) -> StorageResult<KeyValueView<Self::Column>> {
+        ) -> StorageResult<KeyValueView<Self::Column, BlockHeight>> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
 
-        fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
+        fn latest_view(
+            &self,
+        ) -> StorageResult<IterableKeyValueView<Self::Column, BlockHeight>> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
 
