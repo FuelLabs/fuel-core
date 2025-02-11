@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- [2668](https://github.com/FuelLabs/fuel-core/pull/2668): Expose gas price service test helpers
+- [2621](https://github.com/FuelLabs/fuel-core/pull/2598): Global merkle root storage updates process upgrade transactions.
+- [2650](https://github.com/FuelLabs/fuel-core/pull/2650): Populate `ProcessedTransactions` table in global merkle root storage.
+- [2667](https://github.com/FuelLabs/fuel-core/pull/2667): Populate `Blobs` table in global merkle root storage.
+- [2652](https://github.com/FuelLabs/fuel-core/pull/2652): Global Merkle Root storage crate: Add Raw contract bytecode to global merkle root storage when processing Create transactions.
+
 ### Changed 
 - [2473](https://github.com/FuelLabs/fuel-core/pull/2473): Graphql requests and responses make use of a new `extensions` object to specify request/response metadata. A request `extensions` object can contain an integer-valued `required_fuel_block_height` field. When specified, the request will return an error unless the node's current fuel block height is at least the value specified in the `required_fuel_block_height` field. All graphql responses now contain an integer-valued `current_fuel_block_height` field in the `extensions` object, which contains the block height of the last block processed by the node.
 
