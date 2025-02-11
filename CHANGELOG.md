@@ -12,12 +12,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2150](https://github.com/FuelLabs/fuel-core/pull/2150): Upgraded `libp2p` to `0.54.1` and introduced `ConnectionLimiter` to limit pending incoming/outgoing connections.
+- [2666](https://github.com/FuelLabs/fuel-core/pull/2666) Added `--graphql-block-height-tolerance` (default: `10`) and `--graphql-block-height-min-timeout-secs` (default: `30`) CLI args. Requests with `required_fuel_block_height` set will wait if within tolerance of `current_fuel_block_height` instead of failing. The number of seconds that the node will wait is proportional to the number of blocks `lag-behind-blocks` that the node is lagging behind the required fuel block height, and equal to `graphql-block-height-min-timeout-secs + lag-behind-blocks.
 
 ### Fixed
 - [2646](https://github.com/FuelLabs/fuel-core/pull/2646): Improved performance of fetching block height by caching it when the view is created.
 
 ### Changed
-
 - [2473](https://github.com/FuelLabs/fuel-core/pull/2473): Graphql requests and responses make use of a new `extensions` object to specify request/response metadata. A request `extensions` object can contain an integer-valued `required_fuel_block_height` field. When specified, the request will return an error unless the node's current fuel block height is at least the value specified in the `required_fuel_block_height` field. All graphql responses now contain an integer-valued `current_fuel_block_height` field in the `extensions` object, which contains the block height of the last block processed by the node.
 - [2653](https://github.com/FuelLabs/fuel-core/pull/2653): Added cleaner error for wasm-executor upon failed deserialization.
 - [2705](https://github.com/FuelLabs/fuel-core/pull/2705): Update the default value for `--max-block-size` and `--max-transmit-size` to 50 MB
@@ -39,9 +39,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 - [2673](https://github.com/FuelLabs/fuel-core/pull/2673): Change read behavior on the InMemoryTransaction to use offset and allow not equal buf size (fix CCP and LDC broken from https://github.com/FuelLabs/fuel-vm/pull/847)
-
-### Added
-- [2666](https://github.com/FuelLabs/fuel-core/pull/2666) Added `--required-fuel-block-height-tolerance` CLI arg (default: `10`). Requests with `required_fuel_block_height` set will wait if within tolerance of `current_fuel_block_height` instead of failing.
 
 ## [Version 0.41.5]
 
