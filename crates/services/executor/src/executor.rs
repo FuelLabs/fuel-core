@@ -1276,7 +1276,7 @@ where
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
-        let (reverted, state, tx, receipts) = self.attempt_tx_execution_with_vm::<_, _>(
+        let (reverted, state, tx, receipts) = self.attempt_tx_execution_with_vm(
             checked_tx,
             header,
             coinbase_contract_id,
