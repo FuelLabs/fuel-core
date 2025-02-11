@@ -16,6 +16,7 @@ pub mod request_response;
 pub mod service;
 mod utils;
 
+pub mod bounded_hashset;
 mod cached_view;
 
 pub use gossipsub::config as gossipsub_config;

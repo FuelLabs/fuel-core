@@ -249,6 +249,10 @@ impl From<SyncArgs> for fuel_core::sync::Config {
     }
 }
 
+/// We want to prevent the user from accidentally setting this value too high and causing a DOS
+/// threat unintentionally
+const MAX_PEERS_CONNECTED_SAFETY_LIMIT: u32 = 100;
+
 impl P2PArgs {
     pub fn into_config(
         self,
@@ -321,8 +325,13 @@ impl P2PArgs {
             reserved_nodes: self.reserved_nodes,
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,
             enable_mdns: self.enable_mdns,
-            max_peers_connected: self.max_peers_connected,
-            max_connections_per_peer: self.max_connections_per_peer,
+            max_discovery_peers_connected: self.max_peers_connected,
+            max_gossipsub_peers_connected: self
+                .max_peers_connected
+                .min(MAX_PEERS_CONNECTED_SAFETY_LIMIT),
+            max_request_response_peers_connected: self
+                .max_peers_connected
+                .min(MAX_PEERS_CONNECTED_SAFETY_LIMIT),
             allow_private_addresses: self.allow_private_addresses,
             random_walk,
             connection_idle_timeout: Some(Duration::from_secs(

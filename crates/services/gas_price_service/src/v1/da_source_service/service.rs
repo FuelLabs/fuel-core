@@ -181,7 +181,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<Source> RunnableTask for DaSourceService<Source>
 where
     Source: DaBlockCostsSource,
