@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2387](https://github.com/FuelLabs/fuel-core/pull/2387): Update description `tx-max-depth` flag.
 - [2630](https://github.com/FuelLabs/fuel-core/pull/2630): Removed some noisy `tracing::info!` logs
 - [2643](https://github.com/FuelLabs/fuel-core/pull/2643): Before this fix when tip is zero, transactions that use 30M have the same priority as transactions with 1M gas. Now they are correctly ordered.
+- [2645](https://github.com/FuelLabs/fuel-core/pull/2645): Refactored `cumulative_percent_change` for 90% perf gains and reduced duplication. 
 
 ### Breaking 
 - [2661](https://github.com/FuelLabs/fuel-core/pull/2661): Dry run now supports running in past blocks. `dry_run_opt` method now takes block number as the last argument. To retain old behavior, simply pass in `None` for the last argument.
