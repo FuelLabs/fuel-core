@@ -72,3 +72,8 @@ version = "0.4.0"
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]
+fault-proving = [
+  "fuel-core-types/fault-proving",
+  "fuel-core-storage/fault-proving",
+  "fuel-core-chain-config/fault-proving",
+]
