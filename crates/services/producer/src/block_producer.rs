@@ -400,14 +400,7 @@ where
     ) -> anyhow::Result<Vec<StorageReadReplayEvent>> {
         let view = self.view_provider.latest_view()?;
 
-        let block = view.get_block(&height)?;
-        let transactions = block
-            .transactions()
-            .iter()
-            .map(|id| view.get_transaction(id).map(|tx| tx.into_owned()))
-            .collect::<Result<Vec<_>, _>>()?;
-        let block = block.into_owned().uncompress(transactions);
-
+        let block = view.get_full_block(&height)?;
         Ok(self.executor.storage_read_replay(&block)?)
     }
 }

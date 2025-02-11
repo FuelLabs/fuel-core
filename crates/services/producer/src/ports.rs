@@ -39,6 +39,9 @@ pub trait BlockProducerDatabase: Send + Sync {
     /// Gets the committed block at the `height`.
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>>;
 
+    /// Gets the full committed block at the `height`.
+    fn get_full_block(&self, height: &BlockHeight) -> StorageResult<Block>;
+
     /// Gets the transaction by id
     fn get_transaction(&self, id: &TxId) -> StorageResult<Cow<Transaction>>;
 

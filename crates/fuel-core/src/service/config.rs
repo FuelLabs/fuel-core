@@ -52,11 +52,11 @@ pub struct Config {
     /// When `true`:
     /// - Enables manual block production.
     /// - Enables debugger endpoint.
-    /// - Enables storage read replay for historical blocks.
     /// - Allows setting `utxo_validation` to `false`.
     pub debug: bool,
     /// When `true`:
     /// - Enables dry run in the past.
+    /// - Enables storage read replay for historical blocks.
     pub historical_execution: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
