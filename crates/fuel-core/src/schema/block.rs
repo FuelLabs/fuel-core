@@ -188,42 +188,42 @@ impl Header {
 
     /// The layer 1 height of messages and events to include since the last layer 1 block number.
     async fn da_height(&self) -> U64 {
-        self.0.da_height.0.into()
+        self.0.da_height().0.into()
     }
 
     /// The version of the consensus parameters used to create this block.
     async fn consensus_parameters_version(&self) -> U32 {
-        self.0.consensus_parameters_version.into()
+        self.0.consensus_parameters_version().into()
     }
 
     /// The version of the state transition bytecode used to create this block.
     async fn state_transition_bytecode_version(&self) -> U32 {
-        self.0.state_transition_bytecode_version.into()
+        self.0.state_transition_bytecode_version().into()
     }
 
     /// Number of transactions in this block.
     async fn transactions_count(&self) -> U16 {
-        self.0.transactions_count.into()
+        self.0.transactions_count().into()
     }
 
     /// Number of message receipts in this block.
     async fn message_receipt_count(&self) -> U32 {
-        self.0.message_receipt_count.into()
+        self.0.message_receipt_count().into()
     }
 
     /// Merkle root of transactions.
     async fn transactions_root(&self) -> Bytes32 {
-        self.0.transactions_root.into()
+        self.0.transactions_root().into()
     }
 
     /// Merkle root of message receipts in this block.
     async fn message_outbox_root(&self) -> Bytes32 {
-        self.0.message_outbox_root.into()
+        self.0.message_outbox_root().into()
     }
 
     /// Merkle root of inbox events in this block.
     async fn event_inbox_root(&self) -> Bytes32 {
-        self.0.event_inbox_root.into()
+        self.0.event_inbox_root().into()
     }
 
     /// Fuel block height.

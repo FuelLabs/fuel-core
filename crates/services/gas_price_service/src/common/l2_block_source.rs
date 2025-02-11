@@ -69,7 +69,7 @@ where
             }),
             std::cmp::Ordering::Equal => Ok(BlockInfo::GenesisBlock),
             std::cmp::Ordering::Greater => {
-                let param_version = block.header().consensus_parameters_version;
+                let param_version = block.header().consensus_parameters_version();
 
                 let GasPriceSettings {
                     gas_price_factor,
