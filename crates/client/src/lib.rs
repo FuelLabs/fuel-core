@@ -3,6 +3,7 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 pub mod client;
+pub mod reqwest_ext;
 pub mod schema;
 
 /// The GraphQL schema used by the library.

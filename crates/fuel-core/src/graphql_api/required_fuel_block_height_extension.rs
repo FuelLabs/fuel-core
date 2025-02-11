@@ -1,5 +1,6 @@
 use super::database::ReadView;
 
+use crate::fuel_core_graphql_api::database::ReadDatabase;
 use async_graphql::{
     extensions::{
         Extension,
@@ -137,7 +138,11 @@ impl Extension for RequiredFuelBlockHeightInner {
 
         let mut response = next.run(ctx, operation_name).await;
 
-        let current_block_height = view.latest_block_height();
+        // TODO: After https://github.com/FuelLabs/fuel-core/pull/2682
+        //  request the latest block height from the `ReadDatabase` directly.
+        let database: &ReadDatabase = ctx.data_unchecked();
+        let view = database.view();
+        let current_block_height = view.and_then(|view| view.latest_block_height());
 
         if let Ok(current_block_height) = current_block_height {
             let current_block_height: u32 = *current_block_height;
