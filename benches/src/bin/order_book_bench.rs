@@ -1,0 +1,269 @@
+// Define arguments
+
+use fuel_core::{
+    service::config::Trigger,
+    upgradable_executor::native_executor::ports::TransactionExt,
+};
+use fuel_core_chain_config::{
+    ChainConfig,
+    CoinConfig,
+    SnapshotMetadata,
+};
+use fuel_core_storage::transactional::AtomicView;
+use fuel_core_types::{
+    fuel_asm::{
+        op,
+        GTFArgs, RegId,
+    },
+    fuel_crypto::*,
+    fuel_tx::{
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
+        AssetId,
+        Finalizable,
+        Input,
+        Output,
+        Transaction,
+        TransactionBuilder,
+    },
+    fuel_vm::{
+        checked_transaction::{
+            CheckPredicateParams,
+            EstimatePredicates,
+        },
+        interpreter::MemoryInstance,
+        predicate::EmptyStorage,
+    },
+};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
+use test_helpers::builder::{
+    TestContext,
+    TestSetupBuilder,
+};
+fn checked_parameters() -> CheckPredicateParams {
+    let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
+    let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
+    chain_conf.consensus_parameters.into()
+}
+use clap::Parser;
+
+#[derive(Parser)]
+struct Args {
+    #[clap(short = 'c', long, default_value = "16")]
+    pub number_of_cores: usize,
+    #[clap(short = 't', long, default_value = "150000")]
+    pub number_of_transactions: u64,
+    #[clap(short = 'h', long, default_value = "3")]
+    pub number_of_hashes: u64,
+    #[clap(short = 'i', long, default_value = "1")]
+    pub number_of_inputs: u64,
+}
+
+fn generate_transactions(nb_txs: u64, number_hashes: u64, number_of_inputs: u64, rng: &mut StdRng) -> Vec<Transaction> {
+    let mut transactions = Vec::with_capacity(nb_txs as usize);
+    for _ in 0..nb_txs {
+
+        let mut predicate = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::InputCoinPredicateData),
+            op::movi(0x12, 0xc8)
+        ];
+        for _ in 0..number_hashes {
+            predicate.extend(vec![
+                op::movi(0x13, 0x20),
+                op::aloc(0x13),
+                op::move_(0x11, RegId::HP),
+                op::s256(0x11, 0x10, 0x12)
+            ]);
+        }
+        predicate.push(op::ret(0x01));
+        let predicate = predicate.into_iter()
+        .collect::<Vec<u8>>();
+        let owner = Input::predicate_owner(&predicate);
+
+        let predicate_data: Vec<u8> = vec![1; 200];
+
+        let mut tx = TransactionBuilder::script(vec![], vec![]);
+        tx.script_gas_limit(10000);
+        for i in 0..number_of_inputs {
+            tx.add_input(Input::coin_predicate(
+                rng.gen(),
+                owner,
+                10 * i,
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                predicate.clone(),
+                predicate_data.clone(),
+            ));
+            tx.add_output(Output::coin(rng.gen(), 5 * i, AssetId::default()));
+        }
+        let mut tx = tx.finalize();
+        tx.estimate_predicates(
+            &checked_parameters(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Predicate check failed");
+        transactions.push(tx.into());
+    }
+    transactions
+}
+
+fn main() {
+    let args = Args::parse();
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+    let start_transaction_generation = std::time::Instant::now();
+    let transactions = generate_transactions(args.number_of_transactions, args.number_of_hashes, args.number_of_inputs, &mut rng);
+    let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
+    let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
+    tracing::info!(
+        "Generated {} transactions in {:?} ms.",
+        args.number_of_transactions,
+        start_transaction_generation.elapsed().as_millis()
+    );
+
+    let mut test_builder = TestSetupBuilder::new(2322);
+    // setup genesis block with coins that transactions can spend
+    // We don't use the function to not have to convert Script to transactions
+    test_builder.initial_coins.extend(
+        transactions
+            .iter()
+            .flat_map(|t| t.inputs().unwrap())
+            .filter_map(|input| {
+                if let Input::CoinSigned(CoinSigned {
+                    amount,
+                    owner,
+                    asset_id,
+                    utxo_id,
+                    tx_pointer,
+                    ..
+                })
+                | Input::CoinPredicate(CoinPredicate {
+                    amount,
+                    owner,
+                    asset_id,
+                    utxo_id,
+                    tx_pointer,
+                    ..
+                }) = input
+                {
+                    Some(CoinConfig {
+                        tx_id: *utxo_id.tx_id(),
+                        output_index: utxo_id.output_index(),
+                        tx_pointer_block_height: tx_pointer.block_height(),
+                        tx_pointer_tx_idx: tx_pointer.tx_index(),
+                        owner: *owner,
+                        amount: *amount,
+                        asset_id: *asset_id,
+                    })
+                } else {
+                    None
+                }
+            }),
+    );
+
+    // disable automated block production
+    test_builder.trigger = Trigger::Never;
+    test_builder.utxo_validation = true;
+    test_builder.gas_limit = Some(
+        transactions
+            .iter()
+            .filter_map(|tx| {
+                if tx.is_mint() {
+                    return None;
+                }
+                Some(tx.max_gas(&chain_conf.consensus_parameters).unwrap())
+            })
+            .sum(),
+    );
+    test_builder.block_size_limit = Some(1_000_000_000_000_000);
+    test_builder.max_txs = transactions.len();
+    #[cfg(feature = "parallel-executor")]
+    {
+        test_builder.number_threads_pool_verif = args.number_of_cores;
+        test_builder.executor_number_of_cores = args.number_of_cores;
+    }
+
+    // spin up node
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let _drop = rt.enter();
+    let block = rt.block_on({
+        let transactions = transactions.clone();
+        let chain_conf = chain_conf.clone();
+        let mut test_builder = test_builder.clone();
+        async move {
+            test_builder.set_chain_config(chain_conf);
+            // start the producer node
+            let TestContext { srv, client, .. } = test_builder.finalize().await;
+
+            // insert all transactions
+            let mut subscriber = srv
+                .shared
+                .txpool_shared_state
+                .new_tx_notification_subscribe();
+            let mut nb_left = args.number_of_transactions;
+            let start_insertion = tokio::time::Instant::now();
+            srv.shared
+                .txpool_shared_state
+                .try_insert(transactions.clone())
+                .unwrap();
+            while nb_left > 0 {
+                let _ = subscriber.recv().await.unwrap();
+                nb_left -= 1;
+            }
+            tracing::info!(
+                "Inserted {} transactions in {:?} ms.",
+                args.number_of_transactions,
+                start_insertion.elapsed().as_millis()
+            );
+            let start = tokio::time::Instant::now();
+            client.produce_blocks(1, None).await.unwrap();
+            let block = srv
+                .shared
+                .database
+                .on_chain()
+                .latest_view()
+                .unwrap()
+                .get_sealed_block_by_height(&1.into())
+                .unwrap()
+                .unwrap();
+            tracing::info!("Block produced in {:?}ms", start.elapsed().as_millis());
+            block
+        }
+    });
+    drop(rt);
+    let rt = tokio::runtime::Builder::new_current_thread()
+    .enable_all()
+    .build()
+    .unwrap();
+    let _drop = rt.enter();
+    rt.block_on({
+        let chain_conf = chain_conf.clone();
+        let mut test_builder = test_builder.clone();
+        async move {
+        test_builder.set_chain_config(chain_conf.clone());
+        let TestContext { srv, .. } = test_builder.finalize().await;
+        
+        tracing::info!("Starting block import");
+        let start = tokio::time::Instant::now();
+
+        srv.shared
+            .block_importer
+            .execute_and_commit(block)
+            .await
+            .expect("Should validate the block");
+        tracing::info!("Block imported in {:?}ms", start.elapsed().as_millis());
+    }});
+}
+
+fuel_core_trace::enable_tracing!();
