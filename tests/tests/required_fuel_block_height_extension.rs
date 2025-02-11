@@ -149,7 +149,7 @@ async fn current_fuel_block_height_header_is_present_on_successful_request() {
         .as_u64()
         .unwrap();
     assert_eq!(current_fuel_block_height, 0);
-    
+
     let precondition_failed = extensions
         .get("fuel_block_height_precondition_failed")
         .unwrap()
