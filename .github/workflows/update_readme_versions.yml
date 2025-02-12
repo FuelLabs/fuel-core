@@ -113,7 +113,6 @@ jobs:
           - Fuel Ignition: ${{ steps.get-versions.outputs.ignition_version }}
           - Testnet: ${{ steps.get-versions.outputs.testnet_version }}
           - Devnet: ${{ steps.get-versions.outputs.devnet_version }}" \
-          --reviewer FuelLabs/client \
           --base master \
           --head "$branch_name"
       env:
