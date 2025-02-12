@@ -262,8 +262,8 @@ impl TransactionExecutionResult {
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StorageReadReplayEvent {
-    /// Column in the storage, identified by name.
-    pub column: String,
+    /// Column in the storage, identified by id.
+    pub column: u32,
     /// Key in the column.
     pub key: Vec<u8>,
     /// Value at the column:key pair. None if the key was not found.

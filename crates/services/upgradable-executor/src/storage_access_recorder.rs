@@ -40,7 +40,7 @@ where
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         let value = self.storage.get(key, column)?;
         self.record.lock().push(StorageReadReplayEvent {
-            column: column.name(),
+            column: column.id(),
             key: key.to_vec(),
             value: value.as_ref().map(|v| v.to_vec()),
         });

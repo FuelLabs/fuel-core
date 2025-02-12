@@ -981,7 +981,7 @@ impl DryRunTransactionExecutionStatus {
 }
 
 pub struct StorageReadReplayEvent {
-    column: String,
+    column: u32,
     key: HexString,
     value: Option<HexString>,
 }
@@ -1000,7 +1000,7 @@ impl From<fuel_core_types::services::executor::StorageReadReplayEvent>
 
 #[Object]
 impl StorageReadReplayEvent {
-    async fn column(&self) -> String {
+    async fn column(&self) -> u32 {
         self.column.clone()
     }
 
