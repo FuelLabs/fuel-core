@@ -25,6 +25,8 @@ use std::sync::{
     OnceLock,
 };
 
+use tokio::time::Duration;
+
 const REQUIRED_FUEL_BLOCK_HEIGHT: &str = "required_fuel_block_height";
 const CURRENT_FUEL_BLOCK_HEIGHT: &str = "current_fuel_block_height";
 const FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED: &str =
@@ -42,12 +44,13 @@ const FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED: &str =
 )]
 pub(crate) struct RequiredFuelBlockHeightExtension {
     tolerance_threshold: u32,
+    min_timeout: Duration,
     block_height_subscription_handle: BlockHeightSubscriptionHandle,
 }
 
 enum BlockHeightComparison {
     TooFarBehind,
-    WithinTolerance,
+    WithinTolerance(u32),
     Ahead,
 }
 
@@ -62,7 +65,9 @@ impl BlockHeightComparison {
         {
             BlockHeightComparison::TooFarBehind
         } else if current_block_height < required_block_height {
-            BlockHeightComparison::WithinTolerance
+            BlockHeightComparison::WithinTolerance(
+                required_block_height.saturating_sub(**current_block_height),
+            )
         } else {
             BlockHeightComparison::Ahead
         }
@@ -76,6 +81,8 @@ impl RequiredFuelBlockHeightExtension {
     ) -> Self {
         Self {
             tolerance_threshold,
+            // TODO: make it configurable
+            min_timeout: Duration::from_secs(1),
             block_height_subscription_handle,
         }
     }
@@ -84,17 +91,20 @@ impl RequiredFuelBlockHeightExtension {
 pub(crate) struct RequiredFuelBlockHeightInner {
     required_height: OnceLock<BlockHeight>,
     tolerance_threshold: u32,
+    min_timeout: Duration,
     block_height_subscription_handle: BlockHeightSubscriptionHandle,
 }
 
 impl RequiredFuelBlockHeightInner {
     pub fn new(
         tolerance_threshold: u32,
+        min_timeout: Duration,
         block_height_subscription_handle: &BlockHeightSubscriptionHandle,
     ) -> Self {
         Self {
             required_height: OnceLock::new(),
             tolerance_threshold,
+            min_timeout,
             block_height_subscription_handle: block_height_subscription_handle.clone(),
         }
     }
@@ -104,6 +114,7 @@ impl ExtensionFactory for RequiredFuelBlockHeightExtension {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(RequiredFuelBlockHeightInner::new(
             self.tolerance_threshold,
+            self.min_timeout,
             &self.block_height_subscription_handle,
         ))
     }
@@ -156,7 +167,6 @@ impl Extension for RequiredFuelBlockHeightInner {
                 }),
             )]);
         };
-
         let awaited_block_height = match self.required_height.get() {
             None => current_block_height,
             Some(required_block_height) => {
@@ -174,31 +184,31 @@ impl Extension for RequiredFuelBlockHeightInner {
                             column,
                         );
                     }
-                    BlockHeightComparison::WithinTolerance => {
-                        match self
-                            .block_height_subscription_handle
-                            .wait_for_block_height(*required_block_height)
-                            .await
+                    BlockHeightComparison::WithinTolerance(blocks) => {
+                        let timeout = self
+                            .min_timeout
+                            .saturating_add(Duration::from_secs(blocks.into()));
+                        match await_block_height(
+                            &self.block_height_subscription_handle,
+                            required_block_height,
+                            &timeout,
+                        )
+                        .await
                         {
-                            Ok(height) => height,
-
+                            Ok(block_height) => block_height,
                             Err(e) => {
                                 let (line, column) = (line!(), column!());
                                 tracing::error!(
-                                    "Cannot receive block height notification {:?}",
+                                    "Failed to wait for the required fuel block height: {}",
                                     e
                                 );
-
                                 return Response::from_errors(vec![ServerError::new(
-                                format!(
-                                    "Internal server error while waiting for the required fuel block height: {}",
-                                    *required_block_height
-                                ),
-                                Some(Pos {
-                                    line: line as usize,
-                                    column: column as usize,
-                                }),
-                            )]);
+                                    "Failed to wait for the required fuel block height",
+                                    Some(Pos {
+                                        line: line as usize,
+                                        column: column as usize,
+                                    }),
+                                )]);
                             }
                         }
                     }
@@ -260,4 +270,23 @@ fn error_response(
     );
 
     response
+}
+
+async fn await_block_height(
+    block_height_subscription_handle: &BlockHeightSubscriptionHandle,
+    block_height: &BlockHeight,
+    timeout: &Duration,
+) -> anyhow::Result<BlockHeight> {
+    tokio::select! {
+        biased;
+        block_height_res = block_height_subscription_handle.wait_for_block_height(*block_height) => {
+            block_height_res
+        },
+        _ = tokio::time::sleep(*timeout) => {
+            Err(anyhow::anyhow!(
+                "Timeout while waiting for the required fuel block height: {}",
+                block_height
+            ))
+        }
+    }
 }
