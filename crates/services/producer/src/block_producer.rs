@@ -400,8 +400,11 @@ where
     ) -> anyhow::Result<Vec<StorageReadReplayEvent>> {
         let view = self.view_provider.latest_view()?;
 
+        let executor = self.executor.clone();
         let block = view.get_full_block(&height)?;
-        Ok(self.executor.storage_read_replay(&block)?)
+
+        // use the blocking threadpool to avoid clogging up the main async runtime
+        tokio_rayon::spawn_fifo(move || Ok(executor.storage_read_replay(&block)?)).await
     }
 }
 
