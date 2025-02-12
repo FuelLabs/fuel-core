@@ -44,7 +44,9 @@ async fn storage_read_replay__returns_counter_state() {
 
         let storage_bytes = replay
             .iter()
-            .find(|item| item.column == Column::ContractsState && item.key == storage_slot_key)
+            .find(|item| {
+                item.column == Column::ContractsState && item.key == storage_slot_key
+            })
             .expect("No storage read found")
             .value
             .clone()
