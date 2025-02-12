@@ -20,10 +20,12 @@ use fuel_core_types::services::executor::Error as ExecutorError;
 #[allow(missing_docs)]
 pub enum Error {
     /// Error occurred during serialization or deserialization of the entity.
-    #[display("error performing serialization or deserialization")]
+    #[display(fmt = "error performing serialization or deserialization")]
     Codec,
     /// The version of database or data is invalid (possibly not migrated).
-    #[display("Invalid database version, expected {expected:#x}, found {found:#x}")]
+    #[display(
+        fmt = "Invalid database version, expected {expected:#x}, found {found:#x}"
+    )]
     InvalidDatabaseVersion {
         /// the current database version
         found: u32,
@@ -31,17 +33,17 @@ pub enum Error {
         expected: u32,
     },
     /// Multiple heights found in the commit to the database.
-    #[display("Multiple heights found in the commit {heights:?}")]
+    #[display(fmt = "Multiple heights found in the commit {heights:?}")]
     MultipleHeightsInCommit {
         /// List of heights found in the commit.
         heights: Vec<u64>,
     },
     /// Failed to advance the height.
-    #[display("Failed to advance the height")]
+    #[display(fmt = "Failed to advance the height")]
     FailedToAdvanceHeight,
     /// The new and old heights are not linked.
     #[display(
-        "New and old heights are not linked: prev_height: {prev_height:#x}, new_height: {new_height:#x}"
+        fmt = "New and old heights are not linked: prev_height: {prev_height:#x}, new_height: {new_height:#x}"
     )]
     HeightsAreNotLinked {
         /// The old height.
@@ -51,35 +53,35 @@ pub enum Error {
     },
     /// The new height is not found, but the old height is set.
     #[display(
-        "The new height is not found, but the old height is set: prev_height: {prev_height:#x}"
+        fmt = "The new height is not found, but the old height is set: prev_height: {prev_height:#x}"
     )]
     NewHeightIsNotSet {
         /// The old height known by the database.
         prev_height: u64,
     },
-    #[display("The historical database doesn't have any history yet")]
+    #[display(fmt = "The historical database doesn't have any history yet")]
     NoHistoryIsAvailable,
     #[display(
-        "The historical database doesn't have history for the requested height {requested_height:#x}, \
+        fmt = "The historical database doesn't have history for the requested height {requested_height:#x}, \
             the oldest available height is {oldest_available_height:#x}"
     )]
     NoHistoryForRequestedHeight {
         requested_height: u64,
         oldest_available_height: u64,
     },
-    #[display("Reached the end of the history")]
+    #[display(fmt = "Reached the end of the history")]
     ReachedEndOfHistory,
 
     #[cfg(feature = "backup")]
-    #[display("BackupEngine initialization error: {}", _0)]
+    #[display(fmt = "BackupEngine initialization error: {}", _0)]
     BackupEngineInitError(anyhow::Error),
 
     #[cfg(feature = "backup")]
-    #[display("Backup error: {}", _0)]
+    #[display(fmt = "Backup error: {}", _0)]
     BackupError(anyhow::Error),
 
     #[cfg(feature = "backup")]
-    #[display("Restore error: {}", _0)]
+    #[display(fmt = "Restore error: {}", _0)]
     RestoreError(anyhow::Error),
 
     /// Not related to database error.

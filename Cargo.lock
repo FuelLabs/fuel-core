@@ -3510,7 +3510,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "cynic",
- "derive_more 1.0.0",
+ "derive_more 0.99.19",
  "eventsource-client",
  "fuel-core-types 0.41.6",
  "futures",
@@ -3573,7 +3573,7 @@ name = "fuel-core-database"
 version = "0.41.6"
 dependencies = [
  "anyhow",
- "derive_more 1.0.0",
+ "derive_more 0.99.19",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.41.6",
@@ -3666,7 +3666,7 @@ name = "fuel-core-importer"
 version = "0.41.6"
 dependencies = [
  "anyhow",
- "derive_more 1.0.0",
+ "derive_more 0.99.19",
  "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",
@@ -3797,7 +3797,7 @@ version = "0.41.6"
 dependencies = [
  "anyhow",
  "async-trait",
- "derive_more 1.0.0",
+ "derive_more 0.99.19",
  "fuel-core-producer",
  "fuel-core-storage",
  "fuel-core-trace",
@@ -3889,7 +3889,7 @@ name = "fuel-core-storage"
 version = "0.41.6"
 dependencies = [
  "anyhow",
- "derive_more 1.0.0",
+ "derive_more 0.99.19",
  "enum-iterator",
  "fuel-core-storage",
  "fuel-core-types 0.41.6",
@@ -3993,7 +3993,7 @@ version = "0.41.6"
 dependencies = [
  "anyhow",
  "async-trait",
- "derive_more 1.0.0",
+ "derive_more 0.99.19",
  "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
@@ -4054,7 +4054,7 @@ name = "fuel-core-upgradable-executor"
 version = "0.41.6"
 dependencies = [
  "anyhow",
- "derive_more 1.0.0",
+ "derive_more 0.99.19",
  "fuel-core-executor",
  "fuel-core-storage",
  "fuel-core-types 0.41.6",

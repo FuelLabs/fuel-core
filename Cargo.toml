@@ -111,7 +111,7 @@ educe = { version = "0.6", default-features = false, features = [
   "Hash",
   "Debug",
 ] }
-derive_more = { version = "1", features = ["into", "from", "display"] }
+derive_more = { version = "0.99" }
 enum_dispatch = "0.3.13"
 enum-iterator = "1.2"
 hex = { version = "0.4", features = ["serde"] }

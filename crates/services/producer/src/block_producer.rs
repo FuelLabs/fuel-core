@@ -62,19 +62,19 @@ pub mod gas_price;
 
 #[derive(Debug, derive_more::Display)]
 pub enum Error {
-    #[display("Genesis block is absent")]
+    #[display(fmt = "Genesis block is absent")]
     NoGenesisBlock,
     #[display(
-        "The block height {height} should be higher than the previous block height {previous_block}"
+        fmt = "The block height {height} should be higher than the previous block height {previous_block}"
     )]
     BlockHeightShouldBeHigherThanPrevious {
         height: BlockHeight,
         previous_block: BlockHeight,
     },
-    #[display("Previous block height {_0} doesn't exist")]
+    #[display(fmt = "Previous block height {_0} doesn't exist")]
     MissingBlock(BlockHeight),
     #[display(
-        "Best finalized da_height {best} is behind previous block da_height {previous_block}"
+        fmt = "Best finalized da_height {best} is behind previous block da_height {previous_block}"
     )]
     InvalidDaFinalizationState {
         best: DaBlockHeight,
