@@ -11,6 +11,13 @@ pub mod merkle;
 pub mod structured_storage;
 pub mod update;
 
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers;
+
+// Hack, see how it's used in `test_helpers`
+#[cfg(feature = "test-helpers")]
+pub struct Dummy;
+
 use crate::merkle::Merkleized;
 
 pub type ContractsRawCode = Merkleized<fuel_core_storage::tables::ContractsRawCode>;
