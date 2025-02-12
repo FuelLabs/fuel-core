@@ -1001,7 +1001,7 @@ impl From<fuel_core_types::services::executor::StorageReadReplayEvent>
 #[Object]
 impl StorageReadReplayEvent {
     async fn column(&self) -> U32 {
-        self.column.clone()
+        self.column
     }
 
     async fn key(&self) -> HexString {
