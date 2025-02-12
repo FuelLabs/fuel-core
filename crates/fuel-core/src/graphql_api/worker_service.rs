@@ -110,6 +110,7 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
+use tokio::sync::oneshot;
 #[cfg(test)]
 mod tests;
 
@@ -130,14 +131,8 @@ pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
     on_chain_database: OnChain,
     off_chain_database: OffChain,
     base_asset_id: AssetId,
-    block_height_subscriptions: Arc<
-        Mutex<
-            BTreeMap<
-                Reverse<BlockHeight>,
-                Vec<tokio::sync::oneshot::Sender<BlockHeight>>,
-            >,
-        >,
-    >,
+    block_height_subscriptions:
+        Arc<Mutex<BTreeMap<Reverse<BlockHeight>, Vec<oneshot::Sender<BlockHeight>>>>>,
 }
 
 /// The off-chain GraphQL API worker task processes the imported blocks
@@ -153,14 +148,8 @@ pub struct Task<TxPool, D> {
     coins_to_spend_indexation_enabled: bool,
     asset_metadata_indexation_enabled: bool,
     base_asset_id: AssetId,
-    block_height_subscriptions: Arc<
-        Mutex<
-            BTreeMap<
-                Reverse<BlockHeight>,
-                Vec<tokio::sync::oneshot::Sender<BlockHeight>>,
-            >,
-        >,
-    >,
+    block_height_subscriptions:
+        Arc<Mutex<BTreeMap<Reverse<BlockHeight>, Vec<oneshot::Sender<BlockHeight>>>>>,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -219,9 +208,18 @@ where
 
         // Get all the subscribers that need to be notified that the block height
         // has been reached.
-        self.block_height_subscriptions
+        let notifiable_block_height_subcribers = self
+            .block_height_subscriptions
             .lock()
             .split_off(&Reverse(*height));
+        let notifiable_block_height_subcribers =
+            notifiable_block_height_subcribers.into_values().flatten();
+
+        for subscriber in notifiable_block_height_subcribers {
+            if let Err(e) = subscriber.send(*height) {
+                tracing::error!("Failed to notify subscriber to block height: {}", e);
+            }
+        }
 
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
@@ -588,14 +586,8 @@ pub struct BlockHeightSubscriptionHandle {
     // We use Reverse<BlockHeight> as the map key to take advantage of BTreeMap::split_off.
     // This way we can easily remove all the subscribers that need to be notified that the block height
     // has been reached, while keeping the others in the map.
-    handlers_map: Arc<
-        Mutex<
-            BTreeMap<
-                Reverse<BlockHeight>,
-                Vec<tokio::sync::oneshot::Sender<BlockHeight>>,
-            >,
-        >,
-    >,
+    handlers_map:
+        Arc<Mutex<BTreeMap<Reverse<BlockHeight>, Vec<oneshot::Sender<BlockHeight>>>>>,
 }
 
 impl BlockHeightSubscriptionHandle {
