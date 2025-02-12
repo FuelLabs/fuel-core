@@ -3,6 +3,7 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
+use fuel_core_storage::column::Column;
 use fuel_core_types::fuel_tx::Bytes32;
 use rand::SeedableRng;
 use test_helpers::counter_contract;
@@ -45,7 +46,7 @@ async fn storage_read_replay__returns_counter_state() {
         let storage_bytes = replay
             .iter()
             .find(|item| {
-                item.column == Column::ContractsState && item.key == storage_slot_key
+                item.column == Column::ContractsState as u32 && item.key == storage_slot_key
             })
             .expect("No storage read found")
             .value
