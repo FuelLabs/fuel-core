@@ -148,7 +148,7 @@ pub struct P2PArgs {
     #[clap(long = "gossip-heartbeat-interval", default_value = "500ms", env)]
     pub gossip_heartbeat_interval: humantime::Duration,
 
-    /// The maximum byte size for each gossip (default is 18 MiB)
+    /// The maximum byte size for each gossip (default is 50 MiB)
     #[clap(long = "max-transmit-size", default_value = MAX_RESPONSE_SIZE_STR, env)]
     pub max_transmit_size: usize,
 
