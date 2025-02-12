@@ -33,7 +33,7 @@ pub struct FuelOperation<Operation> {
 pub struct FuelGraphQlResponse<T, ErrorExtensions = serde::de::IgnoredAny> {
     #[serde(flatten)]
     pub response: GraphQlResponse<T, ErrorExtensions>,
-    pub extensions: ExtensionsResponse,
+    pub extensions: Option<ExtensionsResponse>,
 }
 
 impl<Operation> FuelOperation<Operation> {

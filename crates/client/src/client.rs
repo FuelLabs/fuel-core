@@ -349,8 +349,10 @@ impl FuelClient {
         R: serde::de::DeserializeOwned + 'static,
     {
         if let Some(inner_required_height) = inner_required_height {
-            if let Some(current_fuel_block_height) =
-                response.extensions.current_fuel_block_height
+            if let Some(current_fuel_block_height) = response
+                .extensions
+                .as_ref()
+                .and_then(|e| e.current_fuel_block_height)
             {
                 let mut lock = inner_required_height.lock().expect("Mutex poisoned");
 
@@ -360,7 +362,11 @@ impl FuelClient {
             }
         }
 
-        if let Some(failed) = response.extensions.fuel_block_height_precondition_failed {
+        if let Some(failed) = response
+            .extensions
+            .as_ref()
+            .and_then(|e| e.fuel_block_height_precondition_failed)
+        {
             if failed {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,

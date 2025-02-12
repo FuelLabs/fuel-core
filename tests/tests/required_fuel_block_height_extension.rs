@@ -12,6 +12,7 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
+use fuel_core_types::fuel_tx;
 
 #[tokio::test]
 async fn request_with_required_block_height_extension_field_works() {
@@ -88,4 +89,50 @@ async fn current_fuel_block_height_header_is_present_on_successful_request() {
 
     // Then
     assert_eq!(client.required_block_height(), Some(50u32.into()));
+}
+
+#[tokio::test]
+async fn current_fuel_block_height_header_is_present_on_successful_committed_transaction()
+{
+    // setup config
+    let state_config = StateConfig::default();
+    let config = Config::local_node_with_state_config(state_config);
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let mut client: FuelClient = FuelClient::from(srv.bound_address);
+
+    // When
+    client.with_required_fuel_block_height(None);
+    let tx = fuel_tx::Transaction::default_test_tx();
+    client.submit_and_await_commit(&tx).await.unwrap();
+
+    // Then
+    assert_eq!(client.required_block_height(), Some(1u32.into()));
+}
+
+#[tokio::test]
+async fn submitting_transaction_with_future_required_height_return_error() {
+    // setup config
+    let state_config = StateConfig::default();
+    let config = Config::local_node_with_state_config(state_config);
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let mut client: FuelClient = FuelClient::from(srv.bound_address);
+
+    // When
+    client.with_required_fuel_block_height(Some(100u32.into()));
+    let tx = fuel_tx::Transaction::default_test_tx();
+    let result = client.submit_and_await_commit(&tx).await;
+
+    // Then
+    let error = result.unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("The required block height was not met"),
+        "Error: {}",
+        error
+    );
 }
