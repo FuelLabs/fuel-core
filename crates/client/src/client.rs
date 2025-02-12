@@ -198,9 +198,7 @@ impl Clone for ConsistencyPolicy {
                 // instances of the `FuelClient`.
                 height: Arc::new(Mutex::new(height.lock().ok().and_then(|h| *h))),
             },
-            Self::Manual { height } => Self::Manual {
-                height: height.clone(),
-            },
+            Self::Manual { height } => Self::Manual { height: *height },
         }
     }
 }
@@ -251,7 +249,9 @@ impl FromStr for FuelClient {
             Ok(Self {
                 client,
                 url,
-                extensions: HashMap::new(),
+                require_height: ConsistencyPolicy::Auto {
+                    height: Arc::new(Mutex::new(None)),
+                },
             })
         }
     }
