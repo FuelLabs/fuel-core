@@ -77,12 +77,13 @@ impl BlockHeightComparison {
 impl RequiredFuelBlockHeightExtension {
     pub fn new(
         tolerance_threshold: u32,
+        min_timeout: Duration,
         block_height_subscription_handle: BlockHeightSubscriptionHandle,
     ) -> Self {
         Self {
             tolerance_threshold,
             // TODO: make it configurable
-            min_timeout: Duration::from_secs(1),
+            min_timeout,
             block_height_subscription_handle,
         }
     }
