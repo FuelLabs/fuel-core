@@ -762,7 +762,7 @@ type Mutation {
 	"""
 	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]!
 	"""
-	Get execution trace for an already-executed transaction.
+	Get execution trace for an already-executed block.
 	"""
 	storageReadReplay(height: U32!): [StorageReadReplayEvent!]!
 	"""
