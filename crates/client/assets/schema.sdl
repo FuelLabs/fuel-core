@@ -1161,7 +1161,7 @@ type StateTransitionPurpose {
 }
 
 type StorageReadReplayEvent {
-	column: Int!
+	column: U32!
 	key: HexString!
 	value: HexString
 }

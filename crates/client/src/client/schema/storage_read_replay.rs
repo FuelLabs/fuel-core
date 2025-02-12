@@ -7,7 +7,7 @@ use crate::client::schema::{
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct StorageReadReplayEvent {
-    pub column: String,
+    pub column: U32,
     pub key: HexString,
     pub value: Option<HexString>,
 }
@@ -16,7 +16,7 @@ impl From<StorageReadReplayEvent>
 {
     fn from(event: StorageReadReplayEvent) -> Self {
         fuel_core_types::services::executor::StorageReadReplayEvent {
-            column: event.column,
+            column: event.column.into(),
             key: event.key.into(),
             value: event.value.map(Into::into),
         }
