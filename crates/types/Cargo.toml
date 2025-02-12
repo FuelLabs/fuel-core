@@ -22,7 +22,6 @@ aws-sdk-kms = { workspace = true, optional = true }
 bs58 = { version = "0.5", optional = true }
 derive_more = { version = "0.99" }
 educe = { workspace = true, optional = true }
-enum_dispatch = { workspace = true }
 fuel-vm-private = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
