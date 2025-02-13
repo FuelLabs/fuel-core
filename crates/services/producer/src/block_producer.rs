@@ -401,10 +401,13 @@ where
         let view = self.view_provider.latest_view()?;
 
         let executor = self.executor.clone();
-        let block = view.get_full_block(&height)?;
 
         // use the blocking threadpool to avoid clogging up the main async runtime
-        tokio_rayon::spawn_fifo(move || Ok(executor.storage_read_replay(&block)?)).await
+        tokio_rayon::spawn_fifo(move || {
+            let block = view.get_full_block(&height)?;
+            Ok(executor.storage_read_replay(&block)?)
+        })
+        .await
     }
 }
 

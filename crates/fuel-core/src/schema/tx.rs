@@ -347,7 +347,7 @@ impl TxMutation {
         Ok(tx_statuses)
     }
 
-    /// Get execution trace for an already-executed transaction.
+    /// Get execution trace for an already-executed block.
     #[graphql(complexity = "query_costs().storage_read_replay + child_complexity")]
     async fn storage_read_replay(
         &self,

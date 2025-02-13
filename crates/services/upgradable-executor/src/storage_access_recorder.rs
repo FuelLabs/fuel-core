@@ -10,7 +10,6 @@ use fuel_core_types::services::executor::StorageReadReplayEvent;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-#[derive(Clone, Debug)]
 pub struct StorageAccessRecorder<S>
 where
     S: KeyValueInspect,
