@@ -119,13 +119,3 @@ impl IntoFuture for Handle {
         self.rx
     }
 }
-
-pub fn new_handler(block_height: BlockHeight) -> (Handler, Subscriber) {
-    let inner = Arc::new(RwLock::new(HandlersMapInner::new(block_height)));
-    (
-        Handler {
-            inner: inner.clone(),
-        },
-        Subscriber { inner },
-    )
-}
