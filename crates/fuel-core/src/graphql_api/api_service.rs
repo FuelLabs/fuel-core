@@ -17,7 +17,7 @@ use crate::{
     },
     graphql_api::{
         self,
-        required_fuel_block_height_extension::RequiredFuelBlockHeightExtension,
+        extensions::required_fuel_block_height::RequiredFuelBlockHeightExtension,
     },
     schema::{
         CoreSchema,

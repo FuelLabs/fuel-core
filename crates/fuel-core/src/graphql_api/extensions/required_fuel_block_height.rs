@@ -1,6 +1,7 @@
-use super::database::ReadView;
-
-use crate::fuel_core_graphql_api::database::ReadDatabase;
+use crate::{
+    fuel_core_graphql_api::database::ReadDatabase,
+    graphql_api::database::ReadView,
+};
 use async_graphql::{
     extensions::{
         Extension,
