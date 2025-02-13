@@ -37,6 +37,16 @@ impl Extension for CurrentStfVersionExtension {
         next: NextExecute<'_>,
     ) -> Response {
         // TODO[RC]: Obtain correct value.
+
+        // - state_transition_bytecode_version lives in the BlockProducer
+        // - all versions are stored in StateTransitionBytecodeVersions DB
+        // - can be obtained by calling latest_state_transition_bytecode_version()
+        // - the value is updated in the following places:
+        //      - fn process_upgrade_transaction() - with fraud proofs enabled only
+        //      - fn execute_genesis_block()
+        //      - fn set_state_transition_bytecode() in vm_storage
+        // - the way to go is to notify the extension about the changes?
+
         let current_stf_version = 2137;
 
         let mut response = next.run(ctx, operation_name).await;
