@@ -9,6 +9,8 @@ use test_case::test_case;
 // are returned.
 
 #[test_case("current_stf_version")]
+#[test_case("current_fuel_block_height")]
+#[test_case("current_consensus_parameters_version")]
 #[tokio::test]
 async fn current_stf_version_is_present(extension_name: &str) {
     let node = FuelService::new_node(Config::local_node()).await.unwrap();
