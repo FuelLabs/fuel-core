@@ -3,7 +3,10 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_storage::column::Column;
+use fuel_core_storage::{
+    column::Column,
+    kv_store::StorageColumn,
+};
 use fuel_core_types::fuel_tx::Bytes32;
 use rand::SeedableRng;
 use test_helpers::counter_contract;

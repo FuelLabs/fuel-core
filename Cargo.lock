@@ -4040,7 +4040,6 @@ dependencies = [
  "derivative",
  "derive_more 0.99.19",
  "fuel-vm 0.59.1",
- "hex",
  "k256",
  "rand",
  "secrecy",

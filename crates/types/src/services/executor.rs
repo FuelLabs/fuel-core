@@ -1,7 +1,5 @@
 //! Types related to executor service.
 
-use core::fmt;
-
 use crate::{
     blockchain::{
         block::Block,
@@ -24,6 +22,8 @@ use crate::{
         ValidityError,
     },
     fuel_types::{
+        fmt_option_truncated_hex,
+        fmt_truncated_hex,
         BlockHeight,
         Bytes32,
         ContractId,
@@ -259,24 +259,18 @@ impl TransactionExecutionResult {
 }
 
 /// When storage in column:key was read, it contained this value.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, derivative::Derivative)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derivative(Debug)]
 pub struct StorageReadReplayEvent {
     /// Column in the storage, identified by id.
     pub column: u32,
     /// Key in the column.
+    #[derivative(Debug(format_with = "fmt_truncated_hex::<32>"))]
     pub key: Vec<u8>,
     /// Value at the column:key pair. None if the key was not found.
+    #[derivative(Debug(format_with = "fmt_option_truncated_hex::<16>"))]
     pub value: Option<Vec<u8>>,
-}
-impl fmt::Debug for StorageReadReplayEvent {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StorageReadReplayEvent")
-            .field("column", &self.column)
-            .field("key", &hex::encode(&self.key))
-            .field("value", &self.value.as_ref().map(hex::encode))
-            .finish()
-    }
 }
 
 #[allow(missing_docs)]
