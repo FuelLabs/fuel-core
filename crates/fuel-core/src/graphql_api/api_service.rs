@@ -92,8 +92,8 @@ pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub use super::database::ReadDatabase;
 use super::{
+    block_height_subscription,
     ports::worker,
-    worker_service::BlockHeightSubscriptionHandle,
 };
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
@@ -234,7 +234,7 @@ pub fn new_service<OnChain, OffChain>(
     gas_price_provider: GasPriceProvider,
     consensus_parameters_provider: ConsensusProvider,
     memory_pool: SharedMemoryPool,
-    block_height_subscription_handle: BlockHeightSubscriptionHandle,
+    block_height_subscriber_factory: block_height_subscription::Subscriber,
 ) -> anyhow::Result<Service>
 where
     OnChain: AtomicView + 'static,
@@ -294,7 +294,7 @@ where
         .extension(ViewExtension::new())
         // `RequiredFuelBlockHeightExtension` uses the view set by the ViewExtension.
         // Do not reorder this line before adding the `ViewExtension`.
-        .extension(RequiredFuelBlockHeightExtension::new(required_fuel_block_height_tolerance, required_fuel_block_height_min_timeout, block_height_subscription_handle))
+        .extension(RequiredFuelBlockHeightExtension::new(required_fuel_block_height_tolerance, required_fuel_block_height_min_timeout, block_height_subscriber_factory))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";

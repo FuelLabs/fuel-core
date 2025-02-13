@@ -1,6 +1,7 @@
 use self::indexation::error::IndexationError;
 
 use super::{
+    block_height_subscription,
     da_compression::da_compress_block,
     indexation,
     storage::old::{
@@ -103,14 +104,10 @@ use futures::{
     FutureExt,
     StreamExt,
 };
-use parking_lot::Mutex;
 use std::{
     borrow::Cow,
-    collections::BTreeMap,
     ops::Deref,
-    sync::Arc,
 };
-use tokio::sync::oneshot;
 #[cfg(test)]
 mod tests;
 
@@ -131,8 +128,7 @@ pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
     on_chain_database: OnChain,
     off_chain_database: OffChain,
     base_asset_id: AssetId,
-    block_height_subscriptions:
-        Arc<Mutex<BTreeMap<Reverse<BlockHeight>, Vec<oneshot::Sender<BlockHeight>>>>>,
+    block_height_subscription_handler: block_height_subscription::Handler,
 }
 
 /// The off-chain GraphQL API worker task processes the imported blocks
@@ -148,8 +144,7 @@ pub struct Task<TxPool, D> {
     coins_to_spend_indexation_enabled: bool,
     asset_metadata_indexation_enabled: bool,
     base_asset_id: AssetId,
-    block_height_subscriptions:
-        Arc<Mutex<BTreeMap<Reverse<BlockHeight>, Vec<oneshot::Sender<BlockHeight>>>>>,
+    block_height_subscription_handler: block_height_subscription::Handler,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -206,20 +201,11 @@ where
             self.tx_pool.send_complete(tx_id, height, status);
         }
 
+        // Notify subscribers and update last seen block height
+        self.block_height_subscription_handler
+            .notify_and_update(*height);
         // Get all the subscribers that need to be notified that the block height
         // has been reached.
-        let notifiable_block_height_subcribers = self
-            .block_height_subscriptions
-            .lock()
-            .split_off(&Reverse(*height));
-        let notifiable_block_height_subcribers =
-            notifiable_block_height_subcribers.into_values().flatten();
-
-        for subscriber in notifiable_block_height_subcribers {
-            if let Err(e) = subscriber.send(*height) {
-                tracing::error!("Failed to notify subscriber to block height: {}", e);
-            }
-        }
 
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
@@ -560,56 +546,6 @@ where
     Ok(())
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-struct Reverse<T>(T);
-
-impl<T> PartialOrd<Reverse<T>> for Reverse<T>
-where
-    T: PartialOrd,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        other.0.partial_cmp(&self.0)
-    }
-}
-
-impl<T> Ord for Reverse<T>
-where
-    T: Ord,
-{
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.0.cmp(&self.0)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct BlockHeightSubscriptionHandle {
-    // We use Reverse<BlockHeight> as the map key to take advantage of BTreeMap::split_off.
-    // This way we can easily remove all the subscribers that need to be notified that the block height
-    // has been reached, while keeping the others in the map.
-    handlers_map:
-        Arc<Mutex<BTreeMap<Reverse<BlockHeight>, Vec<oneshot::Sender<BlockHeight>>>>>,
-}
-
-impl BlockHeightSubscriptionHandle {
-    // TODO: Would be better to split initialization and execution.
-    // But in this case it does not matter, as we have no
-    pub async fn wait_for_block_height(
-        &self,
-        height: BlockHeight,
-    ) -> anyhow::Result<BlockHeight> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        {
-            let mut handlers_map = self.handlers_map.lock();
-            let handlers = handlers_map.entry(Reverse(height)).or_default();
-            handlers.push(tx);
-            // Drop the lock guard before we await to avoid deadlocks
-        }
-
-        let block_height = rx.await?;
-        Ok(block_height)
-    }
-}
-
 #[async_trait::async_trait]
 impl<TxPool, BlockImporter, OnChain, OffChain> RunnableService
     for InitializeTask<TxPool, BlockImporter, OnChain, OffChain>
@@ -620,13 +556,12 @@ where
     OffChain: ports::worker::OffChainDatabase,
 {
     const NAME: &'static str = "GraphQL_Off_Chain_Worker";
-    type SharedData = BlockHeightSubscriptionHandle;
+    type SharedData = block_height_subscription::Subscriber;
     type Task = Task<TxPool, OffChain>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        let handlers_map = Arc::new(Mutex::new(BTreeMap::new()));
-        BlockHeightSubscriptionHandle { handlers_map }
+        self.block_height_subscription_handler.subscribe()
     }
 
     async fn into_task(
@@ -669,7 +604,7 @@ where
             off_chain_database,
             continue_on_error,
             base_asset_id,
-            block_height_subscriptions,
+            block_height_subscription_handler,
         } = self;
 
         let mut task = Task {
@@ -683,7 +618,7 @@ where
             coins_to_spend_indexation_enabled,
             asset_metadata_indexation_enabled,
             base_asset_id,
-            block_height_subscriptions,
+            block_height_subscription_handler,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;
@@ -819,6 +754,8 @@ where
         continue_on_error,
         base_asset_id: *consensus_parameters.base_asset_id(),
         // TODO: Should we recover the block height from the DB?
-        block_height_subscriptions: Arc::new(Mutex::new(BTreeMap::new())),
+        block_height_subscription_handler: block_height_subscription::Handler::new(
+            0.into(),
+        ),
     })
 }
