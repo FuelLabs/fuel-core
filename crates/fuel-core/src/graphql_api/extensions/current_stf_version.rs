@@ -41,11 +41,18 @@ impl Extension for CurrentStfVersionExtension {
         // - state_transition_bytecode_version lives in the BlockProducer
         // - all versions are stored in StateTransitionBytecodeVersions DB
         // - can be obtained by calling latest_state_transition_bytecode_version()
+        //      - but this goes to DB, which can be slow
         // - the value is updated in the following places:
         //      - fn process_upgrade_transaction() - with fraud proofs enabled only
         //      - fn execute_genesis_block()
         //      - fn set_state_transition_bytecode() in vm_storage
-        // - the way to go is to notify the extension about the changes?
+        //
+        // Possible ways to go:
+        // 1) the way to go is to notify the extension about the changes and the extension will
+        //    store the current version internally
+        // 2) store the latest STF version in the `SharedState` - similarly to the latest consensus parameters
+        // 3) just read from DB every time, relying on fast subsequent reads from RocksDB - see the conversation
+        //    here: https://github.com/FuelLabs/fuel-core/pull/2463#discussion_r1882728054
 
         let current_stf_version = 2137;
 
