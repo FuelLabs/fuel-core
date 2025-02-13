@@ -11,10 +11,10 @@ use std::{
 pub mod api_service;
 pub mod da_compression;
 pub mod database;
+pub(crate) mod extensions;
 pub(crate) mod indexation;
 pub(crate) mod metrics_extension;
 pub mod ports;
-pub(crate) mod extensions;
 pub mod storage;
 pub(crate) mod validation_extension;
 pub(crate) mod view_extension;

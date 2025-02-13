@@ -30,6 +30,8 @@ mod fee_collection_contract;
 #[cfg(not(feature = "only-p2p"))]
 mod gas_price;
 #[cfg(not(feature = "only-p2p"))]
+mod graphql_extensions;
+#[cfg(not(feature = "only-p2p"))]
 mod health;
 #[cfg(not(feature = "only-p2p"))]
 mod helpers;
