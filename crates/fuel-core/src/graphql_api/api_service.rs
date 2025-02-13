@@ -12,7 +12,6 @@ use crate::{
             TxPoolPort,
         },
         validation_extension::ValidationExtension,
-        view_extension::ViewExtension,
         Config,
     },
     graphql_api::{
@@ -291,10 +290,11 @@ where
             max_queries_resolver_recursive_depth,
         ))
         .extension(async_graphql::extensions::Tracing)
-        .extension(ViewExtension::new())
-        // `RequiredFuelBlockHeightExtension` uses the view set by the ViewExtension.
-        // Do not reorder this line before adding the `ViewExtension`.
-        .extension(RequiredFuelBlockHeightExtension::new(required_fuel_block_height_tolerance, required_fuel_block_height_min_timeout, block_height_subscriber_factory))
+        .extension(RequiredFuelBlockHeightExtension::new(
+            required_fuel_block_height_tolerance,
+            required_fuel_block_height_min_timeout,
+            block_height_subscriber_factory,
+        ))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";
