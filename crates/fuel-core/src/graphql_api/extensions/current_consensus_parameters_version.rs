@@ -14,7 +14,7 @@ use async_graphql::{
 
 const CURRENT_CONSENSUS_PARAMETERS_VERSION: &str = "current_consensus_parameters_version";
 
-/// The extension to attach the current STF version to all responses.
+/// The extension to attach the current consensus parameters version to all responses.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub(crate) struct CurrentConsensusParametersVersionExtension;
 impl CurrentConsensusParametersVersionExtension {
