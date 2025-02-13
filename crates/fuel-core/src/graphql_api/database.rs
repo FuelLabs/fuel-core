@@ -171,7 +171,7 @@ impl ReadDatabase {
             batch_size: self.batch_size,
             genesis_height: self.genesis_height,
             on_chain: self.on_chain.latest_view()?,
-             off_chain: self.off_chain.latest_view()?,
+            off_chain: self.off_chain.latest_view()?,
             indexation_flags: self.indexation_flags.clone(),
         })
     }
