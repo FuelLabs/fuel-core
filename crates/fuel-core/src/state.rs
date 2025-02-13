@@ -12,7 +12,7 @@ use fuel_core_storage::{
         IterableStore,
     },
     kv_store::StorageColumn,
-    transactional::Changes,
+    transactional::StorageChanges,
     Result as StorageResult,
 };
 use std::fmt::Debug;
@@ -57,7 +57,7 @@ pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
     fn commit_changes(
         &self,
         height: Option<Height>,
-        changes: Changes,
+        changes: StorageChanges,
     ) -> StorageResult<()>;
 
     fn view_at_height(
@@ -77,7 +77,7 @@ impl<Height, S> TransactableStorage<Height>
 where
     S: IterableStore + Debug + Send + Sync,
 {
-    fn commit_changes(&self, _: Option<Height>, _: Changes) -> StorageResult<()> {
+    fn commit_changes(&self, _: Option<Height>, _: StorageChanges) -> StorageResult<()> {
         unimplemented!()
     }
 

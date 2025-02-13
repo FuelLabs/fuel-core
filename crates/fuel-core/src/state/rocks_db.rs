@@ -27,7 +27,10 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    transactional::Changes,
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
     Error as StorageError,
     Result as StorageResult,
 };
@@ -968,10 +971,34 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn commit_changes(&self, changes: &Changes) -> StorageResult<()> {
+    pub fn commit_changes(&self, changes: &StorageChanges) -> StorageResult<()> {
         let instant = std::time::Instant::now();
         let mut batch = WriteBatch::default();
 
+        match changes {
+            StorageChanges::Changes(changes) => {
+                self._populate_batch(&mut batch, changes);
+            }
+            StorageChanges::ChangesList(changes_list) => {
+                for changes in changes_list {
+                    self._populate_batch(&mut batch, changes);
+                }
+            }
+        }
+
+        self.db
+            .write(batch)
+            .map_err(|e| DatabaseError::Other(e.into()))?;
+        // TODO: Use `u128` when `AtomicU128` is stable.
+        self.metrics.database_commit_time.inc_by(
+            u64::try_from(instant.elapsed().as_nanos())
+                .expect("The commit shouldn't take longer than `u64`"),
+        );
+
+        Ok(())
+    }
+
+    fn _populate_batch(&self, batch: &mut WriteBatch, changes: &Changes) {
         for (column, ops) in changes {
             let cf = self.cf_u32(*column);
             let column_metrics = self.metrics.columns_write_statistic.get(column);
@@ -989,17 +1016,6 @@ where
                 }
             }
         }
-
-        self.db
-            .write(batch)
-            .map_err(|e| DatabaseError::Other(e.into()))?;
-        // TODO: Use `u128` when `AtomicU128` is stable.
-        self.metrics.database_commit_time.inc_by(
-            u64::try_from(instant.elapsed().as_nanos())
-                .expect("The commit shouldn't take longer than `u64`"),
-        );
-
-        Ok(())
     }
 }
 
@@ -1035,7 +1051,7 @@ pub mod test_helpers {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(&changes)?;
+            self.commit_changes(&StorageChanges::Changes(changes))?;
 
             Ok(len)
         }
@@ -1044,7 +1060,7 @@ pub mod test_helpers {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(&changes)?;
+            self.commit_changes(&StorageChanges::Changes(changes))?;
             Ok(())
         }
     }
@@ -1166,7 +1182,8 @@ mod tests {
             )]),
         )];
 
-        db.commit_changes(&HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(&StorageChanges::Changes(HashMap::from_iter(ops)))
+            .unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
@@ -1182,7 +1199,8 @@ mod tests {
             Column::Metadata.id(),
             BTreeMap::from_iter(vec![(key.clone().into(), WriteOperation::Remove)]),
         )];
-        db.commit_changes(&HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(&StorageChanges::Changes(HashMap::from_iter(ops)))
+            .unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }
