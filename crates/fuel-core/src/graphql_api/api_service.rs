@@ -17,7 +17,10 @@ use crate::{
     },
     graphql_api::{
         self,
-        extensions::required_fuel_block_height::RequiredFuelBlockHeightExtension,
+        extensions::{
+            current_stf_version::CurrentStfVersionExtension,
+            required_fuel_block_height::RequiredFuelBlockHeightExtension,
+        },
     },
     schema::{
         CoreSchema,
@@ -287,6 +290,7 @@ where
         // `RequiredFuelBlockHeightExtension` uses the view set by the ViewExtension.
         // Do not reorder this line before adding the `ViewExtension`.
         .extension(RequiredFuelBlockHeightExtension::new())
+        .extension(CurrentStfVersionExtension::new())
         .finish();
 
     let graphql_endpoint = "/v1/graphql";
