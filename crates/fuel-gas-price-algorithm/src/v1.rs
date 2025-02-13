@@ -478,13 +478,24 @@ impl AlgorithmUpdaterV1 {
                 let change_amount = self.exec_change(scaled_exec_gas_price);
                 scaled_exec_gas_price =
                     scaled_exec_gas_price.saturating_add(change_amount);
+                // tracing::info!(
+                //     "Fullness: {}%, increasing exec gas price to {}",
+                //     fullness_percent,
+                //     scaled_exec_gas_price
+                // );
             }
             std::cmp::Ordering::Less => {
                 let change_amount = self.exec_change(scaled_exec_gas_price);
                 scaled_exec_gas_price =
                     scaled_exec_gas_price.saturating_sub(change_amount);
+                // tracing::info!(
+                //     "Fullness: {}%, decreasing exec gas price to {}",
+                //     fullness_percent,
+                //     scaled_exec_gas_price
+                // );
             }
         }
+
         self.new_scaled_exec_price =
             max(self.min_scaled_exec_gas_price(), scaled_exec_gas_price);
     }
@@ -568,13 +579,15 @@ impl AlgorithmUpdaterV1 {
         checked_d.unwrap_or(0).saturating_mul(-1)
     }
 
+    #[allow(clippy::let_and_return)]
     fn da_change(&self, p: i128, d: i128) -> i128 {
         let scaled_pd_change = p
             .saturating_add(d)
             .saturating_mul(self.gas_price_factor.get() as i128);
-        let max_change = self.max_change();
-        let clamped_change = scaled_pd_change.saturating_abs().min(max_change);
-        scaled_pd_change.signum().saturating_mul(clamped_change)
+        // let max_change = self.max_change();
+        // let clamped_change = scaled_pd_change.saturating_abs().min(max_change);
+        // scaled_pd_change.signum().saturating_mul(clamped_change)
+        scaled_pd_change
     }
 
     // Should always be positive
