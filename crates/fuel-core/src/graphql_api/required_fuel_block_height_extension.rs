@@ -1,5 +1,8 @@
 use super::{
-    database::ReadView,
+    database::{
+        ReadDatabase,
+        ReadView,
+    },
     worker_service::BlockHeightSubscriptionHandle,
 };
 
@@ -172,7 +175,7 @@ impl Extension for RequiredFuelBlockHeightInner {
                 }),
             )]);
         };
-        let awaited_block_height = match self.required_height.get() {
+        let _awaited_block_height = match self.required_height.get() {
             None => current_block_height,
             Some(required_block_height) => {
                 match BlockHeightComparison::from_block_heights(
@@ -224,7 +227,34 @@ impl Extension for RequiredFuelBlockHeightInner {
 
         let mut response = next.run(ctx, operation_name).await;
 
-        let current_block_height = awaited_block_height;
+        let database: &ReadDatabase = ctx.data_unchecked();
+        let view = match database.view() {
+            Ok(view) => view,
+            Err(e) => {
+                let (line, column) = (line!(), column!());
+                return Response::from_errors(vec![ServerError::new(
+                    e.to_string(),
+                    Some(Pos {
+                        line: line as usize,
+                        column: column as usize,
+                    }),
+                )]);
+            }
+        };
+        let current_block_height = match view.latest_block_height() {
+            Ok(height) => height,
+            Err(e) => {
+                let (line, column) = (line!(), column!());
+                return Response::from_errors(vec![ServerError::new(
+                    e.to_string(),
+                    Some(Pos {
+                        line: line as usize,
+                        column: column as usize,
+                    }),
+                )]);
+            }
+        };
+        // Dereference to display the value in decimal base.
         let current_block_height: u32 = *current_block_height;
         response.extensions.insert(
             CURRENT_FUEL_BLOCK_HEIGHT.to_string(),

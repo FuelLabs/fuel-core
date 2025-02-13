@@ -11,7 +11,6 @@ use async_graphql::{
         Edge,
         EmptyFields,
     },
-    parser::types::OperationType,
     Context,
     MergedObject,
     MergedSubscription,
