@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.41.7]
+
 ### Fixed
 - [2710](https://github.com/FuelLabs/fuel-core/pull/2710): Update Fuel-VM to fix compressed transaction backward compatibility.
 
