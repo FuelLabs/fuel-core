@@ -455,9 +455,7 @@ pub trait ConsensusProvider: Send + Sync {
     fn latest_consensus_params(&self) -> Arc<ConsensusParameters>;
 
     /// Returns latest consensus parameters with version.
-    fn latest_consensus_parameters_with_version(
-        &self,
-    ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>);
+    fn latest_consensus_parameters_version(&self) -> ConsensusParametersVersion;
 
     fn consensus_params_at_version(
         &self,

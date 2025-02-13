@@ -39,8 +39,8 @@ impl Extension for CurrentConsensusParametersVersionExtension {
     ) -> Response {
         let consensus_parameters_provider = ctx.data_unchecked::<ConsensusProvider>();
 
-        let (current_consensus_parameters_version, _) =
-            consensus_parameters_provider.latest_consensus_parameters_with_version();
+        let current_consensus_parameters_version =
+            consensus_parameters_provider.latest_consensus_parameters_version();
 
         let mut response = next.run(ctx, operation_name).await;
         response.extensions.insert(

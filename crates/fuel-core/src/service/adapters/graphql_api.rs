@@ -192,10 +192,8 @@ impl ConsensusProvider for ConsensusParametersProvider {
         self.shared_state.latest_consensus_parameters()
     }
 
-    fn latest_consensus_parameters_with_version(
-        &self,
-    ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>) {
-        self.shared_state.latest_consensus_parameters_with_version()
+    fn latest_consensus_parameters_version(&self) -> ConsensusParametersVersion {
+        self.shared_state.latest_consensus_parameters_version()
     }
 
     fn consensus_params_at_version(
