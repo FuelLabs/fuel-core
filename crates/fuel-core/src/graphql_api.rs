@@ -9,6 +9,7 @@ use std::{
 };
 
 pub mod api_service;
+pub mod block_height_subscription;
 pub mod da_compression;
 pub mod database;
 pub(crate) mod indexation;
