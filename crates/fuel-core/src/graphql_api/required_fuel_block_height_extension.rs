@@ -1,9 +1,6 @@
 use super::{
     block_height_subscription,
-    database::{
-        ReadDatabase,
-        ReadView,
-    },
+    database::ReadDatabase,
 };
 
 use async_graphql::{
@@ -159,23 +156,10 @@ impl Extension for RequiredFuelBlockHeightInner {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/2713.
-        // Should we really need to fetch a view here, or can we just recover
-        // the current block height from the offchain worker via the block
-        // height subscription handle?
-        let view: &ReadView = ctx.data_unchecked();
-
-        let Ok(current_block_height) = view.latest_block_height() else {
-            let (line, column) = (line!(), column!());
-            return Response::from_errors(vec![ServerError::new(
-                "Internal server error while fetching the current block height",
-                Some(Pos {
-                    line: line as usize,
-                    column: column as usize,
-                }),
-            )]);
-        };
         if let Some(required_block_height) = self.required_height.get() {
+            let current_block_height =
+                self.block_height_subscriber.latest_seen_block_height();
+
             match BlockHeightComparison::from_block_heights(
                 &required_block_height,
                 &current_block_height,
