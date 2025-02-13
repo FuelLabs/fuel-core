@@ -15,7 +15,10 @@ use crate::{
         view_extension::ViewExtension,
         Config,
     },
-    graphql_api,
+    graphql_api::{
+        self,
+        required_fuel_block_height_extension::RequiredFuelBlockHeightExtension,
+    },
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -281,6 +284,9 @@ where
         ))
         .extension(async_graphql::extensions::Tracing)
         .extension(ViewExtension::new())
+        // `RequiredFuelBlockHeightExtension` uses the view set by the ViewExtension.
+        // Do not reorder this line before adding the `ViewExtension`.
+        .extension(RequiredFuelBlockHeightExtension::new())
         .finish();
 
     let graphql_endpoint = "/v1/graphql";
