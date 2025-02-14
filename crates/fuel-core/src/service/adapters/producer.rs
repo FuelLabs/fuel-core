@@ -52,7 +52,6 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_tx::{
-        self,
         ConsensusParameters,
         Transaction,
     },
@@ -236,10 +235,19 @@ impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableKeyValu
             .ok_or(not_found!(FuelBlocks))
     }
 
-    fn get_transaction(&self, id: &fuel_tx::TxId) -> StorageResult<Cow<Transaction>> {
-        self.storage::<Transactions>()
-            .get(id)?
-            .ok_or(not_found!(Transactions))
+    fn get_full_block(&self, height: &BlockHeight) -> StorageResult<Block> {
+        let block = self.get_block(height)?;
+        let transactions = block
+            .transactions()
+            .iter()
+            .map(|id| {
+                self.storage::<Transactions>()
+                    .get(id)?
+                    .ok_or(not_found!(Transactions))
+                    .map(|tx| tx.into_owned())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(block.into_owned().uncompress(transactions))
     }
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
