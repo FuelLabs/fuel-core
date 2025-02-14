@@ -9760,6 +9760,7 @@ dependencies = [
  "itertools 0.12.1",
  "rand",
  "reqwest 0.12.12",
+ "serde_json",
  "tempfile",
  "tokio",
 ]

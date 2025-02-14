@@ -1,6 +1,5 @@
 use fuel_core_client::client::types::TransactionStatus;
 use fuel_core_types::{
-    fuel_asm::op,
     fuel_tx::{
         policies::Policies,
         AssetId,
@@ -21,16 +20,15 @@ use rand::{
     rngs::StdRng,
     Rng,
 };
-use test_helpers::builder::{
-    TestContext,
-    TestSetupBuilder,
+use test_helpers::{
+    builder::{
+        TestContext,
+        TestSetupBuilder,
+    },
+    predicate,
 };
 
 const SUBSECTION_SIZE: usize = 64 * 1024;
-
-fn predicate() -> Vec<u8> {
-    vec![op::ret(1)].into_iter().collect::<Vec<u8>>()
-}
 
 fn valid_input(rng: &mut StdRng, amount: u64) -> Input {
     let owner = Input::predicate_owner(predicate());
