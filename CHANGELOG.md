@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [2150](https://github.com/FuelLabs/fuel-core/pull/2150): Upgraded `libp2p` to `0.54.1` and introduced `ConnectionLimiter` to limit pending incoming/outgoing connections.
-- [2666](https://github.com/FuelLabs/fuel-core/pull/2666) Added `--graphql-block-height-tolerance` (default: `10`) and `--graphql-block-height-min-timeout-secs` (default: `30`) CLI args. Requests with `required_fuel_block_height` set will wait if within tolerance of `current_fuel_block_height` instead of failing. The number of seconds that the node will wait is proportional to the number of blocks `lag-behind-blocks` that the node is lagging behind the required fuel block height, and equal to `graphql-block-height-min-timeout-secs + lag-behind-blocks.
+- [2666](https://github.com/FuelLabs/fuel-core/pull/2666): Added two new CLI arguments to control the GraphQL queries consistency: `--graphql-block-height-tolerance` (default: `10`) and `--graphql-block-height-min-timeout` (default: `30s`). If a request requires a specific block height and the node is slightly behind, it will wait instead of failing. The wait time increases with the block lag, starting at the minimum timeout.
 
 ### Fixed
 - [2646](https://github.com/FuelLabs/fuel-core/pull/2646): Improved performance of fetching block height by caching it when the view is created.
