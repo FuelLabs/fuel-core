@@ -9,7 +9,6 @@ use parking_lot::RwLock;
 use tokio::sync::oneshot;
 
 #[derive(Default)]
-
 pub struct Handler {
     inner: Arc<RwLock<HandlersMapInner>>,
 }
