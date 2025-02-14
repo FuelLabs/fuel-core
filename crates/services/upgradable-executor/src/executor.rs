@@ -171,7 +171,10 @@ impl<S, R> Executor<S, R> {
         ("0-40-2", 18),
         ("0-41-4", 19),
         ("0-41-5", 20),
-        ("0-41-6", LATEST_STATE_TRANSITION_VERSION),
+        ("0-41-6", 21),
+        // This update has been performed on the branch release/v0.41.7 which
+        // is on top of the branch release/v0.41.6 not on master.
+        ("0-41-7", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
