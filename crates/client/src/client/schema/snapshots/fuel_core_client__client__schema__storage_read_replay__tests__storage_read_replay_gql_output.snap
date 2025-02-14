@@ -2,7 +2,7 @@
 source: crates/client/src/client/schema/storage_read_replay.rs
 expression: query.query
 ---
-mutation StorageReadReplay($height: U32!) {
+query StorageReadReplay($height: U32!) {
   storageReadReplay(height: $height) {
     column
     key

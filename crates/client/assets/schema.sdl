@@ -762,10 +762,6 @@ type Mutation {
 	"""
 	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]!
 	"""
-	Get execution trace for an already-executed transaction.
-	"""
-	storageReadReplay(height: U32!): [StorageReadReplayEvent!]!
-	"""
 	Submits transaction to the `TxPool`.
 	
 	Returns submitted transaction if the transaction is included in the `TxPool` without problems.
@@ -946,6 +942,10 @@ type Query {
 	Returns all possible receipts for test purposes.
 	"""
 	allReceipts: [Receipt!]!
+	"""
+	Get execution trace for an already-executed block.
+	"""
+	storageReadReplay(height: U32!): [StorageReadReplayEvent!]!
 	"""
 	Returns true when the GraphQL API is serving requests.
 	"""

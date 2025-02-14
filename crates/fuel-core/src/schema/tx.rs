@@ -278,6 +278,31 @@ impl TxQuery {
             .map(Into::into)
             .collect()
     }
+
+    /// Get execution trace for an already-executed block.
+    #[graphql(complexity = "query_costs().storage_read_replay + child_complexity")]
+    async fn storage_read_replay(
+        &self,
+        ctx: &Context<'_>,
+        height: U32,
+    ) -> async_graphql::Result<Vec<StorageReadReplayEvent>> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+        if !config.historical_execution {
+            return Err(anyhow::anyhow!(
+                "`--historical-execution` is required for this operation"
+            )
+            .into());
+        }
+
+        let block_height = height.into();
+        let block_producer = ctx.data_unchecked::<BlockProducer>();
+        Ok(block_producer
+            .storage_read_replay(block_height)
+            .await?
+            .into_iter()
+            .map(StorageReadReplayEvent::from)
+            .collect())
+    }
 }
 
 #[derive(Default)]
@@ -345,31 +370,6 @@ impl TxMutation {
             .collect();
 
         Ok(tx_statuses)
-    }
-
-    /// Get execution trace for an already-executed block.
-    #[graphql(complexity = "query_costs().storage_read_replay + child_complexity")]
-    async fn storage_read_replay(
-        &self,
-        ctx: &Context<'_>,
-        height: U32,
-    ) -> async_graphql::Result<Vec<StorageReadReplayEvent>> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
-        if !config.historical_execution {
-            return Err(anyhow::anyhow!(
-                "`--historical-execution` is required for this operation"
-            )
-            .into());
-        }
-
-        let block_height = height.into();
-        let block_producer = ctx.data_unchecked::<BlockProducer>();
-        Ok(block_producer
-            .storage_read_replay(block_height)
-            .await?
-            .into_iter()
-            .map(StorageReadReplayEvent::from)
-            .collect())
     }
 
     /// Submits transaction to the `TxPool`.

@@ -23,8 +23,6 @@ impl From<StorageReadReplayEvent>
     }
 }
 
-// mutations
-
 #[derive(cynic::QueryVariables, Debug)]
 pub struct StorageReadReplayArgs {
     pub height: U32,
@@ -34,7 +32,7 @@ pub struct StorageReadReplayArgs {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
-    graphql_type = "Mutation",
+    graphql_type = "Query",
     variables = "StorageReadReplayArgs"
 )]
 pub struct StorageReadReplay {
@@ -49,7 +47,7 @@ pub mod tests {
 
     #[test]
     fn storage_read_replay_gql_output() {
-        use cynic::MutationBuilder;
+        use cynic::QueryBuilder;
         let query = StorageReadReplay::build(StorageReadReplayArgs {
             height: BlockHeight::new(1234).into(),
         });
