@@ -9,14 +9,11 @@ use fuel_core_types::fuel_tx::{
     Address,
     AssetId,
     Bytes32,
-    Chargeable,
-    ChargeableTransaction,
     GasCosts,
     Input,
     Transaction,
     UpgradePurpose,
-    UploadBody,
-    UploadMetadata,
+    Upload,
     UploadSubsection,
 };
 use fuel_core_upgradable_executor::WASM_BYTECODE;
@@ -142,13 +139,7 @@ async fn graphql_extensions_should_provide_new_consensus_parameters_version_afte
     assert_eq!(post_upgrade_version, pre_upgrade_version + 1);
 }
 
-fn prepare_upload_transactions(
-    rng: &mut StdRng,
-    amount: u64,
-) -> (
-    Bytes32,
-    Vec<ChargeableTransaction<UploadBody, UploadMetadata>>,
-) {
+fn prepare_upload_transactions(rng: &mut StdRng, amount: u64) -> (Bytes32, Vec<Upload>) {
     const SUBSECTION_SIZE: usize = 64 * 1024;
 
     let subsections =
@@ -163,12 +154,12 @@ async fn upgrade_stf(
     rng: &mut StdRng,
     client: &FuelClient,
     privileged_address: &Address,
-    transactions: &[ChargeableTransaction<UploadBody, UploadMetadata>],
+    transactions: impl Iterator<Item = Upload>,
     amount: u64,
     root: Bytes32,
 ) {
     for upload in transactions {
-        let mut tx = upload.clone().into();
+        let mut tx = upload.into();
         client
             .estimate_predicates(&mut tx)
             .await
@@ -227,17 +218,13 @@ async fn graphql_extensions_should_provide_new_stf_version_after_upgrade() {
         &send_graph_ql_query(&url, QUERY).await,
         EXTENSION_FIELD,
     );
-    dbg!(&pre_upgrade_version);
-
-    let pre_block = client.chain_info().await.unwrap().latest_block;
-    dbg!(&pre_block);
 
     // When
     upgrade_stf(
         &mut rng,
         &client,
         &privileged_address,
-        &transactions,
+        transactions.into_iter(),
         AMOUNT,
         root,
     )
@@ -248,9 +235,5 @@ async fn graphql_extensions_should_provide_new_stf_version_after_upgrade() {
         &send_graph_ql_query(&url, QUERY).await,
         EXTENSION_FIELD,
     );
-    dbg!(&post_upgrade_version);
-
-    let post_block = client.chain_info().await.unwrap().latest_block;
-    dbg!(&post_block);
     assert_eq!(post_upgrade_version, pre_upgrade_version + 1);
 }

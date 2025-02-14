@@ -9,7 +9,6 @@ use fuel_core_types::{
         Receipt,
         Transaction,
         UpgradePurpose,
-        Upload,
         UploadSubsection,
     },
     fuel_vm::UploadedBytecode,

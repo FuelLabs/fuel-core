@@ -37,7 +37,7 @@ pub fn predicate() -> Vec<u8> {
 
 pub fn get_graphql_extension_field_value(result_json: &str, name: &str) -> u64 {
     let json_value: Value =
-        serde_json::from_str(&result_json).expect("should be valid json");
+        serde_json::from_str(result_json).expect("should be valid json");
     let extensions = json_value
         .get("extensions")
         .expect("should have extensions");
