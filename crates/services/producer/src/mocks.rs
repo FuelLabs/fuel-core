@@ -251,11 +251,8 @@ impl BlockProducerDatabase for MockDb {
             .ok_or(not_found!("Didn't find block for test"))
     }
 
-    fn get_transaction(
-        &self,
-        _id: &fuel_core_types::fuel_tx::TxId,
-    ) -> StorageResult<Cow<Transaction>> {
-        todo!();
+    fn get_full_block(&self, _height: &BlockHeight) -> StorageResult<Block> {
+        unimplemented!("Not used by tests");
     }
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
