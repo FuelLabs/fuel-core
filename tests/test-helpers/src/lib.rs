@@ -9,9 +9,14 @@ use fuel_core_types::{
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
+        policies::Policies,
+        AssetId,
+        Input,
         Output,
         Transaction,
         TransactionBuilder,
+        Upload,
+        UploadSubsection,
     },
 };
 use rand::{
@@ -38,6 +43,39 @@ pub fn get_graphql_extension_field_value(result_json: &str, name: &str) -> u64 {
         .expect("should have extensions");
     let field = extensions.get(name).expect("should have field");
     field.as_u64().expect("should be convertible to u64")
+}
+
+pub fn valid_input(rng: &mut StdRng, amount: u64) -> Input {
+    let owner = Input::predicate_owner(predicate());
+    Input::coin_predicate(
+        rng.gen(),
+        owner,
+        amount,
+        AssetId::BASE,
+        Default::default(),
+        Default::default(),
+        predicate(),
+        vec![],
+    )
+}
+
+pub fn transactions_from_subsections(
+    rng: &mut StdRng,
+    subsections: Vec<UploadSubsection>,
+    amount: u64,
+) -> Vec<Upload> {
+    subsections
+        .into_iter()
+        .map(|subsection| {
+            Transaction::upload_from_subsection(
+                subsection,
+                Policies::new().with_max_fee(amount),
+                vec![valid_input(rng, amount)],
+                vec![],
+                vec![],
+            )
+        })
+        .collect()
 }
 
 pub async fn send_graph_ql_query(url: &str, query: &str) -> String {

@@ -26,42 +26,11 @@ use test_helpers::{
         TestSetupBuilder,
     },
     predicate,
+    transactions_from_subsections,
+    valid_input,
 };
 
 const SUBSECTION_SIZE: usize = 64 * 1024;
-
-fn valid_input(rng: &mut StdRng, amount: u64) -> Input {
-    let owner = Input::predicate_owner(predicate());
-    Input::coin_predicate(
-        rng.gen(),
-        owner,
-        amount,
-        AssetId::BASE,
-        Default::default(),
-        Default::default(),
-        predicate(),
-        vec![],
-    )
-}
-
-fn transactions_from_subsections(
-    rng: &mut StdRng,
-    subsections: Vec<UploadSubsection>,
-    amount: u64,
-) -> Vec<Upload> {
-    subsections
-        .into_iter()
-        .map(|subsection| {
-            Transaction::upload_from_subsection(
-                subsection,
-                Policies::new().with_max_fee(amount),
-                vec![valid_input(rng, amount)],
-                vec![],
-                vec![],
-            )
-        })
-        .collect_vec()
-}
 
 #[tokio::test]
 async fn can_upload_current_state_transition_function() {

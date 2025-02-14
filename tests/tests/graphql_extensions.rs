@@ -1,14 +1,26 @@
 use fuel_core::service::Config;
 use fuel_core_bin::FuelService;
-use fuel_core_client::client::FuelClient;
+use fuel_core_client::client::{
+    types::TransactionStatus,
+    FuelClient,
+};
 use fuel_core_types::fuel_tx::{
     policies::Policies,
     Address,
     AssetId,
+    Bytes32,
+    Chargeable,
+    ChargeableTransaction,
     GasCosts,
     Input,
     Transaction,
+    UpgradePurpose,
+    UploadBody,
+    UploadMetadata,
+    UploadSubsection,
 };
+use fuel_core_upgradable_executor::WASM_BYTECODE;
+use itertools::Itertools;
 use rand::{
     rngs::StdRng,
     Rng,
@@ -22,6 +34,7 @@ use test_helpers::{
     get_graphql_extension_field_value,
     predicate,
     send_graph_ql_query,
+    transactions_from_subsections,
 };
 
 const QUERY: &str = r#"
@@ -88,7 +101,6 @@ async fn upgrade_consensus_parameters(
     )
     .unwrap();
 
-    // When
     let mut tx = upgrade.into();
     client.estimate_predicates(&mut tx).await.unwrap();
     client.submit_and_await_commit(&tx).await.unwrap();
@@ -127,5 +139,118 @@ async fn graphql_extensions_should_provide_new_consensus_parameters_version_afte
         EXTENSION_FIELD,
     );
 
+    assert_eq!(post_upgrade_version, pre_upgrade_version + 1);
+}
+
+fn prepare_upload_transactions(
+    rng: &mut StdRng,
+    amount: u64,
+) -> (
+    Bytes32,
+    Vec<ChargeableTransaction<UploadBody, UploadMetadata>>,
+) {
+    const SUBSECTION_SIZE: usize = 64 * 1024;
+
+    let subsections =
+        UploadSubsection::split_bytecode(WASM_BYTECODE, SUBSECTION_SIZE).unwrap();
+    let root = subsections[0].root;
+
+    let transactions = transactions_from_subsections(rng, subsections, amount);
+    (root, transactions)
+}
+
+async fn upgrade_stf(
+    rng: &mut StdRng,
+    client: &FuelClient,
+    privileged_address: &Address,
+    transactions: &[ChargeableTransaction<UploadBody, UploadMetadata>],
+    amount: u64,
+    root: Bytes32,
+) {
+    for upload in transactions {
+        let mut tx = upload.clone().into();
+        client
+            .estimate_predicates(&mut tx)
+            .await
+            .expect("Should estimate transaction");
+        let result = client.submit_and_await_commit(&tx).await;
+        let result = result.expect("We should be able to upload the bytecode subsection");
+        assert!(matches!(result, TransactionStatus::Success { .. }))
+    }
+
+    let upgrade = Transaction::upgrade(
+        UpgradePurpose::StateTransition { root },
+        Policies::new().with_max_fee(amount),
+        vec![Input::coin_predicate(
+            rng.gen(),
+            *privileged_address,
+            amount,
+            AssetId::BASE,
+            Default::default(),
+            Default::default(),
+            predicate(),
+            vec![],
+        )],
+        vec![],
+        vec![],
+    );
+    let mut tx = upgrade.into();
+    client.estimate_predicates(&mut tx).await.unwrap();
+    let result = client.submit_and_await_commit(&tx).await;
+    let result = result.expect("We should be able to upgrade to the uploaded bytecode");
+    assert!(matches!(result, TransactionStatus::Success { .. }));
+    client.produce_blocks(1, None).await.unwrap();
+}
+
+#[tokio::test]
+async fn graphql_extensions_should_provide_new_stf_version_after_upgrade() {
+    const AMOUNT: u64 = 1_000;
+    const EXTENSION_FIELD: &str = "current_stf_version";
+
+    let mut test_builder = TestSetupBuilder::new(2322);
+    let privileged_address = Input::predicate_owner(predicate());
+    test_builder.utxo_validation = false;
+    test_builder.privileged_address = privileged_address;
+    let TestContext {
+        client,
+        srv,
+        mut rng,
+        ..
+    } = test_builder.finalize().await;
+    let url = format!("http://{}/v1/graphql", srv.bound_address);
+
+    // Given
+    let (root, transactions) = prepare_upload_transactions(&mut rng, AMOUNT);
+    test_builder.config_coin_inputs_from_transactions(&transactions.iter().collect_vec());
+
+    let pre_upgrade_version = get_graphql_extension_field_value(
+        &send_graph_ql_query(&url, QUERY).await,
+        EXTENSION_FIELD,
+    );
+    dbg!(&pre_upgrade_version);
+
+    let pre_block = client.chain_info().await.unwrap().latest_block;
+    dbg!(&pre_block);
+
+    // When
+    upgrade_stf(
+        &mut rng,
+        &client,
+        &privileged_address,
+        &transactions,
+        AMOUNT,
+        root,
+    )
+    .await;
+
+    // Then
+    let post_upgrade_version = get_graphql_extension_field_value(
+        &send_graph_ql_query(&url, QUERY).await,
+        EXTENSION_FIELD,
+    );
+    dbg!(&post_upgrade_version);
+
+    let post_block = client.chain_info().await.unwrap().latest_block;
+    dbg!(&post_block);
     assert_eq!(post_upgrade_version, pre_upgrade_version + 1);
 }
