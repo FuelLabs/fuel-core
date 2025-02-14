@@ -49,10 +49,9 @@ pub struct ServiceConfig {
     /// Number of blocks that the node can be lagging behind the required fuel block height
     /// before it will be considered out of sync.
     pub required_fuel_block_height_tolerance: u32,
-    /// Minimum time to wait before dropping the request if the node is lagging behind the required
-    /// fuel block height. The actual timeout in seconds is `required_fuel_block_height_min_timeout + lag`,
-    /// where `lag` is the number of blocks the node is lagging behind the required fuel block height.
-    pub required_fuel_block_height_min_timeout: Duration,
+    /// The time to wait before dropping the request if the node is lagging behind the required
+    /// fuel block height.
+    pub required_fuel_block_height_timeout: Duration,
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
     pub api_request_timeout: Duration,

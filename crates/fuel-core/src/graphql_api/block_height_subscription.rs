@@ -1,33 +1,12 @@
 use std::{
+    cmp::Reverse,
     collections::BTreeMap,
     sync::Arc,
 };
 
 use fuel_core_types::fuel_types::BlockHeight;
 use parking_lot::RwLock;
-use std::future::IntoFuture;
 use tokio::sync::oneshot;
-
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-struct Reverse<T>(T);
-
-impl<T> PartialOrd<Reverse<T>> for Reverse<T>
-where
-    T: PartialOrd,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        other.0.partial_cmp(&self.0)
-    }
-}
-
-impl<T> Ord for Reverse<T>
-where
-    T: Ord,
-{
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.0.cmp(&self.0)
-    }
-}
 
 #[derive(Default)]
 
@@ -62,7 +41,7 @@ impl Handler {
 
         for tx in to_notify {
             if let Err(e) = tx.send(()) {
-                tracing::error!("Failed to notify block height subscriber: {:?}", e);
+                tracing::warn!("Failed to notify block height subscriber: {:?}", e);
             }
         }
     }
@@ -74,15 +53,29 @@ pub struct Subscriber {
 }
 
 impl Subscriber {
-    pub fn wait_for_block_height(&self, block_height: BlockHeight) -> Handle {
-        let (tx, rx) = oneshot::channel();
-        let mut inner_map = self.inner.write();
-        let handlers = inner_map
-            .tx_handles
-            .entry(Reverse(block_height))
-            .or_default();
-        handlers.push(tx);
-        Handle { rx }
+    pub async fn wait_for_block_height(
+        &self,
+        block_height: BlockHeight,
+    ) -> anyhow::Result<()> {
+        let future = {
+            let mut inner_map = self.inner.write();
+
+            if inner_map.latest_seen_block_height >= block_height {
+                return Ok(());
+            }
+
+            let (tx, rx) = oneshot::channel();
+            let handlers = inner_map
+                .tx_handles
+                .entry(Reverse(block_height))
+                .or_default();
+            handlers.push(tx);
+            rx
+        };
+
+        future.await.map_err(|e| {
+            anyhow::anyhow!("The block height subscription channel was closed: {:?}", e)
+        })
     }
 
     pub fn latest_seen_block_height(&self) -> BlockHeight {
@@ -102,20 +95,5 @@ impl HandlersMapInner {
             tx_handles: BTreeMap::new(),
             latest_seen_block_height,
         }
-    }
-}
-
-pub struct Handle {
-    rx: oneshot::Receiver<()>,
-}
-
-impl IntoFuture for Handle {
-    // TODO: Change error type and do not leak receiver abstraction
-    type Output = Result<(), oneshot::error::RecvError>;
-
-    type IntoFuture = oneshot::Receiver<()>;
-
-    fn into_future(self) -> Self::IntoFuture {
-        self.rx
     }
 }

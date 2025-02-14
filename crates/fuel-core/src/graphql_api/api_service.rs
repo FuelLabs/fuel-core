@@ -266,8 +266,8 @@ where
     let number_of_threads = config.config.number_of_threads;
     let required_fuel_block_height_tolerance =
         config.config.required_fuel_block_height_tolerance;
-    let required_fuel_block_height_min_timeout =
-        config.config.required_fuel_block_height_min_timeout;
+    let required_fuel_block_height_timeout =
+        config.config.required_fuel_block_height_timeout;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)
@@ -292,7 +292,7 @@ where
         .extension(async_graphql::extensions::Tracing)
         .extension(RequiredFuelBlockHeightExtension::new(
             required_fuel_block_height_tolerance,
-            required_fuel_block_height_min_timeout,
+            required_fuel_block_height_timeout,
             block_height_subscriber_factory,
         ))
         .finish();

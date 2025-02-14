@@ -336,7 +336,7 @@ pub fn init_sub_services(
         config.da_compression.clone(),
         config.continue_on_error,
         &chain_config.consensus_parameters,
-    );
+    )?;
 
     let graphql_block_height_subscription_handle = graphql_worker.shared.clone();
 

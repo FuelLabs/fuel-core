@@ -736,14 +736,16 @@ pub fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
     consensus_parameters: &ConsensusParameters,
-) -> ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>
+) -> anyhow::Result<ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>>
 where
     TxPool: ports::worker::TxPool,
     OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
     BlockImporter: ports::worker::BlockImporter,
 {
-    ServiceRunner::new(InitializeTask {
+    let off_chain_block_height = off_chain_database.latest_height()?.unwrap_or_default();
+
+    let service = ServiceRunner::new(InitializeTask {
         tx_pool,
         blocks_events: block_importer.block_events(),
         block_importer,
@@ -753,9 +755,10 @@ where
         da_compression_config,
         continue_on_error,
         base_asset_id: *consensus_parameters.base_asset_id(),
-        // TODO: Should we recover the block height from the DB?
         block_height_subscription_handler: block_height_subscription::Handler::new(
-            0.into(),
+            off_chain_block_height,
         ),
-    })
+    });
+
+    Ok(service)
 }

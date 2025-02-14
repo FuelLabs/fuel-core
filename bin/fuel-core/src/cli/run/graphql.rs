@@ -76,15 +76,14 @@ pub struct GraphQLArgs {
     )]
     pub required_fuel_block_height_tolerance: u32,
 
-    /// The minimum time that the node will wait to catch up to the required block height
-    /// of a graphql request. The actual time may be longer and proportional to how
-    /// much the node is behind the required block height.
+    /// The time that the node will wait to catch up to the required block height
+    /// of a graphql request.
     #[clap(
         long = "graphql-required-block-height-min-timeout-seconds",
-        default_value = "10",
+        default_value = "30s",
         env
     )]
-    pub required_fuel_block_height_min_timeout: u32,
+    pub required_fuel_block_height_timeout: humantime::Duration,
 
     #[clap(flatten)]
     pub costs: QueryCosts,

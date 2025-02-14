@@ -1,7 +1,4 @@
-use super::{
-    block_height_subscription,
-    database::ReadDatabase,
-};
+use super::block_height_subscription;
 
 use async_graphql::{
     extensions::{
@@ -44,13 +41,13 @@ const FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED: &str =
 )]
 pub(crate) struct RequiredFuelBlockHeightExtension {
     tolerance_threshold: u32,
-    min_timeout: Duration,
+    timeout: Duration,
     block_height_subscriber: block_height_subscription::Subscriber,
 }
 
 enum BlockHeightComparison {
     TooFarBehind,
-    WithinTolerance(u32),
+    WithinTolerance,
     Ahead,
 }
 
@@ -60,14 +57,12 @@ impl BlockHeightComparison {
         current_block_height: &BlockHeight,
         tolerance_threshold: u32,
     ) -> Self {
-        if **current_block_height
-            < required_block_height.saturating_sub(tolerance_threshold)
+        if current_block_height.saturating_add(tolerance_threshold)
+            < **required_block_height
         {
             BlockHeightComparison::TooFarBehind
         } else if current_block_height < required_block_height {
-            BlockHeightComparison::WithinTolerance(
-                required_block_height.saturating_sub(**current_block_height),
-            )
+            BlockHeightComparison::WithinTolerance
         } else {
             BlockHeightComparison::Ahead
         }
@@ -77,13 +72,12 @@ impl BlockHeightComparison {
 impl RequiredFuelBlockHeightExtension {
     pub fn new(
         tolerance_threshold: u32,
-        min_timeout: Duration,
+        timeout: Duration,
         block_height_subscriber: block_height_subscription::Subscriber,
     ) -> Self {
         Self {
             tolerance_threshold,
-            // : make it configurable
-            min_timeout,
+            timeout,
             block_height_subscriber,
         }
     }
@@ -92,20 +86,20 @@ impl RequiredFuelBlockHeightExtension {
 pub(crate) struct RequiredFuelBlockHeightInner {
     required_height: OnceLock<BlockHeight>,
     tolerance_threshold: u32,
-    min_timeout: Duration,
+    timeout: Duration,
     block_height_subscriber: block_height_subscription::Subscriber,
 }
 
 impl RequiredFuelBlockHeightInner {
     pub fn new(
         tolerance_threshold: u32,
-        min_timeout: Duration,
+        timeout: Duration,
         block_height_subscriber: &block_height_subscription::Subscriber,
     ) -> Self {
         Self {
             required_height: OnceLock::new(),
             tolerance_threshold,
-            min_timeout,
+            timeout,
             block_height_subscriber: block_height_subscriber.clone(),
         }
     }
@@ -115,7 +109,7 @@ impl ExtensionFactory for RequiredFuelBlockHeightExtension {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(RequiredFuelBlockHeightInner::new(
             self.tolerance_threshold,
-            self.min_timeout,
+            self.timeout,
             &self.block_height_subscriber,
         ))
     }
@@ -161,7 +155,7 @@ impl Extension for RequiredFuelBlockHeightInner {
                 self.block_height_subscriber.latest_seen_block_height();
 
             match BlockHeightComparison::from_block_heights(
-                &required_block_height,
+                required_block_height,
                 &current_block_height,
                 self.tolerance_threshold,
             ) {
@@ -174,10 +168,8 @@ impl Extension for RequiredFuelBlockHeightInner {
                         column,
                     );
                 }
-                BlockHeightComparison::WithinTolerance(blocks) => {
-                    let timeout = self
-                        .min_timeout
-                        .saturating_add(Duration::from_secs(blocks.into()));
+                BlockHeightComparison::WithinTolerance => {
+                    let timeout = self.timeout;
                     match await_block_height(
                         &self.block_height_subscriber,
                         required_block_height,
@@ -208,33 +200,8 @@ impl Extension for RequiredFuelBlockHeightInner {
 
         let mut response = next.run(ctx, operation_name).await;
 
-        let database: &ReadDatabase = ctx.data_unchecked();
-        let view = match database.view() {
-            Ok(view) => view,
-            Err(e) => {
-                let (line, column) = (line!(), column!());
-                return Response::from_errors(vec![ServerError::new(
-                    e.to_string(),
-                    Some(Pos {
-                        line: line as usize,
-                        column: column as usize,
-                    }),
-                )]);
-            }
-        };
-        let current_block_height = match view.latest_block_height() {
-            Ok(height) => height,
-            Err(e) => {
-                let (line, column) = (line!(), column!());
-                return Response::from_errors(vec![ServerError::new(
-                    e.to_string(),
-                    Some(Pos {
-                        line: line as usize,
-                        column: column as usize,
-                    }),
-                )]);
-            }
-        };
+        let current_block_height =
+            self.block_height_subscriber.latest_seen_block_height();
         // Dereference to display the value in decimal base.
         let current_block_height: u32 = *current_block_height;
         response.extensions.insert(

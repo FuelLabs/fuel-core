@@ -82,7 +82,6 @@ use std::{
     num::NonZeroU64,
     path::PathBuf,
     str::FromStr,
-    time::Duration,
 };
 use tracing::{
     info,
@@ -628,9 +627,9 @@ impl Command {
                 },
                 required_fuel_block_height_tolerance: graphql
                     .required_fuel_block_height_tolerance,
-                required_fuel_block_height_min_timeout: Duration::from_secs(
-                    graphql.required_fuel_block_height_min_timeout.into(),
-                ),
+                required_fuel_block_height_timeout: graphql
+                    .required_fuel_block_height_timeout
+                    .into(),
             },
             combined_db_config,
             snapshot_reader,

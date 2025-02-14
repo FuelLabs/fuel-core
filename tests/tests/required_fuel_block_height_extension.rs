@@ -147,8 +147,7 @@ async fn request_with_required_block_height_extension_waits_when_within_threshol
     // setup config
     let state_config = StateConfig::default();
     let mut config = Config::local_node_with_state_config(state_config);
-    config.graphql_config.required_fuel_block_height_min_timeout =
-        Duration::from_secs(10);
+    config.graphql_config.required_fuel_block_height_timeout = Duration::from_secs(30);
     config.graphql_config.required_fuel_block_height_tolerance = 5;
 
     // setup server & client
@@ -170,6 +169,8 @@ async fn request_with_required_block_height_extension_waits_when_within_threshol
     // Produce 5 blocks in parallel with the main test, to meet the precondition
     // on required fuel block height.
     let producer_task = tokio::spawn(async move {
+        // Sleep to be sure that `request_task` will be processed before this task.
+        tokio::time::sleep(Duration::from_secs(5)).await;
         producer.produce_blocks(5, None).await.unwrap();
     });
 
@@ -189,7 +190,7 @@ async fn request_with_required_block_height_extension_fails_when_timeout_while_w
     // setup config
     let state_config = StateConfig::default();
     let mut config = Config::local_node_with_state_config(state_config);
-    config.graphql_config.required_fuel_block_height_min_timeout = Duration::from_secs(0);
+    config.graphql_config.required_fuel_block_height_timeout = Duration::from_secs(5);
     config.graphql_config.required_fuel_block_height_tolerance = 5;
 
     // setup server & client
