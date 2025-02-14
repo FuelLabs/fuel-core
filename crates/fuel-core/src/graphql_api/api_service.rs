@@ -233,7 +233,7 @@ pub fn new_service<OnChain, OffChain>(
     gas_price_provider: GasPriceProvider,
     consensus_parameters_provider: ConsensusProvider,
     memory_pool: SharedMemoryPool,
-    block_height_subscriber_factory: block_height_subscription::Subscriber,
+    block_height_subscriber: block_height_subscription::Subscriber,
 ) -> anyhow::Result<Service>
 where
     OnChain: AtomicView + 'static,
@@ -286,6 +286,7 @@ where
         .data(gas_price_provider)
         .data(consensus_parameters_provider)
         .data(memory_pool)
+        .data(block_height_subscriber.clone())
         .extension(ValidationExtension::new(
             max_queries_resolver_recursive_depth,
         ))
@@ -293,7 +294,7 @@ where
         .extension(RequiredFuelBlockHeightExtension::new(
             required_fuel_block_height_tolerance,
             required_fuel_block_height_timeout,
-            block_height_subscriber_factory,
+            block_height_subscriber,
         ))
         .finish();
 
