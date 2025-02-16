@@ -203,7 +203,7 @@ where
 
         // Notify subscribers and update last seen block height
         self.block_height_subscription_handler
-            .notify_and_update(*height);
+            .notify_and_update(*height)?;
         // Get all the subscribers that need to be notified that the block height
         // has been reached.
 

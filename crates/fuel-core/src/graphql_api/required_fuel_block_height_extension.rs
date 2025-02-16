@@ -151,8 +151,10 @@ impl Extension for RequiredFuelBlockHeightInner {
         next: NextExecute<'_>,
     ) -> Response {
         if let Some(required_block_height) = self.required_height.get() {
-            let current_block_height =
-                self.block_height_subscriber.latest_seen_block_height();
+            let current_block_height = self
+                .block_height_subscriber
+                .latest_seen_block_height()
+                .await;
 
             match BlockHeightComparison::from_block_heights(
                 required_block_height,
@@ -200,8 +202,10 @@ impl Extension for RequiredFuelBlockHeightInner {
 
         let mut response = next.run(ctx, operation_name).await;
 
-        let current_block_height =
-            self.block_height_subscriber.latest_seen_block_height();
+        let current_block_height = self
+            .block_height_subscriber
+            .latest_seen_block_height()
+            .await;
         // Dereference to display the value in decimal base.
         let current_block_height: u32 = *current_block_height;
         response.extensions.insert(
