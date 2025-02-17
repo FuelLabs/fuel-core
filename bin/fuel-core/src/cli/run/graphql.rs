@@ -66,6 +66,25 @@ pub struct GraphQLArgs {
     #[clap(long = "api-request-timeout", default_value = "30s", env)]
     pub api_request_timeout: humantime::Duration,
 
+    /// Maximum allowed block lag for GraphQL fuel block height requests.
+    /// The client waits for the node to catch up if it's behind by no more blocks than
+    /// this tolerance.
+    #[clap(
+        long = "graphql-required-block-height-tolerance",
+        default_value = "10",
+        env
+    )]
+    pub required_fuel_block_height_tolerance: u32,
+
+    /// The time that the node will wait to catch up to the required block height
+    /// of a graphql request.
+    #[clap(
+        long = "graphql-required-block-height-min-timeout-seconds",
+        default_value = "30s",
+        env
+    )]
+    pub required_fuel_block_height_timeout: humantime::Duration,
+
     #[clap(flatten)]
     pub costs: QueryCosts,
 }
