@@ -9,7 +9,10 @@ use fuel_core_types::blockchain::block::Block;
 
 /// A stream of blocks
 pub trait BlockStream {
+    /// Error type
     type Error;
+
+    /// Get the next block
     fn next(&mut self) -> impl Future<Output = Result<Block, Self::Error>> + Send;
 }
 
