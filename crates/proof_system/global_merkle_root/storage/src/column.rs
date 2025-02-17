@@ -60,8 +60,11 @@ impl TableColumn {
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Column {
+    /// The column with the specific data.
     TableColumn(TableColumn),
+    /// The column with the merkle tree nodes.
     MerkleDataColumn(TableColumn),
+    /// The merkle metadata column.
     MerkleMetadataColumn,
 }
 

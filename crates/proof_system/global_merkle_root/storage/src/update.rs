@@ -89,7 +89,9 @@ use fuel_core_types::{
     },
 };
 
+/// Main entrypoint to the update functionality
 pub trait UpdateMerkleizedTables {
+    /// Process a block and update all merkleized tables
     fn update_merkleized_tables(
         &mut self,
         chain_id: ChainId,
@@ -263,7 +265,9 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     fn store_processed_transaction(&mut self, tx_id: TxId) -> anyhow::Result<()> {
+        tracing::debug!("storing processed transaction");
         let previous_tx = self
             .storage
             .storage_as_mut::<ProcessedTransactions>()
@@ -276,6 +280,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     fn insert_coin_if_it_has_amount(
         &mut self,
         tx_pointer: TxPointer,
@@ -296,6 +301,7 @@ where
             }
             .into();
 
+            tracing::debug!("storing coin");
             let previous_coin =
                 self.storage.storage::<Coins>().replace(&utxo_id, &coin)?;
 
@@ -307,6 +313,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     fn try_insert_latest_contract_utxo(
         &mut self,
         tx_pointer: TxPointer,
@@ -317,11 +324,13 @@ where
         if let Some(Input::Contract(input::contract::Contract { contract_id, .. })) =
             inputs.get(contract.input_index as usize)
         {
+            tracing::debug!("storing contract UTxO");
             self.storage.storage::<ContractsLatestUtxo>().insert(
                 contract_id,
                 &ContractUtxoInfo::V1((utxo_id, tx_pointer).into()),
             )?;
         } else {
+            tracing::warn!("invalid contract input index");
             Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::InvalidContractInputIndex(utxo_id),
             ))?;
@@ -329,6 +338,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, tx))]
     fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
         let bytecode_witness_index = tx.bytecode_witness_index();
         let witnesses = tx.witnesses();
@@ -347,12 +357,14 @@ where
             anyhow::bail!("Create transaction does not have contract created output")
         };
 
+        tracing::debug!("storing contract code");
         self.storage
             .storage_as_mut::<ContractsRawCode>()
             .insert(contract_id, bytecode)?;
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, tx))]
     fn process_upgrade_transaction(&mut self, tx: &Upgrade) -> anyhow::Result<()> {
         let metadata = match tx.metadata() {
             Some(metadata) => metadata.body.clone(),
@@ -371,6 +383,8 @@ where
                 };
                 self.latest_consensus_parameters_version =
                     next_consensus_parameters_version;
+
+                tracing::debug!("storing next consensus parameters version");
                 self.storage
                     .storage::<ConsensusParametersVersions>()
                     .insert(
@@ -392,6 +406,8 @@ where
                     };
                     self.latest_state_transition_bytecode_version =
                         next_state_transition_bytecode_version;
+
+                tracing::debug!("storing next state transition bytecode version");
                     self.storage
                         .storage::<StateTransitionBytecodeVersions>()
                         .insert(&self.latest_state_transition_bytecode_version, root)?;
@@ -402,6 +418,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, tx))]
     fn process_upload_transaction(&mut self, tx: &Upload) -> anyhow::Result<()> {
         let bytecode_root = *tx.bytecode_root();
         let uploaded_bytecode = self
@@ -450,6 +467,7 @@ where
                 }
             };
 
+        tracing::debug!("storing uploaded bytecodes");
         self.storage
             .storage_as_mut::<UploadedBytecodes>()
             .insert(&bytecode_root, &new_uploaded_bytecode)?;
@@ -457,6 +475,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, tx))]
     fn process_blob_transaction(&mut self, tx: &Blob) -> anyhow::Result<()> {
         let BlobBody {
             id: blob_id,
@@ -469,6 +488,7 @@ where
              // TODO(#2588): Proper error type
             .ok_or_else(|| anyhow!("transaction should have blob payload"))?;
 
+        tracing::debug!("storing blob");
         self.storage
             .storage::<Blobs>()
             .insert(blob_id, blob.as_ref())?;
@@ -477,11 +497,11 @@ where
     }
 }
 
-pub trait TransactionInputs {
+trait TransactionInputs {
     fn inputs(&self) -> Cow<Vec<Input>>;
 }
 
-pub trait TransactionOutputs {
+trait TransactionOutputs {
     fn outputs(&self) -> Cow<Vec<Output>>;
 }
 

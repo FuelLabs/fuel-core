@@ -58,6 +58,7 @@ pub struct UpdateMerkleRootTask<BlockStream, Storage> {
 }
 
 impl<B, S> UpdateMerkleRootTask<B, S> {
+    /// Create a new task
     pub fn new(chain_id: ChainId, storage: S, blocks: B) -> Self {
         Self {
             chain_id,
