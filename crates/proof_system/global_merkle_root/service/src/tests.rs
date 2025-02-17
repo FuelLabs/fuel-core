@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use fuel_core_global_merkle_root_storage::ProcessedTransactions;
 use fuel_core_storage::{
@@ -123,7 +124,7 @@ impl BlockStream for mpsc::Receiver<Block> {
     type Error = ClosedChannel;
 
     async fn next(&mut self) -> Result<Block, ClosedChannel> {
-        self.recv().await.ok_or_else(|| ClosedChannel {})
+        self.recv().await.ok_or(ClosedChannel {})
     }
 }
 
