@@ -11,7 +11,6 @@ use async_graphql::{
         Edge,
         EmptyFields,
     },
-    parser::types::OperationType,
     Context,
     MergedObject,
     MergedSubscription,
@@ -222,16 +221,15 @@ pub trait ReadViewProvider {
 
 impl<'a> ReadViewProvider for Context<'a> {
     fn read_view(&self) -> StorageResult<Cow<'a, ReadView>> {
-        let operation_type = self.query_env.operation.node.ty;
-
-        // Sometimes, during mutable queries or subscription the resolvers
-        // need access to an updated view of the database.
-        if operation_type != OperationType::Query {
-            let database: &ReadDatabase = self.data_unchecked();
-            database.view().map(Cow::Owned)
-        } else {
-            let read_view: &ReadView = self.data_unchecked();
-            Ok(Cow::Borrowed(read_view))
-        }
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/2713.
+        // This function fetches the latest height from the database every time
+        // it is invoked. This is required to allow queries to fetch the most
+        // updated view of the database when the node needs to sync to meet
+        // requirements of fuel_block_height for queries. See
+        // [RequiredFuelBlockHeightExtension]. In practice, we should optimize
+        // the code to avoid fetching a snapshot of the database multiple times
+        // for each query.
+        let database: &ReadDatabase = self.data_unchecked();
+        database.view().map(Cow::Owned)
     }
 }
