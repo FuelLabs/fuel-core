@@ -25,7 +25,6 @@ use rand::{
     Rng,
     RngCore,
 };
-use serde_json::Value;
 
 pub mod builder;
 pub mod counter_contract;
@@ -33,16 +32,6 @@ pub mod fuel_core_driver;
 
 pub fn predicate() -> Vec<u8> {
     vec![op::ret(1)].into_iter().collect::<Vec<u8>>()
-}
-
-pub fn get_graphql_extension_field_value(result_json: &str, name: &str) -> u64 {
-    let json_value: Value =
-        serde_json::from_str(result_json).expect("should be valid json");
-    let extensions = json_value
-        .get("extensions")
-        .expect("should have extensions");
-    let field = extensions.get(name).expect("should have field");
-    field.as_u64().expect("should be convertible to u64")
 }
 
 pub fn valid_input(rng: &mut StdRng, amount: u64) -> Input {

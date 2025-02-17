@@ -52,6 +52,10 @@ use cynic::{
     QueryBuilder,
 };
 use fuel_core_types::{
+    blockchain::header::{
+        ConsensusParametersVersion,
+        StateTransitionBytecodeVersion,
+    },
     fuel_asm::{
         Instruction,
         Word,
@@ -203,6 +207,28 @@ impl Clone for ConsistencyPolicy {
     }
 }
 
+#[derive(Debug, Default)]
+struct ChainStateInfo {
+    current_stf_version: Arc<Mutex<Option<StateTransitionBytecodeVersion>>>,
+    current_consensus_parameters_version: Arc<Mutex<Option<ConsensusParametersVersion>>>,
+}
+
+impl Clone for ChainStateInfo {
+    fn clone(&self) -> Self {
+        Self {
+            current_stf_version: Arc::new(Mutex::new(
+                self.current_stf_version.lock().ok().and_then(|v| *v),
+            )),
+            current_consensus_parameters_version: Arc::new(Mutex::new(
+                self.current_consensus_parameters_version
+                    .lock()
+                    .ok()
+                    .and_then(|v| *v),
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FuelClient {
     client: reqwest::Client,
@@ -210,6 +236,7 @@ pub struct FuelClient {
     cookie: std::sync::Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
     require_height: ConsistencyPolicy,
+    chain_state_info: ChainStateInfo,
 }
 
 impl FromStr for FuelClient {
@@ -240,6 +267,7 @@ impl FromStr for FuelClient {
                 require_height: ConsistencyPolicy::Auto {
                     height: Arc::new(Mutex::new(None)),
                 },
+                chain_state_info: Default::default(),
             })
         }
 
@@ -252,6 +280,7 @@ impl FromStr for FuelClient {
                 require_height: ConsistencyPolicy::Auto {
                     height: Arc::new(Mutex::new(None)),
                 },
+                chain_state_info: Default::default(),
             })
         }
     }
@@ -315,6 +344,32 @@ impl FuelClient {
         }
     }
 
+    fn update_chain_state_info<R, E>(&self, response: &FuelGraphQlResponse<R, E>) {
+        if let Some(current_sft_version) = response
+            .extensions
+            .as_ref()
+            .and_then(|e| e.current_stf_version)
+        {
+            if let Ok(mut c) = self.chain_state_info.current_stf_version.lock() {
+                *c = Some(current_sft_version);
+            }
+        }
+
+        if let Some(current_consensus_parameters_version) = response
+            .extensions
+            .as_ref()
+            .and_then(|e| e.current_consensus_parameters_version)
+        {
+            if let Ok(mut c) = self
+                .chain_state_info
+                .current_consensus_parameters_version
+                .lock()
+            {
+                *c = Some(current_consensus_parameters_version);
+            }
+        }
+    }
+
     /// Send the GraphQL query to the client.
     pub async fn query<ResponseData, Vars>(
         &self,
@@ -332,6 +387,8 @@ impl FuelClient {
             .run_fuel_graphql(fuel_operation)
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        self.update_chain_state_info(&response);
 
         let inner_required_height = match &self.require_height {
             ConsistencyPolicy::Auto { height } => Some(height.clone()),
@@ -518,6 +575,24 @@ impl FuelClient {
             });
 
         Ok(stream)
+    }
+
+    pub fn latest_stf_version(&self) -> Option<StateTransitionBytecodeVersion> {
+        self.chain_state_info
+            .current_stf_version
+            .lock()
+            .ok()
+            .and_then(|value| *value)
+    }
+
+    pub fn latest_consensus_parameters_version(
+        &self,
+    ) -> Option<ConsensusParametersVersion> {
+        self.chain_state_info
+            .current_consensus_parameters_version
+            .lock()
+            .ok()
+            .and_then(|value| *value)
     }
 
     pub async fn health(&self) -> io::Result<bool> {

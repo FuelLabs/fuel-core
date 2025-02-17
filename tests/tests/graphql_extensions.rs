@@ -28,7 +28,6 @@ use test_helpers::{
         TestContext,
         TestSetupBuilder,
     },
-    get_graphql_extension_field_value,
     predicate,
     send_graph_ql_query,
     transactions_from_subsections,
@@ -101,40 +100,42 @@ async fn upgrade_consensus_parameters(
     let mut tx = upgrade.into();
     client.estimate_predicates(&mut tx).await.unwrap();
     client.submit_and_await_commit(&tx).await.unwrap();
-    client.produce_blocks(1, None).await.unwrap();
+    client
+        .produce_blocks(1, None)
+        .await
+        .expect("should produce block");
 }
 
 #[tokio::test]
 async fn graphql_extensions_should_provide_new_consensus_parameters_version_after_upgrade(
 ) {
-    const EXTENSION_FIELD: &str = "current_consensus_parameters_version";
-
     let mut test_builder = TestSetupBuilder::new(2322);
     let privileged_address = Input::predicate_owner(predicate());
     test_builder.utxo_validation = false;
     test_builder.privileged_address = privileged_address;
     let TestContext {
         client,
-        srv,
+        srv: _srv,
         mut rng,
         ..
     } = test_builder.finalize().await;
-    let url = format!("http://{}/v1/graphql", srv.bound_address);
+    client
+        .produce_blocks(1, None)
+        .await
+        .expect("should produce block");
 
     // Given
-    let pre_upgrade_version = get_graphql_extension_field_value(
-        &send_graph_ql_query(&url, QUERY).await,
-        EXTENSION_FIELD,
-    );
+    let pre_upgrade_version = client
+        .latest_consensus_parameters_version()
+        .expect("should have consensus parameters version");
 
     // When
     upgrade_consensus_parameters(&mut rng, &client, &privileged_address).await;
 
     // Then
-    let post_upgrade_version = get_graphql_extension_field_value(
-        &send_graph_ql_query(&url, QUERY).await,
-        EXTENSION_FIELD,
-    );
+    let post_upgrade_version = client
+        .latest_consensus_parameters_version()
+        .expect("should have consensus parameters version");
 
     assert_eq!(post_upgrade_version, pre_upgrade_version + 1);
 }
@@ -190,13 +191,15 @@ async fn upgrade_stf(
     let result = client.submit_and_await_commit(&tx).await;
     let result = result.expect("We should be able to upgrade to the uploaded bytecode");
     assert!(matches!(result, TransactionStatus::Success { .. }));
-    client.produce_blocks(1, None).await.unwrap();
+    client
+        .produce_blocks(1, None)
+        .await
+        .expect("should produce block");
 }
 
 #[tokio::test]
 async fn graphql_extensions_should_provide_new_stf_version_after_upgrade() {
     const AMOUNT: u64 = 1_000;
-    const EXTENSION_FIELD: &str = "current_stf_version";
 
     let mut test_builder = TestSetupBuilder::new(2322);
     let privileged_address = Input::predicate_owner(predicate());
@@ -204,20 +207,22 @@ async fn graphql_extensions_should_provide_new_stf_version_after_upgrade() {
     test_builder.privileged_address = privileged_address;
     let TestContext {
         client,
-        srv,
+        srv: _srv,
         mut rng,
         ..
     } = test_builder.finalize().await;
-    let url = format!("http://{}/v1/graphql", srv.bound_address);
+    client
+        .produce_blocks(1, None)
+        .await
+        .expect("should produce block");
 
     // Given
     let (root, transactions) = prepare_upload_transactions(&mut rng, AMOUNT);
     test_builder.config_coin_inputs_from_transactions(&transactions.iter().collect_vec());
 
-    let pre_upgrade_version = get_graphql_extension_field_value(
-        &send_graph_ql_query(&url, QUERY).await,
-        EXTENSION_FIELD,
-    );
+    let pre_upgrade_version = client
+        .latest_stf_version()
+        .expect("should have stf version");
 
     // When
     upgrade_stf(
@@ -231,9 +236,8 @@ async fn graphql_extensions_should_provide_new_stf_version_after_upgrade() {
     .await;
 
     // Then
-    let post_upgrade_version = get_graphql_extension_field_value(
-        &send_graph_ql_query(&url, QUERY).await,
-        EXTENSION_FIELD,
-    );
+    let post_upgrade_version = client
+        .latest_stf_version()
+        .expect("should have stf version");
     assert_eq!(post_upgrade_version, pre_upgrade_version + 1);
 }
