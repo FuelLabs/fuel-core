@@ -299,9 +299,9 @@ where
         .extension(RequiredFuelBlockHeightExtension::new(
             required_fuel_block_height_tolerance,
             required_fuel_block_height_timeout,
-            block_height_subscriber,
+            block_height_subscriber.clone(),
         ))
-        .extension(ChainStateInfoExtension::new())
+        .extension(ChainStateInfoExtension::new(block_height_subscriber))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";

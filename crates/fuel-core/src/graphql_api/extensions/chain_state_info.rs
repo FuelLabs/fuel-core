@@ -13,23 +13,32 @@ use async_graphql::{
 
 use crate::graphql_api::{
     api_service::ConsensusProvider,
+    block_height_subscription,
     database::ReadDatabase,
 };
 
 const CURRENT_STF_VERSION: &str = "current_stf_version";
 const CURRENT_CONSENSUS_PARAMETERS_VERSION: &str = "current_consensus_parameters_version";
+const CURRENT_FUEL_BLOCK_HEIGHT: &str = "current_fuel_block_height";
 
-#[derive(Debug, derive_more::Display, derive_more::From)]
-pub(crate) struct ChainStateInfoExtension;
+#[derive(Debug)]
+pub(crate) struct ChainStateInfoExtension {
+    block_height_subscriber: block_height_subscription::Subscriber,
+}
+
 impl ChainStateInfoExtension {
-    pub fn new() -> Self {
-        Self
+    pub fn new(block_height_subscriber: block_height_subscription::Subscriber) -> Self {
+        Self {
+            block_height_subscriber,
+        }
     }
 }
 
 impl ExtensionFactory for ChainStateInfoExtension {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(ChainStateInfoExtension::new())
+        Arc::new(ChainStateInfoExtension::new(
+            self.block_height_subscriber.clone(),
+        ))
     }
 }
 
@@ -63,6 +72,14 @@ impl Extension for ChainStateInfoExtension {
                 );
             }
         }
+
+        let current_block_height =
+            self.block_height_subscriber.latest_seen_block_height();
+        let current_block_height: u32 = *current_block_height;
+        response.extensions.insert(
+            CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
+            Value::Number(current_block_height.into()),
+        );
 
         response
     }

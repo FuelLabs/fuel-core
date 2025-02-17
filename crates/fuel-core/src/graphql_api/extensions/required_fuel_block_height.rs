@@ -25,7 +25,6 @@ use tokio::time::Duration;
 use crate::graphql_api::block_height_subscription;
 
 const REQUIRED_FUEL_BLOCK_HEIGHT: &str = "required_fuel_block_height";
-const CURRENT_FUEL_BLOCK_HEIGHT: &str = "current_fuel_block_height";
 const FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED: &str =
     "fuel_block_height_precondition_failed";
 /// The extension that implements the logic for checking whether
@@ -200,14 +199,6 @@ impl Extension for RequiredFuelBlockHeightInner {
 
         let mut response = next.run(ctx, operation_name).await;
 
-        let current_block_height =
-            self.block_height_subscriber.latest_seen_block_height();
-        // Dereference to display the value in decimal base.
-        let current_block_height: u32 = *current_block_height;
-        response.extensions.insert(
-            CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
-            Value::Number(current_block_height.into()),
-        );
         if self.required_height.get().is_some() {
             response.extensions.insert(
                 FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED.to_string(),
@@ -243,10 +234,6 @@ fn error_response(
         }),
     )]);
 
-    response.extensions.insert(
-        CURRENT_FUEL_BLOCK_HEIGHT.to_string(),
-        Value::Number((**current_block_height).into()),
-    );
     response.extensions.insert(
         FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED.to_string(),
         Value::Boolean(true),
