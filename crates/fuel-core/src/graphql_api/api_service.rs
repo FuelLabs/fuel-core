@@ -17,8 +17,7 @@ use crate::{
     graphql_api::{
         self,
         extensions::{
-            current_consensus_parameters_version::CurrentConsensusParametersVersionExtension,
-            current_stf_version::CurrentStfVersionExtension,
+            chain_state_info::ChainStateInfoExtension,
             required_fuel_block_height::RequiredFuelBlockHeightExtension,
         },
     },
@@ -302,8 +301,7 @@ where
             required_fuel_block_height_timeout,
             block_height_subscriber,
         ))
-        .extension(CurrentStfVersionExtension::new())
-        .extension(CurrentConsensusParametersVersionExtension::new())
+        .extension(ChainStateInfoExtension::new())
         .finish();
 
     let graphql_endpoint = "/v1/graphql";

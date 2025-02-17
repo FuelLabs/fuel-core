@@ -11,27 +11,30 @@ use async_graphql::{
     Value,
 };
 
-use crate::graphql_api::database::ReadDatabase;
+use crate::graphql_api::{
+    api_service::ConsensusProvider,
+    database::ReadDatabase,
+};
 
 const CURRENT_STF_VERSION: &str = "current_stf_version";
+const CURRENT_CONSENSUS_PARAMETERS_VERSION: &str = "current_consensus_parameters_version";
 
-/// The extension to attach the current STF version to all responses.
 #[derive(Debug, derive_more::Display, derive_more::From)]
-pub(crate) struct CurrentStfVersionExtension;
-impl CurrentStfVersionExtension {
+pub(crate) struct ChainStateInfoExtension;
+impl ChainStateInfoExtension {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl ExtensionFactory for CurrentStfVersionExtension {
+impl ExtensionFactory for ChainStateInfoExtension {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(CurrentStfVersionExtension::new())
+        Arc::new(ChainStateInfoExtension::new())
     }
 }
 
 #[async_trait::async_trait]
-impl Extension for CurrentStfVersionExtension {
+impl Extension for ChainStateInfoExtension {
     async fn execute(
         &self,
         ctx: &ExtensionContext<'_>,
@@ -41,6 +44,15 @@ impl Extension for CurrentStfVersionExtension {
         let db = ctx.data_unchecked::<ReadDatabase>();
 
         let mut response = next.run(ctx, operation_name).await;
+
+        let consensus_parameters_provider = ctx.data_unchecked::<ConsensusProvider>();
+        let current_consensus_parameters_version =
+            consensus_parameters_provider.latest_consensus_parameters_version();
+        response.extensions.insert(
+            CURRENT_CONSENSUS_PARAMETERS_VERSION.to_string(),
+            Value::Number(current_consensus_parameters_version.into()),
+        );
+
         if let Ok(view) = db.view() {
             if let Ok(latest_block) = view.latest_block() {
                 let current_stf_version =
