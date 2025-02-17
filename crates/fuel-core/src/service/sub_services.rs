@@ -336,7 +336,9 @@ pub fn init_sub_services(
         config.da_compression.clone(),
         config.continue_on_error,
         &chain_config.consensus_parameters,
-    );
+    )?;
+
+    let graphql_block_height_subscription_handle = graphql_worker.shared.clone();
 
     let graphql_config = GraphQLConfig {
         config: config.graphql_config.clone(),
@@ -364,6 +366,7 @@ pub fn init_sub_services(
         Box::new(universal_gas_price_provider),
         Box::new(consensus_parameters_provider),
         SharedMemoryPool::new(config.memory_pool_size),
+        graphql_block_height_subscription_handle,
     )?;
 
     let shared = SharedState {
