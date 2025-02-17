@@ -81,13 +81,7 @@ use fuel_core_types::{
         input::coin::{
             CoinPredicate,
             CoinSigned,
-        },
-        AssetId,
-        Finalizable,
-        Input,
-        Output,
-        Transaction,
-        TransactionBuilder,
+        }, AssetId, Chargeable, Finalizable, Input, Output, Transaction, TransactionBuilder
     },
     fuel_types::{
         Immediate12,

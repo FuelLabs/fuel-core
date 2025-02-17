@@ -141,7 +141,7 @@ where
     D: ports::worker::OffChainDatabase,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
-        let start_time = std::time::Instant::now();
+        let global_start_time = std::time::Instant::now();
         let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
@@ -162,7 +162,7 @@ where
         let total_tx_count = transaction
             .increase_tx_count(block.transactions().len() as u64)
             .unwrap_or_default();
-
+    
         process_executor_events(
             result.events.iter().map(Cow::Borrowed),
             &mut transaction,
@@ -177,18 +177,20 @@ where
         }
         transaction.commit()?;
 
+        let start_time = std::time::Instant::now();
         for status in result.tx_status.iter() {
             let tx_id = status.id;
             let status = from_executor_to_status(block, status.result.clone());
             self.tx_pool.send_complete(tx_id, height, status);
         }
+        tracing::info!("Sending tx status took {:?}ms", start_time.elapsed().as_millis());
 
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
         tracing::info!(
             "Block {} processed in offchain in {}ms",
             height,
-            start_time.elapsed().as_millis()
+            global_start_time.elapsed().as_millis()
         );
         Ok(())
     }
