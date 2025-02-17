@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use fuel_core::{
     chain_config::StateConfig,
     service::{
@@ -135,4 +137,73 @@ async fn submitting_transaction_with_future_required_height_return_error() {
         "Error: {}",
         error
     );
+}
+
+#[tokio::test]
+async fn request_with_required_block_height_extension_waits_when_within_threshold() {
+    let owner = Address::default();
+    let asset_id = AssetId::BASE;
+
+    // setup config
+    let state_config = StateConfig::default();
+    let mut config = Config::local_node_with_state_config(state_config);
+    config.graphql_config.required_fuel_block_height_timeout = Duration::from_secs(30);
+    config.graphql_config.required_fuel_block_height_tolerance = 5;
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let mut client: FuelClient = FuelClient::from(srv.bound_address);
+
+    // Produce enough blocks to be within the tolerance for the node to wait to
+    // reach the required fuel block height.
+    client.produce_blocks(95, None).await.unwrap();
+
+    let producer = client.clone();
+
+    // Issue a request while the precondition on the required fuel block height is not met.
+    let request_task = tokio::spawn(async move {
+        client.with_required_fuel_block_height(Some(100u32.into()));
+        let result = client.balance(&owner, Some(&asset_id)).await;
+        result
+    });
+    // Produce 5 blocks in parallel with the main test, to meet the precondition
+    // on required fuel block height.
+    let producer_task = tokio::spawn(async move {
+        // Sleep to be sure that `request_task` will be processed before this task.
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        producer.produce_blocks(5, None).await.unwrap();
+    });
+
+    let (Ok(result), _) = tokio::join!(request_task, producer_task) else {
+        panic!("Request task failed");
+    };
+
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn request_with_required_block_height_extension_fails_when_timeout_while_within_threshold(
+) {
+    let owner = Address::default();
+    let asset_id = AssetId::BASE;
+
+    // setup config
+    let state_config = StateConfig::default();
+    let mut config = Config::local_node_with_state_config(state_config);
+    config.graphql_config.required_fuel_block_height_timeout = Duration::from_secs(5);
+    config.graphql_config.required_fuel_block_height_tolerance = 5;
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let mut client: FuelClient = FuelClient::from(srv.bound_address);
+
+    // Produce enough blocks to be within the tolerance for the node to wait to
+    // reach the required fuel block height.
+    client.produce_blocks(95, None).await.unwrap();
+
+    // Issue a request while the precondition on the required fuel block height is not met.
+    client.with_required_fuel_block_height(Some(100u32.into()));
+    let result = client.balance(&owner, Some(&asset_id)).await;
+
+    assert!(result.is_err());
 }
