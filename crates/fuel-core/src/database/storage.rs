@@ -16,7 +16,7 @@ use fuel_core_storage::{
     StorageWrite,
 };
 
-impl<Storage, M> StorageMutate<M> for GenericDatabase<Storage>
+impl<Storage, M, Metadata> StorageMutate<M> for GenericDatabase<Storage, Metadata>
 where
     M: Mappable,
     Self: Modifiable,
@@ -50,7 +50,7 @@ where
     }
 }
 
-impl<Storage, M> StorageWrite<M> for GenericDatabase<Storage>
+impl<Storage, M, Metadata> StorageWrite<M> for GenericDatabase<Storage, Metadata>
 where
     M: Mappable,
     StructuredStorage<Storage>: StorageInspect<M, Error = StorageError>,
@@ -95,7 +95,7 @@ where
     }
 }
 
-impl<Storage, M> StorageBatchMutate<M> for GenericDatabase<Storage>
+impl<Storage, M, Metadata> StorageBatchMutate<M> for GenericDatabase<Storage, Metadata>
 where
     M: Mappable,
     StructuredStorage<Storage>: StorageInspect<M, Error = StorageError>,

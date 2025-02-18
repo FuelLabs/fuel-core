@@ -392,8 +392,9 @@ mod tests {
                     .last_block_config()
                     .cloned()
                     .expect("Expects the last block config to be set");
-                block.header_mut().application_mut().da_height =
-                    last_block_config.da_block_height;
+                block
+                    .header_mut()
+                    .set_da_height(last_block_config.da_block_height);
                 block
                     .header_mut()
                     .set_block_height(last_block_config.block_height);
@@ -557,7 +558,7 @@ mod tests {
         fn given_block(&mut self) -> TableEntry<FuelBlocks> {
             let mut block = CompressedBlock::default();
             let height = self.rng.gen();
-            block.header_mut().application_mut().da_height = self.rng.gen();
+            block.header_mut().set_da_height(self.rng.gen());
             block.header_mut().set_block_height(height);
             let _ = self
                 .db

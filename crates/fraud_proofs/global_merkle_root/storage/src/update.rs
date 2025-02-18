@@ -111,10 +111,10 @@ where
             storage: self,
             latest_state_transition_bytecode_version: block
                 .header()
-                .state_transition_bytecode_version,
+                .state_transition_bytecode_version(),
             latest_consensus_parameters_version: block
                 .header()
-                .consensus_parameters_version,
+                .consensus_parameters_version(),
         };
 
         update_transaction.process_block(block)?;
@@ -599,7 +599,7 @@ mod tests {
     #[test]
     /// When encountering a transaction with a contract created output,
     /// `process_output` should ensure an appropriate contract UTxO is
-    /// populated in the `ContractCreated` table.
+    /// populated in the `ContractsLatestUtxo` table.
     fn process_output__should_insert_latest_contract_utxo_when_contract_created() {
         let mut rng = StdRng::seed_from_u64(1337);
 
@@ -641,7 +641,7 @@ mod tests {
     #[test]
     /// When encountering a transaction with a contract output,
     /// `process_output` should ensure an appropriate contract UTxO is
-    /// populated in the `ContractCreated` table.
+    /// populated in the `ContractsLatestUtxo` table.
     fn process_output__should_update_latest_contract_utxo_when_interacting_with_contract()
     {
         let mut rng = StdRng::seed_from_u64(1337);
