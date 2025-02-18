@@ -5,14 +5,11 @@ pub mod request_response;
 use crate::gossipsub::messages::GossipTopicTag;
 use libp2p::request_response as libp2p_request_response;
 
-use std::{
-    borrow::Cow,
-    io,
-};
+use std::io;
 
 pub trait Encoder: Send {
-    /// Returns the serialized object as a slice.
-    fn as_bytes(&self) -> Cow<[u8]>;
+    /// Returns the serialized object as a Vector.
+    fn as_vec(self) -> Vec<u8>;
 }
 
 /// The trait encodes the type to the bytes and passes it to the `Encoder`,
@@ -23,12 +20,10 @@ pub trait Encoder: Send {
 pub trait Encode<T: ?Sized> {
     type Error;
     /// The encoder type that stores serialized object.
-    type Encoder<'a>: Encoder
-    where
-        T: 'a;
+    type Encoder: Encoder;
 
     /// Encodes the object to the bytes and passes it to the `Encoder`.
-    fn encode<'a>(&self, t: &'a T) -> Result<Self::Encoder<'a>, Self::Error>;
+    fn encode(&self, t: &T) -> Result<Self::Encoder, Self::Error>;
 }
 
 /// The trait decodes the type from the bytes.
@@ -38,12 +33,9 @@ pub trait Decode<T> {
     fn decode(&self, bytes: &[u8]) -> Result<T, Self::Error>;
 }
 
-impl<'a> Encoder for Cow<'a, [u8]> {
-    fn as_bytes(&self) -> Cow<'_, [u8]> {
-        match self {
-            Cow::Borrowed(borrowed) => Cow::Borrowed(borrowed),
-            Cow::Owned(owned) => Cow::Borrowed(owned.as_ref()),
-        }
+impl Encoder for Vec<u8> {
+    fn as_vec(self) -> Vec<u8> {
+        self
     }
 }
 

@@ -5,10 +5,7 @@ use super::{
     Encode,
 };
 
-use std::{
-    borrow::Cow,
-    io,
-};
+use std::io;
 
 #[derive(Clone, Default)]
 pub struct PostcardCodec;
@@ -39,13 +36,12 @@ impl<T> Encode<T> for PostcardCodec
 where
     T: ?Sized + serde::Serialize,
 {
-    type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
+    type Encoder = Vec<u8>;
     type Error = io::Error;
 
-    fn encode<'a>(&self, value: &'a T) -> Result<Self::Encoder<'a>, Self::Error> {
-        Ok(Cow::Owned(postcard::to_allocvec(value).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, e.to_string())
-        })?))
+    fn encode<'a>(&self, value: &'a T) -> Result<Self::Encoder, Self::Error> {
+        Ok(postcard::to_allocvec(value)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?)
     }
 }
 

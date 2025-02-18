@@ -106,7 +106,7 @@ where
         T: futures::AsyncWrite + Unpin + Send,
     {
         let encoded_data = self.codec.encode(&req)?;
-        socket.write_all(&encoded_data.as_bytes()).await?;
+        socket.write_all(&encoded_data.as_vec()).await?;
         Ok(())
     }
 
@@ -123,12 +123,12 @@ where
             RequestResponseProtocol::V1 => {
                 let v1_response: V1ResponseMessage = res.into();
                 let res = self.codec.encode(&v1_response)?;
-                let res = res.as_bytes();
+                let res = res.as_vec();
                 socket.write_all(&res).await?;
             }
             RequestResponseProtocol::V2 => {
                 let res = self.codec.encode(&res)?;
-                let res = res.as_bytes();
+                let res = res.as_vec();
                 socket.write_all(&res).await?;
             }
         };
