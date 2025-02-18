@@ -128,4 +128,6 @@ fault-proving = [
   "fuel-core-chain-config/fault-proving",
   "fuel-core-database/fault-proving",
   "fuel-core-sync/fault-proving",
+  "fuel-core-importer/fault-proving",
+  "fuel-core-poa/fault-proving",
 ]
