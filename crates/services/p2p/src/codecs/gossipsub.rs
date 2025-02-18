@@ -32,7 +32,7 @@ where
         match data {
             GossipsubBroadcastRequest::NewTx(tx) => {
                 let bytes = self.codec.encode(&tx)?;
-                Ok(bytes.as_vec())
+                Ok(bytes.to_vec())
             }
         }
     }

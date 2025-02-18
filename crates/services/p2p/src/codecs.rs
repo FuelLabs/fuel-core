@@ -9,7 +9,7 @@ use std::io;
 
 pub trait Encoder: Send {
     /// Returns the serialized object as a Vector.
-    fn as_vec(self) -> Vec<u8>;
+    fn to_vec(self) -> Vec<u8>;
 }
 
 /// The trait encodes the type to the bytes and passes it to the `Encoder`,
@@ -34,7 +34,7 @@ pub trait Decode<T> {
 }
 
 impl Encoder for Vec<u8> {
-    fn as_vec(self) -> Vec<u8> {
+    fn to_vec(self) -> Vec<u8> {
         self
     }
 }
