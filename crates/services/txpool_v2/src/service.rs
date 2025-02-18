@@ -488,7 +488,7 @@ where
             };
 
             let tx = Arc::new(checked_tx);
-            // We don't use the `insert` from `PoolWorkerInterface` because we don't want to make the whole object clonable
+            // We don't use the `insert` from `PoolWorkerInterface` because we don't want to make the whole object cloneable
             if let Err(e) = pool_insert_request_sender.send(PoolInsertRequest::Insert {
                 tx,
                 from_peer_info,
@@ -566,7 +566,7 @@ where
                 if peer_tx_ids.is_empty() {
                     return;
                 }
-                // We don't use the `get_non_existing_txs` from `PoolWorkerInterface` because we don't want to make the whole object clonable
+                // We don't use the `get_non_existing_txs` from `PoolWorkerInterface` because we don't want to make the whole object cloneable
                 let (response_sender, response_receiver) = std::sync::mpsc::channel();
                 if let Err(e) = request_sender.send(PoolOtherRequest::GetNonExistingTxs {
                     tx_ids: peer_tx_ids,
