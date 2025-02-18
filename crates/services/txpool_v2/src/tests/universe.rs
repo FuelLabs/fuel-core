@@ -59,7 +59,10 @@ use tokio::sync::broadcast::Receiver;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
-    config::{BlackList, Config},
+    config::{
+        BlackList,
+        Config,
+    },
     error::Error,
     new_service,
     pool::{
@@ -238,7 +241,7 @@ impl TestPoolUniverse {
                 consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
-                blacklist: BlackList::default()
+                blacklist: BlackList::default(),
             };
             let tx =
                 verification.perform_all_verifications(tx, Default::default(), true)?;
@@ -268,7 +271,7 @@ impl TestPoolUniverse {
                 consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
-                blacklist: BlackList::default()
+                blacklist: BlackList::default(),
             };
             let tx =
                 verification.perform_all_verifications(tx, Default::default(), true)?;
@@ -298,7 +301,7 @@ impl TestPoolUniverse {
                 consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
                 wasm_checker: Arc::new(wasm_checker),
                 memory_pool: MemoryPool::new(),
-                blacklist: BlackList::default()
+                blacklist: BlackList::default(),
             };
             let tx =
                 verification.perform_all_verifications(tx, Default::default(), true)?;
