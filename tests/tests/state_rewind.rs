@@ -474,7 +474,7 @@ async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
         panic!("unexpected result {status:?}")
     };
 
-    // Then, transfer one of these coins to anyther wallet
+    // Then, transfer one of these coins to another wallet
     let source_public = wallets[0].public_key();
     let source_owner: [u8; Address::LEN] = source_public.hash().into();
     let source_coin = get_wallet_coin(&client, &source_owner.into()).await;

@@ -70,7 +70,10 @@ use fuel_core_types::{
         BlockHeight,
         Nonce,
     },
-    services::executor::TransactionExecutionStatus,
+    services::executor::{
+        StorageReadReplayEvent,
+        TransactionExecutionStatus,
+    },
 };
 #[cfg(feature = "subscriptions")]
 use futures::{
@@ -98,6 +101,10 @@ use schema::{
     },
     da_compressed::DaCompressedBlockByHeightArgs,
     gas_price::BlockHorizonArgs,
+    storage_read_replay::{
+        StorageReadReplay,
+        StorageReadReplayArgs,
+    },
     tx::{
         TransactionsByOwnerConnectionArgs,
         TxArg,
@@ -650,6 +657,24 @@ impl FuelClient {
             .into_iter()
             .map(|tx_status| tx_status.try_into().map_err(Into::into))
             .collect()
+    }
+
+    /// Get storage read replay for a block
+    pub async fn storage_read_replay(
+        &self,
+        height: &BlockHeight,
+    ) -> io::Result<Vec<StorageReadReplayEvent>> {
+        let query: Operation<StorageReadReplay, StorageReadReplayArgs> =
+            StorageReadReplay::build(StorageReadReplayArgs {
+                height: (*height).into(),
+            });
+        Ok(self
+            .query(query)
+            .await
+            .map(|r| r.storage_read_replay)?
+            .into_iter()
+            .map(Into::into)
+            .collect())
     }
 
     /// Estimate predicates for the transaction

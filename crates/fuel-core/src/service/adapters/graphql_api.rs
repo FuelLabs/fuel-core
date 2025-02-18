@@ -46,7 +46,10 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
-        executor::TransactionExecutionStatus,
+        executor::{
+            StorageReadReplayEvent,
+            TransactionExecutionStatus,
+        },
         p2p::PeerInfo,
         txpool::TransactionStatus,
     },
@@ -129,6 +132,13 @@ impl BlockProducerPort for BlockProducerAdapter {
         self.block_producer
             .dry_run(transactions, height, time, utxo_validation, gas_price)
             .await
+    }
+
+    async fn storage_read_replay(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Vec<StorageReadReplayEvent>> {
+        self.block_producer.storage_read_replay(height).await
     }
 }
 

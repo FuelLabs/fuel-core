@@ -102,7 +102,7 @@ async fn asset_info_mint_burn() {
         .copied()
         .collect();
     let script = TransactionBuilder::script(
-        script_ops.into_iter().collect::<Vec<u8>>().into(),
+        script_ops.into_iter().collect::<Vec<u8>>(),
         script_data,
     )
     // Add contract as input of the transaction
@@ -150,7 +150,7 @@ async fn asset_info_mint_burn() {
         .copied()
         .collect();
     let script = TransactionBuilder::script(
-        script_ops.into_iter().collect::<Vec<u8>>().into(),
+        script_ops.into_iter().collect::<Vec<u8>>(),
         script_data,
     )
     // Add contract as input of the transaction
