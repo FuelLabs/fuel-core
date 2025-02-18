@@ -5,7 +5,9 @@ use crate::{
     },
     bounded_hashset::BoundedHashset,
     codecs::{
+        gossipsub::GossipsubMessageHandler,
         postcard::PostcardCodec,
+        request_response::RequestResponseMessageHandler,
         GossipsubCodec,
     },
     config::{
@@ -123,8 +125,8 @@ pub struct FuelP2PService {
     /// to the peer that requested it.
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<V2ResponseMessage>>,
 
-    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages
-    network_codec: PostcardCodec,
+    /// `PostcardCodec` as GossipsubCodec for encoding and decoding of Gossipsub messages    
+    gossipsub_codec: GossipsubMessageHandler<PostcardCodec>,
 
     /// Stores additional p2p network info
     network_metadata: NetworkMetadata,
@@ -219,7 +221,8 @@ impl FuelP2PService {
     pub async fn new(
         reserved_peers_updates: broadcast::Sender<usize>,
         config: Config,
-        codec: PostcardCodec,
+        gossipsub_codec: GossipsubMessageHandler<PostcardCodec>,
+        request_response_codec: RequestResponseMessageHandler<PostcardCodec>,
     ) -> anyhow::Result<Self> {
         let metrics = config.metrics;
 
@@ -238,7 +241,7 @@ impl FuelP2PService {
             build_transport_function(&config, connection_state_reader);
         let tcp_config = tcp::Config::new();
 
-        let behaviour = FuelBehaviour::new(&config, codec.clone())?;
+        let behaviour = FuelBehaviour::new(&config, request_response_codec)?;
 
         let swarm_builder = SwarmBuilder::with_existing_identity(config.keypair.clone())
             .with_tokio()
@@ -298,7 +301,7 @@ impl FuelP2PService {
             local_address: config.address,
             tcp_port: config.tcp_port,
             swarm,
-            network_codec: codec,
+            gossipsub_codec,
             outbound_requests_table: HashMap::default(),
             inbound_requests_table: HashMap::default(),
             gossipsub_peer_limiter: BoundedHashset::new(usize::try_from(
@@ -398,7 +401,7 @@ impl FuelP2PService {
             .topics
             .get_gossipsub_topic_hash(&message);
 
-        match self.network_codec.encode(message) {
+        match self.gossipsub_codec.encode(message) {
             Ok(encoded_data) => self
                 .swarm
                 .behaviour_mut()
@@ -624,7 +627,7 @@ impl FuelP2PService {
                 }
 
                 let correct_topic = self.get_topic_tag(&message.topic)?;
-                match self.network_codec.decode(&message.data, correct_topic) {
+                match self.gossipsub_codec.decode(&message.data, correct_topic) {
                     Ok(decoded_message) => Some(FuelP2PEvent::GossipsubMessage {
                         peer_id: propagation_source,
                         message_id,
@@ -906,7 +909,10 @@ mod tests {
         PublishError,
     };
     use crate::{
-        codecs::postcard::PostcardCodec,
+        codecs::{
+            gossipsub::GossipsubMessageHandler,
+            request_response::RequestResponseMessageHandler,
+        },
         config::Config,
         gossipsub::{
             messages::{
@@ -988,10 +994,14 @@ mod tests {
         let (sender, _) =
             broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
 
-        let mut service =
-            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size))
-                .await
-                .unwrap();
+        let mut service = FuelP2PService::new(
+            sender,
+            p2p_config,
+            GossipsubMessageHandler::new(),
+            RequestResponseMessageHandler::new(max_block_size),
+        )
+        .await
+        .unwrap();
         service.start().await.unwrap();
         service
     }
@@ -1128,7 +1138,8 @@ mod tests {
             let mut service = FuelP2PService::new(
                 sender,
                 p2p_config,
-                PostcardCodec::new(max_block_size),
+                GossipsubMessageHandler::new(),
+                RequestResponseMessageHandler::new(max_block_size),
             )
             .await
             .unwrap();
