@@ -779,6 +779,7 @@ where
         gas_price_provider: Arc::new(gas_price_provider),
         wasm_checker: Arc::new(wasm_checker),
         memory_pool: MemoryPool::new(),
+        blacklist: config.black_list.clone(),
     };
 
     let pruner = TransactionPruner {

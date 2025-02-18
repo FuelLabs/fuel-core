@@ -59,7 +59,7 @@ use tokio::sync::broadcast::Receiver;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
-    config::Config,
+    config::{BlackList, Config},
     error::Error,
     new_service,
     pool::{
@@ -238,12 +238,10 @@ impl TestPoolUniverse {
                 consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
+                blacklist: BlackList::default()
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                Default::default(),
-                true,
-            )?;
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
             let tx = Arc::new(tx);
             Ok((tx.clone(), pool.write().insert(tx, &self.mock_db)?))
         } else {
@@ -270,12 +268,10 @@ impl TestPoolUniverse {
                 consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
+                blacklist: BlackList::default()
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                Default::default(),
-                true,
-            )?;
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");
@@ -302,12 +298,10 @@ impl TestPoolUniverse {
                 consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
                 wasm_checker: Arc::new(wasm_checker),
                 memory_pool: MemoryPool::new(),
+                blacklist: BlackList::default()
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                Default::default(),
-                true,
-            )?;
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");

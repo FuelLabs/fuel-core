@@ -371,12 +371,7 @@ where
     }
 
     fn get_tx_ids(&mut self, max_txs: usize, tx_ids_sender: Sender<Vec<TxId>>) {
-        let tx_ids: Vec<TxId> = self
-            .pool
-            .iter_tx_ids()
-            .take(max_txs)
-            .copied()
-            .collect();
+        let tx_ids: Vec<TxId> = self.pool.iter_tx_ids().take(max_txs).copied().collect();
         tx_ids_sender.send(tx_ids).unwrap();
     }
 

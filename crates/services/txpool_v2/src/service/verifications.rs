@@ -1,4 +1,5 @@
 use crate::{
+    config::BlackList,
     error::{
         Error,
         InputValidationError,
@@ -52,6 +53,7 @@ pub(crate) struct Verification<View> {
     pub gas_price_provider: Arc<dyn GasPriceProvider>,
     pub wasm_checker: Arc<dyn WasmChecker>,
     pub memory_pool: MemoryPool,
+    pub blacklist: BlackList,
 }
 
 impl<V> Clone for Verification<V> {
@@ -62,6 +64,7 @@ impl<V> Clone for Verification<V> {
             gas_price_provider: self.gas_price_provider.clone(),
             wasm_checker: self.wasm_checker.clone(),
             memory_pool: self.memory_pool.clone(),
+            blacklist: self.blacklist.clone(),
         }
     }
 }
@@ -99,8 +102,8 @@ where
             .latest_view()
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
 
-        let inputs_verified_tx =
-            gas_price_verified_tx.perform_inputs_verifications(metadata)?;
+        let inputs_verified_tx = gas_price_verified_tx
+            .perform_inputs_verifications(&self.blacklist, metadata)?;
 
         let fully_verified_tx = inputs_verified_tx
             .perform_input_computation_verifications(
@@ -170,18 +173,16 @@ impl BasicVerifiedTx {
 impl GasPriceVerifiedTx {
     pub fn perform_inputs_verifications(
         self,
+        blacklist: &BlackList,
         metadata: Metadata,
     ) -> Result<InputDependenciesVerifiedTx, Error> {
         let pool_tx = checked_tx_into_pool(self.0, metadata)?;
         if pool_tx.max_gas() == 0 {
             return Err(Error::InputValidation(InputValidationError::MaxGasZero))
         }
-        // TODO: Add
-        // self.config
-        // .black_list
-        // .check_blacklisting(&tx)
-        // .map_err(Error::Blacklisted)?;
-        // TODO: Try to remove
+        blacklist
+            .check_blacklisting(&pool_tx)
+            .map_err(Error::Blacklisted)?;
         let checked_transaction: CheckedTransaction = pool_tx.into();
         Ok(InputDependenciesVerifiedTx(checked_transaction.into()))
     }
