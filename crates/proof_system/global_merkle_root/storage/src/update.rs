@@ -451,13 +451,13 @@ where
         let new_bytecode = tx
             .witnesses()
             .get(witness_index)
-            .ok_or_else(|| InvalidBlock::MissingWitness(witness_index))?;
+            .ok_or(InvalidBlock::MissingWitness(witness_index))?;
 
         bytecode.extend_from_slice(new_bytecode.as_ref());
 
         let new_uploaded_subsections_number = uploaded_subsections_number
             .checked_add(1)
-            .ok_or_else(|| InvalidBlock::SubsectionNumberOverflow)?;
+            .ok_or(InvalidBlock::SubsectionNumberOverflow)?;
 
         let new_uploaded_bytecode =
             if new_uploaded_subsections_number == tx.body().subsections_number {
@@ -488,7 +488,7 @@ where
         let blob = tx
             .witnesses()
             .get(witness_index)
-            .ok_or_else(|| InvalidBlock::MissingWitness(witness_index))?;
+            .ok_or(InvalidBlock::MissingWitness(witness_index))?;
 
         tracing::debug!("storing blob");
         self.storage
