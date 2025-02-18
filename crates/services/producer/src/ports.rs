@@ -4,7 +4,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         header::{
             ConsensusParametersVersion,
             StateTransitionBytecodeVersion,
@@ -20,6 +23,7 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Result as ExecutorResult,
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -33,6 +37,9 @@ pub trait BlockProducerDatabase: Send + Sync {
 
     /// Gets the committed block at the `height`.
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>>;
+
+    /// Gets the full committed block at the `height`.
+    fn get_full_block(&self, height: &BlockHeight) -> StorageResult<Block>;
 
     /// Gets the block header BMT MMR root at `height`.
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
@@ -101,4 +108,11 @@ pub trait DryRunner: Send + Sync {
         utxo_validation: Option<bool>,
         at_height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>>;
+}
+
+pub trait StorageReadReplayRecorder: Send + Sync {
+    fn storage_read_replay(
+        &self,
+        block: &Block,
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>>;
 }
