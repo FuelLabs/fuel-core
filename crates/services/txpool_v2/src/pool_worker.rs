@@ -32,10 +32,12 @@ use crate::{
 };
 
 pub struct PoolWorkerInterface {
+    pub(crate) thread_management_sender: Sender<ThreadManagementRequest>,
     pub(crate) insert_request_sender: Sender<PoolInsertRequest>,
     pub(crate) request_sender: Sender<PoolOtherRequest>,
     pub(crate) extract_block_transactions_sender: Sender<PoolExtractBlockTransactions>,
     pub(crate) notification_receiver: tokio::sync::mpsc::Receiver<PoolNotification>,
+    pub(crate) handle: Option<std::thread::JoinHandle<()>>,
 }
 
 impl PoolWorkerInterface {
@@ -52,9 +54,12 @@ impl PoolWorkerInterface {
         let (insert_request_sender, insert_request_receiver) = std::sync::mpsc::channel();
         let (notification_sender, notification_receiver) =
             tokio::sync::mpsc::channel(100000);
+        let (thread_management_sender, thread_management_receiver) =
+            std::sync::mpsc::channel();
 
-        std::thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             let mut worker = PoolWorker::new(
+                thread_management_receiver,
                 request_receiver,
                 extract_block_transactions_receiver,
                 insert_request_receiver,
@@ -65,10 +70,12 @@ impl PoolWorkerInterface {
             worker.run();
         });
         Self {
+            thread_management_sender,
             request_sender,
             extract_block_transactions_sender,
             insert_request_sender,
             notification_receiver,
+            handle: Some(handle),
         }
     }
 
@@ -124,6 +131,24 @@ impl PoolWorkerInterface {
             tracing::error!("Failed to send get txs request: {}", e);
         }
     }
+
+    pub fn stop(&mut self) {
+        if let Err(e) = self
+            .thread_management_sender
+            .send(ThreadManagementRequest::Stop)
+        {
+            tracing::error!("Failed to send stop request: {}", e);
+        }
+        if let Some(handle) = self.handle.take() {
+            if handle.join().is_err() {
+                tracing::error!("Failed to join pool worker thread");
+            }
+        }
+    }
+}
+
+pub enum ThreadManagementRequest {
+    Stop,
 }
 
 // In the real code we want to have more different channels to prioritise each type of query
@@ -191,6 +216,7 @@ pub enum PoolNotification {
 }
 
 pub struct PoolWorker<View> {
+    thread_management_receiver: Receiver<ThreadManagementRequest>,
     request_receiver: Receiver<PoolOtherRequest>,
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
     insert_request_receiver: Receiver<PoolInsertRequest>,
@@ -201,6 +227,7 @@ pub struct PoolWorker<View> {
 
 impl<View> PoolWorker<View> {
     pub fn new(
+        thread_management_receiver: Receiver<ThreadManagementRequest>,
         request_receiver: Receiver<PoolOtherRequest>,
         extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
         insert_request_receiver: Receiver<PoolInsertRequest>,
@@ -209,6 +236,7 @@ impl<View> PoolWorker<View> {
         view_provider: Arc<dyn AtomicView<LatestView = View>>,
     ) -> Self {
         Self {
+            thread_management_receiver,
             request_receiver,
             extract_block_transactions_receiver,
             insert_request_receiver,
@@ -227,6 +255,16 @@ where
         // TODO: Try to find correct prio
         'outer: loop {
             loop {
+                match self.thread_management_receiver.try_recv() {
+                    Ok(ThreadManagementRequest::Stop) => {
+                        break 'outer;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        break 'outer;
+                    }
+                }
+
                 match self.extract_block_transactions_receiver.try_recv() {
                     Ok(PoolExtractBlockTransactions::ExtractBlockTransactions {
                         constraints,

@@ -236,6 +236,7 @@ where
             biased;
 
             _ = watcher.while_started() => {
+                self.pool_worker.stop();
                 TaskNextAction::Stop
             }
 
@@ -244,6 +245,7 @@ where
                     self.import_block(result);
                     TaskNextAction::Continue
                 } else {
+                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -267,6 +269,7 @@ where
                     self.process_notification(notification);
                     TaskNextAction::Continue
                 } else {
+                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -278,6 +281,7 @@ where
                     }
                     TaskNextAction::Continue
                 } else {
+                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -287,6 +291,7 @@ where
                     self.manage_new_peer_subscribed(peer_id);
                     TaskNextAction::Continue
                 } else {
+                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -296,13 +301,15 @@ where
                     self.process_read(read_pool_request).await;
                     TaskNextAction::Continue
                 } else {
+                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
         }
     }
 
-    async fn shutdown(self) -> anyhow::Result<()> {
+    async fn shutdown(mut self) -> anyhow::Result<()> {
+        self.pool_worker.stop();
         Ok(())
     }
 }
