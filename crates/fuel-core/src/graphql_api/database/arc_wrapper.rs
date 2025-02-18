@@ -1,17 +1,27 @@
-use crate::fuel_core_graphql_api::{
-    database::{
-        OffChainView,
-        OnChainView,
+use crate::{
+    fuel_core_graphql_api::{
+        database::{
+            OffChainView,
+            OffChainViewAt,
+            OnChainView,
+        },
+        ports::{
+            OffChainDatabase,
+            OffChainDatabaseAt,
+            OnChainDatabase,
+            OnChainDatabaseAt,
+        },
     },
-    ports::{
-        OffChainDatabase,
-        OnChainDatabase,
-    },
+    graphql_api::database::OnChainViewAt,
 };
 use fuel_core_storage::{
-    transactional::AtomicView,
+    transactional::{
+        AtomicView,
+        HistoricalView,
+    },
     Result as StorageResult,
 };
+use fuel_core_types::fuel_types::BlockHeight;
 use std::sync::Arc;
 
 /// The GraphQL can't work with the generics in [`async_graphql::Context::data_unchecked`] and requires a known type.
@@ -42,6 +52,25 @@ where
     }
 }
 
+impl<Provider> HistoricalView for ArcWrapper<Provider, OnChainView>
+where
+    Provider: HistoricalView<Height = BlockHeight>,
+    Provider::LatestView: OnChainDatabase + 'static,
+    Provider::ViewAtHeight: OnChainDatabaseAt + 'static,
+{
+    type ViewAtHeight = OnChainViewAt;
+
+    type Height = BlockHeight;
+
+    fn latest_height(&self) -> Option<Self::Height> {
+        self.inner.latest_height()
+    }
+
+    fn view_at(&self, height: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
+        Ok(Arc::new(self.inner.view_at(height)?))
+    }
+}
+
 impl<Provider, View> AtomicView for ArcWrapper<Provider, OffChainView>
 where
     Provider: AtomicView<LatestView = View>,
@@ -51,5 +80,24 @@ where
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
         Ok(Arc::new(self.inner.latest_view()?))
+    }
+}
+
+impl<Provider> HistoricalView for ArcWrapper<Provider, OffChainView>
+where
+    Provider: HistoricalView<Height = BlockHeight>,
+    Provider::LatestView: OffChainDatabase + 'static,
+    Provider::ViewAtHeight: OffChainDatabaseAt + 'static,
+{
+    type ViewAtHeight = OffChainViewAt;
+
+    type Height = BlockHeight;
+
+    fn latest_height(&self) -> Option<Self::Height> {
+        self.inner.latest_height()
+    }
+
+    fn view_at(&self, height: &Self::Height) -> StorageResult<Self::ViewAtHeight> {
+        Ok(Arc::new(self.inner.view_at(height)?))
     }
 }
