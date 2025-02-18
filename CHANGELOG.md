@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [2150](https://github.com/FuelLabs/fuel-core/pull/2150): Upgraded `libp2p` to `0.54.1` and introduced `ConnectionLimiter` to limit pending incoming/outgoing connections.
 - [2666](https://github.com/FuelLabs/fuel-core/pull/2666): Added two new CLI arguments to control the GraphQL queries consistency: `--graphql-block-height-tolerance` (default: `10`) and `--graphql-block-height-min-timeout` (default: `30s`). If a request requires a specific block height and the node is slightly behind, it will wait instead of failing.
 - [2722](https://github.com/FuelLabs/fuel-core/pull/2722): Service definition for state root service.
+- [2724](https://github.com/FuelLabs/fuel-core/pull/2724): Explicit error type for merkleized storage.
 
 ### Fixed
 - [2646](https://github.com/FuelLabs/fuel-core/pull/2646): Improved performance of fetching block height by caching it when the view is created.
