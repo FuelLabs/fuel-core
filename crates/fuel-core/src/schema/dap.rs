@@ -5,7 +5,6 @@ use crate::{
         OnChainIterableKeyValueView,
     },
     fuel_core_graphql_api::api_service::ConsensusProvider,
-    require_debug,
     schema::scalars::{
         U32,
         U64,
@@ -76,6 +75,16 @@ use uuid::Uuid;
 pub struct Config {
     /// `true` means that debugger functionality is enabled.
     pub debug_enabled: bool,
+}
+
+pub fn require_debug(ctx: &Context<'_>) -> async_graphql::Result<()> {
+    let config = ctx.data_unchecked::<Config>();
+
+    if config.debug_enabled {
+        Ok(())
+    } else {
+        Err(async_graphql::Error::new("The 'debug' feature is disabled"))
+    }
 }
 
 type FrozenDatabase = VmStorage<StorageTransaction<OnChainIterableKeyValueView>>;

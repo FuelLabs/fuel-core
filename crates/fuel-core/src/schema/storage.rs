@@ -1,7 +1,6 @@
 use crate::{
     fuel_core_graphql_api::database::ReadView,
-    graphql_api::api_service::ReadDatabase,
-    require_debug,
+    graphql_api::{api_service::ReadDatabase, require_historical_execution},
     schema::{
         contract::ContractBalance,
         scalars::{
@@ -37,7 +36,7 @@ impl StorageQuery {
         block_height: Option<U32>,
         storage_slots: Vec<Bytes32>,
     ) -> async_graphql::Result<Vec<StorageSlot>> {
-        require_debug(ctx)?;
+        require_historical_execution(ctx)?;
 
         let view_block_height = if let Some(block_height) = block_height {
             block_height.0.into()
@@ -69,7 +68,7 @@ impl StorageQuery {
         block_height: Option<U32>,
         assets: Vec<AssetId>,
     ) -> async_graphql::Result<Vec<ContractBalance>> {
-        require_debug(ctx)?;
+        require_historical_execution(ctx)?;
 
         let view_block_height = if let Some(block_height) = block_height {
             block_height.0.into()
@@ -103,7 +102,7 @@ impl StorageSubscription {
         contract_id: ContractId,
     ) -> async_graphql::Result<impl Stream<Item = async_graphql::Result<StorageSlot>> + 'a>
     {
-        require_debug(ctx)?;
+        require_historical_execution(ctx)?;
         let read_view: &ReadView = ctx.data_unchecked();
 
         let stream = read_view
@@ -124,7 +123,7 @@ impl StorageSubscription {
     ) -> async_graphql::Result<
         impl Stream<Item = async_graphql::Result<ContractBalance>> + 'a,
     > {
-        require_debug(ctx)?;
+        require_historical_execution(ctx)?;
         let read_view: &ReadView = ctx.data_unchecked();
 
         let stream =

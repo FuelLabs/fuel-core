@@ -5,8 +5,7 @@ use crate::{
             IndexationKind,
         },
         Database,
-        OffChainIterableKeyValueView,
-        OffChainKeyValueView,
+        OffChainIterableKeyValueView, OffChainKeyValueView,
     },
     fuel_core_graphql_api::{
         ports::{

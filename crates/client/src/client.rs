@@ -30,34 +30,6 @@ use crate::{
             upgrades::StateTransitionBytecode,
             RelayedTransactionStatus,
         },
-        contract::ContractBalanceQueryArgs,
-        gas_price::EstimateGasPrice,
-        message::MessageStatusArgs,
-        relayed_tx::RelayedTransactionStatusArgs,
-        storage::{
-            ContractBalanceValuesArgs,
-            ContractSlotValuesArgs,
-            ContractStorageBalancesArgs,
-            ContractStorageSlotsArgs,
-        },
-        tx::DryRunArg,
-        Tai64Timestamp,
-        TransactionId,
-    },
-    types::{
-        asset::AssetDetail,
-        gas_price::LatestGasPrice,
-        message::MessageStatus,
-        primitives::{
-            Address,
-            AssetId,
-            BlockId,
-            ContractId,
-            UtxoId,
-        },
-        upgrades::StateTransitionBytecode,
-        ContractBalance,
-        RelayedTransactionStatus,
     },
     reqwest_ext::{
         FuelGraphQlResponse,
@@ -819,6 +791,7 @@ impl FuelClient {
         contract_id: &ContractId,
     ) -> io::Result<impl Stream<Item = io::Result<(Bytes32, Vec<u8>)>>> {
         use cynic::SubscriptionBuilder;
+        use schema::storage::ContractStorageSlotsArgs;
         let s = schema::storage::ContractStorageSlots::build(ContractStorageSlotsArgs {
             contract_id: (*contract_id).into(),
         });
@@ -838,8 +811,9 @@ impl FuelClient {
     pub async fn contract_storage_balances(
         &self,
         contract_id: &ContractId,
-    ) -> io::Result<impl Stream<Item = io::Result<ContractBalance>>> {
+    ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>>> {
         use cynic::SubscriptionBuilder;
+        use schema::{contract::ContractBalance, storage::ContractStorageBalancesArgs};
         let s = schema::storage::ContractStorageBalances::build(
             ContractStorageBalancesArgs {
                 contract_id: (*contract_id).into(),
@@ -862,7 +836,7 @@ impl FuelClient {
         block_height: Option<BlockHeight>,
         requested_storage_slots: Vec<Bytes32>,
     ) -> io::Result<Vec<(Bytes32, Vec<u8>)>> {
-        let query = schema::storage::ContractSlotValues::build(ContractSlotValuesArgs {
+        let query = schema::storage::ContractSlotValues::build(schema::storage::ContractSlotValuesArgs {
             contract_id: (*contract_id).into(),
             block_height: block_height.map(|b| (*b).into()),
             storage_slots: requested_storage_slots
@@ -881,9 +855,9 @@ impl FuelClient {
         contract_id: &ContractId,
         block_height: Option<BlockHeight>,
         requested_storage_slots: Vec<AssetId>,
-    ) -> io::Result<Vec<ContractBalance>> {
+    ) -> io::Result<Vec<schema::contract::ContractBalance>> {
         let query =
-            schema::storage::ContractBalanceValues::build(ContractBalanceValuesArgs {
+            schema::storage::ContractBalanceValues::build(schema::storage::ContractBalanceValuesArgs {
                 contract_id: (*contract_id).into(),
                 block_height: block_height.map(|b| (*b).into()),
                 assets: requested_storage_slots
