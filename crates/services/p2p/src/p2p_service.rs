@@ -1653,6 +1653,9 @@ mod tests {
         let selected_topic: Sha256Topic = {
             let topic = match broadcast_request {
                 GossipsubBroadcastRequest::NewTx(_) => NEW_TX_GOSSIP_TOPIC,
+                GossipsubBroadcastRequest::Confirmations(_) => {
+                    unimplemented!()
+                }
             };
 
             Topic::new(format!("{}/{}", topic, p2p_config.network_name))
@@ -1723,7 +1726,9 @@ mod tests {
                                     panic!("Wrong GossipsubMessage")
                                 }
                             }
-                        }
+                        GossipsubMessage::Confirmations(_) => {
+                            unimplemented!()
+                            }}
 
                         // Node B received the correct message
                         // If we try to publish it again we will get `PublishError::Duplicate`

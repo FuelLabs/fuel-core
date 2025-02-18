@@ -10,6 +10,7 @@ use super::messages::{
 };
 
 pub const NEW_TX_GOSSIP_TOPIC: &str = "new_tx";
+pub const TX_CONFIRMATIONS_GOSSIP_TOPIC: &str = "tx_confirmations";
 
 /// Holds used Gossipsub Topics
 /// Each field contains TopicHash of existing topics
@@ -17,15 +18,19 @@ pub const NEW_TX_GOSSIP_TOPIC: &str = "new_tx";
 #[derive(Debug)]
 pub struct GossipsubTopics {
     new_tx_topic: TopicHash,
+    tx_confirmations_topic: TopicHash,
 }
 
 impl GossipsubTopics {
     pub fn new(network_name: &str) -> Self {
         let new_tx_topic: Sha256Topic =
             Topic::new(format!("{NEW_TX_GOSSIP_TOPIC}/{network_name}"));
+        let tx_confirmations_topic: Sha256Topic =
+            Topic::new(format!("{TX_CONFIRMATIONS_GOSSIP_TOPIC}/{network_name}"));
 
         Self {
             new_tx_topic: new_tx_topic.hash(),
+            tx_confirmations_topic: tx_confirmations_topic.hash(),
         }
     }
 
@@ -48,6 +53,9 @@ impl GossipsubTopics {
     ) -> TopicHash {
         match outgoing_request {
             GossipsubBroadcastRequest::NewTx(_) => self.new_tx_topic.clone(),
+            GossipsubBroadcastRequest::Confirmations(_) => {
+                self.tx_confirmations_topic.clone()
+            }
         }
     }
 }

@@ -60,6 +60,7 @@ use fuel_core_types::{
             PeerReport,
         },
         BlockHeightHeartbeatData,
+        ConfirmationsGossipData,
         GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
@@ -76,6 +77,7 @@ use futures::{
 use libp2p::{
     gossipsub::{
         MessageAcceptance,
+        MessageId,
         PublishError,
     },
     request_response::InboundRequestId,
@@ -368,6 +370,11 @@ pub trait Broadcast: Send {
 
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()>;
 
+    fn confirmations_broadcast(
+        &self,
+        confirmations: ConfirmationsGossipData,
+    ) -> anyhow::Result<()>;
+
     fn new_tx_subscription_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
 }
 
@@ -392,6 +399,13 @@ impl Broadcast for SharedState {
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()> {
         self.tx_broadcast.send(transaction)?;
         Ok(())
+    }
+
+    fn confirmations_broadcast(
+        &self,
+        _confirmations: ConfirmationsGossipData,
+    ) -> anyhow::Result<()> {
+        todo!();
     }
 
     fn new_tx_subscription_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()> {
@@ -438,6 +452,28 @@ pub struct Task<P, V, B, T> {
     heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
     // cached view
     cached_view: Arc<CachedView>,
+}
+
+impl<P, V, B: Broadcast, T> Task<P, V, B, T> {
+    pub(crate) fn broadcast_gossip_message(
+        &self,
+        message: GossipsubMessage,
+        message_id: MessageId,
+        peer_id: PeerId,
+    ) {
+        let message_id = message_id.0;
+
+        match message {
+            GossipsubMessage::NewTx(transaction) => {
+                let next_transaction = GossipData::new(transaction, peer_id, message_id);
+                let _ = self.broadcast.tx_broadcast(next_transaction);
+            }
+            GossipsubMessage::Confirmations(confirmations) => {
+                let data = GossipData::new(confirmations, peer_id, message_id);
+                let _ = self.broadcast.confirmations_broadcast(data);
+            }
+        }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -986,14 +1022,8 @@ where
                         let _ = self.broadcast.block_height_broadcast(block_height_data);
                     }
                     Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
-                        let message_id = message_id.0;
 
-                        match message {
-                            GossipsubMessage::NewTx(transaction) => {
-                                let next_transaction = GossipData::new(transaction, peer_id, message_id);
-                                let _ = self.broadcast.tx_broadcast(next_transaction);
-                            },
-                        }
+                        self.broadcast_gossip_message(message, message_id, peer_id);
                     },
                     Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
                         let res = self.process_request(request_message, request_id);
@@ -1638,6 +1668,13 @@ pub mod tests {
         fn tx_broadcast(
             &self,
             _transaction: TransactionGossipData,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn confirmations_broadcast(
+            &self,
+            _confirmations: ConfirmationsGossipData,
         ) -> anyhow::Result<()> {
             todo!()
         }

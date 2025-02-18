@@ -72,6 +72,16 @@ pub struct GossipData<T> {
 /// Transactions gossiped by peers for inclusion into a block
 pub type TransactionGossipData = GossipData<Transaction>;
 
+/// Transactions that have been confirmed by block producer
+pub type ConfirmationsGossipData = GossipData<TxConfirmations>;
+
+/// List of transactions that have been confirmed with block producer's signature
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TxConfirmations {
+    signature: String,
+    txs: Vec<Transaction>,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// The source of some network data.
 pub struct SourcePeer<T> {
