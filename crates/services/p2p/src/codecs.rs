@@ -10,9 +10,6 @@ use std::{
     io,
 };
 
-// TODO: https://github.com/FuelLabs/fuel-core/issues/2403
-// This trait is largely a copy-paste from the storage crate.
-// It would be best to have this trait in a separate crate that both storage and p2p can depend on.
 pub trait Encoder: Send {
     /// Returns the serialized object as a slice.
     fn as_bytes(&self) -> Cow<[u8]>;
@@ -23,9 +20,6 @@ pub trait Encoder: Send {
 /// flexibility and more performant encoding, allowing the use of slices and arrays
 /// instead of vectors in some cases. Since the [`Encoder`] returns `Cow<[u8]>`,
 /// it is always possible to take ownership of the serialized value.
-// TODO: https://github.com/FuelLabs/fuel-core/issues/2403
-// This trait is largely a copy-paste from the storage crate.
-// It would be best to have this trait in a separate crate that both storage and p2p can depend on.
 pub trait Encode<T: ?Sized> {
     type Error;
     /// The encoder type that stores serialized object.
@@ -38,9 +32,6 @@ pub trait Encode<T: ?Sized> {
 }
 
 /// The trait decodes the type from the bytes.
-// TODO: https://github.com/FuelLabs/fuel-core/issues/2403
-// This trait is largely a copy-paste from the storage crate.
-// It would be best to have this trait in a separate crate that both storage and p2p can depend on.
 pub trait Decode<T> {
     type Error;
     /// Decodes the type `T` from the bytes.
