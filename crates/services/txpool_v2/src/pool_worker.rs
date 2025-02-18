@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::TxId,
@@ -38,7 +36,6 @@ pub struct PoolWorkerInterface {
     pub(crate) request_sender: Sender<PoolOtherRequest>,
     pub(crate) extract_block_transactions_sender: Sender<PoolExtractBlockTransactions>,
     pub(crate) notification_receiver: tokio::sync::mpsc::Receiver<PoolNotification>,
-    pub(crate) handle: std::thread::JoinHandle<()>,
 }
 
 impl PoolWorkerInterface {
@@ -56,7 +53,7 @@ impl PoolWorkerInterface {
         let (notification_sender, notification_receiver) =
             tokio::sync::mpsc::channel(100000);
 
-        let handle = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             let mut worker = PoolWorker::new(
                 request_receiver,
                 extract_block_transactions_receiver,
@@ -72,22 +69,6 @@ impl PoolWorkerInterface {
             extract_block_transactions_sender,
             insert_request_sender,
             notification_receiver,
-            handle,
-        }
-    }
-
-    pub fn insert(
-        &self,
-        tx: ArcPoolTx,
-        from_peer_info: Option<GossipsubMessageInfo>,
-        response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>,
-    ) {
-        if let Err(e) = self.insert_request_sender.send(PoolInsertRequest::Insert {
-            tx,
-            from_peer_info,
-            response_channel,
-        }) {
-            tracing::error!("Failed to send insert request: {}", e);
         }
     }
 
@@ -118,21 +99,6 @@ impl PoolWorkerInterface {
         }
     }
 
-    pub fn get_block_transactions(
-        &self,
-        constraints: Constraints,
-        transactions: Sender<Vec<ArcPoolTx>>,
-    ) {
-        if let Err(e) = self.extract_block_transactions_sender.send(
-            PoolExtractBlockTransactions::ExtractBlockTransactions {
-                constraints,
-                transactions,
-            },
-        ) {
-            tracing::error!("Failed to send get block transactions request: {}", e);
-        }
-    }
-
     pub fn get_tx_ids(
         &self,
         max_txs: usize,
@@ -156,22 +122,6 @@ impl PoolWorkerInterface {
             .send(PoolOtherRequest::GetTxs { tx_ids, txs })
         {
             tracing::error!("Failed to send get txs request: {}", e);
-        }
-    }
-
-    pub fn get_non_existing_txs(
-        &self,
-        tx_ids: Vec<TxId>,
-        non_existing_txs: Sender<Vec<TxId>>,
-    ) {
-        if let Err(e) = self
-            .request_sender
-            .send(PoolOtherRequest::GetNonExistingTxs {
-                tx_ids,
-                non_existing_txs,
-            })
-        {
-            tracing::error!("Failed to send get non existing txs request: {}", e);
         }
     }
 }
@@ -231,7 +181,6 @@ pub enum PoolNotification {
         tx: ArcPoolTx,
     },
     ErrorInsertion {
-        tx_id: TxId,
         error: Error,
         from_peer_info: Option<GossipsubMessageInfo>,
     },
@@ -278,6 +227,19 @@ where
         // TODO: Try to find correct prio
         'outer: loop {
             loop {
+                match self.extract_block_transactions_receiver.try_recv() {
+                    Ok(PoolExtractBlockTransactions::ExtractBlockTransactions {
+                        constraints,
+                        transactions,
+                    }) => {
+                        self.get_block_transactions(constraints, transactions);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        break;
+                    }
+                }
+
                 match self.insert_request_receiver.try_recv() {
                     Ok(PoolInsertRequest::Insert {
                         tx,
@@ -293,19 +255,6 @@ where
                     Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                         break 'outer;
                     }
-                }
-            }
-
-            match self.extract_block_transactions_receiver.try_recv() {
-                Ok(PoolExtractBlockTransactions::ExtractBlockTransactions {
-                    constraints,
-                    transactions,
-                }) => {
-                    self.get_block_transactions(constraints, transactions);
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    break;
                 }
             }
 
@@ -358,33 +307,39 @@ where
 
         match res {
             Ok(removed_txs) => {
-                futures::executor::block_on(self.notification_sender.send(
-                    PoolNotification::Inserted {
+                if let Err(e) = futures::executor::block_on(
+                    self.notification_sender.send(PoolNotification::Inserted {
                         tx_id,
                         from_peer_info,
                         expiration,
                         time: SystemTime::now(),
                         tx: tx_clone,
-                    },
-                ))
-                .unwrap();
+                    }),
+                ) {
+                    tracing::error!("Failed to send inserted notification: {}", e);
+                }
                 for tx in removed_txs {
                     let removed_tx_id = tx.id();
-                    futures::executor::block_on(self.notification_sender.send(
-                        PoolNotification::Removed {
+                    if let Err(e) = futures::executor::block_on(
+                        self.notification_sender.send(PoolNotification::Removed {
                             tx_id: removed_tx_id,
                             error: Error::Removed(RemovedReason::LessWorth(tx_id)),
-                        },
-                    ))
-                    .unwrap();
+                        }),
+                    ) {
+                        tracing::error!("Failed to send removed notification: {}", e);
+                    }
                 }
             }
             Err(err) => {
-                futures::executor::block_on(
+                if let Err(e) = futures::executor::block_on(
                     self.notification_sender
-                        .send(PoolNotification::Removed { tx_id, error: err }),
-                )
-                .unwrap();
+                        .send(PoolNotification::ErrorInsertion {
+                            error: err.clone(),
+                            from_peer_info,
+                        }),
+                ) {
+                    tracing::error!("Failed to send error insertion notification: {}", e);
+                }
             }
         }
         if let Some(channel) = response_channel {
@@ -412,12 +367,14 @@ where
             let removed = self.pool.remove_coin_dependents(tx_id);
             for tx in removed {
                 let tx_id = tx.id();
-                futures::executor::block_on(self.notification_sender.send(PoolNotification::Removed {
+                if let Err(e) = futures::executor::block_on(self.notification_sender.send(PoolNotification::Removed {
                     tx_id,
                     error: Error::SkippedTransaction(
                         format!("Parent transaction with id: {tx_id}, was removed because of: {reason}")
                     )
-                })).unwrap();
+                })) {
+                    tracing::error!("Failed to send removed notification: {}", e);
+                }
             }
         }
     }
@@ -427,15 +384,16 @@ where
         let removed = self.pool.remove_transaction_and_dependents(tx_ids.0);
         for tx in removed {
             let tx_id = tx.id();
-            futures::executor::block_on(self.notification_sender.send(
+            if let Err(e) = futures::executor::block_on(self.notification_sender.send(
                 PoolNotification::Removed {
                     tx_id,
                     error: Error::SkippedTransaction(format!(
                         "Transaction with id: {tx_id}, was removed because of: {error}"
                     )),
                 },
-            ))
-            .unwrap();
+            )) {
+                tracing::error!("Failed to send removed notification: {}", e);
+            }
         }
     }
 
@@ -464,7 +422,9 @@ where
                 })
             })
             .collect();
-        txs_sender.send(txs).unwrap();
+        if let Err(_) = txs_sender.send(txs) {
+            tracing::error!("Failed to send txs from PoolWorker");
+        }
     }
 
     fn get_non_existing_txs(
@@ -476,6 +436,8 @@ where
             .into_iter()
             .filter(|tx_id| !self.pool.contains(tx_id))
             .collect();
-        non_existing_txs_sender.send(non_existing_txs).unwrap();
+        if let Err(e) = non_existing_txs_sender.send(non_existing_txs) {
+            tracing::error!("Failed to send non existing txs: {}", e);
+        }
     }
 }

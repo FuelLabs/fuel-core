@@ -406,7 +406,6 @@ where
                 self.shared_state.new_txs_notifier.send_replace(());
             }
             PoolNotification::ErrorInsertion {
-                tx_id: _,
                 error,
                 from_peer_info,
             } => {
@@ -489,7 +488,6 @@ where
             };
 
             let tx = Arc::new(checked_tx);
-
             // We don't use the `insert` from `PoolWorkerInterface` because we don't want to make the whole object clonable
             if let Err(e) = pool_insert_request_sender.send(PoolInsertRequest::Insert {
                 tx,
@@ -568,6 +566,7 @@ where
                 if peer_tx_ids.is_empty() {
                     return;
                 }
+                // We don't use the `get_non_existing_txs` from `PoolWorkerInterface` because we don't want to make the whole object clonable
                 let (response_sender, response_receiver) = std::sync::mpsc::channel();
                 if let Err(e) = request_sender.send(PoolOtherRequest::GetNonExistingTxs {
                     tx_ids: peer_tx_ids,
@@ -579,7 +578,7 @@ where
                     );
                     return;
                 }
-                // TODO: Unwrap
+
                 let tx_ids_to_ask = match response_receiver.recv() {
                     Ok(tx_ids) => tx_ids,
                     Err(e) => {
