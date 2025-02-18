@@ -4,7 +4,7 @@ use crate::{
     pool_worker::{
         PoolInsertRequest,
         PoolNotification,
-        PoolOtherRequest,
+        PoolReadRequest,
         PoolWorkerInterface,
     },
 };
@@ -455,7 +455,7 @@ where
 
         let p2p = self.p2p.clone();
         let verification = self.verification.clone();
-        let pool_insert_request_sender = self.pool_worker.insert_request_sender.clone();
+        let pool_insert_request_sender = self.pool_worker.request_insert_sender.clone();
         let shared_state = self.shared_state.clone();
         let current_height_reader = self.current_height_reader.clone();
         let tx_id = transaction.id(&self.chain_id);
@@ -546,7 +546,7 @@ where
         // We are not affected if there is too many queued job and we don't manage this peer.
         let _ = self.p2p_sync_process.try_spawn({
             let p2p = self.p2p.clone();
-            let request_sender = self.pool_worker.request_sender.clone();
+            let request_sender = self.pool_worker.request_read_sender.clone();
             let txs_insert_sender = self.shared_state.write_pool_requests_sender.clone();
             let tx_sync_history = self.tx_sync_history.clone();
             async move {
@@ -575,7 +575,7 @@ where
                 }
                 // We don't use the `get_non_existing_txs` from `PoolWorkerInterface` because we don't want to make the whole object cloneable
                 let (response_sender, response_receiver) = std::sync::mpsc::channel();
-                if let Err(e) = request_sender.send(PoolOtherRequest::GetNonExistingTxs {
+                if let Err(e) = request_sender.send(PoolReadRequest::NonExistingTxs {
                     tx_ids: peer_tx_ids,
                     non_existing_txs: response_sender,
                 }) {

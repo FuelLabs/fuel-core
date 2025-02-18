@@ -33,8 +33,9 @@ use crate::{
 
 pub struct PoolWorkerInterface {
     pub(crate) thread_management_sender: Sender<ThreadManagementRequest>,
-    pub(crate) insert_request_sender: Sender<PoolInsertRequest>,
-    pub(crate) request_sender: Sender<PoolOtherRequest>,
+    pub(crate) request_insert_sender: Sender<PoolInsertRequest>,
+    pub(crate) request_remove_sender: Sender<PoolRemoveRequest>,
+    pub(crate) request_read_sender: Sender<PoolReadRequest>,
     pub(crate) extract_block_transactions_sender: Sender<PoolExtractBlockTransactions>,
     pub(crate) notification_receiver: tokio::sync::mpsc::Receiver<PoolNotification>,
     pub(crate) handle: Option<std::thread::JoinHandle<()>>,
@@ -48,10 +49,11 @@ impl PoolWorkerInterface {
     where
         View: TxPoolPersistentStorage,
     {
-        let (request_sender, request_receiver) = std::sync::mpsc::channel();
+        let (request_read_sender, request_read_receiver) = std::sync::mpsc::channel();
         let (extract_block_transactions_sender, extract_block_transactions_receiver) =
             std::sync::mpsc::channel();
-        let (insert_request_sender, insert_request_receiver) = std::sync::mpsc::channel();
+        let (request_remove_sender, request_remove_receiver) = std::sync::mpsc::channel();
+        let (request_insert_sender, request_insert_receiver) = std::sync::mpsc::channel();
         let (notification_sender, notification_receiver) =
             tokio::sync::mpsc::channel(100000);
         let (thread_management_sender, thread_management_receiver) =
@@ -60,9 +62,10 @@ impl PoolWorkerInterface {
         let handle = std::thread::spawn(move || {
             let mut worker = PoolWorker::new(
                 thread_management_receiver,
-                request_receiver,
+                request_remove_receiver,
+                request_read_receiver,
                 extract_block_transactions_receiver,
-                insert_request_receiver,
+                request_insert_receiver,
                 notification_sender,
                 tx_pool,
                 view_provider,
@@ -71,9 +74,10 @@ impl PoolWorkerInterface {
         });
         Self {
             thread_management_sender,
-            request_sender,
+            request_insert_sender,
             extract_block_transactions_sender,
-            insert_request_sender,
+            request_read_sender,
+            request_remove_sender,
             notification_receiver,
             handle: Some(handle),
         }
@@ -81,8 +85,8 @@ impl PoolWorkerInterface {
 
     pub fn remove(&self, tx_ids: Vec<TxId>) {
         if let Err(e) = self
-            .request_sender
-            .send(PoolOtherRequest::Remove { tx_ids })
+            .request_remove_sender
+            .send(PoolRemoveRequest::Remove { tx_ids })
         {
             tracing::error!("Failed to send remove request: {}", e);
         }
@@ -90,8 +94,8 @@ impl PoolWorkerInterface {
 
     pub fn remove_coin_dependents(&self, parent_txs: Vec<(TxId, String)>) {
         if let Err(e) = self
-            .request_sender
-            .send(PoolOtherRequest::RemoveCoinDependents { parent_txs })
+            .request_remove_sender
+            .send(PoolRemoveRequest::RemoveCoinDependents { parent_txs })
         {
             tracing::error!("Failed to send remove coin dependents request: {}", e);
         }
@@ -99,8 +103,8 @@ impl PoolWorkerInterface {
 
     pub fn remove_and_coin_dependents(&self, tx_ids: (Vec<TxId>, Error)) {
         if let Err(e) = self
-            .request_sender
-            .send(PoolOtherRequest::RemoveAndCoinDependents { tx_ids })
+            .request_remove_sender
+            .send(PoolRemoveRequest::RemoveAndCoinDependents { tx_ids })
         {
             tracing::error!("Failed to send remove and coin dependents request: {}", e);
         }
@@ -111,7 +115,7 @@ impl PoolWorkerInterface {
         max_txs: usize,
         response_channel: tokio::sync::oneshot::Sender<Vec<TxId>>,
     ) {
-        if let Err(e) = self.request_sender.send(PoolOtherRequest::GetTxIds {
+        if let Err(e) = self.request_read_sender.send(PoolReadRequest::TxIds {
             max_txs,
             tx_ids: response_channel,
         }) {
@@ -125,8 +129,8 @@ impl PoolWorkerInterface {
         txs: tokio::sync::oneshot::Sender<Vec<Option<TxInfo>>>,
     ) {
         if let Err(e) = self
-            .request_sender
-            .send(PoolOtherRequest::GetTxs { tx_ids, txs })
+            .request_read_sender
+            .send(PoolReadRequest::Txs { tx_ids, txs })
         {
             tracing::error!("Failed to send get txs request: {}", e);
         }
@@ -173,25 +177,21 @@ pub enum PoolExtractBlockTransactions {
     },
 }
 
-pub enum PoolOtherRequest {
-    Remove {
-        tx_ids: Vec<TxId>,
-    },
-    RemoveCoinDependents {
-        parent_txs: Vec<(TxId, String)>,
-    },
-    RemoveAndCoinDependents {
-        tx_ids: (Vec<TxId>, Error),
-    },
-    GetNonExistingTxs {
+pub enum PoolRemoveRequest {
+    Remove { tx_ids: Vec<TxId> },
+    RemoveCoinDependents { parent_txs: Vec<(TxId, String)> },
+    RemoveAndCoinDependents { tx_ids: (Vec<TxId>, Error) },
+}
+pub enum PoolReadRequest {
+    NonExistingTxs {
         tx_ids: Vec<TxId>,
         non_existing_txs: Sender<Vec<TxId>>,
     },
-    GetTxs {
+    Txs {
         tx_ids: Vec<TxId>,
         txs: tokio::sync::oneshot::Sender<Vec<Option<TxInfo>>>,
     },
-    GetTxIds {
+    TxIds {
         max_txs: usize,
         tx_ids: tokio::sync::oneshot::Sender<Vec<TxId>>,
     },
@@ -217,29 +217,33 @@ pub enum PoolNotification {
 
 pub struct PoolWorker<View> {
     thread_management_receiver: Receiver<ThreadManagementRequest>,
-    request_receiver: Receiver<PoolOtherRequest>,
+    request_remove_receiver: Receiver<PoolRemoveRequest>,
+    request_read_receiver: Receiver<PoolReadRequest>,
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
-    insert_request_receiver: Receiver<PoolInsertRequest>,
+    request_insert_receiver: Receiver<PoolInsertRequest>,
     pool: TxPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
     notification_sender: tokio::sync::mpsc::Sender<PoolNotification>,
 }
 
 impl<View> PoolWorker<View> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         thread_management_receiver: Receiver<ThreadManagementRequest>,
-        request_receiver: Receiver<PoolOtherRequest>,
+        request_remove_receiver: Receiver<PoolRemoveRequest>,
+        request_read_receiver: Receiver<PoolReadRequest>,
         extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
-        insert_request_receiver: Receiver<PoolInsertRequest>,
+        request_insert_receiver: Receiver<PoolInsertRequest>,
         notification_sender: tokio::sync::mpsc::Sender<PoolNotification>,
         pool: TxPool,
         view_provider: Arc<dyn AtomicView<LatestView = View>>,
     ) -> Self {
         Self {
             thread_management_receiver,
-            request_receiver,
+            request_remove_receiver,
+            request_read_receiver,
             extract_block_transactions_receiver,
-            insert_request_receiver,
+            request_insert_receiver,
             pool,
             view_provider,
             notification_sender,
@@ -277,16 +281,19 @@ where
                 }
             }
 
-            loop {
-                match self.insert_request_receiver.try_recv() {
-                    Ok(PoolInsertRequest::Insert {
-                        tx,
-                        from_peer_info,
-                        response_channel,
-                    }) => {
-                        self.insert(tx, from_peer_info, response_channel);
-                        continue;
-                    }
+            for _ in 0..1000 {
+                match self.request_remove_receiver.try_recv() {
+                    Ok(request) => match request {
+                        PoolRemoveRequest::Remove { tx_ids } => {
+                            self.remove(tx_ids);
+                        }
+                        PoolRemoveRequest::RemoveCoinDependents { parent_txs } => {
+                            self.remove_coin_dependents(parent_txs);
+                        }
+                        PoolRemoveRequest::RemoveAndCoinDependents { tx_ids } => {
+                            self.remove_and_coin_dependents(tx_ids);
+                        }
+                    },
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
                         break;
                     }
@@ -296,35 +303,52 @@ where
                 }
             }
 
-            match self.request_receiver.try_recv() {
-                Ok(request) => match request {
-                    PoolOtherRequest::Remove { tx_ids } => {
-                        self.remove(tx_ids);
+            for _ in 0..10000 {
+                match self.request_read_receiver.try_recv() {
+                    Ok(request) => match request {
+                        PoolReadRequest::TxIds { max_txs, tx_ids } => {
+                            self.get_tx_ids(max_txs, tx_ids);
+                        }
+                        PoolReadRequest::Txs { tx_ids, txs } => {
+                            self.get_txs(tx_ids, txs);
+                        }
+                        PoolReadRequest::NonExistingTxs {
+                            tx_ids,
+                            non_existing_txs,
+                        } => {
+                            self.get_non_existing_txs(tx_ids, non_existing_txs);
+                        }
+                    },
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        break;
                     }
-                    PoolOtherRequest::RemoveCoinDependents { parent_txs } => {
-                        self.remove_coin_dependents(parent_txs);
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        break;
                     }
-                    PoolOtherRequest::RemoveAndCoinDependents { tx_ids } => {
-                        self.remove_and_coin_dependents(tx_ids);
-                    }
-                    PoolOtherRequest::GetTxIds { max_txs, tx_ids } => {
-                        self.get_tx_ids(max_txs, tx_ids);
-                    }
-                    PoolOtherRequest::GetTxs { tx_ids, txs } => {
-                        self.get_txs(tx_ids, txs);
-                    }
-                    PoolOtherRequest::GetNonExistingTxs {
-                        tx_ids,
-                        non_existing_txs,
-                    } => {
-                        self.get_non_existing_txs(tx_ids, non_existing_txs);
-                    }
-                },
-                Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    break;
                 }
             }
+
+            for _ in 0..1000 {
+                match self.request_insert_receiver.try_recv() {
+                    Ok(PoolInsertRequest::Insert {
+                        tx,
+                        from_peer_info,
+                        response_channel,
+                    }) => {
+                        self.insert(tx, from_peer_info, response_channel);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        break;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        break 'outer;
+                    }
+                }
+            }
+        }
+        #[cfg(feature = "test-helpers")]
+        {
+            std::thread::sleep(std::time::Duration::from_secs(1));
         }
     }
 
