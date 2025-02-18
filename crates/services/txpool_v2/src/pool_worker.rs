@@ -36,6 +36,7 @@ use crate::{
 pub struct PoolWorkerInterface {
     pub(crate) insert_request_sender: Sender<PoolInsertRequest>,
     pub(crate) request_sender: Sender<PoolOtherRequest>,
+    pub(crate) extract_block_transactions_sender: Sender<PoolExtractBlockTransactions>,
     pub(crate) notification_receiver: tokio::sync::mpsc::Receiver<PoolNotification>,
     pub(crate) handle: std::thread::JoinHandle<()>,
 }
@@ -49,6 +50,8 @@ impl PoolWorkerInterface {
         View: TxPoolPersistentStorage,
     {
         let (request_sender, request_receiver) = std::sync::mpsc::channel();
+        let (extract_block_transactions_sender, extract_block_transactions_receiver) =
+            std::sync::mpsc::channel();
         let (insert_request_sender, insert_request_receiver) = std::sync::mpsc::channel();
         let (notification_sender, notification_receiver) =
             tokio::sync::mpsc::channel(100000);
@@ -56,6 +59,7 @@ impl PoolWorkerInterface {
         let handle = std::thread::spawn(move || {
             let mut worker = PoolWorker::new(
                 request_receiver,
+                extract_block_transactions_receiver,
                 insert_request_receiver,
                 notification_sender,
                 tx_pool,
@@ -65,6 +69,7 @@ impl PoolWorkerInterface {
         });
         Self {
             request_sender,
+            extract_block_transactions_sender,
             insert_request_sender,
             notification_receiver,
             handle,
@@ -77,56 +82,81 @@ impl PoolWorkerInterface {
         from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>,
     ) {
-        self.insert_request_sender
-            .send(PoolInsertRequest::Insert {
-                tx,
-                from_peer_info,
-                response_channel,
-            })
-            .unwrap();
+        if let Err(e) = self.insert_request_sender.send(PoolInsertRequest::Insert {
+            tx,
+            from_peer_info,
+            response_channel,
+        }) {
+            tracing::error!("Failed to send insert request: {}", e);
+        }
     }
 
     pub fn remove(&self, tx_ids: Vec<TxId>) {
-        self.request_sender
+        if let Err(e) = self
+            .request_sender
             .send(PoolOtherRequest::Remove { tx_ids })
-            .unwrap();
+        {
+            tracing::error!("Failed to send remove request: {}", e);
+        }
     }
 
     pub fn remove_coin_dependents(&self, parent_txs: Vec<(TxId, String)>) {
-        self.request_sender
+        if let Err(e) = self
+            .request_sender
             .send(PoolOtherRequest::RemoveCoinDependents { parent_txs })
-            .unwrap();
+        {
+            tracing::error!("Failed to send remove coin dependents request: {}", e);
+        }
     }
 
     pub fn remove_and_coin_dependents(&self, tx_ids: (Vec<TxId>, Error)) {
-        self.request_sender
+        if let Err(e) = self
+            .request_sender
             .send(PoolOtherRequest::RemoveAndCoinDependents { tx_ids })
-            .unwrap();
+        {
+            tracing::error!("Failed to send remove and coin dependents request: {}", e);
+        }
     }
 
     pub fn get_block_transactions(
         &self,
         constraints: Constraints,
-        blocks: Sender<Vec<ArcPoolTx>>,
+        transactions: Sender<Vec<ArcPoolTx>>,
     ) {
-        self.request_sender
-            .send(PoolOtherRequest::GetBlockTransactions {
+        if let Err(e) = self.extract_block_transactions_sender.send(
+            PoolExtractBlockTransactions::ExtractBlockTransactions {
                 constraints,
-                blocks,
-            })
-            .unwrap();
+                transactions,
+            },
+        ) {
+            tracing::error!("Failed to send get block transactions request: {}", e);
+        }
     }
 
-    pub fn get_tx_ids(&self, max_txs: usize, tx_ids: Sender<Vec<TxId>>) {
-        self.request_sender
-            .send(PoolOtherRequest::GetTxIds { max_txs, tx_ids })
-            .unwrap();
+    pub fn get_tx_ids(
+        &self,
+        max_txs: usize,
+        response_channel: tokio::sync::oneshot::Sender<Vec<TxId>>,
+    ) {
+        if let Err(e) = self.request_sender.send(PoolOtherRequest::GetTxIds {
+            max_txs,
+            tx_ids: response_channel,
+        }) {
+            tracing::error!("Failed to send tx ids request: {}", e);
+        }
     }
 
-    pub fn get_txs(&self, tx_ids: Vec<TxId>, txs: Sender<Vec<Option<TxInfo>>>) {
-        self.request_sender
+    pub fn get_txs(
+        &self,
+        tx_ids: Vec<TxId>,
+        txs: tokio::sync::oneshot::Sender<Vec<Option<TxInfo>>>,
+    ) {
+        if let Err(e) = self
+            .request_sender
             .send(PoolOtherRequest::GetTxs { tx_ids, txs })
-            .unwrap();
+        {
+            tracing::error!("Failed to send get txs request: {}", e);
+        }
     }
 
     pub fn get_non_existing_txs(
@@ -134,12 +164,15 @@ impl PoolWorkerInterface {
         tx_ids: Vec<TxId>,
         non_existing_txs: Sender<Vec<TxId>>,
     ) {
-        self.request_sender
+        if let Err(e) = self
+            .request_sender
             .send(PoolOtherRequest::GetNonExistingTxs {
                 tx_ids,
                 non_existing_txs,
             })
-            .unwrap();
+        {
+            tracing::error!("Failed to send get non existing txs request: {}", e);
+        }
     }
 }
 
@@ -158,11 +191,14 @@ pub enum PoolInsertRequest {
     },
 }
 
-pub enum PoolOtherRequest {
-    GetBlockTransactions {
+pub enum PoolExtractBlockTransactions {
+    ExtractBlockTransactions {
         constraints: Constraints,
-        blocks: Sender<Vec<ArcPoolTx>>,
+        transactions: Sender<Vec<ArcPoolTx>>,
     },
+}
+
+pub enum PoolOtherRequest {
     Remove {
         tx_ids: Vec<TxId>,
     },
@@ -178,11 +214,11 @@ pub enum PoolOtherRequest {
     },
     GetTxs {
         tx_ids: Vec<TxId>,
-        txs: Sender<Vec<Option<TxInfo>>>,
+        txs: tokio::sync::oneshot::Sender<Vec<Option<TxInfo>>>,
     },
     GetTxIds {
         max_txs: usize,
-        tx_ids: Sender<Vec<TxId>>,
+        tx_ids: tokio::sync::oneshot::Sender<Vec<TxId>>,
     },
 }
 
@@ -207,6 +243,7 @@ pub enum PoolNotification {
 
 pub struct PoolWorker<View> {
     request_receiver: Receiver<PoolOtherRequest>,
+    extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
     insert_request_receiver: Receiver<PoolInsertRequest>,
     pool: TxPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
@@ -216,6 +253,7 @@ pub struct PoolWorker<View> {
 impl<View> PoolWorker<View> {
     pub fn new(
         request_receiver: Receiver<PoolOtherRequest>,
+        extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
         insert_request_receiver: Receiver<PoolInsertRequest>,
         notification_sender: tokio::sync::mpsc::Sender<PoolNotification>,
         pool: TxPool,
@@ -223,6 +261,7 @@ impl<View> PoolWorker<View> {
     ) -> Self {
         Self {
             request_receiver,
+            extract_block_transactions_receiver,
             insert_request_receiver,
             pool,
             view_provider,
@@ -257,14 +296,21 @@ where
                 }
             }
 
+            match self.extract_block_transactions_receiver.try_recv() {
+                Ok(PoolExtractBlockTransactions::ExtractBlockTransactions {
+                    constraints,
+                    transactions,
+                }) => {
+                    self.get_block_transactions(constraints, transactions);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    break;
+                }
+            }
+
             match self.request_receiver.try_recv() {
                 Ok(request) => match request {
-                    PoolOtherRequest::GetBlockTransactions {
-                        constraints,
-                        blocks,
-                    } => {
-                        self.get_block_transactions(constraints, blocks);
-                    }
                     PoolOtherRequest::Remove { tx_ids } => {
                         self.remove(tx_ids);
                     }
@@ -393,12 +439,22 @@ where
         }
     }
 
-    fn get_tx_ids(&mut self, max_txs: usize, tx_ids_sender: Sender<Vec<TxId>>) {
+    fn get_tx_ids(
+        &mut self,
+        max_txs: usize,
+        tx_ids_sender: tokio::sync::oneshot::Sender<Vec<TxId>>,
+    ) {
         let tx_ids: Vec<TxId> = self.pool.iter_tx_ids().take(max_txs).copied().collect();
-        tx_ids_sender.send(tx_ids).unwrap();
+        if let Err(_) = tx_ids_sender.send(tx_ids) {
+            tracing::error!("Failed to send tx ids out of PoolWorker");
+        }
     }
 
-    fn get_txs(&mut self, tx_ids: Vec<TxId>, txs_sender: Sender<Vec<Option<TxInfo>>>) {
+    fn get_txs(
+        &mut self,
+        tx_ids: Vec<TxId>,
+        txs_sender: tokio::sync::oneshot::Sender<Vec<Option<TxInfo>>>,
+    ) {
         let txs: Vec<Option<TxInfo>> = tx_ids
             .into_iter()
             .map(|tx_id| {

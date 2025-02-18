@@ -7,7 +7,6 @@ use crate::{
         PoolOtherRequest,
         PoolWorkerInterface,
     },
-    Constraints,
 };
 use fuel_core_services::TaskNextAction;
 
@@ -161,13 +160,6 @@ impl TryFrom<TxInfo> for TransactionStatus {
     }
 }
 
-pub enum SelectTransactionsRequest {
-    SelectTransactions {
-        constraints: Constraints,
-        response_channel: oneshot::Sender<Vec<ArcPoolTx>>,
-    },
-}
-
 pub enum WritePoolRequest {
     InsertTxs {
         transactions: Vec<Arc<Transaction>>,
@@ -256,15 +248,6 @@ where
                 }
             }
 
-            select_transaction_request = self.subscriptions.select_transactions.recv() => {
-                if let Some(select_transaction_request) = select_transaction_request {
-                    self.process_select_request(select_transaction_request);
-                    TaskNextAction::Continue
-                } else {
-                    TaskNextAction::Stop
-                }
-            }
-
             _ = self.pruner.ttl_timer.tick() => {
                 self.try_prune_transactions();
                 TaskNextAction::Continue
@@ -310,7 +293,7 @@ where
 
             read_pool_request = self.subscriptions.read_pool.recv() => {
                 if let Some(read_pool_request) = read_pool_request {
-                    self.process_read(read_pool_request);
+                    self.process_read(read_pool_request).await;
                     TaskNextAction::Continue
                 } else {
                     TaskNextAction::Stop
@@ -356,28 +339,6 @@ where
                     expired_txs,
                     Error::Removed(RemovedReason::Ttl),
                 ));
-            }
-        }
-    }
-
-    fn process_select_request(
-        &self,
-        select_transaction_request: SelectTransactionsRequest,
-    ) {
-        match select_transaction_request {
-            SelectTransactionsRequest::SelectTransactions {
-                constraints,
-                response_channel,
-            } => {
-                let (response_sender, response_receiver) = std::sync::mpsc::channel();
-                self.pool_worker
-                    .get_block_transactions(constraints, response_sender);
-                let txs = response_receiver.recv().unwrap();
-                if response_channel.send(txs).is_err() {
-                    tracing::error!(
-                        "Failed to send the result back for `SelectTransactions` request"
-                    );
-                }
             }
         }
     }
@@ -529,14 +490,14 @@ where
 
             let tx = Arc::new(checked_tx);
 
-            // TODO: Unwrap
-            pool_insert_request_sender
-                .send(PoolInsertRequest::Insert {
-                    tx,
-                    from_peer_info,
-                    response_channel,
-                })
-                .unwrap();
+            // We don't use the `insert` from `PoolWorkerInterface` because we don't want to make the whole object clonable
+            if let Err(e) = pool_insert_request_sender.send(PoolInsertRequest::Insert {
+                tx,
+                from_peer_info,
+                response_channel,
+            }) {
+                tracing::error!("Failed to send the insert request: {}", e);
+            }
         };
         move || {
             if metrics {
@@ -608,14 +569,24 @@ where
                     return;
                 }
                 let (response_sender, response_receiver) = std::sync::mpsc::channel();
-                request_sender
-                    .send(PoolOtherRequest::GetNonExistingTxs {
-                        tx_ids: peer_tx_ids,
-                        non_existing_txs: response_sender,
-                    })
-                    .unwrap();
+                if let Err(e) = request_sender.send(PoolOtherRequest::GetNonExistingTxs {
+                    tx_ids: peer_tx_ids,
+                    non_existing_txs: response_sender,
+                }) {
+                    tracing::error!(
+                        "Failed to send the request to get non existing txs: {}",
+                        e
+                    );
+                    return;
+                }
                 // TODO: Unwrap
-                let tx_ids_to_ask = response_receiver.recv().unwrap();
+                let tx_ids_to_ask = match response_receiver.recv() {
+                    Ok(tx_ids) => tx_ids,
+                    Err(e) => {
+                        tracing::error!("Failed to receive the non existing txs: {}", e);
+                        return;
+                    }
+                };
 
                 if tx_ids_to_ask.is_empty() {
                     return;
@@ -679,35 +650,19 @@ where
         }
     }
 
-    fn process_read(&self, request: ReadPoolRequest) {
+    async fn process_read(&self, request: ReadPoolRequest) {
         match request {
             ReadPoolRequest::GetTxIds {
                 max_txs,
                 response_channel,
             } => {
-                // TODO: remove shenannigans maybe tokio channel
-                let (response_sender, response_receiver) = std::sync::mpsc::channel();
-                self.pool_worker.get_tx_ids(max_txs, response_sender);
-                let tx_ids = response_receiver.recv().unwrap();
-                if response_channel.send(tx_ids).is_err() {
-                    tracing::error!(
-                        "Failed to send the result back for `GetTxIds` request"
-                    );
-                }
+                self.pool_worker.get_tx_ids(max_txs, response_channel);
             }
             ReadPoolRequest::GetTxs {
                 tx_ids,
                 response_channel,
             } => {
-                // TODO: remove shenannigans maybe tokio channel
-                let (response_sender, response_receiver) = std::sync::mpsc::channel();
-                self.pool_worker.get_txs(tx_ids, response_sender);
-                let txs = response_receiver.recv().unwrap();
-                if response_channel.send(txs).is_err() {
-                    tracing::error!(
-                        "Failed to send the result back for `GetTxs` request"
-                    );
-                }
+                self.pool_worker.get_txs(tx_ids, response_channel);
             }
         }
     }
@@ -754,8 +709,6 @@ where
             .service_channel_limits
             .max_pending_write_pool_requests,
     );
-    let (select_transactions_requests_sender, select_transactions_requests_receiver) =
-        mpsc::channel(10);
     let (read_pool_requests_sender, read_pool_requests_receiver) =
         mpsc::channel(config.service_channel_limits.max_pending_read_pool_requests);
     let (pool_stats_sender, pool_stats_receiver) =
@@ -770,21 +723,11 @@ where
     );
     let (new_txs_notifier, _) = watch::channel(());
 
-    let shared_state = SharedState {
-        write_pool_requests_sender,
-        tx_status_sender,
-        select_transactions_requests_sender,
-        read_pool_requests_sender,
-        new_txs_notifier,
-        latest_stats: pool_stats_receiver,
-    };
-
     let subscriptions = Subscriptions {
         new_tx_source: new_peers_subscribed_stream,
         new_tx: tx_from_p2p_stream,
         imported_blocks: block_importer.block_events(),
         write_pool: write_pool_requests_receiver,
-        select_transactions: select_transactions_requests_receiver,
         read_pool: read_pool_requests_receiver,
     };
 
@@ -837,6 +780,17 @@ where
         unsafe { SeqLock::new(current_height) };
 
     let pool_worker = PoolWorkerInterface::new(txpool, storage_provider);
+
+    let shared_state = SharedState {
+        write_pool_requests_sender,
+        tx_status_sender,
+        select_transactions_requests_sender: pool_worker
+            .extract_block_transactions_sender
+            .clone(),
+        read_pool_requests_sender,
+        new_txs_notifier,
+        latest_stats: pool_stats_receiver,
+    };
 
     Service::new(Task {
         chain_id,

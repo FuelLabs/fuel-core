@@ -12,14 +12,11 @@ use fuel_core_types::services::{
 };
 use tokio::sync::mpsc;
 
-use super::SelectTransactionsRequest;
-
 /// Stores all subscriptions for the `TxPool` service.
 pub(super) struct Subscriptions {
     pub new_tx: BoxStream<TransactionGossipData>,
     pub new_tx_source: BoxStream<PeerId>,
     pub imported_blocks: BoxStream<SharedImportResult>,
-    pub select_transactions: mpsc::Receiver<SelectTransactionsRequest>,
     pub write_pool: mpsc::Receiver<WritePoolRequest>,
     pub read_pool: mpsc::Receiver<ReadPoolRequest>,
 }

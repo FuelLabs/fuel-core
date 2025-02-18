@@ -23,9 +23,9 @@ use tokio::sync::{
 use crate::{
     error::Error,
     pool::TxPoolStats,
+    pool_worker,
     service::{
         ReadPoolRequest,
-        SelectTransactionsRequest,
         TxInfo,
         WritePoolRequest,
     },
@@ -44,7 +44,7 @@ use crate::{
 pub struct SharedState {
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
-        mpsc::Sender<SelectTransactionsRequest>,
+        std::sync::mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
     pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
@@ -78,22 +78,23 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
-    pub async fn extract_transactions_for_block(
+    pub fn extract_transactions_for_block(
         &self,
         constraints: Constraints,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         let (select_transactions_sender, select_transactions_receiver) =
-            oneshot::channel();
+            std::sync::mpsc::channel();
         self.select_transactions_requests_sender
-            .send(SelectTransactionsRequest::SelectTransactions {
-                constraints,
-                response_channel: select_transactions_sender,
-            })
-            .await
+            .send(
+                pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
+                    constraints,
+                    transactions: select_transactions_sender,
+                },
+            )
             .map_err(|_| Error::ServiceCommunicationFailed)?;
 
         select_transactions_receiver
-            .await
+            .recv()
             .map_err(|_| Error::ServiceCommunicationFailed)
     }
 
