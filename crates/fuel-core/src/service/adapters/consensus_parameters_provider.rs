@@ -21,7 +21,10 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
-    blockchain::header::ConsensusParametersVersion,
+    blockchain::header::{
+        ConsensusParametersVersion,
+        StateTransitionBytecodeVersion,
+    },
     fuel_tx::ConsensusParameters,
     services::block_importer::SharedImportResult,
 };
@@ -38,6 +41,7 @@ pub struct SharedState {
         SharedMutex<ConsensusParametersVersion>,
     pub(crate) consensus_parameters:
         SharedMutex<HashMap<ConsensusParametersVersion, Arc<ConsensusParameters>>>,
+    pub(crate) latest_stf_version: SharedMutex<StateTransitionBytecodeVersion>,
     pub(crate) database: Database,
 }
 
@@ -57,8 +61,16 @@ impl Debug for Task {
 impl SharedState {
     fn new(database: Database) -> Self {
         let genesis_version = 0;
+
+        let latest_stf_version =
+            database.latest_view().map_or(Default::default(), |view| {
+                view.latest_state_transition_bytecode_version()
+                    .unwrap_or_default()
+            });
+
         Self {
             latest_consensus_parameters_version: SharedMutex::new(genesis_version),
+            latest_stf_version: SharedMutex::new(latest_stf_version),
             consensus_parameters: Default::default(),
             database,
         }
@@ -100,13 +112,21 @@ impl SharedState {
         self.latest_consensus_parameters_with_version().1
     }
 
+    pub fn latest_consensus_parameters_version(&self) -> ConsensusParametersVersion {
+        *self.latest_consensus_parameters_version.lock()
+    }
+
     pub fn latest_consensus_parameters_with_version(
         &self,
     ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>) {
-        let version = *self.latest_consensus_parameters_version.lock();
+        let version = self.latest_consensus_parameters_version();
         let params = self.get_consensus_parameters(&version)
             .expect("The latest consensus parameters always are available unless this function was called before regenesis.");
         (version, params)
+    }
+
+    pub fn latest_stf_version(&self) -> StateTransitionBytecodeVersion {
+        *self.latest_stf_version.lock()
     }
 }
 

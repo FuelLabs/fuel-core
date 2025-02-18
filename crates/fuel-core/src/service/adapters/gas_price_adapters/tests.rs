@@ -15,6 +15,8 @@ fn settings__can_retrieve_settings() {
     // given
     let param_version =
         fuel_core_types::blockchain::header::ConsensusParametersVersion::default();
+    let stf_version =
+        fuel_core_types::blockchain::header::StateTransitionBytecodeVersion::default();
     let params =
         fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV1::default();
     let mut hash_map = HashMap::new();
@@ -23,6 +25,7 @@ fn settings__can_retrieve_settings() {
         latest_consensus_parameters_version: SharedMutex::new(param_version),
         consensus_parameters: SharedMutex::new(hash_map),
         database: Default::default(),
+        latest_stf_version: SharedMutex::new(stf_version),
     };
     let consensus_parameters_provider =
         crate::service::adapters::ConsensusParametersProvider::new(shared_state);

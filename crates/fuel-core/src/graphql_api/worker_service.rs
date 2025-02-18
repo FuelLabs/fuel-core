@@ -59,6 +59,7 @@ use fuel_core_types::{
             CompressedBlock,
         },
         consensus::Consensus,
+        header::StateTransitionBytecodeVersion,
     },
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
@@ -111,6 +112,17 @@ use std::{
 #[cfg(test)]
 mod tests;
 
+pub(crate) struct Context<'a, TxPool, BlockImporter, OnChain, OffChain, StfProvider> {
+    pub(crate) tx_pool: TxPool,
+    pub(crate) block_importer: BlockImporter,
+    pub(crate) on_chain_database: OnChain,
+    pub(crate) off_chain_database: OffChain,
+    pub(crate) da_compression_config: DaCompressionConfig,
+    pub(crate) continue_on_error: bool,
+    pub(crate) consensus_parameters: &'a ConsensusParameters,
+    pub(crate) stf_parameters_provider: StfProvider,
+}
+
 #[derive(Debug, Clone)]
 pub enum DaCompressionConfig {
     Disabled,
@@ -118,7 +130,7 @@ pub enum DaCompressionConfig {
 }
 
 /// The initialization task recovers the state of the GraphQL service database on startup.
-pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
+pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain, StfProvider> {
     chain_id: ChainId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
@@ -129,11 +141,12 @@ pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
     off_chain_database: OffChain,
     base_asset_id: AssetId,
     block_height_subscription_handler: block_height_subscription::Handler,
+    stf_parameters_provider: StfProvider,
 }
 
 /// The off-chain GraphQL API worker task processes the imported blocks
 /// and actualize the information used by the GraphQL service.
-pub struct Task<TxPool, D> {
+pub struct Task<TxPool, D, StfProvider> {
     tx_pool: TxPool,
     block_importer: BoxStream<SharedImportResult>,
     database: D,
@@ -145,12 +158,14 @@ pub struct Task<TxPool, D> {
     asset_metadata_indexation_enabled: bool,
     base_asset_id: AssetId,
     block_height_subscription_handler: block_height_subscription::Handler,
+    stf_parameters_provider: StfProvider,
 }
 
-impl<TxPool, D> Task<TxPool, D>
+impl<TxPool, D, StfProvider> Task<TxPool, D, StfProvider>
 where
     TxPool: ports::worker::TxPool,
     D: ports::worker::OffChainDatabase,
+    StfProvider: StfVersionProvider,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
         let block = &result.sealed_block.entity;
@@ -194,6 +209,10 @@ where
         }
 
         transaction.commit()?;
+
+        let current_stf_version = block.header().state_transition_bytecode_version();
+        self.stf_parameters_provider
+            .cache_stf_version(current_stf_version);
 
         for status in result.tx_status.iter() {
             let tx_id = status.id;
@@ -547,17 +566,18 @@ where
 }
 
 #[async_trait::async_trait]
-impl<TxPool, BlockImporter, OnChain, OffChain> RunnableService
-    for InitializeTask<TxPool, BlockImporter, OnChain, OffChain>
+impl<TxPool, BlockImporter, OnChain, OffChain, StfProvider> RunnableService
+    for InitializeTask<TxPool, BlockImporter, OnChain, OffChain, StfProvider>
 where
     TxPool: ports::worker::TxPool,
     BlockImporter: ports::worker::BlockImporter,
     OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
+    StfProvider: StfVersionProvider,
 {
     const NAME: &'static str = "GraphQL_Off_Chain_Worker";
     type SharedData = block_height_subscription::Subscriber;
-    type Task = Task<TxPool, OffChain>;
+    type Task = Task<TxPool, OffChain, StfProvider>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -605,6 +625,7 @@ where
             continue_on_error,
             base_asset_id,
             block_height_subscription_handler,
+            stf_parameters_provider,
         } = self;
 
         let mut task = Task {
@@ -619,6 +640,7 @@ where
             asset_metadata_indexation_enabled,
             base_asset_id,
             block_height_subscription_handler,
+            stf_parameters_provider,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;
@@ -638,8 +660,8 @@ where
     }
 }
 
-fn sync_databases<TxPool, BlockImporter, OffChain>(
-    task: &mut Task<TxPool, OffChain>,
+fn sync_databases<TxPool, BlockImporter, OffChain, StfProvider>(
+    task: &mut Task<TxPool, OffChain, StfProvider>,
     target_chain_height: Option<BlockHeight>,
     import_result_provider: &BlockImporter,
 ) -> anyhow::Result<()>
@@ -647,6 +669,7 @@ where
     TxPool: ports::worker::TxPool,
     BlockImporter: ports::worker::BlockImporter,
     OffChain: ports::worker::OffChainDatabase,
+    StfProvider: StfVersionProvider,
 {
     loop {
         let off_chain_height = task.database.latest_height()?;
@@ -678,10 +701,11 @@ where
     Ok(())
 }
 
-impl<TxPool, D> RunnableTask for Task<TxPool, D>
+impl<TxPool, D, StfProvider> RunnableTask for Task<TxPool, D, StfProvider>
 where
     TxPool: ports::worker::TxPool,
     D: ports::worker::OffChainDatabase,
+    StfProvider: StfVersionProvider,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -728,21 +752,30 @@ where
     }
 }
 
-pub fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
-    tx_pool: TxPool,
-    block_importer: BlockImporter,
-    on_chain_database: OnChain,
-    off_chain_database: OffChain,
-    da_compression_config: DaCompressionConfig,
-    continue_on_error: bool,
-    consensus_parameters: &ConsensusParameters,
-) -> anyhow::Result<ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>>
+#[allow(clippy::type_complexity)]
+pub(crate) fn new_service<TxPool, BlockImporter, OnChain, OffChain, StfProvider>(
+    context: Context<TxPool, BlockImporter, OnChain, OffChain, StfProvider>,
+) -> anyhow::Result<
+    ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain, StfProvider>>,
+>
 where
     TxPool: ports::worker::TxPool,
     OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
     BlockImporter: ports::worker::BlockImporter,
+    StfProvider: StfVersionProvider,
 {
+    let Context {
+        tx_pool,
+        block_importer,
+        on_chain_database,
+        off_chain_database,
+        da_compression_config,
+        continue_on_error,
+        consensus_parameters,
+        stf_parameters_provider,
+    } = context;
+
     let off_chain_block_height = off_chain_database.latest_height()?.unwrap_or_default();
 
     let service = ServiceRunner::new(InitializeTask {
@@ -758,7 +791,13 @@ where
         block_height_subscription_handler: block_height_subscription::Handler::new(
             off_chain_block_height,
         ),
+        stf_parameters_provider,
     });
 
     Ok(service)
+}
+
+pub trait StfVersionProvider: Send {
+    /// Retrieve the state transition function version.
+    fn cache_stf_version(&self, version: StateTransitionBytecodeVersion);
 }

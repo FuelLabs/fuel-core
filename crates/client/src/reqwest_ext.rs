@@ -3,7 +3,13 @@ use cynic::{
     GraphQlResponse,
     Operation,
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::{
+    blockchain::header::{
+        ConsensusParametersVersion,
+        StateTransitionBytecodeVersion,
+    },
+    fuel_types::BlockHeight,
+};
 use std::{
     future::Future,
     marker::PhantomData,
@@ -20,6 +26,8 @@ pub struct ExtensionsResponse {
     pub required_fuel_block_height: Option<BlockHeight>,
     pub current_fuel_block_height: Option<BlockHeight>,
     pub fuel_block_height_precondition_failed: Option<bool>,
+    pub current_stf_version: Option<StateTransitionBytecodeVersion>,
+    pub current_consensus_parameters_version: Option<ConsensusParametersVersion>,
 }
 
 #[derive(Debug, serde::Serialize)]
