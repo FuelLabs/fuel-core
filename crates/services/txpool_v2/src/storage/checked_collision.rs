@@ -35,9 +35,9 @@ impl<StorageIndex> super::CheckedTransaction<StorageIndex>
         &self.tx
     }
 
-    fn into_tx(self) -> ArcPoolTx {
-        self.tx
-    }
+    // fn into_tx(self) -> ArcPoolTx {
+    //     self.tx
+    // }
 
     fn all_dependencies(&self) -> &HashSet<StorageIndex> {
         &self.all_dependencies

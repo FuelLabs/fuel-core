@@ -12,7 +12,7 @@ use std::{
 };
 
 pub(super) struct TransactionPruner {
-    pub time_txs_submitted: Shared<VecDeque<(SystemTime, TxId)>>,
+    pub time_txs_submitted: VecDeque<(SystemTime, TxId)>,
     pub height_expiration_txs: Shared<BTreeMap<BlockHeight, Vec<TxId>>>,
     pub ttl_timer: tokio::time::Interval,
     pub txs_ttl: tokio::time::Duration,
