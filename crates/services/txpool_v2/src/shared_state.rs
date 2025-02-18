@@ -8,9 +8,11 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
-    services::txpool::TransactionStatus,
+    services::txpool::{
+        ArcPoolTx,
+        TransactionStatus,
+    },
 };
-use parking_lot::RwLockWriteGuard;
 use tokio::sync::{
     broadcast,
     mpsc,
@@ -21,12 +23,10 @@ use tokio::sync::{
 use crate::{
     error::Error,
     pool::TxPoolStats,
+    pool_worker,
     service::{
-        BorrowTxPoolRequest,
         ReadPoolRequest,
-        Shared,
         TxInfo,
-        TxPool,
         WritePoolRequest,
     },
     tx_status_stream::{
@@ -37,21 +37,14 @@ use crate::{
         MpscChannel,
         TxStatusChange,
     },
+    Constraints,
 };
-
-pub struct BorrowedTxPool(pub(crate) Shared<TxPool>);
-
-impl BorrowedTxPool {
-    /// Get a write lock on the TxPool.
-    pub fn exclusive_lock(&self) -> RwLockWriteGuard<TxPool> {
-        self.0.write()
-    }
-}
 
 #[derive(Clone)]
 pub struct SharedState {
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
-    pub(crate) select_transactions_requests_sender: mpsc::Sender<BorrowTxPoolRequest>,
+    pub(crate) select_transactions_requests_sender:
+        std::sync::mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
     pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
@@ -85,18 +78,23 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
-    pub async fn borrow_txpool(&self) -> Result<BorrowedTxPool, Error> {
+    pub fn extract_transactions_for_block(
+        &self,
+        constraints: Constraints,
+    ) -> Result<Vec<ArcPoolTx>, Error> {
         let (select_transactions_sender, select_transactions_receiver) =
-            oneshot::channel();
+            std::sync::mpsc::channel();
         self.select_transactions_requests_sender
-            .send(BorrowTxPoolRequest {
-                response_channel: select_transactions_sender,
-            })
-            .await
+            .send(
+                pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
+                    constraints,
+                    transactions: select_transactions_sender,
+                },
+            )
             .map_err(|_| Error::ServiceCommunicationFailed)?;
 
         select_transactions_receiver
-            .await
+            .recv()
             .map_err(|_| Error::ServiceCommunicationFailed)
     }
 

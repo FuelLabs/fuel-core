@@ -45,6 +45,7 @@ mod collision_manager;
 pub mod config;
 pub mod error;
 mod pool;
+mod pool_worker;
 pub mod ports;
 mod selection_algorithms;
 mod service;
@@ -67,8 +68,5 @@ pub use service::{
     new_service,
     Service,
 };
-pub use shared_state::{
-    BorrowedTxPool,
-    SharedState,
-};
+pub use shared_state::SharedState;
 pub use tx_status_stream::TxStatusMessage;

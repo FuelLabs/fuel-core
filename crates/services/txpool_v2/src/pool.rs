@@ -99,11 +99,11 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
     }
 
     /// Returns `true` if the pool is empty.
-    pub fn is_empty(&self) -> bool {
-        self.tx_id_to_storage_id.is_empty()
-            && self.current_gas == 0
-            && self.current_bytes_size == 0
-    }
+    // pub fn is_empty(&self) -> bool {
+    //     self.tx_id_to_storage_id.is_empty()
+    //         && self.current_gas == 0
+    //         && self.current_bytes_size == 0
+    // }
 
     /// Returns the number of transactions in the pool.
     pub fn tx_count(&self) -> usize {
@@ -639,11 +639,11 @@ where
     _guard: &'a S,
 }
 
-impl<'a, S> CanStoreTransaction<'a, S>
-where
-    S: Storage,
-{
-    pub fn into_transaction(self) -> ArcPoolTx {
-        self.checked_transaction.into_tx()
-    }
-}
+// impl<'a, S> CanStoreTransaction<'a, S>
+// where
+//     S: Storage,
+// {
+//     pub fn into_transaction(self) -> ArcPoolTx {
+//         self.checked_transaction.into_tx()
+//     }
+// }

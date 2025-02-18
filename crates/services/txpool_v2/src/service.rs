@@ -1,6 +1,12 @@
 use crate::{
     self as fuel_core_txpool,
     pool::TxPoolStats,
+    pool_worker::{
+        PoolInsertRequest,
+        PoolNotification,
+        PoolOtherRequest,
+        PoolWorkerInterface,
+    },
 };
 use fuel_core_services::TaskNextAction;
 
@@ -39,15 +45,11 @@ use fuel_core_txpool::{
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     service::{
         memory::MemoryPool,
-        p2p::P2PExt,
         pruner::TransactionPruner,
         subscriptions::Subscriptions,
         verifications::Verification,
     },
-    shared_state::{
-        BorrowedTxPool,
-        SharedState,
-    },
+    shared_state::SharedState,
     storage::{
         graph::{
             GraphConfig,
@@ -83,6 +85,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use futures::StreamExt;
+use p2p::P2PExt;
 use parking_lot::RwLock;
 use std::{
     collections::{
@@ -127,9 +130,9 @@ pub type Service<View> = ServiceRunner<Task<View>>;
 #[derive(Debug)]
 pub struct TxInfo {
     /// The transaction
-    tx: ArcPoolTx,
+    pub tx: ArcPoolTx,
     /// The creation instant of the transaction
-    creation_instant: SystemTime,
+    pub creation_instant: SystemTime,
 }
 
 impl TxInfo {
@@ -155,10 +158,6 @@ impl TryFrom<TxInfo> for TransactionStatus {
             time: Tai64::from_unix(unit_time),
         })
     }
-}
-
-pub struct BorrowTxPoolRequest {
-    pub response_channel: oneshot::Sender<BorrowedTxPool>,
 }
 
 pub enum WritePoolRequest {
@@ -194,7 +193,7 @@ pub struct Task<View> {
     transaction_verifier_process: SyncProcessor,
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
-    pool: Shared<TxPool>,
+    pool_worker: PoolWorkerInterface,
     current_height_writer: SeqLockWriter<BlockHeight>,
     current_height_reader: SeqLockReader<BlockHeight>,
     tx_sync_history: Shared<HashSet<PeerId>>,
@@ -237,6 +236,7 @@ where
             biased;
 
             _ = watcher.while_started() => {
+                self.pool_worker.stop();
                 TaskNextAction::Stop
             }
 
@@ -245,15 +245,7 @@ where
                     self.import_block(result);
                     TaskNextAction::Continue
                 } else {
-                    TaskNextAction::Stop
-                }
-            }
-
-            select_transaction_request = self.subscriptions.borrow_txpool.recv() => {
-                if let Some(select_transaction_request) = select_transaction_request {
-                    self.borrow_txpool(select_transaction_request);
-                    TaskNextAction::Continue
-                } else {
+                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -272,6 +264,16 @@ where
                 }
             }
 
+            pool_notification = self.pool_worker.notification_receiver.recv() => {
+                if let Some(notification) = pool_notification {
+                    self.process_notification(notification);
+                    TaskNextAction::Continue
+                } else {
+                    self.pool_worker.stop();
+                    TaskNextAction::Stop
+                }
+            }
+
             tx_from_p2p = self.subscriptions.new_tx.next() => {
                 if let Some(GossipData { data, message_id, peer_id }) = tx_from_p2p {
                     if let Some(tx) = data {
@@ -279,6 +281,7 @@ where
                     }
                     TaskNextAction::Continue
                 } else {
+                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -288,22 +291,25 @@ where
                     self.manage_new_peer_subscribed(peer_id);
                     TaskNextAction::Continue
                 } else {
+                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
 
             read_pool_request = self.subscriptions.read_pool.recv() => {
                 if let Some(read_pool_request) = read_pool_request {
-                    self.process_read(read_pool_request);
+                    self.process_read(read_pool_request).await;
                     TaskNextAction::Continue
                 } else {
+                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
         }
     }
 
-    async fn shutdown(self) -> anyhow::Result<()> {
+    async fn shutdown(mut self) -> anyhow::Result<()> {
+        self.pool_worker.stop();
         Ok(())
     }
 }
@@ -315,16 +321,10 @@ where
     fn import_block(&mut self, result: SharedImportResult) {
         let new_height = *result.sealed_block.entity.header().height();
         let executed_transaction = result.tx_status.iter().map(|s| s.id).collect();
-        // We don't want block importer way for us to process the result.
+        // We don't want block importer wait for us to process the result.
         drop(result);
 
-        {
-            let mut tx_pool = self.pool.write();
-            tx_pool.remove_transaction(executed_transaction);
-            if !tx_pool.is_empty() {
-                self.shared_state.new_txs_notifier.send_replace(());
-            }
-        }
+        self.pool_worker.remove(executed_transaction);
 
         {
             self.current_height_writer.write(|data| {
@@ -333,33 +333,21 @@ where
         }
 
         // Remove expired transactions
-        let mut removed_txs = vec![];
-        {
-            let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
-            let range_to_remove = height_expiration_txs
-                .range(..=new_height)
-                .map(|(k, _)| *k)
-                .collect::<Vec<_>>();
-            for height in range_to_remove {
-                let expired_txs = height_expiration_txs.remove(&height);
-                if let Some(expired_txs) = expired_txs {
-                    let mut tx_pool = self.pool.write();
-                    removed_txs
-                        .extend(tx_pool.remove_transaction_and_dependents(expired_txs));
-                }
+        let range_to_remove = self
+            .pruner
+            .height_expiration_txs
+            .range(..=new_height)
+            .map(|(k, _)| *k)
+            .collect::<Vec<_>>();
+        for height in range_to_remove {
+            let expired_txs = self.pruner.height_expiration_txs.remove(&height);
+            if let Some(expired_txs) = expired_txs {
+                self.pool_worker.remove_and_coin_dependents((
+                    expired_txs,
+                    Error::Removed(RemovedReason::Ttl),
+                ));
             }
         }
-        for tx in removed_txs {
-            self.shared_state
-                .tx_status_sender
-                .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
-        }
-    }
-
-    fn borrow_txpool(&self, request: BorrowTxPoolRequest) {
-        let BorrowTxPoolRequest { response_channel } = request;
-
-        let _ = response_channel.send(BorrowedTxPool(self.pool.clone()));
     }
 
     fn process_write(&self, write_pool_request: WritePoolRequest) {
@@ -391,6 +379,54 @@ where
         }
     }
 
+    fn process_notification(&mut self, notification: PoolNotification) {
+        match notification {
+            PoolNotification::Inserted {
+                tx_id,
+                time,
+                expiration,
+                from_peer_info,
+                tx,
+            } => {
+                self.p2p.process_insertion_result(
+                    from_peer_info,
+                    &Ok(Arc::unwrap_or_clone(tx)),
+                );
+                self.pruner.time_txs_submitted.push_front((time, tx_id));
+
+                let duration = time
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .expect("Time can't be less than UNIX EPOCH");
+
+                self.shared_state
+                    .tx_status_sender
+                    .send_submitted(tx_id, Tai64::from_unix(duration.as_secs() as i64));
+
+                if expiration < u32::MAX.into() {
+                    let block_height_expiration = self
+                        .pruner
+                        .height_expiration_txs
+                        .entry(expiration)
+                        .or_default();
+                    block_height_expiration.push(tx_id);
+                }
+                self.shared_state.new_txs_notifier.send_replace(());
+            }
+            PoolNotification::ErrorInsertion {
+                error,
+                from_peer_info,
+            } => {
+                self.p2p
+                    .process_insertion_result(from_peer_info, &Err(error));
+            }
+            PoolNotification::Removed { tx_id, error } => {
+                self.shared_state
+                    .tx_status_sender
+                    .send_squeezed_out(tx_id, error);
+            }
+        }
+    }
+
     fn insert_transactions(&self, transactions: Vec<Arc<Transaction>>) {
         for transaction in transactions {
             let Ok(reservation) = self.transaction_verifier_process.reserve() else {
@@ -417,13 +453,11 @@ where
                 .inc();
         }
 
-        let verification = self.verification.clone();
-        let pool = self.pool.clone();
         let p2p = self.p2p.clone();
+        let verification = self.verification.clone();
+        let pool_insert_request_sender = self.pool_worker.insert_request_sender.clone();
         let shared_state = self.shared_state.clone();
         let current_height_reader = self.current_height_reader.clone();
-        let time_txs_submitted = self.pruner.time_txs_submitted.clone();
-        let height_expiration_txs = self.pruner.height_expiration_txs.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
 
@@ -437,7 +471,6 @@ where
 
             let result = verification.perform_all_verifications(
                 transaction,
-                &pool,
                 current_height,
                 utxo_validation,
             );
@@ -448,8 +481,6 @@ where
                     .dec();
             }
 
-            p2p.process_insertion_result(from_peer_info, &result);
-
             let checked_tx = match result {
                 Ok(checked_tx) => checked_tx,
                 Err(err) => {
@@ -457,68 +488,20 @@ where
                         let _ = channel.send(Err(err.clone()));
                     }
 
+                    p2p.process_insertion_result(from_peer_info, &Err(err.clone()));
                     shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
                     return
                 }
             };
 
             let tx = Arc::new(checked_tx);
-            let expiration = tx.expiration();
-
-            let result = {
-                let mut pool = pool.write();
-                let result = verification.persistent_storage_provider.latest_view();
-
-                match result {
-                    Ok(view) => pool.insert(tx, &view),
-                    Err(err) => Err(Error::Database(format!("{:?}", err))),
-                }
-            };
-
-            let removed_txs = match result {
-                Ok(removed_txs) => {
-                    let submitted_time = SystemTime::now();
-                    time_txs_submitted
-                        .write()
-                        .push_front((submitted_time, tx_id));
-
-                    if expiration < u32::MAX.into() {
-                        let mut lock = height_expiration_txs.write();
-                        let block_height_expiration = lock.entry(expiration).or_default();
-                        block_height_expiration.push(tx_id);
-                    }
-
-                    let duration = submitted_time
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .expect("Time can't be less than UNIX EPOCH");
-
-                    shared_state.tx_status_sender.send_submitted(
-                        tx_id,
-                        Tai64::from_unix(duration.as_secs() as i64),
-                    );
-
-                    if let Some(channel) = response_channel {
-                        let _ = channel.send(Ok(()));
-                    }
-                    shared_state.new_txs_notifier.send_replace(());
-
-                    removed_txs
-                }
-                Err(err) => {
-                    if let Some(channel) = response_channel {
-                        let _ = channel.send(Err(err.clone()));
-                    }
-
-                    shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
-                    return
-                }
-            };
-
-            for tx in removed_txs {
-                shared_state.tx_status_sender.send_squeezed_out(
-                    tx.id(),
-                    Error::Removed(RemovedReason::LessWorth(tx.id())),
-                );
+            // We don't use the `insert` from `PoolWorkerInterface` because we don't want to make the whole object cloneable
+            if let Err(e) = pool_insert_request_sender.send(PoolInsertRequest::Insert {
+                tx,
+                from_peer_info,
+                response_channel,
+            }) {
+                tracing::error!("Failed to send the insert request: {}", e);
             }
         };
         move || {
@@ -536,18 +519,7 @@ where
     }
 
     fn manage_remove_coin_dependents(&self, transactions: Vec<(TxId, String)>) {
-        for (tx_id, reason) in transactions {
-            let dependents = self.pool.write().remove_coin_dependents(tx_id);
-
-            for removed_tx in dependents {
-                self.shared_state.tx_status_sender.send_squeezed_out(
-                    removed_tx.id(),
-                    Error::SkippedTransaction(
-                        format!("Parent transaction with {tx_id}, was removed because of the {reason}")
-                    )
-                );
-            }
-        }
+        self.pool_worker.remove_coin_dependents(transactions);
     }
 
     fn manage_tx_from_p2p(
@@ -574,7 +546,7 @@ where
         // We are not affected if there is too many queued job and we don't manage this peer.
         let _ = self.p2p_sync_process.try_spawn({
             let p2p = self.p2p.clone();
-            let pool = self.pool.clone();
+            let request_sender = self.pool_worker.request_sender.clone();
             let txs_insert_sender = self.shared_state.write_pool_requests_sender.clone();
             let tx_sync_history = self.tx_sync_history.clone();
             async move {
@@ -601,12 +573,25 @@ where
                 if peer_tx_ids.is_empty() {
                     return;
                 }
-                let tx_ids_to_ask: Vec<TxId> = {
-                    let pool = pool.read();
-                    peer_tx_ids
-                        .into_iter()
-                        .filter(|tx_id| !pool.contains(tx_id))
-                        .collect()
+                // We don't use the `get_non_existing_txs` from `PoolWorkerInterface` because we don't want to make the whole object cloneable
+                let (response_sender, response_receiver) = std::sync::mpsc::channel();
+                if let Err(e) = request_sender.send(PoolOtherRequest::GetNonExistingTxs {
+                    tx_ids: peer_tx_ids,
+                    non_existing_txs: response_sender,
+                }) {
+                    tracing::error!(
+                        "Failed to send the request to get non existing txs: {}",
+                        e
+                    );
+                    return;
+                }
+
+                let tx_ids_to_ask = match response_receiver.recv() {
+                    Ok(tx_ids) => tx_ids,
+                    Err(e) => {
+                        tracing::error!("Failed to receive the non existing txs: {}", e);
+                        return;
+                    }
                 };
 
                 if tx_ids_to_ask.is_empty() {
@@ -643,9 +628,8 @@ where
     fn try_prune_transactions(&mut self) {
         let mut txs_to_remove = vec![];
         {
-            let mut time_txs_submitted = self.pruner.time_txs_submitted.write();
             let now = SystemTime::now();
-            while let Some((time, _)) = time_txs_submitted.back() {
+            while let Some((time, _)) = self.pruner.time_txs_submitted.back() {
                 let Ok(duration) = now.duration_since(*time) else {
                     tracing::error!("Failed to calculate the duration since the transaction was submitted");
                     return;
@@ -654,21 +638,15 @@ where
                     break;
                 }
                 // SAFETY: We are removing the last element that we just checked
-                txs_to_remove.push(time_txs_submitted.pop_back().expect("qed").1);
+                txs_to_remove
+                    .push(self.pruner.time_txs_submitted.pop_back().expect("qed").1);
             }
         }
 
-        let removed;
-        {
-            let mut pool = self.pool.write();
-            removed = pool.remove_transaction_and_dependents(txs_to_remove);
-        }
-
-        for tx in removed {
-            self.shared_state
-                .tx_status_sender
-                .send_squeezed_out(tx.id(), Error::Removed(RemovedReason::Ttl));
-        }
+        self.pool_worker.remove_and_coin_dependents((
+            txs_to_remove,
+            Error::Removed(RemovedReason::Ttl),
+        ));
 
         {
             // Each time when we prune transactions, clear the history of synchronization
@@ -678,43 +656,19 @@ where
         }
     }
 
-    fn process_read(&self, request: ReadPoolRequest) {
+    async fn process_read(&self, request: ReadPoolRequest) {
         match request {
             ReadPoolRequest::GetTxIds {
                 max_txs,
                 response_channel,
             } => {
-                let tx_ids = {
-                    let pool = self.pool.read();
-                    pool.iter_tx_ids().take(max_txs).copied().collect()
-                };
-                if response_channel.send(tx_ids).is_err() {
-                    tracing::error!(
-                        "Failed to send the result back for `GetTxIds` request"
-                    );
-                }
+                self.pool_worker.get_tx_ids(max_txs, response_channel);
             }
             ReadPoolRequest::GetTxs {
                 tx_ids,
                 response_channel,
             } => {
-                let txs = {
-                    let pool = self.pool.read();
-                    tx_ids
-                        .into_iter()
-                        .map(|tx_id| {
-                            pool.find_one(&tx_id).map(|stored_data| TxInfo {
-                                tx: stored_data.transaction.clone(),
-                                creation_instant: stored_data.creation_instant,
-                            })
-                        })
-                        .collect()
-                };
-                if response_channel.send(txs).is_err() {
-                    tracing::error!(
-                        "Failed to send the result back for `GetTxs` request"
-                    );
-                }
+                self.pool_worker.get_txs(tx_ids, response_channel);
             }
         }
     }
@@ -761,8 +715,6 @@ where
             .service_channel_limits
             .max_pending_write_pool_requests,
     );
-    let (select_transactions_requests_sender, select_transactions_requests_receiver) =
-        mpsc::channel(1);
     let (read_pool_requests_sender, read_pool_requests_receiver) =
         mpsc::channel(config.service_channel_limits.max_pending_read_pool_requests);
     let (pool_stats_sender, pool_stats_receiver) =
@@ -777,36 +729,28 @@ where
     );
     let (new_txs_notifier, _) = watch::channel(());
 
-    let shared_state = SharedState {
-        write_pool_requests_sender,
-        tx_status_sender,
-        select_transactions_requests_sender,
-        read_pool_requests_sender,
-        new_txs_notifier,
-        latest_stats: pool_stats_receiver,
-    };
-
     let subscriptions = Subscriptions {
         new_tx_source: new_peers_subscribed_stream,
         new_tx: tx_from_p2p_stream,
         imported_blocks: block_importer.block_events(),
         write_pool: write_pool_requests_receiver,
-        borrow_txpool: select_transactions_requests_receiver,
         read_pool: read_pool_requests_receiver,
     };
 
+    let storage_provider = Arc::new(ps_provider);
     let verification = Verification {
-        persistent_storage_provider: Arc::new(ps_provider),
+        persistent_storage_provider: storage_provider.clone(),
         consensus_parameters_provider: Arc::new(consensus_parameters_provider),
         gas_price_provider: Arc::new(gas_price_provider),
         wasm_checker: Arc::new(wasm_checker),
         memory_pool: MemoryPool::new(),
+        blacklist: config.black_list.clone(),
     };
 
     let pruner = TransactionPruner {
         txs_ttl: config.max_txs_ttl,
-        time_txs_submitted: Arc::new(RwLock::new(VecDeque::new())),
-        height_expiration_txs: Arc::new(RwLock::new(BTreeMap::new())),
+        time_txs_submitted: VecDeque::new(),
+        height_expiration_txs: BTreeMap::new(),
         ttl_timer,
     };
 
@@ -841,6 +785,19 @@ where
     let (current_height_writer, current_height_reader) =
         unsafe { SeqLock::new(current_height) };
 
+    let pool_worker = PoolWorkerInterface::new(txpool, storage_provider);
+
+    let shared_state = SharedState {
+        write_pool_requests_sender,
+        tx_status_sender,
+        select_transactions_requests_sender: pool_worker
+            .extract_block_transactions_sender
+            .clone(),
+        read_pool_requests_sender,
+        new_txs_notifier,
+        latest_stats: pool_stats_receiver,
+    };
+
     Service::new(Task {
         chain_id,
         utxo_validation,
@@ -852,7 +809,7 @@ where
         p2p: Arc::new(p2p),
         current_height_writer,
         current_height_reader,
-        pool: Arc::new(RwLock::new(txpool)),
+        pool_worker,
         shared_state,
         metrics,
         tx_sync_history: Default::default(),
