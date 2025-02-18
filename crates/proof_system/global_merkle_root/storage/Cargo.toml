@@ -19,21 +19,32 @@ fuel-core-types = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
 num_enum = { workspace = true }
+rand = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-fuel-core-storage = { workspace = true, features = ["alloc", "test-helpers"] }
-fuel-core-types = { workspace = true, features = [
-  "serde",
+fuel-core-global-merkle-root-storage = { path = ".", features = [
+  "test-helpers",
+] }
+fuel-core-storage = { workspace = true, features = [
   "alloc",
+  "std",
+  "test-helpers",
+] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "serde",
+  "random",
   "test-helpers",
 ] }
 postcard = { workspace = true, features = ["alloc"] }
 rand = { workspace = true }
 
 [features]
-default = ["std"]
 std = ["fuel-core-storage/std", "fuel-core-types/std"]
-smt = []
-global-state-root = []
+test-helpers = ["dep:rand"]
+fault-proving = [
+  "fuel-core-types/fault-proving",
+  "fuel-core-storage/fault-proving",
+]

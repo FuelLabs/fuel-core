@@ -23,9 +23,12 @@ use fuel_core_storage::{
 
 mod smt;
 
+/// The merkle metadata table containing the global root
 pub type MerkleMetadata = smt::MerkleMetadata;
+/// Template over merkle tree data tables
 pub type MerkleData<T> = smt::MerkleData<T>;
 
+/// Marker type for key conversion logic
 pub struct KeyConverter<Table>(core::marker::PhantomData<Table>);
 
 impl<Table> PrimaryKey for KeyConverter<Table>
@@ -41,11 +44,13 @@ where
     }
 }
 
+/// Merkleized wrapper of the inner table
 pub struct Merkleized<Table>(core::marker::PhantomData<Table>);
 
 /// Implementation of this trait for the table, inherits
 /// the Merkle implementation for the [`Merkleized`] table.
 pub trait MerkleizedTableColumn {
+    /// Get the table column
     fn table_column() -> TableColumn;
 }
 
@@ -97,6 +102,7 @@ where
 pub struct DummyStorage<Column>(core::marker::PhantomData<Column>);
 
 impl<Column> DummyStorage<Column> {
+    /// Create a new dummy storage
     pub fn new() -> Self {
         Self(core::marker::PhantomData)
     }
