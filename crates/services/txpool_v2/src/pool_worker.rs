@@ -375,7 +375,7 @@ where
             .pool
             .iter_tx_ids()
             .take(max_txs)
-            .map(|tx_id| *tx_id)
+            .copied()
             .collect();
         tx_ids_sender.send(tx_ids).unwrap();
     }

@@ -8,7 +8,10 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
-    services::txpool::{ArcPoolTx, TransactionStatus},
+    services::txpool::{
+        ArcPoolTx,
+        TransactionStatus,
+    },
 };
 use tokio::sync::{
     broadcast,
@@ -21,7 +24,10 @@ use crate::{
     error::Error,
     pool::TxPoolStats,
     service::{
-        ReadPoolRequest, SelectTransactionsRequest, TxInfo, WritePoolRequest
+        ReadPoolRequest,
+        SelectTransactionsRequest,
+        TxInfo,
+        WritePoolRequest,
     },
     tx_status_stream::{
         TxStatusMessage,
@@ -30,7 +36,8 @@ use crate::{
     update_sender::{
         MpscChannel,
         TxStatusChange,
-    }, Constraints,
+    },
+    Constraints,
 };
 
 #[derive(Clone)]

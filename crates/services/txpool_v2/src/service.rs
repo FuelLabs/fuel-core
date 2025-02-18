@@ -1,5 +1,13 @@
 use crate::{
-    self as fuel_core_txpool, pool::TxPoolStats, pool_worker::{PoolInsertRequest, PoolNotification, PoolOtherRequest, PoolWorkerInterface}, Constraints
+    self as fuel_core_txpool,
+    pool::TxPoolStats,
+    pool_worker::{
+        PoolInsertRequest,
+        PoolNotification,
+        PoolOtherRequest,
+        PoolWorkerInterface,
+    },
+    Constraints,
 };
 use fuel_core_services::TaskNextAction;
 
@@ -337,17 +345,19 @@ where
         }
 
         // Remove expired transactions
-        {
-            let mut height_expiration_txs = self.pruner.height_expiration_txs.write();
-            let range_to_remove = height_expiration_txs
-                .range(..=new_height)
-                .map(|(k, _)| *k)
-                .collect::<Vec<_>>();
-            for height in range_to_remove {
-                let expired_txs = height_expiration_txs.remove(&height);
-                if let Some(expired_txs) = expired_txs {
-                    self.pool_worker.remove_and_coin_dependents((expired_txs, Error::Removed(RemovedReason::Ttl)));
-                }
+        let range_to_remove = self
+            .pruner
+            .height_expiration_txs
+            .range(..=new_height)
+            .map(|(k, _)| *k)
+            .collect::<Vec<_>>();
+        for height in range_to_remove {
+            let expired_txs = self.pruner.height_expiration_txs.remove(&height);
+            if let Some(expired_txs) = expired_txs {
+                self.pool_worker.remove_and_coin_dependents((
+                    expired_txs,
+                    Error::Removed(RemovedReason::Ttl),
+                ));
             }
         }
     }
@@ -503,14 +513,14 @@ where
             //     let block_height_expiration = lock.entry(expiration).or_default();
             //     block_height_expiration.push(tx_id);
             // }
-            
+
             // TODO: Unwrap
             pool_insert_request_sender
-            .send(PoolInsertRequest::Insert {
-                tx,
-                response_channel,
-            })
-            .unwrap();
+                .send(PoolInsertRequest::Insert {
+                    tx,
+                    response_channel,
+                })
+                .unwrap();
         };
         move || {
             if metrics {
@@ -774,7 +784,7 @@ where
     let pruner = TransactionPruner {
         txs_ttl: config.max_txs_ttl,
         time_txs_submitted: VecDeque::new(),
-        height_expiration_txs: Arc::new(RwLock::new(BTreeMap::new())),
+        height_expiration_txs: BTreeMap::new(),
         ttl_timer,
     };
 

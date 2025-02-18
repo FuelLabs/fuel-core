@@ -241,7 +241,6 @@ impl TestPoolUniverse {
             };
             let tx = verification.perform_all_verifications(
                 tx,
-                &pool.clone(),
                 Default::default(),
                 true,
             )?;
@@ -274,7 +273,6 @@ impl TestPoolUniverse {
             };
             let tx = verification.perform_all_verifications(
                 tx,
-                &pool.clone(),
                 Default::default(),
                 true,
             )?;
@@ -307,7 +305,6 @@ impl TestPoolUniverse {
             };
             let tx = verification.perform_all_verifications(
                 tx,
-                &pool.clone(),
                 Default::default(),
                 true,
             )?;

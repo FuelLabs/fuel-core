@@ -17,21 +17,22 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
         transactions_limit: u16,
         block_transaction_size_limit: u32,
     ) -> Vec<MaybeCheckedTransaction> {
-        self.tx_pool
-            .exclusive_lock()
-            .extract_transactions_for_block(Constraints {
+        futures::executor::block_on(self.tx_pool.extract_transactions_for_block(
+            Constraints {
                 minimal_gas_price: self.minimum_gas_price,
                 max_gas: gas_limit,
                 maximum_txs: transactions_limit,
                 maximum_block_size: block_transaction_size_limit,
-            })
-            .into_iter()
-            .map(|tx| {
-                let transaction = Arc::unwrap_or_clone(tx);
-                let version = transaction.used_consensus_parameters_version();
-                MaybeCheckedTransaction::CheckedTransaction(transaction.into(), version)
-            })
-            .collect()
+            },
+        ))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|tx| {
+            let transaction = Arc::unwrap_or_clone(tx);
+            let version = transaction.used_consensus_parameters_version();
+            MaybeCheckedTransaction::CheckedTransaction(transaction.into(), version)
+        })
+        .collect()
     }
 }
 

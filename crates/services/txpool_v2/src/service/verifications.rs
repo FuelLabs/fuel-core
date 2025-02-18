@@ -1,5 +1,8 @@
 use crate::{
-    error::{Error, InputValidationError},
+    error::{
+        Error,
+        InputValidationError,
+    },
     ports::{
         ConsensusParametersProvider,
         GasPriceProvider,
