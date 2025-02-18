@@ -254,30 +254,30 @@ where
     pub fn run(&mut self) {
         // TODO: Try to find correct prio
         'outer: loop {
+            match self.thread_management_receiver.try_recv() {
+                Ok(ThreadManagementRequest::Stop) => {
+                    break;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    break;
+                }
+            }
+
+            match self.extract_block_transactions_receiver.try_recv() {
+                Ok(PoolExtractBlockTransactions::ExtractBlockTransactions {
+                    constraints,
+                    transactions,
+                }) => {
+                    self.get_block_transactions(constraints, transactions);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    break;
+                }
+            }
+
             loop {
-                match self.thread_management_receiver.try_recv() {
-                    Ok(ThreadManagementRequest::Stop) => {
-                        break 'outer;
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        break 'outer;
-                    }
-                }
-
-                match self.extract_block_transactions_receiver.try_recv() {
-                    Ok(PoolExtractBlockTransactions::ExtractBlockTransactions {
-                        constraints,
-                        transactions,
-                    }) => {
-                        self.get_block_transactions(constraints, transactions);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        break;
-                    }
-                }
-
                 match self.insert_request_receiver.try_recv() {
                     Ok(PoolInsertRequest::Insert {
                         tx,
