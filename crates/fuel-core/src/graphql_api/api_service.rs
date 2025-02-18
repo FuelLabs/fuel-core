@@ -1,6 +1,5 @@
 use crate::{
     fuel_core_graphql_api::{
-        metrics_extension::MetricsExtension,
         ports::{
             BlockProducerPort,
             ConsensusModulePort,
@@ -11,14 +10,15 @@ use crate::{
             P2pPort,
             TxPoolPort,
         },
-        validation_extension::ValidationExtension,
         Config,
     },
     graphql_api::{
         self,
         extensions::{
             chain_state_info::ChainStateInfoExtension,
+            metrics::MetricsExtension,
             required_fuel_block_height::RequiredFuelBlockHeightExtension,
+            validation::ValidationExtension,
         },
     },
     schema::{
