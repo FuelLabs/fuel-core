@@ -151,7 +151,7 @@ impl Extension for RequiredFuelBlockHeightInner {
     ) -> Response {
         if let Some(required_block_height) = self.required_height.get() {
             let current_block_height =
-                self.block_height_subscriber.latest_seen_block_height();
+                self.block_height_subscriber.current_block_height();
 
             match BlockHeightComparison::from_block_heights(
                 required_block_height,

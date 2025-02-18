@@ -454,11 +454,11 @@ pub mod worker {
 }
 
 pub trait ConsensusProvider: Send + Sync {
-    /// Returns latest consensus parameters.
-    fn latest_consensus_params(&self) -> Arc<ConsensusParameters>;
+    /// Returns current consensus parameters.
+    fn current_consensus_params(&self) -> Arc<ConsensusParameters>;
 
-    /// Returns latest consensus parameters version.
-    fn latest_consensus_parameters_version(&self) -> ConsensusParametersVersion;
+    /// Returns current consensus parameters version.
+    fn current_consensus_parameters_version(&self) -> ConsensusParametersVersion;
 
     /// Returns consensus parameters at a specific version.
     fn consensus_params_at_version(
@@ -466,6 +466,6 @@ pub trait ConsensusProvider: Send + Sync {
         version: &ConsensusParametersVersion,
     ) -> anyhow::Result<Arc<ConsensusParameters>>;
 
-    /// Returns the latest state transition bytecode version.
-    fn latest_stf_version(&self) -> StateTransitionBytecodeVersion;
+    /// Returns the current state transition bytecode version.
+    fn current_stf_version(&self) -> StateTransitionBytecodeVersion;
 }

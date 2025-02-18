@@ -53,20 +53,19 @@ impl Extension for ChainStateInfoExtension {
 
         let consensus_parameters_provider = ctx.data_unchecked::<ConsensusProvider>();
         let current_consensus_parameters_version =
-            consensus_parameters_provider.latest_consensus_parameters_version();
+            consensus_parameters_provider.current_consensus_parameters_version();
         response.extensions.insert(
             CURRENT_CONSENSUS_PARAMETERS_VERSION.to_string(),
             Value::Number(current_consensus_parameters_version.into()),
         );
 
-        let current_stf_version = consensus_parameters_provider.latest_stf_version();
+        let current_stf_version = consensus_parameters_provider.current_stf_version();
         response.extensions.insert(
             CURRENT_STF_VERSION.to_string(),
             Value::Number(current_stf_version.into()),
         );
 
-        let current_block_height =
-            self.block_height_subscriber.latest_seen_block_height();
+        let current_block_height = self.block_height_subscriber.current_block_height();
         let current_block_height: u32 = *current_block_height;
         response.extensions.insert(
             CURRENT_FUEL_BLOCK_HEIGHT.to_string(),

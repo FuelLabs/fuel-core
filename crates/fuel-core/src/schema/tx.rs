@@ -215,7 +215,7 @@ impl TxQuery {
         let query = ctx.read_view()?;
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
         let owner = fuel_types::Address::from(owner);
 
         crate::schema::query_pagination(
@@ -253,7 +253,7 @@ impl TxQuery {
 
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
 
         let memory_pool = ctx.data_unchecked::<SharedMemoryPool>();
         let memory = memory_pool.get_memory().await;
@@ -305,7 +305,7 @@ impl TxMutation {
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let consensus_params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
         let block_gas_limit = consensus_params.block_gas_limit();
 
         if block_height.is_some() && !config.historical_execution {
@@ -358,7 +358,7 @@ impl TxMutation {
         let txpool = ctx.data_unchecked::<TxPool>();
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
         let tx = FuelTx::from_bytes(&tx.0)?;
 
         txpool
@@ -450,7 +450,7 @@ async fn submit_and_await_status<'a>(
     let txpool = ctx.data_unchecked::<TxPool>();
     let params = ctx
         .data_unchecked::<ConsensusProvider>()
-        .latest_consensus_params();
+        .current_consensus_params();
     let tx = FuelTx::from_bytes(&tx.0)?;
     let tx_id = tx.id(&params.chain_id());
     let subscription = txpool.tx_update_subscribe(tx_id)?;

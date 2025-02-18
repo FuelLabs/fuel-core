@@ -117,7 +117,7 @@ impl MessageCoin {
     async fn asset_id(&self, ctx: &Context<'_>) -> AssetId {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
 
         let base_asset_id = *params.base_asset_id();
         base_asset_id.into()
@@ -257,7 +257,7 @@ impl CoinQuery {
     ) -> async_graphql::Result<Vec<Vec<CoinType>>> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
         let max_input = params.tx_params().max_inputs();
 
         let excluded_id_count = excluded_ids.as_ref().map_or(0, |exclude| {
