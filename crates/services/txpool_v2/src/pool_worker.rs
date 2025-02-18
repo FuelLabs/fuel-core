@@ -403,7 +403,7 @@ where
         tx_ids_sender: tokio::sync::oneshot::Sender<Vec<TxId>>,
     ) {
         let tx_ids: Vec<TxId> = self.pool.iter_tx_ids().take(max_txs).copied().collect();
-        if let Err(_) = tx_ids_sender.send(tx_ids) {
+        if tx_ids_sender.send(tx_ids).is_err() {
             tracing::error!("Failed to send tx ids out of PoolWorker");
         }
     }
@@ -422,7 +422,7 @@ where
                 })
             })
             .collect();
-        if let Err(_) = txs_sender.send(txs) {
+        if txs_sender.send(txs).is_err() {
             tracing::error!("Failed to send txs from PoolWorker");
         }
     }
