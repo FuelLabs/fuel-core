@@ -339,7 +339,7 @@ pub fn init_sub_services(
         da_compression_config: config.da_compression.clone(),
         continue_on_error: config.continue_on_error,
         consensus_parameters: &chain_config.consensus_parameters,
-        consensus_parameters_provider: consensus_parameters_provider.clone(),
+        stf_parameters_provider: consensus_parameters_provider.clone(),
     };
     let graphql_worker =
         fuel_core_graphql_api::worker_service::new_service(graphql_worker_context)?;

@@ -41,7 +41,7 @@ use crate::{
                 OldTransactions,
             },
         },
-        worker_service::ConsensusParametersProvider as ConsensusParametersProviderTrait,
+        worker_service::StfVersionProvider as StfVersionProviderTrait,
     },
     service::adapters::ConsensusParametersProvider,
 };
@@ -432,7 +432,7 @@ impl worker::OffChainDatabase for Database<OffChain> {
     }
 }
 
-impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
+impl StfVersionProviderTrait for ConsensusParametersProvider {
     fn cache_stf_version(
         &self,
         version: fuel_core_types::blockchain::header::StateTransitionBytecodeVersion,

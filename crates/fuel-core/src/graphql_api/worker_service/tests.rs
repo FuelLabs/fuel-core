@@ -27,9 +27,9 @@ impl ports::worker::TxPool for MockTxPool {
     }
 }
 
-struct MockConsensusProvider;
+struct MockStfProvider;
 
-impl ConsensusParametersProvider for MockConsensusProvider {
+impl StfVersionProvider for MockStfProvider {
     fn cache_stf_version(&self, _version: StateTransitionBytecodeVersion) {
         // Do nothing
     }
@@ -81,9 +81,9 @@ fn block_importer_for_event(event: Event) -> BoxStream<SharedImportResult> {
 fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
     block_importer: BoxStream<SharedImportResult>,
     database: D,
-) -> Task<MockTxPool, D, MockConsensusProvider> {
+) -> Task<MockTxPool, D, MockStfProvider> {
     let tx_pool = MockTxPool;
-    let consensus_provider = MockConsensusProvider;
+    let stf_provider = MockStfProvider;
     let chain_id = Default::default();
     Task {
         tx_pool,
@@ -97,6 +97,6 @@ fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
         asset_metadata_indexation_enabled: true,
         base_asset_id: Default::default(),
         block_height_subscription_handler: Default::default(),
-        consensus_parameters_provider: consensus_provider,
+        stf_parameters_provider: stf_provider,
     }
 }
