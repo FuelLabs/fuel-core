@@ -47,11 +47,11 @@ pub async fn deploy(
         op::movi(0x12, 32),
         op::aloc(0x12),
         // Read value
-        op::srw(0x10, 0x11, 0x12),
+        op::srw(0x10, 0x11, RegId::HP),
         // Increment value
         op::addi(0x10, 0x10, 1),
         // Write value
-        op::sww(0x12, 0x11, 0x10),
+        op::sww(RegId::HP, 0x11, 0x10),
         // Return new counter value
         op::ret(0x10),
     ]
@@ -159,4 +159,16 @@ pub async fn increment(
     };
 
     (block_height, val)
+}
+
+/// Get counter value from storage bytes
+pub fn value_from_storage_bytes(storage_bytes: &[u8]) -> u64 {
+    assert!(storage_bytes.len() == 32, "Storage slot size mismatch");
+    assert!(
+        storage_bytes[8..].iter().all(|v| *v == 0),
+        "Counter values cannot be over u64::MAX"
+    );
+    let mut buffer = [0; 8];
+    buffer.copy_from_slice(&storage_bytes[..8]);
+    u64::from_be_bytes(buffer)
 }

@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 #![deny(unused_must_use)]
 #![deny(warnings)]
 
@@ -55,6 +56,8 @@ mod required_fuel_block_height_extension;
 mod snapshot;
 #[cfg(not(feature = "only-p2p"))]
 mod state_rewind;
+#[cfg(not(feature = "only-p2p"))]
+mod storage_read_replay;
 #[cfg(not(feature = "only-p2p"))]
 mod trigger_integration;
 #[cfg(not(feature = "only-p2p"))]
