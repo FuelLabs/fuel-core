@@ -86,6 +86,11 @@ mod tests {
     => Err(())
     ; "read fails on partially initialized range if keyspace exceeded"
     )]
+    #[test_case(
+    &[(*u256_to_bytes32(U256::MAX), vec![0; 32])], *u256_to_bytes32(U256::MAX), 1
+    => Ok(vec![Some(vec![0; 32])])
+    ; "read success when reading last key"
+    )]
     fn read_sequential_range(
         prefilled_slots: &[([u8; 32], Vec<u8>)],
         start_key: [u8; 32],
@@ -160,6 +165,11 @@ mod tests {
     &[], *u256_to_bytes32(U256::MAX), &[vec![1; 32], vec![2; 32]]
     => Err(())
     ; "insert fails if start_key + range > u256::MAX"
+    )]
+    #[test_case(
+    &[(*u256_to_bytes32(U256::MAX), vec![0; 32])], *u256_to_bytes32(U256::MAX), &[vec![1; 32]]
+    => Ok(true)
+    ; "try to modify only the last value of storage"
     )]
     fn insert_range(
         prefilled_slots: &[([u8; 32], Vec<u8>)],
@@ -254,6 +264,11 @@ mod tests {
     &[([0; 32], vec![0; 32]), (key(2), vec![0; 32])], [0; 32], 3
     => (vec![], false)
     ; "remove multiple slots over partially uninitialized middle range"
+    )]
+    #[test_case(
+    &[(*u256_to_bytes32(U256::MAX), vec![0; 32])], *u256_to_bytes32(U256::MAX), 1
+    => (vec![], true)
+    ; "try to modify only the last value of storage"
     )]
     fn remove_range(
         prefilled_slots: &[([u8; 32], Vec<u8>)],

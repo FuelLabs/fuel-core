@@ -1,3 +1,5 @@
+use crate::utils::aloc_bytearray;
+
 use super::run_group_ref;
 
 use criterion::{
@@ -28,7 +30,7 @@ pub fn run(c: &mut Criterion) {
         "eck1",
         VmBench::new(op::eck1(RegId::HP, 0x20, 0x21))
             .with_prepare_script(vec![
-                op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+                op::gtf_args(0x20, RegId::ZERO, GTFArgs::ScriptData),
                 op::addi(
                     0x21,
                     0x20,
@@ -55,7 +57,7 @@ pub fn run(c: &mut Criterion) {
         "ecr1",
         VmBench::new(op::ecr1(RegId::HP, 0x20, 0x21))
             .with_prepare_script(vec![
-                op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+                op::gtf_args(0x20, RegId::ZERO, GTFArgs::ScriptData),
                 op::addi(
                     0x21,
                     0x20,
@@ -122,7 +124,7 @@ pub fn run(c: &mut Criterion) {
             format!("{i}"),
             VmBench::new(op::ed19(0x20, 0x21, RegId::ZERO, 0x10))
                 .with_prepare_script(vec![
-                    op::gtf_args(0x20, 0x00, GTFArgs::ScriptData),
+                    op::gtf_args(0x20, RegId::ZERO, GTFArgs::ScriptData),
                     op::addi(
                         0x21,
                         0x20,
@@ -154,4 +156,61 @@ pub fn run(c: &mut Criterion) {
         );
     }
     bench_ed19.finish();
+
+    // ecop testing mul as it's the most expensive operation
+    let mut points_bytearray = Vec::new();
+    // X
+    points_bytearray.extend(
+        hex::decode("2bd3e6d0f3b142924f5ca7b49ce5b9d54c4703d7ae5648e61d02268b1a0a9fb7")
+            .unwrap(),
+    );
+    // Y
+    points_bytearray.extend(
+        hex::decode("21611ce0a6af85915e2f1d70300909ce2e49dfad4a4619c8390cae66cefdb204")
+            .unwrap(),
+    );
+    // Scalar
+    points_bytearray.extend(
+        hex::decode("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+            .unwrap(),
+    );
+    // 96 bytes = 1 point and 1 scalar
+    let prepare_points = aloc_bytearray::<96>(0x10, points_bytearray.try_into().unwrap());
+    run_group_ref(
+        &mut c.benchmark_group("ecop"),
+        "ecop",
+        VmBench::new(op::ecop(0x10, RegId::ZERO, 0x01, 0x10))
+            .with_prepare_script(prepare_points),
+    );
+
+    // ec pairing
+    let mut bench_epar = c.benchmark_group("epar");
+    for i in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] {
+        let mut points_bytearray = Vec::new();
+        for _ in 0u32..i {
+            points_bytearray.extend(
+                hex::decode(
+                    "0000000000000000000000000000000000000000000000000000000000000001\
+                    0000000000000000000000000000000000000000000000000000000000000002\
+                    198e9393920d483a7260bfb731fb5d25f1aa493335a9e71297e485b7aef312c2\
+                    1800deef121f1e76426a00665e5c4479674322d4f75edadd46debd5cd992f6ed\
+                    090689d0585ff075ec9e99ad690c3395bc4b313370b38ef355acdadcd122975b\
+                    12c85ea5db8c6deb4aab71808dcb408fe3d1e7690c43d37b4ce6cc0166fa7daa",
+                )
+                .unwrap(),
+            );
+        }
+        bench_epar.throughput(Throughput::Bytes(i as u64));
+        run_group_ref(
+            &mut bench_epar,
+            format!("{i}"),
+            VmBench::new(op::epar(0x12, RegId::ZERO, 0x11, 0x10))
+                .with_data(points_bytearray)
+                .with_prepare_script(vec![
+                    op::movi(0x11, i),
+                    op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+                ]),
+        );
+    }
+    bench_epar.finish();
 }

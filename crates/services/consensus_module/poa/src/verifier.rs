@@ -61,7 +61,7 @@ pub fn verify_block_fields<D: Database>(
     let prev_header = database.block_header(&prev_height)?;
 
     ensure!(
-        header.da_height >= prev_header.da_height,
+        header.da_height() >= prev_header.da_height(),
         "The `da_height` of the next block can't be lower"
     );
 
@@ -70,8 +70,14 @@ pub fn verify_block_fields<D: Database>(
         "The `time` of the next block can't be lower"
     );
 
+    let application_header_hash = match header {
+        BlockHeader::V1(header) => &header.application().hash(),
+        #[cfg(feature = "fault-proving")]
+        BlockHeader::V2(header) => &header.application().hash(),
+    };
+
     ensure!(
-        header.application_hash() == &header.application().hash(),
+        header.application_hash() == application_header_hash,
         "The application hash mismatch."
     );
 

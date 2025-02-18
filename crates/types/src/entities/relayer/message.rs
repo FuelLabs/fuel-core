@@ -135,6 +135,18 @@ impl Message {
         }
     }
 
+    /// Returns `true` if the message is retryable.
+    pub fn is_retryable_message(&self) -> bool {
+        let is_data_empty = self.data().is_empty();
+        !is_data_empty
+    }
+
+    /// Returns `true` if the message is non retryable.
+    pub fn is_non_retryable_message(&self) -> bool {
+        let is_data_empty = self.data().is_empty();
+        is_data_empty
+    }
+
     /// Set the message data
     #[cfg(any(test, feature = "test-helpers"))]
     pub fn set_data(&mut self, data: Vec<u8>) {
@@ -237,6 +249,7 @@ pub struct MerkleProof {
     pub proof_index: u64,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 /// Proves to da layer that this message was included in a Fuel block.
 pub struct MessageProof {
     /// Proof that message is contained within the provided block header.

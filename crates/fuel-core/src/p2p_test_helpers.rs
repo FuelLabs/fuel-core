@@ -2,8 +2,8 @@
 
 use crate::{
     chain_config::{
+        coin_config_helpers::CoinConfigGenerator,
         CoinConfig,
-        CoinConfigGenerator,
     },
     combined_database::CombinedDatabase,
     database::{
@@ -37,7 +37,6 @@ use fuel_core_p2p::{
 };
 use fuel_core_poa::{
     ports::BlockImporter,
-    signer::SignMode,
     Trigger,
 };
 use fuel_core_storage::{
@@ -64,6 +63,7 @@ use fuel_core_types::{
     },
     secrecy::Secret,
     services::p2p::GossipsubMessageAcceptance,
+    signer::SignMode,
 };
 use futures::StreamExt;
 use rand::{
@@ -86,6 +86,32 @@ pub enum BootstrapType {
     ReservedNodes,
 }
 
+/// Set of values that will be overridden in the node's configuration
+#[derive(Clone, Debug)]
+pub struct CustomizeConfig {
+    min_exec_gas_price: Option<u64>,
+    max_discovery_peers_connected: Option<u32>,
+}
+
+impl CustomizeConfig {
+    pub fn no_overrides() -> Self {
+        Self {
+            min_exec_gas_price: None,
+            max_discovery_peers_connected: None,
+        }
+    }
+
+    pub fn min_gas_price(mut self, min_gas_price: u64) -> Self {
+        self.min_exec_gas_price = Some(min_gas_price);
+        self
+    }
+
+    pub fn max_discovery_peers_connected(mut self, max_peers_connected: u32) -> Self {
+        self.max_discovery_peers_connected = Some(max_peers_connected);
+        self
+    }
+}
+
 #[derive(Clone)]
 /// Setup for a producer node
 pub struct ProducerSetup {
@@ -99,6 +125,8 @@ pub struct ProducerSetup {
     pub utxo_validation: bool,
     /// Indicates the type of initial connections.
     pub bootstrap_type: BootstrapType,
+    /// Config Overrides
+    pub config_overrides: CustomizeConfig,
 }
 
 #[derive(Clone)]
@@ -112,6 +140,8 @@ pub struct ValidatorSetup {
     pub utxo_validation: bool,
     /// Indicates the type of initial connections.
     pub bootstrap_type: BootstrapType,
+    /// Config Overrides
+    pub config_overrides: CustomizeConfig,
 }
 
 #[derive(Clone)]
@@ -234,7 +264,7 @@ pub async fn make_nodes(
                     let initial_coin = CoinConfig {
                         // set idx to prevent overlapping utxo_ids when
                         // merging with existing coins from config
-                        output_index: 2,
+                        output_index: 10,
                         ..coin_generator.generate_with(secret, 10000)
                     };
                     let tx = TransactionBuilder::script(
@@ -296,6 +326,7 @@ pub async fn make_nodes(
                             .then_some(name)
                             .unwrap_or_else(|| format!("b:{i}")),
                         config.clone(),
+                        CustomizeConfig::no_overrides(),
                     );
                     if let Some(BootstrapSetup { pub_key, .. }) = boot {
                         update_signing_key(&mut node_config, pub_key);
@@ -314,11 +345,15 @@ pub async fn make_nodes(
     for (i, s) in producers_with_txs.into_iter().enumerate() {
         let config = config.clone();
         let name = s.as_ref().map_or(String::new(), |s| s.0.name.clone());
+        let overrides = s
+            .clone()
+            .map_or(CustomizeConfig::no_overrides(), |s| s.0.config_overrides);
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
                 .unwrap_or_else(|| format!("p:{i}")),
             config.clone(),
+            overrides,
         );
 
         let mut test_txs = Vec::with_capacity(0);
@@ -369,11 +404,15 @@ pub async fn make_nodes(
     for (i, s) in validators_setup.into_iter().enumerate() {
         let config = config.clone();
         let name = s.as_ref().map_or(String::new(), |s| s.name.clone());
+        let overrides = s
+            .clone()
+            .map_or(CustomizeConfig::no_overrides(), |s| s.config_overrides);
         let mut node_config = make_config(
             (!name.is_empty())
                 .then_some(name)
                 .unwrap_or_else(|| format!("v:{i}")),
             config.clone(),
+            overrides,
         );
         node_config.block_production = Trigger::Never;
 
@@ -431,10 +470,24 @@ fn update_signing_key(config: &mut Config, key: Address) {
     config.snapshot_reader = snapshot_reader.clone().with_chain_config(chain_config)
 }
 
-pub fn make_config(name: String, mut node_config: Config) -> Config {
+pub fn make_config(
+    name: String,
+    mut node_config: Config,
+    config_overrides: CustomizeConfig,
+) -> Config {
     node_config.p2p = Config::local_node().p2p;
     node_config.utxo_validation = true;
     node_config.name = name;
+    if let Some(min_gas_price) = config_overrides.min_exec_gas_price {
+        node_config.gas_price_config.min_exec_gas_price = min_gas_price;
+    }
+    if let Some(max_discovery_peers_connected) =
+        config_overrides.max_discovery_peers_connected
+    {
+        if let Some(p2p) = &mut node_config.p2p {
+            p2p.max_discovery_peers_connected = max_discovery_peers_connected;
+        }
+    }
     node_config
 }
 
@@ -607,12 +660,20 @@ fn not_found_txs<'iter>(
 
 impl ProducerSetup {
     pub fn new(secret: SecretKey) -> Self {
+        Self::new_with_overrides(secret, CustomizeConfig::no_overrides())
+    }
+
+    pub fn new_with_overrides(
+        secret: SecretKey,
+        config_overrides: CustomizeConfig,
+    ) -> Self {
         Self {
             name: Default::default(),
             secret,
             num_test_txs: Default::default(),
             utxo_validation: true,
             bootstrap_type: BootstrapType::BootstrapNodes,
+            config_overrides,
         }
     }
 
@@ -647,11 +708,19 @@ impl ProducerSetup {
 
 impl ValidatorSetup {
     pub fn new(pub_key: Address) -> Self {
+        Self::new_with_overrides(pub_key, CustomizeConfig::no_overrides())
+    }
+
+    pub fn new_with_overrides(
+        pub_key: Address,
+        config_overrides: CustomizeConfig,
+    ) -> Self {
         Self {
             pub_key,
             name: Default::default(),
             utxo_validation: true,
             bootstrap_type: BootstrapType::BootstrapNodes,
+            config_overrides,
         }
     }
 

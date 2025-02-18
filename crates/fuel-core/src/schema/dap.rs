@@ -132,7 +132,12 @@ impl ConcreteStorage {
         let fee_params = params.fee_params();
 
         let ready_tx = checked_tx
-            .into_ready(GAS_PRICE, gas_costs, fee_params)
+            .into_ready(
+                GAS_PRICE,
+                gas_costs,
+                fee_params,
+                Some(vm_database.block_height()?),
+            )
             .map_err(|e| {
                 anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
             })?;
@@ -176,7 +181,12 @@ impl ConcreteStorage {
         let fee_params = params.fee_params();
 
         let ready_tx = checked_tx
-            .into_ready(GAS_PRICE, gas_costs, fee_params)
+            .into_ready(
+                GAS_PRICE,
+                gas_costs,
+                fee_params,
+                Some(vm_database.block_height()?),
+            )
             .map_err(|e| {
                 anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
             })?;
@@ -210,10 +220,12 @@ impl ConcreteStorage {
             .get_current_block()?
             .ok_or(not_found!("Block for VMDatabase"))?;
 
+        let application_header = block.header().as_empty_application_header();
+
         let vm_database = VmStorage::new(
             view.into_transaction(),
             block.header().consensus(),
-            block.header().application(),
+            &application_header,
             // TODO: Use a real coinbase address
             Default::default(),
         );
@@ -456,7 +468,12 @@ impl DapMutation {
         match checked_tx {
             CheckedTransaction::Script(script) => {
                 let ready_tx = script
-                    .into_ready(GAS_PRICE, gas_costs, fee_params)
+                    .into_ready(
+                        GAS_PRICE,
+                        gas_costs,
+                        fee_params,
+                        Some(vm.as_ref().block_height()?),
+                    )
                     .map_err(|e| {
                         anyhow!("Failed to apply dynamic values to checked tx: {:?}", e)
                     })?;

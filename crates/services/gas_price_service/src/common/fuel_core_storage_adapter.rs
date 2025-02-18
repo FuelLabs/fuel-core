@@ -1,40 +1,49 @@
-use crate::common::utils::{
-    BlockInfo,
-    Error as GasPriceError,
-    Result as GasPriceResult,
-};
-use anyhow::anyhow;
-use fuel_core_types::fuel_types::BlockHeight;
-
 use crate::{
     common::{
         fuel_core_storage_adapter::storage::{
             GasPriceColumn,
             GasPriceMetadata,
+            RecordedHeights,
         },
         updater_metadata::UpdaterMetadata,
+        utils::{
+            BlockInfo,
+            Error as GasPriceError,
+            Result as GasPriceResult,
+        },
     },
-    ports::MetadataStorage,
+    ports::{
+        GasPriceServiceAtomicStorage,
+        GetLatestRecordedHeight,
+        GetMetadataStorage,
+        SetLatestRecordedHeight,
+        SetMetadataStorage,
+    },
 };
+use anyhow::anyhow;
+use core::cmp::min;
 use fuel_core_storage::{
     codec::{
         postcard::Postcard,
         Encode,
     },
     kv_store::KeyValueInspect,
-    structured_storage::StructuredStorage,
     transactional::{
         Modifiable,
+        StorageTransaction,
         WriteTransaction,
     },
+    Error as StorageError,
     StorageAsMut,
     StorageAsRef,
+    StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
         header::ConsensusParametersVersion,
     },
+    fuel_merkle::storage::StorageMutate,
     fuel_tx::{
         field::{
             MintAmount,
@@ -42,32 +51,20 @@ use fuel_core_types::{
         },
         Transaction,
     },
+    fuel_types::BlockHeight,
 };
-use std::cmp::min;
 
 #[cfg(test)]
 mod metadata_tests;
 
 pub mod storage;
 
-impl<Storage> MetadataStorage for StructuredStorage<Storage>
+impl<Storage> SetMetadataStorage for Storage
 where
-    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable,
-    Storage: Send + Sync,
+    Storage: Send + Sync + Modifiable,
+    for<'a> StorageTransaction<&'a mut Storage>:
+        StorageMutate<GasPriceMetadata, Error = StorageError>,
 {
-    fn get_metadata(
-        &self,
-        block_height: &BlockHeight,
-    ) -> GasPriceResult<Option<UpdaterMetadata>> {
-        let metadata = self
-            .storage::<GasPriceMetadata>()
-            .get(block_height)
-            .map_err(|err| GasPriceError::CouldNotFetchMetadata {
-                source_error: err.into(),
-            })?;
-        Ok(metadata.map(|inner| inner.into_owned()))
-    }
-
     fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
         let block_height = metadata.l2_block_height();
         let mut tx = self.write_transaction();
@@ -82,11 +79,88 @@ where
     }
 }
 
+impl<Storage> GetMetadataStorage for Storage
+where
+    Storage: Send + Sync,
+    Storage: StorageInspect<GasPriceMetadata, Error = StorageError>,
+{
+    fn get_metadata(
+        &self,
+        block_height: &BlockHeight,
+    ) -> GasPriceResult<Option<UpdaterMetadata>> {
+        let metadata = self
+            .storage::<GasPriceMetadata>()
+            .get(block_height)
+            .map_err(|err| GasPriceError::CouldNotFetchMetadata {
+                source_error: err.into(),
+            })?;
+        Ok(metadata.map(std::borrow::Cow::into_owned))
+    }
+}
+
+impl<Storage> GetLatestRecordedHeight for Storage
+where
+    Storage: Send + Sync,
+    Storage: StorageInspect<RecordedHeights, Error = StorageError>,
+{
+    fn get_recorded_height(&self) -> GasPriceResult<Option<BlockHeight>> {
+        const KEY: &() = &();
+        let recorded_height = self
+            .storage::<RecordedHeights>()
+            .get(KEY)
+            .map_err(|err| GasPriceError::CouldNotFetchRecordedHeight(err.into()))?
+            .map(|no| *no);
+        Ok(recorded_height)
+    }
+}
+
+impl<Storage> GasPriceServiceAtomicStorage for Storage
+where
+    Storage: GetMetadataStorage
+        + GetLatestRecordedHeight
+        + KeyValueInspect<Column = GasPriceColumn>
+        + Modifiable
+        + Send
+        + Sync
+        + 'static,
+{
+    type Transaction<'a> = StorageTransaction<&'a mut Storage> where Self: 'a;
+
+    fn begin_transaction(&mut self) -> GasPriceResult<Self::Transaction<'_>> {
+        let tx = self.write_transaction();
+        Ok(tx)
+    }
+
+    fn commit_transaction(transaction: Self::Transaction<'_>) -> GasPriceResult<()> {
+        transaction
+            .commit()
+            .map_err(|err| GasPriceError::CouldNotCommit(err.into()))?;
+        Ok(())
+    }
+}
+
+impl<Storage> SetLatestRecordedHeight for Storage
+where
+    Storage: Send + Sync + StorageMutate<RecordedHeights, Error = StorageError>,
+{
+    fn set_recorded_height(
+        &mut self,
+        recorded_height: BlockHeight,
+    ) -> GasPriceResult<()> {
+        const KEY: &() = &();
+        self.storage_as_mut::<RecordedHeights>()
+            .insert(KEY, &recorded_height)
+            .map_err(|err| GasPriceError::CouldNotSetRecordedHeight(err.into()))?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct GasPriceSettings {
     pub gas_price_factor: u64,
     pub block_gas_limit: u64,
 }
+
 pub trait GasPriceSettingsProvider: Send + Sync + Clone {
     fn settings(
         &self,
@@ -107,11 +181,12 @@ pub fn get_block_info(
         block_gas_capacity: block_gas_limit,
         block_bytes: Postcard::encode(block).len() as u64,
         block_fees: fee,
+        gas_price,
     };
     Ok(info)
 }
 
-fn mint_values(block: &Block<Transaction>) -> GasPriceResult<(u64, u64)> {
+pub(crate) fn mint_values(block: &Block<Transaction>) -> GasPriceResult<(u64, u64)> {
     let mint = block
         .transactions()
         .last()
@@ -121,6 +196,13 @@ fn mint_values(block: &Block<Transaction>) -> GasPriceResult<(u64, u64)> {
         })?;
     Ok((*mint.mint_amount(), *mint.gas_price()))
 }
+
+// TODO: Don't take a direct dependency on `Postcard` as it's not guaranteed to be the encoding format
+// https://github.com/FuelLabs/fuel-core/issues/2443
+pub(crate) fn block_bytes(block: &Block<Transaction>) -> u64 {
+    Postcard::encode(block).len() as u64
+}
+
 fn block_used_gas(
     fee: u64,
     gas_price: u64,

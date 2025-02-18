@@ -43,6 +43,7 @@ use fuel_core_types::{
     },
     fuel_types::{
         AssetId,
+        BlockHeight,
         ChainId,
         Word,
     },
@@ -61,7 +62,10 @@ use crate::{
     config::Config,
     error::Error,
     new_service,
-    pool::Pool,
+    pool::{
+        Pool,
+        TxPoolStats,
+    },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     service::{
         memory::MemoryPool,
@@ -93,12 +97,14 @@ use super::mocks::{
 // the byte and gas price fees.
 pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 pub const GAS_LIMIT: Word = 100000;
+pub const DEFAULT_EXPIRATION_HEIGHT: BlockHeight = BlockHeight::new(1000);
 
 pub struct TestPoolUniverse {
     mock_db: MockDb,
     rng: StdRng,
     pub config: Config,
     pool: Option<Shared<TxPool>>,
+    stats_receiver: Option<tokio::sync::watch::Receiver<TxPoolStats>>,
 }
 
 impl Default for TestPoolUniverse {
@@ -108,6 +114,7 @@ impl Default for TestPoolUniverse {
             rng: StdRng::seed_from_u64(0),
             config: Default::default(),
             pool: None,
+            stats_receiver: None,
         }
     }
 }
@@ -121,6 +128,14 @@ impl TestPoolUniverse {
         &self.mock_db
     }
 
+    pub fn latest_stats(&self) -> TxPoolStats {
+        if let Some(receiver) = &self.stats_receiver {
+            *receiver.borrow()
+        } else {
+            TxPoolStats::default()
+        }
+    }
+
     pub fn config(self, config: Config) -> Self {
         if self.pool.is_some() {
             panic!("Pool already built");
@@ -129,6 +144,7 @@ impl TestPoolUniverse {
     }
 
     pub fn build_pool(&mut self) {
+        let (tx, rx) = tokio::sync::watch::channel(TxPoolStats::default());
         let pool = Arc::new(RwLock::new(Pool::new(
             GraphStorage::new(GraphConfig {
                 max_txs_chain_count: self.config.max_txs_chain_count,
@@ -136,7 +152,9 @@ impl TestPoolUniverse {
             BasicCollisionManager::new(),
             RatioTipGasSelection::new(),
             self.config.clone(),
+            tx,
         )));
+        self.stats_receiver = Some(rx);
         self.pool = Some(pool.clone());
     }
 
@@ -197,6 +215,7 @@ impl TestPoolUniverse {
         }
         tx_builder.tip(tip);
         tx_builder.max_fee_limit(10000);
+        tx_builder.expiration(DEFAULT_EXPIRATION_HEIGHT);
         tx_builder.finalize().into()
     }
 
@@ -299,6 +318,18 @@ impl TestPoolUniverse {
     }
 
     pub fn assert_pool_integrity(&self, expected_txs: &[ArcPoolTx]) {
+        let stats = self.latest_stats();
+        assert_eq!(stats.tx_count, expected_txs.len() as u64);
+        let mut total_gas: u64 = 0;
+        let mut total_size: u64 = 0;
+        for tx in expected_txs {
+            total_gas = total_gas.checked_add(tx.max_gas()).unwrap();
+            total_size = total_size
+                .checked_add(tx.metered_bytes_size() as u64)
+                .unwrap();
+        }
+        assert_eq!(stats.total_gas, total_gas);
+        assert_eq!(stats.total_size, total_size);
         let pool = self.pool.as_ref().unwrap();
         let pool = pool.read();
         let storage_ids_dependencies = pool.storage.assert_integrity(expected_txs);

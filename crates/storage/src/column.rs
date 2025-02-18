@@ -4,7 +4,6 @@
 
 use crate::kv_store::StorageColumn;
 
-#[cfg(feature = "alloc")]
 use alloc::string::{
     String,
     ToString,

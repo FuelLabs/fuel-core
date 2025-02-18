@@ -112,6 +112,13 @@ impl<S> StorageTransaction<S> {
         self.inner.changes
     }
 
+    /// Returns the storage and changes to it.
+    pub fn into_inner(self) -> (S, Changes) {
+        let storage = self.inner.storage;
+        let changes = self.inner.changes;
+        (storage, changes)
+    }
+
     /// Resets the changes to the storage.
     pub fn reset_changes(&mut self) {
         self.inner.changes = Default::default();
@@ -259,10 +266,7 @@ pub trait WriteTransaction {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self>;
 }
 
-impl<S> WriteTransaction for S
-where
-    S: Modifiable,
-{
+impl<S> WriteTransaction for S {
     fn write_transaction(&mut self) -> StorageTransaction<&mut Self> {
         StorageTransaction::transaction(
             self,
@@ -388,24 +392,33 @@ where
         &self,
         key: &[u8],
         column: Self::Column,
+        offset: usize,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
         if let Some(operation) = self.get_from_changes(key, column) {
             match operation {
                 WriteOperation::Insert(value) => {
-                    let read = value.len();
-                    if read != buf.len() {
-                        return Err(crate::Error::Other(anyhow::anyhow!(
-                            "Buffer size is not equal to the value size"
-                        )));
+                    let bytes_len = value.as_ref().len();
+                    let start = offset;
+                    let buf_len = buf.len();
+                    let end = offset.saturating_add(buf.len());
+
+                    if end > bytes_len {
+                        return Err(anyhow::anyhow!(
+                            "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}`",
+                            key
+                        )
+                        .into());
                     }
-                    buf.copy_from_slice(value.as_ref());
-                    Ok(Some(read))
+
+                    let starting_from_offset = &value.as_ref()[start..end];
+                    buf[..].copy_from_slice(starting_from_offset);
+                    Ok(Some(buf_len))
                 }
                 WriteOperation::Remove => Ok(None),
             }
         } else {
-            self.storage.read(key, column, buf)
+            self.storage.read(key, column, offset, buf)
         }
     }
 }
@@ -464,7 +477,7 @@ where
         self.changes
             .entry(column.id())
             .or_default()
-            .insert(k, WriteOperation::Insert(Value::new(buf.to_vec())));
+            .insert(k, WriteOperation::Insert(Value::from(buf)));
         Ok(buf.len())
     }
 
@@ -652,12 +665,90 @@ mod test {
         use crate::column::Column;
 
         #[test]
+        fn read_returns_from_view_exact_size() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 3];
+            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
+            // verify
+            assert_eq!(ret, Some(3));
+            assert_eq!(buf, [1, 2, 3]);
+        }
+
+        #[test]
+        fn read_returns_from_view_buf_smaller() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 2];
+            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
+            // verify
+            assert_eq!(ret, Some(2));
+            assert_eq!(buf, [1, 2]);
+        }
+
+        #[test]
+        fn read_returns_from_view_with_offset() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 2];
+            let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap();
+            // verify
+            assert_eq!(ret, Some(2));
+            assert_eq!(buf, [2, 3]);
+        }
+
+        #[test]
+        fn read_returns_from_view_buf_bigger() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 4];
+            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap_err();
+            // verify
+            assert_eq!(ret, crate::Error::Other(anyhow::anyhow!("Offset `0` + buf_len `4` read until 4 which is out of bounds `3` for key `[10, 11, 12]`".to_string())));
+        }
+
+        #[test]
+        fn read_returns_from_view_buf_bigger_because_offset() {
+            // setup
+            let storage = InMemoryStorage::<Column>::default();
+            let mut view = storage.read_transaction();
+            let key = vec![0xA, 0xB, 0xC];
+            let value = Value::from([1, 2, 3]);
+            view.put(&key, Column::Metadata, value).unwrap();
+            // test
+            let mut buf = [0; 3];
+            let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap_err();
+            // verify
+            assert_eq!(ret, crate::Error::Other(anyhow::anyhow!("Offset `1` + buf_len `3` read until 4 which is out of bounds `3` for key `[10, 11, 12]`".to_string())));
+        }
+
+        #[test]
         fn get_returns_from_view() {
             // setup
             let storage = InMemoryStorage::<Column>::default();
             let mut view = storage.read_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             view.put(&key, Column::Metadata, expected.clone()).unwrap();
             // test
             let ret = view.get(&key, Column::Metadata).unwrap();
@@ -671,7 +762,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             write.commit().unwrap();
 
@@ -688,7 +779,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             write.commit().unwrap();
 
@@ -709,13 +800,13 @@ mod test {
             // setup
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write
                 .put(&[0xA, 0xB, 0xC], Column::Metadata, expected.clone())
                 .unwrap();
             // test
             let ret = write
-                .replace(&[0xA, 0xB, 0xC], Column::Metadata, Arc::new(vec![2, 4, 6]))
+                .replace(&[0xA, 0xB, 0xC], Column::Metadata, Value::from([2, 4, 6]))
                 .unwrap();
             // verify
             assert_eq!(ret, Some(expected))
@@ -727,7 +818,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             // test
             let ret = write.take(&key, Column::Metadata).unwrap();
@@ -743,7 +834,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             write.commit().unwrap();
 
@@ -762,7 +853,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             write.commit().unwrap();
 
@@ -783,7 +874,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected).unwrap();
             // test
             let ret = write.exists(&key, Column::Metadata).unwrap();
@@ -797,7 +888,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected).unwrap();
             write.commit().unwrap();
 
@@ -814,7 +905,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected).unwrap();
             write.commit().unwrap();
 
@@ -836,7 +927,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
             // test
             write.commit().unwrap();
@@ -851,7 +942,7 @@ mod test {
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
             let key = vec![0xA, 0xB, 0xC];
-            let expected = Arc::new(vec![1, 2, 3]);
+            let expected = Value::from([1, 2, 3]);
             write.put(&key, Column::Metadata, expected).unwrap();
             write.commit().unwrap();
 
@@ -870,7 +961,7 @@ mod test {
 
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
-            let expected = Arc::new(vec![]);
+            let expected = Value::from([]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
 
             assert_eq!(
@@ -908,7 +999,7 @@ mod test {
 
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
-            let expected = Arc::new(vec![]);
+            let expected = Value::from([]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
 
             assert_eq!(
@@ -946,7 +1037,7 @@ mod test {
 
             let mut storage = InMemoryStorage::<Column>::default();
             let mut write = storage.write_transaction();
-            let expected = Arc::new(vec![]);
+            let expected = Value::from([]);
             write.put(&key, Column::Metadata, expected.clone()).unwrap();
 
             assert_eq!(

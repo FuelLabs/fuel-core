@@ -24,6 +24,7 @@ query ChainQuery {
         prevRoot
         time
         applicationHash
+        txIdCommitment
       }
       consensus {
         __typename
@@ -165,6 +166,7 @@ query ChainQuery {
         wqmm
         xor
         xori
+        ecop
         alocDependentCost {
           __typename
           ... on LightOperation {
@@ -419,6 +421,17 @@ query ChainQuery {
           }
         }
         swwq {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        epar {
           __typename
           ... on LightOperation {
             base

@@ -67,6 +67,25 @@ impl PeerToPeerPort for P2PAdapter {
 
     async fn get_transactions(
         &self,
+        block_ids: Range<u32>,
+    ) -> anyhow::Result<SourcePeer<Option<Vec<Transactions>>>> {
+        let result = if let Some(service) = &self.service {
+            service.get_transactions(block_ids).await
+        } else {
+            Err(anyhow::anyhow!("No P2P service available"))
+        };
+        match result {
+            Ok((peer_id, transactions)) => {
+                let peer_id: PeerId = peer_id.into();
+                let transactions = peer_id.bind(transactions);
+                Ok(transactions)
+            }
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn get_transactions_from_peer(
+        &self,
         range: SourcePeer<Range<u32>>,
     ) -> anyhow::Result<Option<Vec<Transactions>>> {
         let SourcePeer {
@@ -123,7 +142,6 @@ impl PeerReport for P2PAdapterPeerReport {
     }
 }
 
-#[async_trait::async_trait]
 impl BlockImporterPort for BlockImporterAdapter {
     fn committed_height_stream(&self) -> BoxStream<BlockHeight> {
         use futures::StreamExt;
@@ -141,7 +159,6 @@ impl BlockImporterPort for BlockImporterAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl ConsensusPort for ConsensusAdapter {
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
         Ok(self.block_verifier.verify_consensus(header))

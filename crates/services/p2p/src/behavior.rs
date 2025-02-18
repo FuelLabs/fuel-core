@@ -17,6 +17,10 @@ use crate::{
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     allow_block_list,
+    connection_limits::{
+        self,
+        ConnectionLimits,
+    },
     gossipsub::{
         self,
         MessageAcceptance,
@@ -35,6 +39,10 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
+
+const MAX_PENDING_INCOMING_CONNECTIONS: u32 = 100;
+const MAX_PENDING_OUTGOING_CONNECTIONS: u32 = 100;
+const MAX_ESTABLISHED_CONNECTIONS: u32 = 1000;
 
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
@@ -62,13 +70,16 @@ pub struct FuelBehaviour {
     /// RequestResponse protocol
     request_response:
         request_response::Behaviour<RequestResponseMessageHandler<PostcardCodec>>,
+
+    /// The Behaviour to manage connection limits.
+    connection_limits: connection_limits::Behaviour,
 }
 
 impl FuelBehaviour {
     pub(crate) fn new(
         p2p_config: &Config,
         request_response_codec: RequestResponseMessageHandler<PostcardCodec>,
-    ) -> anyhow::Result<Self> {
+    ) -> anyhow::Result<Self, anyhow::Error> {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -78,7 +89,7 @@ impl FuelBehaviour {
 
             discovery_config
                 .enable_mdns(p2p_config.enable_mdns)
-                .max_peers_connected(p2p_config.max_peers_connected as usize)
+                .max_peers_connected(p2p_config.max_discovery_peers_connected as usize)
                 .with_bootstrap_nodes(p2p_config.bootstrap_nodes.clone())
                 .with_reserved_nodes(p2p_config.reserved_nodes.clone())
                 .enable_reserved_nodes_only_mode(p2p_config.reserved_nodes_only_mode);
@@ -115,6 +126,13 @@ impl FuelBehaviour {
             BlockHeight::default(),
         );
 
+        let connection_limits = connection_limits::Behaviour::new(
+            ConnectionLimits::default()
+                .with_max_pending_incoming(Some(MAX_PENDING_INCOMING_CONNECTIONS))
+                .with_max_pending_outgoing(Some(MAX_PENDING_OUTGOING_CONNECTIONS))
+                .with_max_established(Some(MAX_ESTABLISHED_CONNECTIONS)),
+        );
+
         let req_res_protocol = request_response_codec
             .get_req_res_protocols()
             .map(|protocol| (protocol, ProtocolSupport::Full));
@@ -138,6 +156,7 @@ impl FuelBehaviour {
             blocked_peer: Default::default(),
             identify,
             heartbeat,
+            connection_limits,
         })
     }
 

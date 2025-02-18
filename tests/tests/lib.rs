@@ -2,6 +2,8 @@
 #![deny(warnings)]
 
 #[cfg(not(feature = "only-p2p"))]
+mod assets;
+#[cfg(not(feature = "only-p2p"))]
 mod balances;
 #[cfg(not(feature = "only-p2p"))]
 mod blob;
@@ -48,6 +50,8 @@ mod regenesis;
 #[cfg(not(feature = "only-p2p"))]
 mod relayer;
 #[cfg(not(feature = "only-p2p"))]
+mod required_fuel_block_height_extension;
+#[cfg(not(feature = "only-p2p"))]
 mod snapshot;
 #[cfg(not(feature = "only-p2p"))]
 mod state_rewind;
@@ -62,6 +66,9 @@ mod vm_storage;
 mod sync;
 #[cfg(feature = "only-p2p")]
 mod tx_gossip;
+
+#[cfg(feature = "only-p2p")]
+mod peering;
 
 #[cfg(feature = "aws-kms")]
 mod aws_kms;

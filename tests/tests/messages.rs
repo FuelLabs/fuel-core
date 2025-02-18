@@ -41,7 +41,6 @@ use itertools::Itertools;
 use rstest::rstest;
 use std::ops::Deref;
 
-#[cfg(feature = "relayer")]
 mod relayer;
 
 fn setup_config(messages: impl IntoIterator<Item = MessageConfig>) -> Config {

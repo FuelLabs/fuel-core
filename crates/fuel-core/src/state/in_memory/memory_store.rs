@@ -191,7 +191,7 @@ where
     fn view_at_height(
         &self,
         _: &Description::Height,
-    ) -> StorageResult<KeyValueView<Self::Column>> {
+    ) -> StorageResult<KeyValueView<Self::Column, Description::Height>> {
         // TODO: https://github.com/FuelLabs/fuel-core/issues/1995
         Err(
             anyhow::anyhow!("The historical view is not implemented for `MemoryStore`")
@@ -199,10 +199,13 @@ where
         )
     }
 
-    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
+    fn latest_view(
+        &self,
+    ) -> StorageResult<IterableKeyValueView<Self::Column, Description::Height>> {
         let view = self.create_view();
-        Ok(IterableKeyValueView::from_storage(
+        Ok(IterableKeyValueView::from_storage_and_metadata(
             IterableKeyValueViewWrapper::new(view),
+            None,
         ))
     }
 
@@ -223,7 +226,6 @@ mod tests {
         kv_store::KeyValueMutate,
         transactional::ReadTransaction,
     };
-    use std::sync::Arc;
 
     impl<Description> KeyValueMutate for MemoryStore<Description>
     where
@@ -256,7 +258,7 @@ mod tests {
         let key = vec![0x00];
 
         let mut db = MemoryStore::<OnChain>::default();
-        let expected = Arc::new(vec![]);
+        let expected = Value::from([]);
         db.put(&key.to_vec(), Column::Metadata, expected.clone())
             .unwrap();
 
@@ -281,7 +283,7 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let mut db = MemoryStore::<OnChain>::default();
-        let expected = Arc::new(vec![1, 2, 3]);
+        let expected = Value::from([1, 2, 3]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -305,7 +307,7 @@ mod tests {
         let key: Vec<u8> = Vec::with_capacity(0);
 
         let mut db = MemoryStore::<OnChain>::default();
-        let expected = Arc::new(vec![]);
+        let expected = Value::from([]);
         db.put(&key, Column::Metadata, expected.clone()).unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), expected);

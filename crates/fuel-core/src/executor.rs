@@ -61,6 +61,7 @@ mod tests {
         fuel_tx::{
             consensus_parameters::gas::GasCostsValuesV1,
             field::{
+                Expiration,
                 InputContract,
                 Inputs,
                 MintAmount,
@@ -202,6 +203,7 @@ mod tests {
             backtrace: config.backtrace,
             utxo_validation_default: config.utxo_validation_default,
             native_executor_version: None,
+            allow_historical_execution: true,
         };
 
         let database = add_consensus_parameters(database, &config.consensus_parameters);
@@ -362,8 +364,8 @@ mod tests {
 
         assert!(skipped_transactions.is_empty());
         assert_ne!(
-            start_block.header().transactions_root,
-            block.header().transactions_root
+            start_block.header().transactions_root(),
+            block.header().transactions_root()
         );
         assert_eq!(block.transactions().len(), 11);
         assert!(block.transactions()[10].as_mint().is_some());
@@ -607,6 +609,7 @@ mod tests {
                 .next()
                 .unwrap()
                 .unwrap();
+
             assert_eq!(asset_id, AssetId::zeroed());
             assert_eq!(amount, expected_fee_amount_1 + expected_fee_amount_2);
         }
@@ -960,6 +963,63 @@ mod tests {
                 ExecutorError::CoinbaseAmountMismatch
             ));
         }
+    }
+
+    #[test]
+    fn executor_invalidates_expired_tx() {
+        let producer = create_executor(Default::default(), Default::default());
+        let validator = create_executor(Default::default(), Default::default());
+
+        // Given
+        let mut block = test_block(2u32.into(), 0u64.into(), 0);
+
+        let amount = 1;
+        let asset = AssetId::BASE;
+        let mut tx = TxBuilder::new(2322u64)
+            .script_gas_limit(10)
+            .coin_input(asset, (amount as Word) * 100)
+            .coin_output(asset, (amount as Word) * 50)
+            .change_output(asset)
+            .build()
+            .transaction()
+            .clone();
+
+        // When
+        tx.set_expiration(1u32.into());
+        block.transactions_mut().push(tx.clone().into());
+
+        let ExecutionResult {
+            skipped_transactions,
+            mut block,
+            ..
+        } = producer
+            .produce_without_commit(block.into())
+            .unwrap()
+            .into_result();
+
+        // Then
+        assert_eq!(skipped_transactions.len(), 1);
+        assert_eq!(
+            skipped_transactions[0].1,
+            ExecutorError::InvalidTransaction(CheckError::Validity(
+                ValidityError::TransactionExpiration
+            ))
+        );
+
+        // Produced block is valid
+        let _ = validator.validate(&block).unwrap().into_result();
+
+        // Make the block invalid by adding expired transaction
+        let len = block.transactions().len();
+        block.transactions_mut().insert(len - 1, tx.into());
+
+        let verify_error = validator.validate(&block).unwrap_err();
+        assert_eq!(
+            verify_error,
+            ExecutorError::InvalidTransaction(CheckError::Validity(
+                ValidityError::TransactionExpiration
+            ))
+        );
     }
 
     // Ensure tx has at least one input to cover gas
@@ -2653,7 +2713,7 @@ mod tests {
             .message_id()
             .to_bytes(),
         );
-        assert_eq!(block.header().message_outbox_root.as_ref(), mt.root());
+        assert_eq!(block.header().message_outbox_root().as_ref(), mt.root());
     }
 
     #[test]
@@ -2692,7 +2752,7 @@ mod tests {
 
         // Then
         let empty_root = empty_sum_sha256();
-        assert_eq!(block.header().message_outbox_root.as_ref(), empty_root)
+        assert_eq!(block.header().message_outbox_root().as_ref(), empty_root)
     }
 
     #[test]
@@ -3327,7 +3387,7 @@ mod tests {
 
             // then
             let expected = root_calculator.root().into();
-            let actual = result.block.header().application().event_inbox_root;
+            let actual = result.block.header().event_inbox_root();
             assert_eq!(actual, expected);
         }
 
