@@ -8,14 +8,16 @@ use fuel_core_types::{
     },
 };
 use std::{
-    sync::{
-        mpsc::{
-            Receiver,
-            Sender,
-        },
-        Arc,
-    },
+    sync::Arc,
     time::SystemTime,
+};
+use tokio::sync::{
+    mpsc,
+    mpsc::{
+        UnboundedReceiver,
+        UnboundedSender,
+    },
+    oneshot,
 };
 
 use crate::{
@@ -32,12 +34,13 @@ use crate::{
 };
 
 pub struct PoolWorkerInterface {
-    pub(crate) thread_management_sender: Sender<ThreadManagementRequest>,
-    pub(crate) request_insert_sender: Sender<PoolInsertRequest>,
-    pub(crate) request_remove_sender: Sender<PoolRemoveRequest>,
-    pub(crate) request_read_sender: Sender<PoolReadRequest>,
-    pub(crate) extract_block_transactions_sender: Sender<PoolExtractBlockTransactions>,
-    pub(crate) notification_receiver: tokio::sync::mpsc::Receiver<PoolNotification>,
+    pub(crate) thread_management_sender: UnboundedSender<ThreadManagementRequest>,
+    pub(crate) request_insert_sender: UnboundedSender<PoolInsertRequest>,
+    pub(crate) request_remove_sender: UnboundedSender<PoolRemoveRequest>,
+    pub(crate) request_read_sender: UnboundedSender<PoolReadRequest>,
+    pub(crate) extract_block_transactions_sender:
+        UnboundedSender<PoolExtractBlockTransactions>,
+    pub(crate) notification_receiver: UnboundedReceiver<PoolNotification>,
     pub(crate) handle: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -49,28 +52,32 @@ impl PoolWorkerInterface {
     where
         View: TxPoolPersistentStorage,
     {
-        let (request_read_sender, request_read_receiver) = std::sync::mpsc::channel();
+        let (request_read_sender, request_read_receiver) = mpsc::unbounded_channel();
         let (extract_block_transactions_sender, extract_block_transactions_receiver) =
-            std::sync::mpsc::channel();
-        let (request_remove_sender, request_remove_receiver) = std::sync::mpsc::channel();
-        let (request_insert_sender, request_insert_receiver) = std::sync::mpsc::channel();
-        let (notification_sender, notification_receiver) =
-            tokio::sync::mpsc::channel(100000);
+            mpsc::unbounded_channel();
+        let (request_remove_sender, request_remove_receiver) = mpsc::unbounded_channel();
+        let (request_insert_sender, request_insert_receiver) = mpsc::unbounded_channel();
+        let (notification_sender, notification_receiver) = mpsc::unbounded_channel();
         let (thread_management_sender, thread_management_receiver) =
-            std::sync::mpsc::channel();
+            mpsc::unbounded_channel();
 
         let handle = std::thread::spawn(move || {
-            let mut worker = PoolWorker::new(
+            let tokio_runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            let mut worker = PoolWorker {
                 thread_management_receiver,
                 request_remove_receiver,
                 request_read_receiver,
                 extract_block_transactions_receiver,
                 request_insert_receiver,
                 notification_sender,
-                tx_pool,
+                pool: tx_pool,
                 view_provider,
-            );
-            worker.run();
+            };
+
+            tokio_runtime.block_on(async { while !worker.run().await {} });
         });
         Self {
             thread_management_sender,
@@ -113,7 +120,7 @@ impl PoolWorkerInterface {
     pub fn get_tx_ids(
         &self,
         max_txs: usize,
-        response_channel: tokio::sync::oneshot::Sender<Vec<TxId>>,
+        response_channel: oneshot::Sender<Vec<TxId>>,
     ) {
         if let Err(e) = self.request_read_sender.send(PoolReadRequest::TxIds {
             max_txs,
@@ -123,11 +130,7 @@ impl PoolWorkerInterface {
         }
     }
 
-    pub fn get_txs(
-        &self,
-        tx_ids: Vec<TxId>,
-        txs: tokio::sync::oneshot::Sender<Vec<Option<TxInfo>>>,
-    ) {
+    pub fn get_txs(&self, tx_ids: Vec<TxId>, txs: oneshot::Sender<Vec<Option<TxInfo>>>) {
         if let Err(e) = self
             .request_read_sender
             .send(PoolReadRequest::Txs { tx_ids, txs })
@@ -166,34 +169,38 @@ pub enum PoolInsertRequest {
     Insert {
         tx: ArcPoolTx,
         from_peer_info: Option<GossipsubMessageInfo>,
-        response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>,
+        response_channel: Option<oneshot::Sender<Result<(), Error>>>,
     },
 }
 
 pub enum PoolExtractBlockTransactions {
     ExtractBlockTransactions {
         constraints: Constraints,
-        transactions: Sender<Vec<ArcPoolTx>>,
+        transactions: oneshot::Sender<Vec<ArcPoolTx>>,
     },
 }
 
 pub enum PoolRemoveRequest {
     Remove { tx_ids: Vec<TxId> },
+    // TODO: It duplicates `WritePoolRequest::RemoveCoinDependents`. We need to work directly with
+    //  `RemoveCoinDependents` without `WritePoolRequest::RemoveCoinDependents` at the middle.
     RemoveCoinDependents { parent_txs: Vec<(TxId, String)> },
     RemoveAndCoinDependents { tx_ids: (Vec<TxId>, Error) },
 }
 pub enum PoolReadRequest {
     NonExistingTxs {
         tx_ids: Vec<TxId>,
-        non_existing_txs: Sender<Vec<TxId>>,
+        non_existing_txs: oneshot::Sender<Vec<TxId>>,
     },
+    // TODO: Avoid duplication of the `ReadPoolRequest::GetTxs`
     Txs {
         tx_ids: Vec<TxId>,
-        txs: tokio::sync::oneshot::Sender<Vec<Option<TxInfo>>>,
+        txs: oneshot::Sender<Vec<Option<TxInfo>>>,
     },
+    // TODO: Avoid duplication of the `ReadPoolRequest::GetTxIds`
     TxIds {
         max_txs: usize,
-        tx_ids: tokio::sync::oneshot::Sender<Vec<TxId>>,
+        tx_ids: oneshot::Sender<Vec<TxId>>,
     },
 }
 
@@ -216,74 +223,40 @@ pub enum PoolNotification {
 }
 
 pub struct PoolWorker<View> {
-    thread_management_receiver: Receiver<ThreadManagementRequest>,
-    request_remove_receiver: Receiver<PoolRemoveRequest>,
-    request_read_receiver: Receiver<PoolReadRequest>,
-    extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
-    request_insert_receiver: Receiver<PoolInsertRequest>,
+    thread_management_receiver: UnboundedReceiver<ThreadManagementRequest>,
+    request_remove_receiver: UnboundedReceiver<PoolRemoveRequest>,
+    request_read_receiver: UnboundedReceiver<PoolReadRequest>,
+    extract_block_transactions_receiver: UnboundedReceiver<PoolExtractBlockTransactions>,
+    request_insert_receiver: UnboundedReceiver<PoolInsertRequest>,
     pool: TxPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
-    notification_sender: tokio::sync::mpsc::Sender<PoolNotification>,
-}
-
-impl<View> PoolWorker<View> {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        thread_management_receiver: Receiver<ThreadManagementRequest>,
-        request_remove_receiver: Receiver<PoolRemoveRequest>,
-        request_read_receiver: Receiver<PoolReadRequest>,
-        extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
-        request_insert_receiver: Receiver<PoolInsertRequest>,
-        notification_sender: tokio::sync::mpsc::Sender<PoolNotification>,
-        pool: TxPool,
-        view_provider: Arc<dyn AtomicView<LatestView = View>>,
-    ) -> Self {
-        Self {
-            thread_management_receiver,
-            request_remove_receiver,
-            request_read_receiver,
-            extract_block_transactions_receiver,
-            request_insert_receiver,
-            pool,
-            view_provider,
-            notification_sender,
-        }
-    }
+    notification_sender: UnboundedSender<PoolNotification>,
 }
 
 impl<View> PoolWorker<View>
 where
     View: TxPoolPersistentStorage,
 {
-    pub fn run(&mut self) {
-        // TODO: Try to find correct prio
-        'outer: loop {
-            match self.thread_management_receiver.try_recv() {
-                Ok(ThreadManagementRequest::Stop) => {
-                    break;
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    break;
+    pub async fn run(&mut self) -> bool {
+        let mut remove_buffer = vec![];
+        let mut read_buffer = vec![];
+        let mut insert_buffer = vec![];
+        tokio::select! {
+            biased;
+            _ = self.thread_management_receiver.recv() => {
+                return true
+            }
+            extract = self.extract_block_transactions_receiver.recv() => {
+                match extract {
+                    Some(PoolExtractBlockTransactions::ExtractBlockTransactions { constraints, transactions }) => {
+                        self.get_block_transactions(constraints, transactions);
+                    }
+                    None => return true,
                 }
             }
-
-            match self.extract_block_transactions_receiver.try_recv() {
-                Ok(PoolExtractBlockTransactions::ExtractBlockTransactions {
-                    constraints,
-                    transactions,
-                }) => {
-                    self.get_block_transactions(constraints, transactions);
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {}
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    break;
-                }
-            }
-
-            for _ in 0..1000 {
-                match self.request_remove_receiver.try_recv() {
-                    Ok(request) => match request {
+            _ = self.request_remove_receiver.recv_many(&mut remove_buffer, 1_000) => {
+                for remove in remove_buffer {
+                    match remove {
                         PoolRemoveRequest::Remove { tx_ids } => {
                             self.remove(tx_ids);
                         }
@@ -293,19 +266,12 @@ where
                         PoolRemoveRequest::RemoveAndCoinDependents { tx_ids } => {
                             self.remove_and_coin_dependents(tx_ids);
                         }
-                    },
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        break;
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        break 'outer;
                     }
                 }
             }
-
-            for _ in 0..10000 {
-                match self.request_read_receiver.try_recv() {
-                    Ok(request) => match request {
+            _ = self.request_read_receiver.recv_many(&mut insert_buffer, 10_000) => {
+                for read in insert_buffer {
+                    match read {
                         PoolReadRequest::TxIds { max_txs, tx_ids } => {
                             self.get_tx_ids(max_txs, tx_ids);
                         }
@@ -318,41 +284,29 @@ where
                         } => {
                             self.get_non_existing_txs(tx_ids, non_existing_txs);
                         }
-                    },
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        break;
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        break;
                     }
                 }
             }
-
-            for _ in 0..1000 {
-                match self.request_insert_receiver.try_recv() {
-                    Ok(PoolInsertRequest::Insert {
+            _ = self.request_insert_receiver.recv_many(&mut read_buffer, 1_000) => {
+                for insert in read_buffer {
+                    let PoolInsertRequest::Insert {
                         tx,
                         from_peer_info,
                         response_channel,
-                    }) => {
-                        self.insert(tx, from_peer_info, response_channel);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        break;
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        break 'outer;
-                    }
+                    } = insert;
+
+                    self.insert(tx, from_peer_info, response_channel);
                 }
             }
         }
+        return false
     }
 
     fn insert(
         &mut self,
         tx: ArcPoolTx,
         from_peer_info: Option<GossipsubMessageInfo>,
-        response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>,
+        response_channel: Option<oneshot::Sender<Result<(), Error>>>,
     ) {
         let tx_id = tx.id();
         let expiration = tx.expiration();
@@ -365,37 +319,38 @@ where
 
         match res {
             Ok(removed_txs) => {
-                if let Err(e) = futures::executor::block_on(
+                if let Err(e) =
                     self.notification_sender.send(PoolNotification::Inserted {
                         tx_id,
                         from_peer_info,
                         expiration,
                         time: SystemTime::now(),
                         tx: tx_clone,
-                    }),
-                ) {
+                    })
+                {
                     tracing::error!("Failed to send inserted notification: {}", e);
                 }
+
                 for tx in removed_txs {
                     let removed_tx_id = tx.id();
-                    if let Err(e) = futures::executor::block_on(
+                    if let Err(e) =
                         self.notification_sender.send(PoolNotification::Removed {
                             tx_id: removed_tx_id,
                             error: Error::Removed(RemovedReason::LessWorth(tx_id)),
-                        }),
-                    ) {
+                        })
+                    {
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
                 }
             }
             Err(err) => {
-                if let Err(e) = futures::executor::block_on(
+                if let Err(e) =
                     self.notification_sender
                         .send(PoolNotification::ErrorInsertion {
                             error: err.clone(),
                             from_peer_info,
-                        }),
-                ) {
+                        })
+                {
                     tracing::error!("Failed to send error insertion notification: {}", e);
                 }
             }
@@ -408,11 +363,11 @@ where
     fn get_block_transactions(
         &mut self,
         constraints: Constraints,
-        blocks: Sender<Vec<ArcPoolTx>>,
+        blocks: oneshot::Sender<Vec<ArcPoolTx>>,
     ) {
         let txs = self.pool.extract_transactions_for_block(constraints);
-        if let Err(e) = blocks.send(txs) {
-            tracing::error!("Failed to send block transactions: {}", e);
+        if let Err(_) = blocks.send(txs) {
+            tracing::error!("Failed to send block transactions");
         }
     }
 
@@ -425,12 +380,12 @@ where
             let removed = self.pool.remove_coin_dependents(tx_id);
             for tx in removed {
                 let tx_id = tx.id();
-                if let Err(e) = futures::executor::block_on(self.notification_sender.send(PoolNotification::Removed {
+                if let Err(e) = self.notification_sender.send(PoolNotification::Removed {
                     tx_id,
                     error: Error::SkippedTransaction(
                         format!("Parent transaction with id: {tx_id}, was removed because of: {reason}")
                     )
-                })) {
+                }) {
                     tracing::error!("Failed to send removed notification: {}", e);
                 }
             }
@@ -438,28 +393,20 @@ where
     }
 
     fn remove_and_coin_dependents(&mut self, tx_ids: (Vec<TxId>, Error)) {
-        let error = tx_ids.1.clone().to_string();
+        let error = tx_ids.1.clone();
         let removed = self.pool.remove_transaction_and_dependents(tx_ids.0);
         for tx in removed {
             let tx_id = tx.id();
-            if let Err(e) = futures::executor::block_on(self.notification_sender.send(
-                PoolNotification::Removed {
-                    tx_id,
-                    error: Error::SkippedTransaction(format!(
-                        "Transaction with id: {tx_id}, was removed because of: {error}"
-                    )),
-                },
-            )) {
+            if let Err(e) = self.notification_sender.send(PoolNotification::Removed {
+                tx_id,
+                error: error.clone(),
+            }) {
                 tracing::error!("Failed to send removed notification: {}", e);
             }
         }
     }
 
-    fn get_tx_ids(
-        &mut self,
-        max_txs: usize,
-        tx_ids_sender: tokio::sync::oneshot::Sender<Vec<TxId>>,
-    ) {
+    fn get_tx_ids(&mut self, max_txs: usize, tx_ids_sender: oneshot::Sender<Vec<TxId>>) {
         let tx_ids: Vec<TxId> = self.pool.iter_tx_ids().take(max_txs).copied().collect();
         if tx_ids_sender.send(tx_ids).is_err() {
             tracing::error!("Failed to send tx ids out of PoolWorker");
@@ -469,7 +416,7 @@ where
     fn get_txs(
         &mut self,
         tx_ids: Vec<TxId>,
-        txs_sender: tokio::sync::oneshot::Sender<Vec<Option<TxInfo>>>,
+        txs_sender: oneshot::Sender<Vec<Option<TxInfo>>>,
     ) {
         let txs: Vec<Option<TxInfo>> = tx_ids
             .into_iter()
@@ -488,14 +435,14 @@ where
     fn get_non_existing_txs(
         &mut self,
         tx_ids: Vec<TxId>,
-        non_existing_txs_sender: Sender<Vec<TxId>>,
+        non_existing_txs_sender: oneshot::Sender<Vec<TxId>>,
     ) {
         let non_existing_txs: Vec<TxId> = tx_ids
             .into_iter()
             .filter(|tx_id| !self.pool.contains(tx_id))
             .collect();
-        if let Err(e) = non_existing_txs_sender.send(non_existing_txs) {
-            tracing::error!("Failed to send non existing txs: {}", e);
+        if let Err(_) = non_existing_txs_sender.send(non_existing_txs) {
+            tracing::error!("Failed to send non existing txs");
         }
     }
 }

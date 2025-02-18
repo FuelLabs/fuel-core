@@ -298,7 +298,7 @@ where
 
             read_pool_request = self.subscriptions.read_pool.recv() => {
                 if let Some(read_pool_request) = read_pool_request {
-                    self.process_read(read_pool_request).await;
+                    self.process_read(read_pool_request);
                     TaskNextAction::Continue
                 } else {
                     self.pool_worker.stop();
@@ -570,11 +570,13 @@ where
                         );
                     })
                     .unwrap_or_default();
+
                 if peer_tx_ids.is_empty() {
                     return;
                 }
+
                 // We don't use the `get_non_existing_txs` from `PoolWorkerInterface` because we don't want to make the whole object cloneable
-                let (response_sender, response_receiver) = std::sync::mpsc::channel();
+                let (response_sender, response_receiver) = oneshot::channel();
                 if let Err(e) = request_sender.send(PoolReadRequest::NonExistingTxs {
                     tx_ids: peer_tx_ids,
                     non_existing_txs: response_sender,
@@ -586,7 +588,7 @@ where
                     return;
                 }
 
-                let tx_ids_to_ask = match response_receiver.recv() {
+                let tx_ids_to_ask = match response_receiver.await {
                     Ok(tx_ids) => tx_ids,
                     Err(e) => {
                         tracing::error!("Failed to receive the non existing txs: {}", e);
@@ -656,7 +658,7 @@ where
         }
     }
 
-    async fn process_read(&self, request: ReadPoolRequest) {
+    fn process_read(&self, request: ReadPoolRequest) {
         match request {
             ReadPoolRequest::GetTxIds {
                 max_txs,

@@ -44,7 +44,7 @@ use crate::{
 pub struct SharedState {
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
-        std::sync::mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
+        mpsc::UnboundedSender<pool_worker::PoolExtractBlockTransactions>,
     pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
@@ -78,12 +78,12 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
-    pub fn extract_transactions_for_block(
+    pub async fn extract_transactions_for_block(
         &self,
         constraints: Constraints,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         let (select_transactions_sender, select_transactions_receiver) =
-            std::sync::mpsc::channel();
+            oneshot::channel();
         self.select_transactions_requests_sender
             .send(
                 pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
@@ -94,7 +94,7 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?;
 
         select_transactions_receiver
-            .recv()
+            .await
             .map_err(|_| Error::ServiceCommunicationFailed)
     }
 
