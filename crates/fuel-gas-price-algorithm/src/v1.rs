@@ -478,21 +478,21 @@ impl AlgorithmUpdaterV1 {
                 let change_amount = self.exec_change(scaled_exec_gas_price);
                 scaled_exec_gas_price =
                     scaled_exec_gas_price.saturating_add(change_amount);
-                // tracing::info!(
-                //     "Fullness: {}%, increasing exec gas price to {}",
-                //     fullness_percent,
-                //     scaled_exec_gas_price
-                // );
+                tracing::info!(
+                    "Fullness: {}%, increasing exec gas price to {}",
+                    fullness_percent,
+                    scaled_exec_gas_price
+                );
             }
             std::cmp::Ordering::Less => {
                 let change_amount = self.exec_change(scaled_exec_gas_price);
                 scaled_exec_gas_price =
                     scaled_exec_gas_price.saturating_sub(change_amount);
-                // tracing::info!(
-                //     "Fullness: {}%, decreasing exec gas price to {}",
-                //     fullness_percent,
-                //     scaled_exec_gas_price
-                // );
+                tracing::info!(
+                    "Fullness: {}%, decreasing exec gas price to {}",
+                    fullness_percent,
+                    scaled_exec_gas_price
+                );
             }
         }
 
@@ -587,6 +587,12 @@ impl AlgorithmUpdaterV1 {
         // let max_change = self.max_change();
         // let clamped_change = scaled_pd_change.saturating_abs().min(max_change);
         // scaled_pd_change.signum().saturating_mul(clamped_change)
+
+        // what percentage of the last profit is the (change / last_profit) * 100
+        // let percent_change = scaled_pd_change
+        //     .saturating_mul(100)
+        //     .div(self.new_scaled_da_gas_price as i128);
+        // tracing::info!("DA Percent change: {}", percent_change);
         scaled_pd_change
     }
 
