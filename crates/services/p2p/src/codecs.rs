@@ -40,7 +40,7 @@ pub trait Decode<T> {
 
 impl<'a> Encoder for Cow<'a, [u8]> {
     fn to_bytes(self) -> Vec<u8> {
-        self.into()
+        self.into_owned()
     }
 }
 
