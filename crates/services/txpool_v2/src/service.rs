@@ -86,6 +86,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use futures::StreamExt;
+use p2p::P2PExt;
 use parking_lot::RwLock;
 use std::{
     collections::{
@@ -333,10 +334,7 @@ where
         // We don't want block importer wait for us to process the result.
         drop(result);
 
-        {
-            // TODO: More explicit remove and transaction are executable
-            self.pool_worker.remove(executed_transaction);
-        }
+        self.pool_worker.remove(executed_transaction);
 
         {
             self.current_height_writer.write(|data| {
@@ -415,7 +413,17 @@ where
 
     fn process_notification(&mut self, notification: PoolNotification) {
         match notification {
-            PoolNotification::Inserted { tx_id, time } => {
+            PoolNotification::Inserted {
+                tx_id,
+                time,
+                expiration,
+                from_peer_info,
+                tx,
+            } => {
+                self.p2p.process_insertion_result(
+                    from_peer_info,
+                    &Ok(Arc::unwrap_or_clone(tx)),
+                );
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
 
                 let duration = time
@@ -425,7 +433,24 @@ where
                 self.shared_state
                     .tx_status_sender
                     .send_submitted(tx_id, Tai64::from_unix(duration.as_secs() as i64));
+
+                if expiration < u32::MAX.into() {
+                    let block_height_expiration = self
+                        .pruner
+                        .height_expiration_txs
+                        .entry(expiration)
+                        .or_default();
+                    block_height_expiration.push(tx_id);
+                }
                 self.shared_state.new_txs_notifier.send_replace(());
+            }
+            PoolNotification::ErrorInsertion {
+                tx_id: _,
+                error,
+                from_peer_info,
+            } => {
+                self.p2p
+                    .process_insertion_result(from_peer_info, &Err(error));
             }
             PoolNotification::Removed { tx_id, error } => {
                 self.shared_state
@@ -451,7 +476,7 @@ where
     fn insert_transaction(
         &self,
         transaction: Arc<Transaction>,
-        _from_peer_info: Option<GossipsubMessageInfo>,
+        from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
     ) -> impl FnOnce() + Send + 'static {
         let metrics = self.metrics;
@@ -461,12 +486,11 @@ where
                 .inc();
         }
 
+        let p2p = self.p2p.clone();
         let verification = self.verification.clone();
         let pool_insert_request_sender = self.pool_worker.insert_request_sender.clone();
         let shared_state = self.shared_state.clone();
         let current_height_reader = self.current_height_reader.clone();
-        // TODO: Use it elsewhere
-        // let height_expiration_txs = self.pruner.height_expiration_txs.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
 
@@ -490,9 +514,6 @@ where
                     .dec();
             }
 
-            // TODO: Reintroduce after notification insertion
-            // p2p.process_insertion_result(from_peer_info, &result);
-
             let checked_tx = match result {
                 Ok(checked_tx) => checked_tx,
                 Err(err) => {
@@ -500,24 +521,19 @@ where
                         let _ = channel.send(Err(err.clone()));
                     }
 
+                    p2p.process_insertion_result(from_peer_info, &Err(err.clone()));
                     shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
                     return
                 }
             };
 
             let tx = Arc::new(checked_tx);
-            // TODO: Move on notification received
-            // let expiration = tx.expiration();
-            // if expiration < u32::MAX.into() {
-            //     let mut lock = height_expiration_txs.write();
-            //     let block_height_expiration = lock.entry(expiration).or_default();
-            //     block_height_expiration.push(tx_id);
-            // }
 
             // TODO: Unwrap
             pool_insert_request_sender
                 .send(PoolInsertRequest::Insert {
                     tx,
+                    from_peer_info,
                     response_channel,
                 })
                 .unwrap();

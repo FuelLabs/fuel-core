@@ -12,8 +12,6 @@ use fuel_core_types::services::{
 use std::sync::Arc;
 
 pub trait P2PExt {
-    // TODO: Use
-    #[allow(dead_code)]
     fn process_insertion_result(
         &self,
         from_peer_info: Option<GossipsubMessageInfo>,

@@ -3,7 +3,11 @@
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::TxId,
-    services::txpool::ArcPoolTx,
+    fuel_types::BlockHeight,
+    services::{
+        p2p::GossipsubMessageInfo,
+        txpool::ArcPoolTx,
+    },
 };
 use std::{
     sync::{
@@ -70,11 +74,13 @@ impl PoolWorkerInterface {
     pub fn insert(
         &self,
         tx: ArcPoolTx,
+        from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>,
     ) {
         self.insert_request_sender
             .send(PoolInsertRequest::Insert {
                 tx,
+                from_peer_info,
                 response_channel,
             })
             .unwrap();
@@ -147,6 +153,7 @@ impl PoolWorkerInterface {
 pub enum PoolInsertRequest {
     Insert {
         tx: ArcPoolTx,
+        from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>,
     },
 }
@@ -180,8 +187,22 @@ pub enum PoolOtherRequest {
 }
 
 pub enum PoolNotification {
-    Inserted { tx_id: TxId, time: SystemTime },
-    Removed { tx_id: TxId, error: Error },
+    Inserted {
+        tx_id: TxId,
+        time: SystemTime,
+        expiration: BlockHeight,
+        from_peer_info: Option<GossipsubMessageInfo>,
+        tx: ArcPoolTx,
+    },
+    ErrorInsertion {
+        tx_id: TxId,
+        error: Error,
+        from_peer_info: Option<GossipsubMessageInfo>,
+    },
+    Removed {
+        tx_id: TxId,
+        error: Error,
+    },
 }
 
 pub struct PoolWorker<View> {
@@ -221,9 +242,10 @@ where
                 match self.insert_request_receiver.try_recv() {
                     Ok(PoolInsertRequest::Insert {
                         tx,
+                        from_peer_info,
                         response_channel,
                     }) => {
-                        self.insert(tx, response_channel);
+                        self.insert(tx, from_peer_info, response_channel);
                         continue;
                     }
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -276,11 +298,13 @@ where
     fn insert(
         &mut self,
         tx: ArcPoolTx,
+        from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<tokio::sync::oneshot::Sender<Result<(), Error>>>,
     ) {
         let tx_id = tx.id();
+        let expiration = tx.expiration();
         let result = self.view_provider.latest_view();
-        // let start_time = std::time::Instant::now();
+        let tx_clone = tx.clone();
         let res = match result {
             Ok(view) => self.pool.insert(tx, &view),
             Err(err) => Err(Error::Database(format!("{:?}", err))),
@@ -291,7 +315,10 @@ where
                 futures::executor::block_on(self.notification_sender.send(
                     PoolNotification::Inserted {
                         tx_id,
+                        from_peer_info,
+                        expiration,
                         time: SystemTime::now(),
+                        tx: tx_clone,
                     },
                 ))
                 .unwrap();
@@ -317,11 +344,6 @@ where
         if let Some(channel) = response_channel {
             let _ = channel.send(Ok(()));
         }
-        // tracing::info!(
-        //     "Transaction (id: {}) took {} micros seconds to insert into the pool",
-        //     &tx_id,
-        //     start_time.elapsed().as_micros()
-        // );
     }
 
     fn get_block_transactions(
@@ -330,8 +352,9 @@ where
         blocks: Sender<Vec<ArcPoolTx>>,
     ) {
         let txs = self.pool.extract_transactions_for_block(constraints);
-        // TODO: Unwrap
-        blocks.send(txs).unwrap();
+        if let Err(e) = blocks.send(txs) {
+            tracing::error!("Failed to send block transactions: {}", e);
+        }
     }
 
     fn remove(&mut self, tx_ids: Vec<TxId>) {
