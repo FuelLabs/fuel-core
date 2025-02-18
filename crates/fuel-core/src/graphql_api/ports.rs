@@ -32,7 +32,10 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        header::ConsensusParametersVersion,
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::{
             BlockId,
             DaBlockHeight,
@@ -457,8 +460,12 @@ pub trait ConsensusProvider: Send + Sync {
     /// Returns latest consensus parameters version.
     fn latest_consensus_parameters_version(&self) -> ConsensusParametersVersion;
 
+    /// Returns consensus parameters at a specific version.
     fn consensus_params_at_version(
         &self,
         version: &ConsensusParametersVersion,
     ) -> anyhow::Result<Arc<ConsensusParameters>>;
+
+    /// Returns the latest state transition bytecode version.
+    fn latest_stf_version(&self) -> StateTransitionBytecodeVersion;
 }

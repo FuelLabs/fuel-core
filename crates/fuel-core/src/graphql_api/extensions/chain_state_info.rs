@@ -14,7 +14,6 @@ use async_graphql::{
 use crate::graphql_api::{
     api_service::ConsensusProvider,
     block_height_subscription,
-    database::ReadDatabase,
 };
 
 const CURRENT_STF_VERSION: &str = "current_stf_version";
@@ -50,8 +49,6 @@ impl Extension for ChainStateInfoExtension {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
-        let db = ctx.data_unchecked::<ReadDatabase>();
-
         let mut response = next.run(ctx, operation_name).await;
 
         let consensus_parameters_provider = ctx.data_unchecked::<ConsensusProvider>();
@@ -62,16 +59,11 @@ impl Extension for ChainStateInfoExtension {
             Value::Number(current_consensus_parameters_version.into()),
         );
 
-        if let Ok(view) = db.view() {
-            if let Ok(latest_block) = view.latest_block() {
-                let current_stf_version =
-                    latest_block.header().state_transition_bytecode_version();
-                response.extensions.insert(
-                    CURRENT_STF_VERSION.to_string(),
-                    Value::Number(current_stf_version.into()),
-                );
-            }
-        }
+        let current_stf_version = consensus_parameters_provider.latest_stf_version();
+        response.extensions.insert(
+            CURRENT_STF_VERSION.to_string(),
+            Value::Number(current_stf_version.into()),
+        );
 
         let current_block_height =
             self.block_height_subscriber.latest_seen_block_height();

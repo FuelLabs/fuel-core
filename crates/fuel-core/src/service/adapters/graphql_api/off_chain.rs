@@ -41,8 +41,11 @@ use crate::{
                 OldTransactions,
             },
         },
+        worker_service::ConsensusParametersProvider as ConsensusParametersProviderTrait,
     },
+    service::adapters::ConsensusParametersProvider,
 };
+
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     codec::Encode,
@@ -426,5 +429,14 @@ impl worker::OffChainDatabase for Database<OffChain> {
 
     fn asset_metadata_indexation_enabled(&self) -> StorageResult<bool> {
         self.indexation_available(IndexationKind::AssetMetadata)
+    }
+}
+
+impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
+    fn cache_stf_version(
+        &self,
+        version: fuel_core_types::blockchain::header::StateTransitionBytecodeVersion,
+    ) {
+        *self.shared_state.latest_stf_version.lock() = version;
     }
 }

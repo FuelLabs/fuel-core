@@ -35,7 +35,10 @@ use fuel_core_txpool::{
     TxStatusMessage,
 };
 use fuel_core_types::{
-    blockchain::header::ConsensusParametersVersion,
+    blockchain::header::{
+        ConsensusParametersVersion,
+        StateTransitionBytecodeVersion,
+    },
     entities::relayer::message::MerkleProof,
     fuel_tx::{
         Bytes32,
@@ -201,6 +204,10 @@ impl ConsensusProvider for ConsensusParametersProvider {
         version: &ConsensusParametersVersion,
     ) -> anyhow::Result<Arc<ConsensusParameters>> {
         Ok(self.shared_state.get_consensus_parameters(version)?)
+    }
+
+    fn latest_stf_version(&self) -> StateTransitionBytecodeVersion {
+        self.shared_state.latest_stf_version()
     }
 }
 
