@@ -22,9 +22,8 @@ pub struct GossipsubMessageHandler<Codec> {
 
 impl<Codec> GossipsubCodec for GossipsubMessageHandler<Codec>
 where
-    Codec: Encode<Transaction, Error = io::Error>
-        + Decode<Transaction, Error = io::Error>
-        + Send,
+    Codec:
+        Encode<Transaction, Error = io::Error> + Decode<Transaction, Error = io::Error>,
 {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;
