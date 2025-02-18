@@ -12,7 +12,7 @@ use std::{
 
 pub trait Encoder: Send {
     /// Returns the serialized object as a slice.
-    fn as_bytes(&self) -> Cow<[u8]>;
+    fn to_bytes(self) -> Vec<u8>;
 }
 
 /// The trait encodes the type to the bytes and passes it to the `Encoder`,
@@ -39,11 +39,8 @@ pub trait Decode<T> {
 }
 
 impl<'a> Encoder for Cow<'a, [u8]> {
-    fn as_bytes(&self) -> Cow<'_, [u8]> {
-        match self {
-            Cow::Borrowed(borrowed) => Cow::Borrowed(borrowed),
-            Cow::Owned(owned) => Cow::Borrowed(owned.as_ref()),
-        }
+    fn to_bytes(self) -> Vec<u8> {
+        self.into()
     }
 }
 
