@@ -201,6 +201,7 @@ fn main() {
             .sum(),
     );
     test_builder.block_size_limit = Some(1_000_000_000_000_000);
+    test_builder.number_threads_pool_verif = args.number_of_cores;
     test_builder.max_txs = transactions.len();
     // spin up node
     let rt = tokio::runtime::Builder::new_current_thread()
