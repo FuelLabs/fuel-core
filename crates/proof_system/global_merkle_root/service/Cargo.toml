@@ -35,3 +35,10 @@ fuel-core-types = { workspace = true, default-features = false, features = [
   "test-helpers",
 ] }
 rand = { workspace = true }
+
+[features]
+fault-proving = [
+  "fuel-core-types/fault-proving",
+  "fuel-core-storage/fault-proving",
+  "fuel-core-global-merkle-root-storage/fault-proving",
+]

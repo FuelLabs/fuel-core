@@ -151,7 +151,15 @@ fn random_block(
     let outbox_message_ids = &[];
     let event_inbox_root = Bytes32::default();
 
-    Block::new(header, transactions, outbox_message_ids, event_inbox_root).unwrap()
+    Block::new(
+        header,
+        transactions,
+        outbox_message_ids,
+        event_inbox_root,
+        #[cfg(feature = "fault-proving")]
+        &ChainId::default(),
+    )
+    .unwrap()
 }
 
 fn random_transaction(rng: &mut StdRng) -> Transaction {

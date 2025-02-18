@@ -44,3 +44,7 @@ rand = { workspace = true }
 [features]
 std = ["fuel-core-storage/std", "fuel-core-types/std"]
 test-helpers = ["dep:rand"]
+fault-proving = [
+  "fuel-core-types/fault-proving",
+  "fuel-core-storage/fault-proving",
+]
