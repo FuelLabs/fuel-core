@@ -2,7 +2,8 @@ use crate::{
     database::{
         database_description::on_chain::OnChain,
         Database,
-        OnChainIterableKeyValueView, OnChainKeyValueView,
+        OnChainIterableKeyValueView,
+        OnChainKeyValueView,
     },
     fuel_core_graphql_api::ports::{
         DatabaseBlocks,

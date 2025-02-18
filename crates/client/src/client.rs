@@ -811,9 +811,13 @@ impl FuelClient {
     pub async fn contract_storage_balances(
         &self,
         contract_id: &ContractId,
-    ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>>> {
+    ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>>>
+    {
         use cynic::SubscriptionBuilder;
-        use schema::{contract::ContractBalance, storage::ContractStorageBalancesArgs};
+        use schema::{
+            contract::ContractBalance,
+            storage::ContractStorageBalancesArgs,
+        };
         let s = schema::storage::ContractStorageBalances::build(
             ContractStorageBalancesArgs {
                 contract_id: (*contract_id).into(),
@@ -836,14 +840,16 @@ impl FuelClient {
         block_height: Option<BlockHeight>,
         requested_storage_slots: Vec<Bytes32>,
     ) -> io::Result<Vec<(Bytes32, Vec<u8>)>> {
-        let query = schema::storage::ContractSlotValues::build(schema::storage::ContractSlotValuesArgs {
-            contract_id: (*contract_id).into(),
-            block_height: block_height.map(|b| (*b).into()),
-            storage_slots: requested_storage_slots
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        });
+        let query = schema::storage::ContractSlotValues::build(
+            schema::storage::ContractSlotValuesArgs {
+                contract_id: (*contract_id).into(),
+                block_height: block_height.map(|b| (*b).into()),
+                storage_slots: requested_storage_slots
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+            },
+        );
 
         self.query(query)
             .await
@@ -856,15 +862,16 @@ impl FuelClient {
         block_height: Option<BlockHeight>,
         requested_storage_slots: Vec<AssetId>,
     ) -> io::Result<Vec<schema::contract::ContractBalance>> {
-        let query =
-            schema::storage::ContractBalanceValues::build(schema::storage::ContractBalanceValuesArgs {
+        let query = schema::storage::ContractBalanceValues::build(
+            schema::storage::ContractBalanceValuesArgs {
                 contract_id: (*contract_id).into(),
                 block_height: block_height.map(|b| (*b).into()),
                 assets: requested_storage_slots
                     .into_iter()
                     .map(Into::into)
                     .collect(),
-            });
+            },
+        );
 
         self.query(query).await.map(|r| {
             r.contract_balance_values

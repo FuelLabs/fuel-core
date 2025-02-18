@@ -3,9 +3,7 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-use crate::{
-    service::genesis::NotifyCancel,
-};
+use crate::service::genesis::NotifyCancel;
 use tokio_util::sync::CancellationToken;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

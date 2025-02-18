@@ -1,6 +1,9 @@
 use crate::{
     fuel_core_graphql_api::database::ReadView,
-    graphql_api::{api_service::ReadDatabase, require_historical_execution},
+    graphql_api::{
+        api_service::ReadDatabase,
+        require_historical_execution,
+    },
     schema::{
         contract::ContractBalance,
         scalars::{
