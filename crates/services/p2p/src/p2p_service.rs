@@ -125,7 +125,7 @@ pub struct FuelP2PService {
     /// to the peer that requested it.
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<V2ResponseMessage>>,
 
-    /// `UboundedCodec` as GossipsubCodec for encoding and decoding of Gossipsub messages    
+    /// `PostcardCodec` as GossipsubCodec for encoding and decoding of Gossipsub messages    
     gossipsub_codec: GossipsubMessageHandler<PostcardCodec>,
 
     /// Stores additional p2p network info
