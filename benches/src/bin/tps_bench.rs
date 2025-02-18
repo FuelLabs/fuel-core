@@ -140,7 +140,7 @@ fn main() {
     let transactions = generate_transactions(args.number_of_transactions, &mut rng);
     let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
     let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
-    tracing::info!(
+    tracing::warn!(
         "Generated {} transactions in {:?} ms.",
         args.number_of_transactions,
         start_transaction_generation.elapsed().as_millis()
@@ -232,7 +232,7 @@ fn main() {
                 let _ = subscriber.recv().await.unwrap();
                 nb_left -= 1;
             }
-            tracing::info!(
+            tracing::warn!(
                 "Inserted {} transactions in {:?} ms.",
                 args.number_of_transactions,
                 start_insertion.elapsed().as_millis()
