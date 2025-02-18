@@ -346,10 +346,6 @@ where
                 }
             }
         }
-        #[cfg(feature = "test-helpers")]
-        {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
     }
 
     fn insert(
