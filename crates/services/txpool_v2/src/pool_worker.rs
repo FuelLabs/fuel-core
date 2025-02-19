@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
-    fuel_tx::TxId,
+    fuel_tx::{
+        Transaction,
+        TxId,
+    },
     fuel_types::BlockHeight,
     services::{
         p2p::GossipsubMessageInfo,
@@ -169,6 +172,7 @@ pub enum ThreadManagementRequest {
 pub enum PoolInsertRequest {
     Insert {
         tx: ArcPoolTx,
+        tx_for_p2p: Arc<Transaction>,
         from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
     },
@@ -211,7 +215,7 @@ pub enum PoolNotification {
         time: SystemTime,
         expiration: BlockHeight,
         from_peer_info: Option<GossipsubMessageInfo>,
-        tx: ArcPoolTx,
+        tx: Arc<Transaction>,
     },
     ErrorInsertion {
         error: Error,
@@ -292,11 +296,12 @@ where
                 for insert in read_buffer {
                     let PoolInsertRequest::Insert {
                         tx,
+                        tx_for_p2p,
                         from_peer_info,
                         response_channel,
                     } = insert;
 
-                    self.insert(tx, from_peer_info, response_channel);
+                    self.insert(tx, tx_for_p2p, from_peer_info, response_channel);
                 }
             }
         }
@@ -306,13 +311,13 @@ where
     fn insert(
         &mut self,
         tx: ArcPoolTx,
+        tx_for_p2p: Arc<Transaction>,
         from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
     ) {
         let tx_id = tx.id();
         let expiration = tx.expiration();
         let result = self.view_provider.latest_view();
-        let tx_clone = tx.clone();
         let res = match result {
             Ok(view) => self.pool.insert(tx, &view),
             Err(err) => Err(Error::Database(format!("{:?}", err))),
@@ -326,7 +331,7 @@ where
                         from_peer_info,
                         expiration,
                         time: SystemTime::now(),
-                        tx: tx_clone,
+                        tx: tx_for_p2p,
                     })
                 {
                     tracing::error!("Failed to send inserted notification: {}", e);
@@ -367,7 +372,7 @@ where
         blocks: oneshot::Sender<Vec<ArcPoolTx>>,
     ) {
         let txs = self.pool.extract_transactions_for_block(constraints);
-        if let Err(_) = blocks.send(txs) {
+        if blocks.send(txs).is_err() {
             tracing::error!("Failed to send block transactions");
         }
     }

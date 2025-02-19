@@ -85,7 +85,6 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use futures::StreamExt;
-use p2p::P2PExt;
 use parking_lot::RwLock;
 use std::{
     collections::{
@@ -109,7 +108,6 @@ use tokio::{
 };
 
 pub(crate) mod memory;
-mod p2p;
 mod pruner;
 mod subscriptions;
 pub(crate) mod verifications;
@@ -123,7 +121,7 @@ pub type TxPool = Pool<
 
 pub(crate) type Shared<T> = Arc<RwLock<T>>;
 
-pub type Service<View> = ServiceRunner<Task<View>>;
+pub type Service<View, P2P> = ServiceRunner<Task<View, P2P>>;
 
 /// Structure returned to others modules containing the transaction and
 /// some useful infos
@@ -184,12 +182,12 @@ pub enum ReadPoolRequest {
     },
 }
 
-pub struct Task<View> {
+pub struct Task<View, P2P> {
     chain_id: ChainId,
     utxo_validation: bool,
     subscriptions: Subscriptions,
     verification: Verification<View>,
-    p2p: Arc<dyn P2PRequests>,
+    p2p: Arc<P2P>,
     transaction_verifier_process: SyncProcessor,
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
@@ -202,15 +200,16 @@ pub struct Task<View> {
 }
 
 #[async_trait::async_trait]
-impl<View> RunnableService for Task<View>
+impl<View, P2P> RunnableService for Task<View, P2P>
 where
     View: TxPoolPersistentStorage,
+    P2P: P2PRequests,
 {
     const NAME: &'static str = "TxPool";
 
     type SharedData = SharedState;
 
-    type Task = Task<View>;
+    type Task = Task<View, P2P>;
 
     type TaskParams = ();
 
@@ -227,9 +226,10 @@ where
     }
 }
 
-impl<View> RunnableTask for Task<View>
+impl<View, P2P> RunnableTask for Task<View, P2P>
 where
     View: TxPoolPersistentStorage,
+    P2P: P2PRequests,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -314,9 +314,10 @@ where
     }
 }
 
-impl<View> Task<View>
+impl<View, P2P> Task<View, P2P>
 where
     View: TxPoolPersistentStorage,
+    P2P: P2PRequests,
 {
     fn import_block(&mut self, result: SharedImportResult) {
         let new_height = *result.sealed_block.entity.header().height();
@@ -385,13 +386,10 @@ where
                 tx_id,
                 time,
                 expiration,
-                from_peer_info: _,
-                tx: _,
+                from_peer_info,
+                tx,
             } => {
-                // self.p2p.process_insertion_result(
-                //     from_peer_info,
-                //     &Ok(Arc::unwrap_or_clone(tx)),
-                // );
+                self.p2p.process_insertion_result(from_peer_info, Ok(tx));
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
 
                 let duration = time
@@ -417,7 +415,7 @@ where
                 from_peer_info,
             } => {
                 self.p2p
-                    .process_insertion_result(from_peer_info, &Err(error));
+                    .process_insertion_result(from_peer_info, Err(error));
             }
             PoolNotification::Removed { tx_id, error } => {
                 self.shared_state
@@ -464,6 +462,7 @@ where
         let insert_transaction_thread_pool_op = move || {
             let current_height = current_height_reader.read();
 
+            let tx_clone = Arc::clone(&transaction);
             // TODO: This should be removed if the checked transactions
             //  can work with Arc in it
             //  (see https://github.com/FuelLabs/fuel-vm/issues/831)
@@ -488,7 +487,7 @@ where
                         let _ = channel.send(Err(err.clone()));
                     }
 
-                    p2p.process_insertion_result(from_peer_info, &Err(err.clone()));
+                    p2p.process_insertion_result(from_peer_info, Err(err.clone()));
                     shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
                     return
                 }
@@ -498,6 +497,7 @@ where
             // We don't use the `insert` from `PoolWorkerInterface` because we don't want to make the whole object cloneable
             if let Err(e) = pool_insert_request_sender.send(PoolInsertRequest::Insert {
                 tx,
+                tx_for_p2p: tx_clone,
                 from_peer_info,
                 response_channel,
             }) {
@@ -695,7 +695,7 @@ pub fn new_service<
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
     wasm_checker: WasmChecker,
-) -> Service<PSView>
+) -> Service<PSView, P2P>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
     P2P: P2PRequests,
