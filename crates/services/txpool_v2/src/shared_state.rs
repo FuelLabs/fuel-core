@@ -17,6 +17,7 @@ use tokio::sync::{
     broadcast,
     mpsc,
     oneshot,
+    oneshot::error::TryRecvError,
     watch,
 };
 
@@ -78,13 +79,12 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
-    pub async fn extract_transactions_for_block(
+    pub fn extract_transactions_for_block(
         &self,
         constraints: Constraints,
     ) -> Result<Vec<ArcPoolTx>, Error> {
-        let (select_transactions_sender, select_transactions_receiver) =
+        let (select_transactions_sender, mut select_transactions_receiver) =
             oneshot::channel();
-        dbg!("before send");
         self.select_transactions_requests_sender
             .send(
                 pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
@@ -93,13 +93,20 @@ impl SharedState {
                 },
             )
             .map_err(|_| Error::ServiceCommunicationFailed)?;
-        dbg!("after send");
 
-        let res = select_transactions_receiver
-            .await
-            .map_err(|_| Error::ServiceCommunicationFailed);
-        dbg!("after receive");
-        res
+        loop {
+            let result = select_transactions_receiver.try_recv();
+
+            match result {
+                Ok(txs) => {
+                    return Ok(txs);
+                }
+                Err(TryRecvError::Empty) => continue,
+                Err(TryRecvError::Closed) => {
+                    return Err(Error::ServiceCommunicationFailed);
+                }
+            }
+        }
     }
 
     pub async fn get_tx_ids(&self, max_txs: usize) -> Result<Vec<TxId>, Error> {
