@@ -158,6 +158,24 @@ pub enum Column {
     DaCompressionTemporalPredicateCodeMerkleData = 40,
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalPredicateCodeMerkleMetadata = 41,
+    #[cfg(feature = "fault-proving")]
+    DaCompressionTemporalRegistryIndexV2 = 42,
+    #[cfg(feature = "fault-proving")]
+    DaCompressionTemporalRegistryIndexMerkleData = 43,
+    #[cfg(feature = "fault-proving")]
+    DaCompressionTemporalRegistryIndexMerkleMetadata = 44,
+    #[cfg(feature = "fault-proving")]
+    DaCompressionTemporalRegistryTimestampsV2 = 45,
+    #[cfg(feature = "fault-proving")]
+    DaCompressionTemporalRegistryTimestampsMerkleData = 46,
+    #[cfg(feature = "fault-proving")]
+    DaCompressionTemporalRegistryTimestampsMerkleMetadata = 47,
+    #[cfg(feature = "fault-proving")]
+    DaCompressionTemporalRegistryEvictorCacheV2 = 48,
+    #[cfg(feature = "fault-proving")]
+    DaCompressionTemporalRegistryEvictorCacheMerkleData = 49,
+    #[cfg(feature = "fault-proving")]
+    DaCompressionTemporalRegistryEvictorCacheMerkleMetadata = 50,
 }
 
 impl Column {
