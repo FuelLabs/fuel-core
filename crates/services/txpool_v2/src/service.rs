@@ -321,6 +321,7 @@ where
     P2P: P2PRequests,
 {
     fn import_block(&mut self, result: SharedImportResult) {
+        dbg!("import_block");
         let new_height = *result.sealed_block.entity.header().height();
         let executed_transaction = result.tx_status.iter().map(|s| s.id).collect();
         // We don't want block importer wait for us to process the result.
@@ -653,6 +654,7 @@ where
     }
 
     fn try_prune_transactions(&mut self) {
+        dbg!("try_prune_transactions");
         let mut txs_to_remove = vec![];
         {
             let now = SystemTime::now();

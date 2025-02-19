@@ -84,6 +84,7 @@ impl SharedState {
     ) -> Result<Vec<ArcPoolTx>, Error> {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
+        dbg!("before send");
         self.select_transactions_requests_sender
             .send(
                 pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
@@ -92,10 +93,13 @@ impl SharedState {
                 },
             )
             .map_err(|_| Error::ServiceCommunicationFailed)?;
+        dbg!("after send");
 
-        select_transactions_receiver
+        let res = select_transactions_receiver
             .await
-            .map_err(|_| Error::ServiceCommunicationFailed)
+            .map_err(|_| Error::ServiceCommunicationFailed);
+        dbg!("after receive");
+        res
     }
 
     pub async fn get_tx_ids(&self, max_txs: usize) -> Result<Vec<TxId>, Error> {

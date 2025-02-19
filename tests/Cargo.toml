@@ -78,6 +78,7 @@ tokio = { workspace = true, features = [
 ] }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
+console-subscriber = "0.4.1"
 
 [dev-dependencies]
 fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }

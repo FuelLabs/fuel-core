@@ -611,6 +611,10 @@ where
         // as the final mint transaction.
         let mut remaining_tx_count = max_tx_count().saturating_sub(data.tx_count);
 
+        #[cfg(feature = "std")]
+        {
+            dbg!(block.header.height());
+        }
         let mut regular_tx_iter = l2_tx_source
             .next(
                 remaining_gas_limit,

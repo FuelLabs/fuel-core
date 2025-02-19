@@ -184,6 +184,7 @@ async fn request_with_required_block_height_extension_waits_when_within_threshol
 #[tokio::test]
 async fn request_with_required_block_height_extension_fails_when_timeout_while_within_threshold(
 ) {
+    console_subscriber::init();
     let owner = Address::default();
     let asset_id = AssetId::BASE;
 
@@ -199,11 +200,14 @@ async fn request_with_required_block_height_extension_fails_when_timeout_while_w
 
     // Produce enough blocks to be within the tolerance for the node to wait to
     // reach the required fuel block height.
+    dbg!("Producing 95 blocks");
     client.produce_blocks(95, None).await.unwrap();
 
+    dbg!("before Issuing request with required block height 100");
     // Issue a request while the precondition on the required fuel block height is not met.
     client.with_required_fuel_block_height(Some(100u32.into()));
+    dbg!("after Issuing request with required block height 100");
     let result = client.balance(&owner, Some(&asset_id)).await;
-
+    dbg!("after balance");
     assert!(result.is_err());
 }

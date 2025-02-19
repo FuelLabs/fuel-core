@@ -17,6 +17,7 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
         transactions_limit: u16,
         block_transaction_size_limit: u32,
     ) -> Vec<MaybeCheckedTransaction> {
+        dbg!("before future");
         let future = self.tx_pool.extract_transactions_for_block(Constraints {
             minimal_gas_price: self.minimum_gas_price,
             max_gas: gas_limit,
@@ -24,7 +25,7 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
             maximum_block_size: block_transaction_size_limit,
         });
 
-        futures::executor::block_on(future)
+        let res = futures::executor::block_on(future)
             .unwrap_or_default()
             .into_iter()
             .map(|tx| {
@@ -32,7 +33,9 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
                 let version = transaction.used_consensus_parameters_version();
                 MaybeCheckedTransaction::CheckedTransaction(transaction.into(), version)
             })
-            .collect()
+            .collect();
+        dbg!("after future");
+        res
     }
 }
 

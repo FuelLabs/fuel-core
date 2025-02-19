@@ -94,30 +94,36 @@ impl PoolWorkerInterface {
     }
 
     pub fn remove(&self, tx_ids: Vec<TxId>) {
+        dbg!("send remove");
         if let Err(e) = self
             .request_remove_sender
             .send(PoolRemoveRequest::Remove { tx_ids })
         {
             tracing::error!("Failed to send remove request: {}", e);
         }
+        dbg!("after send remove");
     }
 
     pub fn remove_coin_dependents(&self, parent_txs: Vec<(TxId, String)>) {
+        dbg!("send remove coin dependents");
         if let Err(e) = self
             .request_remove_sender
             .send(PoolRemoveRequest::RemoveCoinDependents { parent_txs })
         {
             tracing::error!("Failed to send remove coin dependents request: {}", e);
         }
+        dbg!("after send remove coin dependents");
     }
 
     pub fn remove_and_coin_dependents(&self, tx_ids: (Vec<TxId>, Error)) {
+        dbg!("send remove and coin dependents");
         if let Err(e) = self
             .request_remove_sender
             .send(PoolRemoveRequest::RemoveAndCoinDependents { tx_ids })
         {
             tracing::error!("Failed to send remove and coin dependents request: {}", e);
         }
+        dbg!("after send remove and coin dependents");
     }
 
     pub fn get_tx_ids(
@@ -244,20 +250,30 @@ where
         let mut remove_buffer = vec![];
         let mut read_buffer = vec![];
         let mut insert_buffer = vec![];
+        dbg!("start loop");
         tokio::select! {
             biased;
             _ = self.thread_management_receiver.recv() => {
+                dbg!("return true1");
                 return true
             }
             extract = self.extract_block_transactions_receiver.recv() => {
+                dbg!("extract");
                 match extract {
                     Some(PoolExtractBlockTransactions::ExtractBlockTransactions { constraints, transactions }) => {
                         self.get_block_transactions(constraints, transactions);
                     }
-                    None => return true,
+                    None => {
+                        dbg!("return true2");
+                        return true
+                    },
                 }
             }
             _ = self.request_remove_receiver.recv_many(&mut remove_buffer, 1_000) => {
+                if remove_buffer.is_empty() {
+                    dbg!("return true3");
+                    return true
+                }
                 for remove in remove_buffer {
                     match remove {
                         PoolRemoveRequest::Remove { tx_ids } => {
@@ -272,8 +288,12 @@ where
                     }
                 }
             }
-            _ = self.request_read_receiver.recv_many(&mut insert_buffer, 10_000) => {
-                for read in insert_buffer {
+            _ = self.request_read_receiver.recv_many(&mut read_buffer, 10_000) => {
+                if read_buffer.is_empty() {
+                    dbg!("return true4");
+                    return true
+                }
+                for read in read_buffer {
                     match read {
                         PoolReadRequest::TxIds { max_txs, tx_ids } => {
                             self.get_tx_ids(max_txs, tx_ids);
@@ -290,8 +310,13 @@ where
                     }
                 }
             }
-            _ = self.request_insert_receiver.recv_many(&mut read_buffer, 1_000) => {
-                for insert in read_buffer {
+            _ = self.request_insert_receiver.recv_many(&mut insert_buffer, 1_000) => {
+                dbg!("insert");
+                if insert_buffer.is_empty() {
+                    dbg!("return true5");
+                    return true
+                }
+                for insert in insert_buffer {
                     let PoolInsertRequest::Insert {
                         tx,
                         tx_for_p2p,
@@ -303,6 +328,7 @@ where
                 }
             }
         }
+        dbg!("return false");
         false
     }
 
@@ -366,10 +392,13 @@ where
         constraints: Constraints,
         blocks: oneshot::Sender<Vec<ArcPoolTx>>,
     ) {
+        dbg!("before sending results");
         let txs = self.pool.extract_transactions_for_block(constraints);
         if blocks.send(txs).is_err() {
+            dbg!("error");
             tracing::error!("Failed to send block transactions");
         }
+        dbg!("after sending results");
     }
 
     fn remove(&mut self, tx_ids: Vec<TxId>) {
