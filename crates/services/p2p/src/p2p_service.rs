@@ -901,6 +901,8 @@ impl FuelP2PService {
 #[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
+    #![allow(non_snake_case)]
+
     use super::{
         FuelP2PService,
         PublishError,
@@ -972,7 +974,10 @@ mod tests {
     use rand::Rng;
     use std::{
         collections::HashSet,
-        ops::Range,
+        ops::{
+            Deref,
+            Range,
+        },
         sync::Arc,
         time::Duration,
     };
@@ -1766,21 +1771,7 @@ mod tests {
                             panic!("Wrong Topic");
                         }
 
-                        // received value should match sent value
-                        match &message {
-                            GossipsubMessage::NewTx(tx) => {
-                                if tx != &Transaction::default_test_tx() {
-                                    tracing::error!("Wrong p2p message {:?}", message);
-                                    panic!("Wrong GossipsubMessage")
-                                }
-                            }
-                            GossipsubMessage::Confirmations(confirmations) => {
-                                if confirmations != &TxConfirmations::default_test_tx() {
-                                    tracing::error!("Wrong p2p message {:?}", message);
-                                    panic!("Wrong GossipsubMessage")
-                                }
-                            }
-                        }
+                        check_message_matches_request(&message, &broadcast_request);
 
                         // Node B received the correct message
                         // If we try to publish it again we will get `PublishError::Duplicate`
@@ -1816,6 +1807,22 @@ mod tests {
                     }
                 }
             };
+        }
+    }
+
+    fn check_message_matches_request(
+        message: &GossipsubMessage,
+        expected: &GossipsubBroadcastRequest,
+    ) {
+        match (message, expected) {
+            (GossipsubMessage::NewTx(received), GossipsubBroadcastRequest::NewTx(requested)) => {
+                assert_eq!(requested.deref(), received, "Both messages were `NewTx`s, but the received message did not match the requested message");
+            }
+            (
+                GossipsubMessage::Confirmations(received),
+                GossipsubBroadcastRequest::Confirmations(requested),
+            ) => assert_eq!(requested.deref(), received, "Both messages were `Confirmations`, but the received message did not match the requested message"),
+            _ => panic!("Message does not match the expected request, expected: {:?}, actual: {:?}", expected, message),
         }
     }
 
