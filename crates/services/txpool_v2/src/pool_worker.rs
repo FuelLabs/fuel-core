@@ -300,7 +300,7 @@ where
                 }
             }
         }
-        return false
+        false
     }
 
     fn insert(
@@ -442,7 +442,7 @@ where
             .into_iter()
             .filter(|tx_id| !self.pool.contains(tx_id))
             .collect();
-        if let Err(_) = non_existing_txs_sender.send(non_existing_txs) {
+        if non_existing_txs_sender.send(non_existing_txs).is_err() {
             tracing::error!("Failed to send non existing txs");
         }
     }
