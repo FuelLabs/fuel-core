@@ -119,6 +119,8 @@ fn arc_pool_tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block 
         transactions,
         &[],
         Default::default(),
+        #[cfg(feature = "fault-proving")]
+        &Default::default(),
     )
     .unwrap()
 }
@@ -202,6 +204,7 @@ impl DryRunner for MockExecutorWithCapture {
         &self,
         block: Components<Vec<Transaction>>,
         _utxo_validation: Option<bool>,
+        _height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         *self.captured.lock().unwrap() = Some(block);
 
@@ -246,6 +249,10 @@ impl BlockProducerDatabase for MockDb {
             .cloned()
             .map(Cow::Owned)
             .ok_or(not_found!("Didn't find block for test"))
+    }
+
+    fn get_full_block(&self, _height: &BlockHeight) -> StorageResult<Block> {
+        unimplemented!("Not used by tests");
     }
 
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {

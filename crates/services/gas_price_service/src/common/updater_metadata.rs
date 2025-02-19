@@ -18,14 +18,14 @@ pub enum UpdaterMetadata {
 impl UpdaterMetadata {
     pub fn l2_block_height(&self) -> BlockHeight {
         match self {
-            UpdaterMetadata::V0(v0) => v0.l2_block_height.into(),
-            UpdaterMetadata::V1(v1) => v1.l2_block_height.into(),
+            Self::V0(v0) => v0.l2_block_height.into(),
+            Self::V1(v1) => v1.l2_block_height.into(),
         }
     }
 
     pub fn v1(&self) -> Option<&V1Metadata> {
         match self {
-            UpdaterMetadata::V1(v1) => Some(v1),
+            Self::V1(v1) => Some(v1),
             _ => None,
         }
     }

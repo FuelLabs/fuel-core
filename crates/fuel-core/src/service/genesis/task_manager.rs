@@ -8,18 +8,18 @@ use futures::{
 use itertools::Itertools;
 use tokio::task::JoinSet;
 
-pub struct TaskManager<T> {
+pub struct TaskManager<T, N> {
     set: JoinSet<anyhow::Result<T>>,
-    cancel_token: CancellationToken,
+    cancel_token: CancellationToken<N>,
 }
 
-#[async_trait::async_trait]
 pub trait NotifyCancel {
-    async fn wait_until_cancelled(&self) -> anyhow::Result<()>;
+    fn wait_until_cancelled(
+        &self,
+    ) -> impl core::future::Future<Output = anyhow::Result<()>> + Send;
     fn is_cancelled(&self) -> bool;
 }
 
-#[async_trait::async_trait]
 impl NotifyCancel for tokio_util::sync::CancellationToken {
     async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
         self.cancelled().await;
@@ -30,7 +30,6 @@ impl NotifyCancel for tokio_util::sync::CancellationToken {
     }
 }
 
-#[async_trait::async_trait]
 impl NotifyCancel for StateWatcher {
     async fn wait_until_cancelled(&self) -> anyhow::Result<()> {
         let mut state = self.clone();
@@ -50,13 +49,16 @@ impl NotifyCancel for StateWatcher {
 /// A token that implements [`NotifyCancel`]. Given to jobs inside of [`TaskManager`] so they can
 /// stop either when commanded by the [`TaskManager`] or by an outside source.
 #[derive(Clone)]
-pub struct CancellationToken {
-    outside_signal: Arc<dyn NotifyCancel + Send + Sync>,
+pub struct CancellationToken<N> {
+    outside_signal: Arc<N>,
     inner_signal: tokio_util::sync::CancellationToken,
 }
 
-impl CancellationToken {
-    pub fn new(outside_signal: impl NotifyCancel + Send + Sync + 'static) -> Self {
+impl<N> CancellationToken<N>
+where
+    N: NotifyCancel,
+{
+    pub fn new(outside_signal: N) -> Self {
         Self {
             outside_signal: Arc::new(outside_signal),
             inner_signal: tokio_util::sync::CancellationToken::new(),
@@ -66,16 +68,17 @@ impl CancellationToken {
     pub fn cancel(&self) {
         self.inner_signal.cancel()
     }
-}
 
-impl CancellationToken {
     pub fn is_cancelled(&self) -> bool {
         self.inner_signal.is_cancelled() || self.outside_signal.is_cancelled()
     }
 }
 
-impl<T> TaskManager<T> {
-    pub fn new(outside_cancel: impl NotifyCancel + Send + Sync + 'static) -> Self {
+impl<T, N> TaskManager<T, N>
+where
+    N: NotifyCancel + Clone,
+{
+    pub fn new(outside_cancel: N) -> Self {
         Self {
             set: JoinSet::new(),
             cancel_token: CancellationToken::new(outside_cancel),
@@ -84,20 +87,21 @@ impl<T> TaskManager<T> {
 
     pub fn run<F>(&mut self, arg: F) -> anyhow::Result<T>
     where
-        F: FnOnce(CancellationToken) -> anyhow::Result<T>,
+        F: FnOnce(CancellationToken<N>) -> anyhow::Result<T>,
     {
         arg(self.cancel_token.clone())
     }
 }
 
-impl<T> TaskManager<T>
+impl<T, N> TaskManager<T, N>
 where
     T: Send + 'static,
+    N: NotifyCancel + Send + Sync + Clone + 'static,
 {
     #[cfg(test)]
     pub fn spawn<F, Fut>(&mut self, arg: F)
     where
-        F: FnOnce(CancellationToken) -> Fut,
+        F: FnOnce(CancellationToken<N>) -> Fut,
         Fut: futures::Future<Output = anyhow::Result<T>> + Send + 'static,
     {
         let token = self.cancel_token.clone();
@@ -106,7 +110,7 @@ where
 
     pub fn spawn_blocking<F>(&mut self, arg: F)
     where
-        F: FnOnce(CancellationToken) -> anyhow::Result<T> + Send + 'static,
+        F: FnOnce(CancellationToken<N>) -> anyhow::Result<T> + Send + 'static,
     {
         let token = self.cancel_token.clone();
         self.set.spawn_blocking(move || arg(token));

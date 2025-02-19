@@ -2,14 +2,17 @@
 //! we need to remove old tests(usually, we need to create a new test per each release)
 //! and write a new test(only one) to track new forward compatibility.
 
-use crate::tests_helper::{
-    default_multiaddr,
-    transactions_from_subsections,
-    upgrade_transaction,
-    Version36FuelCoreDriver,
-    IGNITION_TESTNET_SNAPSHOT,
-    POA_SECRET_KEY,
-    SUBSECTION_SIZE,
+use crate::{
+    select_port,
+    tests_helper::{
+        default_multiaddr,
+        transactions_from_subsections,
+        upgrade_transaction,
+        Version36FuelCoreDriver,
+        IGNITION_TESTNET_SNAPSHOT,
+        POA_SECRET_KEY,
+        SUBSECTION_SIZE,
+    },
 };
 use fuel_tx::{
     field::ChargeableBody,
@@ -45,7 +48,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
 
     let v36_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
-    let v36_port = "40333";
+    let v36_port = select_port(format!("{}:{}.{}", file!(), line!(), column!()));
     let v36_node = Version36FuelCoreDriver::spawn(&[
         "--service-name",
         "V36Producer",

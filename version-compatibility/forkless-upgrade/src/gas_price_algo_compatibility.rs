@@ -1,11 +1,14 @@
 #![allow(unused_imports)]
 
-use crate::tests_helper::{
-    default_multiaddr,
-    LatestFuelCoreDriver,
-    Version36FuelCoreDriver,
-    IGNITION_TESTNET_SNAPSHOT,
-    POA_SECRET_KEY,
+use crate::{
+    select_port,
+    tests_helper::{
+        default_multiaddr,
+        LatestFuelCoreDriver,
+        Version36FuelCoreDriver,
+        IGNITION_TESTNET_SNAPSHOT,
+        POA_SECRET_KEY,
+    },
 };
 use latest_fuel_core_gas_price_service::{
     common::{
@@ -48,7 +51,7 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     // Given
     let genesis_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
-    let genesis_port = "30333";
+    let genesis_port = select_port(format!("{}:{}.{}", file!(), line!(), column!()));
     let starting_gas_price = 987;
     let old_driver = Version36FuelCoreDriver::spawn(&[
         "--service-name",

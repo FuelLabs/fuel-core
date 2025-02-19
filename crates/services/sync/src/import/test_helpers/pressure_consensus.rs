@@ -13,7 +13,6 @@ use std::time::Duration;
 
 pub struct PressureConsensus(MockConsensusPort, Duration, SharedCounts);
 
-#[async_trait::async_trait]
 impl ConsensusPort for PressureConsensus {
     fn check_sealed_header(&self, header: &SealedBlockHeader) -> anyhow::Result<bool> {
         self.0.check_sealed_header(header)
@@ -30,7 +29,8 @@ impl ConsensusPort for PressureConsensus {
 impl PressureConsensus {
     pub fn new(counts: SharedCounts, delays: Duration) -> Self {
         let mut mock = MockConsensusPort::default();
-        mock.expect_await_da_height().returning(|_| Ok(()));
+        mock.expect_await_da_height()
+            .returning(|_| Box::pin(async move { Ok(()) }));
         mock.expect_check_sealed_header().returning(|_| Ok(true));
         Self(mock, delays, counts)
     }

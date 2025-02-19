@@ -17,6 +17,7 @@ use anyhow::{
 use fuel_core_storage::transactional::{
     AtomicView,
     Changes,
+    HistoricalView,
 };
 use fuel_core_types::{
     blockchain::{
@@ -42,6 +43,7 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -125,7 +127,7 @@ where
 
         let block_time = predefined_block.header().consensus().time;
 
-        let da_height = predefined_block.header().application().da_height;
+        let da_height = predefined_block.header().da_height();
 
         let view = self.view_provider.latest_view()?;
 
@@ -204,7 +206,7 @@ where
             anyhow!("Failed to acquire the production lock, block production is already in progress")
         })?;
 
-        let gas_price = self.calculate_gas_price().await?;
+        let gas_price = self.production_gas_price().await?;
 
         let source = tx_source(gas_price, height).await?;
 
@@ -244,10 +246,15 @@ where
         Ok(result)
     }
 
-    async fn calculate_gas_price(&self) -> anyhow::Result<u64> {
+    async fn production_gas_price(&self) -> anyhow::Result<u64> {
         self.gas_price_provider
-            .next_gas_price()
-            .await
+            .production_gas_price()
+            .map_err(|e| anyhow!("No gas price found: {e:?}"))
+    }
+
+    async fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
+        self.gas_price_provider
+            .dry_run_gas_price()
             .map_err(|e| anyhow!("No gas price found: {e:?}"))
     }
 }
@@ -338,7 +345,7 @@ where
         let gas_price = if let Some(inner) = gas_price {
             inner
         } else {
-            self.calculate_gas_price().await?
+            self.dry_run_gas_price().await?
         };
 
         // The dry run execution should use the state of the blockchain based on the
@@ -358,7 +365,7 @@ where
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let tx_statuses = tokio_rayon::spawn_fifo(
             move || -> anyhow::Result<Vec<TransactionExecutionStatus>> {
-                Ok(executor.dry_run(component, utxo_validation)?)
+                Ok(executor.dry_run(component, utxo_validation, height)?)
             },
         )
         .await?;
@@ -374,6 +381,33 @@ where
         } else {
             Ok(tx_statuses)
         }
+    }
+}
+
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+where
+    ViewProvider: HistoricalView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
+    Executor: ports::StorageReadReplayRecorder + 'static,
+    GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
+{
+    /// Re-executes an old block, getting the storage read events.
+    pub async fn storage_read_replay(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Vec<StorageReadReplayEvent>> {
+        let view = self.view_provider.latest_view()?;
+
+        let executor = self.executor.clone();
+
+        // use the blocking threadpool to avoid clogging up the main async runtime
+        tokio_rayon::spawn_fifo(move || {
+            let block = view.get_full_block(&height)?;
+            Ok(executor.storage_read_replay(&block)?)
+        })
+        .await
     }
 }
 
@@ -517,7 +551,7 @@ where
 
         Ok(PreviousBlockInfo {
             prev_root,
-            da_height: previous_block.header().da_height,
+            da_height: previous_block.header().da_height(),
         })
     }
 }

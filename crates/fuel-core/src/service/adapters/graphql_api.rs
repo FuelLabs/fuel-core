@@ -46,7 +46,10 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
-        executor::TransactionExecutionStatus,
+        executor::{
+            StorageReadReplayEvent,
+            TransactionExecutionStatus,
+        },
         p2p::PeerInfo,
         txpool::TransactionStatus,
     },
@@ -130,6 +133,13 @@ impl BlockProducerPort for BlockProducerAdapter {
             .dry_run(transactions, height, time, utxo_validation, gas_price)
             .await
     }
+
+    async fn storage_read_replay(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Vec<StorageReadReplayEvent>> {
+        self.block_producer.storage_read_replay(height).await
+    }
 }
 
 #[async_trait::async_trait]
@@ -181,9 +191,8 @@ impl worker::TxPool for TxPoolAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl GasPriceEstimate for StaticGasPrice {
-    async fn worst_case_gas_price(&self, _height: BlockHeight) -> Option<u64> {
+    fn worst_case_gas_price(&self, _height: BlockHeight) -> Option<u64> {
         Some(self.gas_price)
     }
 }

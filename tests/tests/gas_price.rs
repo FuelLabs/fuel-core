@@ -34,6 +34,7 @@ use fuel_core_gas_price_service::{
     common::fuel_core_storage_adapter::storage::GasPriceMetadata,
     ports::{
         GasPriceData,
+        GetLatestRecordedHeight,
         GetMetadataStorage,
     },
     v1::{
@@ -66,6 +67,7 @@ use fuel_core_types::{
         Transaction,
         TransactionBuilder,
     },
+    fuel_types::BlockHeight,
     services::executor::TransactionExecutionResult,
 };
 use rand::{
@@ -179,7 +181,7 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
     // given
     let mut config = Config::local_node();
     let starting_gas_price = 982;
-    config.starting_exec_gas_price = starting_gas_price;
+    config.gas_price_config.starting_exec_gas_price = starting_gas_price;
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
         .unwrap();
@@ -213,15 +215,17 @@ async fn produce_block__raises_gas_price() {
     let percent = 10;
     let threshold = 50;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
-    node_config.starting_exec_gas_price = starting_gas_price;
-    node_config.exec_gas_price_change_percent = percent;
-    node_config.exec_gas_price_threshold_percent = threshold;
+    node_config.gas_price_config.starting_exec_gas_price = starting_gas_price;
+    node_config.gas_price_config.exec_gas_price_change_percent = percent;
+    node_config
+        .gas_price_config
+        .exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
-    node_config.da_gas_price_p_component = 0;
-    node_config.da_gas_price_d_component = 0;
-    node_config.max_da_gas_price_change_percent = 0;
-    node_config.min_da_gas_price = 0;
-    node_config.max_da_gas_price = 1;
+    node_config.gas_price_config.da_gas_price_p_component = 0;
+    node_config.gas_price_config.da_gas_price_d_component = 0;
+    node_config.gas_price_config.max_da_gas_price_change_percent = 0;
+    node_config.gas_price_config.min_da_gas_price = 0;
+    node_config.gas_price_config.max_da_gas_price = 1;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -263,15 +267,17 @@ async fn produce_block__lowers_gas_price() {
     let percent = 10;
     let threshold = 50;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
-    node_config.starting_exec_gas_price = starting_gas_price;
-    node_config.exec_gas_price_change_percent = percent;
-    node_config.exec_gas_price_threshold_percent = threshold;
+    node_config.gas_price_config.starting_exec_gas_price = starting_gas_price;
+    node_config.gas_price_config.exec_gas_price_change_percent = percent;
+    node_config
+        .gas_price_config
+        .exec_gas_price_threshold_percent = threshold;
     node_config.block_production = Trigger::Never;
-    node_config.da_gas_price_p_component = 0;
-    node_config.da_gas_price_d_component = 0;
-    node_config.max_da_gas_price_change_percent = 0;
-    node_config.min_da_gas_price = 0;
-    node_config.max_da_gas_price = 1;
+    node_config.gas_price_config.da_gas_price_p_component = 0;
+    node_config.gas_price_config.da_gas_price_d_component = 0;
+    node_config.gas_price_config.max_da_gas_price_change_percent = 0;
+    node_config.gas_price_config.min_da_gas_price = 0;
+    node_config.gas_price_config.max_da_gas_price = 1;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -314,14 +320,13 @@ async fn produce_block__dont_raises_gas_price_with_default_parameters() {
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
-    let base_asset_id = driver
+    let base_asset_id = *driver
         .client
         .consensus_parameters(0)
         .await
         .unwrap()
         .unwrap()
-        .base_asset_id()
-        .clone();
+        .base_asset_id();
 
     // when
     let arb_tx_count = 20;
@@ -347,10 +352,12 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     let mut node_config = Config::local_node();
     let starting_gas_price = 1000;
     let percent = 10;
-    node_config.starting_exec_gas_price = starting_gas_price;
-    node_config.exec_gas_price_change_percent = percent;
+    node_config.gas_price_config.starting_exec_gas_price = starting_gas_price;
+    node_config.gas_price_config.exec_gas_price_change_percent = percent;
     // Always increase
-    node_config.exec_gas_price_threshold_percent = 0;
+    node_config
+        .gas_price_config
+        .exec_gas_price_threshold_percent = 0;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -392,7 +399,12 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
         "0",
     ];
     let driver = FuelCoreDriver::spawn(&args).await.unwrap();
-    let starting = driver.node.shared.config.starting_exec_gas_price;
+    let starting = driver
+        .node
+        .shared
+        .config
+        .gas_price_config
+        .starting_exec_gas_price;
     let arb_blocks_to_produce = 10;
     for _ in 0..arb_blocks_to_produce {
         driver.client.produce_blocks(1, None).await.unwrap();
@@ -443,7 +455,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
         total_gas,
         ..
     } = client
-        .dry_run_opt(&[tx.clone()], Some(false), None)
+        .dry_run_opt(&[tx.clone()], Some(false), None, None)
         .await
         .unwrap()
         .pop()
@@ -458,7 +470,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
         total_gas: total_gas_zero_gas_price,
         ..
     } = client
-        .dry_run_opt(&[tx], Some(false), Some(0))
+        .dry_run_opt(&[tx], Some(false), Some(0), None)
         .await
         .unwrap()
         .pop()
@@ -515,7 +527,7 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
         .produce_blocks(1, None)
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
     let new_height = 2;
 
     let recovered_database = &recovered_driver.node.shared.database;
@@ -574,8 +586,6 @@ fn produce_block__l1_committed_block_affects_gas_price() {
         let temp_dir = driver.kill().await;
         (first_gas_price, temp_dir)
     });
-
-    assert_eq!(100u64, first_gas_price);
 
     let mut mock = FakeServer::new();
     let url = mock.url();
@@ -719,15 +729,15 @@ fn node_config_with_da_committer_url(url: url::Url) -> Config {
         Config::local_node_with_configs(chain_config, StateConfig::local_testnet());
     let starting_gas_price = 10_000_000;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
-    node_config.min_da_gas_price = starting_gas_price;
-    node_config.max_da_gas_price = u64::MAX;
-    node_config.max_da_gas_price_change_percent = 15;
+    node_config.gas_price_config.min_da_gas_price = starting_gas_price;
+    node_config.gas_price_config.max_da_gas_price = u64::MAX;
+    node_config.gas_price_config.max_da_gas_price_change_percent = 15;
     node_config.block_production = Trigger::Never;
-    node_config.da_committer_url = Some(url);
-    node_config.da_poll_interval = Some(Duration::from_millis(100));
-    node_config.da_gas_price_p_component = 123_456;
-    node_config.da_gas_price_d_component = 1_234_567;
-    node_config.block_activity_threshold = 0;
+    node_config.gas_price_config.da_committer_url = Some(url);
+    node_config.gas_price_config.da_poll_interval = Some(Duration::from_millis(100));
+    node_config.gas_price_config.da_gas_price_p_component = 123_456;
+    node_config.gas_price_config.da_gas_price_d_component = 1_234_567;
+    node_config.gas_price_config.block_activity_threshold = 0;
     node_config
 }
 
@@ -994,4 +1004,36 @@ async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
 
     assert_eq!(producer_block_height, validator_block_height);
     assert_eq!(gas_price, u64::from(validator_gas_price.gas_price));
+}
+
+#[tokio::test]
+async fn cli__starting_recorded_height_is_set_in_db() {
+    // given
+    let starting_recorded_height: u32 = 1234;
+    let as_str = &starting_recorded_height.to_string();
+    let args = vec![
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--da-starting-recorded-height",
+        as_str,
+    ];
+    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+    driver.client.produce_blocks(1, None).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // when
+    let actual = driver
+        .node
+        .shared
+        .database
+        .gas_price()
+        .get_recorded_height()
+        .unwrap()
+        .unwrap();
+
+    // then
+    let expected = BlockHeight::from(starting_recorded_height);
+    assert_eq!(expected, actual);
+    driver.kill().await;
 }

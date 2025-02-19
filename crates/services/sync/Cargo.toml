@@ -30,3 +30,4 @@ tracing-subscriber = { workspace = true }
 
 [features]
 benchmarking = ["dep:mockall", "fuel-core-types/test-helpers"]
+fault-proving = ["fuel-core-types/fault-proving"]

@@ -248,9 +248,9 @@ where
 {
     let metadata = metadata_storage
         .get_metadata(&metadata_height.into())?
-        .ok_or(anyhow::anyhow!(
-            "Expected metadata to exist for height: {metadata_height}"
-        ))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("Expected metadata to exist for height: {metadata_height}")
+        })?;
 
     let mut algo_updater = if let UpdaterMetadata::V0(metadata) = metadata {
         Ok(AlgorithmUpdaterV0::new(
@@ -296,7 +296,7 @@ where
         let block = view
             .get_block(&height.into())?
             .ok_or(not_found!("FullBlock"))?;
-        let param_version = block.header().consensus_parameters_version;
+        let param_version = block.header().consensus_parameters_version();
 
         let GasPriceSettings {
             gas_price_factor,

@@ -566,10 +566,15 @@ type Header {
 	Hash of the application header.
 	"""
 	applicationHash: Bytes32!
+	"""
+	Transaction ID Commitment
+	"""
+	txIdCommitment: Bytes32
 }
 
 enum HeaderVersion {
 	V1
+	V2
 }
 
 type HeavyOperation {
@@ -579,6 +584,21 @@ type HeavyOperation {
 
 scalar HexString
 
+
+type IndexationFlags {
+	"""
+	Is balances indexation enabled
+	"""
+	balances: Boolean!
+	"""
+	Is coins to spend indexation enabled
+	"""
+	coinsToSpend: Boolean!
+	"""
+	Is asset metadata indexation enabled
+	"""
+	assetMetadata: Boolean!
+}
 
 union Input = InputCoin | InputContract | InputMessage
 
@@ -740,7 +760,7 @@ type Mutation {
 	"""
 	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
 	"""
-	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64): [DryRunTransactionExecutionStatus!]!
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]!
 	"""
 	Submits transaction to the `TxPool`.
 	
@@ -764,6 +784,7 @@ type NodeInfo {
 	maxSize: U64!
 	maxDepth: U64!
 	nodeVersion: String!
+	indexation: IndexationFlags!
 	txPoolStats: TxPoolStats!
 	peers: [PeerInfo!]!
 }
@@ -921,6 +942,10 @@ type Query {
 	Returns all possible receipts for test purposes.
 	"""
 	allReceipts: [Receipt!]!
+	"""
+	Get execution trace for an already-executed block.
+	"""
+	storageReadReplay(height: U32!): [StorageReadReplayEvent!]!
 	"""
 	Returns true when the GraphQL API is serving requests.
 	"""
@@ -1133,6 +1158,12 @@ type StateTransitionBytecode {
 
 type StateTransitionPurpose {
 	root: Bytes32!
+}
+
+type StorageReadReplayEvent {
+	column: U32!
+	key: HexString!
+	value: HexString
 }
 
 

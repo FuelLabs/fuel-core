@@ -73,9 +73,9 @@ mod on_chain;
 
 const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 
-pub struct SnapshotImporter {
+pub struct SnapshotImporter<N = StateWatcher> {
     db: CombinedGenesisDatabase,
-    task_manager: TaskManager<()>,
+    task_manager: TaskManager<(), N>,
     genesis_block: Block,
     snapshot_reader: SnapshotReader,
     multi_progress_reporter: MultipleProgressReporter,
@@ -179,7 +179,7 @@ impl SnapshotImporter {
         }
 
         let block_height = *self.genesis_block.header().height();
-        let da_block_height = self.genesis_block.header().da_height;
+        let da_block_height = self.genesis_block.header().da_height();
         let db = self.db.on_chain().clone();
 
         let migration_name = migration_name::<TableBeingWritten, TableBeingWritten>();
@@ -233,7 +233,7 @@ impl SnapshotImporter {
         }
 
         let block_height = *self.genesis_block.header().height();
-        let da_block_height = self.genesis_block.header().da_height;
+        let da_block_height = self.genesis_block.header().da_height();
 
         let db = self.db.off_chain().clone();
 

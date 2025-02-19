@@ -6,12 +6,94 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Breaking
+- [2648](https://github.com/FuelLabs/fuel-core/pull/2648): Add feature-flagged field to block header `fault_proving_header` that contains a commitment to all transaction ids.
+- [2678](https://github.com/FuelLabs/fuel-core/pull/2678): Removed public accessors for `BlockHeader` fields and replaced with methods instead, moved `tx_id_commitment` to the application header of `BlockHeaderV2`.
+
 ### Added
-- [2551](https://github.com/FuelLabs/fuel-core/pull/2551): Enhanced the DA compressed block header to include block id.
+- [2150](https://github.com/FuelLabs/fuel-core/pull/2150): Upgraded `libp2p` to `0.54.1` and introduced `ConnectionLimiter` to limit pending incoming/outgoing connections.
+- [2491](https://github.com/FuelLabs/fuel-core/pull/2491): Storage read replays of historical blocks for execution tracing. Only available behind `--historical-execution` flag.
+- [2666](https://github.com/FuelLabs/fuel-core/pull/2666): Added two new CLI arguments to control the GraphQL queries consistency: `--graphql-block-height-tolerance` (default: `10`) and `--graphql-block-height-min-timeout` (default: `30s`). If a request requires a specific block height and the node is slightly behind, it will wait instead of failing.
 
 ### Fixed
+- [2646](https://github.com/FuelLabs/fuel-core/pull/2646): Improved performance of fetching block height by caching it when the view is created.
+
+### Changed
+- [2473](https://github.com/FuelLabs/fuel-core/pull/2473): Graphql requests and responses make use of a new `extensions` object to specify request/response metadata. A request `extensions` object can contain an integer-valued `required_fuel_block_height` field. When specified, the request will return an error unless the node's current fuel block height is at least the value specified in the `required_fuel_block_height` field. All graphql responses now contain an integer-valued `current_fuel_block_height` field in the `extensions` object, which contains the block height of the last block processed by the node.
+- [2653](https://github.com/FuelLabs/fuel-core/pull/2653): Added cleaner error for wasm-executor upon failed deserialization.
+- [2705](https://github.com/FuelLabs/fuel-core/pull/2705): Update the default value for `--max-block-size` and `--max-transmit-size` to 50 MB
+
+## [Version 0.41.7]
+
+### Fixed
+- [2710](https://github.com/FuelLabs/fuel-core/pull/2710): Update Fuel-VM to fix compressed transaction backward compatibility.
+
+## [Version 0.41.6]
+
+### Added
+- [2668](https://github.com/FuelLabs/fuel-core/pull/2668): Expose gas price service test helpers
+- [2621](https://github.com/FuelLabs/fuel-core/pull/2598): Global merkle root storage updates process upgrade transactions.
+- [2650](https://github.com/FuelLabs/fuel-core/pull/2650): Populate `ProcessedTransactions` table in global merkle root storage.
+- [2667](https://github.com/FuelLabs/fuel-core/pull/2667): Populate `Blobs` table in global merkle root storage.
+- [2652](https://github.com/FuelLabs/fuel-core/pull/2652): Global Merkle Root storage crate: Add Raw contract bytecode to global merkle root storage when processing Create transactions.
+- [2669](https://github.com/FuelLabs/fuel-core/pull/2669): Populate `UploadedBytecodes` table in global merkle root storage.
+
+### Fixed
+- [2673](https://github.com/FuelLabs/fuel-core/pull/2673): Change read behavior on the InMemoryTransaction to use offset and allow not equal buf size (fix CCP and LDC broken from https://github.com/FuelLabs/fuel-vm/pull/847)
+
+## [Version 0.41.5]
+
+### Changed
+- [2387](https://github.com/FuelLabs/fuel-core/pull/2387): Update description `tx-max-depth` flag.
+- [2630](https://github.com/FuelLabs/fuel-core/pull/2630): Removed some noisy `tracing::info!` logs
+- [2643](https://github.com/FuelLabs/fuel-core/pull/2643): Before this fix when tip is zero, transactions that use 30M have the same priority as transactions with 1M gas. Now they are correctly ordered.
+- [2645](https://github.com/FuelLabs/fuel-core/pull/2645): Refactored `cumulative_percent_change` for 90% perf gains and reduced duplication. 
+
+### Breaking 
+- [2661](https://github.com/FuelLabs/fuel-core/pull/2661): Dry run now supports running in past blocks. `dry_run_opt` method now takes block number as the last argument. To retain old behavior, simply pass in `None` for the last argument.
+
+### Added
+- [2617](https://github.com/FuelLabs/fuel-core/pull/2617): Add integration skeleton of parallel-executor.
+- [2553](https://github.com/FuelLabs/fuel-core/pull/2553): Scaffold global merkle root storage crate.
+- [2598](https://github.com/FuelLabs/fuel-core/pull/2598): Add initial test suite for global merkle root storage updates.
+- [2635](https://github.com/FuelLabs/fuel-core/pull/2635): Add metrics to gas price service
+- [2664](https://github.com/FuelLabs/fuel-core/pull/2664): Add print with all information when a transaction is refused because of a collision.
+
+### Fixed
+- [2632](https://github.com/FuelLabs/fuel-core/pull/2632): Improved performance of certain async trait impls in the gas price service.
+- [2662](https://github.com/FuelLabs/fuel-core/pull/2662): Fix balances query endpoint cost without indexation and behavior coins to spend with one parameter at zero.
+
+## [Version 0.41.4]
+
+### Fixed
+- [2628](https://github.com/FuelLabs/fuel-core/pull/2628): Downgrade STF.
+
+## [Version 0.41.3]
+
+### Fixed
+- [2626](https://github.com/FuelLabs/fuel-core/pull/2626): Avoid needs of RocksDB features in tests modules.
+
+## [Version 0.41.2]
+
+### Fixed
+
+- [2623](https://github.com/FuelLabs/fuel-core/pull/2623): Pinned netlink-proto's version.
+
+## [Version 0.41.1]
+
+### Added
+- [2551](https://github.com/FuelLabs/fuel-core/pull/2551): Enhanced the DA compressed block header to include block id.
+- [2595](https://github.com/FuelLabs/fuel-core/pull/2595): Added `indexation` field to the `nodeInfo` GraphQL endpoint to allow checking if a specific indexation is enabled.
+
+### Changed
+- [2603](https://github.com/FuelLabs/fuel-core/pull/2603): Sets the latest recorded height on initialization, not just when DA costs are received
+
+### Fixed
+- [2612](https://github.com/FuelLabs/fuel-core/pull/2612): Use latest gas price to estimate next block gas price during dry runs 
+- [2612](https://github.com/FuelLabs/fuel-core/pull/2612): Use latest gas price to estimate next block gas price in tx pool instead of using algorithm directly
 - [2609](https://github.com/FuelLabs/fuel-core/pull/2609): Check response before trying to deserialize, return error instead
 - [2599](https://github.com/FuelLabs/fuel-core/pull/2599): Use the proper `url` apis to construct full url path in `BlockCommitterHttpApi` client
+- [2593](https://github.com/FuelLabs/fuel-core/pull/2593): Fixed utxo id decompression
 
 ## [Version 0.41.0]
 

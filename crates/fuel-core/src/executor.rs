@@ -203,6 +203,7 @@ mod tests {
             backtrace: config.backtrace,
             utxo_validation_default: config.utxo_validation_default,
             native_executor_version: None,
+            allow_historical_execution: true,
         };
 
         let database = add_consensus_parameters(database, &config.consensus_parameters);
@@ -363,8 +364,8 @@ mod tests {
 
         assert!(skipped_transactions.is_empty());
         assert_ne!(
-            start_block.header().transactions_root,
-            block.header().transactions_root
+            start_block.header().transactions_root(),
+            block.header().transactions_root()
         );
         assert_eq!(block.transactions().len(), 11);
         assert!(block.transactions()[10].as_mint().is_some());
@@ -2712,7 +2713,7 @@ mod tests {
             .message_id()
             .to_bytes(),
         );
-        assert_eq!(block.header().message_outbox_root.as_ref(), mt.root());
+        assert_eq!(block.header().message_outbox_root().as_ref(), mt.root());
     }
 
     #[test]
@@ -2751,7 +2752,7 @@ mod tests {
 
         // Then
         let empty_root = empty_sum_sha256();
-        assert_eq!(block.header().message_outbox_root.as_ref(), empty_root)
+        assert_eq!(block.header().message_outbox_root().as_ref(), empty_root)
     }
 
     #[test]
@@ -3386,7 +3387,7 @@ mod tests {
 
             // then
             let expected = root_calculator.root().into();
-            let actual = result.block.header().application().event_inbox_root;
+            let actual = result.block.header().event_inbox_root();
             assert_eq!(actual, expected);
         }
 

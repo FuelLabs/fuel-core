@@ -70,9 +70,13 @@ impl MockProducerGasPrice {
     }
 }
 
-#[async_trait::async_trait]
 impl GasPriceProvider for MockProducerGasPrice {
-    async fn next_gas_price(&self) -> anyhow::Result<u64> {
+    fn production_gas_price(&self) -> anyhow::Result<u64> {
+        self.gas_price
+            .ok_or_else(|| anyhow::anyhow!("Gas price not provided"))
+    }
+
+    fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
         self.gas_price
             .ok_or_else(|| anyhow::anyhow!("Gas price not provided"))
     }
@@ -133,7 +137,12 @@ mod produce_and_execute_block_txpool {
             },
             transactions: vec![],
         }
-        .generate(&[], Default::default())
+        .generate(
+            &[],
+            Default::default(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap()
         .compress(&Default::default());
 
@@ -175,7 +184,12 @@ mod produce_and_execute_block_txpool {
             },
             transactions: vec![],
         }
-        .generate(&[], Default::default())
+        .generate(
+            &[],
+            Default::default(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap()
         .compress(&Default::default());
 
@@ -207,7 +221,7 @@ mod produce_and_execute_block_txpool {
         // Then
         let header = result.block.header();
         assert_eq!(
-            header.consensus_parameters_version,
+            header.consensus_parameters_version(),
             consensus_parameters_version
         );
     }
@@ -228,7 +242,12 @@ mod produce_and_execute_block_txpool {
             },
             transactions: vec![],
         }
-        .generate(&[], Default::default())
+        .generate(
+            &[],
+            Default::default(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap()
         .compress(&Default::default());
 
@@ -260,7 +279,7 @@ mod produce_and_execute_block_txpool {
         // Then
         let header = result.block.header();
         assert_eq!(
-            header.state_transition_bytecode_version,
+            header.state_transition_bytecode_version(),
             state_transition_bytecode_version
         );
     }
@@ -380,13 +399,7 @@ mod produce_and_execute_block_txpool {
 
         // then
         let expected = prev_da_height + 3;
-        let actual: u64 = res
-            .into_result()
-            .block
-            .header()
-            .application()
-            .da_height
-            .into();
+        let actual: u64 = res.into_result().block.header().da_height().into();
         assert_eq!(expected, actual);
     }
 
@@ -426,13 +439,7 @@ mod produce_and_execute_block_txpool {
 
         // then
         let expected = prev_da_height + 3;
-        let actual: u64 = res
-            .into_result()
-            .block
-            .header()
-            .application()
-            .da_height
-            .into();
+        let actual: u64 = res.into_result().block.header().da_height().into();
         assert_eq!(expected, actual);
     }
 
@@ -476,13 +483,7 @@ mod produce_and_execute_block_txpool {
 
             // then
             let expected = prev_da_height + i;
-            let actual: u64 = res
-                .into_result()
-                .block
-                .header()
-                .application()
-                .da_height
-                .into();
+            let actual: u64 = res.into_result().block.header().da_height().into();
             assert_eq!(expected, actual);
         }
     }
@@ -719,7 +720,13 @@ prop_compose! {
         };
         let outbox_message_ids = vec![];
         let event_inbox_root = Bytes32::default();
-        Block::new(header, txs, &outbox_message_ids, event_inbox_root).unwrap()
+        Block::new(
+            header,
+            txs,
+            &outbox_message_ids,
+            event_inbox_root,
+            #[cfg(feature = "fault-proving")] &Default::default(),
+        ).unwrap()
     }
 }
 
@@ -729,7 +736,7 @@ fn ctx_for_block(
     executor: MockExecutorWithCapture,
 ) -> TestContext<MockExecutorWithCapture> {
     let prev_height = block.header().height().pred().unwrap();
-    let prev_da_height = block.header().da_height.as_u64() - 1;
+    let prev_da_height = block.header().da_height().as_u64() - 1;
     TestContextBuilder::new()
         .with_prev_height(prev_height)
         .with_prev_da_height(prev_da_height.into())
@@ -808,7 +815,7 @@ proptest! {
         let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
 
         // then
-        let expected_da_height = block.header().application().da_height;
+        let expected_da_height = block.header().da_height();
         let captured = executor.captured.lock().unwrap();
         let actual = captured.as_ref().unwrap().header_to_produce.application.da_height;
         assert_eq!(expected_da_height, actual);
@@ -1056,7 +1063,12 @@ impl TestContextBuilder {
             },
             transactions: vec![],
         }
-        .generate(&[], Default::default())
+        .generate(
+            &[],
+            Default::default(),
+            #[cfg(feature = "fault-proving")]
+            &Default::default(),
+        )
         .unwrap()
         .compress(&Default::default());
 
