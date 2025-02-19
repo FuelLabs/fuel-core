@@ -85,6 +85,11 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)?
     }
 
+    /// This function has a hot loop inside to acquire transactions for the execution.
+    /// It relies on the prioritization of the `TxPool`
+    /// (it always tries to prioritize the `extract` call over other calls).
+    /// In the future, extraction will be an async function,
+    /// and we can remove this loop and just `await`.
     pub fn extract_transactions_for_block(
         &self,
         constraints: Constraints,

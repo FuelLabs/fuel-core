@@ -99,22 +99,24 @@ impl PoolWorkerInterface {
         }
     }
 
-    pub fn remove(&self, tx_ids: Vec<TxId>) {
-        if let Err(e) = self
-            .request_remove_sender
+    pub fn remove(&self, tx_ids: Vec<TxId>) -> anyhow::Result<()> {
+        self.request_remove_sender
             .send(PoolRemoveRequest::Remove { tx_ids })
-        {
-            tracing::error!("Failed to send remove request: {}", e);
-        }
+            .map_err(|e| anyhow::anyhow!("Failed to send remove request: {}", e))
     }
 
-    pub fn remove_and_coin_dependents(&self, tx_ids: (Vec<TxId>, Error)) {
-        if let Err(e) = self
-            .request_remove_sender
+    pub fn remove_and_coin_dependents(
+        &self,
+        tx_ids: (Vec<TxId>, Error),
+    ) -> anyhow::Result<()> {
+        self.request_remove_sender
             .send(PoolRemoveRequest::RemoveAndCoinDependents { tx_ids })
-        {
-            tracing::error!("Failed to send remove and coin dependents request: {}", e);
-        }
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to send remove and coin dependents request: {}",
+                    e
+                )
+            })
     }
 
     pub fn stop(&mut self) {

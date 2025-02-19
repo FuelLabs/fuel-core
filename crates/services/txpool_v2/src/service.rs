@@ -231,16 +231,14 @@ where
 
             block_result = self.subscriptions.imported_blocks.next() => {
                 if let Some(result) = block_result {
-                    self.import_block(result);
-                    TaskNextAction::Continue
+                    self.import_block(result)
                 } else {
                     TaskNextAction::Stop
                 }
             }
 
             _ = self.pruner.ttl_timer.tick() => {
-                self.try_prune_transactions();
-                TaskNextAction::Continue
+                self.try_prune_transactions()
             }
 
             pool_notification = self.pool_worker.notification_receiver.recv() => {
@@ -294,13 +292,16 @@ where
     View: TxPoolPersistentStorage,
     P2P: P2PRequests,
 {
-    fn import_block(&mut self, result: SharedImportResult) {
+    fn import_block(&mut self, result: SharedImportResult) -> TaskNextAction {
         let new_height = *result.sealed_block.entity.header().height();
         let executed_transaction = result.tx_status.iter().map(|s| s.id).collect();
         // We don't want block importer wait for us to process the result.
         drop(result);
 
-        self.pool_worker.remove(executed_transaction);
+        if let Err(err) = self.pool_worker.remove(executed_transaction) {
+            tracing::error!("{err}");
+            return TaskNextAction::Stop
+        }
 
         {
             self.current_height_writer.write(|data| {
@@ -318,12 +319,18 @@ where
         for height in range_to_remove {
             let expired_txs = self.pruner.height_expiration_txs.remove(&height);
             if let Some(expired_txs) = expired_txs {
-                self.pool_worker.remove_and_coin_dependents((
+                let result = self.pool_worker.remove_and_coin_dependents((
                     expired_txs,
                     Error::Removed(RemovedReason::Ttl),
                 ));
+
+                if let Err(err) = result {
+                    tracing::error!("{err}");
+                    return TaskNextAction::Stop
+                }
             }
         }
+        TaskNextAction::Continue
     }
 
     fn process_write(&self, write_pool_request: WritePoolRequest) {
@@ -409,7 +416,7 @@ where
                     InsertionSource::P2P { from_peer_info } => {
                         let _ = self.p2p.notify_gossip_transaction_validity(
                             from_peer_info,
-                            GossipsubMessageAcceptance::Reject,
+                            GossipsubMessageAcceptance::Ignore,
                         );
                     }
                     InsertionSource::RPC { response_channel } => {
@@ -648,14 +655,14 @@ where
         });
     }
 
-    fn try_prune_transactions(&mut self) {
+    fn try_prune_transactions(&mut self) -> TaskNextAction {
         let mut txs_to_remove = vec![];
         {
             let now = SystemTime::now();
             while let Some((time, _)) = self.pruner.time_txs_submitted.back() {
                 let Ok(duration) = now.duration_since(*time) else {
                     tracing::error!("Failed to calculate the duration since the transaction was submitted");
-                    return;
+                    return TaskNextAction::Stop;
                 };
                 if duration < self.pruner.txs_ttl {
                     break;
@@ -666,10 +673,15 @@ where
             }
         }
 
-        self.pool_worker.remove_and_coin_dependents((
+        let result = self.pool_worker.remove_and_coin_dependents((
             txs_to_remove,
             Error::Removed(RemovedReason::Ttl),
         ));
+
+        if let Err(err) = result {
+            tracing::error!("{err}");
+            return TaskNextAction::Stop;
+        }
 
         {
             // Each time when we prune transactions, clear the history of synchronization
@@ -677,6 +689,8 @@ where
             let mut tx_sync_history = self.tx_sync_history.write();
             tx_sync_history.clear();
         }
+
+        TaskNextAction::Continue
     }
 }
 
