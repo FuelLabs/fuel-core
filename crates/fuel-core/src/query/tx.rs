@@ -14,7 +14,7 @@ use fuel_core_types::{
         TxPointer,
     },
     fuel_types::Address,
-    services::txpool::TransactionStatus,
+    services::txpool::TransactionStatusV2,
 };
 use futures::{
     Stream,
@@ -26,10 +26,15 @@ impl ReadView {
     pub fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
         let status = self.tx_status(tx_id)?;
 
+        // TODO[RC]: Should `SuccessDuringBlockProduction` and `FailureDuringBlockProduction` provide recepits?
         let receipts = match status {
-            TransactionStatus::Success { receipts, .. }
-            | TransactionStatus::Failed { receipts, .. } => Some(receipts),
-            _ => None,
+            TransactionStatusV2::Success { receipts, .. }
+            | TransactionStatusV2::Failure { receipts, .. } => Some(receipts),
+            TransactionStatusV2::Submitted { .. }
+            | TransactionStatusV2::SuccessDuringBlockProduction { .. }
+            | TransactionStatusV2::SqueezedOut { .. }
+            | TransactionStatusV2::SqueezedOutDuringBlockProduction { .. }
+            | TransactionStatusV2::FailureDuringBlockProduction { .. } => None,
         };
         receipts.ok_or(not_found!(Transactions))
     }

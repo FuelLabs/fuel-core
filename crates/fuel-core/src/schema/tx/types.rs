@@ -86,7 +86,7 @@ use fuel_core_types::{
         },
         txpool::{
             self,
-            TransactionStatus as TxStatus,
+            TransactionStatusV2 as TxStatus,
         },
     },
     tai64::Tai64,
@@ -142,8 +142,11 @@ impl From<VmProgramState> for ProgramState {
 pub enum TransactionStatus {
     Submitted(SubmittedStatus),
     Success(SuccessStatus),
+    SuccessDuringBlockProduction(SuccessDuringBlockProductionStatus),
     SqueezedOut(SqueezedOutStatus),
-    Failed(FailureStatus),
+    SqueezedOutDuringBlockProduction(SqueezedOutDuringBlockProductionStatus),
+    Failure(FailureStatus),
+    FailureDuringBlockProduction(FailureDuringBlockProductionStatus),
 }
 
 #[derive(Debug)]
@@ -213,6 +216,18 @@ impl SuccessStatus {
 }
 
 #[derive(Debug)]
+pub struct SuccessDuringBlockProductionStatus(
+    pub fuel_core_types::fuel_types::BlockHeight,
+);
+
+#[Object]
+impl SuccessDuringBlockProductionStatus {
+    async fn block_height(&self) -> U32 {
+        self.0.into()
+    }
+}
+
+#[derive(Debug)]
 pub struct FailureStatus {
     tx_id: TxId,
     block_height: fuel_core_types::fuel_types::BlockHeight,
@@ -273,6 +288,18 @@ impl FailureStatus {
 }
 
 #[derive(Debug)]
+pub struct FailureDuringBlockProductionStatus(
+    pub fuel_core_types::fuel_types::BlockHeight,
+);
+
+#[Object]
+impl FailureDuringBlockProductionStatus {
+    async fn block_height(&self) -> U32 {
+        self.0.into()
+    }
+}
+
+#[derive(Debug)]
 pub struct SqueezedOutStatus {
     pub reason: String,
 }
@@ -284,24 +311,34 @@ impl SqueezedOutStatus {
     }
 }
 
+#[derive(Debug)]
+pub struct SqueezedOutDuringBlockProductionStatus(pub String);
+
+#[Object]
+impl SqueezedOutDuringBlockProductionStatus {
+    async fn reason(&self) -> String {
+        self.0.clone()
+    }
+}
+
 impl TransactionStatus {
     pub fn new(tx_id: TxId, tx_status: TxStatus) -> Self {
         match tx_status {
-            TxStatus::Submitted { time } => {
-                TransactionStatus::Submitted(SubmittedStatus(time))
+            TxStatus::Submitted { timestamp } => {
+                TransactionStatus::Submitted(SubmittedStatus(timestamp))
             }
             TxStatus::Success {
                 block_height,
-                result,
-                time,
+                block_timestamp,
+                program_state,
                 receipts,
                 total_gas,
                 total_fee,
             } => TransactionStatus::Success(SuccessStatus {
                 tx_id,
                 block_height,
-                result,
-                time,
+                result: program_state, /* TODO[RC]: Update fields in `SuccessStatus` and other variants to be consistent with the updated TransactionStatus */
+                time: block_timestamp,
                 receipts,
                 total_gas,
                 total_fee,
@@ -309,22 +346,38 @@ impl TransactionStatus {
             TxStatus::SqueezedOut { reason } => {
                 TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
             }
-            TxStatus::Failed {
+            TxStatus::Failure {
                 block_height,
-                time,
-                result,
+                block_timestamp,
+                reason: _, // TODO[RC]: Should we use this?
+                program_state,
                 receipts,
                 total_gas,
                 total_fee,
-            } => TransactionStatus::Failed(FailureStatus {
+            } => TransactionStatus::Failure(FailureStatus {
                 tx_id,
                 block_height,
-                time,
-                state: result,
+                time: block_timestamp,
+                state: program_state,
                 receipts,
                 total_gas,
                 total_fee,
             }),
+            TxStatus::SuccessDuringBlockProduction { block_height } => {
+                TransactionStatus::SuccessDuringBlockProduction(
+                    SuccessDuringBlockProductionStatus(block_height),
+                )
+            }
+            TxStatus::SqueezedOutDuringBlockProduction { reason } => {
+                TransactionStatus::SqueezedOutDuringBlockProduction(
+                    SqueezedOutDuringBlockProductionStatus(reason),
+                )
+            }
+            TxStatus::FailureDuringBlockProduction { block_height } => {
+                TransactionStatus::FailureDuringBlockProduction(
+                    FailureDuringBlockProductionStatus(block_height),
+                )
+            }
         }
     }
 }
@@ -332,8 +385,8 @@ impl TransactionStatus {
 impl From<TransactionStatus> for TxStatus {
     fn from(s: TransactionStatus) -> Self {
         match s {
-            TransactionStatus::Submitted(SubmittedStatus(time)) => {
-                TxStatus::Submitted { time }
+            TransactionStatus::Submitted(SubmittedStatus(timestamp)) => {
+                TxStatus::Submitted { timestamp }
             }
             TransactionStatus::Success(SuccessStatus {
                 block_height,
@@ -345,8 +398,8 @@ impl From<TransactionStatus> for TxStatus {
                 ..
             }) => TxStatus::Success {
                 block_height,
-                result,
-                time,
+                program_state: result, // TODO[RC]: Rename these?
+                block_timestamp: time,
                 receipts,
                 total_gas,
                 total_fee,
@@ -354,22 +407,32 @@ impl From<TransactionStatus> for TxStatus {
             TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
                 TxStatus::SqueezedOut { reason }
             }
-            TransactionStatus::Failed(FailureStatus {
+            TransactionStatus::Failure(FailureStatus {
                 block_height,
                 time,
-                state: result,
+                state,
                 receipts,
                 total_gas,
                 total_fee,
                 ..
-            }) => TxStatus::Failed {
+            }) => TxStatus::Failure {
                 block_height,
-                time,
-                result,
+                block_timestamp: time,
+                program_state: state,
                 receipts,
                 total_gas,
                 total_fee,
+                reason: "Reason".to_string(), // TODO[RC]: Update this
             },
+            TransactionStatus::SuccessDuringBlockProduction(
+                SuccessDuringBlockProductionStatus(block_height),
+            ) => TxStatus::SuccessDuringBlockProduction { block_height },
+            TransactionStatus::SqueezedOutDuringBlockProduction(
+                SqueezedOutDuringBlockProductionStatus(reason),
+            ) => TxStatus::SqueezedOutDuringBlockProduction { reason },
+            TransactionStatus::FailureDuringBlockProduction(
+                FailureDuringBlockProductionStatus(block_height),
+            ) => TxStatus::FailureDuringBlockProduction { block_height },
         }
     }
 }
@@ -988,7 +1051,7 @@ pub(crate) async fn get_tx_status(
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query
         .tx_status(&id)
-        .into_api_result::<txpool::TransactionStatus, StorageError>()?
+        .into_api_result::<txpool::TransactionStatusV2, StorageError>()?
     {
         Some(status) => {
             let status = TransactionStatus::new(id, status);

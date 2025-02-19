@@ -25,7 +25,7 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     fuel_types::Bytes32,
-    services::txpool::TransactionStatus,
+    services::txpool::TransactionStatusV2,
     tai64::Tai64,
 };
 use futures::StreamExt;
@@ -42,43 +42,59 @@ use proptest::{
 };
 use test_strategy::*;
 
-/// Returns a Transaction ID value from a u8
 fn txn_id(i: u8) -> Bytes32 {
     [i; 32].into()
 }
 
-/// Returns a TransactionStatus with Submitted status and time set to 0
-fn submitted() -> TransactionStatus {
-    TransactionStatus::Submitted { time: Tai64(0) }
+fn submitted() -> TransactionStatusV2 {
+    TransactionStatusV2::Submitted {
+        timestamp: Tai64(0),
+    }
 }
 
-/// Returns a TransactionStatus with Success status, time set to 0, and result set to None
-fn success() -> TransactionStatus {
-    TransactionStatus::Success {
+fn success() -> TransactionStatusV2 {
+    TransactionStatusV2::Success {
         block_height: Default::default(),
-        time: Tai64(0),
-        result: None,
+        block_timestamp: Tai64(0),
+        program_state: None,
         receipts: vec![],
         total_gas: 0,
         total_fee: 0,
     }
 }
 
-/// Returns a TransactionStatus with Failed status, time set to 0, result set to None, and empty reason
-fn failed() -> TransactionStatus {
-    TransactionStatus::Failed {
+fn success_during_block_production() -> TransactionStatusV2 {
+    TransactionStatusV2::SuccessDuringBlockProduction {
         block_height: Default::default(),
-        time: Tai64(0),
-        result: None,
-        receipts: vec![],
-        total_gas: 0,
-        total_fee: 0,
     }
 }
 
-/// Returns a TransactionStatus with SqueezedOut status and an empty error message
-fn squeezed() -> TransactionStatus {
-    TransactionStatus::SqueezedOut {
+fn failure() -> TransactionStatusV2 {
+    TransactionStatusV2::Failure {
+        block_height: Default::default(),
+        block_timestamp: Tai64(0),
+        program_state: None,
+        receipts: vec![],
+        total_gas: 0,
+        total_fee: 0,
+        reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
+    }
+}
+
+fn failure_during_block_production() -> TransactionStatusV2 {
+    TransactionStatusV2::FailureDuringBlockProduction {
+        block_height: Default::default(),
+    }
+}
+
+fn squeezed() -> TransactionStatusV2 {
+    TransactionStatusV2::SqueezedOut {
+        reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
+    }
+}
+
+fn squeezed_during_block_production() -> TransactionStatusV2 {
+    TransactionStatusV2::SqueezedOutDuringBlockProduction {
         reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }
@@ -96,6 +112,7 @@ enum TxStatus {
 }
 
 /// Represents the final transaction statuses (Success, Squeezed, Failed).
+// TODO[RC]: Should this also include the "...DuringBlockProduction" variants?
 #[derive(Debug, Clone, PartialEq, Eq, Arbitrary)]
 enum FinalTxStatus {
     /// The transaction was successfully included in a block.
@@ -108,12 +125,12 @@ enum FinalTxStatus {
 }
 
 /// Strategy to generate an Option<TransactionStatus>
-fn state() -> impl Strategy<Value = Option<TransactionStatus>> {
+fn state() -> impl Strategy<Value = Option<TransactionStatusV2>> {
     prop::option::of(transaction_status())
 }
 
 /// Strategy to generate a Result<Option<TransactionStatus>, Error>
-fn state_result() -> impl Strategy<Value = Result<Option<TransactionStatus>, Error>> {
+fn state_result() -> impl Strategy<Value = Result<Option<TransactionStatusV2>, Error>> {
     prop::result::maybe_ok(state(), Just(Error))
 }
 
@@ -126,12 +143,15 @@ fn tx_status_message() -> impl Strategy<Value = TxStatusMessage> {
 }
 
 /// Strategy to generate a TransactionStatus
-fn transaction_status() -> impl Strategy<Value = TransactionStatus> {
+fn transaction_status() -> impl Strategy<Value = TransactionStatusV2> {
     prop_oneof![
         Just(submitted()),
         Just(success()),
-        Just(failed()),
+        Just(success_during_block_production()),
+        Just(failure()),
+        Just(failure_during_block_production()),
         Just(squeezed()),
+        Just(squeezed_during_block_production()),
     ]
 }
 
@@ -204,12 +224,21 @@ fn transaction_status_change_model(
 /// Takes a `TransactionStatus` and returns a `Flow` value based on the given status.
 /// If the status is `Submitted`, the function returns a `Flow::Continue` with `Submitted`.
 /// If the status is `Success`, `SqueezedOut`, or `Failed`, the function returns a `Flow::Break` with the corresponding `FinalTxStatus`.
-fn next_state(state: TransactionStatus) -> Flow {
+fn next_state(state: TransactionStatusV2) -> Flow {
     match state {
-        TransactionStatus::Submitted { .. } => Flow::Continue(Submitted),
-        TransactionStatus::Success { .. } => Flow::Break(FinalTxStatus::Success),
-        TransactionStatus::Failed { .. } => Flow::Break(FinalTxStatus::Failed),
-        TransactionStatus::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
+        TransactionStatusV2::Submitted { .. } => Flow::Continue(Submitted),
+        TransactionStatusV2::Success { .. } => Flow::Break(FinalTxStatus::Success),
+        TransactionStatusV2::SuccessDuringBlockProduction { .. } => {
+            Flow::Break(FinalTxStatus::Success)
+        }
+        TransactionStatusV2::Failure { .. } => Flow::Break(FinalTxStatus::Failed),
+        TransactionStatusV2::FailureDuringBlockProduction { .. } => {
+            Flow::Break(FinalTxStatus::Failed)
+        }
+        TransactionStatusV2::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
+        TransactionStatusV2::SqueezedOutDuringBlockProduction { .. } => {
+            Flow::Break(FinalTxStatus::Squeezed)
+        }
     }
 }
 
@@ -224,7 +253,7 @@ thread_local!(static RT: tokio::runtime::Runtime =
 /// Property-based test for transaction_status_change
 #[proptest]
 fn test_tsc(
-    #[strategy(state_result())] state: Result<Option<TransactionStatus>, Error>,
+    #[strategy(state_result())] state: Result<Option<TransactionStatusV2>, Error>,
     #[strategy(input_stream())] stream: Vec<TxStatusMessage>,
 ) {
     test_tsc_inner(state, stream)
@@ -232,7 +261,7 @@ fn test_tsc(
 
 /// Helper function called by test_tsc to actually run the tests
 fn test_tsc_inner(
-    state: Result<Option<TransactionStatus>, Error>,
+    state: Result<Option<TransactionStatusV2>, Error>,
     stream: Vec<TxStatusMessage>,
 ) {
     let model_out: Vec<_> = transaction_status_change_model(
@@ -270,17 +299,26 @@ impl From<crate::schema::tx::types::TransactionStatus> for TxStatus {
     fn from(status: crate::schema::tx::types::TransactionStatus) -> Self {
         match status {
             crate::schema::tx::types::TransactionStatus::Submitted(_) => {
-                TxStatus::Submitted
-            }
+                        TxStatus::Submitted
+                    }
             crate::schema::tx::types::TransactionStatus::Success(_) => {
-                TxStatus::Final(FinalTxStatus::Success)
-            }
+                        TxStatus::Final(FinalTxStatus::Success)
+                    }
+                    crate::schema::tx::types::TransactionStatus::SuccessDuringBlockProduction(_) => {
+                        TxStatus::Final(FinalTxStatus::Success)
+                    }
             crate::schema::tx::types::TransactionStatus::SqueezedOut(_) => {
-                TxStatus::Final(FinalTxStatus::Squeezed)
-            }
-            crate::schema::tx::types::TransactionStatus::Failed(_) => {
-                TxStatus::Final(FinalTxStatus::Failed)
-            }
+                        TxStatus::Final(FinalTxStatus::Squeezed)
+                    }
+                    crate::schema::tx::types::TransactionStatus::SqueezedOutDuringBlockProduction(_) => {
+                        TxStatus::Final(FinalTxStatus::Squeezed)
+                    }
+            crate::schema::tx::types::TransactionStatus::Failure(_) => {
+                        TxStatus::Final(FinalTxStatus::Failed)
+                    }
+                    crate::schema::tx::types::TransactionStatus::FailureDuringBlockProduction(_) => {
+                        TxStatus::Final(FinalTxStatus::Failed)
+                    }
         }
     }
 }

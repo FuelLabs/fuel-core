@@ -65,7 +65,7 @@ mockall::mock! {
             message_block_height: &BlockHeight,
             commit_block_height: &BlockHeight,
         ) -> StorageResult<MerkleProof>;
-        fn transaction_status(&self, transaction_id: &TxId) -> StorageResult<TransactionStatus>;
+        fn transaction_status(&self, transaction_id: &TxId) -> StorageResult<TransactionStatusV2>;
     }
 }
 
@@ -167,10 +167,10 @@ async fn can_build_message_proof() {
             count += 1;
             r
         };
-        Ok(TransactionStatus::Success {
+        Ok(TransactionStatusV2::Success {
             block_height: message_block_height,
-            time: Tai64::UNIX_EPOCH,
-            result: None,
+            block_timestamp: Tai64::UNIX_EPOCH,
+            program_state: None,
             receipts,
             total_gas: 0,
             total_fee: 0,

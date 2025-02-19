@@ -290,7 +290,7 @@ mod tests {
             UtxoId,
         },
         fuel_types::ChainId,
-        services::txpool::TransactionStatus,
+        services::txpool::TransactionStatusV2,
         tai64::Tai64,
     };
     use itertools::Itertools;
@@ -515,10 +515,10 @@ mod tests {
 
         fn given_transaction_status(&mut self) -> TableEntry<TransactionStatuses> {
             let key = self.rng.gen();
-            let status = TransactionStatus::Success {
+            let status = TransactionStatusV2::Success {
                 block_height: self.rng.gen(),
-                time: Tai64(self.rng.gen::<u32>().into()),
-                result: None,
+                block_timestamp: Tai64(self.rng.gen::<u32>().into()),
+                program_state: None,
                 receipts: vec![Receipt::Return {
                     id: self.rng.gen(),
                     val: self.rng.gen(),

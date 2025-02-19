@@ -11,7 +11,7 @@ use fuel_core_types::{
     fuel_types::ChainId,
     services::{
         block_importer::ImportResult,
-        txpool::TransactionStatus,
+        txpool::TransactionStatusV2,
     },
 };
 use std::{
@@ -476,7 +476,7 @@ async fn simple_insert_removal_subscription() {
     assert!(
         matches!(
             update,
-            TxStatusMessage::Status(TransactionStatus::Submitted { .. })
+            TxStatusMessage::Status(TransactionStatusV2::Submitted { .. })
         ),
         "First message in tx1 stream should be Submitted"
     );
@@ -489,7 +489,7 @@ async fn simple_insert_removal_subscription() {
     assert!(
         matches!(
             update,
-            TxStatusMessage::Status(TransactionStatus::Submitted { .. })
+            TxStatusMessage::Status(TransactionStatusV2::Submitted { .. })
         ),
         "First message in tx2 stream should be Submitted"
     );
@@ -501,7 +501,7 @@ async fn simple_insert_removal_subscription() {
     let update = tx1_subscribe_updates.next().await.unwrap();
     assert_eq!(
         update,
-        TxStatusMessage::Status(TransactionStatus::SqueezedOut {
+        TxStatusMessage::Status(TransactionStatusV2::SqueezedOut {
             reason: "Transaction is removed: Transaction expired because it exceeded the configured time to live `tx-pool-ttl`."
                 .to_string()
         }),
@@ -511,7 +511,7 @@ async fn simple_insert_removal_subscription() {
     let update = tx2_subscribe_updates.next().await.unwrap();
     assert_eq!(
         update,
-        TxStatusMessage::Status(TransactionStatus::SqueezedOut {
+        TxStatusMessage::Status(TransactionStatusV2::SqueezedOut {
             reason: "Transaction is removed: Transaction expired because it exceeded the configured time to live `tx-pool-ttl`."
                 .to_string()
         }),

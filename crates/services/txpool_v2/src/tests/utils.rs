@@ -5,7 +5,7 @@ use std::{
 
 use fuel_core_types::{
     fuel_tx::Bytes32,
-    services::txpool::TransactionStatus,
+    services::txpool::TransactionStatusV2,
     tai64::Tai64,
 };
 use proptest::{
@@ -36,27 +36,39 @@ use crate::{
     },
 };
 
-pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus> {
+pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatusV2> {
     prop_oneof![
-        Just(TransactionStatus::Submitted { time: Tai64(0) }),
-        Just(TransactionStatus::Success {
+        Just(TransactionStatusV2::Submitted {
+            timestamp: Tai64(0)
+        }),
+        Just(TransactionStatusV2::Success {
             block_height: Default::default(),
-            time: Tai64(0),
-            result: None,
+            block_timestamp: Tai64(0),
+            program_state: None,
             receipts: vec![],
             total_gas: 0,
             total_fee: 0,
         }),
-        Just(TransactionStatus::Failed {
+        Just(TransactionStatusV2::SuccessDuringBlockProduction {
+            block_height: Default::default()
+        }),
+        Just(TransactionStatusV2::Failure {
             block_height: Default::default(),
-            time: Tai64(0),
-            result: None,
+            block_timestamp: Tai64(0),
+            program_state: None,
             receipts: vec![],
             total_gas: 0,
             total_fee: 0,
+            reason: "failure".to_string(),
         }),
-        Just(TransactionStatus::SqueezedOut {
+        Just(TransactionStatusV2::FailureDuringBlockProduction {
+            block_height: Default::default()
+        }),
+        Just(TransactionStatusV2::SqueezedOut {
             reason: Default::default(),
+        }),
+        Just(TransactionStatusV2::SqueezedOutDuringBlockProduction {
+            reason: "squeezed out".to_string(),
         }),
     ]
 }

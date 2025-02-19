@@ -10,7 +10,7 @@ use fuel_core_storage::StorageAsRef;
 use fuel_core_types::{
     fuel_tx::Bytes32,
     fuel_types::BlockHeight,
-    services::txpool::TransactionStatus,
+    services::txpool::TransactionStatusV2,
 };
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ impl ports::worker::TxPool for MockTxPool {
         &self,
         _id: Bytes32,
         _block_height: &BlockHeight,
-        _status: TransactionStatus,
+        _status: TransactionStatusV2,
     ) {
         // Do nothing
     }

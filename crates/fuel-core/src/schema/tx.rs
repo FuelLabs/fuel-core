@@ -479,7 +479,7 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(
         &self,
         id: Bytes32,
-    ) -> StorageResult<Option<txpool::TransactionStatus>> {
+    ) -> StorageResult<Option<txpool::TransactionStatusV2>> {
         match self.query.tx_status(&id) {
             Ok(status) => Ok(Some(status)),
             Err(StorageError::NotFound(_, _)) => Ok(self
@@ -487,7 +487,7 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
                 .submission_time(id)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?
-                .map(|time| txpool::TransactionStatus::Submitted { time })),
+                .map(|time| txpool::TransactionStatusV2::Submitted { timestamp: time })),
             Err(err) => Err(err),
         }
     }

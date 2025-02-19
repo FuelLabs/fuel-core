@@ -3,7 +3,7 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     fuel_types::Bytes32,
-    services::txpool::TransactionStatus as TxPoolTxStatus,
+    services::txpool::TransactionStatusV2 as TxPoolTxStatus,
 };
 use futures::{
     stream::BoxStream,

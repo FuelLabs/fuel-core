@@ -333,7 +333,7 @@ impl From<&PoolTransaction> for CheckedTransaction {
 /// The status of the transaction during its life from the tx pool until the block.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TransactionStatus {
+pub enum TransactionStatusV1 {
     /// Transaction was submitted into the txpool
     Submitted {
         /// Timestamp of submission into the txpool
@@ -376,12 +376,75 @@ pub enum TransactionStatus {
     },
 }
 
+/// The status of the transaction during its life from the TxPool until the inclusion in the block.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TransactionStatusV2 {
+    /// Transaction was submitted into the TxPool
+    Submitted {
+        /// Timestamp of submission into the TxPool
+        timestamp: Tai64,
+    },
+    /// Transaction was successfully included in a block
+    Success {
+        /// Included in this block
+        block_height: BlockHeight,
+        /// Timestamp of the block
+        block_timestamp: Tai64,
+        /// Result of executing the transaction for scripts
+        program_state: Option<ProgramState>,
+        /// The receipts generated during execution of the transaction
+        receipts: Vec<Receipt>,
+        /// The total gas used by the transaction
+        total_gas: u64,
+        /// The total fee paid by the transaction
+        total_fee: u64,
+    },
+    /// Transaction was successfully included in a block
+    SuccessDuringBlockProduction {
+        /// The block height that was being produced when the transaction succeeded
+        block_height: BlockHeight,
+    },
+    /// Transaction was squeezed out of the TxPool
+    SqueezedOut {
+        /// The reason why the transaction was squeezed out
+        reason: String,
+    },
+    /// Transaction was squeezed out
+    SqueezedOutDuringBlockProduction {
+        /// The reason why the transaction was squeezed out
+        reason: String,
+    },
+    /// Transaction was included in a block, but the execution has failed
+    Failure {
+        /// Included in this block
+        block_height: BlockHeight,
+        /// Timestamp of the block
+        block_timestamp: Tai64,
+        /// The reason why the transaction has failed
+        reason: String,
+        /// Result of executing the transaction for scripts
+        program_state: Option<ProgramState>,
+        /// The receipts generated during execution of the transaction
+        receipts: Vec<Receipt>,
+        /// The total gas used by the transaction
+        total_gas: u64,
+        /// The total fee paid by the transaction
+        total_fee: u64,
+    },
+    /// Transaction was not included in a block
+    FailureDuringBlockProduction {
+        /// The block height that was being produced when the transaction failed
+        block_height: BlockHeight,
+    },
+}
+
 /// Converts the transaction execution result to the transaction status.
 pub fn from_executor_to_status(
     block: &Block,
     result: TransactionExecutionResult,
-) -> TransactionStatus {
-    let time = block.header().time();
+) -> TransactionStatusV2 {
+    let timestamp = block.header().time();
     let block_height = *block.header().height();
     match result {
         TransactionExecutionResult::Success {
@@ -389,10 +452,10 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-        } => TransactionStatus::Success {
+        } => TransactionStatusV2::Success {
             block_height,
-            time,
-            result,
+            block_timestamp: timestamp,
+            program_state: result,
             receipts,
             total_gas,
             total_fee,
@@ -402,13 +465,14 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-        } => TransactionStatus::Failed {
+        } => TransactionStatusV2::Failure {
             block_height,
-            time,
-            result,
+            block_timestamp: timestamp,
+            program_state: result,
             receipts,
             total_gas,
             total_fee,
+            reason: "Reason".to_string(), // TODO[RC]: Provide reason,
         },
     }
 }

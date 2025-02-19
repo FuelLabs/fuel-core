@@ -85,7 +85,7 @@ use fuel_core_types::{
         BlockHeight,
         Nonce,
     },
-    services::txpool::TransactionStatus,
+    services::txpool::TransactionStatusV2,
 };
 use std::iter;
 
@@ -108,7 +108,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             .map(|value| value.to_vec())
     }
 
-    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
+    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatusV2> {
         self.get_tx_status(tx_id)
             .transpose()
             .ok_or(not_found!("TransactionId"))?

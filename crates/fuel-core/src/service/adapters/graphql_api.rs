@@ -48,7 +48,7 @@ use fuel_core_types::{
         block_importer::SharedImportResult,
         executor::TransactionExecutionStatus,
         p2p::PeerInfo,
-        txpool::TransactionStatus,
+        txpool::TransactionStatusV2,
     },
     tai64::Tai64,
 };
@@ -175,7 +175,7 @@ impl worker::TxPool for TxPoolAdapter {
         &self,
         id: Bytes32,
         block_height: &BlockHeight,
-        status: TransactionStatus,
+        status: TransactionStatusV2,
     ) {
         self.service.notify_complete_tx(id, block_height, status)
     }

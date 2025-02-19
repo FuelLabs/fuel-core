@@ -66,7 +66,7 @@ use fuel_core_types::{
         executor::TransactionExecutionStatus,
         graphql_api::ContractBalance,
         p2p::PeerInfo,
-        txpool::TransactionStatus,
+        txpool::TransactionStatusV2,
     },
     tai64::Tai64,
 };
@@ -82,7 +82,7 @@ pub trait OffChainDatabase: Send + Sync {
 
     fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>>;
 
-    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus>;
+    fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatusV2>;
 
     fn balance(
         &self,
@@ -340,7 +340,7 @@ pub mod worker {
         fuel_types::BlockHeight,
         services::{
             block_importer::SharedImportResult,
-            txpool::TransactionStatus,
+            txpool::TransactionStatusV2,
         },
     };
 
@@ -414,8 +414,8 @@ pub mod worker {
         fn update_tx_status(
             &mut self,
             id: &Bytes32,
-            status: TransactionStatus,
-        ) -> StorageResult<Option<TransactionStatus>>;
+            status: TransactionStatusV2,
+        ) -> StorageResult<Option<TransactionStatusV2>>;
 
         /// Update metadata about the total number of transactions on the chain.
         /// Returns the total count after the update.
@@ -445,7 +445,7 @@ pub mod worker {
             &self,
             id: Bytes32,
             block_height: &BlockHeight,
-            status: TransactionStatus,
+            status: TransactionStatusV2,
         );
     }
 }

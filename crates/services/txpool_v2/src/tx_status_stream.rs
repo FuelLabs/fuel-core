@@ -1,6 +1,6 @@
 use fuel_core_types::{
     fuel_tx::Bytes32,
-    services::txpool::TransactionStatus,
+    services::txpool::TransactionStatusV2,
 };
 use std::pin::Pin;
 use tokio_stream::Stream;
@@ -27,12 +27,12 @@ impl TxUpdate {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TxStatusMessage {
-    Status(TransactionStatus),
+    Status(TransactionStatusV2),
     FailedStatus,
 }
 
-impl<E> From<Result<TransactionStatus, E>> for TxStatusMessage {
-    fn from(result: Result<TransactionStatus, E>) -> Self {
+impl<E> From<Result<TransactionStatusV2, E>> for TxStatusMessage {
+    fn from(result: Result<TransactionStatusV2, E>) -> Self {
         match result {
             Ok(status) => TxStatusMessage::Status(status),
             _ => TxStatusMessage::FailedStatus,
@@ -43,12 +43,12 @@ impl<E> From<Result<TransactionStatus, E>> for TxStatusMessage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum State {
     Empty,
-    Initial(TransactionStatus),
-    EarlySuccess(TransactionStatus),
-    Success(TransactionStatus, TransactionStatus),
+    Initial(TransactionStatusV2),
+    EarlySuccess(TransactionStatusV2),
+    Success(TransactionStatusV2, TransactionStatusV2),
     Failed,
-    LateFailed(TransactionStatus),
-    SenderClosed(TransactionStatus),
+    LateFailed(TransactionStatusV2),
+    SenderClosed(TransactionStatusV2),
     Closed,
 }
 
@@ -78,8 +78,8 @@ impl TxUpdateStream {
         let state = std::mem::replace(&mut self.state, State::Empty);
         self.state = match state {
             State::Empty => match msg {
-                TxStatusMessage::Status(TransactionStatus::Submitted { time }) => {
-                    State::Initial(TransactionStatus::Submitted { time })
+                TxStatusMessage::Status(TransactionStatusV2::Submitted { timestamp }) => {
+                    State::Initial(TransactionStatusV2::Submitted { timestamp })
                 }
                 TxStatusMessage::Status(s) => State::EarlySuccess(s),
                 TxStatusMessage::FailedStatus => State::Failed,

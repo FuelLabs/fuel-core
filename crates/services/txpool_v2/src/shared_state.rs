@@ -8,7 +8,7 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
-    services::txpool::TransactionStatus,
+    services::txpool::TransactionStatusV2,
 };
 use parking_lot::RwLockWriteGuard;
 use tokio::sync::{
@@ -155,7 +155,7 @@ impl SharedState {
         &self,
         id: Bytes32,
         block_height: &BlockHeight,
-        status: TransactionStatus,
+        status: TransactionStatusV2,
     ) {
         self.tx_status_sender.send_complete(
             id,

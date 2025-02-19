@@ -77,7 +77,7 @@ use fuel_core_types::{
         },
         txpool::{
             ArcPoolTx,
-            TransactionStatus,
+            TransactionStatusV2,
         },
     },
     tai64::Tai64,
@@ -142,7 +142,7 @@ impl TxInfo {
     }
 }
 
-impl TryFrom<TxInfo> for TransactionStatus {
+impl TryFrom<TxInfo> for TransactionStatusV2 {
     type Error = SystemTimeError;
 
     fn try_from(value: TxInfo) -> Result<Self, Self::Error> {
@@ -151,8 +151,8 @@ impl TryFrom<TxInfo> for TransactionStatus {
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_secs() as i64;
 
-        Ok(TransactionStatus::Submitted {
-            time: Tai64::from_unix(unit_time),
+        Ok(TransactionStatusV2::Submitted {
+            timestamp: Tai64::from_unix(unit_time),
         })
     }
 }
