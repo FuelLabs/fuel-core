@@ -18,6 +18,8 @@ use std::{
 use tokio::sync::{
     mpsc,
     mpsc::{
+        Receiver,
+        Sender,
         UnboundedReceiver,
         UnboundedSender,
     },
@@ -25,6 +27,7 @@ use tokio::sync::{
 };
 
 use crate::{
+    config::ServiceChannelLimits,
     error::{
         Error,
         RemovedReason,
@@ -41,7 +44,7 @@ pub struct PoolWorkerInterface {
     pub(crate) thread_management_sender: UnboundedSender<ThreadManagementRequest>,
     pub(crate) request_insert_sender: UnboundedSender<PoolInsertRequest>,
     pub(crate) request_remove_sender: UnboundedSender<PoolRemoveRequest>,
-    pub(crate) request_read_sender: UnboundedSender<PoolReadRequest>,
+    pub(crate) request_read_sender: Sender<PoolReadRequest>,
     pub(crate) extract_block_transactions_sender:
         UnboundedSender<PoolExtractBlockTransactions>,
     pub(crate) notification_receiver: UnboundedReceiver<PoolNotification>,
@@ -52,11 +55,13 @@ impl PoolWorkerInterface {
     pub fn new<View>(
         tx_pool: TxPool,
         view_provider: Arc<dyn AtomicView<LatestView = View>>,
+        limits: &ServiceChannelLimits,
     ) -> Self
     where
         View: TxPoolPersistentStorage,
     {
-        let (request_read_sender, request_read_receiver) = mpsc::unbounded_channel();
+        let (request_read_sender, request_read_receiver) =
+            mpsc::channel(limits.max_pending_read_pool_requests);
         let (extract_block_transactions_sender, extract_block_transactions_receiver) =
             mpsc::unbounded_channel();
         let (request_remove_sender, request_remove_receiver) = mpsc::unbounded_channel();
@@ -103,43 +108,12 @@ impl PoolWorkerInterface {
         }
     }
 
-    pub fn remove_coin_dependents(&self, parent_txs: Vec<(TxId, String)>) {
-        if let Err(e) = self
-            .request_remove_sender
-            .send(PoolRemoveRequest::RemoveCoinDependents { parent_txs })
-        {
-            tracing::error!("Failed to send remove coin dependents request: {}", e);
-        }
-    }
-
     pub fn remove_and_coin_dependents(&self, tx_ids: (Vec<TxId>, Error)) {
         if let Err(e) = self
             .request_remove_sender
             .send(PoolRemoveRequest::RemoveAndCoinDependents { tx_ids })
         {
             tracing::error!("Failed to send remove and coin dependents request: {}", e);
-        }
-    }
-
-    pub fn get_tx_ids(
-        &self,
-        max_txs: usize,
-        response_channel: oneshot::Sender<Vec<TxId>>,
-    ) {
-        if let Err(e) = self.request_read_sender.send(PoolReadRequest::TxIds {
-            max_txs,
-            tx_ids: response_channel,
-        }) {
-            tracing::error!("Failed to send tx ids request: {}", e);
-        }
-    }
-
-    pub fn get_txs(&self, tx_ids: Vec<TxId>, txs: oneshot::Sender<Vec<Option<TxInfo>>>) {
-        if let Err(e) = self
-            .request_read_sender
-            .send(PoolReadRequest::Txs { tx_ids, txs })
-        {
-            tracing::error!("Failed to send get txs request: {}", e);
         }
     }
 
@@ -188,8 +162,6 @@ pub enum PoolExtractBlockTransactions {
 
 pub enum PoolRemoveRequest {
     Remove { tx_ids: Vec<TxId> },
-    // TODO: It duplicates `WritePoolRequest::RemoveCoinDependents`. We need to work directly with
-    //  `RemoveCoinDependents` without `WritePoolRequest::RemoveCoinDependents` at the middle.
     RemoveCoinDependents { parent_txs: Vec<(TxId, String)> },
     RemoveAndCoinDependents { tx_ids: (Vec<TxId>, Error) },
 }
@@ -198,15 +170,13 @@ pub enum PoolReadRequest {
         tx_ids: Vec<TxId>,
         non_existing_txs: oneshot::Sender<Vec<TxId>>,
     },
-    // TODO: Avoid duplication of the `ReadPoolRequest::GetTxs`
     Txs {
         tx_ids: Vec<TxId>,
-        txs: oneshot::Sender<Vec<Option<TxInfo>>>,
+        response_channel: oneshot::Sender<Vec<Option<TxInfo>>>,
     },
-    // TODO: Avoid duplication of the `ReadPoolRequest::GetTxIds`
     TxIds {
         max_txs: usize,
-        tx_ids: oneshot::Sender<Vec<TxId>>,
+        response_channel: oneshot::Sender<Vec<TxId>>,
     },
 }
 
@@ -242,7 +212,7 @@ pub enum PoolNotification {
 pub struct PoolWorker<View> {
     thread_management_receiver: UnboundedReceiver<ThreadManagementRequest>,
     request_remove_receiver: UnboundedReceiver<PoolRemoveRequest>,
-    request_read_receiver: UnboundedReceiver<PoolReadRequest>,
+    request_read_receiver: Receiver<PoolReadRequest>,
     extract_block_transactions_receiver: UnboundedReceiver<PoolExtractBlockTransactions>,
     request_insert_receiver: UnboundedReceiver<PoolInsertRequest>,
     pool: TxPool,
@@ -289,11 +259,11 @@ where
             _ = self.request_read_receiver.recv_many(&mut insert_buffer, 10_000) => {
                 for read in insert_buffer {
                     match read {
-                        PoolReadRequest::TxIds { max_txs, tx_ids } => {
-                            self.get_tx_ids(max_txs, tx_ids);
+                        PoolReadRequest::TxIds { max_txs, response_channel } => {
+                            self.get_tx_ids(max_txs, response_channel);
                         }
-                        PoolReadRequest::Txs { tx_ids, txs } => {
-                            self.get_txs(tx_ids, txs);
+                        PoolReadRequest::Txs { tx_ids, response_channel } => {
+                            self.get_txs(tx_ids, response_channel);
                         }
                         PoolReadRequest::NonExistingTxs {
                             tx_ids,

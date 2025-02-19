@@ -27,8 +27,11 @@ use crate::{
     error::Error,
     pool::TxPoolStats,
     pool_worker,
+    pool_worker::{
+        PoolReadRequest,
+        PoolRemoveRequest,
+    },
     service::{
-        ReadPoolRequest,
         TxInfo,
         WritePoolRequest,
     },
@@ -45,10 +48,11 @@ use crate::{
 
 #[derive(Clone)]
 pub struct SharedState {
+    pub(crate) request_remove_sender: mpsc::UnboundedSender<PoolRemoveRequest>,
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
         mpsc::UnboundedSender<pool_worker::PoolExtractBlockTransactions>,
-    pub(crate) read_pool_requests_sender: mpsc::Sender<ReadPoolRequest>,
+    pub(crate) request_read_sender: mpsc::Sender<PoolReadRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
     pub(crate) latest_stats: tokio::sync::watch::Receiver<TxPoolStats>,
@@ -111,14 +115,16 @@ impl SharedState {
     }
 
     pub async fn get_tx_ids(&self, max_txs: usize) -> Result<Vec<TxId>, Error> {
-        let (result_sender, result_receiver) = oneshot::channel();
-        self.read_pool_requests_sender
-            .send(ReadPoolRequest::GetTxIds {
+        let (response_channel, result_receiver) = oneshot::channel();
+
+        self.request_read_sender
+            .send(PoolReadRequest::TxIds {
                 max_txs,
-                response_channel: result_sender,
+                response_channel,
             })
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?;
+
         result_receiver
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)
@@ -129,14 +135,16 @@ impl SharedState {
     }
 
     pub async fn find(&self, tx_ids: Vec<TxId>) -> Result<Vec<Option<TxInfo>>, Error> {
-        let (result_sender, result_receiver) = oneshot::channel();
-        self.read_pool_requests_sender
-            .send(ReadPoolRequest::GetTxs {
+        let (response_channel, result_receiver) = oneshot::channel();
+
+        self.request_read_sender
+            .send(PoolReadRequest::Txs {
                 tx_ids,
-                response_channel: result_sender,
+                response_channel,
             })
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)?;
+
         result_receiver
             .await
             .map_err(|_| Error::ServiceCommunicationFailed)
@@ -186,9 +194,14 @@ impl SharedState {
             })
             .collect();
 
-        let _ = self
-            .write_pool_requests_sender
-            .try_send(WritePoolRequest::RemoveCoinDependents { transactions });
+        if let Err(e) =
+            self.request_remove_sender
+                .send(PoolRemoveRequest::RemoveCoinDependents {
+                    parent_txs: transactions,
+                })
+        {
+            tracing::error!("Failed to send remove coin dependents request: {}", e);
+        }
     }
 
     pub fn latest_stats(&self) -> TxPoolStats {

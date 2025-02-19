@@ -66,7 +66,6 @@ use fuel_core_txpool::{
 use fuel_core_types::{
     fuel_tx::{
         Transaction,
-        TxId,
         UniqueIdentifier,
     },
     fuel_types::{
@@ -170,20 +169,6 @@ pub enum WritePoolRequest {
     InsertTx {
         transaction: Arc<Transaction>,
         response_channel: oneshot::Sender<Result<(), Error>>,
-    },
-    RemoveCoinDependents {
-        transactions: Vec<(TxId, String)>,
-    },
-}
-
-pub enum ReadPoolRequest {
-    GetTxIds {
-        max_txs: usize,
-        response_channel: oneshot::Sender<Vec<TxId>>,
-    },
-    GetTxs {
-        tx_ids: Vec<TxId>,
-        response_channel: oneshot::Sender<Vec<Option<TxInfo>>>,
     },
 }
 
@@ -295,15 +280,6 @@ where
                     TaskNextAction::Stop
                 }
             }
-
-            read_pool_request = self.subscriptions.read_pool.recv() => {
-                if let Some(read_pool_request) = read_pool_request {
-                    self.process_read(read_pool_request);
-                    TaskNextAction::Continue
-                } else {
-                    TaskNextAction::Stop
-                }
-            }
         }
     }
 
@@ -372,9 +348,6 @@ where
                     tracing::error!("Failed to insert transaction: Out of capacity");
                     let _ = response_channel.send(Err(Error::ServiceQueueFull));
                 }
-            }
-            WritePoolRequest::RemoveCoinDependents { transactions } => {
-                self.manage_remove_coin_dependents(transactions);
             }
         }
     }
@@ -567,10 +540,6 @@ where
         }
     }
 
-    fn manage_remove_coin_dependents(&self, transactions: Vec<(TxId, String)>) {
-        self.pool_worker.remove_coin_dependents(transactions);
-    }
-
     fn manage_tx_from_p2p(
         &mut self,
         tx: Transaction,
@@ -626,10 +595,13 @@ where
 
                 // We don't use the `get_non_existing_txs` from `PoolWorkerInterface` because we don't want to make the whole object cloneable
                 let (response_sender, response_receiver) = oneshot::channel();
-                if let Err(e) = request_sender.send(PoolReadRequest::NonExistingTxs {
-                    tx_ids: peer_tx_ids,
-                    non_existing_txs: response_sender,
-                }) {
+                if let Err(e) = request_sender
+                    .send(PoolReadRequest::NonExistingTxs {
+                        tx_ids: peer_tx_ids,
+                        non_existing_txs: response_sender,
+                    })
+                    .await
+                {
                     tracing::error!(
                         "Failed to send the request to get non existing txs: {}",
                         e
@@ -706,23 +678,6 @@ where
             tx_sync_history.clear();
         }
     }
-
-    fn process_read(&self, request: ReadPoolRequest) {
-        match request {
-            ReadPoolRequest::GetTxIds {
-                max_txs,
-                response_channel,
-            } => {
-                self.pool_worker.get_tx_ids(max_txs, response_channel);
-            }
-            ReadPoolRequest::GetTxs {
-                tx_ids,
-                response_channel,
-            } => {
-                self.pool_worker.get_txs(tx_ids, response_channel);
-            }
-        }
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -766,8 +721,7 @@ where
             .service_channel_limits
             .max_pending_write_pool_requests,
     );
-    let (read_pool_requests_sender, read_pool_requests_receiver) =
-        mpsc::channel(config.service_channel_limits.max_pending_read_pool_requests);
+
     let (pool_stats_sender, pool_stats_receiver) =
         tokio::sync::watch::channel(TxPoolStats::default());
     let tx_status_sender = TxStatusChange::new(
@@ -785,7 +739,6 @@ where
         new_tx: tx_from_p2p_stream,
         imported_blocks: block_importer.block_events(),
         write_pool: write_pool_requests_receiver,
-        read_pool: read_pool_requests_receiver,
     };
 
     let storage_provider = Arc::new(ps_provider);
@@ -821,6 +774,7 @@ where
 
     let metrics = config.metrics;
 
+    let service_channel_limits = config.service_channel_limits;
     let utxo_validation = config.utxo_validation;
     let txpool = Pool::new(
         GraphStorage::new(GraphConfig {
@@ -836,15 +790,17 @@ where
     let (current_height_writer, current_height_reader) =
         unsafe { SeqLock::new(current_height) };
 
-    let pool_worker = PoolWorkerInterface::new(txpool, storage_provider);
+    let pool_worker =
+        PoolWorkerInterface::new(txpool, storage_provider, &service_channel_limits);
 
     let shared_state = SharedState {
+        request_remove_sender: pool_worker.request_remove_sender.clone(),
+        request_read_sender: pool_worker.request_read_sender.clone(),
         write_pool_requests_sender,
         tx_status_sender,
         select_transactions_requests_sender: pool_worker
             .extract_block_transactions_sender
             .clone(),
-        read_pool_requests_sender,
         new_txs_notifier,
         latest_stats: pool_stats_receiver,
     };
