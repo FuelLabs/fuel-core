@@ -37,6 +37,15 @@ impl Mappable for TemporalRegistryAddressMerkleData {
     type OwnedValue = Self::Value;
 }
 
+impl TableWithBlueprint for TemporalRegistryAddressMerkleData {
+    type Blueprint = Plain<Primitive<8>, Postcard>;
+    type Column = Column;
+
+    fn column() -> Column {
+        Column::DaCompressionTemporalAddressMerkleData
+    }
+}
+
 /// The metadata table for [`TemporalRegistryAddressMerkleData`] table.
 pub struct TemporalRegistryAddressMerkleMetadata;
 
@@ -47,8 +56,14 @@ impl Mappable for TemporalRegistryAddressMerkleMetadata {
     type OwnedValue = Self::Value;
 }
 
-/// V2 table for storing Address with Merklized encoding.
-pub struct DaCompressionTemporalRegistryAddressV2;
+impl TableWithBlueprint for TemporalRegistryAddressMerkleMetadata {
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = Column;
+
+    fn column() -> Column {
+        Column::DaCompressionTemporalAddressMerkleMetadata
+    }
+}
 
 /// Encoder for the V2 version of the DaCompressionTemporalRegistry for Address.
 pub struct DaCompressionTemporalRegistryAddressV2Encoder;
@@ -62,6 +77,9 @@ impl fuel_core_storage::codec::Encode<Address>
         *Borrow::<[u8; Bytes32::LEN]>::borrow(value)
     }
 }
+
+/// V2 table for storing Address with Merklized encoding.
+pub struct DaCompressionTemporalRegistryAddressV2;
 
 impl Mappable for DaCompressionTemporalRegistryAddressV2 {
     type Key = Self::OwnedKey;
@@ -82,24 +100,6 @@ impl TableWithBlueprint for DaCompressionTemporalRegistryAddressV2 {
 
     fn column() -> Self::Column {
         Column::DaCompressionTemporalRegistryAddressV2
-    }
-}
-
-impl TableWithBlueprint for TemporalRegistryAddressMerkleData {
-    type Blueprint = Plain<Primitive<8>, Postcard>;
-    type Column = Column;
-
-    fn column() -> Column {
-        Column::DaCompressionTemporalAddressMerkleData
-    }
-}
-
-impl TableWithBlueprint for TemporalRegistryAddressMerkleMetadata {
-    type Blueprint = Plain<Postcard, Postcard>;
-    type Column = Column;
-
-    fn column() -> Column {
-        Column::DaCompressionTemporalAddressMerkleMetadata
     }
 }
 

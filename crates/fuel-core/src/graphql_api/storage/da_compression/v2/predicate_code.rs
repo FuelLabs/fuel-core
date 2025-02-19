@@ -24,28 +24,12 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_merkle::binary;
 
-/// V2 table for storing PredicateCode with Merklized encoding.
-pub struct DaCompressionTemporalRegistryPredicateCodeV2;
-
-/// Encoder for the V2 version of the DaCompressionTemporalRegistry for PredicateCode.
-pub struct DaCompressionTemporalRegistryPredicateCodeV2Encoder;
-
 pub struct TemporalRegistryPredicateCodeMerkleData;
 
 impl Mappable for TemporalRegistryPredicateCodeMerkleData {
     type Key = u64;
     type OwnedKey = Self::Key;
     type Value = binary::Primitive;
-    type OwnedValue = Self::Value;
-}
-
-/// The metadata table for [`TemporalRegistryPredicateCodeMerkleData`] table.
-pub struct TemporalRegistryPredicateCodeMerkleMetadata;
-
-impl Mappable for TemporalRegistryPredicateCodeMerkleMetadata {
-    type Key = DenseMetadataKey<RegistryKey>;
-    type OwnedKey = Self::Key;
-    type Value = DenseMerkleMetadata;
     type OwnedValue = Self::Value;
 }
 
@@ -58,6 +42,16 @@ impl TableWithBlueprint for TemporalRegistryPredicateCodeMerkleData {
     }
 }
 
+/// The metadata table for [`TemporalRegistryPredicateCodeMerkleData`] table.
+pub struct TemporalRegistryPredicateCodeMerkleMetadata;
+
+impl Mappable for TemporalRegistryPredicateCodeMerkleMetadata {
+    type Key = DenseMetadataKey<RegistryKey>;
+    type OwnedKey = Self::Key;
+    type Value = DenseMerkleMetadata;
+    type OwnedValue = Self::Value;
+}
+
 impl TableWithBlueprint for TemporalRegistryPredicateCodeMerkleMetadata {
     type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column;
@@ -66,6 +60,9 @@ impl TableWithBlueprint for TemporalRegistryPredicateCodeMerkleMetadata {
         Column::DaCompressionTemporalPredicateCodeMerkleMetadata
     }
 }
+
+/// Encoder for the V2 version of the DaCompressionTemporalRegistry for PredicateCode.
+pub struct DaCompressionTemporalRegistryPredicateCodeV2Encoder;
 
 impl fuel_core_storage::codec::Encode<PredicateCode>
     for DaCompressionTemporalRegistryPredicateCodeV2Encoder
@@ -77,6 +74,9 @@ impl fuel_core_storage::codec::Encode<PredicateCode>
         std::borrow::Cow::Owned(bytes)
     }
 }
+
+/// V2 table for storing PredicateCode with Merklized encoding.
+pub struct DaCompressionTemporalRegistryPredicateCodeV2;
 
 impl Mappable for DaCompressionTemporalRegistryPredicateCodeV2 {
     type Key = Self::OwnedKey;

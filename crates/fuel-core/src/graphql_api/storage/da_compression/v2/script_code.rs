@@ -26,28 +26,12 @@ use fuel_core_types::{
     fuel_tx::ScriptCode,
 };
 
-/// V2 table for storing ScriptCode with Merklized encoding.
-pub struct DaCompressionTemporalRegistryScriptCodeV2;
-
-/// Encoder for the V2 version of the DaCompressionTemporalRegistry for ScriptCode.
-pub struct DaCompressionTemporalRegistryScriptCodeV2Encoder;
-
 pub struct TemporalRegistryScriptCodeMerkleData;
 
 impl Mappable for TemporalRegistryScriptCodeMerkleData {
     type Key = u64;
     type OwnedKey = Self::Key;
     type Value = binary::Primitive;
-    type OwnedValue = Self::Value;
-}
-
-/// The metadata table for [`TemporalRegistryScriptCodeMerkleData`] table.
-pub struct TemporalRegistryScriptCodeMerkleMetadata;
-
-impl Mappable for TemporalRegistryScriptCodeMerkleMetadata {
-    type Key = DenseMetadataKey<RegistryKey>;
-    type OwnedKey = Self::Key;
-    type Value = DenseMerkleMetadata;
     type OwnedValue = Self::Value;
 }
 
@@ -60,6 +44,16 @@ impl TableWithBlueprint for TemporalRegistryScriptCodeMerkleData {
     }
 }
 
+/// The metadata table for [`TemporalRegistryScriptCodeMerkleData`] table.
+pub struct TemporalRegistryScriptCodeMerkleMetadata;
+
+impl Mappable for TemporalRegistryScriptCodeMerkleMetadata {
+    type Key = DenseMetadataKey<RegistryKey>;
+    type OwnedKey = Self::Key;
+    type Value = DenseMerkleMetadata;
+    type OwnedValue = Self::Value;
+}
+
 impl TableWithBlueprint for TemporalRegistryScriptCodeMerkleMetadata {
     type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column;
@@ -68,6 +62,9 @@ impl TableWithBlueprint for TemporalRegistryScriptCodeMerkleMetadata {
         Column::DaCompressionTemporalScriptCodeMerkleMetadata
     }
 }
+
+/// Encoder for the V2 version of the DaCompressionTemporalRegistry for ScriptCode.
+pub struct DaCompressionTemporalRegistryScriptCodeV2Encoder;
 
 impl fuel_core_storage::codec::Encode<ScriptCode>
     for DaCompressionTemporalRegistryScriptCodeV2Encoder
@@ -79,6 +76,9 @@ impl fuel_core_storage::codec::Encode<ScriptCode>
         std::borrow::Cow::Owned(bytes)
     }
 }
+
+/// V2 table for storing ScriptCode with Merklized encoding.
+pub struct DaCompressionTemporalRegistryScriptCodeV2;
 
 impl Mappable for DaCompressionTemporalRegistryScriptCodeV2 {
     type Key = Self::OwnedKey;

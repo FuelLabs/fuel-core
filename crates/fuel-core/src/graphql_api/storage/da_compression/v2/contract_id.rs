@@ -28,28 +28,12 @@ use fuel_core_types::{
     },
 };
 
-/// V2 table for storing ContractId with Merklized encoding.
-pub struct DaCompressionTemporalRegistryContractIdV2;
-
-/// Encoder for the V2 version of the DaCompressionTemporalRegistry for ContractId.
-pub struct DaCompressionTemporalRegistryContractIdV2Encoder;
-
 pub struct TemporalRegistryContractIdMerkleData;
 
 impl Mappable for TemporalRegistryContractIdMerkleData {
     type Key = u64;
     type OwnedKey = Self::Key;
     type Value = binary::Primitive;
-    type OwnedValue = Self::Value;
-}
-
-/// The metadata table for [`TemporalRegistryContractIdMerkleData`] table.
-pub struct TemporalRegistryContractIdMerkleMetadata;
-
-impl Mappable for TemporalRegistryContractIdMerkleMetadata {
-    type Key = DenseMetadataKey<RegistryKey>;
-    type OwnedKey = Self::Key;
-    type Value = DenseMerkleMetadata;
     type OwnedValue = Self::Value;
 }
 
@@ -62,6 +46,16 @@ impl TableWithBlueprint for TemporalRegistryContractIdMerkleData {
     }
 }
 
+/// The metadata table for [`TemporalRegistryContractIdMerkleData`] table.
+pub struct TemporalRegistryContractIdMerkleMetadata;
+
+impl Mappable for TemporalRegistryContractIdMerkleMetadata {
+    type Key = DenseMetadataKey<RegistryKey>;
+    type OwnedKey = Self::Key;
+    type Value = DenseMerkleMetadata;
+    type OwnedValue = Self::Value;
+}
+
 impl TableWithBlueprint for TemporalRegistryContractIdMerkleMetadata {
     type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column;
@@ -71,6 +65,9 @@ impl TableWithBlueprint for TemporalRegistryContractIdMerkleMetadata {
     }
 }
 
+/// Encoder for the V2 version of the DaCompressionTemporalRegistry for ContractId.
+pub struct DaCompressionTemporalRegistryContractIdV2Encoder;
+
 impl fuel_core_storage::codec::Encode<ContractId>
     for DaCompressionTemporalRegistryContractIdV2Encoder
 {
@@ -79,6 +76,9 @@ impl fuel_core_storage::codec::Encode<ContractId>
         *Borrow::<[u8; Bytes32::LEN]>::borrow(value)
     }
 }
+
+/// V2 table for storing ContractId with Merklized encoding.
+pub struct DaCompressionTemporalRegistryContractIdV2;
 
 impl Mappable for DaCompressionTemporalRegistryContractIdV2 {
     type Key = Self::OwnedKey;

@@ -28,8 +28,42 @@ use fuel_core_types::{
     },
 };
 
-/// V2 table for storing AssetId with Merklized encoding.
-pub struct DaCompressionTemporalRegistryAssetIdV2;
+pub struct TemporalRegistryAssetIdMerkleData;
+
+impl Mappable for TemporalRegistryAssetIdMerkleData {
+    type Key = u64;
+    type OwnedKey = Self::Key;
+    type Value = binary::Primitive;
+    type OwnedValue = Self::Value;
+}
+
+impl TableWithBlueprint for TemporalRegistryAssetIdMerkleData {
+    type Blueprint = Plain<Primitive<8>, Postcard>;
+    type Column = Column;
+
+    fn column() -> Column {
+        Column::DaCompressionTemporalAssetIdMerkleData
+    }
+}
+
+/// The metadata table for [`TemporalRegistryAssetIdMerkleData`] table.
+pub struct TemporalRegistryAssetIdMerkleMetadata;
+
+impl Mappable for TemporalRegistryAssetIdMerkleMetadata {
+    type Key = DenseMetadataKey<RegistryKey>;
+    type OwnedKey = Self::Key;
+    type Value = DenseMerkleMetadata;
+    type OwnedValue = Self::Value;
+}
+
+impl TableWithBlueprint for TemporalRegistryAssetIdMerkleMetadata {
+    type Blueprint = Plain<Postcard, Postcard>;
+    type Column = Column;
+
+    fn column() -> Column {
+        Column::DaCompressionTemporalAssetIdMerkleMetadata
+    }
+}
 
 /// Encoder for the V2 version of the DaCompressionTemporalRegistry for AssetId.
 pub struct DaCompressionTemporalRegistryAssetIdV2Encoder;
@@ -42,6 +76,9 @@ impl fuel_core_storage::codec::Encode<AssetId>
         *Borrow::<[u8; Bytes32::LEN]>::borrow(value)
     }
 }
+
+/// V2 table for storing AssetId with Merklized encoding.
+pub struct DaCompressionTemporalRegistryAssetIdV2;
 
 impl Mappable for DaCompressionTemporalRegistryAssetIdV2 {
     type Key = Self::OwnedKey;
@@ -61,43 +98,6 @@ impl TableWithBlueprint for DaCompressionTemporalRegistryAssetIdV2 {
     type Column = Column;
     fn column() -> Self::Column {
         Self::Column::DaCompressionTemporalRegistryAssetIdV2
-    }
-}
-
-pub struct TemporalRegistryAssetIdMerkleData;
-
-impl Mappable for TemporalRegistryAssetIdMerkleData {
-    type Key = u64;
-    type OwnedKey = Self::Key;
-    type Value = binary::Primitive;
-    type OwnedValue = Self::Value;
-}
-
-/// The metadata table for [`TemporalRegistryAssetIdMerkleData`] table.
-pub struct TemporalRegistryAssetIdMerkleMetadata;
-
-impl Mappable for TemporalRegistryAssetIdMerkleMetadata {
-    type Key = DenseMetadataKey<RegistryKey>;
-    type OwnedKey = Self::Key;
-    type Value = DenseMerkleMetadata;
-    type OwnedValue = Self::Value;
-}
-
-impl TableWithBlueprint for TemporalRegistryAssetIdMerkleData {
-    type Blueprint = Plain<Primitive<8>, Postcard>;
-    type Column = Column;
-
-    fn column() -> Column {
-        Column::DaCompressionTemporalAssetIdMerkleData
-    }
-}
-
-impl TableWithBlueprint for TemporalRegistryAssetIdMerkleMetadata {
-    type Blueprint = Plain<Postcard, Postcard>;
-    type Column = Column;
-
-    fn column() -> Column {
-        Column::DaCompressionTemporalAssetIdMerkleMetadata
     }
 }
 
