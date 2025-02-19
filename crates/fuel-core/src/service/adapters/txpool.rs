@@ -227,8 +227,8 @@ const _: () = {
 
         fn process_insertion_result(
             &self,
-            from_peer_info: Option<GossipsubMessageInfo>,
-            result: Result<Arc<Transaction>, fuel_core_txpool::error::Error>,
+            _from_peer_info: Option<GossipsubMessageInfo>,
+            _result: Result<Arc<Transaction>, fuel_core_txpool::error::Error>,
         ) {
         }
     }
