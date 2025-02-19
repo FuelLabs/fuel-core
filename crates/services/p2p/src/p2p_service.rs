@@ -1774,9 +1774,13 @@ mod tests {
                                     panic!("Wrong GossipsubMessage")
                                 }
                             }
-                        GossipsubMessage::Confirmations(_) => {
-                            unimplemented!()
-                            }}
+                            GossipsubMessage::Confirmations(confirmations) => {
+                                if confirmations != &TxConfirmations::default_test_tx() {
+                                    tracing::error!("Wrong p2p message {:?}", message);
+                                    panic!("Wrong GossipsubMessage")
+                                }
+                            }
+                        }
 
                         // Node B received the correct message
                         // If we try to publish it again we will get `PublishError::Duplicate`

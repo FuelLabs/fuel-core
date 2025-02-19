@@ -76,7 +76,7 @@ pub type TransactionGossipData = GossipData<Transaction>;
 pub type ConfirmationsGossipData = GossipData<TxConfirmations>;
 
 /// List of transactions that have been confirmed with block producer's signature
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct TxConfirmations {
     signature: String,
     txs: Vec<Transaction>,
