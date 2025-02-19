@@ -1538,13 +1538,32 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn gossipsub_broadcast_tx_with_reject() {
+    async fn gossipsub_broadcast_tx_with_reject__new_tx() {
         for _ in 0..100 {
             tokio::time::timeout(
                 Duration::from_secs(5),
                 gossipsub_broadcast(
                     GossipsubBroadcastRequest::NewTx(Arc::new(
                         Transaction::default_test_tx(),
+                    )),
+                    GossipsubMessageAcceptance::Reject,
+                    None,
+                ),
+            )
+            .await
+            .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn gossipsub_broadcast_tx_with_reject__tx_confirmations() {
+        for _ in 0..100 {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                gossipsub_broadcast(
+                    GossipsubBroadcastRequest::Confirmations(Arc::new(
+                        TxConfirmations::default_test_tx(),
                     )),
                     GossipsubMessageAcceptance::Reject,
                     None,
