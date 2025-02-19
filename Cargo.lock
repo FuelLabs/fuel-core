@@ -11560,3 +11560,38 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "fuel-asm"
+version = "0.59.1"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=master#f8fe20c7f97b442778e85fa0ad539f80a66adc71"
+
+[[patch.unused]]
+name = "fuel-crypto"
+version = "0.59.1"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=master#f8fe20c7f97b442778e85fa0ad539f80a66adc71"
+
+[[patch.unused]]
+name = "fuel-merkle"
+version = "0.59.1"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=master#f8fe20c7f97b442778e85fa0ad539f80a66adc71"
+
+[[patch.unused]]
+name = "fuel-storage"
+version = "0.59.1"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=master#f8fe20c7f97b442778e85fa0ad539f80a66adc71"
+
+[[patch.unused]]
+name = "fuel-tx"
+version = "0.59.1"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=master#f8fe20c7f97b442778e85fa0ad539f80a66adc71"
+
+[[patch.unused]]
+name = "fuel-types"
+version = "0.59.1"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=master#f8fe20c7f97b442778e85fa0ad539f80a66adc71"
+
+[[patch.unused]]
+name = "fuel-vm"
+version = "0.59.1"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=master#f8fe20c7f97b442778e85fa0ad539f80a66adc71"
