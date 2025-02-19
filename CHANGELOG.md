@@ -4,25 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
-
-### Breaking
-- [2648](https://github.com/FuelLabs/fuel-core/pull/2648): Add feature-flagged field to block header `fault_proving_header` that contains a commitment to all transaction ids.
-- [2678](https://github.com/FuelLabs/fuel-core/pull/2678): Removed public accessors for `BlockHeader` fields and replaced with methods instead, moved `tx_id_commitment` to the application header of `BlockHeaderV2`.
-
-### Added
-- [2150](https://github.com/FuelLabs/fuel-core/pull/2150): Upgraded `libp2p` to `0.54.1` and introduced `ConnectionLimiter` to limit pending incoming/outgoing connections.
-- [2491](https://github.com/FuelLabs/fuel-core/pull/2491): Storage read replays of historical blocks for execution tracing. Only available behind `--historical-execution` flag.
-- [2666](https://github.com/FuelLabs/fuel-core/pull/2666): Added two new CLI arguments to control the GraphQL queries consistency: `--graphql-block-height-tolerance` (default: `10`) and `--graphql-block-height-min-timeout` (default: `30s`). If a request requires a specific block height and the node is slightly behind, it will wait instead of failing.
-- [2722](https://github.com/FuelLabs/fuel-core/pull/2722): Service definition for state root service.
-
-### Fixed
-- [2646](https://github.com/FuelLabs/fuel-core/pull/2646): Improved performance of fetching block height by caching it when the view is created.
-
-### Changed
-- [2473](https://github.com/FuelLabs/fuel-core/pull/2473): Graphql requests and responses make use of a new `extensions` object to specify request/response metadata. A request `extensions` object can contain an integer-valued `required_fuel_block_height` field. When specified, the request will return an error unless the node's current fuel block height is at least the value specified in the `required_fuel_block_height` field. All graphql responses now contain an integer-valued `current_fuel_block_height` field in the `extensions` object, which contains the block height of the last block processed by the node.
-- [2653](https://github.com/FuelLabs/fuel-core/pull/2653): Added cleaner error for wasm-executor upon failed deserialization.
-- [2705](https://github.com/FuelLabs/fuel-core/pull/2705): Update the default value for `--max-block-size` and `--max-transmit-size` to 50 MB
+## [Unreleased (see .changes folder)]
 
 ## [Version 0.41.7]
 
