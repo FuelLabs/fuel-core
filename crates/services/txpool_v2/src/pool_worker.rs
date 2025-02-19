@@ -356,9 +356,13 @@ where
                 if let Some(channel) = response_channel {
                     let _ = channel.send(Err(error.clone()));
                 }
-                if let Err(e) = self
-                    .notification_sender
-                    .send(PoolNotification::ErrorInsertion { tx_id, from_peer_info, error })
+                if let Err(e) =
+                    self.notification_sender
+                        .send(PoolNotification::ErrorInsertion {
+                            tx_id,
+                            from_peer_info,
+                            error,
+                        })
                 {
                     tracing::error!("Failed to send error insertion notification: {}", e);
                 }
