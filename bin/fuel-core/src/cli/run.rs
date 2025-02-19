@@ -608,6 +608,7 @@ impl Command {
                     get_peers: graphql.costs.get_peers,
                     estimate_predicates: graphql.costs.estimate_predicates,
                     dry_run: graphql.costs.dry_run,
+                    storage_read_replay: graphql.costs.storage_read_replay,
                     submit: graphql.costs.submit,
                     submit_and_await: graphql.costs.submit_and_await,
                     status_change: graphql.costs.status_change,
@@ -625,6 +626,11 @@ impl Command {
                         .state_transition_bytecode_read,
                     da_compressed_block_read: graphql.costs.da_compressed_block_read,
                 },
+                required_fuel_block_height_tolerance: graphql
+                    .required_fuel_block_height_tolerance,
+                required_fuel_block_height_timeout: graphql
+                    .required_fuel_block_height_timeout
+                    .into(),
             },
             combined_db_config,
             snapshot_reader,

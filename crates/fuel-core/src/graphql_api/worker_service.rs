@@ -1,6 +1,7 @@
 use self::indexation::error::IndexationError;
 
 use super::{
+    block_height_subscription,
     da_compression::da_compress_block,
     indexation,
     storage::old::{
@@ -40,7 +41,6 @@ use crate::{
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
     stream::BoxStream,
-    EmptyShared,
     RunnableService,
     RunnableTask,
     ServiceRunner,
@@ -108,7 +108,6 @@ use std::{
     borrow::Cow,
     ops::Deref,
 };
-
 #[cfg(test)]
 mod tests;
 
@@ -129,6 +128,7 @@ pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
     on_chain_database: OnChain,
     off_chain_database: OffChain,
     base_asset_id: AssetId,
+    block_height_subscription_handler: block_height_subscription::Handler,
 }
 
 /// The off-chain GraphQL API worker task processes the imported blocks
@@ -144,6 +144,7 @@ pub struct Task<TxPool, D> {
     coins_to_spend_indexation_enabled: bool,
     asset_metadata_indexation_enabled: bool,
     base_asset_id: AssetId,
+    block_height_subscription_handler: block_height_subscription::Handler,
 }
 
 impl<TxPool, D> Task<TxPool, D>
@@ -199,6 +200,12 @@ where
             let status = from_executor_to_status(block, status.result.clone());
             self.tx_pool.send_complete(tx_id, height, status);
         }
+
+        // Notify subscribers and update last seen block height
+        self.block_height_subscription_handler
+            .notify_and_update(*height);
+        // Get all the subscribers that need to be notified that the block height
+        // has been reached.
 
         // update the importer metrics after the block is successfully committed
         graphql_metrics().total_txs_count.set(total_tx_count as i64);
@@ -549,12 +556,12 @@ where
     OffChain: ports::worker::OffChainDatabase,
 {
     const NAME: &'static str = "GraphQL_Off_Chain_Worker";
-    type SharedData = EmptyShared;
+    type SharedData = block_height_subscription::Subscriber;
     type Task = Task<TxPool, OffChain>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        EmptyShared
+        self.block_height_subscription_handler.subscribe()
     }
 
     async fn into_task(
@@ -597,6 +604,7 @@ where
             off_chain_database,
             continue_on_error,
             base_asset_id,
+            block_height_subscription_handler,
         } = self;
 
         let mut task = Task {
@@ -610,6 +618,7 @@ where
             coins_to_spend_indexation_enabled,
             asset_metadata_indexation_enabled,
             base_asset_id,
+            block_height_subscription_handler,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;
@@ -727,14 +736,16 @@ pub fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
     consensus_parameters: &ConsensusParameters,
-) -> ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>
+) -> anyhow::Result<ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>>
 where
     TxPool: ports::worker::TxPool,
     OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
     BlockImporter: ports::worker::BlockImporter,
 {
-    ServiceRunner::new(InitializeTask {
+    let off_chain_block_height = off_chain_database.latest_height()?.unwrap_or_default();
+
+    let service = ServiceRunner::new(InitializeTask {
         tx_pool,
         blocks_events: block_importer.block_events(),
         block_importer,
@@ -744,5 +755,10 @@ where
         da_compression_config,
         continue_on_error,
         base_asset_id: *consensus_parameters.base_asset_id(),
-    })
+        block_height_subscription_handler: block_height_subscription::Handler::new(
+            off_chain_block_height,
+        ),
+    });
+
+    Ok(service)
 }

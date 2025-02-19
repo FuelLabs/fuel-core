@@ -251,6 +251,10 @@ impl BlockProducerDatabase for MockDb {
             .ok_or(not_found!("Didn't find block for test"))
     }
 
+    fn get_full_block(&self, _height: &BlockHeight) -> StorageResult<Block> {
+        unimplemented!("Not used by tests");
+    }
+
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
         Ok(Bytes32::new(
             [u8::try_from(*height.deref()).expect("Test use small values"); 32],

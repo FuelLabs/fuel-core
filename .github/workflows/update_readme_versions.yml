@@ -93,8 +93,8 @@ jobs:
 
         # Proceed with PR creation
         echo "Creating PR..."
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
+        git config user.name 'github-actions[bot]'
+        git config user.email 'github-actions[bot]@users.noreply.github.com'
 
         branch_name="version-update-$(date +%s)"
         git checkout -b "$branch_name"
@@ -113,7 +113,6 @@ jobs:
           - Fuel Ignition: ${{ steps.get-versions.outputs.ignition_version }}
           - Testnet: ${{ steps.get-versions.outputs.testnet_version }}
           - Devnet: ${{ steps.get-versions.outputs.devnet_version }}" \
-          --reviewer FuelLabs/client \
           --base master \
           --head "$branch_name"
       env:
