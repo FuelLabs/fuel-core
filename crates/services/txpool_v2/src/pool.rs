@@ -631,12 +631,3 @@ where
     /// Protects the pool from modifications while this type is active.
     _guard: &'a S,
 }
-
-// impl<'a, S> CanStoreTransaction<'a, S>
-// where
-//     S: Storage,
-// {
-//     pub fn into_transaction(self) -> ArcPoolTx {
-//         self.checked_transaction.into_tx()
-//     }
-// }

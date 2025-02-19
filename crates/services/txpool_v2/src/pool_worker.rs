@@ -11,6 +11,7 @@ use fuel_core_types::{
     },
 };
 use std::{
+    ops::Deref,
     sync::Arc,
     time::SystemTime,
 };
@@ -161,19 +162,20 @@ pub enum ThreadManagementRequest {
     Stop,
 }
 
-// In the real code we want to have more different channels to prioritise each type of query
-// We are only prioritising this one for bench for now
-// The order would probably be :
-// 1. Getting txs for a block
-// 2. Inserting txs
-// 3. Removing txs / removing coins depedents ...
-// 4. Read API/P2P...
+#[allow(clippy::upper_case_acronyms)]
+pub enum InsertionSource {
+    P2P {
+        from_peer_info: GossipsubMessageInfo,
+    },
+    RPC {
+        response_channel: Option<oneshot::Sender<Result<(), Error>>>,
+    },
+}
+
 pub enum PoolInsertRequest {
     Insert {
         tx: ArcPoolTx,
-        tx_for_p2p: Arc<Transaction>,
-        from_peer_info: Option<GossipsubMessageInfo>,
-        response_channel: Option<oneshot::Sender<Result<(), Error>>>,
+        source: InsertionSource,
     },
 }
 
@@ -208,18 +210,28 @@ pub enum PoolReadRequest {
     },
 }
 
+#[allow(clippy::upper_case_acronyms)]
+pub enum ExtendedInsertionSource {
+    P2P {
+        from_peer_info: GossipsubMessageInfo,
+    },
+    RPC {
+        tx: Arc<Transaction>,
+        response_channel: Option<oneshot::Sender<Result<(), Error>>>,
+    },
+}
+
 pub enum PoolNotification {
     Inserted {
         tx_id: TxId,
         time: SystemTime,
         expiration: BlockHeight,
-        from_peer_info: Option<GossipsubMessageInfo>,
-        tx: Arc<Transaction>,
+        source: ExtendedInsertionSource,
     },
     ErrorInsertion {
         tx_id: TxId,
         error: Error,
-        from_peer_info: Option<GossipsubMessageInfo>,
+        source: InsertionSource,
     },
     Removed {
         tx_id: TxId,
@@ -296,25 +308,17 @@ where
                 for insert in read_buffer {
                     let PoolInsertRequest::Insert {
                         tx,
-                        tx_for_p2p,
-                        from_peer_info,
-                        response_channel,
+                        source,
                     } = insert;
 
-                    self.insert(tx, tx_for_p2p, from_peer_info, response_channel);
+                    self.insert(tx, source);
                 }
             }
         }
         false
     }
 
-    fn insert(
-        &mut self,
-        tx: ArcPoolTx,
-        tx_for_p2p: Arc<Transaction>,
-        from_peer_info: Option<GossipsubMessageInfo>,
-        response_channel: Option<oneshot::Sender<Result<(), Error>>>,
-    ) {
+    fn insert(&mut self, tx: ArcPoolTx, source: InsertionSource) {
         let tx_id = tx.id();
         let expiration = tx.expiration();
         let result = self.view_provider.latest_view();
@@ -325,13 +329,31 @@ where
 
         match res {
             Ok(removed_txs) => {
+                let extended_source = match source {
+                    InsertionSource::P2P { from_peer_info } => {
+                        ExtendedInsertionSource::P2P { from_peer_info }
+                    }
+                    InsertionSource::RPC { response_channel } => {
+                        let tx: Transaction = self
+                            .pool
+                            .find_one(&tx_id)
+                            .expect("Transaction was inserted above; qed")
+                            .transaction
+                            .deref()
+                            .into();
+
+                        ExtendedInsertionSource::RPC {
+                            tx: Arc::new(tx),
+                            response_channel,
+                        }
+                    }
+                };
                 if let Err(e) =
                     self.notification_sender.send(PoolNotification::Inserted {
                         tx_id,
-                        from_peer_info,
                         expiration,
                         time: SystemTime::now(),
-                        tx: tx_for_p2p,
+                        source: extended_source,
                     })
                 {
                     tracing::error!("Failed to send inserted notification: {}", e);
@@ -348,19 +370,13 @@ where
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
                 }
-                if let Some(channel) = response_channel {
-                    let _ = channel.send(Ok(()));
-                }
             }
             Err(error) => {
-                if let Some(channel) = response_channel {
-                    let _ = channel.send(Err(error.clone()));
-                }
                 if let Err(e) =
                     self.notification_sender
                         .send(PoolNotification::ErrorInsertion {
                             tx_id,
-                            from_peer_info,
+                            source,
                             error,
                         })
                 {

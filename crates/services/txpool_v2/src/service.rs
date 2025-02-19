@@ -10,6 +10,10 @@ use crate::{
 };
 use fuel_core_services::TaskNextAction;
 
+use crate::pool_worker::{
+    ExtendedInsertionSource,
+    InsertionSource,
+};
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
     seqlock::{
@@ -237,7 +241,6 @@ where
             biased;
 
             _ = watcher.while_started() => {
-                self.pool_worker.stop();
                 TaskNextAction::Stop
             }
 
@@ -246,7 +249,6 @@ where
                     self.import_block(result);
                     TaskNextAction::Continue
                 } else {
-                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -261,7 +263,6 @@ where
                     self.process_notification(notification);
                     TaskNextAction::Continue
                 } else {
-                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -282,7 +283,6 @@ where
                     }
                     TaskNextAction::Continue
                 } else {
-                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -292,7 +292,6 @@ where
                     self.manage_new_peer_subscribed(peer_id);
                     TaskNextAction::Continue
                 } else {
-                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -302,7 +301,6 @@ where
                     self.process_read(read_pool_request);
                     TaskNextAction::Continue
                 } else {
-                    self.pool_worker.stop();
                     TaskNextAction::Stop
                 }
             }
@@ -387,17 +385,28 @@ where
                 tx_id,
                 time,
                 expiration,
-                from_peer_info,
-                tx,
+                source,
             } => {
-                if let Some(from_peer_info) = from_peer_info {
-                    let _ = self.p2p.notify_gossip_transaction_validity(
-                        from_peer_info,
-                        GossipsubMessageAcceptance::Accept,
-                    );
-                } else if let Err(e) = self.p2p.broadcast_transaction(tx) {
-                    tracing::error!("Failed to broadcast transaction: {}", e);
+                match source {
+                    ExtendedInsertionSource::P2P { from_peer_info } => {
+                        let _ = self.p2p.notify_gossip_transaction_validity(
+                            from_peer_info,
+                            GossipsubMessageAcceptance::Accept,
+                        );
+                    }
+                    ExtendedInsertionSource::RPC {
+                        response_channel,
+                        tx,
+                    } => {
+                        if let Some(channel) = response_channel {
+                            let _ = channel.send(Ok(()));
+                        }
+                        if let Err(e) = self.p2p.broadcast_transaction(tx) {
+                            tracing::error!("Failed to broadcast transaction: {}", e);
+                        }
+                    }
                 }
+
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
 
                 let duration = time
@@ -421,14 +430,22 @@ where
             PoolNotification::ErrorInsertion {
                 tx_id,
                 error,
-                from_peer_info,
+                source,
             } => {
-                if let Some(from_peer_info) = from_peer_info {
-                    let _ = self.p2p.notify_gossip_transaction_validity(
-                        from_peer_info,
-                        GossipsubMessageAcceptance::Reject,
-                    );
+                match source {
+                    InsertionSource::P2P { from_peer_info } => {
+                        let _ = self.p2p.notify_gossip_transaction_validity(
+                            from_peer_info,
+                            GossipsubMessageAcceptance::Reject,
+                        );
+                    }
+                    InsertionSource::RPC { response_channel } => {
+                        if let Some(channel) = response_channel {
+                            let _ = channel.send(Err(error.clone()));
+                        }
+                    }
                 }
+
                 self.shared_state
                     .tx_status_sender
                     .send_squeezed_out(tx_id, error);
@@ -478,7 +495,6 @@ where
         let insert_transaction_thread_pool_op = move || {
             let current_height = current_height_reader.read();
 
-            let tx_clone = Arc::clone(&transaction);
             // TODO: This should be removed if the checked transactions
             //  can work with Arc in it
             //  (see https://github.com/FuelLabs/fuel-vm/issues/831)
@@ -505,8 +521,7 @@ where
 
                     if let Some(from_peer_info) = from_peer_info {
                         match err {
-                            fuel_core_txpool::error::Error::ConsensusValidity(_)
-                            | fuel_core_txpool::error::Error::MintIsDisallowed => {
+                            Error::ConsensusValidity(_) | Error::MintIsDisallowed => {
                                 let _ = p2p.notify_gossip_transaction_validity(
                                     from_peer_info,
                                     GossipsubMessageAcceptance::Reject,
@@ -525,14 +540,16 @@ where
                 }
             };
 
+            let source = if let Some(from_peer_info) = from_peer_info {
+                InsertionSource::P2P { from_peer_info }
+            } else {
+                InsertionSource::RPC { response_channel }
+            };
             let tx = Arc::new(checked_tx);
-            // We don't use the `insert` from `PoolWorkerInterface` because we don't want to make the whole object cloneable
-            if let Err(e) = pool_insert_request_sender.send(PoolInsertRequest::Insert {
-                tx,
-                tx_for_p2p: tx_clone,
-                from_peer_info,
-                response_channel,
-            }) {
+
+            if let Err(e) =
+                pool_insert_request_sender.send(PoolInsertRequest::Insert { tx, source })
+            {
                 tracing::error!("Failed to send the insert request: {}", e);
             }
         };
