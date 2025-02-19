@@ -224,6 +224,13 @@ const _: () = {
         ) -> anyhow::Result<Vec<Option<Transaction>>> {
             Ok(vec![])
         }
+
+        fn process_insertion_result(
+            &self,
+            from_peer_info: Option<GossipsubMessageInfo>,
+            result: Result<Arc<Transaction>, fuel_core_txpool::error::Error>,
+        ) {
+        }
     }
 };
 
