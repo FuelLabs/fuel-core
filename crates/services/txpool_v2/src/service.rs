@@ -255,15 +255,6 @@ where
                 TaskNextAction::Continue
             }
 
-            write_pool_request = self.subscriptions.write_pool.recv() => {
-                if let Some(write_pool_request) = write_pool_request {
-                    self.process_write(write_pool_request);
-                    TaskNextAction::Continue
-                } else {
-                    TaskNextAction::Continue
-                }
-            }
-
             pool_notification = self.pool_worker.notification_receiver.recv() => {
                 if let Some(notification) = pool_notification {
                     self.process_notification(notification);
@@ -271,6 +262,15 @@ where
                 } else {
                     self.pool_worker.stop();
                     TaskNextAction::Stop
+                }
+            }
+
+            write_pool_request = self.subscriptions.write_pool.recv() => {
+                if let Some(write_pool_request) = write_pool_request {
+                    self.process_write(write_pool_request);
+                    TaskNextAction::Continue
+                } else {
+                    TaskNextAction::Continue
                 }
             }
 
@@ -385,13 +385,13 @@ where
                 tx_id,
                 time,
                 expiration,
-                from_peer_info,
-                tx,
+                from_peer_info: _,
+                tx: _,
             } => {
-                self.p2p.process_insertion_result(
-                    from_peer_info,
-                    &Ok(Arc::unwrap_or_clone(tx)),
-                );
+                // self.p2p.process_insertion_result(
+                //     from_peer_info,
+                //     &Ok(Arc::unwrap_or_clone(tx)),
+                // );
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
 
                 let duration = time

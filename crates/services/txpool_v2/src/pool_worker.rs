@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::TxId,
