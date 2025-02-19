@@ -910,10 +910,14 @@ mod tests {
         config::Config,
         gossipsub::{
             messages::{
+                GossipTopicTag,
                 GossipsubBroadcastRequest,
                 GossipsubMessage,
             },
-            topics::NEW_TX_GOSSIP_TOPIC,
+            topics::{
+                NEW_TX_GOSSIP_TOPIC,
+                TX_CONFIRMATIONS_GOSSIP_TOPIC,
+            },
         },
         p2p_service::FuelP2PEvent,
         peer_manager::PeerInfo,
@@ -945,6 +949,7 @@ mod tests {
             GossipsubMessageAcceptance,
             NetworkableTransactionPool,
             Transactions,
+            TxConfirmations,
         },
     };
     use futures::{
@@ -1482,13 +1487,40 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn gossipsub_broadcast_tx_with_accept() {
+    async fn gossipsub_broadcast_tx_with_accept__new_tx() {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .with_target(false)
+            .init();
         for _ in 0..100 {
             tokio::time::timeout(
                 Duration::from_secs(5),
                 gossipsub_broadcast(
                     GossipsubBroadcastRequest::NewTx(Arc::new(
                         Transaction::default_test_tx(),
+                    )),
+                    GossipsubMessageAcceptance::Accept,
+                    None,
+                ),
+            )
+            .await
+            .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn gossipsub_broadcast_tx_with_accept__tx_confirmations() {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .with_target(false)
+            .init();
+        for _ in 0..100 {
+            tokio::time::timeout(
+                Duration::from_secs(20),
+                gossipsub_broadcast(
+                    GossipsubBroadcastRequest::Confirmations(Arc::new(
+                        TxConfirmations::default_test_tx(),
                     )),
                     GossipsubMessageAcceptance::Accept,
                     None,
@@ -1650,16 +1682,23 @@ mod tests {
             p2p_config.max_gossipsub_peers_connected = connection_limit;
         }
 
-        let selected_topic: Sha256Topic = {
-            let topic = match broadcast_request {
-                GossipsubBroadcastRequest::NewTx(_) => NEW_TX_GOSSIP_TOPIC,
-                GossipsubBroadcastRequest::Confirmations(_) => {
-                    unimplemented!()
+        let (selected_topic, selected_tag): (Sha256Topic, GossipTopicTag) = {
+            let (topic, tag) = match broadcast_request {
+                GossipsubBroadcastRequest::NewTx(_) => {
+                    (NEW_TX_GOSSIP_TOPIC, GossipTopicTag::NewTx)
                 }
+                GossipsubBroadcastRequest::Confirmations(_) => (
+                    TX_CONFIRMATIONS_GOSSIP_TOPIC,
+                    GossipTopicTag::TxConfirmations,
+                ),
             };
 
-            Topic::new(format!("{}/{}", topic, p2p_config.network_name))
+            (
+                Topic::new(format!("{}/{}", topic, p2p_config.network_name)),
+                tag,
+            )
         };
+        tracing::info!("Selected Topic: {:?}", selected_topic);
 
         let mut message_sent = false;
 
@@ -1693,17 +1732,26 @@ mod tests {
 
             tokio::select! {
                 node_a_event = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::NewSubscription { peer_id, .. }) = &node_a_event {
-                        if peer_id == &node_b.local_peer_id {
-                            a_connected_to_b = true;
+                    if let Some(FuelP2PEvent::NewSubscription { peer_id, tag }) = &node_a_event {
+                        if tag != &selected_tag {
+                            tracing::info!("Wrong tag, expected: {:?}, actual: {:?}", selected_tag, tag);
+                        } else {
+                            if peer_id == &node_b.local_peer_id {
+                                a_connected_to_b = true;
+                            }
                         }
                     }
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::NewSubscription { peer_id, .. }) = &node_b_event {
-                        if peer_id == &node_c.local_peer_id {
-                            b_connected_to_c = true;
+                    if let Some(FuelP2PEvent::NewSubscription { peer_id,tag,  }) = &node_b_event {
+                        tracing::info!("New subscription for peer_id: {:?} with tag: {:?}", peer_id, tag);
+                        if tag != &selected_tag {
+                            tracing::info!("Wrong tag, expected: {:?}, actual: {:?}", selected_tag, tag);
+                        } else {
+                            if peer_id == &node_c.local_peer_id {
+                                b_connected_to_c = true;
+                            }
                         }
                     }
 

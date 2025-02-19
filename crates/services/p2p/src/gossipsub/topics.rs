@@ -41,6 +41,9 @@ impl GossipsubTopics {
     ) -> Option<GossipTopicTag> {
         match incoming_topic {
             hash if hash == &self.new_tx_topic => Some(GossipTopicTag::NewTx),
+            hash if hash == &self.tx_confirmations_topic => {
+                Some(GossipTopicTag::TxConfirmations)
+            }
             _ => None,
         }
     }

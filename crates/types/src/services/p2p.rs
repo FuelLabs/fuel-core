@@ -82,6 +82,17 @@ pub struct TxConfirmations {
     txs: Vec<Transaction>,
 }
 
+#[cfg(feature = "test-helpers")]
+impl TxConfirmations {
+    /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
+    pub fn default_test_tx() -> Self {
+        Self {
+            signature: "Not a real signature".to_string(),
+            txs: vec![Transaction::default_test_tx()],
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// The source of some network data.
 pub struct SourcePeer<T> {
