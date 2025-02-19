@@ -223,6 +223,8 @@ pub enum PoolNotification {
         tx: Arc<Transaction>,
     },
     ErrorInsertion {
+        tx_id: TxId,
+        error: Error,
         from_peer_info: Option<GossipsubMessageInfo>,
     },
     Removed {
@@ -372,18 +374,21 @@ where
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
                 }
+                if let Some(channel) = response_channel {
+                    let _ = channel.send(Ok(()));
+                }
             }
-            Err(_) => {
+            Err(error) => {
+                if let Some(channel) = response_channel {
+                    let _ = channel.send(Err(error.clone()));
+                }
                 if let Err(e) = self
                     .notification_sender
-                    .send(PoolNotification::ErrorInsertion { from_peer_info })
+                    .send(PoolNotification::ErrorInsertion { tx_id, from_peer_info, error })
                 {
                     tracing::error!("Failed to send error insertion notification: {}", e);
                 }
             }
-        }
-        if let Some(channel) = response_channel {
-            let _ = channel.send(Ok(()));
         }
     }
 
