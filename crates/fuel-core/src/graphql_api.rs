@@ -9,14 +9,15 @@ use std::{
 };
 
 pub mod api_service;
+pub(crate) mod block_height_subscription;
 pub mod da_compression;
 pub mod database;
 pub(crate) mod indexation;
 pub(crate) mod metrics_extension;
 pub mod ports;
+pub(crate) mod required_fuel_block_height_extension;
 pub mod storage;
 pub(crate) mod validation_extension;
-pub(crate) mod view_extension;
 pub mod worker_service;
 
 #[derive(Clone, Debug)]
@@ -24,6 +25,7 @@ pub struct Config {
     pub config: ServiceConfig,
     pub utxo_validation: bool,
     pub debug: bool,
+    pub historical_execution: bool,
     pub vm_backtrace: bool,
     pub max_tx: usize,
     pub max_gas: u64,
@@ -44,6 +46,12 @@ pub struct ServiceConfig {
     pub max_queries_directives: usize,
     pub max_concurrent_queries: usize,
     pub request_body_bytes_limit: usize,
+    /// Number of blocks that the node can be lagging behind the required fuel block height
+    /// before it will be considered out of sync.
+    pub required_fuel_block_height_tolerance: u32,
+    /// The time to wait before dropping the request if the node is lagging behind the required
+    /// fuel block height.
+    pub required_fuel_block_height_timeout: Duration,
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
     pub api_request_timeout: Duration,
@@ -58,6 +66,7 @@ pub struct Costs {
     pub get_peers: usize,
     pub estimate_predicates: usize,
     pub dry_run: usize,
+    pub storage_read_replay: usize,
     pub submit: usize,
     pub submit_and_await: usize,
     pub status_change: usize,
@@ -90,6 +99,7 @@ pub const DEFAULT_QUERY_COSTS: Costs = Costs {
     get_peers: 40001,
     estimate_predicates: 40001,
     dry_run: 12000,
+    storage_read_replay: 40001,
     submit: 40001,
     submit_and_await: 40001,
     status_change: 40001,

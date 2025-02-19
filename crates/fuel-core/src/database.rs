@@ -25,6 +25,7 @@ use crate::{
     },
 };
 use fuel_core_chain_config::TableEntry;
+pub use fuel_core_database::Error;
 use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
@@ -60,17 +61,12 @@ use itertools::Itertools;
 use std::{
     borrow::Cow,
     fmt::Debug,
+    io::Empty,
     sync::Arc,
 };
-
-pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
-use crate::database::database_description::{
-    gas_price::GasPriceDatabase,
-    indexation_availability,
-};
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
@@ -83,6 +79,13 @@ use crate::state::{
         DatabaseConfig,
         RocksDb,
     },
+};
+use crate::{
+    database::database_description::{
+        gas_price::GasPriceDatabase,
+        indexation_availability,
+    },
+    state::HeightType,
 };
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -126,10 +129,13 @@ where
 }
 
 pub type Database<Description = OnChain, Stage = RegularStage<Description>> =
-    GenericDatabase<DataSource<Description, Stage>>;
-pub type OnChainIterableKeyValueView = IterableKeyValueView<ColumnType<OnChain>>;
-pub type OffChainIterableKeyValueView = IterableKeyValueView<ColumnType<OffChain>>;
-pub type RelayerIterableKeyValueView = IterableKeyValueView<ColumnType<Relayer>>;
+    GenericDatabase<DataSource<Description, Stage>, Empty>;
+pub type OnChainIterableKeyValueView =
+    IterableKeyValueView<ColumnType<OnChain>, HeightType<OnChain>>;
+pub type OffChainIterableKeyValueView =
+    IterableKeyValueView<ColumnType<OffChain>, HeightType<OffChain>>;
+pub type RelayerIterableKeyValueView =
+    IterableKeyValueView<ColumnType<Relayer>, HeightType<Relayer>>;
 
 pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisStage>;
 
@@ -141,7 +147,9 @@ impl OnChainIterableKeyValueView {
     }
 
     pub fn latest_height(&self) -> StorageResult<BlockHeight> {
-        self.maybe_latest_height()?.ok_or(not_found!("BlockHeight"))
+        self.metadata()
+            .cloned()
+            .ok_or_else(|| not_found!("Metadata"))
     }
 
     pub fn latest_block(&self) -> StorageResult<CompressedBlock> {
@@ -176,7 +184,10 @@ where
     Description: DatabaseDescription,
 {
     pub fn new(data_source: DataSourceType<Description>) -> Self {
-        GenesisDatabase::from_storage(DataSource::new(data_source, GenesisStage))
+        GenesisDatabase::from_storage_and_metadata(
+            DataSource::new(data_source, GenesisStage),
+            None,
+        )
     }
 }
 
@@ -187,12 +198,15 @@ where
         StorageInspect<MetadataTable<Description>, Error = StorageError>,
 {
     pub fn new(data_source: DataSourceType<Description>) -> Self {
-        let mut database = Self::from_storage(DataSource::new(
-            data_source,
-            RegularStage {
-                height: SharedMutex::new(None),
-            },
-        ));
+        let mut database = Self::from_storage_and_metadata(
+            DataSource::new(
+                data_source,
+                RegularStage {
+                    height: SharedMutex::new(None),
+                },
+            ),
+            Some(Empty::default()),
+        );
         let height = database
             .latest_height_from_metadata()
             .expect("Failed to get latest height during creation of the database");
@@ -235,14 +249,14 @@ where
     ) -> core::result::Result<GenesisDatabase<Description>, GenesisDatabase<Description>>
     {
         if !self.stage.height.lock().is_some() {
-            Ok(GenesisDatabase::new(self.into_inner().data))
+            Ok(GenesisDatabase::new(self.into_inner().0.data))
         } else {
             tracing::warn!(
                 "Converting regular database into genesis, \
                 while height is already set for `{}`",
                 Description::name()
             );
-            Err(GenesisDatabase::new(self.into_inner().data))
+            Err(GenesisDatabase::new(self.into_inner().0.data))
         }
     }
 }
@@ -254,7 +268,10 @@ where
 {
     pub fn in_memory() -> Self {
         let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
-        Self::from_storage(DataSource::new(data, Stage::default()))
+        Self::from_storage_and_metadata(
+            DataSource::new(data, Stage::default()),
+            Some(Empty::default()),
+        )
     }
 
     #[cfg(feature = "rocksdb")]
@@ -267,7 +284,10 @@ where
         )?;
         let historical_db = HistoricalRocksDB::new(db, state_rewind_policy)?;
         let data = Arc::new(historical_db);
-        Ok(Self::from_storage(DataSource::new(data, Stage::default())))
+        Ok(Self::from_storage_and_metadata(
+            DataSource::new(data, Stage::default()),
+            None,
+        ))
     }
 }
 
@@ -323,16 +343,31 @@ where
 
         Ok(())
     }
+
+    fn latest_view_with_height(
+        &self,
+        height: Option<Description::Height>,
+    ) -> StorageResult<IterableKeyValueView<ColumnType<Description>, Description::Height>>
+    {
+        let view = self.inner_storage().data.latest_view()?;
+
+        let (view, _) = view.into_inner();
+        Ok(IterableKeyValueView::from_storage_and_metadata(
+            view, height,
+        ))
+    }
 }
 
 impl<Description> AtomicView for Database<Description>
 where
     Description: DatabaseDescription,
 {
-    type LatestView = IterableKeyValueView<ColumnType<Description>>;
+    type LatestView = IterableKeyValueView<ColumnType<Description>, Description::Height>;
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
-        self.inner_storage().data.latest_view()
+        let lock = self.inner_storage().stage.height.lock();
+        let view = self.latest_view_with_height(*lock)?;
+        Ok(view)
     }
 }
 
@@ -341,7 +376,7 @@ where
     Description: DatabaseDescription,
 {
     type Height = Description::Height;
-    type ViewAtHeight = KeyValueView<ColumnType<Description>>;
+    type ViewAtHeight = KeyValueView<ColumnType<Description>, Description::Height>;
 
     fn latest_height(&self) -> Option<Self::Height> {
         *self.inner_storage().stage.height.lock()
@@ -351,9 +386,15 @@ where
         let lock = self.inner_storage().stage.height.lock();
 
         match *lock {
-            None => return self.latest_view().map(|view| view.into_key_value_view()),
+            None => {
+                return self
+                    .latest_view_with_height(None)
+                    .map(|view| view.into_key_value_view())
+            }
             Some(current_height) if &current_height == height => {
-                return self.latest_view().map(|view| view.into_key_value_view())
+                return self
+                    .latest_view_with_height(Some(current_height))
+                    .map(|view| view.into_key_value_view())
             }
             _ => {}
         };

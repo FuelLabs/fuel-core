@@ -175,7 +175,7 @@ async fn dry_run_override_utxo_validation() {
 
     let tx_statuses = context
         .client
-        .dry_run_opt(&[tx], Some(false), None)
+        .dry_run_opt(&[tx], Some(false), None, None)
         .await
         .unwrap();
     let log = tx_statuses
@@ -226,7 +226,7 @@ async fn dry_run_no_utxo_validation_override() {
     let client = TestSetupBuilder::new(2322).finalize().await.client;
 
     // verify that the client validated the inputs and failed the tx
-    let res = client.dry_run_opt(&[tx], None, None).await;
+    let res = client.dry_run_opt(&[tx], None, None, None).await;
     assert!(res.is_err());
 }
 

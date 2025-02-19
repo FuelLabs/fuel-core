@@ -636,6 +636,11 @@ impl Instance<InputData> {
             .expect("Memory was initialized above; qed");
         let slice = &memory.data(&self.store)[ptr..ptr.saturating_add(len)];
 
-        postcard::from_bytes(slice).map_err(|e| anyhow::anyhow!(e))
+        postcard::from_bytes(slice).map_err(|e| {
+          match e {
+              postcard::Error::SerdeDeCustom => anyhow::anyhow!(e).context("Error in Deserialization; check feature flags of wasm module during compilation"),
+              _ => anyhow::anyhow!(e).context("Error in Deserialization; fatal"),
+          }
+        })
     }
 }

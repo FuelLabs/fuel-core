@@ -320,14 +320,13 @@ async fn produce_block__dont_raises_gas_price_with_default_parameters() {
 
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
-    let base_asset_id = driver
+    let base_asset_id = *driver
         .client
         .consensus_parameters(0)
         .await
         .unwrap()
         .unwrap()
-        .base_asset_id()
-        .clone();
+        .base_asset_id();
 
     // when
     let arb_tx_count = 20;
@@ -456,7 +455,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
         total_gas,
         ..
     } = client
-        .dry_run_opt(&[tx.clone()], Some(false), None)
+        .dry_run_opt(&[tx.clone()], Some(false), None, None)
         .await
         .unwrap()
         .pop()
@@ -471,7 +470,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
         total_gas: total_gas_zero_gas_price,
         ..
     } = client
-        .dry_run_opt(&[tx], Some(false), Some(0))
+        .dry_run_opt(&[tx], Some(false), Some(0), None)
         .await
         .unwrap()
         .pop()
