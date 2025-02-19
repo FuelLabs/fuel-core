@@ -123,35 +123,35 @@ pub enum Column {
     AssetsInfo = 25,
     /// Index of the coins that are available to spend.
     CoinsToSpend = 26,
-    /// See [`DaCompressionTemporalRegistryAddressV2`](da_compression::v2::DaCompressionTemporalRegistryAddressV2)
+    /// See [`DaCompressionTemporalRegistryAddressV2`](da_compression::v2::address::DaCompressionTemporalRegistryAddressV2)
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalRegistryAddressV2 = 27,
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalAddressMerkleData = 28,
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalAddressMerkleMetadata = 29,
-    // See [`DaCompressionTemporalRegistryAssetIdV2`](da_compression::v2::DaCompressionTemporalRegistryAssetIdV2)
+    // See [`DaCompressionTemporalRegistryAssetIdV2`](da_compression::v2::asset_id::DaCompressionTemporalRegistryAssetIdV2)
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalRegistryAssetIdV2 = 30,
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalAssetIdMerkleData = 31,
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalAssetIdMerkleMetadata = 32,
-    /// See [`DaCompressionTemporalRegistryContractIdV2`](da_compression::v2::DaCompressionTemporalRegistryContractIdV2)
+    /// See [`DaCompressionTemporalRegistryContractIdV2`](da_compression::v2::contract_id::DaCompressionTemporalRegistryContractIdV2)
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalRegistryContractIdV2 = 33,
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalContractIdMerkleData = 34,
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalContractIdMerkleMetadata = 35,
-    /// See [`DaCompressionTemporalRegistryScriptCodeV2`](da_compression::v2::DaCompressionTemporalRegistryScriptCodeV2)
+    /// See [`DaCompressionTemporalRegistryScriptCodeV2`](da_compression::v2::script_code::DaCompressionTemporalRegistryScriptCodeV2)
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalRegistryScriptCodeV2 = 36,
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalScriptCodeMerkleData = 37,
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalScriptCodeMerkleMetadata = 38,
-    /// See [`DaCompressionTemporalRegistryPredicateCodeV2`](da_compression::v2::DaCompressionTemporalRegistryPredicateCodeV2)
+    /// See [`DaCompressionTemporalRegistryPredicateCodeV2`](da_compression::v2::predicate_code::DaCompressionTemporalRegistryPredicateCodeV2)
     #[cfg(feature = "fault-proving")]
     DaCompressionTemporalRegistryPredicateCodeV2 = 39,
     #[cfg(feature = "fault-proving")]
