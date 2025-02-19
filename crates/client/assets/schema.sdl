@@ -1162,15 +1162,15 @@ type StateTransitionPurpose {
 	root: Bytes32!
 }
 
-type StorageSlot {
-	key: Bytes32!
-	value: HexString!
-}
-
 type StorageReadReplayEvent {
 	column: U32!
 	key: HexString!
 	value: HexString
+}
+
+type StorageSlot {
+	key: Bytes32!
+	value: HexString!
 }
 
 
