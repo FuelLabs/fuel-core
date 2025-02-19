@@ -6,6 +6,7 @@ use super::scalars::{
 use crate::{
     fuel_core_graphql_api::{
         api_service::ConsensusModule,
+        block_height_subscription,
         database::ReadView,
         query_costs,
         Config as GraphQLConfig,
@@ -403,10 +404,13 @@ impl BlockMutation {
             .manually_produce_blocks(start_time, blocks_to_produce)
             .await?;
 
-        ctx.read_view()?
-            .latest_block_height()
-            .map(Into::into)
-            .map_err(Into::into)
+        let on_chain_height = ctx.read_view()?.latest_block_height()?;
+        let off_chain_subscriber =
+            ctx.data_unchecked::<block_height_subscription::Subscriber>();
+        off_chain_subscriber
+            .wait_for_block_height(on_chain_height)
+            .await?;
+        Ok(on_chain_height.into())
     }
 }
 

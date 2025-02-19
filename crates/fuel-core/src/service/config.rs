@@ -56,6 +56,7 @@ pub struct Config {
     pub debug: bool,
     /// When `true`:
     /// - Enables dry run in the past.
+    /// - Enables storage read replay for historical blocks.
     pub historical_execution: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
@@ -157,6 +158,8 @@ impl Config {
                 query_log_threshold_time: Duration::from_secs(2),
                 api_request_timeout: Duration::from_secs(60),
                 costs: Default::default(),
+                required_fuel_block_height_tolerance: 10,
+                required_fuel_block_height_timeout: Duration::from_secs(30),
             },
             combined_db_config,
             continue_on_error: false,

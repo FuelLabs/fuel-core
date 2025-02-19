@@ -943,6 +943,10 @@ type Query {
 	"""
 	allReceipts: [Receipt!]!
 	"""
+	Get execution trace for an already-executed block.
+	"""
+	storageReadReplay(height: U32!): [StorageReadReplayEvent!]!
+	"""
 	Returns true when the GraphQL API is serving requests.
 	"""
 	health: Boolean!
@@ -1154,6 +1158,12 @@ type StateTransitionBytecode {
 
 type StateTransitionPurpose {
 	root: Bytes32!
+}
+
+type StorageReadReplayEvent {
+	column: U32!
+	key: HexString!
+	value: HexString
 }
 
 

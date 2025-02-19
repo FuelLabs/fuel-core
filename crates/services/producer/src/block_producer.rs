@@ -17,6 +17,7 @@ use anyhow::{
 use fuel_core_storage::transactional::{
     AtomicView,
     Changes,
+    HistoricalView,
 };
 use fuel_core_types::{
     blockchain::{
@@ -42,6 +43,7 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -379,6 +381,33 @@ where
         } else {
             Ok(tx_statuses)
         }
+    }
+}
+
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+where
+    ViewProvider: HistoricalView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
+    Executor: ports::StorageReadReplayRecorder + 'static,
+    GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
+{
+    /// Re-executes an old block, getting the storage read events.
+    pub async fn storage_read_replay(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Vec<StorageReadReplayEvent>> {
+        let view = self.view_provider.latest_view()?;
+
+        let executor = self.executor.clone();
+
+        // use the blocking threadpool to avoid clogging up the main async runtime
+        tokio_rayon::spawn_fifo(move || {
+            let block = view.get_full_block(&height)?;
+            Ok(executor.storage_read_replay(&block)?)
+        })
+        .await
     }
 }
 
