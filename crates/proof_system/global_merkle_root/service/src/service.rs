@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use fuel_core_global_merkle_root_storage::update::UpdateMerkleizedTables;
 use fuel_core_services::{
     RunnableService,
@@ -16,38 +14,18 @@ use crate::ports::{
     ServiceStorage,
 };
 
-/// Service definition as a thin wrapper over `ServiceRunner`.
-pub struct Service<B, S>(ServiceRunner<UpdateMerkleRootTask<B, S>>)
-where
-    B: BlockStream + Send + 'static,
-    B::Error: std::error::Error + Send + Sync + 'static,
-    S: ServiceStorage + Send + 'static;
-
-impl<B, S> Service<B, S>
-where
-    B: BlockStream + Send + 'static,
-    B::Error: std::error::Error + Send + Sync + 'static,
-    S: ServiceStorage + Send + 'static,
-{
-    /// Construct a new service.
-    pub fn new(chain_id: ChainId, storage: S, blocks: B) -> Self {
-        Self(ServiceRunner::new(UpdateMerkleRootTask::new(
-            chain_id, storage, blocks,
-        )))
-    }
-}
-
-impl<B, S> Deref for Service<B, S>
+/// Instantiate a new service runner.
+pub fn new_service<B, S>(
+    chain_id: ChainId,
+    storage: S,
+    blocks: B,
+) -> ServiceRunner<UpdateMerkleRootTask<B, S>>
 where
     B: BlockStream + Send + 'static,
     B::Error: std::error::Error + Send + Sync + 'static,
     S: ServiceStorage + Send + 'static,
 {
-    type Target = ServiceRunner<UpdateMerkleRootTask<B, S>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+    ServiceRunner::new(UpdateMerkleRootTask::new(chain_id, storage, blocks))
 }
 
 /// The inner task definition. Holds the state of the service.

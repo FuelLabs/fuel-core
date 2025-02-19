@@ -2,6 +2,7 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use fuel_core_global_merkle_root_storage::ProcessedTransactions;
+use fuel_core_services::Service as _;
 use fuel_core_storage::{
     kv_store::{
         KeyValueInspect,
@@ -46,11 +47,9 @@ use tokio::sync::{
     watch,
 };
 
-use fuel_core_services::Service as _;
-
 use crate::{
     ports::BlockStream,
-    service::Service,
+    service,
 };
 
 #[tokio::test]
@@ -59,7 +58,7 @@ async fn service__should_return_appropriate_status_when_started_and_stopped() {
     let chain_id = ChainId::default();
     let storage = InMemoryStorage::default();
     let (_blocks_tx, blocks_rx) = mpsc::channel(128);
-    let service = Service::new(chain_id, storage, blocks_rx);
+    let service = service::new_service(chain_id, storage, blocks_rx);
 
     // When
     let started_status = service.start_and_await().await.unwrap();
@@ -79,7 +78,7 @@ async fn service__should_populate_storage_when_receiving_blocks() {
     let storage = SubscribableMemoryStorage::new();
     let mut storage_subscription = storage.subscribe();
     let (blocks_tx, blocks_rx) = mpsc::channel(128);
-    let service = Service::new(chain_id, storage, blocks_rx);
+    let service = service::new_service(chain_id, storage, blocks_rx);
 
     let blocks = [
         random_block(&mut rng, 0u32, 0u64),
