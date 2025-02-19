@@ -220,10 +220,12 @@ impl ConcreteStorage {
             .get_current_block()?
             .ok_or(not_found!("Block for VMDatabase"))?;
 
+        let application_header = block.header().as_empty_application_header();
+
         let vm_database = VmStorage::new(
             view.into_transaction(),
             block.header().consensus(),
-            block.header().application(),
+            &application_header,
             // TODO: Use a real coinbase address
             Default::default(),
         );

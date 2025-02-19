@@ -40,6 +40,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
+use fuel_core_metrics::gas_price_metrics::gas_price_metrics;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -48,7 +49,10 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::{
+    fuel_types::BlockHeight,
+    services::txpool::Metadata,
+};
 use fuel_gas_price_algorithm::{
     v0::AlgorithmUpdaterV0,
     v1::{
@@ -127,6 +131,8 @@ where
     latest_l2_block: Arc<AtomicU32>,
     /// Initial Recorded Height
     initial_recorded_height: Option<BlockHeight>,
+    /// Metrics will be recorded if true
+    record_metrics: bool,
 }
 
 impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
@@ -146,12 +152,12 @@ where
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn latest_l2_block(&self) -> &AtomicU32 {
         &self.latest_l2_block
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn initial_recorded_height(&self) -> Option<BlockHeight> {
         self.initial_recorded_height
     }
@@ -174,11 +180,11 @@ where
         tracing::debug!("Updating gas price algorithm");
         self.apply_block_info_to_gas_algorithm(block).await?;
 
-        self.notify_da_source_service_l2_block(block)?;
+        self.notify_da_source_service_l2_block(block);
         Ok(())
     }
 
-    fn notify_da_source_service_l2_block(&self, block: BlockInfo) -> anyhow::Result<()> {
+    fn notify_da_source_service_l2_block(&self, block: BlockInfo) {
         tracing::debug!("Notifying the Da source service of the latest L2 block");
         match block {
             BlockInfo::GenesisBlock => {}
@@ -186,7 +192,6 @@ where
                 self.latest_l2_block.store(height, Ordering::Release);
             }
         }
-        Ok(())
     }
 }
 
@@ -205,6 +210,7 @@ where
         storage_tx_provider: AtomicStorage,
         latest_l2_block: Arc<AtomicU32>,
         initial_recorded_height: Option<BlockHeight>,
+        record_metrics: bool,
     ) -> Self {
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
         Self {
@@ -218,6 +224,7 @@ where
             storage_tx_provider,
             latest_l2_block,
             initial_recorded_height,
+            record_metrics,
         }
     }
 
@@ -229,13 +236,13 @@ where
         self.shared_algo.clone()
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn storage_tx_provider(&self) -> &AtomicStorage {
         &self.storage_tx_provider
     }
 
-    async fn update(&mut self, new_algorithm: AlgorithmV1) {
-        self.shared_algo.update(new_algorithm).await;
+    fn update(&mut self, new_algorithm: AlgorithmV1) {
+        self.shared_algo.update(new_algorithm);
     }
 
     fn validate_block_gas_capacity(
@@ -252,17 +259,19 @@ where
         block_gas_capacity: u64,
         block_bytes: u64,
         block_fees: u64,
+        gas_price: u64,
     ) -> anyhow::Result<()> {
         let capacity = Self::validate_block_gas_capacity(block_gas_capacity)?;
         let mut storage_tx = self.storage_tx_provider.begin_transaction()?;
-        let mut new_recorded_height = match storage_tx
+        let (old_recorded_height, mut new_recorded_height) = match storage_tx
             .get_recorded_height()
             .map_err(|err| anyhow!(err))?
         {
-            Some(_) => None,
+            Some(old) => (Some(old), None),
             None => {
                 // Sets it on first run
-                self.initial_recorded_height.take()
+                let initial = self.initial_recorded_height.take();
+                (None, initial)
             }
         };
 
@@ -304,10 +313,59 @@ where
         AtomicStorage::commit_transaction(storage_tx)?;
         let new_algo = self.algorithm_updater.algorithm();
         tracing::debug!("Updating gas price: {}", &new_algo.calculate());
-        self.shared_algo.update(new_algo).await;
+        self.shared_algo.update(new_algo);
+        let best_recorded_height = new_recorded_height.or(old_recorded_height);
+        Self::record_metrics(&metadata, gas_price, best_recorded_height);
         // Clear the buffer after committing changes
         self.da_block_costs_buffer.clear();
         Ok(())
+    }
+
+    fn record_metrics(
+        metadata: &UpdaterMetadata,
+        gas_price: u64,
+        recorded_height: Option<BlockHeight>,
+    ) {
+        if let UpdaterMetadata::V1(v1_metadata) = metadata {
+            let metrics = gas_price_metrics();
+            let real_gas_price_i64 = gas_price.try_into().unwrap_or(i64::MAX);
+            let exec_gas_price_i64 = v1_metadata
+                .new_exec_gas_price()
+                .try_into()
+                .unwrap_or(i64::MAX);
+            let da_gas_price_i64 = v1_metadata
+                .new_da_gas_price()
+                .try_into()
+                .unwrap_or(i64::MAX);
+            let total_reward_i64 =
+                v1_metadata.total_da_rewards.try_into().unwrap_or(i64::MAX);
+            let total_known_costs_i64 = v1_metadata
+                .latest_known_total_da_cost
+                .try_into()
+                .unwrap_or(i64::MAX);
+            let predicted_profit_i64 =
+                v1_metadata.last_profit.try_into().unwrap_or(i64::MAX);
+            let unrecorded_bytes_i64 = v1_metadata
+                .unrecorded_block_bytes
+                .try_into()
+                .unwrap_or(i64::MAX);
+            let latest_cost_per_byte_i64 = v1_metadata
+                .latest_da_cost_per_byte
+                .try_into()
+                .unwrap_or(i64::MAX);
+            metrics.real_gas_price.set(real_gas_price_i64);
+            metrics.exec_gas_price.set(exec_gas_price_i64);
+            metrics.da_gas_price.set(da_gas_price_i64);
+            metrics.total_reward.set(total_reward_i64);
+            metrics.total_known_costs.set(total_known_costs_i64);
+            metrics.predicted_profit.set(predicted_profit_i64);
+            metrics.unrecorded_bytes.set(unrecorded_bytes_i64);
+            metrics.latest_cost_per_byte.set(latest_cost_per_byte_i64);
+            if let Some(height) = recorded_height {
+                let inner: u32 = height.into();
+                metrics.recorded_height.set(inner.into());
+            }
+        }
     }
 
     async fn apply_block_info_to_gas_algorithm(
@@ -321,7 +379,7 @@ where
                 tx.set_metadata(&metadata).map_err(|err| anyhow!(err))?;
                 AtomicStorage::commit_transaction(tx)?;
                 let new_algo = self.algorithm_updater.algorithm();
-                self.shared_algo.update(new_algo).await;
+                self.shared_algo.update(new_algo);
             }
             BlockInfo::Block {
                 height,
@@ -329,6 +387,7 @@ where
                 block_gas_capacity,
                 block_bytes,
                 block_fees,
+                gas_price,
                 ..
             } => {
                 self.handle_normal_block(
@@ -337,6 +396,7 @@ where
                     block_gas_capacity,
                     block_bytes,
                     block_fees,
+                    gas_price,
                 )
                 .await?;
             }
@@ -346,7 +406,6 @@ where
     }
 }
 
-#[async_trait]
 impl<L2, DA, AtomicStorage> RunnableTask for GasPriceServiceV1<L2, DA, AtomicStorage>
 where
     L2: L2BlockSource,
@@ -521,7 +580,6 @@ mod tests {
         l2_block: mpsc::Receiver<BlockInfo>,
     }
 
-    #[async_trait::async_trait]
     impl L2BlockSource for FakeL2BlockSource {
         async fn get_l2_block(&mut self) -> GasPriceResult<BlockInfo> {
             let block = self.l2_block.recv().await.unwrap();
@@ -599,6 +657,7 @@ mod tests {
             block_activity_threshold: 20,
             da_poll_interval: None,
             starting_recorded_height: None,
+            record_metrics: false,
         };
         let inner = database();
         let (algo_updater, shared_algo) = initialize_algorithm(
@@ -635,6 +694,7 @@ mod tests {
             inner,
             latest_l2_height,
             None,
+            false,
         );
         let read_algo = service.next_block_algorithm();
         let mut watcher = StateWatcher::default();
@@ -687,6 +747,7 @@ mod tests {
             block_activity_threshold: 20,
             da_poll_interval: None,
             starting_recorded_height: None,
+            record_metrics: false,
         };
         let mut inner = database();
         let mut tx = inner.write_transaction();
@@ -732,6 +793,7 @@ mod tests {
             inner,
             latest_l2_block,
             None,
+            false,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -768,6 +830,7 @@ mod tests {
             block_activity_threshold: 20,
             da_poll_interval: None,
             starting_recorded_height: None,
+            record_metrics: false,
         }
     }
 
@@ -837,6 +900,7 @@ mod tests {
             inner,
             latest_l2_height,
             None,
+            false,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -930,6 +994,7 @@ mod tests {
             inner,
             latest_l2_height,
             None,
+            false,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -973,6 +1038,7 @@ mod tests {
             block_activity_threshold: 20,
             da_poll_interval: None,
             starting_recorded_height: None,
+            record_metrics: false,
         }
     }
 
@@ -1112,6 +1178,7 @@ mod tests {
             atomic_storage,
             latest_l2_height,
             Some(expected_recorded_height),
+            false,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();

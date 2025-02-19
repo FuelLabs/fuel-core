@@ -134,9 +134,8 @@ where
             .unwrap_or(genesis_block_height)
             .into();
 
-        let gas_price_metadata_height = gas_metadata_height
-            .map(|x| x.into())
-            .unwrap_or(latest_block_height);
+        let gas_price_metadata_height =
+            gas_metadata_height.map_or(latest_block_height, std::convert::Into::into);
 
         let (algo_updater, shared_algo) = initialize_algorithm(
             &config,
@@ -186,11 +185,8 @@ where
             .into();
 
         let maybe_metadata_height = self.gas_metadata_height;
-        let metadata_height = if let Some(metadata_height) = maybe_metadata_height {
-            metadata_height.into()
-        } else {
-            latest_block_height
-        };
+        let metadata_height =
+            maybe_metadata_height.map_or(latest_block_height, std::convert::Into::into);
 
         let l2_block_source = FuelL2BlockSource::new(
             self.genesis_block_height,
@@ -200,21 +196,22 @@ where
 
         let starting_recorded_height = match self.gas_price_db.get_recorded_height()? {
             Some(height) => height,
-            None => match self.config.starting_recorded_height {
-                Some(height) => {
-                    tracing::debug!(
-                        "Using provided starting recorded height: {:?}",
-                        height
-                    );
-                    height
-                }
-                None => {
+            None => self.config.starting_recorded_height.map_or_else(
+                || {
                     tracing::debug!("No starting recorded height provided, defaulting to latest block height");
                     BlockHeight::from(latest_block_height)
-                }
-            },
+                },
+                |height| {
+                    tracing::debug!(
+                "Using provided starting recorded height: {:?}",
+                height
+            );
+                    height
+                },
+            ),
         };
 
+        let record_metrics = self.config.record_metrics;
         let poll_duration = self.config.da_poll_interval;
         let latest_l2_height = Arc::new(AtomicU32::new(latest_block_height));
 
@@ -237,6 +234,7 @@ where
                 self.gas_price_db,
                 Arc::clone(&latest_l2_height),
                 Some(starting_recorded_height),
+                record_metrics,
             );
             Ok(service)
         } else {
@@ -265,6 +263,7 @@ where
                 self.gas_price_db,
                 Arc::clone(&latest_l2_height),
                 Some(starting_recorded_height),
+                record_metrics,
             );
             Ok(service)
         }
@@ -295,7 +294,7 @@ where
         state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        UninitializedTask::init(self, state_watcher).await
+        Self::init(self, state_watcher).await
     }
 }
 
@@ -338,7 +337,7 @@ where
         let block = view
             .get_block(&height.into())?
             .ok_or(not_found!("FullBlock"))?;
-        let param_version = block.header().consensus_parameters_version;
+        let param_version = block.header().consensus_parameters_version();
 
         let GasPriceSettings {
             gas_price_factor,

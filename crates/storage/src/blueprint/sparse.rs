@@ -55,10 +55,10 @@ pub trait PrimaryKey {
     /// The storage key of the table.
     type InputKey: ?Sized;
     /// The extracted primary key.
-    type OutputKey: ?Sized;
+    type OutputKey: ?Sized + Copy;
 
     /// Converts the key of the table into the primary key of the metadata table.
-    fn primary_key(key: &Self::InputKey) -> &Self::OutputKey;
+    fn primary_key(key: &Self::InputKey) -> Cow<'_, Self::OutputKey>;
 }
 
 /// The `Sparse` blueprint builds the storage as a [`Plain`](super::plain::Plain)
@@ -103,7 +103,7 @@ where
         // Get latest metadata entry for this `primary_key`
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
-            .get(primary_key)?
+            .get(primary_key.as_ref())?
             .unwrap_or_default();
 
         let root = *prev_metadata.root();
@@ -119,7 +119,7 @@ where
         let metadata = SparseMerkleMetadata::new(root);
         storage
             .storage::<Metadata>()
-            .insert(primary_key, &metadata)?;
+            .insert(primary_key.as_ref(), &metadata)?;
         Ok(())
     }
 
@@ -137,7 +137,7 @@ where
         let primary_key = KeyConverter::primary_key(key);
         // Get latest metadata entry for this `primary_key`
         let prev_metadata: Option<Cow<SparseMerkleMetadata>> =
-            storage.storage::<Metadata>().get(primary_key)?;
+            storage.storage::<Metadata>().get(primary_key.as_ref())?;
 
         if let Some(prev_metadata) = prev_metadata {
             let root = *prev_metadata.root();
@@ -152,13 +152,13 @@ where
             let storage = tree.into_storage();
             if &root == MerkleTree::<Nodes, S>::empty_root() {
                 // The tree is now empty; remove the metadata
-                storage.storage::<Metadata>().remove(primary_key)?;
+                storage.storage::<Metadata>().remove(primary_key.as_ref())?;
             } else {
                 // Generate new metadata for the updated tree
                 let metadata = SparseMerkleMetadata::new(root);
                 storage
                     .storage::<Metadata>()
-                    .insert(primary_key, &metadata)?;
+                    .insert(primary_key.as_ref(), &metadata)?;
             }
         }
 
@@ -316,7 +316,10 @@ where
             return Ok(())
         }
 
-        if storage.storage::<Metadata>().contains_key(primary_key)? {
+        if storage
+            .storage::<Metadata>()
+            .contains_key(primary_key.as_ref())?
+        {
             return Err(anyhow::anyhow!(
                 "The {} is already initialized",
                 M::column().name()
@@ -357,7 +360,7 @@ where
         let metadata = SparseMerkleMetadata::new(root);
         storage
             .storage::<Metadata>()
-            .insert(primary_key, &metadata)?;
+            .insert(primary_key.as_ref(), &metadata)?;
 
         Ok(())
     }
@@ -383,7 +386,7 @@ where
 
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
-            .get(primary_key)?
+            .get(primary_key.as_ref())?
             .unwrap_or_default();
 
         let root = *prev_metadata.root();
@@ -416,7 +419,7 @@ where
         let metadata = SparseMerkleMetadata::new(root);
         storage
             .storage::<Metadata>()
-            .insert(primary_key, &metadata)?;
+            .insert(primary_key.as_ref(), &metadata)?;
 
         Ok(())
     }
@@ -441,7 +444,7 @@ where
 
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
-            .get(primary_key)?
+            .get(primary_key.as_ref())?
             .unwrap_or_default();
 
         let root = *prev_metadata.root();
@@ -468,13 +471,13 @@ where
 
         if &root == MerkleTree::<Nodes, S>::empty_root() {
             // The tree is now empty; remove the metadata
-            storage.storage::<Metadata>().remove(primary_key)?;
+            storage.storage::<Metadata>().remove(primary_key.as_ref())?;
         } else {
             // Generate new metadata for the updated tree
             let metadata = SparseMerkleMetadata::new(root);
             storage
                 .storage::<Metadata>()
-                .insert(primary_key, &metadata)?;
+                .insert(primary_key.as_ref(), &metadata)?;
         }
 
         Ok(())

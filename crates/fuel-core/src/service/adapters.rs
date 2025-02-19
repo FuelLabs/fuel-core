@@ -17,8 +17,13 @@ use fuel_core_consensus_module::{
     RelayerConsensusConfig,
 };
 use fuel_core_executor::executor::OnceTransactionsSource;
-use fuel_core_gas_price_service::v1::service::LatestGasPrice;
+use fuel_core_gas_price_service::{
+    common::cumulative_percentage_change,
+    v1::service::LatestGasPrice,
+};
 use fuel_core_importer::ImporterResult;
+// #[cfg(feature = "parallel-executor")]
+// use fuel_core_parallel_executor::executor::Executor;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
@@ -49,6 +54,7 @@ use fuel_core_types::{
     signer::SignMode,
     tai64::Tai64,
 };
+//#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
 
@@ -100,7 +106,7 @@ mod universal_gas_price_provider_tests {
     use super::*;
     use proptest::proptest;
 
-    async fn _worst_case__correctly_calculates_value(
+    fn _worst_case__correctly_calculates_value(
         gas_price: u64,
         starting_height: u32,
         block_horizon: u32,
@@ -112,10 +118,7 @@ mod universal_gas_price_provider_tests {
 
         // when
         let target_height = starting_height.saturating_add(block_horizon);
-        let estimated = subject
-            .worst_case_gas_price(target_height.into())
-            .await
-            .unwrap();
+        let estimated = subject.worst_case_gas_price(target_height.into()).unwrap();
 
         // then
         let mut actual = gas_price;
@@ -137,13 +140,12 @@ mod universal_gas_price_provider_tests {
             block_horizon in 0..10_000u32,
             percentage: u16,
         ) {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(_worst_case__correctly_calculates_value(
+            _worst_case__correctly_calculates_value(
                 gas_price,
                 starting_height,
                 block_horizon,
                 percentage,
-            ));
+            );
         }
     }
 
@@ -155,15 +157,13 @@ mod universal_gas_price_provider_tests {
             block_horizon in 0..10_000u32,
             percentage: u16
         ) {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-
             // given
             let subject = UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
 
             // when
             let target_height = starting_height.saturating_add(block_horizon);
 
-            let _ = rt.block_on(subject.worst_case_gas_price(target_height.into()));
+            let _ = subject.worst_case_gas_price(target_height.into());
 
             // then
             // doesn't panic with an overflow
@@ -273,9 +273,8 @@ impl TxPoolGasPriceProvider for UniversalGasPriceProvider<u32, u64> {
     }
 }
 
-#[async_trait::async_trait]
 impl GasPriceEstimate for UniversalGasPriceProvider<u32, u64> {
-    async fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
+    fn worst_case_gas_price(&self, height: BlockHeight) -> Option<u64> {
         let (best_height, best_gas_price) = self.get_height_and_gas_price();
         let percentage = self.percentage;
 
@@ -287,31 +286,6 @@ impl GasPriceEstimate for UniversalGasPriceProvider<u32, u64> {
         );
         Some(worst)
     }
-}
-
-#[allow(clippy::cast_possible_truncation)]
-pub(crate) fn cumulative_percentage_change(
-    start_gas_price: u64,
-    best_height: u32,
-    percentage: u64,
-    target_height: u32,
-) -> u64 {
-    let blocks = target_height.saturating_sub(best_height) as f64;
-    let percentage_as_decimal = percentage as f64 / 100.0;
-    let multiple = (1.0f64 + percentage_as_decimal).powf(blocks);
-    let mut approx = start_gas_price as f64 * multiple;
-    // Account for rounding errors and take a slightly higher value
-    // Around the `ROUNDING_ERROR_CUTOFF` the rounding errors will cause the estimate to be too low.
-    // We increase by `ROUNDING_ERROR_COMPENSATION` to account for this.
-    // This is an unlikely situation in practice, but we want to guarantee that the actual
-    // gas price is always equal or less than the estimate given here
-    const ROUNDING_ERROR_CUTOFF: f64 = 16948547188989277.0;
-    if approx > ROUNDING_ERROR_CUTOFF {
-        const ROUNDING_ERROR_COMPENSATION: f64 = 2000.0;
-        approx += ROUNDING_ERROR_COMPENSATION;
-    }
-    // `f64` over `u64::MAX` are cast to `u64::MAX`
-    approx.ceil() as u64
 }
 
 #[derive(Clone)]
@@ -353,6 +327,9 @@ impl ExecutorAdapter {
     pub fn new(
         database: Database,
         relayer_database: Database<Relayer>,
+        // #[cfg(feature = "parallel-executor")]
+        // config: fuel_core_parallel_executor::config::Config,
+        // #[cfg(not(feature = "parallel-executor"))]
         config: fuel_core_upgradable_executor::config::Config,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);

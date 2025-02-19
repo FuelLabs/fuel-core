@@ -33,6 +33,7 @@ use fuel_core_storage::{
         ConsensusParametersVersions,
         FuelBlocks,
         StateTransitionBytecodeVersions,
+        Transactions,
     },
     transactional::Changes,
     Result as StorageResult,
@@ -40,14 +41,16 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         header::{
             ConsensusParametersVersion,
             StateTransitionBytecodeVersion,
         },
         primitives::DaBlockHeight,
     },
-    fuel_tx,
     fuel_tx::{
         ConsensusParameters,
         Transaction,
@@ -60,6 +63,7 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Result as ExecutorResult,
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -117,10 +121,20 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
 impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
     fn dry_run(
         &self,
-        block: Components<Vec<fuel_tx::Transaction>>,
+        block: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
+        at_height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
-        self.executor.dry_run(block, utxo_validation)
+        self.executor.dry_run(block, utxo_validation, at_height)
+    }
+}
+
+impl fuel_core_producer::ports::StorageReadReplayRecorder for ExecutorAdapter {
+    fn storage_read_replay(
+        &self,
+        block: &Block,
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
+        self.executor.storage_read_replay(block)
     }
 }
 
@@ -221,6 +235,21 @@ impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableKeyValu
             .ok_or(not_found!(FuelBlocks))
     }
 
+    fn get_full_block(&self, height: &BlockHeight) -> StorageResult<Block> {
+        let block = self.get_block(height)?;
+        let transactions = block
+            .transactions()
+            .iter()
+            .map(|id| {
+                self.storage::<Transactions>()
+                    .get(id)?
+                    .ok_or(not_found!(Transactions))
+                    .map(|tx| tx.into_owned())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(block.into_owned().uncompress(transactions))
+    }
+
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32> {
         self.storage::<FuelBlocks>().root(height).map(Into::into)
     }
@@ -248,13 +277,12 @@ impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableKeyValu
     }
 }
 
-#[async_trait::async_trait]
 impl GasPriceProvider for StaticGasPrice {
-    async fn production_gas_price(&self) -> anyhow::Result<u64> {
+    fn production_gas_price(&self) -> anyhow::Result<u64> {
         Ok(self.gas_price)
     }
 
-    async fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
+    fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
         Ok(self.gas_price)
     }
 }
