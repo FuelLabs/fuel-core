@@ -20,6 +20,7 @@ use crate::{
         key_value_view::KeyValueViewWrapper,
         rocks_db::RocksDb,
         ColumnType,
+        HeightType,
         IterableKeyValueView,
         KeyValueView,
         TransactableStorage,
@@ -595,17 +596,24 @@ where
     fn view_at_height(
         &self,
         height: &Description::Height,
-    ) -> StorageResult<KeyValueView<ColumnType<Description>>> {
+    ) -> StorageResult<KeyValueView<ColumnType<Description>, HeightType<Description>>>
+    {
         let view = self.create_view_at(height)?;
-        Ok(KeyValueView::from_storage(KeyValueViewWrapper::new(view)))
+        Ok(KeyValueView::from_storage_and_metadata(
+            KeyValueViewWrapper::new(view),
+            Some(*height),
+        ))
     }
 
     fn latest_view(
         &self,
-    ) -> StorageResult<IterableKeyValueView<ColumnType<Description>>> {
+    ) -> StorageResult<
+        IterableKeyValueView<ColumnType<Description>, HeightType<Description>>,
+    > {
         let view = self.latest_view();
-        Ok(IterableKeyValueView::from_storage(
+        Ok(IterableKeyValueView::from_storage_and_metadata(
             IterableKeyValueViewWrapper::new(view),
+            None,
         ))
     }
 

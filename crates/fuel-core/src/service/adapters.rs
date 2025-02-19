@@ -17,8 +17,13 @@ use fuel_core_consensus_module::{
     RelayerConsensusConfig,
 };
 use fuel_core_executor::executor::OnceTransactionsSource;
-use fuel_core_gas_price_service::v1::service::LatestGasPrice;
+use fuel_core_gas_price_service::{
+    common::cumulative_percentage_change,
+    v1::service::LatestGasPrice,
+};
 use fuel_core_importer::ImporterResult;
+// #[cfg(feature = "parallel-executor")]
+// use fuel_core_parallel_executor::executor::Executor;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
@@ -49,6 +54,7 @@ use fuel_core_types::{
     signer::SignMode,
     tai64::Tai64,
 };
+//#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
 
@@ -282,31 +288,6 @@ impl GasPriceEstimate for UniversalGasPriceProvider<u32, u64> {
     }
 }
 
-#[allow(clippy::cast_possible_truncation)]
-pub(crate) fn cumulative_percentage_change(
-    start_gas_price: u64,
-    best_height: u32,
-    percentage: u64,
-    target_height: u32,
-) -> u64 {
-    let blocks = target_height.saturating_sub(best_height) as f64;
-    let percentage_as_decimal = percentage as f64 / 100.0;
-    let multiple = (1.0f64 + percentage_as_decimal).powf(blocks);
-    let mut approx = start_gas_price as f64 * multiple;
-    // Account for rounding errors and take a slightly higher value
-    // Around the `ROUNDING_ERROR_CUTOFF` the rounding errors will cause the estimate to be too low.
-    // We increase by `ROUNDING_ERROR_COMPENSATION` to account for this.
-    // This is an unlikely situation in practice, but we want to guarantee that the actual
-    // gas price is always equal or less than the estimate given here
-    const ROUNDING_ERROR_CUTOFF: f64 = 16948547188989277.0;
-    if approx > ROUNDING_ERROR_CUTOFF {
-        const ROUNDING_ERROR_COMPENSATION: f64 = 2000.0;
-        approx += ROUNDING_ERROR_COMPENSATION;
-    }
-    // `f64` over `u64::MAX` are cast to `u64::MAX`
-    approx.ceil() as u64
-}
-
 #[derive(Clone)]
 pub struct PoAAdapter {
     shared_state: Option<fuel_core_poa::service::SharedState>,
@@ -346,6 +327,9 @@ impl ExecutorAdapter {
     pub fn new(
         database: Database,
         relayer_database: Database<Relayer>,
+        // #[cfg(feature = "parallel-executor")]
+        // config: fuel_core_parallel_executor::config::Config,
+        // #[cfg(not(feature = "parallel-executor"))]
         config: fuel_core_upgradable_executor::config::Config,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);

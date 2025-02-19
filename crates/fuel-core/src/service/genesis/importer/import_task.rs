@@ -24,6 +24,7 @@ use crate::{
     service::genesis::{
         progress::ProgressReporter,
         task_manager::CancellationToken,
+        NotifyCancel,
     },
 };
 
@@ -100,7 +101,10 @@ where
     for<'a> StorageTransaction<&'a mut GenesisDatabase<DbDesc>>:
         StorageMutate<GenesisMetadata<DbDesc>, Error = fuel_core_storage::Error>,
 {
-    pub fn run(mut self, cancel_token: CancellationToken) -> anyhow::Result<()> {
+    pub fn run<N>(mut self, cancel_token: CancellationToken<N>) -> anyhow::Result<()>
+    where
+        N: NotifyCancel + Send + Sync + 'static,
+    {
         let mut db = self.db;
         let mut is_cancelled = cancel_token.is_cancelled();
         self.groups
@@ -578,11 +582,13 @@ mod tests {
         fn view_at_height(
             &self,
             _: &BlockHeight,
-        ) -> StorageResult<KeyValueView<Self::Column>> {
+        ) -> StorageResult<KeyValueView<Self::Column, BlockHeight>> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
 
-        fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column>> {
+        fn latest_view(
+            &self,
+        ) -> StorageResult<IterableKeyValueView<Self::Column, BlockHeight>> {
             Err(anyhow::anyhow!("I refuse to work!").into())
         }
 
@@ -609,7 +615,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    fn never_cancel() -> CancellationToken {
+    fn never_cancel() -> CancellationToken<tokio_util::sync::CancellationToken> {
         CancellationToken::new(tokio_util::sync::CancellationToken::new())
     }
 }

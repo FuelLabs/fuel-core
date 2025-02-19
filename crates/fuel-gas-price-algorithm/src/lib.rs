@@ -5,3 +5,5 @@
 mod utils;
 pub mod v0;
 pub mod v1;
+
+pub use utils::cumulative_percentage_change;

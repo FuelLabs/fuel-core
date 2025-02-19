@@ -228,7 +228,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<View> RunnableTask for Task<View>
 where
     View: TxPoolPersistentStorage,

@@ -6,6 +6,7 @@ use super::{
         P2PAdapter,
     },
     genesis::create_genesis_block,
+    DbType,
 };
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
@@ -102,14 +103,30 @@ pub fn init_sub_services(
 
     let last_height = *last_block_header.height();
 
+    if config.historical_execution
+        && config.combined_db_config.database_type != DbType::RocksDb
+    {
+        return Err(anyhow::anyhow!(
+            "Historical execution is only supported with RocksDB"
+        ));
+    }
+
+    let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
+        backtrace: config.vm.backtrace,
+        utxo_validation_default: config.utxo_validation,
+        native_executor_version: config.native_executor_version,
+        allow_historical_execution: config.historical_execution,
+    };
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
-        fuel_core_upgradable_executor::config::Config {
-            backtrace: config.vm.backtrace,
-            utxo_validation_default: config.utxo_validation,
-            native_executor_version: config.native_executor_version,
-        },
+        // #[cfg(not(feature = "parallel-executor"))]
+        upgradable_executor_config,
+        // #[cfg(feature = "parallel-executor")]
+        // fuel_core_parallel_executor::config::Config {
+        //     number_of_cores: config.executor_number_of_cores,
+        //     executor_config: upgradable_executor_config,
+        // },
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());
@@ -189,7 +206,8 @@ pub fn init_sub_services(
     let settings = consensus_parameters_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    let committer_api = BlockCommitterHttpApi::new(config.da_committer_url.clone());
+    let committer_api =
+        BlockCommitterHttpApi::new(config.gas_price_config.da_committer_url.clone());
     let da_source = BlockCommitterDaBlockCosts::new(committer_api);
     let v1_config = V1AlgorithmConfig::from(config.clone());
 
@@ -318,12 +336,15 @@ pub fn init_sub_services(
         config.da_compression.clone(),
         config.continue_on_error,
         &chain_config.consensus_parameters,
-    );
+    )?;
+
+    let graphql_block_height_subscription_handle = graphql_worker.shared.clone();
 
     let graphql_config = GraphQLConfig {
         config: config.graphql_config.clone(),
         utxo_validation: config.utxo_validation,
         debug: config.debug,
+        historical_execution: config.historical_execution,
         vm_backtrace: config.vm.backtrace,
         max_tx: config.txpool.pool_limits.max_txs,
         max_gas: config.txpool.pool_limits.max_gas,
@@ -345,6 +366,7 @@ pub fn init_sub_services(
         Box::new(universal_gas_price_provider),
         Box::new(consensus_parameters_provider),
         SharedMemoryPool::new(config.memory_pool_size),
+        graphql_block_height_subscription_handle,
     )?;
 
     let shared = SharedState {

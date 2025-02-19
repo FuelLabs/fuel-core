@@ -526,7 +526,7 @@ async fn await_da_height<C: ConsensusPort + Send + Sync + 'static>(
     consensus: &Arc<C>,
 ) {
     let _ = consensus
-        .await_da_height(&header.entity.da_height)
+        .await_da_height(&header.entity.da_height())
         .await
         .trace_err("Failed to wait for DA layer to sync");
 }

@@ -4,7 +4,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock,
+        block::{
+            Block,
+            CompressedBlock,
+        },
         header::{
             ConsensusParametersVersion,
             StateTransitionBytecodeVersion,
@@ -20,6 +23,7 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             Result as ExecutorResult,
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -33,6 +37,9 @@ pub trait BlockProducerDatabase: Send + Sync {
 
     /// Gets the committed block at the `height`.
     fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>>;
+
+    /// Gets the full committed block at the `height`.
+    fn get_full_block(&self, height: &BlockHeight) -> StorageResult<Block>;
 
     /// Gets the block header BMT MMR root at `height`.
     fn block_header_merkle_root(&self, height: &BlockHeight) -> StorageResult<Bytes32>;
@@ -94,10 +101,18 @@ pub trait BlockProducer<TxSource>: Send + Sync {
 pub trait DryRunner: Send + Sync {
     /// Executes the block without committing it to the database. During execution collects the
     /// receipts to return them. The `utxo_validation` field can be used to disable the validation
-    /// of utxos during execution.
+    /// of utxos during execution. The `at_height` field can be used to dry run on top of a past block.
     fn dry_run(
         &self,
         block: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
+        at_height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>>;
+}
+
+pub trait StorageReadReplayRecorder: Send + Sync {
+    fn storage_read_replay(
+        &self,
+        block: &Block,
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>>;
 }

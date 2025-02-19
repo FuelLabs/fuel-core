@@ -11,7 +11,6 @@ use crate::{
     v0::algorithm::SharedV0Algorithm,
 };
 use anyhow::anyhow;
-use async_trait::async_trait;
 use fuel_core_services::{
     RunnableTask,
     StateWatcher,
@@ -74,7 +73,7 @@ where
             .ok_or_else(|| anyhow!("Block gas capacity must be non-zero"))
     }
 
-    async fn set_metadata(&mut self) -> anyhow::Result<()> {
+    fn set_metadata(&mut self) -> anyhow::Result<()> {
         let metadata: UpdaterMetadata = self.algorithm_updater.clone().into();
         self.metadata_storage
             .set_metadata(&metadata)
@@ -92,7 +91,7 @@ where
         self.algorithm_updater
             .update_l2_block_data(height, gas_used, capacity)?;
 
-        self.set_metadata().await?;
+        self.set_metadata()?;
         Ok(())
     }
 
@@ -102,7 +101,7 @@ where
     ) -> anyhow::Result<()> {
         match l2_block {
             BlockInfo::GenesisBlock => {
-                self.set_metadata().await?;
+                self.set_metadata()?;
             }
             BlockInfo::Block {
                 height,
@@ -137,7 +136,6 @@ where
         Ok(())
     }
 }
-#[async_trait]
 impl<L2, Metadata> RunnableTask for GasPriceServiceV0<L2, Metadata>
 where
     L2: L2BlockSource,

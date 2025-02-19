@@ -61,8 +61,7 @@ pub mod storage;
 
 impl<Storage> SetMetadataStorage for Storage
 where
-    Storage: Send + Sync,
-    Storage: Modifiable,
+    Storage: Send + Sync + Modifiable,
     for<'a> StorageTransaction<&'a mut Storage>:
         StorageMutate<GasPriceMetadata, Error = StorageError>,
 {
@@ -95,7 +94,7 @@ where
             .map_err(|err| GasPriceError::CouldNotFetchMetadata {
                 source_error: err.into(),
             })?;
-        Ok(metadata.map(|inner| inner.into_owned()))
+        Ok(metadata.map(std::borrow::Cow::into_owned))
     }
 }
 
@@ -117,9 +116,13 @@ where
 
 impl<Storage> GasPriceServiceAtomicStorage for Storage
 where
-    Storage: 'static,
-    Storage: GetMetadataStorage + GetLatestRecordedHeight,
-    Storage: KeyValueInspect<Column = GasPriceColumn> + Modifiable + Send + Sync,
+    Storage: GetMetadataStorage
+        + GetLatestRecordedHeight
+        + KeyValueInspect<Column = GasPriceColumn>
+        + Modifiable
+        + Send
+        + Sync
+        + 'static,
 {
     type Transaction<'a> = StorageTransaction<&'a mut Storage> where Self: 'a;
 
@@ -138,8 +141,7 @@ where
 
 impl<Storage> SetLatestRecordedHeight for Storage
 where
-    Storage: Send + Sync,
-    Storage: StorageMutate<RecordedHeights, Error = StorageError>,
+    Storage: Send + Sync + StorageMutate<RecordedHeights, Error = StorageError>,
 {
     fn set_recorded_height(
         &mut self,

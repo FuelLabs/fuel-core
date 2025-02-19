@@ -9,13 +9,11 @@ build = "build.rs"
 [dev-dependencies]
 anyhow = "1.0"
 clap = "4.4"
-libp2p = "0.53.2"
+libp2p = "0.54.1"
 hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
-# Remove when we upgrade rust version
-netlink-proto = "=0.11.3"
 
 # Neutral deps
 fuel-core-trace = { path = "../../crates/trace" }
