@@ -418,13 +418,14 @@ where
                 }
                 self.shared_state.new_txs_notifier.send_replace(());
             }
-            PoolNotification::ErrorInsertion { from_peer_info } => {
+            PoolNotification::ErrorInsertion { tx_id, error, from_peer_info } => {
                 if let Some(from_peer_info) = from_peer_info {
                     let _ = self.p2p.notify_gossip_transaction_validity(
                         from_peer_info,
                         GossipsubMessageAcceptance::Reject,
                     );
                 }
+                self.shared_state.tx_status_sender.send_squeezed_out(tx_id, error);
             }
             PoolNotification::Removed { tx_id, error } => {
                 self.shared_state
