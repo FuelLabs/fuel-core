@@ -89,7 +89,9 @@ use fuel_core_types::{
     },
 };
 
+/// Main entrypoint to the update functionality
 pub trait UpdateMerkleizedTables {
+    /// Process a block and update all merkleized tables
     fn update_merkleized_tables(
         &mut self,
         chain_id: ChainId,
@@ -101,6 +103,7 @@ impl<Storage> UpdateMerkleizedTables for StorageTransaction<Storage>
 where
     Storage: KeyValueInspect<Column = Column>,
 {
+    #[tracing::instrument(skip(self, block))]
     fn update_merkleized_tables(
         &mut self,
         chain_id: ChainId,
@@ -135,6 +138,7 @@ where
     Storage: KeyValueInspect<Column = Column>,
 {
     // TODO(#2588): Proper result type
+    #[tracing::instrument(skip(self, block))]
     pub fn process_block(&mut self, block: &Block) -> anyhow::Result<()> {
         let block_height = *block.header().height();
 
@@ -147,6 +151,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, tx))]
     fn process_transaction(
         &mut self,
         block_height: BlockHeight,
@@ -182,10 +187,12 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, input))]
     fn process_input(&mut self, input: &Input) -> anyhow::Result<()> {
         match input {
             Input::CoinSigned(CoinSigned { utxo_id, .. })
             | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                tracing::debug!(%utxo_id, "removing coin");
                 self.storage.storage_as_mut::<Coins>().remove(utxo_id)?;
             }
             Input::Contract(_) => {
@@ -193,6 +200,7 @@ where
             }
             Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
             | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. }) => {
+                tracing::debug!(%nonce, "removing message coin");
                 self.storage.storage_as_mut::<Messages>().remove(nonce)?;
             }
             // The messages below are retryable, it means that if execution failed,
@@ -204,6 +212,7 @@ where
                 //  the script root. But maybe we have less expensive way.
                 let success_status = false;
                 if success_status {
+                    tracing::debug!(%nonce, "removing data message");
                     self.storage.storage_as_mut::<Messages>().remove(nonce)?;
                 }
             }
@@ -212,6 +221,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, inputs, output))]
     fn process_output(
         &mut self,
         tx_pointer: TxPointer,
@@ -245,6 +255,7 @@ where
                 )?;
             }
             Output::ContractCreated { contract_id, .. } => {
+                tracing::debug!(%contract_id, "creating contract");
                 self.storage.storage::<ContractsLatestUtxo>().insert(
                     contract_id,
                     &ContractUtxoInfo::V1((utxo_id, tx_pointer).into()),
@@ -254,7 +265,9 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     fn store_processed_transaction(&mut self, tx_id: TxId) -> anyhow::Result<()> {
+        tracing::debug!("storing processed transaction");
         let previous_tx = self
             .storage
             .storage_as_mut::<ProcessedTransactions>()
@@ -267,6 +280,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     fn insert_coin_if_it_has_amount(
         &mut self,
         tx_pointer: TxPointer,
@@ -287,6 +301,7 @@ where
             }
             .into();
 
+            tracing::debug!("storing coin");
             let previous_coin =
                 self.storage.storage::<Coins>().replace(&utxo_id, &coin)?;
 
@@ -298,6 +313,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     fn try_insert_latest_contract_utxo(
         &mut self,
         tx_pointer: TxPointer,
@@ -308,11 +324,13 @@ where
         if let Some(Input::Contract(input::contract::Contract { contract_id, .. })) =
             inputs.get(contract.input_index as usize)
         {
+            tracing::debug!("storing contract UTxO");
             self.storage.storage::<ContractsLatestUtxo>().insert(
                 contract_id,
                 &ContractUtxoInfo::V1((utxo_id, tx_pointer).into()),
             )?;
         } else {
+            tracing::warn!("invalid contract input index");
             Err(ExecutorError::TransactionValidity(
                 TransactionValidityError::InvalidContractInputIndex(utxo_id),
             ))?;
@@ -320,6 +338,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, tx))]
     fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
         let bytecode_witness_index = tx.bytecode_witness_index();
         let witnesses = tx.witnesses();
@@ -338,12 +357,14 @@ where
             anyhow::bail!("Create transaction does not have contract created output")
         };
 
+        tracing::debug!("storing contract code");
         self.storage
             .storage_as_mut::<ContractsRawCode>()
             .insert(contract_id, bytecode)?;
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, tx))]
     fn process_upgrade_transaction(&mut self, tx: &Upgrade) -> anyhow::Result<()> {
         let metadata = match tx.metadata() {
             Some(metadata) => metadata.body.clone(),
@@ -362,6 +383,8 @@ where
                 };
                 self.latest_consensus_parameters_version =
                     next_consensus_parameters_version;
+
+                tracing::debug!("storing next consensus parameters version");
                 self.storage
                     .storage::<ConsensusParametersVersions>()
                     .insert(
@@ -383,6 +406,8 @@ where
                     };
                     self.latest_state_transition_bytecode_version =
                         next_state_transition_bytecode_version;
+
+                tracing::debug!("storing next state transition bytecode version");
                     self.storage
                         .storage::<StateTransitionBytecodeVersions>()
                         .insert(&self.latest_state_transition_bytecode_version, root)?;
@@ -393,6 +418,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, tx))]
     fn process_upload_transaction(&mut self, tx: &Upload) -> anyhow::Result<()> {
         let bytecode_root = *tx.bytecode_root();
         let uploaded_bytecode = self
@@ -441,6 +467,7 @@ where
                 }
             };
 
+        tracing::debug!("storing uploaded bytecodes");
         self.storage
             .storage_as_mut::<UploadedBytecodes>()
             .insert(&bytecode_root, &new_uploaded_bytecode)?;
@@ -448,6 +475,7 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, tx))]
     fn process_blob_transaction(&mut self, tx: &Blob) -> anyhow::Result<()> {
         let BlobBody {
             id: blob_id,
@@ -460,6 +488,7 @@ where
              // TODO(#2588): Proper error type
             .ok_or_else(|| anyhow!("transaction should have blob payload"))?;
 
+        tracing::debug!("storing blob");
         self.storage
             .storage::<Blobs>()
             .insert(blob_id, blob.as_ref())?;
@@ -468,11 +497,11 @@ where
     }
 }
 
-pub trait TransactionInputs {
+trait TransactionInputs {
     fn inputs(&self) -> Cow<Vec<Input>>;
 }
 
-pub trait TransactionOutputs {
+trait TransactionOutputs {
     fn outputs(&self) -> Cow<Vec<Output>>;
 }
 
@@ -511,6 +540,8 @@ impl TransactionOutputs for Transaction {
 mod tests {
     use super::*;
 
+    use crate::test_helpers;
+
     use fuel_core_storage::{
         structured_storage::test::InMemoryStorage,
         transactional::{
@@ -531,18 +562,12 @@ mod tests {
             Bytes32,
             ConsensusParameters,
             Contract,
-            ContractId,
-            Create,
             Finalizable,
             TransactionBuilder,
-            TxId,
             UploadBody,
             Witness,
         },
-        fuel_vm::{
-            CallFrame,
-            Salt,
-        },
+        fuel_vm::CallFrame,
     };
 
     use rand::{
@@ -564,12 +589,12 @@ mod tests {
         let mut storage_update_tx =
             storage_tx.construct_update_merkleized_tables_transaction();
 
-        let tx_pointer = random_tx_pointer(&mut rng);
-        let utxo_id = random_utxo_id(&mut rng);
+        let tx_pointer = test_helpers::random_tx_pointer(&mut rng);
+        let utxo_id = test_helpers::random_utxo_id(&mut rng);
         let inputs = vec![];
 
         let output_amount = rng.gen();
-        let output_address = random_address(&mut rng);
+        let output_address = test_helpers::random_address(&mut rng);
         let output = Output::Coin {
             to: output_address,
             amount: output_amount,
@@ -609,11 +634,11 @@ mod tests {
         let mut storage_update_tx =
             storage_tx.construct_update_merkleized_tables_transaction();
 
-        let tx_pointer = random_tx_pointer(&mut rng);
-        let utxo_id = random_utxo_id(&mut rng);
+        let tx_pointer = test_helpers::random_tx_pointer(&mut rng);
+        let utxo_id = test_helpers::random_utxo_id(&mut rng);
         let inputs = vec![];
 
-        let contract_id = random_contract_id(&mut rng);
+        let contract_id = test_helpers::random_contract_id(&mut rng);
         let output = Output::ContractCreated {
             contract_id,
             state_root: Bytes32::zeroed(),
@@ -652,10 +677,10 @@ mod tests {
         let mut storage_update_tx =
             storage_tx.construct_update_merkleized_tables_transaction();
 
-        let tx_pointer = random_tx_pointer(&mut rng);
-        let utxo_id = random_utxo_id(&mut rng);
+        let tx_pointer = test_helpers::random_tx_pointer(&mut rng);
+        let utxo_id = test_helpers::random_utxo_id(&mut rng);
 
-        let contract_id = random_contract_id(&mut rng);
+        let contract_id = test_helpers::random_contract_id(&mut rng);
         let input_contract = input::contract::Contract {
             contract_id,
             ..Default::default()
@@ -703,9 +728,9 @@ mod tests {
             storage_tx.construct_update_merkleized_tables_transaction();
 
         let output_amount = rng.gen();
-        let output_address = random_address(&mut rng);
-        let tx_pointer = random_tx_pointer(&mut rng);
-        let utxo_id = random_utxo_id(&mut rng);
+        let output_address = test_helpers::random_address(&mut rng);
+        let tx_pointer = test_helpers::random_tx_pointer(&mut rng);
+        let utxo_id = test_helpers::random_utxo_id(&mut rng);
         let inputs = vec![];
 
         let output = Output::Coin {
@@ -942,7 +967,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(1337);
 
         // Given
-        let root = random_bytes(&mut rng);
+        let root = test_helpers::random_bytes(&mut rng);
         let bytecode_segment_1 = vec![4, 2];
         let bytecode_segment_2 = vec![1, 3, 3, 7];
 
@@ -1042,7 +1067,8 @@ mod tests {
         .collect::<Vec<u8>>();
 
         let mut rng = StdRng::seed_from_u64(1337);
-        let create_contract_tx = create_contract_tx(&contract_bytecode, &mut rng);
+        let create_contract_tx =
+            test_helpers::create_contract_tx(&contract_bytecode, &mut rng);
         let contract_id = create_contract_tx
             .metadata()
             .as_ref()
@@ -1070,57 +1096,6 @@ mod tests {
             .into_owned();
         // Then
         assert_eq!(stored_contract, Contract::from(contract_bytecode));
-    }
-
-    // TODO: https://github.com/FuelLabs/fuel-core/issues/2654
-    // This code is copied from the executor. We should refactor it to be shared.
-    fn create_contract_tx(bytecode: &[u8], rng: &mut impl rand::RngCore) -> Create {
-        let salt: Salt = rng.gen();
-        let contract = Contract::from(bytecode);
-        let root = contract.root();
-        let state_root = Contract::default_state_root();
-        let contract_id = contract.id(&salt, &root, &state_root);
-
-        TransactionBuilder::create(bytecode.into(), salt, Default::default())
-            .add_fee_input()
-            .add_output(Output::contract_created(contract_id, state_root))
-            .finalize()
-    }
-
-    fn random_utxo_id(rng: &mut impl rand::RngCore) -> UtxoId {
-        let mut txid = TxId::default();
-        rng.fill_bytes(txid.as_mut());
-        let output_index = rng.gen();
-
-        UtxoId::new(txid, output_index)
-    }
-
-    fn random_tx_pointer(rng: &mut impl rand::RngCore) -> TxPointer {
-        let block_height = BlockHeight::new(rng.gen());
-        let tx_index = rng.gen();
-
-        TxPointer::new(block_height, tx_index)
-    }
-
-    fn random_address(rng: &mut impl rand::RngCore) -> Address {
-        let mut address = Address::default();
-        rng.fill_bytes(address.as_mut());
-
-        address
-    }
-
-    fn random_contract_id(rng: &mut impl rand::RngCore) -> ContractId {
-        let mut contract_id = ContractId::default();
-        rng.fill_bytes(contract_id.as_mut());
-
-        contract_id
-    }
-
-    fn random_bytes(rng: &mut impl rand::RngCore) -> Bytes32 {
-        let mut bytes = Bytes32::default();
-        rng.fill_bytes(bytes.as_mut());
-
-        bytes
     }
 
     trait ConstructUpdateMerkleizedTablesTransactionForTests<'a>: Sized + 'a {
