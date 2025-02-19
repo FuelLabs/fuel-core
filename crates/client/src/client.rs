@@ -826,7 +826,7 @@ impl FuelClient {
 
         let stream = self.subscribe(s).await?.map(
             |result: io::Result<schema::storage::ContractStorageBalances>| {
-                let result: ContractBalance = result?.contract_storage_balances.into();
+                let result: ContractBalance = result?.contract_storage_balances;
                 Result::<_, io::Error>::Ok(result)
             },
         );
