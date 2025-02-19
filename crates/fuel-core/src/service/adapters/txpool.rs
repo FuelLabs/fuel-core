@@ -141,42 +141,6 @@ impl fuel_core_txpool::ports::P2PRequests for P2PAdapter {
             Ok(vec![])
         }
     }
-
-    fn process_insertion_result(
-        &self,
-        from_peer_info: Option<GossipsubMessageInfo>,
-        result: Result<Arc<Transaction>, fuel_core_txpool::error::Error>,
-    ) {
-        if let Some(service) = &self.service {
-            if let Some(from_peer_info) = from_peer_info {
-                match &result {
-                    Ok(_) => {
-                        let _ = service.notify_gossip_transaction_validity(
-                            from_peer_info,
-                            GossipsubMessageAcceptance::Accept,
-                        );
-                    }
-                    Err(fuel_core_txpool::error::Error::ConsensusValidity(_))
-                    | Err(fuel_core_txpool::error::Error::MintIsDisallowed) => {
-                        let _ = service.notify_gossip_transaction_validity(
-                            from_peer_info,
-                            GossipsubMessageAcceptance::Reject,
-                        );
-                    }
-                    Err(_) => {
-                        let _ = service.notify_gossip_transaction_validity(
-                            from_peer_info,
-                            GossipsubMessageAcceptance::Ignore,
-                        );
-                    }
-                };
-            } else if let Ok(transaction) = result {
-                if let Err(e) = service.broadcast_transaction(transaction) {
-                    tracing::error!("Failed to broadcast transaction: {}", e);
-                }
-            }
-        }
-    }
 }
 
 #[cfg(not(feature = "p2p"))]
@@ -223,13 +187,6 @@ const _: () = {
             _tx_ids: Vec<TxId>,
         ) -> anyhow::Result<Vec<Option<Transaction>>> {
             Ok(vec![])
-        }
-
-        fn process_insertion_result(
-            &self,
-            _from_peer_info: Option<GossipsubMessageInfo>,
-            _result: Result<Arc<Transaction>, fuel_core_txpool::error::Error>,
-        ) {
         }
     }
 };

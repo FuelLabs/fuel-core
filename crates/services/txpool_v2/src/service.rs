@@ -73,6 +73,7 @@ use fuel_core_types::{
         block_importer::SharedImportResult,
         p2p::{
             GossipData,
+            GossipsubMessageAcceptance,
             GossipsubMessageInfo,
             PeerId,
             TransactionGossipData,
@@ -389,7 +390,14 @@ where
                 from_peer_info,
                 tx,
             } => {
-                self.p2p.process_insertion_result(from_peer_info, Ok(tx));
+                if let Some(from_peer_info) = from_peer_info {
+                    let _ = self.p2p.notify_gossip_transaction_validity(
+                        from_peer_info,
+                        GossipsubMessageAcceptance::Accept,
+                    );
+                } else if let Err(e) = self.p2p.broadcast_transaction(tx) {
+                    tracing::error!("Failed to broadcast transaction: {}", e);
+                }
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
 
                 let duration = time
@@ -410,12 +418,13 @@ where
                 }
                 self.shared_state.new_txs_notifier.send_replace(());
             }
-            PoolNotification::ErrorInsertion {
-                error,
-                from_peer_info,
-            } => {
-                self.p2p
-                    .process_insertion_result(from_peer_info, Err(error));
+            PoolNotification::ErrorInsertion { from_peer_info } => {
+                if let Some(from_peer_info) = from_peer_info {
+                    let _ = self.p2p.notify_gossip_transaction_validity(
+                        from_peer_info,
+                        GossipsubMessageAcceptance::Reject,
+                    );
+                }
             }
             PoolNotification::Removed { tx_id, error } => {
                 self.shared_state
@@ -487,7 +496,23 @@ where
                         let _ = channel.send(Err(err.clone()));
                     }
 
-                    p2p.process_insertion_result(from_peer_info, Err(err.clone()));
+                    if let Some(from_peer_info) = from_peer_info {
+                        match err {
+                            fuel_core_txpool::error::Error::ConsensusValidity(_)
+                            | fuel_core_txpool::error::Error::MintIsDisallowed => {
+                                let _ = p2p.notify_gossip_transaction_validity(
+                                    from_peer_info,
+                                    GossipsubMessageAcceptance::Reject,
+                                );
+                            }
+                            _ => {
+                                let _ = p2p.notify_gossip_transaction_validity(
+                                    from_peer_info,
+                                    GossipsubMessageAcceptance::Ignore,
+                                );
+                            }
+                        }
+                    }
                     shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
                     return
                 }

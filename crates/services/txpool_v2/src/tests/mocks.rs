@@ -290,12 +290,6 @@ mockall::mock! {
             peer_id: PeerId,
             tx_ids: Vec<TxId>,
         ) -> anyhow::Result<Vec<Option<Transaction>>>;
-
-        fn process_insertion_result(
-            &self,
-            from_peer_info: Option<GossipsubMessageInfo>,
-            result: Result<Arc<Transaction>, crate::error::Error>,
-        );
     }
 }
 

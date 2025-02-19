@@ -32,10 +32,7 @@ use fuel_core_types::{
     },
 };
 
-use crate::{
-    error::Error,
-    GasPrice,
-};
+use crate::GasPrice;
 
 pub use fuel_core_storage::transactional::AtomicView;
 
@@ -125,10 +122,4 @@ pub trait P2PRequests: NotifyP2P + Send + Sync + 'static {
         peer_id: PeerId,
         tx_ids: Vec<TxId>,
     ) -> anyhow::Result<Vec<Option<Transaction>>>;
-
-    fn process_insertion_result(
-        &self,
-        from_peer_info: Option<GossipsubMessageInfo>,
-        result: Result<Arc<Transaction>, Error>,
-    );
 }

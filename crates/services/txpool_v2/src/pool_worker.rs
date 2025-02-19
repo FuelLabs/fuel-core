@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::{
@@ -218,7 +217,6 @@ pub enum PoolNotification {
         tx: Arc<Transaction>,
     },
     ErrorInsertion {
-        error: Error,
         from_peer_info: Option<GossipsubMessageInfo>,
     },
     Removed {
@@ -349,13 +347,10 @@ where
                     }
                 }
             }
-            Err(err) => {
-                if let Err(e) =
-                    self.notification_sender
-                        .send(PoolNotification::ErrorInsertion {
-                            error: err.clone(),
-                            from_peer_info,
-                        })
+            Err(_) => {
+                if let Err(e) = self
+                    .notification_sender
+                    .send(PoolNotification::ErrorInsertion { from_peer_info })
                 {
                     tracing::error!("Failed to send error insertion notification: {}", e);
                 }
