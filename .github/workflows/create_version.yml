@@ -1,0 +1,99 @@
+name: Create version
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  create_version:
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    if: ${{ github.event.label.name == 'pr release' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Get the version number in the PR description
+        id: get_version
+        run: |
+          # Extract the version number from the PR description
+          version=$(echo "${{ github.event.pull_request.body }}" | grep -oP '## Version \K[0-9]+\.[0-9]+\.[0-9]+')
+          echo "NEW_VERSION=${version}" >> $GITHUB_OUTPUT
+
+      - name: Gather all changes
+        id: gather_changes
+        run: |
+
+          # Define the order of sections
+          sections_order=("breaking" "added" "changed" "fixed" "removed")
+
+          # Process each section in the specified order
+          for section in "${sections_order[@]}"; do
+            dir_path=".changes/${section}"
+            if [ -d "$dir_path" ]; then
+              # Collect .md files sorted numerically using version sort
+              files=()
+              while IFS= read -r -d $'\0' file; do
+                files+=("$file")
+              done < <(find "$dir_path" -maxdepth 1 -type f -name '*.md' -print0 | sort -V -z)
+              
+              if [ ${#files[@]} -gt 0 ]; then
+                # Capitalize the first letter of the section name
+                section_name="$(tr '[:lower:]' '[:upper:]' <<< "${section:0:1}")${section:1}"
+                VERSION_TEXT+="\n### $section_name\n"
+                for file in "${files[@]}"; do
+                  filename=$(basename "$file" .md)
+                  content=$(cat "$file")
+                  VERSION_TEXT+="- [${filename}](https://github.com/FuelLabs/fuel-core/pull/${filename}): ${content}\n"
+                done
+              fi
+            fi
+          done
+          {
+            echo 'VERSION_TEXT<<EOF'
+            echo -e ${VERSION_TEXT}
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+
+      - name: Update PR description with the version and changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Update the PR description with the version and changes
+          gh pr edit ${{ github.event.pull_request.number }} --body "## Version ${{ steps.get_version.outputs.NEW_VERSION }}
+          ${{ steps.gather_changes.outputs.VERSION_TEXT }}"
+
+      - name: Update the CHANGELOG.md file
+        run: |
+          while IFS= read -r line; do
+            if [[ "$line" == "## [Unreleased (see .changes folder)]" ]]; then
+                echo -e "## [Unreleased (see .changes folder)]\n"
+                echo -e "## [Version ${{ steps.get_version.outputs.NEW_VERSION }}]"
+                VERSION_TEXT="${{ steps.gather_changes.outputs.VERSION_TEXT }}"
+                VERSION_TEXT=${VERSION_TEXT::-1}
+                echo -e "$VERSION_TEXT"
+            else
+                printf "%s\n" "$line"
+            fi
+          done < CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+          cat CHANGELOG.md
+          
+      - name: Delete all the .md files in the .changes directory
+        run: |
+          find .changes -type f -name '*.md' -delete
+      
+      - name: Commit & push the changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md
+          git add .changes
+          git commit -m "Generate changelog for v.${{ steps.get_version.outputs.NEW_VERSION }}"
+          git push
