@@ -66,7 +66,10 @@ use fuel_core_types::{
     },
     fuel_vm::interpreter::Memory,
     services::{
-        executor::TransactionExecutionStatus,
+        executor::{
+            StorageReadReplayEvent,
+            TransactionExecutionStatus,
+        },
         graphql_api::ContractBalance,
         p2p::PeerInfo,
         txpool::TransactionStatus,
@@ -259,6 +262,11 @@ pub trait BlockProducerPort: Send + Sync {
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
     ) -> anyhow::Result<Vec<TransactionExecutionStatus>>;
+
+    async fn storage_read_replay(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Vec<StorageReadReplayEvent>>;
 }
 
 #[async_trait::async_trait]

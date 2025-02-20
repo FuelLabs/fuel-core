@@ -980,6 +980,39 @@ impl DryRunTransactionExecutionStatus {
     }
 }
 
+pub struct StorageReadReplayEvent {
+    column: U32,
+    key: HexString,
+    value: Option<HexString>,
+}
+
+impl From<fuel_core_types::services::executor::StorageReadReplayEvent>
+    for StorageReadReplayEvent
+{
+    fn from(event: fuel_core_types::services::executor::StorageReadReplayEvent) -> Self {
+        Self {
+            column: event.column.into(),
+            key: HexString(event.key),
+            value: event.value.map(HexString),
+        }
+    }
+}
+
+#[Object]
+impl StorageReadReplayEvent {
+    async fn column(&self) -> U32 {
+        self.column
+    }
+
+    async fn key(&self) -> HexString {
+        self.key.clone()
+    }
+
+    async fn value(&self) -> Option<HexString> {
+        self.value.clone()
+    }
+}
+
 #[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
 pub(crate) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,

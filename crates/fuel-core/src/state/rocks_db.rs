@@ -142,6 +142,7 @@ impl<Description> Drop for RocksDb<Description> {
         // Drop the snapshot before the db.
         // Dropping the snapshot after the db will cause a sigsegv.
         self.snapshot = None;
+        self.db.cancel_all_background_work(true);
     }
 }
 

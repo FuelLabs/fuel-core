@@ -131,6 +131,14 @@ pub struct QueryCosts {
     )]
     pub dry_run: usize,
 
+    /// Query costs for generating execution trace for a block.
+    #[clap(
+        long = "query-cost-storage-read-replay",
+        default_value = DEFAULT_QUERY_COSTS.storage_read_replay.to_string(),
+        env
+    )]
+    pub storage_read_replay: usize,
+
     /// Query costs for submitting a transaction.
     #[clap(
         long = "query-cost-submit",
