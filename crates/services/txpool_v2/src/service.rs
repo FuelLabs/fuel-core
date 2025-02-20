@@ -391,7 +391,7 @@ where
                         tx,
                     } => {
                         if let Some(channel) = response_channel {
-                            if let Err(_) = channel.send(Ok(())) {
+                            if channel.send(Ok(())).is_err() {
                                 tracing::error!("Failed to send the response to the RPC");
                             }
                         }
@@ -537,8 +537,8 @@ where
             };
             let tx = Arc::new(checked_tx);
 
-            if let Err(e) =
-                pool_insert_request_sender.send(PoolInsertRequest::Insert { tx, source })
+            if let Err(e) = pool_insert_request_sender
+                .try_send(PoolInsertRequest::Insert { tx, source })
             {
                 tracing::error!("Failed to send the insert request: {}", e);
             }

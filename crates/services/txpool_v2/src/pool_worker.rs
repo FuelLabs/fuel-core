@@ -20,8 +20,6 @@ use tokio::sync::{
     mpsc::{
         Receiver,
         Sender,
-        UnboundedReceiver,
-        UnboundedSender,
     },
     oneshot,
 };
@@ -44,14 +42,17 @@ const MAX_PENDING_READ_POOL_REQUESTS: usize = 10_000;
 const MAX_PENDING_INSERT_POOL_REQUESTS: usize = 1_000;
 const MAX_PENDING_REMOVE_POOL_REQUESTS: usize = 1_000;
 
+const SIZE_EXTRACT_BLOCK_TRANSACTIONS_CHANNEL: usize = 100_000;
+const SIZE_NOTIFICATION_CHANNEL: usize = 10_000_000;
+const SIZE_THREAD_MANAGEMENT_CHANNEL: usize = 10;
+
 pub(super) struct PoolWorkerInterface {
-    thread_management_sender: UnboundedSender<ThreadManagementRequest>,
-    pub(super) request_insert_sender: UnboundedSender<PoolInsertRequest>,
-    pub(super) request_remove_sender: UnboundedSender<PoolRemoveRequest>,
+    thread_management_sender: Sender<ThreadManagementRequest>,
+    pub(super) request_insert_sender: Sender<PoolInsertRequest>,
+    pub(super) request_remove_sender: Sender<PoolRemoveRequest>,
     pub(super) request_read_sender: Sender<PoolReadRequest>,
-    pub(super) extract_block_transactions_sender:
-        UnboundedSender<PoolExtractBlockTransactions>,
-    pub(super) notification_receiver: UnboundedReceiver<PoolNotification>,
+    pub(super) extract_block_transactions_sender: Sender<PoolExtractBlockTransactions>,
+    pub(super) notification_receiver: Receiver<PoolNotification>,
     handle: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -67,12 +68,15 @@ impl PoolWorkerInterface {
         let (request_read_sender, request_read_receiver) =
             mpsc::channel(limits.max_pending_read_pool_requests);
         let (extract_block_transactions_sender, extract_block_transactions_receiver) =
-            mpsc::unbounded_channel();
-        let (request_remove_sender, request_remove_receiver) = mpsc::unbounded_channel();
-        let (request_insert_sender, request_insert_receiver) = mpsc::unbounded_channel();
-        let (notification_sender, notification_receiver) = mpsc::unbounded_channel();
+            mpsc::channel(SIZE_EXTRACT_BLOCK_TRANSACTIONS_CHANNEL);
+        let (request_remove_sender, request_remove_receiver) =
+            mpsc::channel(limits.max_pending_write_pool_requests);
+        let (request_insert_sender, request_insert_receiver) =
+            mpsc::channel(limits.max_pending_write_pool_requests);
+        let (notification_sender, notification_receiver) =
+            mpsc::channel(SIZE_NOTIFICATION_CHANNEL);
         let (thread_management_sender, thread_management_receiver) =
-            mpsc::unbounded_channel();
+            mpsc::channel(SIZE_THREAD_MANAGEMENT_CHANNEL);
 
         let handle = std::thread::spawn(move || {
             let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
@@ -108,7 +112,7 @@ impl PoolWorkerInterface {
 
     pub fn remove_executed_transactions(&self, tx_ids: Vec<TxId>) -> anyhow::Result<()> {
         self.request_remove_sender
-            .send(PoolRemoveRequest::ExecutedTransactions { tx_ids })
+            .try_send(PoolRemoveRequest::ExecutedTransactions { tx_ids })
             .map_err(|e| anyhow::anyhow!("Failed to send remove request: {}", e))
     }
 
@@ -117,7 +121,7 @@ impl PoolWorkerInterface {
         tx_and_dependents_ids: (Vec<TxId>, Error),
     ) -> anyhow::Result<()> {
         self.request_remove_sender
-            .send(PoolRemoveRequest::TxAndCoinDependents {
+            .try_send(PoolRemoveRequest::TxAndCoinDependents {
                 tx_and_dependents_ids,
             })
             .map_err(|e| {
@@ -131,7 +135,7 @@ impl PoolWorkerInterface {
     pub fn stop(&mut self) {
         if let Err(e) = self
             .thread_management_sender
-            .send(ThreadManagementRequest::Stop)
+            .try_send(ThreadManagementRequest::Stop)
         {
             tracing::error!("Failed to send stop request: {}", e);
         }
@@ -227,14 +231,14 @@ pub(super) enum PoolNotification {
 }
 
 pub(super) struct PoolWorker<View> {
-    thread_management_receiver: UnboundedReceiver<ThreadManagementRequest>,
-    request_remove_receiver: UnboundedReceiver<PoolRemoveRequest>,
+    thread_management_receiver: Receiver<ThreadManagementRequest>,
+    request_remove_receiver: Receiver<PoolRemoveRequest>,
     request_read_receiver: Receiver<PoolReadRequest>,
-    extract_block_transactions_receiver: UnboundedReceiver<PoolExtractBlockTransactions>,
-    request_insert_receiver: UnboundedReceiver<PoolInsertRequest>,
+    extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
+    request_insert_receiver: Receiver<PoolInsertRequest>,
     pool: TxPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
-    notification_sender: UnboundedSender<PoolNotification>,
+    notification_sender: Sender<PoolNotification>,
 }
 
 impl<View> PoolWorker<View>
@@ -350,12 +354,13 @@ where
                     }
                 };
                 if let Err(e) =
-                    self.notification_sender.send(PoolNotification::Inserted {
-                        tx_id,
-                        expiration,
-                        time: SystemTime::now(),
-                        source: extended_source,
-                    })
+                    self.notification_sender
+                        .try_send(PoolNotification::Inserted {
+                            tx_id,
+                            expiration,
+                            time: SystemTime::now(),
+                            source: extended_source,
+                        })
                 {
                     tracing::error!("Failed to send inserted notification: {}", e);
                 }
@@ -363,10 +368,11 @@ where
                 for tx in removed_txs {
                     let removed_tx_id = tx.id();
                     if let Err(e) =
-                        self.notification_sender.send(PoolNotification::Removed {
-                            tx_id: removed_tx_id,
-                            error: Error::Removed(RemovedReason::LessWorth(tx_id)),
-                        })
+                        self.notification_sender
+                            .try_send(PoolNotification::Removed {
+                                tx_id: removed_tx_id,
+                                error: Error::Removed(RemovedReason::LessWorth(tx_id)),
+                            })
                     {
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
@@ -375,7 +381,7 @@ where
             Err(error) => {
                 if let Err(e) =
                     self.notification_sender
-                        .send(PoolNotification::ErrorInsertion {
+                        .try_send(PoolNotification::ErrorInsertion {
                             tx_id,
                             source,
                             error,
@@ -407,7 +413,7 @@ where
             let removed = self.pool.remove_coin_dependents(tx_id);
             for tx in removed {
                 let tx_id = tx.id();
-                if let Err(e) = self.notification_sender.send(PoolNotification::Removed {
+                if let Err(e) = self.notification_sender.try_send(PoolNotification::Removed {
                     tx_id,
                     error: Error::SkippedTransaction(
                         format!("Parent transaction with id: {tx_id}, was removed because of: {reason}")
@@ -424,10 +430,13 @@ where
         let removed = self.pool.remove_transaction_and_dependents(tx_ids);
         for tx in removed {
             let tx_id = tx.id();
-            if let Err(e) = self.notification_sender.send(PoolNotification::Removed {
-                tx_id,
-                error: error.clone(),
-            }) {
+            if let Err(e) = self
+                .notification_sender
+                .try_send(PoolNotification::Removed {
+                    tx_id,
+                    error: error.clone(),
+                })
+            {
                 tracing::error!("Failed to send removed notification: {}", e);
             }
         }

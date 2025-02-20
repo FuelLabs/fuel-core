@@ -48,10 +48,10 @@ use crate::{
 
 #[derive(Clone)]
 pub struct SharedState {
-    pub(crate) request_remove_sender: mpsc::UnboundedSender<PoolRemoveRequest>,
+    pub(crate) request_remove_sender: mpsc::Sender<PoolRemoveRequest>,
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
-        mpsc::UnboundedSender<pool_worker::PoolExtractBlockTransactions>,
+        mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
     pub(crate) request_read_sender: mpsc::Sender<PoolReadRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
@@ -97,7 +97,7 @@ impl SharedState {
         let (select_transactions_sender, mut select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
-            .send(
+            .try_send(
                 pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
                     constraints,
                     transactions: select_transactions_sender,
@@ -202,7 +202,7 @@ impl SharedState {
 
         if let Err(e) = self
             .request_remove_sender
-            .send(PoolRemoveRequest::CoinDependents { dependents_ids })
+            .try_send(PoolRemoveRequest::CoinDependents { dependents_ids })
         {
             tracing::error!("Failed to send remove coin dependents request: {}", e);
         }
