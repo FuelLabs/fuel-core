@@ -227,14 +227,13 @@ fn initialize_gossipsub(gossipsub: &mut gossipsub::Behaviour, p2p_config: &Confi
         .with_peer_score(peer_score_params, peer_score_thresholds)
         .expect("gossipsub initialized with peer score");
 
-    // TODO: Make topics configurable.
-    let topics = vec![
-        (NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT),
-        (
+    let mut topics = vec![(NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT)];
+    if p2p_config.subscribe_to_pre_confirmations {
+        topics.push((
             TX_CONFIRMATIONS_GOSSIP_TOPIC,
             TX_CONFIRMATIONS_GOSSIP_WEIGHT,
-        ),
-    ];
+        ));
+    }
 
     // subscribe to gossipsub topics with the network name suffix
     for (topic, weight) in topics {
