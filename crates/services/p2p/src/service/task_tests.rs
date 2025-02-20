@@ -506,7 +506,7 @@ fn arb_tx_confirmation_gossip_message() -> FuelP2PEvent {
     let peer_id = PeerId::random();
     let message_id = vec![1, 2, 3, 4, 5].into();
     let topic_hash = TopicHash::from_raw(TX_CONFIRMATIONS_GOSSIP_TOPIC);
-    let confirmations = TxConfirmations::default_test_tx();
+    let confirmations = TxConfirmations::default_test_confirmation();
     let message = GossipsubMessage::Confirmations(confirmations);
     FuelP2PEvent::GossipsubMessage {
         peer_id,

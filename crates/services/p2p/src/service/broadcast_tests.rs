@@ -13,7 +13,7 @@ fn arb_shared_state() -> SharedState {
 async fn shared_state__broadcast__tx_confirmations() {
     // given
     let broadcast = arb_shared_state();
-    let confirmations = TxConfirmations::default_test_tx();
+    let confirmations = TxConfirmations::default_test_confirmation();
     let confirmations_gossip_data = ConfirmationsGossipData {
         data: Some(confirmations.clone()),
         peer_id: FuelPeerId::from(PeerId::random().to_bytes().to_vec()),

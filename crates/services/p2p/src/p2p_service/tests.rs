@@ -587,10 +587,6 @@ async fn peer_info_updates_work() {
 #[tokio::test]
 #[instrument]
 async fn gossipsub_broadcast_tx_with_accept__new_tx() {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .with_target(false)
-        .init();
     for _ in 0..100 {
         tokio::time::timeout(
             Duration::from_secs(5),
@@ -610,16 +606,12 @@ async fn gossipsub_broadcast_tx_with_accept__new_tx() {
 #[tokio::test]
 #[instrument]
 async fn gossipsub_broadcast_tx_with_accept__tx_confirmations() {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .with_target(false)
-        .init();
     for _ in 0..100 {
         tokio::time::timeout(
             Duration::from_secs(20),
             gossipsub_broadcast(
                 GossipsubBroadcastRequest::Confirmations(Arc::new(
-                    TxConfirmations::default_test_tx(),
+                    TxConfirmations::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Accept,
                 None,
@@ -657,7 +649,7 @@ async fn gossipsub_broadcast_tx_with_reject__tx_confirmations() {
             Duration::from_secs(5),
             gossipsub_broadcast(
                 GossipsubBroadcastRequest::Confirmations(Arc::new(
-                    TxConfirmations::default_test_tx(),
+                    TxConfirmations::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Reject,
                 None,
