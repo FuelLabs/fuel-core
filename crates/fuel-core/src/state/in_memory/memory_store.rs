@@ -134,8 +134,7 @@ where
         for (column, btree) in changes.into_iter() {
             let mut lock = self.inner[column as usize]
                 .lock()
-                .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))
-                .unwrap();
+                .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?;
 
             for (key, operation) in btree.into_iter() {
                 if !conflicts_finder.insert((column, key.clone())) {

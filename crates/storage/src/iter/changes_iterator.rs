@@ -52,6 +52,7 @@ where
                     WriteOperation::Remove => None,
                 })),
             StorageChanges::ChangesList(changes_list) => {
+                let mut found_value = None;
                 for changes in changes_list.iter() {
                     if let Some(value) = changes
                         .get(&column.id())
@@ -61,10 +62,19 @@ where
                             WriteOperation::Remove => None,
                         })
                     {
-                        return Ok(Some(value));
+                        if found_value.is_some() {
+                            return Err(anyhow::anyhow!(
+                                "Conflicting changes found for the column {} with {:?}",
+                                column.name(),
+                                key
+                            )
+                            .into());
+                        }
+
+                        found_value = Some(value);
                     }
                 }
-                Ok(None)
+                Ok(found_value)
             }
         }
     }
