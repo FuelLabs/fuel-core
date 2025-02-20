@@ -828,7 +828,7 @@ where
             broadcast.reserved_peers_broadcast.clone(),
             config,
             GossipsubMessageHandler::new(),
-            RequestResponseMessageHandler::new(max_block_size.try_into()?),
+            RequestResponseMessageHandler::new(max_block_size),
         )
         .await?;
         p2p_service.update_block_height(last_height);

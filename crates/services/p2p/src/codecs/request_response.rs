@@ -1,4 +1,7 @@
-use std::io;
+use std::{
+    io,
+    num::NonZeroU32,
+};
 
 use crate::request_response::{
     messages::{
@@ -31,7 +34,7 @@ pub struct RequestResponseMessageHandler<Codec> {
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
-    pub(crate) max_response_size: u64,
+    pub(crate) max_response_size: NonZeroU32,
 }
 
 /// Since Postcard does not support async reads or writes out of the box
@@ -66,7 +69,7 @@ where
     {
         let mut response = Vec::new();
         socket
-            .take(self.max_response_size as u64)
+            .take(self.max_response_size.get() as u64)
             .read_to_end(&mut response)
             .await?;
         self.codec.decode(&response)
@@ -82,7 +85,7 @@ where
     {
         let mut response = Vec::new();
         socket
-            .take(self.max_response_size as u64)
+            .take(self.max_response_size.get() as u64)
             .read_to_end(&mut response)
             .await?;
 
