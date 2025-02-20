@@ -15,7 +15,7 @@ use crate::{
         },
         topics::{
             NEW_TX_GOSSIP_TOPIC,
-            TX_CONFIRMATIONS_GOSSIP_TOPIC,
+            TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
         },
     },
     p2p_service::{
@@ -810,7 +810,7 @@ async fn gossipsub_broadcast(
                 (NEW_TX_GOSSIP_TOPIC, GossipTopicTag::NewTx)
             }
             GossipsubBroadcastRequest::TxPreConfirmations(_) => (
-                TX_CONFIRMATIONS_GOSSIP_TOPIC,
+                TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
                 GossipTopicTag::TxPreConfirmations,
             ),
         };

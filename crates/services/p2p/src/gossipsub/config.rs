@@ -1,6 +1,6 @@
 use super::topics::{
     NEW_TX_GOSSIP_TOPIC,
-    TX_CONFIRMATIONS_GOSSIP_TOPIC,
+    TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
 };
 use crate::{
     config::{
@@ -52,7 +52,7 @@ const MESH_SIZE: usize = 8;
 // The weight applied to the score for delivering new transactions.
 const NEW_TX_GOSSIP_WEIGHT: f64 = 0.05;
 
-const TX_CONFIRMATIONS_GOSSIP_WEIGHT: f64 = 0.05;
+const TX_PRECONFIRMATIONS_GOSSIP_WEIGHT: f64 = 0.05;
 
 // The threshold for a peer's score to be considered for greylisting.
 // If a peer's score falls below this value, they will be greylisted.
@@ -230,8 +230,8 @@ fn initialize_gossipsub(gossipsub: &mut gossipsub::Behaviour, p2p_config: &Confi
     let mut topics = vec![(NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT)];
     if p2p_config.subscribe_to_pre_confirmations {
         topics.push((
-            TX_CONFIRMATIONS_GOSSIP_TOPIC,
-            TX_CONFIRMATIONS_GOSSIP_WEIGHT,
+            TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
+            TX_PRECONFIRMATIONS_GOSSIP_WEIGHT,
         ));
     }
 

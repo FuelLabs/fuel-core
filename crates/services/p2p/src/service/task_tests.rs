@@ -4,7 +4,7 @@ use crate::ports::P2pDb;
 use super::*;
 
 use crate::{
-    gossipsub::topics::TX_CONFIRMATIONS_GOSSIP_TOPIC,
+    gossipsub::topics::TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
     peer_manager::heartbeat_data::HeartbeatData,
 };
 use fuel_core_services::{
@@ -505,7 +505,7 @@ async fn should_process_all_imported_block_under_infinite_events_from_p2p() {
 fn arb_tx_confirmation_gossip_message() -> FuelP2PEvent {
     let peer_id = PeerId::random();
     let message_id = vec![1, 2, 3, 4, 5].into();
-    let topic_hash = TopicHash::from_raw(TX_CONFIRMATIONS_GOSSIP_TOPIC);
+    let topic_hash = TopicHash::from_raw(TX_PRECONFIRMATIONS_GOSSIP_TOPIC);
     let confirmations = PreConfirmationMessage::default_test_confirmation();
     let message = GossipsubMessage::TxPreConfirmations(confirmations);
     FuelP2PEvent::GossipsubMessage {
