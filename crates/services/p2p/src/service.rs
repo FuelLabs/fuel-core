@@ -1,6 +1,9 @@
 use crate::{
     cached_view::CachedView,
-    codecs::postcard::PostcardCodec,
+    codecs::{
+        gossipsub::GossipsubMessageHandler,
+        request_response::RequestResponseMessageHandler,
+    },
     config::{
         Config,
         NotInitialized,
@@ -824,7 +827,8 @@ where
         let mut p2p_service = FuelP2PService::new(
             broadcast.reserved_peers_broadcast.clone(),
             config,
-            PostcardCodec::new(max_block_size),
+            GossipsubMessageHandler::new(),
+            RequestResponseMessageHandler::new(max_block_size),
         )
         .await?;
         p2p_service.update_block_height(last_height);
