@@ -32,7 +32,7 @@ use fuel_core_types::{
         Bytes32,
     },
     fuel_types::BlockHeight,
-    services::txpool::TransactionStatusV2,
+    services::txpool::TransactionStatusStorage,
 };
 use statistic::StatisticTable;
 
@@ -222,8 +222,8 @@ where
     fn update_tx_status(
         &mut self,
         id: &Bytes32,
-        status: TransactionStatusV2,
-    ) -> StorageResult<Option<TransactionStatusV2>> {
+        status: TransactionStatusStorage,
+    ) -> StorageResult<Option<TransactionStatusStorage>> {
         self.storage::<TransactionStatuses>().replace(id, &status)
     }
 

@@ -13,7 +13,7 @@ use fuel_core_types::{
             GossipsubMessageAcceptance,
             PeerId,
         },
-        txpool::TransactionStatusV2,
+        txpool::TransactionStatusPreconfirmations,
     },
 };
 use std::{
@@ -207,7 +207,7 @@ async fn can_insert_from_p2p() {
     assert!(matches!(
         res,
         Some(TxStatusMessage::Status(
-            TransactionStatusV2::Submitted { .. }
+            TransactionStatusPreconfirmations::Submitted { .. }
         ))
     ));
 
@@ -258,7 +258,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
         matches!(
             update,
             Some(TxStatusMessage::Status(
-                TransactionStatusV2::Submitted { .. }
+                TransactionStatusPreconfirmations::Submitted { .. }
             ))
         ),
         "Got {:?}",
@@ -296,7 +296,7 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     assert!(matches!(
         res,
         Some(TxStatusMessage::Status(
-            TransactionStatusV2::Submitted { .. }
+            TransactionStatusPreconfirmations::Submitted { .. }
         ))
     ));
 

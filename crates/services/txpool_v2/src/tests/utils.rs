@@ -5,7 +5,7 @@ use std::{
 
 use fuel_core_types::{
     fuel_tx::Bytes32,
-    services::txpool::TransactionStatusV2,
+    services::txpool::TransactionStatusPreconfirmations,
     tai64::Tai64,
 };
 use proptest::{
@@ -36,12 +36,13 @@ use crate::{
     },
 };
 
-pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatusV2> {
+pub fn transaction_status_strategy(
+) -> impl Strategy<Value = TransactionStatusPreconfirmations> {
     prop_oneof![
-        Just(TransactionStatusV2::Submitted {
+        Just(TransactionStatusPreconfirmations::Submitted {
             timestamp: Tai64(0)
         }),
-        Just(TransactionStatusV2::Success {
+        Just(TransactionStatusPreconfirmations::Success {
             block_height: Default::default(),
             block_timestamp: Tai64(0),
             program_state: None,
@@ -49,10 +50,12 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatusV
             total_gas: 0,
             total_fee: 0,
         }),
-        Just(TransactionStatusV2::SuccessDuringBlockProduction {
-            block_height: Default::default()
-        }),
-        Just(TransactionStatusV2::Failure {
+        Just(
+            TransactionStatusPreconfirmations::SuccessDuringBlockProduction {
+                block_height: Default::default()
+            }
+        ),
+        Just(TransactionStatusPreconfirmations::Failure {
             block_height: Default::default(),
             block_timestamp: Tai64(0),
             program_state: None,
@@ -61,15 +64,19 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatusV
             total_fee: 0,
             reason: "failure".to_string(),
         }),
-        Just(TransactionStatusV2::FailureDuringBlockProduction {
-            block_height: Default::default()
-        }),
-        Just(TransactionStatusV2::SqueezedOut {
+        Just(
+            TransactionStatusPreconfirmations::FailureDuringBlockProduction {
+                block_height: Default::default()
+            }
+        ),
+        Just(TransactionStatusPreconfirmations::SqueezedOut {
             reason: Default::default(),
         }),
-        Just(TransactionStatusV2::SqueezedOutDuringBlockProduction {
-            reason: "squeezed out".to_string(),
-        }),
+        Just(
+            TransactionStatusPreconfirmations::SqueezedOutDuringBlockProduction {
+                reason: "squeezed out".to_string(),
+            }
+        ),
     ]
 }
 

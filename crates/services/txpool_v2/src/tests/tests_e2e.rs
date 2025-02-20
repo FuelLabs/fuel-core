@@ -6,7 +6,7 @@
 
 use fuel_core_types::{
     fuel_tx::Bytes32,
-    services::txpool::TransactionStatusV2,
+    services::txpool::TransactionStatusPreconfirmations,
     tai64::Tai64,
 };
 use proptest::prelude::*;
@@ -69,7 +69,7 @@ fn test_update_sender_reg() {
         Subscribe(0),
         Send(
             0,
-            Status(TransactionStatusV2::Success {
+            Status(TransactionStatusPreconfirmations::Success {
                 block_height: Default::default(),
                 block_timestamp: Tai64(0),
                 program_state: None,
@@ -81,7 +81,7 @@ fn test_update_sender_reg() {
         Recv(0),
         Send(
             0,
-            Status(TransactionStatusV2::Submitted {
+            Status(TransactionStatusPreconfirmations::Submitted {
                 timestamp: Tai64(0),
             }),
         ),

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use fuel_core::{
     self,
-    schema::tx::types::TransactionStatus,
+    schema::tx::types::TransactionStatusPreconfirmations,
     service::{
         Config,
         FuelService,
@@ -229,7 +229,7 @@ async fn test_regression_in_subscribe() {
                     .filter(|status| {
                         futures::future::ready(!matches!(
                             status,
-                            Ok(TransactionStatus::Submitted(_))
+                            Ok(TransactionStatusPreconfirmations::Submitted(_))
                         ))
                     })
                     .collect::<Vec<_>>();
@@ -245,7 +245,7 @@ async fn test_regression_in_subscribe() {
         };
         match r {
             Ok(s) => assert_eq!(
-                matches!(s, TransactionStatus::Success(_)),
+                matches!(s, TransactionStatusPreconfirmations::Success(_)),
                 model_result,
                 "{:?}",
                 s

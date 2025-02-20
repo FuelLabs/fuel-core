@@ -6,7 +6,7 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types::Bytes32,
-    services::txpool::TransactionStatusV2 as TxPoolTxStatus,
+    services::txpool::TransactionStatusPreconfirmations as TxPoolTxStatus,
 };
 use futures::{
     Stream,
@@ -20,7 +20,7 @@ use crate::{
         transaction_status_change,
         TxnStatusChangeState,
     },
-    schema::tx::types::TransactionStatus,
+    schema::tx::types::TransactionStatusPreconfirmations,
 };
 
 use super::*;
@@ -39,7 +39,9 @@ impl FuelService {
     pub async fn submit_and_status_change(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>> + '_> {
+    ) -> anyhow::Result<
+        impl Stream<Item = anyhow::Result<TransactionStatusPreconfirmations>> + '_,
+    > {
         let id = tx.id(&self
             .shared
             .config
@@ -56,7 +58,7 @@ impl FuelService {
     pub async fn submit_and_await_commit(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<TransactionStatus> {
+    ) -> anyhow::Result<TransactionStatusPreconfirmations> {
         let id = tx.id(&self
             .shared
             .config
@@ -65,7 +67,10 @@ impl FuelService {
             .consensus_parameters
             .chain_id());
         let stream = self.transaction_status_change(id).await?.filter(|status| {
-            futures::future::ready(!matches!(status, Ok(TransactionStatus::Submitted(_))))
+            futures::future::ready(!matches!(
+                status,
+                Ok(TransactionStatusPreconfirmations::Submitted(_))
+            ))
         });
         futures::pin_mut!(stream);
         self.submit(tx).await?;
@@ -79,7 +84,9 @@ impl FuelService {
     pub async fn transaction_status_change(
         &self,
         id: Bytes32,
-    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>> + '_> {
+    ) -> anyhow::Result<
+        impl Stream<Item = anyhow::Result<TransactionStatusPreconfirmations>> + '_,
+    > {
         let txpool = &self.shared.txpool_shared_state;
         let db = self.shared.database.off_chain().latest_view()?;
         let rx = txpool.tx_update_subscribe(id)?;
@@ -96,7 +103,7 @@ struct StatusChangeState<'a> {
 impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>> {
         match self.db.get_tx_status(&id)? {
-            Some(status) => Ok(Some(status)),
+            Some(status) => Ok(Some(status.into())),
             None => {
                 let result = self
                     .txpool

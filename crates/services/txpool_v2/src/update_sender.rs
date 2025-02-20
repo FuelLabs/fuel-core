@@ -10,7 +10,7 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
-    services::txpool::TransactionStatusV2,
+    services::txpool::TransactionStatusPreconfirmations,
     tai64::Tai64,
 };
 use parking_lot::Mutex;
@@ -74,7 +74,9 @@ impl TxStatusChange {
         let _ = self.new_tx_notification_sender.send(id);
         self.update_sender.send(TxUpdate::new(
             id,
-            TxStatusMessage::Status(TransactionStatusV2::Submitted { timestamp }),
+            TxStatusMessage::Status(TransactionStatusPreconfirmations::Submitted {
+                timestamp,
+            }),
         ));
     }
 
@@ -82,7 +84,7 @@ impl TxStatusChange {
         tracing::info!("Transaction {id} squeezed out because {reason}");
         self.update_sender.send(TxUpdate::new(
             id,
-            TxStatusMessage::Status(TransactionStatusV2::SqueezedOut {
+            TxStatusMessage::Status(TransactionStatusPreconfirmations::SqueezedOut {
                 reason: reason.to_string(),
             }),
         ));

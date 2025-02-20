@@ -1,6 +1,6 @@
 use fuel_core_types::{
     fuel_tx::Bytes32,
-    services::txpool::TransactionStatusV2,
+    services::txpool::TransactionStatusPreconfirmations,
 };
 use std::pin::Pin;
 use tokio_stream::Stream;
@@ -27,15 +27,15 @@ impl TxUpdate {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TxStatusMessage {
-    Status(TransactionStatusV2),
+    Status(TransactionStatusPreconfirmations),
     FailedStatus,
 }
 
-impl<E> From<Result<TransactionStatusV2, E>> for TxStatusMessage {
-    fn from(result: Result<TransactionStatusV2, E>) -> Self {
+impl<E> From<Result<TransactionStatusPreconfirmations, E>> for TxStatusMessage {
+    fn from(result: Result<TransactionStatusPreconfirmations, E>) -> Self {
         match result {
             Ok(status) => TxStatusMessage::Status(status),
-            _ => TxStatusMessage::FailedStatus,
+            Err(_) => TxStatusMessage::FailedStatus,
         }
     }
 }
@@ -43,12 +43,15 @@ impl<E> From<Result<TransactionStatusV2, E>> for TxStatusMessage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum State {
     Empty,
-    Initial(TransactionStatusV2),
-    EarlySuccess(TransactionStatusV2),
-    Success(TransactionStatusV2, TransactionStatusV2),
+    Initial(TransactionStatusPreconfirmations),
+    EarlySuccess(TransactionStatusPreconfirmations),
+    Success(
+        TransactionStatusPreconfirmations,
+        TransactionStatusPreconfirmations,
+    ),
     Failed,
-    LateFailed(TransactionStatusV2),
-    SenderClosed(TransactionStatusV2),
+    LateFailed(TransactionStatusPreconfirmations),
+    SenderClosed(TransactionStatusPreconfirmations),
     Closed,
 }
 
@@ -78,9 +81,11 @@ impl TxUpdateStream {
         let state = std::mem::replace(&mut self.state, State::Empty);
         self.state = match state {
             State::Empty => match msg {
-                TxStatusMessage::Status(TransactionStatusV2::Submitted { timestamp }) => {
-                    State::Initial(TransactionStatusV2::Submitted { timestamp })
-                }
+                TxStatusMessage::Status(
+                    TransactionStatusPreconfirmations::Submitted { timestamp },
+                ) => State::Initial(TransactionStatusPreconfirmations::Submitted {
+                    timestamp,
+                }),
                 TxStatusMessage::Status(s) => State::EarlySuccess(s),
                 TxStatusMessage::FailedStatus => State::Failed,
             },

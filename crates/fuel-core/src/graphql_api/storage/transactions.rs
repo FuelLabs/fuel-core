@@ -23,7 +23,7 @@ use fuel_core_types::{
         Bytes32,
     },
     fuel_types::BlockHeight,
-    services::txpool::TransactionStatusV2,
+    services::txpool::TransactionStatusStorage,
 };
 use std::{
     array::TryFromSliceError,
@@ -67,7 +67,7 @@ pub struct TransactionStatuses;
 impl Mappable for TransactionStatuses {
     type Key = Bytes32;
     type OwnedKey = Self::Key;
-    type Value = TransactionStatusV2; // TODO[RC]: Migration needed?
+    type Value = TransactionStatusStorage; // TODO[RC]: TransactionStatusStorage should ultimately only contain `Success` and `Failed` variants. We don't need to persist any other states.
     type OwnedValue = Self::Value;
 }
 
@@ -238,8 +238,8 @@ mod test {
     fuel_core_storage::basic_storage_tests!(
         TransactionStatuses,
         <TransactionStatuses as Mappable>::Key::default(),
-        TransactionStatusV2::Submitted {
-            timestamp: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
+        TransactionStatusStorage::Submitted {
+            time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
         }
     );
 }

@@ -101,6 +101,8 @@ pub struct StatusWithTransactionResponse {
     pub status: StatusWithTransaction,
 }
 
+// TODO[RC]: Update this to also distinguish between legacy TransactionStatusStorage (used in Storage)
+// and the new TransactionStatusWithPreconfirmations (used in the API)
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TransactionStatus {
     Submitted {

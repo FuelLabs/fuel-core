@@ -12,7 +12,7 @@ use crate::{
     },
     fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     p2p::Multiaddr,
-    schema::tx::types::TransactionStatus,
+    schema::tx::types::TransactionStatusPreconfirmations,
     service::{
         Config,
         FuelService,
@@ -563,8 +563,8 @@ impl Node {
                     result = wait_transaction.next() => {
                         let status = result.unwrap().unwrap();
 
-                        if matches!(status, TransactionStatus::Failure { .. }) || matches!(status, TransactionStatus::FailureDuringBlockProduction { .. })
-                            || matches!(status, TransactionStatus::Success { .. })|| matches!(status, TransactionStatus::SuccessDuringBlockProduction { .. }) {
+                        if matches!(status, TransactionStatusPreconfirmations::Failure { .. }) || matches!(status, TransactionStatusPreconfirmations::FailureDuringBlockProduction { .. })
+                            || matches!(status, TransactionStatusPreconfirmations::Success { .. })|| matches!(status, TransactionStatusPreconfirmations::SuccessDuringBlockProduction { .. }) {
                             break
                         }
                     }

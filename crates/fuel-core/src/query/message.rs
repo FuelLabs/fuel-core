@@ -31,7 +31,7 @@ use fuel_core_types::{
         MessageId,
         Nonce,
     },
-    services::txpool::TransactionStatusV2,
+    services::txpool::TransactionStatusStorage,
 };
 use futures::{
     Stream,
@@ -119,7 +119,7 @@ pub trait MessageProofData {
     fn transaction_status(
         &self,
         transaction_id: &TxId,
-    ) -> StorageResult<TransactionStatusV2>;
+    ) -> StorageResult<TransactionStatusStorage>;
 
     /// Gets the [`MerkleProof`] for the message block at `message_block_height` height
     /// relatively to the commit block where message block <= commit block.
@@ -138,7 +138,7 @@ impl MessageProofData for ReadView {
     fn transaction_status(
         &self,
         transaction_id: &TxId,
-    ) -> StorageResult<TransactionStatusV2> {
+    ) -> StorageResult<TransactionStatusStorage> {
         self.tx_status(transaction_id)
     }
 
@@ -160,7 +160,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
 ) -> StorageResult<MessageProof> {
     // Get the block id from the transaction status if it's ready.
     let (message_block_height, (sender, recipient, nonce, amount, data)) = match database.transaction_status(&transaction_id) {
-        Ok(TransactionStatusV2::Success { block_height, receipts, .. }) => (
+        Ok(TransactionStatusStorage::Success { block_height, receipts, .. }) => (
             block_height,
             receipts.into_iter()
             .find_map(|r| match r {
@@ -180,32 +180,23 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
                 anyhow::anyhow!("Desired `nonce` missing in transaction receipts").into(),
             )?
         ),
-        Ok(TransactionStatusV2::Submitted { .. }) => {
+        Ok(TransactionStatusStorage::Submitted { .. }) => {
             return Err(anyhow::anyhow!(
                 "Unable to obtain the message block height. The transaction has not been processed yet"
             )
             .into())
         }
-        Ok(TransactionStatusV2::SqueezedOut { reason }) => {
+        Ok(TransactionStatusStorage::SqueezedOut { reason }) => {
             return Err(anyhow::anyhow!(
                 "Unable to obtain the message block height. The transaction was squeezed out: {reason}"
             )
             .into())
         }
-        Ok(TransactionStatusV2::Failure { .. }) => {
+        Ok(TransactionStatusStorage::Failed { .. }) => {
             return Err(anyhow::anyhow!(
                 "Unable to obtain the message block height. The transaction failed"
             )
             .into())
-        }
-        Ok(TransactionStatusV2::SuccessDuringBlockProduction { .. }) => {
-            todo!() // TODO[RC]: Handle this
-        }
-        Ok(TransactionStatusV2::SqueezedOutDuringBlockProduction { .. }) => {
-            todo!() // TODO[RC]: Handle this
-        }
-        Ok(TransactionStatusV2::FailureDuringBlockProduction { .. }) => {
-            todo!() // TODO[RC]: Handle this
         }
         Err(err) => {
             return Err(anyhow::anyhow!(
@@ -214,7 +205,6 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
             .into())
         }
     };
-
     let Some(data) = data else {
         return Err(anyhow::anyhow!("Output message doesn't contain any `data`").into())
     };
@@ -281,13 +271,10 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
     let leaves: Vec<Vec<Receipt>> = message_block_txs
         .iter()
         .filter_map(|id| match database.transaction_status(id) {
-            Ok(TransactionStatusV2::Success { receipts, .. }) => Some(Ok(receipts)),
-            Ok(TransactionStatusV2::SuccessDuringBlockProduction { .. })
-            | Ok(TransactionStatusV2::SqueezedOut { .. })
-            | Ok(TransactionStatusV2::SqueezedOutDuringBlockProduction { .. })
-            | Ok(TransactionStatusV2::Failure { .. })
-            | Ok(TransactionStatusV2::FailureDuringBlockProduction { .. })
-            | Ok(TransactionStatusV2::Submitted { .. }) => None,
+            Ok(TransactionStatusStorage::Success { receipts, .. }) => Some(Ok(receipts)),
+            Ok(TransactionStatusStorage::Submitted { .. })
+            | Ok(TransactionStatusStorage::SqueezedOut { .. })
+            | Ok(TransactionStatusStorage::Failed { .. }) => None,
             Err(err) => Some(Err(err)),
         })
         .try_collect()?;
@@ -367,7 +354,7 @@ mod tests {
             BlockHeight,
             Nonce,
         },
-        services::txpool::TransactionStatusV2,
+        services::txpool::TransactionStatusStorage,
         tai64::Tai64,
     };
 
@@ -378,7 +365,7 @@ mod tests {
 
     pub struct FakeDB {
         pub blocks: HashMap<BlockHeight, CompressedBlock>,
-        pub transaction_statuses: HashMap<TxId, TransactionStatusV2>,
+        pub transaction_statuses: HashMap<TxId, TransactionStatusStorage>,
         pub receipts: HashMap<TxId, Vec<Receipt>>,
     }
 
@@ -398,7 +385,7 @@ mod tests {
         fn insert_transaction_status(
             &mut self,
             transaction_id: TxId,
-            status: TransactionStatusV2,
+            status: TransactionStatusStorage,
         ) {
             self.transaction_statuses.insert(transaction_id, status);
         }
@@ -416,7 +403,7 @@ mod tests {
         fn transaction_status(
             &self,
             transaction_id: &TxId,
-        ) -> fuel_core_storage::Result<TransactionStatusV2> {
+        ) -> fuel_core_storage::Result<TransactionStatusStorage> {
             self.transaction_statuses
                 .get(transaction_id)
                 .cloned()
@@ -462,13 +449,13 @@ mod tests {
         database.insert_block(block_height, block.clone());
         database.insert_transaction_status(
             valid_tx_id,
-            TransactionStatusV2::Success {
-                block_timestamp: Tai64::UNIX_EPOCH,
+            TransactionStatusStorage::Success {
+                time: Tai64::UNIX_EPOCH,
                 block_height,
                 receipts: valid_tx_receipts.clone(),
                 total_fee: 0,
                 total_gas: 0,
-                program_state: None,
+                result: None,
             },
         );
         database.insert_receipts(valid_tx_id, valid_tx_receipts.clone());
@@ -496,14 +483,13 @@ mod tests {
         }
         database.insert_transaction_status(
             invalid_tx_id,
-            TransactionStatusV2::Failure {
-                block_timestamp: Tai64::UNIX_EPOCH,
+            TransactionStatusStorage::Failed {
+                time: Tai64::UNIX_EPOCH,
                 block_height,
-                program_state: None,
+                result: None,
                 total_fee: 0,
                 total_gas: 0,
                 receipts: invalid_tx_receipts.clone(),
-                reason: "Failure reason".to_string(),
             },
         );
         database.insert_receipts(invalid_tx_id, invalid_tx_receipts.clone());

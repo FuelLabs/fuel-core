@@ -6,7 +6,7 @@ use std::{
 
 use fuel_core_types::{
     fuel_tx::Bytes32,
-    services::txpool::TransactionStatusV2,
+    services::txpool::TransactionStatusPreconfirmations,
     tai64::Tai64,
 };
 use parking_lot::lock_api::Mutex;
@@ -82,7 +82,7 @@ fn test_send_reg() {
     use State::*;
     let update = TxUpdate {
         tx_id: Bytes32::from([2; 32]),
-        message: TxStatusMessage::Status(TransactionStatusV2::Success {
+        message: TxStatusMessage::Status(TransactionStatusPreconfirmations::Success {
             block_height: Default::default(),
             block_timestamp: Tai64(0),
             program_state: None,
@@ -97,14 +97,14 @@ fn test_send_reg() {
             2,
             &[
                 SenderData::closed(Success(
-                    TransactionStatusV2::Submitted {
+                    TransactionStatusPreconfirmations::Submitted {
                         timestamp: Tai64(0),
                     },
-                    TransactionStatusV2::Submitted {
+                    TransactionStatusPreconfirmations::Submitted {
                         timestamp: Tai64(0),
                     },
                 )),
-                SenderData::ok(Initial(TransactionStatusV2::Submitted {
+                SenderData::ok(Initial(TransactionStatusPreconfirmations::Submitted {
                     timestamp: Tai64(0),
                 })),
             ],

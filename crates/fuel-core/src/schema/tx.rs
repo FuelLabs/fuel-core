@@ -29,7 +29,7 @@ use crate::{
             TransactionId,
             TxPointer,
         },
-        tx::types::TransactionStatus,
+        tx::types::TransactionStatusPreconfirmations,
         ReadViewProvider,
     },
     service::adapters::SharedMemoryPool,
@@ -420,8 +420,9 @@ impl TxStatusSubscription {
         &self,
         ctx: &'a Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
-    ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
-    {
+    ) -> anyhow::Result<
+        impl Stream<Item = async_graphql::Result<TransactionStatusPreconfirmations>> + 'a,
+    > {
         let txpool = ctx.data_unchecked::<TxPool>();
         let rx = txpool.tx_update_subscribe(id.into())?;
         let query = ctx.read_view()?;
@@ -441,13 +442,15 @@ impl TxStatusSubscription {
         ctx: &'a Context<'a>,
         tx: HexString,
     ) -> async_graphql::Result<
-        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
+        impl Stream<Item = async_graphql::Result<TransactionStatusPreconfirmations>> + 'a,
     > {
         use tokio_stream::StreamExt;
         let subscription = submit_and_await_status(ctx, tx).await?;
 
         Ok(subscription
-            .skip_while(|event| matches!(event, Ok(TransactionStatus::Submitted(..))))
+            .skip_while(|event| {
+                matches!(event, Ok(TransactionStatusPreconfirmations::Submitted(..)))
+            })
             .take(1))
     }
 
@@ -460,7 +463,7 @@ impl TxStatusSubscription {
         ctx: &'a Context<'a>,
         tx: HexString,
     ) -> async_graphql::Result<
-        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
+        impl Stream<Item = async_graphql::Result<TransactionStatusPreconfirmations>> + 'a,
     > {
         submit_and_await_status(ctx, tx).await
     }
@@ -470,7 +473,7 @@ async fn submit_and_await_status<'a>(
     ctx: &'a Context<'a>,
     tx: HexString,
 ) -> async_graphql::Result<
-    impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
+    impl Stream<Item = async_graphql::Result<TransactionStatusPreconfirmations>> + 'a,
 > {
     use tokio_stream::StreamExt;
     let txpool = ctx.data_unchecked::<TxPool>();
@@ -486,7 +489,7 @@ async fn submit_and_await_status<'a>(
     Ok(subscription
         .map(move |event| match event {
             TxStatusMessage::Status(status) => {
-                let status = TransactionStatus::new(tx_id, status);
+                let status = TransactionStatusPreconfirmations::new(tx_id, status);
                 Ok(status)
             }
             TxStatusMessage::FailedStatus => {
@@ -505,15 +508,19 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(
         &self,
         id: Bytes32,
-    ) -> StorageResult<Option<txpool::TransactionStatusV2>> {
+    ) -> StorageResult<Option<txpool::TransactionStatusPreconfirmations>> {
         match self.query.tx_status(&id) {
-            Ok(status) => Ok(Some(status)),
+            Ok(status) => Ok(Some(status.into())),
             Err(StorageError::NotFound(_, _)) => Ok(self
                 .txpool
                 .submission_time(id)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?
-                .map(|time| txpool::TransactionStatusV2::Submitted { timestamp: time })),
+                .map(
+                    |time| txpool::TransactionStatusPreconfirmations::Submitted {
+                        timestamp: time,
+                    },
+                )),
             Err(err) => Err(err),
         }
     }

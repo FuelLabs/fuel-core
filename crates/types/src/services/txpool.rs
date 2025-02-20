@@ -333,7 +333,7 @@ impl From<&PoolTransaction> for CheckedTransaction {
 /// The status of the transaction during its life from the tx pool until the block.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TransactionStatusV1 {
+pub enum TransactionStatusStorage {
     /// Transaction was submitted into the txpool
     Submitted {
         /// Timestamp of submission into the txpool
@@ -376,10 +376,54 @@ pub enum TransactionStatusV1 {
     },
 }
 
+impl From<TransactionStatusStorage> for TransactionStatusPreconfirmations {
+    fn from(value: TransactionStatusStorage) -> Self {
+        match value {
+            TransactionStatusStorage::Submitted { time } => {
+                TransactionStatusPreconfirmations::Submitted { timestamp: time }
+            }
+            TransactionStatusStorage::Success {
+                block_height,
+                time,
+                result,
+                receipts,
+                total_gas,
+                total_fee,
+            } => TransactionStatusPreconfirmations::Success {
+                block_height,
+                block_timestamp: time,
+                program_state: result,
+                receipts,
+                total_gas,
+                total_fee,
+            },
+            TransactionStatusStorage::SqueezedOut { reason } => {
+                TransactionStatusPreconfirmations::SqueezedOut { reason }
+            }
+            TransactionStatusStorage::Failed {
+                block_height,
+                time,
+                result,
+                receipts,
+                total_gas,
+                total_fee,
+            } => TransactionStatusPreconfirmations::Failure {
+                block_height,
+                block_timestamp: time,
+                program_state: result,
+                receipts,
+                total_gas,
+                total_fee,
+                reason: "Reason".to_string(), // TODO[RC]: Provide reason,
+            },
+        }
+    }
+}
+
 /// The status of the transaction during its life from the TxPool until the inclusion in the block.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TransactionStatusV2 {
+pub enum TransactionStatusPreconfirmations {
     /// Transaction was submitted into the TxPool
     Submitted {
         /// Timestamp of submission into the TxPool
@@ -443,7 +487,7 @@ pub enum TransactionStatusV2 {
 pub fn from_executor_to_status(
     block: &Block,
     result: TransactionExecutionResult,
-) -> TransactionStatusV2 {
+) -> TransactionStatusStorage {
     let timestamp = block.header().time();
     let block_height = *block.header().height();
     match result {
@@ -452,10 +496,10 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-        } => TransactionStatusV2::Success {
+        } => TransactionStatusStorage::Success {
             block_height,
-            block_timestamp: timestamp,
-            program_state: result,
+            time: timestamp,
+            result,
             receipts,
             total_gas,
             total_fee,
@@ -465,14 +509,13 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-        } => TransactionStatusV2::Failure {
+        } => TransactionStatusStorage::Failed {
             block_height,
-            block_timestamp: timestamp,
-            program_state: result,
+            time: timestamp,
+            result,
             receipts,
             total_gas,
             total_fee,
-            reason: "Reason".to_string(), // TODO[RC]: Provide reason,
         },
     }
 }
