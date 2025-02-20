@@ -190,7 +190,7 @@ impl SharedState {
     /// Notify the txpool that some transactions were skipped during block production.
     /// This is used to update the status of the skipped transactions internally and in subscriptions
     pub fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
-        let transactions = tx_ids_and_reason
+        let dependents_ids = tx_ids_and_reason
             .into_iter()
             .map(|(tx_id, reason)| {
                 self.tx_status_sender
@@ -199,11 +199,9 @@ impl SharedState {
             })
             .collect();
 
-        if let Err(e) =
-            self.request_remove_sender
-                .send(PoolRemoveRequest::RemoveCoinDependents {
-                    parent_txs: transactions,
-                })
+        if let Err(e) = self
+            .request_remove_sender
+            .send(PoolRemoveRequest::CoinDependents { dependents_ids })
         {
             tracing::error!("Failed to send remove coin dependents request: {}", e);
         }

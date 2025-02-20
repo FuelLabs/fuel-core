@@ -294,11 +294,14 @@ where
 {
     fn import_block(&mut self, result: SharedImportResult) -> TaskNextAction {
         let new_height = *result.sealed_block.entity.header().height();
-        let executed_transaction = result.tx_status.iter().map(|s| s.id).collect();
+        let executed_transactions = result.tx_status.iter().map(|s| s.id).collect();
         // We don't want block importer wait for us to process the result.
         drop(result);
 
-        if let Err(err) = self.pool_worker.remove(executed_transaction) {
+        if let Err(err) = self
+            .pool_worker
+            .remove_executed_transactions(executed_transactions)
+        {
             tracing::error!("{err}");
             return TaskNextAction::Stop
         }
@@ -319,7 +322,7 @@ where
         for height in range_to_remove {
             let expired_txs = self.pruner.height_expiration_txs.remove(&height);
             if let Some(expired_txs) = expired_txs {
-                let result = self.pool_worker.remove_and_coin_dependents((
+                let result = self.pool_worker.remove_tx_and_coin_dependents((
                     expired_txs,
                     Error::Removed(RemovedReason::Ttl),
                 ));
@@ -673,7 +676,7 @@ where
             }
         }
 
-        let result = self.pool_worker.remove_and_coin_dependents((
+        let result = self.pool_worker.remove_tx_and_coin_dependents((
             txs_to_remove,
             Error::Removed(RemovedReason::Ttl),
         ));

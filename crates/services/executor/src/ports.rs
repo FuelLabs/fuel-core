@@ -132,7 +132,7 @@ impl TransactionExt for Transaction {
             Transaction::Script(tx) => Ok(tx.inputs()),
             Transaction::Create(tx) => Ok(tx.inputs()),
             Transaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have max_gas".to_string(),
+                "Mint transaction doesn't have inputs".to_string(),
             )),
             Transaction::Upgrade(tx) => Ok(tx.inputs()),
             Transaction::Upload(tx) => Ok(tx.inputs()),

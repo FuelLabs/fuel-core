@@ -40,15 +40,19 @@ use crate::{
     Constraints,
 };
 
-pub struct PoolWorkerInterface {
-    pub(crate) thread_management_sender: UnboundedSender<ThreadManagementRequest>,
+const MAX_PENDING_READ_POOL_REQUESTS: usize = 10_000;
+const MAX_PENDING_INSERT_POOL_REQUESTS: usize = 1_000;
+const MAX_PENDING_REMOVE_POOL_REQUESTS: usize = 1_000;
+
+pub(crate) struct PoolWorkerInterface {
+    thread_management_sender: UnboundedSender<ThreadManagementRequest>,
     pub(crate) request_insert_sender: UnboundedSender<PoolInsertRequest>,
     pub(crate) request_remove_sender: UnboundedSender<PoolRemoveRequest>,
     pub(crate) request_read_sender: Sender<PoolReadRequest>,
     pub(crate) extract_block_transactions_sender:
         UnboundedSender<PoolExtractBlockTransactions>,
     pub(crate) notification_receiver: UnboundedReceiver<PoolNotification>,
-    pub(crate) handle: Option<std::thread::JoinHandle<()>>,
+    handle: Option<std::thread::JoinHandle<()>>,
 }
 
 impl PoolWorkerInterface {
@@ -71,10 +75,13 @@ impl PoolWorkerInterface {
             mpsc::unbounded_channel();
 
         let handle = std::thread::spawn(move || {
-            let tokio_runtime = tokio::runtime::Builder::new_current_thread()
+            let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-                .unwrap();
+            else {
+                tracing::error!("Failed to build tokio runtime for pool worker");
+                return;
+            };
             let mut worker = PoolWorker {
                 thread_management_receiver,
                 request_remove_receiver,
@@ -99,18 +106,20 @@ impl PoolWorkerInterface {
         }
     }
 
-    pub fn remove(&self, tx_ids: Vec<TxId>) -> anyhow::Result<()> {
+    pub fn remove_executed_transactions(&self, tx_ids: Vec<TxId>) -> anyhow::Result<()> {
         self.request_remove_sender
-            .send(PoolRemoveRequest::Remove { tx_ids })
+            .send(PoolRemoveRequest::ExecutedTransactions { tx_ids })
             .map_err(|e| anyhow::anyhow!("Failed to send remove request: {}", e))
     }
 
-    pub fn remove_and_coin_dependents(
+    pub fn remove_tx_and_coin_dependents(
         &self,
-        tx_ids: (Vec<TxId>, Error),
+        tx_and_dependents_ids: (Vec<TxId>, Error),
     ) -> anyhow::Result<()> {
         self.request_remove_sender
-            .send(PoolRemoveRequest::RemoveAndCoinDependents { tx_ids })
+            .send(PoolRemoveRequest::TxAndCoinDependents {
+                tx_and_dependents_ids,
+            })
             .map_err(|e| {
                 anyhow::anyhow!(
                     "Failed to send remove and coin dependents request: {}",
@@ -134,7 +143,7 @@ impl PoolWorkerInterface {
     }
 }
 
-pub enum ThreadManagementRequest {
+enum ThreadManagementRequest {
     Stop,
 }
 
@@ -163,9 +172,15 @@ pub enum PoolExtractBlockTransactions {
 }
 
 pub enum PoolRemoveRequest {
-    Remove { tx_ids: Vec<TxId> },
-    RemoveCoinDependents { parent_txs: Vec<(TxId, String)> },
-    RemoveAndCoinDependents { tx_ids: (Vec<TxId>, Error) },
+    ExecutedTransactions {
+        tx_ids: Vec<TxId>,
+    },
+    CoinDependents {
+        dependents_ids: Vec<(TxId, String)>,
+    },
+    TxAndCoinDependents {
+        tx_and_dependents_ids: (Vec<TxId>, Error),
+    },
 }
 pub enum PoolReadRequest {
     NonExistingTxs {
@@ -232,8 +247,13 @@ where
         let mut insert_buffer = vec![];
         tokio::select! {
             biased;
-            _ = self.thread_management_receiver.recv() => {
-                return true
+            management_req = self.thread_management_receiver.recv() => {
+                match management_req {
+                    Some(req) => match req {
+                        ThreadManagementRequest::Stop => return true,
+                    },
+                    None => return true,
+                }
             }
             extract = self.extract_block_transactions_receiver.recv() => {
                 match extract {
@@ -243,23 +263,29 @@ where
                     None => return true,
                 }
             }
-            _ = self.request_remove_receiver.recv_many(&mut remove_buffer, 1_000) => {
+            _ = self.request_remove_receiver.recv_many(&mut remove_buffer, MAX_PENDING_REMOVE_POOL_REQUESTS) => {
+                if remove_buffer.is_empty() {
+                    return true;
+                }
                 for remove in remove_buffer {
                     match remove {
-                        PoolRemoveRequest::Remove { tx_ids } => {
+                        PoolRemoveRequest::ExecutedTransactions { tx_ids } => {
                             self.remove(tx_ids);
                         }
-                        PoolRemoveRequest::RemoveCoinDependents { parent_txs } => {
-                            self.remove_coin_dependents(parent_txs);
+                        PoolRemoveRequest::CoinDependents { dependents_ids } => {
+                            self.remove_coin_dependents(dependents_ids);
                         }
-                        PoolRemoveRequest::RemoveAndCoinDependents { tx_ids } => {
-                            self.remove_and_coin_dependents(tx_ids);
+                        PoolRemoveRequest::TxAndCoinDependents { tx_and_dependents_ids } => {
+                            self.remove_and_coin_dependents(tx_and_dependents_ids);
                         }
                     }
                 }
             }
-            _ = self.request_read_receiver.recv_many(&mut insert_buffer, 10_000) => {
-                for read in insert_buffer {
+            _ = self.request_read_receiver.recv_many(&mut read_buffer, MAX_PENDING_READ_POOL_REQUESTS) => {
+                if read_buffer.is_empty() {
+                    return true;
+                }
+                for read in read_buffer {
                     match read {
                         PoolReadRequest::TxIds { max_txs, response_channel } => {
                             self.get_tx_ids(max_txs, response_channel);
@@ -276,8 +302,11 @@ where
                     }
                 }
             }
-            _ = self.request_insert_receiver.recv_many(&mut read_buffer, 1_000) => {
-                for insert in read_buffer {
+            _ = self.request_insert_receiver.recv_many(&mut insert_buffer, MAX_PENDING_INSERT_POOL_REQUESTS) => {
+                if insert_buffer.is_empty() {
+                    return true;
+                }
+                for insert in insert_buffer {
                     let PoolInsertRequest::Insert {
                         tx,
                         source,
