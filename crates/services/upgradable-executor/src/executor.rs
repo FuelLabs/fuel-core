@@ -1,6 +1,9 @@
-use crate::config::Config;
 #[cfg(feature = "wasm-executor")]
 use crate::error::UpgradableError;
+use crate::{
+    config::Config,
+    storage_access_recorder::StorageAccessRecorder,
+};
 
 use fuel_core_executor::{
     executor::{
@@ -41,6 +44,7 @@ use fuel_core_types::{
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             ValidationResult,
         },
@@ -407,6 +411,124 @@ where
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let options = self.config.as_ref().into();
         self.validate_inner(block, options)
+    }
+
+    #[cfg(not(feature = "wasm-executor"))]
+    pub fn storage_read_replay(
+        &self,
+        block: &Block,
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
+        let block_version = block.header().state_transition_bytecode_version();
+        let native_executor_version = self.native_executor_version();
+        if block_version == native_executor_version {
+            self.native_storage_read_replay(block)
+        } else {
+            Err(ExecutorError::Other(format!(
+                "Not supported version `{block_version}`. Expected version is `{}`",
+                Self::VERSION
+            )))
+        }
+    }
+
+    #[cfg(feature = "wasm-executor")]
+    pub fn storage_read_replay(
+        &self,
+        block: &Block,
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
+        let block_version = block.header().state_transition_bytecode_version();
+        let native_executor_version = self.native_executor_version();
+        if block_version == native_executor_version {
+            match &self.execution_strategy {
+                ExecutionStrategy::Native => self.native_storage_read_replay(block),
+                ExecutionStrategy::Wasm { module } => {
+                    if let Ok(module) = self.get_module(block_version) {
+                        self.wasm_storage_read_replay(&module, block)
+                    } else {
+                        self.wasm_storage_read_replay(module, block)
+                    }
+                }
+            }
+        } else {
+            let module = self.get_module(block_version)?;
+            self.wasm_storage_read_replay(&module, block)
+        }
+    }
+
+    pub fn native_storage_read_replay(
+        &self,
+        block: &Block,
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
+        let previous_block_height = block.header().height().pred();
+        let relayer = self.relayer_view_provider.latest_view()?;
+
+        let storage_rec = if let Some(previous_block_height) = previous_block_height {
+            let database = self.storage_view_provider.view_at(&previous_block_height)?;
+            let database = StorageAccessRecorder::new(database);
+            let database_rec = database.record.clone();
+
+            let executor =
+                ExecutionInstance::new(relayer, database, self.config.as_ref().into());
+            let _ = executor.validate_without_commit(block)?;
+            database_rec
+        } else {
+            let database = self.storage_view_provider.latest_view()?;
+            let database = StorageAccessRecorder::new(database);
+            let database_rec = database.record.clone();
+            let executor =
+                ExecutionInstance::new(relayer, database, self.config.as_ref().into());
+            let _ = executor.validate_without_commit(block)?;
+            database_rec
+        };
+
+        let mut g = storage_rec.lock();
+        Ok(core::mem::take(&mut g))
+    }
+
+    #[cfg(feature = "wasm-executor")]
+    fn wasm_storage_read_replay(
+        &self,
+        module: &wasmtime::Module,
+        block: &Block,
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
+        let options = self.config.as_ref().into();
+        let previous_block_height = block.header().height().pred();
+
+        let instance = crate::instance::Instance::new(&self.engine).no_source()?;
+
+        let (instance, storage_rec) = if let Some(previous_block_height) =
+            previous_block_height
+        {
+            let storage = self.storage_view_provider.view_at(&previous_block_height)?;
+            let storage = StorageAccessRecorder::new(storage);
+            let storage_rec = storage.record.clone();
+            (instance.add_storage(storage)?, storage_rec)
+        } else {
+            let storage = self.storage_view_provider.latest_view()?;
+            let storage = StorageAccessRecorder::new(storage);
+            let storage_rec = storage.record.clone();
+            (instance.add_storage(storage)?, storage_rec)
+        };
+
+        let relayer = self.relayer_view_provider.latest_view()?;
+        let instance = instance
+            .add_relayer(relayer)?
+            .add_validation_input_data(block, options)?;
+
+        let output = instance.run(module)?;
+
+        match output {
+            ReturnType::ExecutionV0(result) => {
+                let _ = convert_from_v0_execution_result(result)?;
+            }
+            ReturnType::ExecutionV1(result) => {
+                let _ = convert_from_v1_execution_result(result)?;
+            }
+            ReturnType::Validation(result) => {
+                let _ = result?;
+            }
+        }
+        let mut g = storage_rec.lock();
+        Ok(core::mem::take(&mut g))
     }
 
     #[cfg(feature = "wasm-executor")]

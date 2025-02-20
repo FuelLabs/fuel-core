@@ -56,6 +56,7 @@ pub struct Config {
     pub debug: bool,
     /// When `true`:
     /// - Enables dry run in the past.
+    /// - Enables storage read replay for historical blocks.
     pub historical_execution: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,

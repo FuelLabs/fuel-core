@@ -1614,6 +1614,7 @@ where
         Ok(checked_tx)
     }
 
+    #[allow(clippy::type_complexity)]
     fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
         checked_tx: Checked<Tx>,
@@ -1657,7 +1658,7 @@ where
             Some(*header.height()),
         )?;
 
-        let mut vm = Interpreter::with_storage(
+        let mut vm = Interpreter::<_, _, _>::with_storage(
             memory,
             vm_db,
             InterpreterParams::new(gas_price, &self.consensus_params),
@@ -1693,7 +1694,7 @@ where
         }
 
         self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
-        Ok((reverted, state, tx, receipts))
+        Ok((reverted, state, tx, receipts.to_vec()))
     }
 
     fn verify_inputs_exist_and_values_match<T>(
@@ -1998,9 +1999,9 @@ where
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace<M, T, Tx>(
+    fn log_backtrace<M, T, Tx, Ecal>(
         &self,
-        vm: &Interpreter<M, VmStorage<T>, Tx>,
+        vm: &Interpreter<M, VmStorage<T>, Tx, Ecal>,
         receipts: &[Receipt],
     ) where
         M: Memory,
