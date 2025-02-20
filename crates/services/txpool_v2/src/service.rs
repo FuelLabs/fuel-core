@@ -298,7 +298,7 @@ where
         // We don't want block importer wait for us to process the result.
         drop(result);
 
-        if let Err(err) = self.pool_worker.remove(executed_transaction) {
+        if let Err(err) = self.pool_worker.executed(executed_transaction) {
             tracing::error!("{err}");
             return TaskNextAction::Stop
         }
