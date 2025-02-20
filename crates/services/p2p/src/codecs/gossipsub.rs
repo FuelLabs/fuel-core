@@ -31,7 +31,7 @@ where
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         match data {
             GossipsubBroadcastRequest::NewTx(tx) => {
-                Ok(self.codec.encode(&tx)?.to_bytes())
+                Ok(self.codec.encode(&tx)?.into_bytes())
             }
         }
     }
