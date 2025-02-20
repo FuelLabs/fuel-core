@@ -36,7 +36,7 @@ pub mod script_code_codec;
 pub mod timestamps;
 
 #[cfg(feature = "fault-proving")]
-pub mod fault_proving_extra_storage;
+pub mod v2;
 
 /// The table for the compressed blocks sent to DA.
 pub struct DaCompressedBlocks;
