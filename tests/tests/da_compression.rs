@@ -1,7 +1,13 @@
 use core::time::Duration;
 use fuel_core::{
-    combined_database::CombinedDatabase,
-    fuel_core_graphql_api::worker_service::DaCompressionConfig,
+    chain_config::TESTNET_WALLET_SECRETS,
+    fuel_core_graphql_api::{
+        da_compression::{
+            DbTx,
+            DecompressDbTx,
+        },
+        worker_service::DaCompressionConfig,
+    },
     p2p_test_helpers::*,
     service::{
         Config,
@@ -9,11 +15,19 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    pagination::PaginationRequest,
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_compression::VersionedCompressedBlock;
-use fuel_core_poa::signer::SignMode;
+use fuel_core_compression::{
+    decompress::decompress,
+    VersionedCompressedBlock,
+};
+use fuel_core_storage::transactional::{
+    AtomicView,
+    HistoricalView,
+    IntoTransaction,
+};
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -21,40 +35,77 @@ use fuel_core_types::{
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
+        Address,
         GasCosts,
         Input,
         TransactionBuilder,
+        TxPointer,
+        UniqueIdentifier,
     },
     secrecy::Secret,
+    signer::SignMode,
 };
 use rand::{
     rngs::StdRng,
     SeedableRng,
 };
+use std::str::FromStr;
 
 #[tokio::test]
 async fn can_fetch_da_compressed_block_from_graphql() {
     let mut rng = StdRng::seed_from_u64(10);
     let poa_secret = SecretKey::random(&mut rng);
 
-    let db = CombinedDatabase::default();
     let mut config = Config::local_node();
     config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
+    config.utxo_validation = true;
     let compression_config = fuel_core_compression::Config {
         temporal_registry_retention: Duration::from_secs(3600),
     };
     config.da_compression = DaCompressionConfig::Enabled(compression_config);
-    let srv = FuelService::from_combined_database(db.clone(), config)
-        .await
-        .unwrap();
+    let chain_id = config
+        .snapshot_reader
+        .chain_config()
+        .consensus_parameters
+        .chain_id();
+    let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
+
+    let wallet_secret =
+        SecretKey::from_str(TESTNET_WALLET_SECRETS[1]).expect("Expected valid secret");
+    let wallet_address = Address::from(*wallet_secret.public_key().hash());
+
+    let coins = client
+        .coins(
+            &wallet_address,
+            None,
+            PaginationRequest {
+                cursor: None,
+                results: 10,
+                direction: fuel_core_client::client::pagination::PageDirection::Forward,
+            },
+        )
+        .await
+        .expect("Unable to get coins")
+        .results;
+
+    let coin = coins
+        .into_iter()
+        .next()
+        .expect("Expected at least one coin");
 
     let tx =
         TransactionBuilder::script([op::ret(RegId::ONE)].into_iter().collect(), vec![])
             .max_fee_limit(0)
             .script_gas_limit(1_000_000)
             .with_gas_costs(GasCosts::free())
-            .add_fee_input()
+            .add_unsigned_coin_input(
+                wallet_secret,
+                coin.utxo_id,
+                coin.amount,
+                coin.asset_id,
+                TxPointer::new(coin.block_created.into(), coin.tx_created_idx),
+            )
             .finalize_as_transaction();
 
     let status = client.submit_and_await_commit(&tx).await.unwrap();
@@ -66,9 +117,44 @@ async fn can_fetch_da_compressed_block_from_graphql() {
         }
     };
 
-    let block = client.da_compressed_block(block_height).await.unwrap();
-    let block = block.expect("Unable to get compressed block");
-    let _: VersionedCompressedBlock = postcard::from_bytes(&block).unwrap();
+    let block = client
+        .da_compressed_block(block_height)
+        .await
+        .unwrap()
+        .expect("Unable to get compressed block");
+    let block: VersionedCompressedBlock = postcard::from_bytes(&block).unwrap();
+
+    // Reuse the existing offchain db to decompress the block
+    let db = &srv.shared.database;
+
+    let on_chain_before_execution = db.on_chain().view_at(&0u32.into()).unwrap();
+    let mut tx_inner = db.off_chain().clone().into_transaction();
+    let db_tx = DecompressDbTx {
+        db_tx: DbTx {
+            db_tx: &mut tx_inner,
+        },
+        onchain_db: on_chain_before_execution,
+    };
+    let decompressed = decompress(compression_config, db_tx, block).await.unwrap();
+
+    let block_from_on_chain_db = db
+        .on_chain()
+        .latest_view()
+        .unwrap()
+        .get_full_block(&block_height)
+        .unwrap()
+        .unwrap();
+
+    let db_transactions = block_from_on_chain_db.transactions();
+    let decompressed_transactions = decompressed.transactions;
+
+    assert_eq!(decompressed_transactions.len(), 2);
+    for (db_tx, decompressed_tx) in
+        db_transactions.iter().zip(decompressed_transactions.iter())
+    {
+        // ensure tx ids match
+        assert_eq!(db_tx.id(&chain_id), decompressed_tx.id(&chain_id));
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

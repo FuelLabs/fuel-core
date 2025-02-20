@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use futures::{
     AsyncRead,
     AsyncReadExt,
+    AsyncWrite,
     AsyncWriteExt,
 };
 use libp2p::request_response;
@@ -101,10 +102,10 @@ where
         req: Self::Request,
     ) -> io::Result<()>
     where
-        T: futures::AsyncWrite + Unpin + Send,
+        T: AsyncWrite + Unpin + Send,
     {
         let encoded_data = self.codec.encode(&req)?;
-        socket.write_all(&encoded_data.as_bytes()).await?;
+        socket.write_all(&encoded_data.into_bytes()).await?;
         Ok(())
     }
 
@@ -115,18 +116,18 @@ where
         res: Self::Response,
     ) -> io::Result<()>
     where
-        T: futures::AsyncWrite + Unpin + Send,
+        T: AsyncWrite + Unpin + Send,
     {
         match protocol {
             RequestResponseProtocol::V1 => {
                 let v1_response: V1ResponseMessage = res.into();
                 let res = self.codec.encode(&v1_response)?;
-                let res = res.as_bytes();
+                let res = res.into_bytes();
                 socket.write_all(&res).await?;
             }
             RequestResponseProtocol::V2 => {
                 let res = self.codec.encode(&res)?;
-                let res = res.as_bytes();
+                let res = res.into_bytes();
                 socket.write_all(&res).await?;
             }
         };

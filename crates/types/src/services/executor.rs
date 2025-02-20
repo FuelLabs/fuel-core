@@ -22,6 +22,8 @@ use crate::{
         ValidityError,
     },
     fuel_types::{
+        fmt_option_truncated_hex,
+        fmt_truncated_hex,
         BlockHeight,
         Bytes32,
         ContractId,
@@ -256,6 +258,21 @@ impl TransactionExecutionResult {
     }
 }
 
+/// When storage in column:key was read, it contained this value.
+#[derive(Clone, PartialEq, Eq, derivative::Derivative)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derivative(Debug)]
+pub struct StorageReadReplayEvent {
+    /// Column in the storage, identified by id.
+    pub column: u32,
+    /// Key in the column.
+    #[derivative(Debug(format_with = "fmt_truncated_hex::<32>"))]
+    pub key: Vec<u8>,
+    /// Value at the column:key pair. None if the key was not found.
+    #[derivative(Debug(format_with = "fmt_option_truncated_hex::<16>"))]
+    pub value: Option<Vec<u8>>,
+}
+
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, derive_more::Display, derive_more::From)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -336,6 +353,10 @@ pub enum Error {
     RelayerGivesIncorrectMessages,
     #[display(fmt = "Consensus parameters not found for version {_0}")]
     ConsensusParametersNotFound(ConsensusParametersVersion),
+    #[display(
+        fmt = "The expiration block height {_0} of the transaction is more than the current block height {_1}"
+    )]
+    TransactionExpired(BlockHeight, BlockHeight),
     /// It is possible to occur untyped errors in the case of the upgrade.
     #[display(fmt = "Occurred untyped error: {_0}")]
     Other(String),

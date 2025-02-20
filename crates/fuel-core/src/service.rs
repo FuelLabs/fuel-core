@@ -1,17 +1,13 @@
-use self::adapters::BlockImporterAdapter;
-use crate::{
-    combined_database::{
-        CombinedDatabase,
-        ShutdownListener,
-    },
-    database::Database,
-    service::{
-        adapters::{
-            ExecutorAdapter,
-            PoAAdapter,
-        },
-        sub_services::TxPoolSharedState,
-    },
+use std::{
+    net::SocketAddr,
+    sync::Arc,
+};
+
+pub use config::{
+    Config,
+    DbType,
+    RelayerConsensusConfig,
+    VMConfig,
 };
 use fuel_core_chain_config::{
     ConsensusConfig,
@@ -21,6 +17,7 @@ use fuel_core_poa::{
     ports::BlockImporter,
     verifier::verify_consensus,
 };
+pub use fuel_core_services::Service as ServiceTrait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -40,18 +37,23 @@ use fuel_core_storage::{
     StorageAsMut,
 };
 use fuel_core_types::blockchain::consensus::Consensus;
-use std::{
-    net::SocketAddr,
-    sync::Arc,
+
+use crate::{
+    combined_database::{
+        CombinedDatabase,
+        ShutdownListener,
+    },
+    database::Database,
+    service::{
+        adapters::{
+            ExecutorAdapter,
+            PoAAdapter,
+        },
+        sub_services::TxPoolSharedState,
+    },
 };
 
-pub use config::{
-    Config,
-    DbType,
-    RelayerConsensusConfig,
-    VMConfig,
-};
-pub use fuel_core_services::Service as ServiceTrait;
+use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
@@ -426,7 +428,6 @@ impl RunnableService for Task {
     }
 }
 
-#[async_trait::async_trait]
 impl RunnableTask for Task {
     #[tracing::instrument(skip_all)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
@@ -518,6 +519,10 @@ mod tests {
         {
             // p2p & sync
             expected_services += 2;
+        }
+        #[cfg(feature = "shared-sequencer")]
+        {
+            expected_services += 1;
         }
 
         // # Dev-note: Update the `expected_services` when we add/remove a new/old service.

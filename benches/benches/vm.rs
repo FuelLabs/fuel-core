@@ -41,7 +41,6 @@ where
             let clock = quanta::Clock::new();
 
             let original_db = vm.as_mut().database_mut().clone();
-            let original_memory = vm.memory().clone();
             // During block production/validation for each state, which may affect the state of the database,
             // we create a new storage transaction. The code here simulates the same behavior to have
             // the same nesting level and the same performance.
@@ -53,7 +52,6 @@ where
 
             let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
-                vm.memory_mut().clone_from(&original_memory);
                 let start = black_box(clock.raw());
                 match instruction {
                     Instruction::CALL(call) => {
@@ -72,7 +70,6 @@ where
                 vm.as_mut().database_mut().reset_changes();
             }
             *vm.as_mut().database_mut() = original_db;
-            *vm.memory_mut() = original_memory;
             total
         })
     });

@@ -2,9 +2,16 @@ scalar Address
 
 scalar AssetId
 
+type AssetInfoDetails {
+	contractId: ContractId!
+	subId: SubId!
+	totalSupply: U128!
+}
+
 type Balance {
 	owner: Address!
 	amount: U64!
+	amountU128: U128!
 	assetId: AssetId!
 }
 
@@ -442,6 +449,7 @@ type GasCosts {
 	wqmm: U64!
 	xor: U64!
 	xori: U64!
+	ecop: U64
 	alocDependentCost: DependentCost!
 	bldd: DependentCost
 	bsiz: DependentCost
@@ -466,6 +474,7 @@ type GasCosts {
 	smo: DependentCost!
 	srwq: DependentCost!
 	swwq: DependentCost!
+	epar: DependentCost
 	contractRoot: DependentCost!
 	stateRoot: DependentCost!
 	vmInitialization: DependentCost!
@@ -557,10 +566,15 @@ type Header {
 	Hash of the application header.
 	"""
 	applicationHash: Bytes32!
+	"""
+	Transaction ID Commitment
+	"""
+	txIdCommitment: Bytes32
 }
 
 enum HeaderVersion {
 	V1
+	V2
 }
 
 type HeavyOperation {
@@ -570,6 +584,21 @@ type HeavyOperation {
 
 scalar HexString
 
+
+type IndexationFlags {
+	"""
+	Is balances indexation enabled
+	"""
+	balances: Boolean!
+	"""
+	Is coins to spend indexation enabled
+	"""
+	coinsToSpend: Boolean!
+	"""
+	Is asset metadata indexation enabled
+	"""
+	assetMetadata: Boolean!
+}
 
 union Input = InputCoin | InputContract | InputMessage
 
@@ -731,7 +760,7 @@ type Mutation {
 	"""
 	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
 	"""
-	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64): [DryRunTransactionExecutionStatus!]!
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]!
 	"""
 	Submits transaction to the `TxPool`.
 	
@@ -751,8 +780,12 @@ type NodeInfo {
 	utxoValidation: Boolean!
 	vmBacktrace: Boolean!
 	maxTx: U64!
+	maxGas: U64!
+	maxSize: U64!
 	maxDepth: U64!
 	nodeVersion: String!
+	indexation: IndexationFlags!
+	txPoolStats: TxPoolStats!
 	peers: [PeerInfo!]!
 }
 
@@ -850,6 +883,12 @@ type ProgramState {
 }
 
 type Query {
+	assetDetails(
+		"""
+		ID of the Asset
+		"""
+		id: AssetId!
+	): AssetInfoDetails!
 	"""
 	Read register value by index.
 	"""
@@ -903,6 +942,10 @@ type Query {
 	Returns all possible receipts for test purposes.
 	"""
 	allReceipts: [Receipt!]!
+	"""
+	Get execution trace for an already-executed block.
+	"""
+	storageReadReplay(height: U32!): [StorageReadReplayEvent!]!
 	"""
 	Returns true when the GraphQL API is serving requests.
 	"""
@@ -1117,6 +1160,14 @@ type StateTransitionPurpose {
 	root: Bytes32!
 }
 
+type StorageReadReplayEvent {
+	column: U32!
+	key: HexString!
+	value: HexString
+}
+
+
+scalar SubId
 
 type SubmittedStatus {
 	time: Tai64Timestamp!
@@ -1258,6 +1309,23 @@ enum TxParametersVersion {
 }
 
 scalar TxPointer
+
+type TxPoolStats {
+	"""
+	The number of transactions in the pool
+	"""
+	txCount: U64!
+	"""
+	The total size of the transactions in the pool
+	"""
+	totalSize: U64!
+	"""
+	The total gas of the transactions in the pool
+	"""
+	totalGas: U64!
+}
+
+scalar U128
 
 scalar U16
 

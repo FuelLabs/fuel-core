@@ -136,7 +136,6 @@ impl RunnableService for SyncTask {
     }
 }
 
-#[async_trait::async_trait]
 impl RunnableTask for SyncTask {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         let tick: BoxFuture<tokio::time::Instant> = if let Some(timer) = &mut self.timer {
@@ -329,7 +328,7 @@ mod tests {
         }
     }
 
-    /// Helper function that creates a `SyncTask` with a given configuration    
+    /// Helper function that creates a `SyncTask` with a given configuration
     fn configure_sync_task(
         min_connected_reserved_peers: usize,
         connections_stream: impl IntoIterator<Item = usize>,

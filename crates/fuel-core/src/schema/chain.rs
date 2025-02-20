@@ -280,7 +280,8 @@ impl GasCosts {
             GasCostsValues::V1(_)
             | GasCostsValues::V2(_)
             | GasCostsValues::V3(_)
-            | GasCostsValues::V4(_) => GasCostsVersion::V1,
+            | GasCostsValues::V4(_)
+            | GasCostsValues::V5(_) => GasCostsVersion::V1,
         }
     }
 
@@ -636,6 +637,10 @@ impl GasCosts {
         self.0.xori().into()
     }
 
+    async fn ecop(&self) -> Option<U64> {
+        self.0.ecop().ok().map(Into::into)
+    }
+
     async fn aloc_dependent_cost(&self) -> DependentCost {
         self.0.aloc().into()
     }
@@ -730,6 +735,10 @@ impl GasCosts {
 
     async fn swwq(&self) -> DependentCost {
         self.0.swwq().into()
+    }
+
+    async fn epar(&self) -> Option<DependentCost> {
+        self.0.epar().ok().map(Into::into)
     }
 
     // Non-opcode prices

@@ -1,32 +1,40 @@
 #[cfg(feature = "subscriptions")]
 use crate::client::types::StatusWithTransaction;
-use crate::client::{
-    schema::{
-        block::BlockByHeightArgs,
-        coins::{
-            ExcludeInput,
-            SpendQueryElementInput,
+use crate::{
+    client::{
+        schema::{
+            block::BlockByHeightArgs,
+            coins::{
+                ExcludeInput,
+                SpendQueryElementInput,
+            },
+            contract::ContractBalanceQueryArgs,
+            gas_price::EstimateGasPrice,
+            message::MessageStatusArgs,
+            relayed_tx::RelayedTransactionStatusArgs,
+            tx::DryRunArg,
+            Tai64Timestamp,
+            TransactionId,
         },
-        contract::ContractBalanceQueryArgs,
-        gas_price::EstimateGasPrice,
-        message::MessageStatusArgs,
-        relayed_tx::RelayedTransactionStatusArgs,
-        tx::DryRunArg,
-        Tai64Timestamp,
-        TransactionId,
+        types::{
+            asset::AssetDetail,
+            gas_price::LatestGasPrice,
+            message::MessageStatus,
+            primitives::{
+                Address,
+                AssetId,
+                BlockId,
+                ContractId,
+                UtxoId,
+            },
+            upgrades::StateTransitionBytecode,
+            RelayedTransactionStatus,
+        },
     },
-    types::{
-        gas_price::LatestGasPrice,
-        message::MessageStatus,
-        primitives::{
-            Address,
-            AssetId,
-            BlockId,
-            ContractId,
-            UtxoId,
-        },
-        upgrades::StateTransitionBytecode,
-        RelayedTransactionStatus,
+    reqwest_ext::{
+        FuelGraphQlResponse,
+        FuelOperation,
+        ReqwestExt,
     },
 };
 use anyhow::Context;
@@ -38,8 +46,6 @@ use base64::prelude::{
 #[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
 use cynic::{
-    http::ReqwestExt,
-    GraphQlResponse,
     Id,
     MutationBuilder,
     Operation,
@@ -64,7 +70,10 @@ use fuel_core_types::{
         BlockHeight,
         Nonce,
     },
-    services::executor::TransactionExecutionStatus,
+    services::executor::{
+        StorageReadReplayEvent,
+        TransactionExecutionStatus,
+    },
 };
 #[cfg(feature = "subscriptions")]
 use futures::{
@@ -78,6 +87,7 @@ use pagination::{
     PaginationRequest,
 };
 use schema::{
+    assets::AssetInfoArg,
     balance::BalanceArgs,
     blob::BlobByIdArgs,
     block::BlockByIdArgs,
@@ -91,6 +101,10 @@ use schema::{
     },
     da_compressed::DaCompressedBlockByHeightArgs,
     gas_price::BlockHorizonArgs,
+    storage_read_replay::{
+        StorageReadReplay,
+        StorageReadReplayArgs,
+    },
     tx::{
         TransactionsByOwnerConnectionArgs,
         TxArg,
@@ -127,6 +141,10 @@ use std::{
         self,
         FromStr,
     },
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 use tai64::Tai64;
 use tracing as _;
@@ -149,12 +167,56 @@ pub mod types;
 
 type RegisterId = u32;
 
+#[derive(Debug, derive_more::Display, derive_more::From)]
+#[non_exhaustive]
+/// Error occurring during interaction with the FuelClient
+// anyhow::Error is wrapped inside a custom Error type,
+// so that we can specific error variants in the future.
+pub enum Error {
+    /// Unknown or not expected(by architecture) error.
+    #[from]
+    Other(anyhow::Error),
+}
+
+/// Consistency policy for the [`FuelClient`] to define the strategy
+/// for the required height feature.
+#[derive(Debug)]
+pub enum ConsistencyPolicy {
+    /// Automatically fetch the next block height from the response and
+    /// use it as an input to the next query to guarantee consistency
+    /// of the results for the queries.
+    Auto {
+        /// The required block height for the queries.
+        height: Arc<Mutex<Option<BlockHeight>>>,
+    },
+    /// Use manually sets the block height for all queries
+    /// via the [`FuelClient::with_required_fuel_block_height`].
+    Manual {
+        /// The required block height for the queries.
+        height: Option<BlockHeight>,
+    },
+}
+
+impl Clone for ConsistencyPolicy {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Auto { height } => Self::Auto {
+                // We don't want to share the same mutex between the different
+                // instances of the `FuelClient`.
+                height: Arc::new(Mutex::new(height.lock().ok().and_then(|h| *h))),
+            },
+            Self::Manual { height } => Self::Manual { height: *height },
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FuelClient {
     client: reqwest::Client,
     #[cfg(feature = "subscriptions")]
     cookie: std::sync::Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
+    require_height: ConsistencyPolicy,
 }
 
 impl FromStr for FuelClient {
@@ -182,13 +244,22 @@ impl FromStr for FuelClient {
                 client,
                 cookie,
                 url,
+                require_height: ConsistencyPolicy::Auto {
+                    height: Arc::new(Mutex::new(None)),
+                },
             })
         }
 
         #[cfg(not(feature = "subscriptions"))]
         {
             let client = reqwest::Client::new();
-            Ok(Self { client, url })
+            Ok(Self {
+                client,
+                url,
+                require_height: ConsistencyPolicy::Auto {
+                    height: Arc::new(Mutex::new(None)),
+                },
+            })
         }
     }
 }
@@ -221,6 +292,36 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
+    pub fn with_required_fuel_block_height(
+        &mut self,
+        new_height: Option<BlockHeight>,
+    ) -> &mut Self {
+        match &mut self.require_height {
+            ConsistencyPolicy::Auto { height } => {
+                *height.lock().expect("Mutex poisoned") = new_height;
+            }
+            ConsistencyPolicy::Manual { height } => {
+                *height = new_height;
+            }
+        }
+        self
+    }
+
+    pub fn use_manual_consistency_policy(
+        &mut self,
+        height: Option<BlockHeight>,
+    ) -> &mut Self {
+        self.require_height = ConsistencyPolicy::Manual { height };
+        self
+    }
+
+    pub fn required_block_height(&self) -> Option<BlockHeight> {
+        match &self.require_height {
+            ConsistencyPolicy::Auto { height } => height.lock().ok().and_then(|h| *h),
+            ConsistencyPolicy::Manual { height } => *height,
+        }
+    }
+
     /// Send the GraphQL query to the client.
     pub async fn query<ResponseData, Vars>(
         &self,
@@ -230,20 +331,59 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
+        let required_fuel_block_height = self.required_block_height();
+        let fuel_operation = FuelOperation::new(q, required_fuel_block_height);
         let response = self
             .client
             .post(self.url.clone())
-            .run_graphql(q)
+            .run_fuel_graphql(fuel_operation)
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-        Self::decode_response(response)
+        let inner_required_height = match &self.require_height {
+            ConsistencyPolicy::Auto { height } => Some(height.clone()),
+            _ => None,
+        };
+
+        Self::decode_response(response, inner_required_height)
     }
 
-    fn decode_response<R>(response: GraphQlResponse<R>) -> io::Result<R>
+    fn decode_response<R, E>(
+        response: FuelGraphQlResponse<R, E>,
+        inner_required_height: Option<Arc<Mutex<Option<BlockHeight>>>>,
+    ) -> io::Result<R>
     where
         R: serde::de::DeserializeOwned + 'static,
     {
+        if let Some(inner_required_height) = inner_required_height {
+            if let Some(current_fuel_block_height) = response
+                .extensions
+                .as_ref()
+                .and_then(|e| e.current_fuel_block_height)
+            {
+                let mut lock = inner_required_height.lock().expect("Mutex poisoned");
+
+                if current_fuel_block_height >= lock.unwrap_or_default() {
+                    *lock = Some(current_fuel_block_height);
+                }
+            }
+        }
+
+        if let Some(failed) = response
+            .extensions
+            .as_ref()
+            .and_then(|e| e.fuel_block_height_precondition_failed)
+        {
+            if failed {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "The required block height was not met",
+                ));
+            }
+        }
+
+        let response = response.response;
+
         match (response.data, response.errors) {
             (Some(d), _) => Ok(d),
             (_, Some(e)) => Err(from_strings_errors_to_std_error(
@@ -269,7 +409,11 @@ impl FuelClient {
         use reqwest::cookie::CookieStore;
         let mut url = self.url.clone();
         url.set_path("/v1/graphql-sub");
-        let json_query = serde_json::to_string(&q)?;
+
+        let required_fuel_block_height = self.required_block_height();
+        let fuel_operation = FuelOperation::new(q, required_fuel_block_height);
+
+        let json_query = serde_json::to_string(&fuel_operation)?;
         let mut client_builder = es::ClientBuilder::for_url(url.as_str())
             .map_err(|e| {
                 io::Error::new(
@@ -327,18 +471,25 @@ impl FuelClient {
 
         let mut last = None;
 
+        let inner_required_height = match &self.require_height {
+            ConsistencyPolicy::Auto { height } => Some(height.clone()),
+            _ => None,
+        };
+
         let stream = es::Client::stream(&client)
-            .take_while(|result| {
+            .zip(futures::stream::repeat(inner_required_height))
+            .take_while(|(result, _)| {
                 futures::future::ready(!matches!(result, Err(es::Error::Eof)))
             })
-            .filter_map(move |result| {
+            .filter_map(move |(result, inner_required_height)| {
                 tracing::debug!("Got result: {result:?}");
                 let r = match result {
                     Ok(es::SSE::Event(es::Event { data, .. })) => {
-                        match serde_json::from_str::<GraphQlResponse<ResponseData>>(&data)
-                        {
+                        match serde_json::from_str::<FuelGraphQlResponse<ResponseData>>(
+                            &data,
+                        ) {
                             Ok(resp) => {
-                                match Self::decode_response(resp) {
+                                match Self::decode_response(resp, inner_required_height) {
                                     Ok(resp) => {
                                         match last.replace(data) {
                                             // Remove duplicates
@@ -478,7 +629,7 @@ impl FuelClient {
         &self,
         txs: &[Transaction],
     ) -> io::Result<Vec<TransactionExecutionStatus>> {
-        self.dry_run_opt(txs, None, None).await
+        self.dry_run_opt(txs, None, None, None).await
     }
 
     /// Dry run with options to override the node behavior
@@ -488,6 +639,7 @@ impl FuelClient {
         // Disable utxo input checks (exists, unspent, and valid signature)
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
+        at_height: Option<BlockHeight>,
     ) -> io::Result<Vec<TransactionExecutionStatus>> {
         let txs = txs
             .iter()
@@ -498,12 +650,31 @@ impl FuelClient {
                 txs,
                 utxo_validation,
                 gas_price: gas_price.map(|gp| gp.into()),
+                block_height: at_height.map(|bh| bh.into()),
             });
         let tx_statuses = self.query(query).await.map(|r| r.dry_run)?;
         tx_statuses
             .into_iter()
             .map(|tx_status| tx_status.try_into().map_err(Into::into))
             .collect()
+    }
+
+    /// Get storage read replay for a block
+    pub async fn storage_read_replay(
+        &self,
+        height: &BlockHeight,
+    ) -> io::Result<Vec<StorageReadReplayEvent>> {
+        let query: Operation<StorageReadReplay, StorageReadReplayArgs> =
+            StorageReadReplay::build(StorageReadReplayArgs {
+                height: (*height).into(),
+            });
+        Ok(self
+            .query(query)
+            .await
+            .map(|r| r.storage_read_replay)?
+            .into_iter()
+            .map(Into::into)
+            .collect())
     }
 
     /// Estimate predicates for the transaction
@@ -1077,7 +1248,7 @@ impl FuelClient {
         };
         let query = schema::balance::BalanceQuery::build(BalanceArgs { owner, asset_id });
         let balance: types::Balance = self.query(query).await?.balance.into();
-        Ok(balance.amount)
+        Ok(balance.amount.try_into().unwrap_or(u64::MAX))
     }
 
     // Retrieve a page of balances by their owner
@@ -1190,6 +1361,14 @@ impl FuelClient {
             .map(|status| status.try_into())
             .transpose()?;
         Ok(status)
+    }
+
+    pub async fn asset_info(&self, asset_id: &AssetId) -> io::Result<AssetDetail> {
+        let query = schema::assets::AssetInfoQuery::build(AssetInfoArg {
+            id: (*asset_id).into(),
+        });
+        let asset_info = self.query(query).await?.asset_details.into();
+        Ok(asset_info)
     }
 }
 

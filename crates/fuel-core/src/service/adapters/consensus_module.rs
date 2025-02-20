@@ -40,7 +40,7 @@ impl VerifierAdapter {
         database: Database,
     ) -> Self {
         let block_height = *genesis_block.header().height();
-        let da_block_height = genesis_block.header().da_height;
+        let da_block_height = genesis_block.header().da_height();
         let config = VerifierConfig::new(consensus, block_height, da_block_height);
         Self {
             block_verifier: Arc::new(Verifier::new(config, database)),

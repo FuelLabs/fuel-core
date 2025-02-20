@@ -39,16 +39,21 @@ async fn test_new_service() {
         .into_boxed()
     });
     p2p.expect_get_sealed_block_headers().returning(|range| {
-        let peer = random_peer();
-        let headers = Some(range.map(empty_header).collect::<Vec<_>>());
-        let headers = peer.bind(headers);
-        Ok(headers)
+        Box::pin(async move {
+            let peer = random_peer();
+            let headers = Some(range.map(empty_header).collect::<Vec<_>>());
+            let headers = peer.bind(headers);
+            Ok(headers)
+        })
     });
-    p2p.expect_get_transactions().returning(|block_ids| {
-        let data = block_ids.data;
-        let v = data.into_iter().map(|_| Transactions::default()).collect();
-        Ok(Some(v))
-    });
+    p2p.expect_get_transactions_from_peer()
+        .returning(|block_ids| {
+            Box::pin(async move {
+                let data = block_ids.data;
+                let v = data.into_iter().map(|_| Transactions::default()).collect();
+                Ok(Some(v))
+            })
+        });
     let mut importer = MockBlockImporterPort::default();
     importer
         .expect_committed_height_stream()
@@ -56,13 +61,15 @@ async fn test_new_service() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
     importer.expect_execute_and_commit().returning(move |h| {
         tx.try_send(**h.entity.header().height()).unwrap();
-        Ok(())
+        Box::pin(async { Ok(()) })
     });
     let mut consensus = MockConsensusPort::default();
     consensus
         .expect_check_sealed_header()
         .returning(|_| Ok(true));
-    consensus.expect_await_da_height().returning(|_| Ok(()));
+    consensus
+        .expect_await_da_height()
+        .returning(|_| Box::pin(async { Ok(()) }));
     let params = Config {
         block_stream_buffer_size: 10,
         header_batch_size: 10,

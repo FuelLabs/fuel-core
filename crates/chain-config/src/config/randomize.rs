@@ -201,12 +201,19 @@ impl Randomize for CompressedBlock {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         let tx1: Transaction = Randomize::randomize(&mut rng);
         let tx2: Transaction = Randomize::randomize(&mut rng);
+        let default_chain_id = ChainId::default();
 
-        let tx_ids = vec![tx1.id(&ChainId::default()), tx2.id(&ChainId::default())];
+        let tx_ids = vec![tx1.id(&default_chain_id), tx2.id(&default_chain_id)];
 
         Self::test(
             PartialBlockHeader::default()
-                .generate(&[tx1, tx2], &[], rng.gen())
+                .generate(
+                    &[tx1, tx2],
+                    &[],
+                    rng.gen(),
+                    #[cfg(feature = "fault-proving")]
+                    &default_chain_id,
+                )
                 .expect("The header is valid"),
             tx_ids,
         )

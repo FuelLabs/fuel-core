@@ -136,7 +136,7 @@ pub async fn execute_genesis_block(
     database_transaction_on_chain
         .storage_as_mut::<ConsensusParametersVersions>()
         .insert(
-            &genesis_block.header().consensus_parameters_version,
+            &genesis_block.header().consensus_parameters_version(),
             &chain_config.consensus_parameters,
         )?;
 
@@ -144,7 +144,7 @@ pub async fn execute_genesis_block(
     database_transaction_on_chain
         .storage_as_mut::<StateTransitionBytecodeVersions>()
         .insert(
-            &genesis_block.header().state_transition_bytecode_version,
+            &genesis_block.header().state_transition_bytecode_version(),
             &bytecode_root,
         )?;
     database_transaction_on_chain
@@ -285,13 +285,20 @@ pub fn create_genesis_block(config: &Config) -> Block {
             consensus: ConsensusHeader::<Empty> {
                 prev_root,
                 height,
-                time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
+                // The time is set to UNIX_EPOCH + 10 leap seconds to make backward compatibility
+                time: fuel_core_types::tai64::Tai64(4611686018427387914),
                 generated: Empty,
             },
         },
         transactions_ids,
         message_ids,
         events,
+        #[cfg(feature = "fault-proving")]
+        &config
+            .snapshot_reader
+            .chain_config()
+            .consensus_parameters
+            .chain_id(),
     )
     .expect("The block is valid; qed")
 }
@@ -716,7 +723,7 @@ mod tests {
             .latest_block()
             .unwrap()
             .header()
-            .state_transition_bytecode_version;
+            .state_transition_bytecode_version();
         last_block.blocks_root = view
             .block_header_merkle_root(&last_block.block_height)
             .unwrap();

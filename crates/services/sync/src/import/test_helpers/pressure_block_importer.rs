@@ -14,7 +14,6 @@ use std::time::Duration;
 
 pub struct PressureBlockImporter(MockBlockImporterPort, Duration, SharedCounts);
 
-#[async_trait::async_trait]
 impl BlockImporterPort for PressureBlockImporter {
     fn committed_height_stream(&self) -> BoxStream<BlockHeight> {
         self.0.committed_height_stream()
@@ -34,7 +33,8 @@ impl BlockImporterPort for PressureBlockImporter {
 impl PressureBlockImporter {
     pub fn new(counts: SharedCounts, delays: Duration) -> Self {
         let mut mock = MockBlockImporterPort::default();
-        mock.expect_execute_and_commit().returning(move |_| Ok(()));
+        mock.expect_execute_and_commit()
+            .returning(move |_| Box::pin(async move { Ok(()) }));
         Self(mock, delays, counts)
     }
 }

@@ -4,11 +4,13 @@ use crate::{
         updater_metadata::UpdaterMetadata,
         utils::BlockInfo,
     },
-    ports::MetadataStorage,
+    ports::{
+        GetMetadataStorage,
+        SetMetadataStorage,
+    },
     v0::algorithm::SharedV0Algorithm,
 };
 use anyhow::anyhow;
-use async_trait::async_trait;
 use fuel_core_services::{
     RunnableTask,
     StateWatcher,
@@ -35,7 +37,7 @@ pub struct GasPriceServiceV0<L2, Metadata> {
 
 impl<L2, Metadata> GasPriceServiceV0<L2, Metadata>
 where
-    Metadata: MetadataStorage,
+    Metadata: GetMetadataStorage + SetMetadataStorage,
 {
     pub fn new(
         l2_block_source: L2,
@@ -59,8 +61,8 @@ where
         self.shared_algo.clone()
     }
 
-    async fn update(&mut self, new_algorithm: AlgorithmV0) {
-        self.shared_algo.update(new_algorithm).await;
+    fn update(&mut self, new_algorithm: AlgorithmV0) {
+        self.shared_algo.update(new_algorithm);
     }
 
     fn validate_block_gas_capacity(
@@ -71,7 +73,7 @@ where
             .ok_or_else(|| anyhow!("Block gas capacity must be non-zero"))
     }
 
-    async fn set_metadata(&mut self) -> anyhow::Result<()> {
+    fn set_metadata(&mut self) -> anyhow::Result<()> {
         let metadata: UpdaterMetadata = self.algorithm_updater.clone().into();
         self.metadata_storage
             .set_metadata(&metadata)
@@ -89,7 +91,7 @@ where
         self.algorithm_updater
             .update_l2_block_data(height, gas_used, capacity)?;
 
-        self.set_metadata().await?;
+        self.set_metadata()?;
         Ok(())
     }
 
@@ -99,7 +101,7 @@ where
     ) -> anyhow::Result<()> {
         match l2_block {
             BlockInfo::GenesisBlock => {
-                self.set_metadata().await?;
+                self.set_metadata()?;
             }
             BlockInfo::Block {
                 height,
@@ -112,7 +114,7 @@ where
             }
         }
 
-        self.update(self.algorithm_updater.algorithm()).await;
+        self.update(self.algorithm_updater.algorithm());
         Ok(())
     }
 }
@@ -120,7 +122,7 @@ where
 impl<L2, Metadata> GasPriceServiceV0<L2, Metadata>
 where
     L2: L2BlockSource,
-    Metadata: MetadataStorage,
+    Metadata: GetMetadataStorage + SetMetadataStorage,
 {
     async fn process_l2_block_res(
         &mut self,
@@ -134,13 +136,13 @@ where
         Ok(())
     }
 }
-#[async_trait]
 impl<L2, Metadata> RunnableTask for GasPriceServiceV0<L2, Metadata>
 where
     L2: L2BlockSource,
-    Metadata: MetadataStorage,
+    Metadata: GetMetadataStorage + SetMetadataStorage,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
+        tracing::trace!("Call of `run` function of the gas price service v0");
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
@@ -148,6 +150,7 @@ where
                 TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
+                tracing::debug!("Received L2 block");
                 let res = self.process_l2_block_res(l2_block_res).await;
                 TaskNextAction::always_continue(res)
             }
@@ -176,7 +179,10 @@ mod tests {
                 Result as GasPriceResult,
             },
         },
-        ports::MetadataStorage,
+        ports::{
+            GetMetadataStorage,
+            SetMetadataStorage,
+        },
         v0::{
             metadata::V0AlgorithmConfig,
             service::GasPriceServiceV0,
@@ -195,7 +201,6 @@ mod tests {
         l2_block: mpsc::Receiver<BlockInfo>,
     }
 
-    #[async_trait::async_trait]
     impl L2BlockSource for FakeL2BlockSource {
         async fn get_l2_block(&mut self) -> GasPriceResult<BlockInfo> {
             let block = self.l2_block.recv().await.unwrap();
@@ -215,18 +220,20 @@ mod tests {
         }
     }
 
-    impl MetadataStorage for FakeMetadata {
+    impl SetMetadataStorage for FakeMetadata {
+        fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
+            *self.inner.lock().unwrap() = Some(metadata.clone());
+            Ok(())
+        }
+    }
+
+    impl GetMetadataStorage for FakeMetadata {
         fn get_metadata(
             &self,
             _: &BlockHeight,
         ) -> GasPriceResult<Option<UpdaterMetadata>> {
             let metadata = self.inner.lock().unwrap().clone();
             Ok(metadata)
-        }
-
-        fn set_metadata(&mut self, metadata: &UpdaterMetadata) -> GasPriceResult<()> {
-            *self.inner.lock().unwrap() = Some(metadata.clone());
-            Ok(())
         }
     }
 
@@ -240,6 +247,7 @@ mod tests {
             block_gas_capacity: 100,
             block_bytes: 100,
             block_fees: 100,
+            gas_price: 100,
         };
 
         let (l2_block_sender, l2_block_receiver) = mpsc::channel(1);

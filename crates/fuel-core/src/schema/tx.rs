@@ -1,4 +1,7 @@
-use super::scalars::U64;
+use super::scalars::{
+    U32,
+    U64,
+};
 use crate::{
     fuel_core_graphql_api::{
         api_service::{
@@ -7,6 +10,7 @@ use crate::{
             TxPool,
         },
         query_costs,
+        Config as GraphQLConfig,
         IntoApiResult,
     },
     graphql_api::{
@@ -73,6 +77,7 @@ use std::{
 };
 use types::{
     DryRunTransactionExecutionStatus,
+    StorageReadReplayEvent,
     Transaction,
 };
 
@@ -273,6 +278,31 @@ impl TxQuery {
             .map(Into::into)
             .collect()
     }
+
+    /// Get execution trace for an already-executed block.
+    #[graphql(complexity = "query_costs().storage_read_replay + child_complexity")]
+    async fn storage_read_replay(
+        &self,
+        ctx: &Context<'_>,
+        height: U32,
+    ) -> async_graphql::Result<Vec<StorageReadReplayEvent>> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+        if !config.historical_execution {
+            return Err(anyhow::anyhow!(
+                "`--historical-execution` is required for this operation"
+            )
+            .into());
+        }
+
+        let block_height = height.into();
+        let block_producer = ctx.data_unchecked::<BlockProducer>();
+        Ok(block_producer
+            .storage_read_replay(block_height)
+            .await?
+            .into_iter()
+            .map(StorageReadReplayEvent::from)
+            .collect())
+    }
 }
 
 #[derive(Default)]
@@ -293,12 +323,23 @@ impl TxMutation {
         // for read-only calls.
         utxo_validation: Option<bool>,
         gas_price: Option<U64>,
+        // This can be used to run the dry-run on top of a past block.
+        // Requires `--historical-execution` flag to be enabled.
+        block_height: Option<U32>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
+        let config = ctx.data_unchecked::<GraphQLConfig>().clone();
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let consensus_params = ctx
             .data_unchecked::<ConsensusProvider>()
             .latest_consensus_params();
         let block_gas_limit = consensus_params.block_gas_limit();
+
+        if block_height.is_some() && !config.historical_execution {
+            return Err(anyhow::anyhow!(
+                "The `blockHeight` parameter requires the `--historical-execution` option"
+            )
+            .into());
+        }
 
         let mut transactions = txs
             .iter()
@@ -317,7 +358,7 @@ impl TxMutation {
         let tx_statuses = block_producer
             .dry_run_txs(
                 transactions,
-                None, // TODO(#1749): Pass parameter from API
+                block_height.map(|x| x.into()),
                 None, // TODO(#1749): Pass parameter from API
                 utxo_validation,
                 gas_price.map(|x| x.into()),

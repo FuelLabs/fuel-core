@@ -12,10 +12,12 @@ use crate::{
             TxPoolPort,
         },
         validation_extension::ValidationExtension,
-        view_extension::ViewExtension,
         Config,
     },
-    graphql_api,
+    graphql_api::{
+        self,
+        required_fuel_block_height_extension::RequiredFuelBlockHeightExtension,
+    },
     schema::{
         CoreSchema,
         CoreSchemaBuilder,
@@ -88,6 +90,10 @@ use tower_http::{
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub use super::database::ReadDatabase;
+use super::{
+    block_height_subscription,
+    ports::worker,
+};
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
@@ -192,7 +198,6 @@ impl RunnableService for GraphqlService {
     }
 }
 
-#[async_trait::async_trait]
 impl RunnableTask for Task {
     async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
         match self.server.as_mut().await {
@@ -228,14 +233,23 @@ pub fn new_service<OnChain, OffChain>(
     gas_price_provider: GasPriceProvider,
     consensus_parameters_provider: ConsensusProvider,
     memory_pool: SharedMemoryPool,
+    block_height_subscriber: block_height_subscription::Subscriber,
 ) -> anyhow::Result<Service>
 where
     OnChain: AtomicView + 'static,
-    OffChain: AtomicView + 'static,
+    OffChain: AtomicView + worker::OffChainDatabase + 'static,
     OnChain::LatestView: OnChainDatabase,
     OffChain::LatestView: OffChainDatabase,
 {
-    graphql_api::initialize_query_costs(config.config.costs.clone())?;
+    let balances_indexation_enabled = off_database.balances_indexation_enabled()?;
+
+    let mut cost_config = config.config.costs.clone();
+
+    if !balances_indexation_enabled {
+        cost_config.balance_query = graphql_api::BALANCES_QUERY_COST_WITHOUT_INDEXATION;
+    }
+
+    graphql_api::initialize_query_costs(cost_config)?;
 
     let network_addr = config.config.addr;
     let combined_read_database = ReadDatabase::new(
@@ -243,13 +257,17 @@ where
         genesis_block_height,
         on_database,
         off_database,
-    );
+    )?;
     let request_timeout = config.config.api_request_timeout;
     let concurrency_limit = config.config.max_concurrent_queries;
     let body_limit = config.config.request_body_bytes_limit;
     let max_queries_resolver_recursive_depth =
         config.config.max_queries_resolver_recursive_depth;
     let number_of_threads = config.config.number_of_threads;
+    let required_fuel_block_height_tolerance =
+        config.config.required_fuel_block_height_tolerance;
+    let required_fuel_block_height_timeout =
+        config.config.required_fuel_block_height_timeout;
 
     let schema = schema
         .limit_complexity(config.config.max_queries_complexity)
@@ -268,11 +286,16 @@ where
         .data(gas_price_provider)
         .data(consensus_parameters_provider)
         .data(memory_pool)
+        .data(block_height_subscriber.clone())
         .extension(ValidationExtension::new(
             max_queries_resolver_recursive_depth,
         ))
         .extension(async_graphql::extensions::Tracing)
-        .extension(ViewExtension::new())
+        .extension(RequiredFuelBlockHeightExtension::new(
+            required_fuel_block_height_tolerance,
+            required_fuel_block_height_timeout,
+            block_height_subscriber,
+        ))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";

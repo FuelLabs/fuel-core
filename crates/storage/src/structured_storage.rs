@@ -44,7 +44,6 @@ use crate::{
     StorageSize,
     StorageWrite,
 };
-use core::ops::Deref;
 
 #[cfg(feature = "std")]
 use std::{
@@ -105,7 +104,7 @@ impl<S> StructuredStorage<S> {
     }
 
     /// Returns the inner storage.
-    pub fn into_inner(self) -> S {
+    pub fn into_storage(self) -> S {
         self.inner
     }
 }
@@ -148,9 +147,10 @@ where
         &self,
         key: &[u8],
         column: Self::Column,
+        offset: usize,
         buf: &mut [u8],
     ) -> StorageResult<Option<usize>> {
-        self.inner.read(key, column, buf)
+        self.inner.read(key, column, offset, buf)
     }
 }
 
@@ -359,6 +359,7 @@ where
     fn read(
         &self,
         key: &<M as Mappable>::Key,
+        offset: usize,
         buf: &mut [u8],
     ) -> Result<Option<usize>, Self::Error> {
         let key_encoder =
@@ -366,8 +367,12 @@ where
                 key,
             );
         let key_bytes = key_encoder.as_bytes();
-        self.inner
-            .read(key_bytes.as_ref(), <M as TableWithBlueprint>::column(), buf)
+        self.inner.read(
+            key_bytes.as_ref(),
+            <M as TableWithBlueprint>::column(),
+            offset,
+            buf,
+        )
     }
 
     fn read_alloc(
@@ -382,7 +387,7 @@ where
         self.inner
             .get(key_bytes.as_ref(), <M as TableWithBlueprint>::column())
             // TODO: Return `Value` instead of cloned `Vec<u8>`.
-            .map(|value| value.map(|value| value.deref().clone()))
+            .map(|value| value.map(|value| value.to_vec()))
     }
 }
 

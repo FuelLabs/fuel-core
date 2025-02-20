@@ -168,7 +168,14 @@ mod tests {
                     },
                 };
                 let block = PartialFuelBlock::new(header, vec![]);
-                block.generate(&[], Default::default()).unwrap()
+                block
+                    .generate(
+                        &[],
+                        Default::default(),
+                        #[cfg(feature = "fault-proving")]
+                        &Default::default(),
+                    )
+                    .unwrap()
             })
             .collect::<Vec<_>>();
 

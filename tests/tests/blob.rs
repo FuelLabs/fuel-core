@@ -179,11 +179,15 @@ async fn blob__cannot_post_already_existing_blob() {
 
     // Then
     let err = result.expect_err("Should fail because of the same blob id");
-    assert!(err.to_string().contains("BlobId is already taken"));
+    assert!(
+        err.to_string().contains("BlobId is already taken"),
+        "{}",
+        err
+    );
 }
 
 #[tokio::test]
-async fn blob__accessing_nonexitent_blob_panics_vm() {
+async fn blob__accessing_nonexistent_blob_panics_vm() {
     // Given
     let ctx = TestContext::new().await;
     let blob_id = BlobId::new([0; 32]); // Nonexistent

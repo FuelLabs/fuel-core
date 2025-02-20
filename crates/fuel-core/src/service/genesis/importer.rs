@@ -58,6 +58,7 @@ use fuel_core_types::{
         block::Block,
         primitives::DaBlockHeight,
     },
+    fuel_tx::AssetId,
     fuel_types::BlockHeight,
     fuel_vm::BlobData,
 };
@@ -72,9 +73,9 @@ mod on_chain;
 
 const GROUPS_NUMBER_FOR_PARALLELIZATION: usize = 10;
 
-pub struct SnapshotImporter {
+pub struct SnapshotImporter<N = StateWatcher> {
     db: CombinedGenesisDatabase,
-    task_manager: TaskManager<()>,
+    task_manager: TaskManager<(), N>,
     genesis_block: Block,
     snapshot_reader: SnapshotReader,
     multi_progress_reporter: MultipleProgressReporter,
@@ -178,7 +179,7 @@ impl SnapshotImporter {
         }
 
         let block_height = *self.genesis_block.header().height();
-        let da_block_height = self.genesis_block.header().da_height;
+        let da_block_height = self.genesis_block.header().da_height();
         let db = self.db.on_chain().clone();
 
         let migration_name = migration_name::<TableBeingWritten, TableBeingWritten>();
@@ -187,7 +188,14 @@ impl SnapshotImporter {
             .table_reporter(Some(num_groups), migration_name);
 
         let task = ImportTask::new(
-            Handler::new(block_height, da_block_height),
+            Handler::new(
+                block_height,
+                da_block_height,
+                self.snapshot_reader
+                    .chain_config()
+                    .consensus_parameters
+                    .base_asset_id(),
+            ),
             groups,
             db,
             progress_reporter,
@@ -225,7 +233,7 @@ impl SnapshotImporter {
         }
 
         let block_height = *self.genesis_block.header().height();
-        let da_block_height = self.genesis_block.header().da_height;
+        let da_block_height = self.genesis_block.header().da_height();
 
         let db = self.db.off_chain().clone();
 
@@ -235,7 +243,14 @@ impl SnapshotImporter {
             .table_reporter(Some(num_groups), migration_name);
 
         let task = ImportTask::new(
-            Handler::new(block_height, da_block_height),
+            Handler::new(
+                block_height,
+                da_block_height,
+                self.snapshot_reader
+                    .chain_config()
+                    .consensus_parameters
+                    .base_asset_id(),
+            ),
             groups,
             db,
             progress_reporter,
@@ -255,15 +270,21 @@ impl SnapshotImporter {
 pub struct Handler<TableBeingWritten, TableInSnapshot> {
     pub block_height: BlockHeight,
     pub da_block_height: DaBlockHeight,
+    pub base_asset_id: AssetId,
     _table_being_written: PhantomData<TableBeingWritten>,
     _table_in_snapshot: PhantomData<TableInSnapshot>,
 }
 
 impl<A, B> Handler<A, B> {
-    pub fn new(block_height: BlockHeight, da_block_height: DaBlockHeight) -> Self {
+    pub fn new(
+        block_height: BlockHeight,
+        da_block_height: DaBlockHeight,
+        base_asset_id: &AssetId,
+    ) -> Self {
         Self {
             block_height,
             da_block_height,
+            base_asset_id: *base_asset_id,
             _table_being_written: PhantomData,
             _table_in_snapshot: PhantomData,
         }

@@ -17,6 +17,7 @@ use anyhow::{
 use fuel_core_storage::transactional::{
     AtomicView,
     Changes,
+    HistoricalView,
 };
 use fuel_core_types::{
     blockchain::{
@@ -42,6 +43,7 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            StorageReadReplayEvent,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -125,10 +127,22 @@ where
 
         let block_time = predefined_block.header().consensus().time;
 
-        let da_height = predefined_block.header().application().da_height;
+        let da_height = predefined_block.header().da_height();
+
+        let view = self.view_provider.latest_view()?;
 
         let header_to_produce =
-            self.new_header_with_da_height(height, block_time, da_height)?;
+            self.new_header_with_da_height(height, block_time, da_height, &view)?;
+
+        let latest_height = view.latest_height().ok_or(Error::NoGenesisBlock)?;
+
+        if header_to_produce.height() <= &latest_height {
+            return Err(Error::BlockHeightShouldBeHigherThanPrevious {
+                height,
+                previous_block: latest_height,
+            }
+            .into())
+        }
 
         let maybe_mint_tx = transactions_source.pop();
         let mint_tx =
@@ -192,13 +206,25 @@ where
             anyhow!("Failed to acquire the production lock, block production is already in progress")
         })?;
 
-        let gas_price = self.calculate_gas_price().await?;
+        let gas_price = self.production_gas_price().await?;
 
         let source = tx_source(gas_price, height).await?;
 
+        let view = self.view_provider.latest_view()?;
+
         let header = self
-            .new_header_with_new_da_height(height, block_time)
+            .new_header_with_new_da_height(height, block_time, &view)
             .await?;
+
+        let latest_height = view.latest_height().ok_or(Error::NoGenesisBlock)?;
+
+        if header.height() <= &latest_height {
+            return Err(Error::BlockHeightShouldBeHigherThanPrevious {
+                height,
+                previous_block: latest_height,
+            }
+            .into())
+        }
 
         let component = Components {
             header_to_produce: header,
@@ -220,10 +246,15 @@ where
         Ok(result)
     }
 
-    async fn calculate_gas_price(&self) -> anyhow::Result<u64> {
+    async fn production_gas_price(&self) -> anyhow::Result<u64> {
         self.gas_price_provider
-            .next_gas_price()
-            .await
+            .production_gas_price()
+            .map_err(|e| anyhow!("No gas price found: {e:?}"))
+    }
+
+    async fn dry_run_gas_price(&self) -> anyhow::Result<u64> {
+        self.gas_price_provider
+            .dry_run_gas_price()
             .map_err(|e| anyhow!("No gas price found: {e:?}"))
     }
 }
@@ -309,12 +340,12 @@ where
                 .unwrap_or(Tai64::UNIX_EPOCH)
         });
 
-        let header = self.new_header(simulated_height, simulated_time)?;
+        let header = self.new_header(simulated_height, simulated_time, &view)?;
 
         let gas_price = if let Some(inner) = gas_price {
             inner
         } else {
-            self.calculate_gas_price().await?
+            self.dry_run_gas_price().await?
         };
 
         // The dry run execution should use the state of the blockchain based on the
@@ -334,7 +365,7 @@ where
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let tx_statuses = tokio_rayon::spawn_fifo(
             move || -> anyhow::Result<Vec<TransactionExecutionStatus>> {
-                Ok(executor.dry_run(component, utxo_validation)?)
+                Ok(executor.dry_run(component, utxo_validation, height)?)
             },
         )
         .await?;
@@ -353,6 +384,33 @@ where
     }
 }
 
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+where
+    ViewProvider: HistoricalView + 'static,
+    ViewProvider::LatestView: BlockProducerDatabase,
+    Executor: ports::StorageReadReplayRecorder + 'static,
+    GasPriceProvider: GasPriceProviderConstraint,
+    ConsensusProvider: ConsensusParametersProvider,
+{
+    /// Re-executes an old block, getting the storage read events.
+    pub async fn storage_read_replay(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Vec<StorageReadReplayEvent>> {
+        let view = self.view_provider.latest_view()?;
+
+        let executor = self.executor.clone();
+
+        // use the blocking threadpool to avoid clogging up the main async runtime
+        tokio_rayon::spawn_fifo(move || {
+            let block = view.get_full_block(&height)?;
+            Ok(executor.storage_read_replay(&block)?)
+        })
+        .await
+    }
+}
+
 pub const NO_NEW_DA_HEIGHT_FOUND: &str = "No new da_height found";
 
 impl<ViewProvider, TxPool, Executor, GP, ConsensusProvider>
@@ -367,8 +425,9 @@ where
         &self,
         height: BlockHeight,
         block_time: Tai64,
+        view: &ViewProvider::LatestView,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let mut block_header = self.new_header(height, block_time)?;
+        let mut block_header = self.new_header(height, block_time, view)?;
         let previous_da_height = block_header.da_height;
         let gas_limit = self
             .consensus_parameters_provider
@@ -390,11 +449,13 @@ where
         height: BlockHeight,
         block_time: Tai64,
         da_height: DaBlockHeight,
+        view: &ViewProvider::LatestView,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let mut block_header = self.new_header(height, block_time)?;
+        let mut block_header = self.new_header(height, block_time, view)?;
         block_header.application.da_height = da_height;
         Ok(block_header)
     }
+
     async fn select_new_da_height(
         &self,
         gas_limit: u64,
@@ -447,9 +508,9 @@ where
         &self,
         height: BlockHeight,
         block_time: Tai64,
+        view: &ViewProvider::LatestView,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let view = self.view_provider.latest_view()?;
-        let previous_block_info = self.previous_block_info(height, &view)?;
+        let previous_block_info = self.previous_block_info(height, view)?;
         let consensus_parameters_version = view.latest_consensus_parameters_version()?;
         let state_transition_bytecode_version =
             view.latest_state_transition_bytecode_version()?;
@@ -475,29 +536,23 @@ where
         height: BlockHeight,
         view: &ViewProvider::LatestView,
     ) -> anyhow::Result<PreviousBlockInfo> {
-        let latest_height = self
-            .view_provider
-            .latest_view()?
-            .latest_height()
-            .ok_or(Error::NoGenesisBlock)?;
-        // block 0 is reserved for genesis
-        if height <= latest_height {
-            Err(Error::BlockHeightShouldBeHigherThanPrevious {
-                height,
-                previous_block: latest_height,
-            }
-            .into())
-        } else {
-            // get info from previous block height
-            let prev_height = height.pred().expect("We checked the height above");
-            let previous_block = view.get_block(&prev_height)?;
-            let prev_root = view.block_header_merkle_root(&prev_height)?;
+        let latest_height = view.latest_height().ok_or(Error::NoGenesisBlock)?;
 
-            Ok(PreviousBlockInfo {
-                prev_root,
-                da_height: previous_block.header().da_height,
-            })
-        }
+        // get info from previous block height
+        let prev_height =
+            height
+                .pred()
+                .ok_or(Error::BlockHeightShouldBeHigherThanPrevious {
+                    height: 0u32.into(),
+                    previous_block: latest_height,
+                })?;
+        let previous_block = view.get_block(&prev_height)?;
+        let prev_root = view.block_header_merkle_root(&prev_height)?;
+
+        Ok(PreviousBlockInfo {
+            prev_root,
+            da_height: previous_block.header().da_height(),
+        })
     }
 }
 

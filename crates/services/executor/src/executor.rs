@@ -164,11 +164,11 @@ use alloc::{
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
-#[cfg(not(feature = "test-helpers"))]
+#[cfg(not(feature = "limited-tx-count"))]
 pub const fn max_tx_count() -> u16 {
     u16::MAX.saturating_sub(1)
 }
-#[cfg(feature = "test-helpers")]
+#[cfg(feature = "limited-tx-count")]
 pub const fn max_tx_count() -> u16 {
     1024
 }
@@ -287,8 +287,12 @@ where
         TxSource: TransactionsSource,
     {
         let consensus_params_version = components.consensus_parameters_version();
+
         let (block_executor, storage_tx) =
             self.into_executor(consensus_params_version)?;
+
+        #[cfg(feature = "fault-proving")]
+        let chain_id = block_executor.consensus_params.chain_id();
 
         let (partial_block, execution_data) = if dry_run {
             block_executor.dry_run_block(components, storage_tx)?
@@ -310,7 +314,12 @@ where
         } = execution_data;
 
         let block = partial_block
-            .generate(&message_ids[..], event_inbox_root)
+            .generate(
+                &message_ids[..],
+                event_inbox_root,
+                #[cfg(feature = "fault-proving")]
+                &chain_id,
+            )
             .map_err(ExecutorError::BlockHeaderError)?;
 
         let finalized_block_id = block.id();
@@ -334,7 +343,7 @@ where
         self,
         block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
-        let consensus_params_version = block.header().consensus_parameters_version;
+        let consensus_params_version = block.header().consensus_parameters_version();
         let (block_executor, storage_tx) =
             self.into_executor(consensus_params_version)?;
 
@@ -844,13 +853,14 @@ where
             ..
         } = &data;
 
+        let chain_id = self.consensus_params.chain_id();
+
         new_partial_block
             .transactions
             .iter()
             .zip(old_block.transactions())
             .try_for_each(|(new_tx, old_tx)| {
                 if new_tx != old_tx {
-                    let chain_id = self.consensus_params.chain_id();
                     let transaction_id = old_tx.id(&chain_id);
 
                     tracing::info!(
@@ -867,7 +877,12 @@ where
             })?;
 
         let new_block = new_partial_block
-            .generate(&message_ids[..], *event_inbox_root)
+            .generate(
+                &message_ids[..],
+                *event_inbox_root,
+                #[cfg(feature = "fault-proving")]
+                &chain_id,
+            )
             .map_err(ExecutorError::BlockHeaderError)?;
         if new_block.header() != old_block.header() {
             tracing::info!(
@@ -901,7 +916,7 @@ where
             .storage::<FuelBlocks>()
             .get(&prev_block_height)?
             .ok_or(ExecutorError::PreviousBlockIsNotFound)?;
-        let previous_da_height = prev_block_header.header().da_height;
+        let previous_da_height = prev_block_header.header().da_height();
         let Some(next_unprocessed_da_height) = previous_da_height.0.checked_add(1) else {
             return Err(ExecutorError::DaHeightExceededItsLimit)
         };
@@ -1156,11 +1171,20 @@ where
     ) -> ExecutorResult<CheckedTransaction> {
         let block_height = *header.height();
         let actual_version = header.consensus_parameters_version;
+        let expiration = tx.expiration();
         let checked_tx = match tx {
             MaybeCheckedTransaction::Transaction(tx) => tx
                 .into_checked_basic(block_height, &self.consensus_params)?
                 .into(),
             MaybeCheckedTransaction::CheckedTransaction(checked_tx, checked_version) => {
+                // If you plan to add an other check of validity like this one on the checked_tx
+                // then probably the `CheckedTransaction` type isn't useful anymore.
+                if block_height > expiration {
+                    return Err(ExecutorError::TransactionExpired(
+                        expiration,
+                        block_height,
+                    ));
+                }
                 if actual_version == checked_version {
                     checked_tx
                 } else {
@@ -1590,6 +1614,7 @@ where
         Ok(checked_tx)
     }
 
+    #[allow(clippy::type_complexity)]
     fn attempt_tx_execution_with_vm<Tx, T>(
         &self,
         checked_tx: Checked<Tx>,
@@ -1626,9 +1651,14 @@ where
             .iter()
             .map(|input| input.predicate_gas_used())
             .collect();
-        let ready_tx = checked_tx.into_ready(gas_price, gas_costs, fee_params)?;
+        let ready_tx = checked_tx.into_ready(
+            gas_price,
+            gas_costs,
+            fee_params,
+            Some(*header.height()),
+        )?;
 
-        let mut vm = Interpreter::with_storage(
+        let mut vm = Interpreter::<_, _, _>::with_storage(
             memory,
             vm_db,
             InterpreterParams::new(gas_price, &self.consensus_params),
@@ -1664,7 +1694,7 @@ where
         }
 
         self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
-        Ok((reverted, state, tx, receipts))
+        Ok((reverted, state, tx, receipts.to_vec()))
     }
 
     fn verify_inputs_exist_and_values_match<T>(
@@ -1969,9 +1999,9 @@ where
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace<M, T, Tx>(
+    fn log_backtrace<M, T, Tx, Ecal>(
         &self,
-        vm: &Interpreter<M, VmStorage<T>, Tx>,
+        vm: &Interpreter<M, VmStorage<T>, Tx, Ecal>,
         receipts: &[Receipt],
     ) where
         M: Memory,

@@ -9,10 +9,12 @@ use fuel_core::{
         StateConfig,
     },
     service::{
+        config::GasPriceConfig,
         Config,
         DbType,
         FuelService,
     },
+    state::rocks_db::DatabaseConfig,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_poa::Trigger;
@@ -99,6 +101,9 @@ pub struct TestSetupBuilder {
     pub privileged_address: Address,
     pub base_asset_id: AssetId,
     pub trigger: Trigger,
+    pub max_txs: usize,
+    pub database_type: DbType,
+    pub database_config: DatabaseConfig,
 }
 
 impl TestSetupBuilder {
@@ -231,14 +236,28 @@ impl TestSetupBuilder {
             ..StateConfig::default()
         };
 
-        let config = Config {
+        let mut txpool = fuel_core_txpool::config::Config::default();
+        txpool.pool_limits.max_txs = self.max_txs;
+        txpool.max_tx_update_subscriptions = self.max_txs;
+        txpool.service_channel_limits = fuel_core_txpool::config::ServiceChannelLimits {
+            max_pending_write_pool_requests: self.max_txs,
+            max_pending_read_pool_requests: self.max_txs,
+        };
+        txpool.heavy_work.size_of_verification_queue = self.max_txs;
+
+        let gas_price_config = GasPriceConfig {
+            starting_exec_gas_price: self.starting_gas_price,
+            ..GasPriceConfig::local_node()
+        };
+
+        let mut config = Config {
             utxo_validation: self.utxo_validation,
-            txpool: fuel_core_txpool::config::Config::default(),
+            txpool,
             block_production: self.trigger,
-            starting_gas_price: self.starting_gas_price,
+            gas_price_config,
             ..Config::local_node_with_configs(chain_conf, state)
         };
-        assert_eq!(config.combined_db_config.database_type, DbType::RocksDb);
+        config.combined_db_config.database_config = self.database_config;
 
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
@@ -265,6 +284,9 @@ impl Default for TestSetupBuilder {
             privileged_address: Default::default(),
             base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
+            max_txs: 100000,
+            database_type: DbType::RocksDb,
+            database_config: DatabaseConfig::config_for_tests(),
         }
     }
 }

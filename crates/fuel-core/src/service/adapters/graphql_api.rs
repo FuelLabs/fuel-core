@@ -9,6 +9,7 @@ use crate::{
     database::OnChainIterableKeyValueView,
     fuel_core_graphql_api::ports::{
         worker,
+        worker::BlockAt,
         BlockProducerPort,
         ConsensusProvider,
         DatabaseMessageProof,
@@ -29,7 +30,10 @@ use crate::{
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::TxStatusMessage;
+use fuel_core_txpool::{
+    TxPoolStats,
+    TxStatusMessage,
+};
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     entities::relayer::message::MerkleProof,
@@ -42,7 +46,10 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
-        executor::TransactionExecutionStatus,
+        executor::{
+            StorageReadReplayEvent,
+            TransactionExecutionStatus,
+        },
         p2p::PeerInfo,
         txpool::TransactionStatus,
     },
@@ -96,6 +103,10 @@ impl TxPoolPort for TxPoolAdapter {
     ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
         self.service.tx_update_subscribe(id)
     }
+
+    fn latest_pool_stats(&self) -> TxPoolStats {
+        self.service.latest_stats()
+    }
 }
 
 impl DatabaseMessageProof for OnChainIterableKeyValueView {
@@ -121,6 +132,13 @@ impl BlockProducerPort for BlockProducerAdapter {
         self.block_producer
             .dry_run(transactions, height, time, utxo_validation, gas_price)
             .await
+    }
+
+    async fn storage_read_replay(
+        &self,
+        height: BlockHeight,
+    ) -> anyhow::Result<Vec<StorageReadReplayEvent>> {
+        self.block_producer.storage_read_replay(height).await
     }
 }
 
@@ -173,9 +191,8 @@ impl worker::TxPool for TxPoolAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl GasPriceEstimate for StaticGasPrice {
-    async fn worst_case_gas_price(&self, _height: BlockHeight) -> Option<u64> {
+    fn worst_case_gas_price(&self, _height: BlockHeight) -> Option<u64> {
         Some(self.gas_price)
     }
 }
@@ -218,7 +235,7 @@ impl worker::BlockImporter for GraphQLBlockImporter {
 
     fn block_event_at_height(
         &self,
-        height: Option<BlockHeight>,
+        height: BlockAt,
     ) -> anyhow::Result<SharedImportResult> {
         self.import_result_provider_adapter.result_at_height(height)
     }

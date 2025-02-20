@@ -34,6 +34,10 @@ use fuel_core::{
         RelayerConsensusConfig,
         VMConfig,
     },
+    state::rocks_db::{
+        ColumnsPolicy,
+        DatabaseConfig,
+    },
     txpool::config::{
         BlackList,
         Config as TxPoolConfig,
@@ -47,6 +51,7 @@ use fuel_core::{
         secrecy::Secret,
     },
 };
+
 use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
@@ -55,8 +60,10 @@ use fuel_core_metrics::config::{
     DisableConfig,
     Module,
 };
-use fuel_core_poa::signer::SignMode;
-use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
+use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
+    signer::SignMode,
+};
 use pyroscope::{
     pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
@@ -85,10 +92,16 @@ use tracing::{
 #[cfg(feature = "rocksdb")]
 use fuel_core::state::historical_rocksdb::StateRewindPolicy;
 
-use super::DEFAULT_DATABASE_CACHE_SIZE;
+use crate::cli::run::gas_price::GasPriceArgs;
+use fuel_core::service::config::GasPriceConfig;
+#[cfg(feature = "parallel-executor")]
+use std::num::NonZeroUsize;
 
 #[cfg(feature = "p2p")]
 mod p2p;
+
+#[cfg(feature = "shared-sequencer")]
+mod shared_sequencer;
 
 mod consensus;
 mod graphql;
@@ -96,6 +109,8 @@ mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
 mod tx_pool;
+
+mod gas_price;
 
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
@@ -105,12 +120,8 @@ pub struct Command {
     pub service_name: String,
 
     /// The maximum database cache size in bytes.
-    #[arg(
-        long = "max-database-cache-size",
-        default_value_t = DEFAULT_DATABASE_CACHE_SIZE,
-        env
-    )]
-    pub max_database_cache_size: usize,
+    #[arg(long = "max-database-cache-size", env)]
+    pub max_database_cache_size: Option<usize>,
 
     #[clap(
         name = "DB_PATH",
@@ -176,6 +187,11 @@ pub struct Command {
     #[arg(long = "debug", env)]
     pub debug: bool,
 
+    /// Allows execution of transactions based on past block, such as:
+    /// - Dry run in the past
+    #[arg(long = "historical-execution", env)]
+    pub historical_execution: bool,
+
     /// Enable logging of backtraces from vm errors
     #[arg(long = "vm-backtrace", env)]
     pub vm_backtrace: bool,
@@ -189,21 +205,14 @@ pub struct Command {
     #[arg(long = "native-executor-version", env)]
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
 
-    /// The starting gas price for the network
-    #[arg(long = "starting-gas-price", default_value = "0", env)]
-    pub starting_gas_price: u64,
+    /// Number of cores to use for the parallel executor.
+    #[cfg(feature = "parallel-executor")]
+    #[arg(long = "executor-number-of-cores", env, default_value = "1")]
+    pub executor_number_of_cores: NonZeroUsize,
 
-    /// The percentage change in gas price per block
-    #[arg(long = "gas-price-change-percent", default_value = "0", env)]
-    pub gas_price_change_percent: u64,
-
-    /// The minimum allowed gas price
-    #[arg(long = "min-gas-price", default_value = "0", env)]
-    pub min_gas_price: u64,
-
-    /// The percentage threshold for gas price increase
-    #[arg(long = "gas-price-threshold-percent", default_value = "50", env)]
-    pub gas_price_threshold_percent: u64,
+    /// All the configurations for the gas price service.
+    #[clap(flatten)]
+    pub gas_price: gas_price::GasPriceArgs,
 
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
@@ -256,6 +265,10 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
+    #[cfg_attr(feature = "shared-sequencer", clap(flatten))]
+    #[cfg(feature = "shared-sequencer")]
+    pub shared_sequencer_args: shared_sequencer::Args,
+
     #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), env)]
     pub disabled_metrics: Vec<Module>,
 
@@ -297,12 +310,12 @@ impl Command {
             continue_on_error,
             vm_backtrace,
             debug,
+            historical_execution,
             utxo_validation,
             native_executor_version,
-            starting_gas_price,
-            gas_price_change_percent,
-            min_gas_price,
-            gas_price_threshold_percent,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores,
+            gas_price,
             consensus_key,
             #[cfg(feature = "aws-kms")]
             consensus_aws_kms,
@@ -316,6 +329,8 @@ impl Command {
             p2p_args,
             #[cfg(feature = "p2p")]
             sync_args,
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer_args,
             disabled_metrics,
             max_da_lag,
             max_wait_time,
@@ -327,12 +342,32 @@ impl Command {
             profiling: _,
         } = self;
 
+        let GasPriceArgs {
+            starting_gas_price,
+            gas_price_change_percent,
+            min_gas_price,
+            gas_price_threshold_percent,
+            min_da_gas_price,
+            max_da_gas_price,
+            da_gas_price_p_component,
+            da_gas_price_d_component,
+            da_committer_url,
+            da_poll_interval,
+            da_starting_recorded_height,
+        } = gas_price;
+
         let enabled_metrics = disabled_metrics.list_of_enabled();
 
         if !enabled_metrics.is_empty() {
             info!("`{:?}` metrics are enabled", enabled_metrics);
         } else {
             info!("All metrics are disabled");
+        }
+
+        if gas_price.max_da_gas_price < gas_price.min_da_gas_price {
+            anyhow::bail!(
+                "The maximum DA gas price must be greater than or equal to the minimum DA gas price"
+            );
         }
 
         let addr = net::SocketAddr::new(graphql.ip, graphql.port);
@@ -395,8 +430,9 @@ impl Command {
                 // if consensus key is not configured, fallback to dev consensus key
                 let key = default_consensus_dev_key();
                 warn!(
-                    "Fuel Core is using an insecure test key for consensus. Public key: {}",
-                    key.public_key()
+                    "Fuel Core is using an insecure test key for consensus. Public key: {}, SecretKey: {}",
+                    key.public_key(),
+                    key
                 );
                 consensus_signer = SignMode::Key(Secret::new(key.into()));
             }
@@ -456,16 +492,24 @@ impl Command {
         let combined_db_config = CombinedDatabaseConfig {
             database_path,
             database_type,
-            max_database_cache_size,
+            #[cfg(feature = "rocksdb")]
+            database_config: DatabaseConfig {
+                max_fds: rocksdb_max_fds,
+                cache_capacity: max_database_cache_size,
+                #[cfg(feature = "production")]
+                columns_policy: ColumnsPolicy::OnCreation,
+                #[cfg(not(feature = "production"))]
+                columns_policy: ColumnsPolicy::Lazy,
+            },
             #[cfg(feature = "rocksdb")]
             state_rewind_policy,
-            #[cfg(feature = "rocksdb")]
-            max_fds: rocksdb_max_fds,
         };
 
         let block_importer = fuel_core::service::config::fuel_core_importer::Config::new(
             disabled_metrics.is_enabled(Module::Importer),
         );
+
+        let gas_price_metrics = disabled_metrics.is_enabled(Module::GasPrice);
 
         let da_compression = match da_compression {
             Some(retention) => {
@@ -522,6 +566,27 @@ impl Command {
             max_pending_write_pool_requests: tx_max_pending_write_requests,
         };
 
+        let gas_price_config = GasPriceConfig {
+            starting_exec_gas_price: gas_price.starting_gas_price,
+            exec_gas_price_change_percent: gas_price.gas_price_change_percent,
+            min_exec_gas_price: gas_price.min_gas_price,
+            exec_gas_price_threshold_percent: gas_price.gas_price_threshold_percent,
+            da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
+            starting_recorded_height: da_starting_recorded_height,
+            min_da_gas_price,
+            max_da_gas_price,
+            max_da_gas_price_change_percent: gas_price.gas_price_change_percent,
+            da_gas_price_p_component,
+            da_gas_price_d_component,
+            gas_price_metrics,
+            activity_normal_range_size: 100,
+            activity_capped_range_size: 0,
+            activity_decrease_range_size: 0,
+            da_committer_url,
+            block_activity_threshold: 0,
+            da_poll_interval: gas_price.da_poll_interval.map(Into::into),
+        };
+
         let config = Config {
             graphql_config: GraphQLConfig {
                 addr,
@@ -543,6 +608,7 @@ impl Command {
                     get_peers: graphql.costs.get_peers,
                     estimate_predicates: graphql.costs.estimate_predicates,
                     dry_run: graphql.costs.dry_run,
+                    storage_read_replay: graphql.costs.storage_read_replay,
                     submit: graphql.costs.submit,
                     submit_and_await: graphql.costs.submit_and_await,
                     status_change: graphql.costs.status_change,
@@ -560,13 +626,21 @@ impl Command {
                         .state_transition_bytecode_read,
                     da_compressed_block_read: graphql.costs.da_compressed_block_read,
                 },
+                required_fuel_block_height_tolerance: graphql
+                    .required_fuel_block_height_tolerance,
+                required_fuel_block_height_timeout: graphql
+                    .required_fuel_block_height_timeout
+                    .into(),
             },
             combined_db_config,
             snapshot_reader,
             debug,
+            historical_execution,
             native_executor_version,
             continue_on_error,
             utxo_validation,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores,
             block_production: trigger,
             predefined_blocks_path,
             vm: VMConfig {
@@ -588,10 +662,7 @@ impl Command {
                 coinbase_recipient,
                 metrics: disabled_metrics.is_enabled(Module::Producer),
             },
-            starting_gas_price,
-            gas_price_change_percent,
-            min_gas_price,
-            gas_price_threshold_percent,
+            gas_price_config,
             block_importer,
             da_compression,
             #[cfg(feature = "relayer")]
@@ -600,6 +671,8 @@ impl Command {
             p2p: p2p_cfg,
             #[cfg(feature = "p2p")]
             sync: sync_args.into(),
+            #[cfg(feature = "shared-sequencer")]
+            shared_sequencer: shared_sequencer_args.try_into()?,
             consensus_signer,
             name,
             relayer_consensus_config: verifier,

@@ -15,9 +15,9 @@ use fuel_core_gas_price_service::{
     },
     ports::{
         GasPriceData,
-        GasPriceServiceConfig,
         L2Data,
     },
+    v1::metadata::V1AlgorithmConfig,
 };
 use fuel_core_storage::{
     transactional::HistoricalView,
@@ -37,7 +37,10 @@ use crate::{
         database_description::gas_price::GasPriceDatabase,
         Database,
     },
-    service::Config,
+    service::{
+        config::GasPriceConfig,
+        Config,
+    },
 };
 
 #[cfg(test)]
@@ -62,14 +65,47 @@ impl GasPriceData for Database<GasPriceDatabase> {
     }
 }
 
-impl From<Config> for GasPriceServiceConfig {
+impl From<Config> for V1AlgorithmConfig {
     fn from(value: Config) -> Self {
-        GasPriceServiceConfig::new_v0(
-            value.starting_gas_price,
-            value.min_gas_price,
-            value.gas_price_change_percent,
-            value.gas_price_threshold_percent,
-        )
+        let GasPriceConfig {
+            starting_exec_gas_price,
+            exec_gas_price_change_percent,
+            min_exec_gas_price,
+            exec_gas_price_threshold_percent,
+            da_committer_url: _,
+            da_poll_interval,
+            da_gas_price_factor,
+            starting_recorded_height,
+            min_da_gas_price,
+            max_da_gas_price,
+            max_da_gas_price_change_percent,
+            da_gas_price_p_component,
+            da_gas_price_d_component,
+            gas_price_metrics,
+            activity_normal_range_size,
+            activity_capped_range_size,
+            activity_decrease_range_size,
+            block_activity_threshold,
+        } = value.gas_price_config;
+        V1AlgorithmConfig {
+            new_exec_gas_price: starting_exec_gas_price,
+            min_exec_gas_price,
+            exec_gas_price_change_percent,
+            l2_block_fullness_threshold_percent: exec_gas_price_threshold_percent,
+            min_da_gas_price,
+            max_da_gas_price,
+            max_da_gas_price_change_percent,
+            da_p_component: da_gas_price_p_component,
+            da_d_component: da_gas_price_d_component,
+            normal_range_size: activity_normal_range_size,
+            capped_range_size: activity_capped_range_size,
+            decrease_range_size: activity_decrease_range_size,
+            block_activity_threshold,
+            da_poll_interval,
+            gas_price_factor: da_gas_price_factor,
+            starting_recorded_height: starting_recorded_height.map(BlockHeight::from),
+            record_metrics: gas_price_metrics,
+        }
     }
 }
 

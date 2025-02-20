@@ -26,6 +26,7 @@ use crate::client::pagination::{
 };
 pub use primitives::*;
 
+pub mod assets;
 pub mod balance;
 pub mod blob;
 pub mod block;
@@ -35,6 +36,7 @@ pub mod contract;
 pub mod da_compressed;
 pub mod message;
 pub mod node_info;
+pub mod storage_read_replay;
 pub mod upgrades;
 
 pub mod gas_price;

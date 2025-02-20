@@ -25,6 +25,7 @@ use crate::{
     },
 };
 use fuel_core_chain_config::TableEntry;
+pub use fuel_core_database::Error;
 use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
@@ -58,15 +59,14 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 use std::{
+    borrow::Cow,
     fmt::Debug,
+    io::Empty,
     sync::Arc,
 };
-
-pub use fuel_core_database::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
-use crate::database::database_description::gas_price::GasPriceDatabase;
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
@@ -74,7 +74,18 @@ use crate::state::{
         HistoricalRocksDB,
         StateRewindPolicy,
     },
-    rocks_db::RocksDb,
+    rocks_db::{
+        ColumnsPolicy,
+        DatabaseConfig,
+        RocksDb,
+    },
+};
+use crate::{
+    database::database_description::{
+        gas_price::GasPriceDatabase,
+        indexation_availability,
+    },
+    state::HeightType,
 };
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -118,10 +129,13 @@ where
 }
 
 pub type Database<Description = OnChain, Stage = RegularStage<Description>> =
-    GenericDatabase<DataSource<Description, Stage>>;
-pub type OnChainIterableKeyValueView = IterableKeyValueView<ColumnType<OnChain>>;
-pub type OffChainIterableKeyValueView = IterableKeyValueView<ColumnType<OffChain>>;
-pub type RelayerIterableKeyValueView = IterableKeyValueView<ColumnType<Relayer>>;
+    GenericDatabase<DataSource<Description, Stage>, Empty>;
+pub type OnChainIterableKeyValueView =
+    IterableKeyValueView<ColumnType<OnChain>, HeightType<OnChain>>;
+pub type OffChainIterableKeyValueView =
+    IterableKeyValueView<ColumnType<OffChain>, HeightType<OffChain>>;
+pub type RelayerIterableKeyValueView =
+    IterableKeyValueView<ColumnType<Relayer>, HeightType<Relayer>>;
 
 pub type GenesisDatabase<Description = OnChain> = Database<Description, GenesisStage>;
 
@@ -133,7 +147,9 @@ impl OnChainIterableKeyValueView {
     }
 
     pub fn latest_height(&self) -> StorageResult<BlockHeight> {
-        self.maybe_latest_height()?.ok_or(not_found!("BlockHeight"))
+        self.metadata()
+            .cloned()
+            .ok_or_else(|| not_found!("Metadata"))
     }
 
     pub fn latest_block(&self) -> StorageResult<CompressedBlock> {
@@ -168,7 +184,10 @@ where
     Description: DatabaseDescription,
 {
     pub fn new(data_source: DataSourceType<Description>) -> Self {
-        GenesisDatabase::from_storage(DataSource::new(data_source, GenesisStage))
+        GenesisDatabase::from_storage_and_metadata(
+            DataSource::new(data_source, GenesisStage),
+            None,
+        )
     }
 }
 
@@ -179,12 +198,15 @@ where
         StorageInspect<MetadataTable<Description>, Error = StorageError>,
 {
     pub fn new(data_source: DataSourceType<Description>) -> Self {
-        let mut database = Self::from_storage(DataSource::new(
-            data_source,
-            RegularStage {
-                height: SharedMutex::new(None),
-            },
-        ));
+        let mut database = Self::from_storage_and_metadata(
+            DataSource::new(
+                data_source,
+                RegularStage {
+                    height: SharedMutex::new(None),
+                },
+            ),
+            Some(Empty::default()),
+        );
         let height = database
             .latest_height_from_metadata()
             .expect("Failed to get latest height during creation of the database");
@@ -197,16 +219,15 @@ where
     #[cfg(feature = "rocksdb")]
     pub fn open_rocksdb(
         path: &Path,
-        capacity: impl Into<Option<usize>>,
         state_rewind_policy: StateRewindPolicy,
-        max_fds: i32,
+        database_config: DatabaseConfig,
     ) -> Result<Self> {
         use anyhow::Context;
+
         let db = HistoricalRocksDB::<Description>::default_open(
             path,
-            capacity.into(),
             state_rewind_policy,
-            max_fds,
+            database_config,
         )
         .map_err(Into::<anyhow::Error>::into)
         .with_context(|| {
@@ -228,14 +249,14 @@ where
     ) -> core::result::Result<GenesisDatabase<Description>, GenesisDatabase<Description>>
     {
         if !self.stage.height.lock().is_some() {
-            Ok(GenesisDatabase::new(self.into_inner().data))
+            Ok(GenesisDatabase::new(self.into_inner().0.data))
         } else {
             tracing::warn!(
                 "Converting regular database into genesis, \
                 while height is already set for `{}`",
                 Description::name()
             );
-            Err(GenesisDatabase::new(self.into_inner().data))
+            Err(GenesisDatabase::new(self.into_inner().0.data))
         }
     }
 }
@@ -247,16 +268,26 @@ where
 {
     pub fn in_memory() -> Self {
         let data = Arc::<MemoryStore<Description>>::new(MemoryStore::default());
-        Self::from_storage(DataSource::new(data, Stage::default()))
+        Self::from_storage_and_metadata(
+            DataSource::new(data, Stage::default()),
+            Some(Empty::default()),
+        )
     }
 
     #[cfg(feature = "rocksdb")]
-    pub fn rocksdb_temp() -> Self {
-        let db = RocksDb::<Historical<Description>>::default_open_temp(None).unwrap();
-        let historical_db =
-            HistoricalRocksDB::new(db, StateRewindPolicy::NoRewind).unwrap();
+    pub fn rocksdb_temp(
+        state_rewind_policy: StateRewindPolicy,
+        database_config: DatabaseConfig,
+    ) -> Result<Self> {
+        let db = RocksDb::<Historical<Description>>::default_open_temp_with_params(
+            database_config,
+        )?;
+        let historical_db = HistoricalRocksDB::new(db, state_rewind_policy)?;
         let data = Arc::new(historical_db);
-        Self::from_storage(DataSource::new(data, Stage::default()))
+        Ok(Self::from_storage_and_metadata(
+            DataSource::new(data, Stage::default()),
+            None,
+        ))
     }
 }
 
@@ -275,7 +306,15 @@ where
         }
         #[cfg(feature = "rocksdb")]
         {
-            Self::rocksdb_temp()
+            Self::rocksdb_temp(
+                StateRewindPolicy::NoRewind,
+                DatabaseConfig {
+                    cache_capacity: None,
+                    max_fds: 512,
+                    columns_policy: ColumnsPolicy::Lazy,
+                },
+            )
+            .expect("Failed to create a temporary database")
         }
     }
 }
@@ -304,16 +343,31 @@ where
 
         Ok(())
     }
+
+    fn latest_view_with_height(
+        &self,
+        height: Option<Description::Height>,
+    ) -> StorageResult<IterableKeyValueView<ColumnType<Description>, Description::Height>>
+    {
+        let view = self.inner_storage().data.latest_view()?;
+
+        let (view, _) = view.into_inner();
+        Ok(IterableKeyValueView::from_storage_and_metadata(
+            view, height,
+        ))
+    }
 }
 
 impl<Description> AtomicView for Database<Description>
 where
     Description: DatabaseDescription,
 {
-    type LatestView = IterableKeyValueView<ColumnType<Description>>;
+    type LatestView = IterableKeyValueView<ColumnType<Description>, Description::Height>;
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
-        self.inner_storage().data.latest_view()
+        let lock = self.inner_storage().stage.height.lock();
+        let view = self.latest_view_with_height(*lock)?;
+        Ok(view)
     }
 }
 
@@ -322,7 +376,7 @@ where
     Description: DatabaseDescription,
 {
     type Height = Description::Height;
-    type ViewAtHeight = KeyValueView<ColumnType<Description>>;
+    type ViewAtHeight = KeyValueView<ColumnType<Description>, Description::Height>;
 
     fn latest_height(&self) -> Option<Self::Height> {
         *self.inner_storage().stage.height.lock()
@@ -332,9 +386,15 @@ where
         let lock = self.inner_storage().stage.height.lock();
 
         match *lock {
-            None => return self.latest_view().map(|view| view.into_key_value_view()),
+            None => {
+                return self
+                    .latest_view_with_height(None)
+                    .map(|view| view.into_key_value_view())
+            }
             Some(current_height) if &current_height == height => {
-                return self.latest_view().map(|view| view.into_key_value_view())
+                return self
+                    .latest_view_with_height(Some(current_height))
+                    .map(|view| view.into_key_value_view())
             }
             _ => {}
         };
@@ -408,7 +468,7 @@ impl Modifiable for GenesisDatabase<Relayer> {
     }
 }
 
-fn commit_changes_with_height_update<Description>(
+pub fn commit_changes_with_height_update<Description>(
     database: &mut Database<Description>,
     changes: Changes,
     heights_lookup: impl Fn(
@@ -482,15 +542,13 @@ where
             ConflictPolicy::Overwrite,
             changes,
         );
+        let maybe_current_metadata = transaction
+            .storage_as_mut::<MetadataTable<Description>>()
+            .get(&())?;
+        let metadata = update_metadata::<Description>(maybe_current_metadata, new_height);
         transaction
             .storage_as_mut::<MetadataTable<Description>>()
-            .insert(
-                &(),
-                &DatabaseMetadata::V1 {
-                    version: Description::version(),
-                    height: new_height,
-                },
-            )?;
+            .insert(&(), &metadata)?;
 
         transaction.into_changes()
     } else {
@@ -509,6 +567,39 @@ where
     Ok(())
 }
 
+fn update_metadata<Description>(
+    maybe_current_metadata: Option<
+        Cow<DatabaseMetadata<<Description as DatabaseDescription>::Height>>,
+    >,
+    new_height: <Description as DatabaseDescription>::Height,
+) -> DatabaseMetadata<<Description as DatabaseDescription>::Height>
+where
+    Description: DatabaseDescription,
+{
+    let updated_metadata = match maybe_current_metadata.as_ref() {
+        Some(metadata) => match metadata.as_ref() {
+            DatabaseMetadata::V1 { .. } => DatabaseMetadata::V1 {
+                version: Description::version(),
+                height: new_height,
+            },
+            DatabaseMetadata::V2 {
+                indexation_availability,
+                ..
+            } => DatabaseMetadata::V2 {
+                version: Description::version(),
+                height: new_height,
+                indexation_availability: indexation_availability.clone(),
+            },
+        },
+        None => DatabaseMetadata::V2 {
+            version: Description::version(),
+            height: new_height,
+            indexation_availability: indexation_availability::<Description>(None),
+        },
+    };
+    updated_metadata
+}
+
 #[cfg(feature = "rocksdb")]
 pub fn convert_to_rocksdb_direction(direction: IterDirection) -> rocksdb::Direction {
     match direction {
@@ -523,10 +614,6 @@ mod tests {
     use crate::database::{
         database_description::DatabaseDescription,
         Database,
-    };
-    use fuel_core_storage::{
-        tables::FuelBlocks,
-        StorageAsMut,
     };
 
     fn column_keys_not_exceed_count<Description>()
@@ -1076,12 +1163,152 @@ mod tests {
 
         let db = Database::<OnChain>::open_rocksdb(
             temp_dir.path(),
-            1024 * 1024 * 1024,
             Default::default(),
-            512,
+            DatabaseConfig::config_for_tests(),
         )
         .unwrap();
         // rocks db fails
         test(db);
+    }
+
+    mod metadata {
+        use crate::database::database_description::IndexationKind;
+        use fuel_core_storage::kv_store::StorageColumn;
+        use std::{
+            borrow::Cow,
+            collections::HashSet,
+        };
+        use strum::EnumCount;
+
+        use super::{
+            database_description::DatabaseDescription,
+            update_metadata,
+            DatabaseHeight,
+            DatabaseMetadata,
+        };
+
+        #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
+        struct HeightMock(u64);
+        impl DatabaseHeight for HeightMock {
+            fn as_u64(&self) -> u64 {
+                1
+            }
+
+            fn advance_height(&self) -> Option<Self> {
+                None
+            }
+
+            fn rollback_height(&self) -> Option<Self> {
+                None
+            }
+        }
+
+        const MOCK_VERSION: u32 = 0;
+
+        #[derive(EnumCount, enum_iterator::Sequence, Debug, Clone, Copy)]
+        enum ColumnMock {
+            Column1,
+        }
+
+        impl StorageColumn for ColumnMock {
+            fn name(&self) -> String {
+                "column".to_string()
+            }
+
+            fn id(&self) -> u32 {
+                42
+            }
+        }
+
+        #[derive(Debug, Clone, Copy)]
+        struct DatabaseDescriptionMock;
+        impl DatabaseDescription for DatabaseDescriptionMock {
+            type Column = ColumnMock;
+
+            type Height = HeightMock;
+
+            fn version() -> u32 {
+                MOCK_VERSION
+            }
+
+            fn name() -> String {
+                "mock".to_string()
+            }
+
+            fn metadata_column() -> Self::Column {
+                Self::Column::Column1
+            }
+
+            fn prefix(_: &Self::Column) -> Option<usize> {
+                None
+            }
+        }
+
+        #[test]
+        fn update_metadata_preserves_v1() {
+            let current_metadata: DatabaseMetadata<HeightMock> = DatabaseMetadata::V1 {
+                version: MOCK_VERSION,
+                height: HeightMock(1),
+            };
+            let new_metadata = update_metadata::<DatabaseDescriptionMock>(
+                Some(Cow::Borrowed(&current_metadata)),
+                HeightMock(2),
+            );
+
+            match new_metadata {
+                DatabaseMetadata::V1 { version, height } => {
+                    assert_eq!(version, current_metadata.version());
+                    assert_eq!(height, HeightMock(2));
+                }
+                DatabaseMetadata::V2 { .. } => panic!("should be V1"),
+            }
+        }
+
+        #[test]
+        fn update_metadata_preserves_v2() {
+            let available_indexation = HashSet::new();
+
+            let current_metadata: DatabaseMetadata<HeightMock> = DatabaseMetadata::V2 {
+                version: MOCK_VERSION,
+                height: HeightMock(1),
+                indexation_availability: available_indexation.clone(),
+            };
+            let new_metadata = update_metadata::<DatabaseDescriptionMock>(
+                Some(Cow::Borrowed(&current_metadata)),
+                HeightMock(2),
+            );
+
+            match new_metadata {
+                DatabaseMetadata::V1 { .. } => panic!("should be V2"),
+                DatabaseMetadata::V2 {
+                    version,
+                    height,
+                    indexation_availability,
+                } => {
+                    assert_eq!(version, current_metadata.version());
+                    assert_eq!(height, HeightMock(2));
+                    assert_eq!(indexation_availability, available_indexation);
+                }
+            }
+        }
+
+        #[test]
+        fn update_metadata_none_becomes_v2() {
+            let new_metadata =
+                update_metadata::<DatabaseDescriptionMock>(None, HeightMock(2));
+
+            match new_metadata {
+                DatabaseMetadata::V1 { .. } => panic!("should be V2"),
+                DatabaseMetadata::V2 {
+                    version,
+                    height,
+                    indexation_availability,
+                } => {
+                    assert_eq!(version, MOCK_VERSION);
+                    assert_eq!(height, HeightMock(2));
+                    assert_eq!(indexation_availability, IndexationKind::all().collect());
+                }
+            }
+        }
     }
 }

@@ -22,9 +22,8 @@ pub struct GossipsubMessageHandler<Codec> {
 
 impl<Codec> GossipsubCodec for GossipsubMessageHandler<Codec>
 where
-    Codec: Encode<Transaction, Error = io::Error>
-        + Decode<Transaction, Error = io::Error>
-        + Send,
+    Codec:
+        Encode<Transaction, Error = io::Error> + Decode<Transaction, Error = io::Error>,
 {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;
@@ -32,7 +31,7 @@ where
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         match data {
             GossipsubBroadcastRequest::NewTx(tx) => {
-                Ok(self.codec.encode(&tx)?.as_bytes().into_owned())
+                Ok(self.codec.encode(&tx)?.into_bytes())
             }
         }
     }
