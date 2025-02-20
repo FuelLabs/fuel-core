@@ -259,17 +259,17 @@ impl TransactionExecutionResult {
 }
 
 /// When storage in column:key was read, it contained this value.
-#[derive(Clone, PartialEq, Eq, derivative::Derivative)]
+#[derive(Clone, PartialEq, Eq, educe::Educe)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derivative(Debug)]
+#[educe(Debug)]
 pub struct StorageReadReplayEvent {
     /// Column in the storage, identified by id.
     pub column: u32,
     /// Key in the column.
-    #[derivative(Debug(format_with = "fmt_truncated_hex::<32>"))]
+    #[educe(Debug(method(fmt_truncated_hex::<32>)))]
     pub key: Vec<u8>,
     /// Value at the column:key pair. None if the key was not found.
-    #[derivative(Debug(format_with = "fmt_option_truncated_hex::<16>"))]
+    #[educe(Debug(method("fmt_option_truncated_hex::<16>")))]
     pub value: Option<Vec<u8>>,
 }
 
