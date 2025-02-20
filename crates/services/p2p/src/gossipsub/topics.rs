@@ -26,8 +26,7 @@ impl GossipsubTopics {
         let new_tx_topic: Sha256Topic =
             Topic::new(format!("{NEW_TX_GOSSIP_TOPIC}/{network_name}"));
         let tx_confirmations_topic: Sha256Topic =
-            Topic::new(format!("{TX_CONFIRMATIONS_GOSSIP_TOPIC}/{network_name}"));
-
+            Topic::new(format!("{TX_PRECONFIRMATIONS_GOSSIP_TOPIC}/{network_name}"));
         Self {
             new_tx_topic: new_tx_topic.hash(),
             tx_confirmations_topic: tx_confirmations_topic.hash(),
