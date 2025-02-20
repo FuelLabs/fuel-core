@@ -6,7 +6,6 @@ use super::{
     PublishError,
 };
 use crate::{
-    codecs::postcard::PostcardCodec,
     config::Config,
     gossipsub::{
         messages::{
@@ -19,7 +18,11 @@ use crate::{
             TX_CONFIRMATIONS_GOSSIP_TOPIC,
         },
     },
-    p2p_service::FuelP2PEvent,
+    p2p_service::{
+        FuelP2PEvent,
+        GossipsubMessageHandler,
+        RequestResponseMessageHandler,
+    },
     peer_manager::PeerInfo,
     request_response::messages::{
         RequestMessage,
@@ -86,7 +89,6 @@ use tokio::sync::{
     watch,
 };
 use tracing_attributes::instrument;
-
 type P2PService = FuelP2PService;
 
 /// helper function for building FuelP2PService
@@ -96,10 +98,14 @@ async fn build_service_from_config(mut p2p_config: Config) -> P2PService {
     let (sender, _) =
         broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
 
-    let mut service =
-        FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size))
-            .await
-            .unwrap();
+    let mut service = FuelP2PService::new(
+        sender,
+        p2p_config,
+        GossipsubMessageHandler::new(),
+        RequestResponseMessageHandler::new(max_block_size),
+    )
+    .await
+    .unwrap();
     service.start().await.unwrap();
     service
 }
@@ -232,10 +238,14 @@ async fn dont_connect_to_node_with_same_peer_id() {
         let (sender, _) =
             broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
 
-        let mut service =
-            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size))
-                .await
-                .unwrap();
+        let mut service = FuelP2PService::new(
+            sender,
+            p2p_config,
+            GossipsubMessageHandler::new(),
+            RequestResponseMessageHandler::new(max_block_size),
+        )
+        .await
+        .unwrap();
         service.start().await.unwrap();
         service
     };

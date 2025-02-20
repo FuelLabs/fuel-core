@@ -39,7 +39,10 @@ impl<T> Encode<T> for PostcardCodec
 where
     T: ?Sized + serde::Serialize,
 {
-    type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
+    type Encoder<'a>
+        = Cow<'a, [u8]>
+    where
+        T: 'a;
     type Error = io::Error;
 
     fn encode<'a>(&self, value: &'a T) -> Result<Self::Encoder<'a>, Self::Error> {
@@ -49,94 +52,6 @@ where
     }
 }
 
-    async fn read_response<T>(
-        &mut self,
-        protocol: &Self::Protocol,
-        socket: &mut T,
-    ) -> io::Result<Self::Response>
-    where
-        T: AsyncRead + Unpin + Send,
-    {
-        let mut response = Vec::new();
-        socket
-            .take(self.max_response_size as u64)
-            .read_to_end(&mut response)
-            .await?;
-
-        match protocol {
-            PostcardProtocol::V1 => {
-                let v1_response = deserialize::<V1ResponseMessage>(&response)?;
-                Ok(v1_response.into())
-            }
-            PostcardProtocol::V2 => deserialize::<V2ResponseMessage>(&response),
-        }
-    }
-
-    async fn write_request<T>(
-        &mut self,
-        _protocol: &Self::Protocol,
-        socket: &mut T,
-        req: Self::Request,
-    ) -> io::Result<()>
-    where
-        T: futures::AsyncWrite + Unpin + Send,
-    {
-        let encoded_data = serialize(&req)?;
-        socket.write_all(&encoded_data).await?;
-        Ok(())
-    }
-
-    async fn write_response<T>(
-        &mut self,
-        protocol: &Self::Protocol,
-        socket: &mut T,
-        res: Self::Response,
-    ) -> io::Result<()>
-    where
-        T: futures::AsyncWrite + Unpin + Send,
-    {
-        let encoded_data = match protocol {
-            PostcardProtocol::V1 => {
-                let v1_response: V1ResponseMessage = res.into();
-                serialize(&v1_response)?
-            }
-            PostcardProtocol::V2 => serialize(&res)?,
-        };
-        socket.write_all(&encoded_data).await?;
-        Ok(())
-    }
-}
-
-impl GossipsubCodec for PostcardCodec {
-    type RequestMessage = GossipsubBroadcastRequest;
-    type ResponseMessage = GossipsubMessage;
-
-    fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
-        let encoded_data = match data {
-            GossipsubBroadcastRequest::NewTx(tx) => postcard::to_stdvec(&*tx),
-            GossipsubBroadcastRequest::TxPreConfirmations(confirmations) => {
-                postcard::to_stdvec(&*confirmations)
-            }
-        };
-
-        encoded_data.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
-    }
-
-    fn decode(
-        &self,
-        encoded_data: &[u8],
-        gossipsub_tag: GossipTopicTag,
-    ) -> Result<Self::ResponseMessage, io::Error> {
-        let decoded_response = match gossipsub_tag {
-            GossipTopicTag::NewTx => GossipsubMessage::NewTx(deserialize(encoded_data)?),
-            GossipTopicTag::TxPreConfirmations => {
-                GossipsubMessage::TxPreConfirmations(deserialize(encoded_data)?)
-            }
-        };
-
-        Ok(decoded_response)
-    }
-}
 impl<T> Decode<T> for PostcardCodec
 where
     T: serde::de::DeserializeOwned,
