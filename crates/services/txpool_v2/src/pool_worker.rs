@@ -337,7 +337,7 @@ where
                     InsertionSource::RPC { response_channel } => {
                         let tx: Transaction = self
                             .pool
-                            .find_one(&tx_id)
+                            .get(&tx_id)
                             .expect("Transaction was inserted above; qed")
                             .transaction
                             .deref()
@@ -448,7 +448,7 @@ where
         let txs: Vec<Option<TxInfo>> = tx_ids
             .into_iter()
             .map(|tx_id| {
-                self.pool.find_one(&tx_id).map(|tx| TxInfo {
+                self.pool.get(&tx_id).map(|tx| TxInfo {
                     tx: tx.transaction.clone(),
                     creation_instant: tx.creation_instant,
                 })

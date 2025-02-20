@@ -391,7 +391,9 @@ where
                         tx,
                     } => {
                         if let Some(channel) = response_channel {
-                            let _ = channel.send(Ok(()));
+                            if let Err(_) = channel.send(Ok(())) {
+                                tracing::error!("Failed to send the response to the RPC");
+                            }
                         }
                         if let Err(e) = self.p2p.broadcast_transaction(tx) {
                             tracing::error!("Failed to broadcast transaction: {}", e);

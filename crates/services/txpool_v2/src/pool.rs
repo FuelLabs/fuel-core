@@ -333,7 +333,7 @@ where
         txs
     }
 
-    pub fn find_one(&self, tx_id: &TxId) -> Option<&StorageData> {
+    pub fn get(&self, tx_id: &TxId) -> Option<&StorageData> {
         Storage::get(&self.storage, self.tx_id_to_storage_id.get(tx_id)?)
     }
 
