@@ -28,8 +28,10 @@ use std::{
         IpAddr,
         Ipv4Addr,
     },
+    num::NonZeroU32,
     time::Duration,
 };
+
 mod connection_tracker;
 mod fuel_authenticated;
 pub(crate) mod fuel_upgrade;
@@ -40,7 +42,8 @@ const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 /// The configuration of the ingress should be the same:
 /// - `nginx.org/client-max-body-size`
 /// - `nginx.ingress.kubernetes.io/proxy-body-size`
-pub const MAX_RESPONSE_SIZE: usize = 50 * 1024 * 1024;
+pub const MAX_RESPONSE_SIZE: NonZeroU32 =
+    unsafe { NonZeroU32::new_unchecked(50 * 1024 * 1024) };
 
 /// Maximum number of blocks per request.
 pub const MAX_HEADERS_PER_REQUEST: usize = 100;
@@ -69,7 +72,7 @@ pub struct Config<State = Initialized> {
     pub tcp_port: u16,
 
     /// Max Size of a Block in bytes
-    pub max_block_size: usize,
+    pub max_block_size: NonZeroU32,
     pub max_headers_per_request: usize,
 
     // Maximum of txs id asked in a single request

@@ -19,10 +19,6 @@ use std::ops::Range;
 use thiserror::Error;
 use tokio::sync::oneshot;
 
-/// Max Size in Bytes of the Request Message
-#[cfg(test)]
-pub(crate) const MAX_REQUEST_SIZE: usize = core::mem::size_of::<RequestMessage>();
-
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone)]
 pub enum RequestMessage {
     SealedHeaders(Range<u32>),
