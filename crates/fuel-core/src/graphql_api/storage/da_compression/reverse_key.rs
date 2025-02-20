@@ -71,11 +71,11 @@ impl rand::distributions::Distribution<ReverseKey> for rand::distributions::Stan
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> ReverseKey {
         use strum::EnumCount;
         match rng.next_u32() as usize % ReverseKey::COUNT {
-            0 => ReverseKey::Address(Address::default()),
-            1 => ReverseKey::AssetId(AssetId::default()),
-            2 => ReverseKey::ContractId(ContractId::default()),
-            3 => ReverseKey::ScriptCode(Bytes32::default()),
-            4 => ReverseKey::PredicateCode(Bytes32::default()),
+            0 => ReverseKey::Address(rng.gen()),
+            1 => ReverseKey::AssetId(rng.gen()),
+            2 => ReverseKey::ContractId(rng.gen()),
+            3 => ReverseKey::ScriptCode(rng.gen()),
+            4 => ReverseKey::PredicateCode(rng.gen()),
             _ => unreachable!("New reverse key is added but not supported here"),
         }
     }
