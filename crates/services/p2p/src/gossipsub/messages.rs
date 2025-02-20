@@ -13,7 +13,7 @@ use serde::{
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum GossipTopicTag {
     NewTx,
-    TxConfirmations,
+    TxPreConfirmations,
 }
 
 /// Takes `Arc<T>` and wraps it in a matching GossipsubBroadcastRequest
@@ -22,11 +22,11 @@ pub enum GossipTopicTag {
 #[derive(Debug, Clone)]
 pub enum GossipsubBroadcastRequest {
     NewTx(Arc<Transaction>),
-    Confirmations(Arc<PreConfirmationMessage>),
+    TxPreConfirmations(Arc<PreConfirmationMessage>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GossipsubMessage {
     NewTx(Transaction),
-    Confirmations(PreConfirmationMessage),
+    TxPreConfirmations(PreConfirmationMessage),
 }

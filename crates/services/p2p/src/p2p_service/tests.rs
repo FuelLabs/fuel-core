@@ -610,7 +610,7 @@ async fn gossipsub_broadcast_tx_with_accept__tx_confirmations() {
         tokio::time::timeout(
             Duration::from_secs(20),
             gossipsub_broadcast(
-                GossipsubBroadcastRequest::Confirmations(Arc::new(
+                GossipsubBroadcastRequest::TxPreConfirmations(Arc::new(
                     PreConfirmationMessage::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Accept,
@@ -648,7 +648,7 @@ async fn gossipsub_broadcast_tx_with_reject__tx_confirmations() {
         tokio::time::timeout(
             Duration::from_secs(5),
             gossipsub_broadcast(
-                GossipsubBroadcastRequest::Confirmations(Arc::new(
+                GossipsubBroadcastRequest::TxPreConfirmations(Arc::new(
                     PreConfirmationMessage::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Reject,
@@ -797,9 +797,9 @@ async fn gossipsub_broadcast(
             GossipsubBroadcastRequest::NewTx(_) => {
                 (NEW_TX_GOSSIP_TOPIC, GossipTopicTag::NewTx)
             }
-            GossipsubBroadcastRequest::Confirmations(_) => (
+            GossipsubBroadcastRequest::TxPreConfirmations(_) => (
                 TX_CONFIRMATIONS_GOSSIP_TOPIC,
-                GossipTopicTag::TxConfirmations,
+                GossipTopicTag::TxPreConfirmations,
             ),
         };
 
@@ -920,8 +920,8 @@ fn check_message_matches_request(
             assert_eq!(requested.deref(), received, "Both messages were `NewTx`s, but the received message did not match the requested message");
         }
         (
-            GossipsubMessage::Confirmations(received),
-            GossipsubBroadcastRequest::Confirmations(requested),
+            GossipsubMessage::TxPreConfirmations(received),
+            GossipsubBroadcastRequest::TxPreConfirmations(requested),
         ) => assert_eq!(requested.deref(), received, "Both messages were `Confirmations`, but the received message did not match the requested message"),
         _ => panic!("Message does not match the expected request, expected: {:?}, actual: {:?}", expected, message),
     }

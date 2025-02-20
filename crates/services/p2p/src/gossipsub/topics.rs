@@ -42,7 +42,7 @@ impl GossipsubTopics {
         match incoming_topic {
             hash if hash == &self.new_tx_topic => Some(GossipTopicTag::NewTx),
             hash if hash == &self.tx_confirmations_topic => {
-                Some(GossipTopicTag::TxConfirmations)
+                Some(GossipTopicTag::TxPreConfirmations)
             }
             _ => None,
         }
@@ -56,7 +56,7 @@ impl GossipsubTopics {
     ) -> TopicHash {
         match outgoing_request {
             GossipsubBroadcastRequest::NewTx(_) => self.new_tx_topic.clone(),
-            GossipsubBroadcastRequest::Confirmations(_) => {
+            GossipsubBroadcastRequest::TxPreConfirmations(_) => {
                 self.tx_confirmations_topic.clone()
             }
         }

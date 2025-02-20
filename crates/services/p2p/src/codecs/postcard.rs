@@ -158,7 +158,7 @@ impl GossipsubCodec for PostcardCodec {
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         let encoded_data = match data {
             GossipsubBroadcastRequest::NewTx(tx) => postcard::to_stdvec(&*tx),
-            GossipsubBroadcastRequest::Confirmations(confirmations) => {
+            GossipsubBroadcastRequest::TxPreConfirmations(confirmations) => {
                 postcard::to_stdvec(&*confirmations)
             }
         };
@@ -173,8 +173,8 @@ impl GossipsubCodec for PostcardCodec {
     ) -> Result<Self::ResponseMessage, io::Error> {
         let decoded_response = match gossipsub_tag {
             GossipTopicTag::NewTx => GossipsubMessage::NewTx(deserialize(encoded_data)?),
-            GossipTopicTag::TxConfirmations => {
-                GossipsubMessage::Confirmations(deserialize(encoded_data)?)
+            GossipTopicTag::TxPreConfirmations => {
+                GossipsubMessage::TxPreConfirmations(deserialize(encoded_data)?)
             }
         };
 

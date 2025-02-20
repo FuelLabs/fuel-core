@@ -475,7 +475,7 @@ impl<P, V, B: Broadcast, T> Task<P, V, B, T> {
                 let next_transaction = GossipData::new(transaction, peer_id, message_id);
                 let _ = self.broadcast.tx_broadcast(next_transaction);
             }
-            GossipsubMessage::Confirmations(confirmations) => {
+            GossipsubMessage::TxPreConfirmations(confirmations) => {
                 let data = GossipData::new(confirmations, peer_id, message_id);
                 let _ = self.broadcast.confirmations_broadcast(data);
             }

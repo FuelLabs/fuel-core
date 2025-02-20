@@ -507,7 +507,7 @@ fn arb_tx_confirmation_gossip_message() -> FuelP2PEvent {
     let message_id = vec![1, 2, 3, 4, 5].into();
     let topic_hash = TopicHash::from_raw(TX_CONFIRMATIONS_GOSSIP_TOPIC);
     let confirmations = PreConfirmationMessage::default_test_confirmation();
-    let message = GossipsubMessage::Confirmations(confirmations);
+    let message = GossipsubMessage::TxPreConfirmations(confirmations);
     FuelP2PEvent::GossipsubMessage {
         peer_id,
         message_id,
@@ -564,7 +564,7 @@ async fn run__gossip_message_from_p2p_service_is_broadcasted__tx_confirmations()
     let FuelP2PEvent::GossipsubMessage { message, .. } = gossip_message_event else {
         panic!("Expected GossipsubMessage event");
     };
-    let GossipsubMessage::Confirmations(expected) = message else {
+    let GossipsubMessage::TxPreConfirmations(expected) = message else {
         panic!("Expected Confirmations message");
     };
     assert_eq!(expected, actual);
