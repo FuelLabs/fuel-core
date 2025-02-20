@@ -402,12 +402,13 @@ where
                 self.pending_pool
                     .insert_transaction(tx, MissingInput::Contract(contract_id));
             }
-            Err(Error::InputValidation(
-                InputValidationError::NotInsertedInputMessageUnknown(nonce),
-            )) => {
-                self.pending_pool
-                    .insert_transaction(tx, MissingInput::Message(nonce));
-            }
+            // Review question: Should we manage messages ?
+            // Err(Error::InputValidation(
+            //     InputValidationError::NotInsertedInputMessageUnknown(nonce),
+            // )) => {
+            //     self.pending_pool
+            //         .insert_transaction(tx, MissingInput::Message(nonce));
+            // }
             Err(error) => {
                 if let Err(e) =
                     self.notification_sender
