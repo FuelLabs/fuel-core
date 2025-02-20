@@ -185,7 +185,7 @@ pub(super) enum PoolRemoveRequest {
 pub(super) enum PoolReadRequest {
     NonExistingTxs {
         tx_ids: Vec<TxId>,
-        non_existing_txs: oneshot::Sender<Vec<TxId>>,
+        response_channel: oneshot::Sender<Vec<TxId>>,
     },
     Txs {
         tx_ids: Vec<TxId>,
@@ -295,9 +295,9 @@ where
                         }
                         PoolReadRequest::NonExistingTxs {
                             tx_ids,
-                            non_existing_txs,
+                            response_channel,
                         } => {
-                            self.get_non_existing_txs(tx_ids, non_existing_txs);
+                            self.get_non_existing_txs(tx_ids, response_channel);
                         }
                     }
                 }
@@ -462,13 +462,13 @@ where
     fn get_non_existing_txs(
         &mut self,
         tx_ids: Vec<TxId>,
-        non_existing_txs_sender: oneshot::Sender<Vec<TxId>>,
+        response_channel: oneshot::Sender<Vec<TxId>>,
     ) {
         let non_existing_txs: Vec<TxId> = tx_ids
             .into_iter()
             .filter(|tx_id| !self.pool.contains(tx_id))
             .collect();
-        if non_existing_txs_sender.send(non_existing_txs).is_err() {
+        if response_channel.send(non_existing_txs).is_err() {
             tracing::error!("Failed to send non existing txs");
         }
     }

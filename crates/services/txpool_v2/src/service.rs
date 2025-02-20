@@ -176,7 +176,7 @@ pub struct Task<View, P2P> {
     chain_id: ChainId,
     utxo_validation: bool,
     subscriptions: Subscriptions,
-    verification: Verification<View>,
+    verification: Arc<Verification<View>>,
     p2p: Arc<P2P>,
     transaction_verifier_process: SyncProcessor,
     p2p_sync_process: AsyncProcessor,
@@ -370,6 +370,15 @@ where
                 expiration,
                 source,
             } => {
+                let duration = time
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .expect("Time can't be less than UNIX EPOCH");
+                // We do it at the top of the function to avoid any inconsistency in case of error
+                let Ok(duration) = i64::try_from(duration.as_secs()) else {
+                    tracing::error!("Failed to convert the duration to i64");
+                    return
+                };
+
                 match source {
                     ExtendedInsertionSource::P2P { from_peer_info } => {
                         let _ = self.p2p.notify_gossip_transaction_validity(
@@ -392,13 +401,9 @@ where
 
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
 
-                let duration = time
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .expect("Time can't be less than UNIX EPOCH");
-
                 self.shared_state
                     .tx_status_sender
-                    .send_submitted(tx_id, Tai64::from_unix(duration.as_secs() as i64));
+                    .send_submitted(tx_id, Tai64::from_unix(duration));
 
                 if expiration < u32::MAX.into() {
                     let block_height_expiration = self
@@ -608,7 +613,7 @@ where
                 if let Err(e) = request_sender
                     .send(PoolReadRequest::NonExistingTxs {
                         tx_ids: peer_tx_ids,
-                        non_existing_txs: response_sender,
+                        response_channel: response_sender,
                     })
                     .await
                 {
@@ -826,7 +831,7 @@ where
         chain_id,
         utxo_validation,
         subscriptions,
-        verification,
+        verification: Arc::new(verification),
         transaction_verifier_process,
         p2p_sync_process,
         pruner,

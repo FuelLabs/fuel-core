@@ -47,6 +47,7 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub(crate) struct Verification<View> {
     pub persistent_storage_provider: Arc<dyn AtomicView<LatestView = View>>,
     pub consensus_parameters_provider: Arc<dyn ConsensusParametersProvider>,
@@ -54,19 +55,6 @@ pub(crate) struct Verification<View> {
     pub wasm_checker: Arc<dyn WasmChecker>,
     pub memory_pool: MemoryPool,
     pub blacklist: BlackList,
-}
-
-impl<V> Clone for Verification<V> {
-    fn clone(&self) -> Self {
-        Self {
-            persistent_storage_provider: self.persistent_storage_provider.clone(),
-            consensus_parameters_provider: self.consensus_parameters_provider.clone(),
-            gas_price_provider: self.gas_price_provider.clone(),
-            wasm_checker: self.wasm_checker.clone(),
-            memory_pool: self.memory_pool.clone(),
-            blacklist: self.blacklist.clone(),
-        }
-    }
 }
 
 impl<View> Verification<View>
