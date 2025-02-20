@@ -176,7 +176,7 @@ pub struct Task<View, P2P> {
     chain_id: ChainId,
     utxo_validation: bool,
     subscriptions: Subscriptions,
-    verification: Verification<View>,
+    verification: Arc<Verification<View>>,
     p2p: Arc<P2P>,
     transaction_verifier_process: SyncProcessor,
     p2p_sync_process: AsyncProcessor,
@@ -294,11 +294,14 @@ where
 {
     fn import_block(&mut self, result: SharedImportResult) -> TaskNextAction {
         let new_height = *result.sealed_block.entity.header().height();
-        let executed_transaction = result.tx_status.iter().map(|s| s.id).collect();
+        let executed_transactions = result.tx_status.iter().map(|s| s.id).collect();
         // We don't want block importer wait for us to process the result.
         drop(result);
 
-        if let Err(err) = self.pool_worker.executed(executed_transaction) {
+        if let Err(err) = self
+            .pool_worker
+            .remove_executed_transactions(executed_transactions)
+        {
             tracing::error!("{err}");
             return TaskNextAction::Stop
         }
@@ -319,7 +322,7 @@ where
         for height in range_to_remove {
             let expired_txs = self.pruner.height_expiration_txs.remove(&height);
             if let Some(expired_txs) = expired_txs {
-                let result = self.pool_worker.remove_and_coin_dependents((
+                let result = self.pool_worker.remove_tx_and_coin_dependents((
                     expired_txs,
                     Error::Removed(RemovedReason::Ttl),
                 ));
@@ -367,6 +370,15 @@ where
                 expiration,
                 source,
             } => {
+                let duration = time
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .expect("Time can't be less than UNIX EPOCH");
+                // We do it at the top of the function to avoid any inconsistency in case of error
+                let Ok(duration) = i64::try_from(duration.as_secs()) else {
+                    tracing::error!("Failed to convert the duration to i64");
+                    return
+                };
+
                 match source {
                     ExtendedInsertionSource::P2P { from_peer_info } => {
                         let _ = self.p2p.notify_gossip_transaction_validity(
@@ -379,7 +391,9 @@ where
                         tx,
                     } => {
                         if let Some(channel) = response_channel {
-                            let _ = channel.send(Ok(()));
+                            if channel.send(Ok(())).is_err() {
+                                tracing::error!("Failed to send the response to the RPC");
+                            }
                         }
                         if let Err(e) = self.p2p.broadcast_transaction(tx) {
                             tracing::error!("Failed to broadcast transaction: {}", e);
@@ -389,13 +403,9 @@ where
 
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
 
-                let duration = time
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .expect("Time can't be less than UNIX EPOCH");
-
                 self.shared_state
                     .tx_status_sender
-                    .send_submitted(tx_id, Tai64::from_unix(duration.as_secs() as i64));
+                    .send_submitted(tx_id, Tai64::from_unix(duration));
 
                 if expiration < u32::MAX.into() {
                     let block_height_expiration = self
@@ -527,8 +537,8 @@ where
             };
             let tx = Arc::new(checked_tx);
 
-            if let Err(e) =
-                pool_insert_request_sender.send(PoolInsertRequest::Insert { tx, source })
+            if let Err(e) = pool_insert_request_sender
+                .try_send(PoolInsertRequest::Insert { tx, source })
             {
                 tracing::error!("Failed to send the insert request: {}", e);
             }
@@ -605,7 +615,7 @@ where
                 if let Err(e) = request_sender
                     .send(PoolReadRequest::NonExistingTxs {
                         tx_ids: peer_tx_ids,
-                        non_existing_txs: response_sender,
+                        response_channel: response_sender,
                     })
                     .await
                 {
@@ -673,7 +683,7 @@ where
             }
         }
 
-        let result = self.pool_worker.remove_and_coin_dependents((
+        let result = self.pool_worker.remove_tx_and_coin_dependents((
             txs_to_remove,
             Error::Removed(RemovedReason::Ttl),
         ));
@@ -823,7 +833,7 @@ where
         chain_id,
         utxo_validation,
         subscriptions,
-        verification,
+        verification: Arc::new(verification),
         transaction_verifier_process,
         p2p_sync_process,
         pruner,

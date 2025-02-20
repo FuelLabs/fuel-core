@@ -48,10 +48,10 @@ use crate::{
 
 #[derive(Clone)]
 pub struct SharedState {
-    pub(crate) request_remove_sender: mpsc::UnboundedSender<PoolRemoveRequest>,
+    pub(crate) request_remove_sender: mpsc::Sender<PoolRemoveRequest>,
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
-        mpsc::UnboundedSender<pool_worker::PoolExtractBlockTransactions>,
+        mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
     pub(crate) request_read_sender: mpsc::Sender<PoolReadRequest>,
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
@@ -97,7 +97,7 @@ impl SharedState {
         let (select_transactions_sender, mut select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
-            .send(
+            .try_send(
                 pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
                     constraints,
                     transactions: select_transactions_sender,
@@ -190,20 +190,19 @@ impl SharedState {
     /// Notify the txpool that some transactions were skipped during block production.
     /// This is used to update the status of the skipped transactions internally and in subscriptions
     pub fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
-        let transactions = tx_ids_and_reason
+        let dependents_ids = tx_ids_and_reason
             .into_iter()
             .map(|(tx_id, reason)| {
+                let error = Error::SkippedTransaction(reason);
                 self.tx_status_sender
-                    .send_squeezed_out(tx_id, Error::SkippedTransaction(reason.clone()));
-                (tx_id, reason)
+                    .send_squeezed_out(tx_id, error.clone());
+                (tx_id, error)
             })
             .collect();
 
-        if let Err(e) =
-            self.request_remove_sender
-                .send(PoolRemoveRequest::RemoveCoinDependents {
-                    parent_txs: transactions,
-                })
+        if let Err(e) = self
+            .request_remove_sender
+            .try_send(PoolRemoveRequest::CoinDependents { dependents_ids })
         {
             tracing::error!("Failed to send remove coin dependents request: {}", e);
         }

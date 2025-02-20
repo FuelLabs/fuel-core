@@ -434,7 +434,7 @@ macro_rules! basic_merklelized_storage_tests {
                 let mut init_storage = InMemoryStorage::default();
                 let mut init_structured_storage = init_storage.write_transaction();
 
-                let mut rng = &mut StdRng::seed_from_u64(1234);
+                let mut rng = &mut StdRng::seed_from_u64(31337);
                 let gen = || Some($random_key(&mut rng));
                 let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
                 let value = $value_insert;
@@ -477,7 +477,7 @@ macro_rules! basic_merklelized_storage_tests {
                 let mut init_storage = InMemoryStorage::default();
                 let mut init_structured_storage = init_storage.write_transaction();
 
-                let mut rng = &mut StdRng::seed_from_u64(1234);
+                let mut rng = &mut StdRng::seed_from_u64(31337);
                 let gen = || Some($random_key(&mut rng));
                 let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
                 let value = $value_insert;
