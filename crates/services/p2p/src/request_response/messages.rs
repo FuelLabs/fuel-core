@@ -1,3 +1,4 @@
+use crate::service::TaskError;
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
     fuel_tx::TxId,
@@ -17,11 +18,6 @@ use serde::{
 use std::ops::Range;
 use thiserror::Error;
 use tokio::sync::oneshot;
-
-use crate::service::TaskError;
-
-pub(crate) const V1_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.1";
-pub(crate) const V2_REQUEST_RESPONSE_PROTOCOL_ID: &str = "/fuel/req_res/0.0.2";
 
 /// Max Size in Bytes of the Request Message
 #[cfg(test)]
