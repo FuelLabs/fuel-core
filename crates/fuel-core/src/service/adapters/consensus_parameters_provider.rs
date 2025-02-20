@@ -350,7 +350,7 @@ mod tests {
         // When
         let result_with_new_version = result_with_new_version(new_version);
         let _ = block_sender.send(result_with_new_version);
-        task.run(&mut StateWatcher::started()).await;
+        let _ = task.run(&mut StateWatcher::started()).await;
 
         // Then
         assert_eq!(
