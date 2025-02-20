@@ -193,9 +193,10 @@ impl SharedState {
         let dependents_ids = tx_ids_and_reason
             .into_iter()
             .map(|(tx_id, reason)| {
+                let error = Error::SkippedTransaction(reason);
                 self.tx_status_sender
-                    .send_squeezed_out(tx_id, Error::SkippedTransaction(reason.clone()));
-                (tx_id, reason)
+                    .send_squeezed_out(tx_id, error.clone());
+                (tx_id, error)
             })
             .collect();
 

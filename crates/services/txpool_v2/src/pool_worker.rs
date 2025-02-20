@@ -44,14 +44,14 @@ const MAX_PENDING_READ_POOL_REQUESTS: usize = 10_000;
 const MAX_PENDING_INSERT_POOL_REQUESTS: usize = 1_000;
 const MAX_PENDING_REMOVE_POOL_REQUESTS: usize = 1_000;
 
-pub(crate) struct PoolWorkerInterface {
+pub(super) struct PoolWorkerInterface {
     thread_management_sender: UnboundedSender<ThreadManagementRequest>,
-    pub(crate) request_insert_sender: UnboundedSender<PoolInsertRequest>,
-    pub(crate) request_remove_sender: UnboundedSender<PoolRemoveRequest>,
-    pub(crate) request_read_sender: Sender<PoolReadRequest>,
-    pub(crate) extract_block_transactions_sender:
+    pub(super) request_insert_sender: UnboundedSender<PoolInsertRequest>,
+    pub(super) request_remove_sender: UnboundedSender<PoolRemoveRequest>,
+    pub(super) request_read_sender: Sender<PoolReadRequest>,
+    pub(super) extract_block_transactions_sender:
         UnboundedSender<PoolExtractBlockTransactions>,
-    pub(crate) notification_receiver: UnboundedReceiver<PoolNotification>,
+    pub(super) notification_receiver: UnboundedReceiver<PoolNotification>,
     handle: Option<std::thread::JoinHandle<()>>,
 }
 
@@ -148,7 +148,7 @@ enum ThreadManagementRequest {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-pub enum InsertionSource {
+pub(super) enum InsertionSource {
     P2P {
         from_peer_info: GossipsubMessageInfo,
     },
@@ -157,32 +157,32 @@ pub enum InsertionSource {
     },
 }
 
-pub enum PoolInsertRequest {
+pub(super) enum PoolInsertRequest {
     Insert {
         tx: ArcPoolTx,
         source: InsertionSource,
     },
 }
 
-pub enum PoolExtractBlockTransactions {
+pub(super) enum PoolExtractBlockTransactions {
     ExtractBlockTransactions {
         constraints: Constraints,
         transactions: oneshot::Sender<Vec<ArcPoolTx>>,
     },
 }
 
-pub enum PoolRemoveRequest {
+pub(super) enum PoolRemoveRequest {
     ExecutedTransactions {
         tx_ids: Vec<TxId>,
     },
     CoinDependents {
-        dependents_ids: Vec<(TxId, String)>,
+        dependents_ids: Vec<(TxId, Error)>,
     },
     TxAndCoinDependents {
         tx_and_dependents_ids: (Vec<TxId>, Error),
     },
 }
-pub enum PoolReadRequest {
+pub(super) enum PoolReadRequest {
     NonExistingTxs {
         tx_ids: Vec<TxId>,
         non_existing_txs: oneshot::Sender<Vec<TxId>>,
@@ -198,7 +198,7 @@ pub enum PoolReadRequest {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-pub enum ExtendedInsertionSource {
+pub(super) enum ExtendedInsertionSource {
     P2P {
         from_peer_info: GossipsubMessageInfo,
     },
@@ -208,7 +208,7 @@ pub enum ExtendedInsertionSource {
     },
 }
 
-pub enum PoolNotification {
+pub(super) enum PoolNotification {
     Inserted {
         tx_id: TxId,
         time: SystemTime,
@@ -226,7 +226,7 @@ pub enum PoolNotification {
     },
 }
 
-pub struct PoolWorker<View> {
+pub(super) struct PoolWorker<View> {
     thread_management_receiver: UnboundedReceiver<ThreadManagementRequest>,
     request_remove_receiver: UnboundedReceiver<PoolRemoveRequest>,
     request_read_receiver: Receiver<PoolReadRequest>,
@@ -258,7 +258,7 @@ where
             extract = self.extract_block_transactions_receiver.recv() => {
                 match extract {
                     Some(PoolExtractBlockTransactions::ExtractBlockTransactions { constraints, transactions }) => {
-                        self.get_block_transactions(constraints, transactions);
+                        self.extract_block_transactions(constraints, transactions);
                     }
                     None => return true,
                 }
@@ -387,7 +387,7 @@ where
         }
     }
 
-    fn get_block_transactions(
+    fn extract_block_transactions(
         &mut self,
         constraints: Constraints,
         blocks: oneshot::Sender<Vec<ArcPoolTx>>,
@@ -402,7 +402,7 @@ where
         self.pool.remove_transaction(tx_ids);
     }
 
-    fn remove_coin_dependents(&mut self, parent_txs: Vec<(TxId, String)>) {
+    fn remove_coin_dependents(&mut self, parent_txs: Vec<(TxId, Error)>) {
         for (tx_id, reason) in parent_txs {
             let removed = self.pool.remove_coin_dependents(tx_id);
             for tx in removed {
@@ -420,8 +420,8 @@ where
     }
 
     fn remove_and_coin_dependents(&mut self, tx_ids: (Vec<TxId>, Error)) {
-        let error = tx_ids.1.clone();
-        let removed = self.pool.remove_transaction_and_dependents(tx_ids.0);
+        let (tx_ids, error) = tx_ids;
+        let removed = self.pool.remove_transaction_and_dependents(tx_ids);
         for tx in removed {
             let tx_id = tx.id();
             if let Err(e) = self.notification_sender.send(PoolNotification::Removed {
