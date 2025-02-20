@@ -46,8 +46,34 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
-pub trait DecompressDb: TemporalRegistryAll + HistoryLookup {}
-impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup {}
+#[cfg(not(feature = "fault-proving"))]
+pub mod not_fault_proving {
+    use super::*;
+
+    pub trait DecompressDb: TemporalRegistryAll + HistoryLookup {}
+    impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup {}
+}
+
+#[cfg(not(feature = "fault-proving"))]
+pub use not_fault_proving::*;
+
+#[cfg(feature = "fault-proving")]
+pub mod fault_proving {
+    use super::*;
+    use crate::ports::RegistryRootGetter;
+
+    pub trait DecompressDb:
+        TemporalRegistryAll + HistoryLookup + RegistryRootGetter
+    {
+    }
+    impl<T> DecompressDb for T where
+        T: TemporalRegistryAll + HistoryLookup + RegistryRootGetter
+    {
+    }
+}
+
+#[cfg(feature = "fault-proving")]
+pub use fault_proving::*;
 
 /// This must be called for all decompressed blocks in sequence, otherwise the result will be garbage.
 pub async fn decompress<D>(
@@ -58,7 +84,15 @@ pub async fn decompress<D>(
 where
     D: DecompressDb,
 {
-    // TODO: merkle root verification: https://github.com/FuelLabs/fuel-core/issues/2232
+    #[cfg(feature = "fault-proving")]
+    {
+        let db_registry_root = db.registry_root()?;
+        if let VersionedCompressedBlock::V1(block) = &block {
+            if block.header.registry_root != db_registry_root {
+                anyhow::bail!("Registry root mismatch");
+            }
+        }
+    }
 
     block
         .registrations()
