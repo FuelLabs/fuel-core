@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Version 0.41.5]
 
+### Added
+- [2579](https://github.com/FuelLabs/fuel-core/pull/2579): Clear expiration txs cache in transaction pool based on inserted transactions
+
 ### Changed
 - [2387](https://github.com/FuelLabs/fuel-core/pull/2387): Update description `tx-max-depth` flag.
 - [2630](https://github.com/FuelLabs/fuel-core/pull/2630): Removed some noisy `tracing::info!` logs
