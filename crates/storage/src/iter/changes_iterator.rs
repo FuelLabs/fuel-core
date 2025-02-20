@@ -14,13 +14,11 @@ use crate::{
         Value,
         WriteOperation,
     },
-    transactional::{
-        Changes,
-        ReferenceBytesKey,
-        StorageChanges,
-    },
+    transactional::StorageChanges,
 };
-use alloc::collections::BTreeMap;
+
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 
 /// A type that allows to iterate over the `StorageChanges`.
 pub struct ChangesIterator<'a, Column> {
@@ -100,21 +98,13 @@ where
                 }
             }
             StorageChanges::ChangesList(changes_list) => {
-                // We have to clone the prefix and start, because we need to pass them to the iterator
-                // if someone finds a solution without making it a vec, feel free to contribute :)
                 let column = column.id();
-                let prefix = prefix.map(|prefix| prefix.to_vec());
-                let start = start.map(|start| start.to_vec());
-                changes_list
-                    .iter()
-                    .filter_map(move |changes| {
-                        changes.get(&column).map(|tree| {
-                            crate::iter::iterator(
-                                tree,
-                                prefix.as_deref(),
-                                start.as_deref(),
-                                direction,
-                            )
+
+                let mut iterators_list = Vec::with_capacity(changes_list.len());
+
+                for changes in changes_list.iter() {
+                    let iter = changes.get(&column).map(|tree| {
+                        crate::iter::iterator(tree, prefix, start, direction)
                             .filter_map(|(key, value)| match value {
                                 WriteOperation::Insert(value) => {
                                     Some((key.clone().into(), value.clone()))
@@ -122,10 +112,13 @@ where
                                 WriteOperation::Remove => None,
                             })
                             .map(Ok)
-                        })
-                    })
-                    .flatten()
-                    .into_boxed()
+                    });
+                    if let Some(iter) = iter {
+                        iterators_list.push(iter);
+                    }
+                }
+
+                iterators_list.into_iter().flatten().into_boxed()
             }
         }
     }
@@ -141,62 +134,42 @@ where
         // because we have to filter out the keys that were removed, which are
         // marked as `WriteOperation::Remove` in the value
         // copied as-is from the above function, but only to return keys
+
         match self.changes {
-            StorageChanges::Changes(changes) => get_insert_keys_from_changes(
-                changes,
-                column.id(),
-                prefix,
-                start,
-                direction,
-            ),
+            StorageChanges::Changes(changes) => {
+                if let Some(tree) = changes.get(&column.id()) {
+                    crate::iter::iterator(tree, prefix, start, direction)
+                        .filter_map(|(key, value)| match value {
+                            WriteOperation::Insert(_) => Some(key.clone().into()),
+                            WriteOperation::Remove => None,
+                        })
+                        .map(Ok)
+                        .into_boxed()
+                } else {
+                    core::iter::empty().into_boxed()
+                }
+            }
             StorageChanges::ChangesList(changes_list) => {
-                // We have to clone the prefix and start, because we need to pass them to the iterator
-                // if someone finds a solution without making it a vec, feel free to contribute :)
                 let column = column.id();
-                let prefix = prefix.map(|prefix| prefix.to_vec());
-                let start = start.map(|start| start.to_vec());
-                changes_list
-                    .iter()
-                    .flat_map(move |changes| {
-                        get_insert_keys_from_changes(
-                            changes,
-                            column,
-                            prefix.as_deref(),
-                            start.as_deref(),
-                            direction,
-                        )
-                    })
-                    .into_boxed()
+
+                let mut iterators_list = Vec::with_capacity(changes_list.len());
+
+                for changes in changes_list.iter() {
+                    let iter = changes.get(&column).map(|tree| {
+                        crate::iter::iterator(tree, prefix, start, direction)
+                            .filter_map(|(key, value)| match value {
+                                WriteOperation::Insert(_) => Some(key.clone().into()),
+                                WriteOperation::Remove => None,
+                            })
+                            .map(Ok)
+                    });
+                    if let Some(iter) = iter {
+                        iterators_list.push(iter);
+                    }
+                }
+
+                iterators_list.into_iter().flatten().into_boxed()
             }
         }
     }
-}
-
-fn get_insert_keys_from_changes<'a>(
-    changes: &'a Changes,
-    column_id: u32,
-    prefix: Option<&[u8]>,
-    start: Option<&[u8]>,
-    direction: IterDirection,
-) -> BoxedIter<'a, crate::kv_store::KeyItem> {
-    changes
-        .get(&column_id)
-        .map_or(core::iter::empty().into_boxed(), |tree| {
-            boxed_insert_iter(tree, prefix, start, direction)
-        })
-}
-
-fn boxed_insert_iter<'a>(
-    tree: &'a BTreeMap<ReferenceBytesKey, WriteOperation>,
-    prefix: Option<&[u8]>,
-    start: Option<&[u8]>,
-    direction: IterDirection,
-) -> BoxedIter<'a, crate::kv_store::KeyItem> {
-    crate::iter::iterator(tree, prefix, start, direction)
-        .filter_map(|(key, value)| match value {
-            WriteOperation::Insert(_) => Some(key.clone().into()),
-            WriteOperation::Remove => None,
-        })
-        .map(Ok)
-        .into_boxed()
 }

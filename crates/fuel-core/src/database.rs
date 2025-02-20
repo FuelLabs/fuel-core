@@ -406,96 +406,72 @@ where
 
 impl Modifiable for Database<OnChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        commit_changes_with_height_update(
-            self,
-            StorageChanges::Changes(changes),
-            |iter| {
-                iter.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
-                    .try_collect()
-            },
-        )
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
+                .try_collect()
+        })
     }
 }
 
 impl Modifiable for Database<OffChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        commit_changes_with_height_update(
-            self,
-            StorageChanges::Changes(changes),
-            |iter| {
-                iter.iter_all::<FuelBlockIdsToHeights>(Some(IterDirection::Reverse))
-                    .map(|result| result.map(|(_, height)| height))
-                    .try_collect()
-            },
-        )
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all::<FuelBlockIdsToHeights>(Some(IterDirection::Reverse))
+                .map(|result| result.map(|(_, height)| height))
+                .try_collect()
+        })
     }
 }
 
 impl Modifiable for Database<GasPriceDatabase> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        commit_changes_with_height_update(
-            self,
-            StorageChanges::Changes(changes),
-            |iter| {
-                iter.iter_all_keys::<GasPriceMetadata>(Some(IterDirection::Reverse))
-                    .try_collect()
-            },
-        )
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all_keys::<GasPriceMetadata>(Some(IterDirection::Reverse))
+                .try_collect()
+        })
     }
 }
 
 #[cfg(feature = "relayer")]
 impl Modifiable for Database<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        commit_changes_with_height_update(
-            self,
-            StorageChanges::Changes(changes),
-            |iter| {
-                iter.iter_all_keys::<fuel_core_relayer::storage::EventsHistory>(Some(
-                    IterDirection::Reverse,
-                ))
-                .try_collect()
-            },
-        )
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all_keys::<fuel_core_relayer::storage::EventsHistory>(Some(
+                IterDirection::Reverse,
+            ))
+            .try_collect()
+        })
     }
 }
 
 #[cfg(not(feature = "relayer"))]
 impl Modifiable for Database<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        commit_changes_with_height_update(self, StorageChanges::Changes(changes), |_| {
-            Ok(vec![])
-        })
+        commit_changes_with_height_update(self, changes, |_| Ok(vec![]))
     }
 }
 
 impl Modifiable for GenesisDatabase<OnChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data
-            .as_ref()
-            .commit_changes(None, StorageChanges::Changes(changes))
+        self.data.as_ref().commit_changes(None, changes.into())
     }
 }
 
 impl Modifiable for GenesisDatabase<OffChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data
-            .as_ref()
-            .commit_changes(None, StorageChanges::Changes(changes))
+        self.data.as_ref().commit_changes(None, changes.into())
     }
 }
 
 impl Modifiable for GenesisDatabase<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data
-            .as_ref()
-            .commit_changes(None, StorageChanges::Changes(changes))
+        self.data.as_ref().commit_changes(None, changes.into())
     }
 }
 
-pub fn commit_changes_with_height_update<Description>(
+pub fn commit_changes_with_height_update<Description, Changes>(
     database: &mut Database<Description>,
-    mut changes: StorageChanges,
+    changes: Changes,
     heights_lookup: impl Fn(
         &ChangesIterator<Description::Column>,
     ) -> StorageResult<Vec<Description::Height>>,
@@ -505,8 +481,10 @@ where
     Description::Height: Debug + PartialOrd + DatabaseHeight,
     for<'a> StorageTransaction<&'a &'a mut Database<Description>>:
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
+    Changes: Into<StorageChanges>,
 {
     // Gets the all new heights from the `changes`
+    let mut changes = changes.into();
     let iterator = ChangesIterator::<Description::Column>::new(&changes);
     let new_heights = heights_lookup(&iterator)?;
 
@@ -580,9 +558,8 @@ where
                 StorageChanges::ChangesList(vec![c, transaction.into_changes()])
             }
             StorageChanges::ChangesList(mut list) => {
-                let mut changes = core::mem::take(&mut list);
-                changes.push(transaction.into_changes());
-                StorageChanges::ChangesList(changes)
+                list.push(transaction.into_changes());
+                StorageChanges::ChangesList(list)
             }
         }
     };

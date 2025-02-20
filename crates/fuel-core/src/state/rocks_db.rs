@@ -29,6 +29,7 @@ use fuel_core_storage::{
     },
     transactional::{
         Changes,
+        ReferenceBytesKey,
         StorageChanges,
     },
     Error as StorageError,
@@ -53,7 +54,10 @@ use rocksdb::{
 };
 use std::{
     cmp,
-    collections::BTreeMap,
+    collections::{
+        BTreeMap,
+        HashSet,
+    },
     fmt,
     fmt::Formatter,
     iter,
@@ -971,17 +975,18 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn commit_changes(&self, changes: &StorageChanges) -> StorageResult<()> {
+    pub fn commit_changes<'a>(&self, changes: &'a StorageChanges) -> StorageResult<()> {
         let instant = std::time::Instant::now();
         let mut batch = WriteBatch::default();
+        let mut conflict_finder = HashSet::<(&'a u32, &'a ReferenceBytesKey)>::new();
 
         match changes {
             StorageChanges::Changes(changes) => {
-                self._populate_batch(&mut batch, changes);
+                self._populate_batch(&mut batch, &mut conflict_finder, changes)?;
             }
             StorageChanges::ChangesList(changes_list) => {
                 for changes in changes_list {
-                    self._populate_batch(&mut batch, changes);
+                    self._populate_batch(&mut batch, &mut conflict_finder, changes)?;
                 }
             }
         }
@@ -998,13 +1003,26 @@ where
         Ok(())
     }
 
-    fn _populate_batch(&self, batch: &mut WriteBatch, changes: &Changes) {
+    fn _populate_batch<'a>(
+        &self,
+        batch: &mut WriteBatch,
+        conflict_finder: &mut HashSet<(&'a u32, &'a ReferenceBytesKey)>,
+        changes: &'a Changes,
+    ) -> DatabaseResult<()> {
         for (column, ops) in changes {
             let cf = self.cf_u32(*column);
             let column_metrics = self.metrics.columns_write_statistic.get(column);
             for (key, op) in ops {
                 self.metrics.write_meter.inc();
                 column_metrics.map(|metric| metric.inc());
+
+                if !conflict_finder.insert((column, key)) {
+                    return Err(DatabaseError::ConflictingChanges {
+                        column: *column,
+                        key: key.clone(),
+                    });
+                }
+
                 match op {
                     WriteOperation::Insert(value) => {
                         self.metrics.bytes_written.inc_by(value.len() as u64);
@@ -1016,6 +1034,7 @@ where
                 }
             }
         }
+        Ok(())
     }
 }
 
