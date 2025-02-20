@@ -1,7 +1,11 @@
 use crate::{
-    database::database_description::{
-        on_chain::OnChain,
-        DatabaseDescription,
+    database::{
+        database_description::{
+            on_chain::OnChain,
+            DatabaseDescription,
+        },
+        Error as DatabaseError,
+        Result as DatabaseResult,
     },
     state::{
         in_memory::memory_view::MemoryView,
@@ -36,7 +40,10 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use std::{
-    collections::BTreeMap,
+    collections::{
+        BTreeMap,
+        HashSet,
+    },
     fmt::Debug,
     ops::Deref,
     sync::Mutex,
@@ -119,14 +126,24 @@ where
         collection.into_iter().map(Ok)
     }
 
-    fn _insert_changes(&self, changes: Changes) {
+    fn _insert_changes(
+        &self,
+        conflicts_finder: &mut HashSet<(u32, ReferenceBytesKey)>,
+        changes: Changes,
+    ) -> DatabaseResult<()> {
         for (column, btree) in changes.into_iter() {
             let mut lock = self.inner[column as usize]
                 .lock()
-                .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))
-                .unwrap();
+                .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?;
 
             for (key, operation) in btree.into_iter() {
+                if !conflicts_finder.insert((column, key.clone())) {
+                    return Err(DatabaseError::ConflictingChanges {
+                        column,
+                        key: key.clone(),
+                    })
+                }
+
                 match operation {
                     WriteOperation::Insert(value) => {
                         lock.insert(key, value);
@@ -137,6 +154,7 @@ where
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -190,14 +208,16 @@ where
         _: Option<Description::Height>,
         changes: StorageChanges,
     ) -> StorageResult<()> {
+        let mut conflicts_finder = HashSet::<(u32, ReferenceBytesKey)>::new();
+
         match changes {
             StorageChanges::ChangesList(changes) => {
                 for changes in changes.into_iter() {
-                    self._insert_changes(changes);
+                    self._insert_changes(&mut conflicts_finder, changes)?;
                 }
             }
             StorageChanges::Changes(changes) => {
-                self._insert_changes(changes);
+                self._insert_changes(&mut conflicts_finder, changes)?;
             }
         };
         Ok(())
@@ -255,7 +275,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(None, StorageChanges::Changes(changes))?;
+            self.commit_changes(None, changes.into())?;
             Ok(len)
         }
 
@@ -263,7 +283,7 @@ mod tests {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(None, StorageChanges::Changes(changes))?;
+            self.commit_changes(None, changes.into())?;
             Ok(())
         }
     }
