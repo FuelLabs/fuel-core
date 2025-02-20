@@ -10,11 +10,12 @@ members = [
   "crates/client",
   "crates/compression",
   "crates/database",
-  "crates/fraud_proofs/global_merkle_root/storage",
   "crates/fuel-core",
   "crates/fuel-gas-price-algorithm",
   "crates/keygen",
   "crates/metrics",
+  "crates/proof_system/global_merkle_root/service",
+  "crates/proof_system/global_merkle_root/storage",
   "crates/services",
   "crates/services/consensus_module",
   "crates/services/consensus_module/bft",
@@ -96,6 +97,10 @@ fuel-core-wasm-executor = { version = "0.41.7", path = "./crates/services/upgrad
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 fuel-gas-price-algorithm = { version = "0.41.7", path = "crates/fuel-gas-price-algorithm" }
 
+# Proof system
+fuel-core-global-merkle-root-storage = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/storage" }
+fuel-core-global-merkle-root-service = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/service" }
+
 # Fuel dependencies
 fuel-vm-private = { version = "0.59.2", package = "fuel-vm", default-features = false }
 
@@ -105,7 +110,12 @@ async-trait = "0.1"
 aws-sdk-kms = "1.37"
 cynic = { version = "3.1.0", features = ["http-reqwest"] }
 clap = "4.4"
-derivative = { version = "2" }
+educe = { version = "0.6", default-features = false, features = [
+  "Eq",
+  "PartialEq",
+  "Hash",
+  "Debug",
+] }
 derive_more = { version = "0.99" }
 enum_dispatch = "0.3.13"
 enum-iterator = "1.2"
@@ -126,6 +136,7 @@ postcard = "1.0"
 tracing-attributes = "0.1"
 tracing-subscriber = "0.3"
 serde = "1.0"
+serde-big-array = { version = "0.5", default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_with = { version = "3.4", default-features = false }
 strum = { version = "0.25" }

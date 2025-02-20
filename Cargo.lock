@@ -3485,7 +3485,7 @@ dependencies = [
  "anyhow",
  "bech32",
  "bytes",
- "derivative",
+ "educe",
  "fuel-core-chain-config",
  "fuel-core-storage",
  "fuel-core-types 0.41.7",
@@ -3648,11 +3648,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-global-merkle-root-service"
+version = "0.41.7"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "derive_more 0.99.19",
+ "fuel-core-global-merkle-root-storage",
+ "fuel-core-services",
+ "fuel-core-storage",
+ "fuel-core-types 0.41.7",
+ "rand",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fuel-core-global-merkle-root-storage"
 version = "0.41.7"
 dependencies = [
  "anyhow",
  "enum-iterator",
+ "fuel-core-global-merkle-root-storage",
  "fuel-core-storage",
  "fuel-core-types 0.41.7",
  "num_enum",
@@ -3660,6 +3677,7 @@ dependencies = [
  "rand",
  "strum 0.25.0",
  "strum_macros 0.25.3",
+ "tracing",
 ]
 
 [[package]]
@@ -4038,8 +4056,8 @@ dependencies = [
  "aws-config",
  "aws-sdk-kms",
  "bs58",
- "derivative",
  "derive_more 0.99.19",
+ "educe",
  "fuel-vm 0.59.2",
  "k256",
  "rand",
