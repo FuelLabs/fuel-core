@@ -70,13 +70,15 @@ impl Mappable for DaCompressionTemporalRegistryEvictorCacheV2 {
 /// Encoder for the V2 version of the DaCompressionTemporalRegistry for EvictorCache.
 pub struct DaCompressionTemporalEvictorCacheV2Encoder;
 
-impl fuel_core_storage::codec::Encode<MetadataKey>
+impl fuel_core_storage::codec::Encode<RegistryKey>
     for DaCompressionTemporalEvictorCacheV2Encoder
 {
-    type Encoder<'a> = [u8; 1];
+    type Encoder<'a> = [u8; RegistryKey::SIZE];
 
-    fn encode(value: &MetadataKey) -> Self::Encoder<'_> {
-        [*value as u8]
+    fn encode(value: &RegistryKey) -> Self::Encoder<'_> {
+        let mut bytes = [0u8; RegistryKey::SIZE];
+        bytes.copy_from_slice(value.as_ref());
+        bytes
     }
 }
 
