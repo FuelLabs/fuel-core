@@ -79,7 +79,7 @@ pub struct GossipData<T> {
 pub type TransactionGossipData = GossipData<Transaction>;
 
 /// Transactions that have been confirmed by block producer
-pub type ConfirmationsGossipData = GossipData<TxConfirmations>;
+pub type ConfirmationsGossipData = GossipData<PreConfirmationMessage>;
 
 /// A value and an associated signature
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -148,7 +148,7 @@ pub type SignedPreconfirmationByDelegate = Sealed<Preconfirmations>;
 
 /// The possible messages sent by the parties pre-confirming transactinos
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum TxConfirmations {
+pub enum PreConfirmationMessage {
     /// Notification of key delegation
     Delegate(SignedByBlockProducerDelegation),
     /// Notification of pre-confirmations
@@ -156,7 +156,7 @@ pub enum TxConfirmations {
 }
 
 #[cfg(feature = "test-helpers")]
-impl TxConfirmations {
+impl PreConfirmationMessage {
     /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
     pub fn default_test_confirmation() -> Self {
         Self::Preconfirmations(SignedPreconfirmationByDelegate {

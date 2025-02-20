@@ -48,8 +48,8 @@ use fuel_core_types::{
     services::p2p::{
         GossipsubMessageAcceptance,
         NetworkableTransactionPool,
+        PreConfirmationMessage,
         Transactions,
-        TxConfirmations,
     },
 };
 use futures::{
@@ -611,7 +611,7 @@ async fn gossipsub_broadcast_tx_with_accept__tx_confirmations() {
             Duration::from_secs(20),
             gossipsub_broadcast(
                 GossipsubBroadcastRequest::Confirmations(Arc::new(
-                    TxConfirmations::default_test_confirmation(),
+                    PreConfirmationMessage::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Accept,
                 None,
@@ -649,7 +649,7 @@ async fn gossipsub_broadcast_tx_with_reject__tx_confirmations() {
             Duration::from_secs(5),
             gossipsub_broadcast(
                 GossipsubBroadcastRequest::Confirmations(Arc::new(
-                    TxConfirmations::default_test_confirmation(),
+                    PreConfirmationMessage::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Reject,
                 None,

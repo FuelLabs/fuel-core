@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use fuel_core_types::services::p2p::TxConfirmations;
+use fuel_core_types::services::p2p::PreConfirmationMessage;
 
 fn arb_shared_state() -> SharedState {
     let config = Config::default("test network");
@@ -13,7 +13,7 @@ fn arb_shared_state() -> SharedState {
 async fn shared_state__broadcast__tx_confirmations() {
     // given
     let broadcast = arb_shared_state();
-    let confirmations = TxConfirmations::default_test_confirmation();
+    let confirmations = PreConfirmationMessage::default_test_confirmation();
     let confirmations_gossip_data = ConfirmationsGossipData {
         data: Some(confirmations.clone()),
         peer_id: FuelPeerId::from(PeerId::random().to_bytes().to_vec()),
