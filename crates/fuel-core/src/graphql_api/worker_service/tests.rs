@@ -27,14 +27,6 @@ impl ports::worker::TxPool for MockTxPool {
     }
 }
 
-struct MockStfProvider;
-
-impl StfVersionProvider for MockStfProvider {
-    fn cache_stf_version(&self, _version: StateTransitionBytecodeVersion) {
-        // Do nothing
-    }
-}
-
 #[tokio::test]
 async fn run__relayed_transaction_events_are_added_to_storage() {
     let tx_id: Bytes32 = [1; 32].into();
@@ -97,6 +89,5 @@ fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
         asset_metadata_indexation_enabled: true,
         base_asset_id: Default::default(),
         block_height_subscription_handler: Default::default(),
-        stf_parameters_provider: stf_provider,
     }
 }

@@ -131,6 +131,35 @@ impl SharedState {
     }
 }
 
+fn update_cached_version<V, F, E>(
+    current_version: &SharedRwLock<V>,
+    new_version: V,
+    cache_fn: F,
+) -> bool
+where
+    E: core::fmt::Debug,
+    V: PartialOrd,
+    F: FnOnce() -> Result<(), E>,
+{
+    let read_guard = current_version.upgradable_read();
+    if new_version > *read_guard {
+        match cache_fn() {
+            Ok(_) => {
+                let mut write_guard = RwLockUpgradableReadGuard::upgrade(read_guard);
+                *write_guard = new_version;
+            }
+            Err(err) => {
+                tracing::error!(
+                    "Failed to update cache in consensus parameters: {:?}",
+                    err
+                );
+                return false
+            }
+        };
+    }
+    true
+}
+
 impl RunnableTask for Task {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -141,25 +170,29 @@ impl RunnableTask for Task {
             }
 
             Some(event) = self.blocks_events.next() => {
-                let new_version = event
+                let header = event
                     .sealed_block
                     .entity
-                    .header()
-                    .consensus_parameters_version();
+                    .header();
 
-                let read_guard = self.shared_state.latest_consensus_parameters_version.upgradable_read();
-                if new_version > *read_guard {
-                    match self.shared_state.cache_consensus_parameters(new_version) {
-                        Ok(_) => {
-                            let mut write_guard = RwLockUpgradableReadGuard::upgrade(read_guard);
-                            *write_guard = new_version;
-                        }
-                        Err(err) => {
-                            tracing::error!("Failed to cache consensus parameters: {:?}", err);
-                            return TaskNextAction::Stop
-                        }
-                    }
+                let new_consensus_parameters_version = header.consensus_parameters_version();
+                if !update_cached_version(
+                    &self.shared_state.latest_consensus_parameters_version,
+                    new_consensus_parameters_version,
+                    || self.shared_state.cache_consensus_parameters(new_consensus_parameters_version).map(|_| ())
+                ) {
+                    return TaskNextAction::Stop
                 }
+
+                let new_stf_version = header.state_transition_bytecode_version();
+                if !update_cached_version(
+                    &self.shared_state.latest_stf_version,
+                    new_stf_version,
+                    || Ok::<(), ()>(())
+                ) {
+                    return TaskNextAction::Stop
+                }
+
                 TaskNextAction::Continue
             }
         }
