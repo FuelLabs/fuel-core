@@ -395,11 +395,9 @@ impl FuelClient {
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-        self.update_chain_state_info(&response);
-
         let inner_required_height = match &self.require_height {
             ConsistencyPolicy::Auto { height } => Some(height.clone()),
-            _ => None,
+            ConsistencyPolicy::Manual { .. } => None,
         };
 
         Self::decode_response(response, inner_required_height)
