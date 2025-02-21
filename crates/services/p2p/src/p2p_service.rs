@@ -1019,7 +1019,7 @@ mod tests {
 
         let mut sentry_node = {
             let mut p2p_config = p2p_config.clone();
-            p2p_config.max_discovery_peers_connected = max_peers_allowed as u32;
+            p2p_config.max_functional_peers_connected = max_peers_allowed as u32;
 
             p2p_config.bootstrap_nodes = bootstrap_multiaddrs;
 
