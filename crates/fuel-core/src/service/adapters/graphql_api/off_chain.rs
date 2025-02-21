@@ -437,6 +437,6 @@ impl StfVersionProviderTrait for ConsensusParametersProvider {
         &self,
         version: fuel_core_types::blockchain::header::StateTransitionBytecodeVersion,
     ) {
-        *self.shared_state.latest_stf_version.lock() = version;
+        *self.shared_state.latest_stf_version.write() = version;
     }
 }

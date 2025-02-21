@@ -8,7 +8,7 @@ use fuel_core_services::{
     RunnableService,
     RunnableTask,
     ServiceRunner,
-    SharedMutex,
+    SharedRwLock,
     StateWatcher,
     TaskNextAction,
 };
@@ -29,6 +29,7 @@ use fuel_core_types::{
     services::block_importer::SharedImportResult,
 };
 use futures::StreamExt;
+use parking_lot::RwLockUpgradableReadGuard;
 use std::{
     collections::HashMap,
     fmt::Debug,
@@ -38,10 +39,10 @@ use std::{
 #[derive(Clone, Debug)]
 pub struct SharedState {
     pub(crate) latest_consensus_parameters_version:
-        SharedMutex<ConsensusParametersVersion>,
+        SharedRwLock<ConsensusParametersVersion>,
     pub(crate) consensus_parameters:
-        SharedMutex<HashMap<ConsensusParametersVersion, Arc<ConsensusParameters>>>,
-    pub(crate) latest_stf_version: SharedMutex<StateTransitionBytecodeVersion>,
+        SharedRwLock<HashMap<ConsensusParametersVersion, Arc<ConsensusParameters>>>,
+    pub(crate) latest_stf_version: SharedRwLock<StateTransitionBytecodeVersion>,
     pub(crate) database: Database,
 }
 
@@ -69,8 +70,8 @@ impl SharedState {
             });
 
         Self {
-            latest_consensus_parameters_version: SharedMutex::new(genesis_version),
-            latest_stf_version: SharedMutex::new(latest_stf_version),
+            latest_consensus_parameters_version: SharedRwLock::new(genesis_version),
+            latest_stf_version: SharedRwLock::new(latest_stf_version),
             consensus_parameters: Default::default(),
             database,
         }
@@ -89,7 +90,7 @@ impl SharedState {
 
         let consensus_parameters = Arc::new(consensus_parameters);
         self.consensus_parameters
-            .lock()
+            .write()
             .insert(version, consensus_parameters.clone());
         Ok(consensus_parameters)
     }
@@ -99,7 +100,7 @@ impl SharedState {
         version: &ConsensusParametersVersion,
     ) -> StorageResult<Arc<ConsensusParameters>> {
         {
-            let consensus_parameters = self.consensus_parameters.lock();
+            let consensus_parameters = self.consensus_parameters.read();
             if let Some(parameters) = consensus_parameters.get(version) {
                 return Ok(parameters.clone());
             }
@@ -113,7 +114,7 @@ impl SharedState {
     }
 
     pub fn latest_consensus_parameters_version(&self) -> ConsensusParametersVersion {
-        *self.latest_consensus_parameters_version.lock()
+        *self.latest_consensus_parameters_version.read()
     }
 
     pub fn latest_consensus_parameters_with_version(
@@ -126,7 +127,7 @@ impl SharedState {
     }
 
     pub fn latest_stf_version(&self) -> StateTransitionBytecodeVersion {
-        *self.latest_stf_version.lock()
+        *self.latest_stf_version.read()
     }
 }
 
@@ -146,10 +147,12 @@ impl RunnableTask for Task {
                     .header()
                     .consensus_parameters_version();
 
-                if new_version > *self.shared_state.latest_consensus_parameters_version.lock() {
+                    let read_guard = self.shared_state.latest_consensus_parameters_version.upgradable_read();
+                if new_version > *read_guard {
                     match self.shared_state.cache_consensus_parameters(new_version) {
                         Ok(_) => {
-                            *self.shared_state.latest_consensus_parameters_version.lock() = new_version;
+                            let mut write_guard = RwLockUpgradableReadGuard::upgrade(read_guard);
+                            *write_guard = new_version;
                         }
                         Err(err) => {
                             tracing::error!("Failed to cache consensus parameters: {:?}", err);
@@ -191,8 +194,10 @@ impl RunnableService for Task {
             .latest_consensus_parameters_version()?;
         self.shared_state
             .cache_consensus_parameters(latest_consensus_parameters_version)?;
-        *self.shared_state.latest_consensus_parameters_version.lock() =
-            latest_consensus_parameters_version;
+        *self
+            .shared_state
+            .latest_consensus_parameters_version
+            .write() = latest_consensus_parameters_version;
 
         Ok(self)
     }
