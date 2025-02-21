@@ -51,7 +51,6 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     // Given
     let genesis_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
-    let genesis_port = select_port(format!("{}:{}.{}", file!(), line!(), column!()));
     let starting_gas_price = 987;
     let old_driver = Version36FuelCoreDriver::spawn(&[
         "--service-name",
@@ -67,7 +66,7 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
         "--keypair",
         hexed_secret.as_str(),
         "--peering-port",
-        genesis_port,
+        "0",
         "--starting-gas-price",
         starting_gas_price.to_string().as_str(),
     ])
@@ -95,9 +94,6 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
         OldUpdaterMetadata::V0(v0) => v0,
     };
 
-    let public_key = Keypair::from(genesis_keypair).public();
-    let genesis_peer_id = PeerId::from_public_key(&public_key);
-    let genesis_multiaddr = default_multiaddr(genesis_port, genesis_peer_id);
     drop(view);
     let temp_dir = old_driver.kill().await;
 
@@ -111,14 +107,12 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
             "LatestValidator",
             "--debug",
             "--poa-instant",
-            "false",
+            "true",
             "--snapshot",
             IGNITION_TESTNET_SNAPSHOT,
             "--enable-p2p",
             "--keypair",
             hexed_secret.as_str(),
-            "--reserved-nodes",
-            genesis_multiaddr.as_str(),
             "--peering-port",
             "0",
         ],
@@ -133,7 +127,7 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
         .produce_blocks(BLOCKS_TO_PRODUCE, None)
         .await
         .unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
     // Then
     let db = &latest_node.node.shared.database;

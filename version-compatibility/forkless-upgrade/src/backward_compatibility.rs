@@ -130,7 +130,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
         "V36Producer",
         "--debug",
         "--poa-interval-period",
-        "10ms",
+        "1s",
         "--consensus-key",
         POA_SECRET_KEY,
         "--snapshot",
@@ -140,7 +140,6 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
         hexed_secret.as_str(),
         "--peering-port",
         v36_port,
-        "--heartbeat-idle-duration=0",
     ])
     .await
     .unwrap();
@@ -167,7 +166,6 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
         v36_multiaddr.as_str(),
         "--peering-port",
         "0",
-        "--heartbeat-idle-duration=10ms",
     ])
     .await
     .unwrap();
