@@ -507,24 +507,6 @@ where
             }
         }
     }
-
-    // async fn handle_txpool_triggered_event(&mut self) -> TaskNextAction {
-    //     match self.on_txpool_event().await {
-    //         Ok(()) => TaskNextAction::Continue,
-    //         Err(err) => {
-    //             // Wait some time in case of error to avoid spamming retry block production
-    //             tokio::time::sleep(Duration::from_secs(1)).await;
-    //             TaskNextAction::ErrorContinue(err)
-    //         }
-    //     }
-    // }
-
-    // async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
-    //     match self.trigger {
-    //         Trigger::Instant => self.produce_next_block().await,
-    //         Trigger::Never | Trigger::Interval { .. } => Ok(()),
-    //     }
-    // }
 }
 
 #[derive(Serialize)]
