@@ -272,7 +272,7 @@ where
                     .get(&DenseMetadataKey::Latest)?
                     .map(|cow| *cow.root())
                     // the only time it will be empty is on initialization
-                    .unwrap_or(*Bytes32::default())
+                    .unwrap_or_default()
             };
         }
 
