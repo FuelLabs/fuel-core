@@ -521,8 +521,8 @@ impl AlgorithmUpdaterV1 {
                     0u64
                 }
             });
-        tracing::debug!("Profit: {}", self.last_profit);
-        tracing::debug!(
+        tracing::info!("Profit: {}", self.last_profit);
+        tracing::info!(
             "DA gas price change: p: {}, d: {}, change: {}, new: {}",
             p,
             d,
