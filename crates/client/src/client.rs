@@ -400,16 +400,19 @@ impl FuelClient {
             ConsistencyPolicy::Manual { .. } => None,
         };
 
-        Self::decode_response(response, inner_required_height)
+        self.decode_response(response, inner_required_height)
     }
 
     fn decode_response<R, E>(
+        &self,
         response: FuelGraphQlResponse<R, E>,
         inner_required_height: Option<Arc<Mutex<Option<BlockHeight>>>>,
     ) -> io::Result<R>
     where
         R: serde::de::DeserializeOwned + 'static,
     {
+        self.update_chain_state_info(&response);
+
         if let Some(inner_required_height) = inner_required_height {
             if let Some(current_fuel_block_height) = response
                 .extensions
@@ -453,7 +456,7 @@ impl FuelClient {
     async fn subscribe<ResponseData, Vars>(
         &self,
         q: StreamingOperation<ResponseData, Vars>,
-    ) -> io::Result<impl futures::Stream<Item = io::Result<ResponseData>>>
+    ) -> io::Result<impl futures::Stream<Item = io::Result<ResponseData>> + '_>
     where
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
@@ -544,7 +547,7 @@ impl FuelClient {
                             &data,
                         ) {
                             Ok(resp) => {
-                                match Self::decode_response(resp, inner_required_height) {
+                                match self.decode_response(resp, inner_required_height) {
                                     Ok(resp) => {
                                         match last.replace(data) {
                                             // Remove duplicates
@@ -837,10 +840,10 @@ impl FuelClient {
     /// Compared to the `submit_and_await_commit`, the stream also contains
     /// `SubmittedStatus` as an intermediate state.
     #[cfg(feature = "subscriptions")]
-    pub async fn submit_and_await_status(
-        &self,
-        tx: &Transaction,
-    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>>> {
+    pub async fn submit_and_await_status<'a>(
+        &'a self,
+        tx: &'a Transaction,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
         let tx = tx.clone().to_bytes();
         let s = schema::tx::SubmitAndAwaitStatusSubscription::build(TxArg {
@@ -999,10 +1002,10 @@ impl FuelClient {
     #[tracing::instrument(skip(self), level = "debug")]
     #[cfg(feature = "subscriptions")]
     /// Subscribe to the status of a transaction
-    pub async fn subscribe_transaction_status(
-        &self,
-        id: &TxId,
-    ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>>> {
+    pub async fn subscribe_transaction_status<'a>(
+        &'a self,
+        id: &'a TxId,
+    ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
         let tx_id: TransactionId = (*id).into();
         let s = schema::tx::StatusChangeSubscription::build(TxIdArgs { id: tx_id });
