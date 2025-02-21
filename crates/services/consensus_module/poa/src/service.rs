@@ -572,10 +572,7 @@ where
         let next_block_production: BoxFuture<()> = match self.trigger {
             Trigger::Never => Box::pin(core::future::pending()),
             Trigger::Instant => Box::pin(async {
-                self.new_txs_watcher
-                    .changed()
-                    .await
-                    .expect("The PoA task should be the holder of the `Sender`");
+                let _ = self.new_txs_watcher.changed().await;
                 ()
             }),
             Trigger::Interval { block_time } => {
