@@ -573,7 +573,6 @@ where
             Trigger::Never => Box::pin(core::future::pending()),
             Trigger::Instant => Box::pin(async {
                 let _ = self.new_txs_watcher.changed().await;
-                ()
             }),
             Trigger::Interval { block_time } => {
                 let next_block_time = match self
