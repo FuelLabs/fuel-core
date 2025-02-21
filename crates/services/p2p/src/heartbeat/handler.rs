@@ -74,7 +74,7 @@ impl Default for Config {
     fn default() -> Self {
         Self::new(
             Duration::from_secs(60),
-            Duration::from_secs(1),
+            Duration::from_millis(100),
             NonZeroU32::new(5).expect("5 != 0"),
         )
     }
