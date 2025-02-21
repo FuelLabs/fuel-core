@@ -265,8 +265,6 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
     message_id: MessageId,
     message_block_txs: &[Bytes32],
 ) -> StorageResult<MerkleProof> {
-    // TODO[RC]: Should `SuccessDuringBlockProduction` provide receipts?
-
     // Get the message receipts from the block.
     let leaves: Vec<Vec<Receipt>> = message_block_txs
         .iter()

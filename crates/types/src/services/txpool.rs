@@ -408,13 +408,13 @@ impl From<TransactionStatusStorage> for TransactionStatusPreconfirmations {
                 total_gas,
                 total_fee,
             } => TransactionStatusPreconfirmations::Failure {
+                reason: TransactionExecutionResult::reason(&receipts, &result),
                 block_height,
                 block_timestamp: time,
                 program_state: result,
                 receipts,
                 total_gas,
                 total_fee,
-                reason: "Reason".to_string(), // TODO[RC]: Provide reason,
             },
         }
     }

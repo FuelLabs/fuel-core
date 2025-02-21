@@ -352,11 +352,11 @@ impl TransactionStatusPreconfirmations {
             TxStatus::Failure {
                 block_height,
                 block_timestamp,
-                reason: _, // TODO[RC]: Should we use this?
                 program_state,
                 receipts,
                 total_gas,
                 total_fee,
+                ..
             } => TransactionStatusPreconfirmations::Failure(FailureStatus {
                 tx_id,
                 block_height,
@@ -401,7 +401,7 @@ impl From<TransactionStatusPreconfirmations> for TxStatus {
                 ..
             }) => TxStatus::Success {
                 block_height,
-                program_state: result, // TODO[RC]: Rename these?
+                program_state: result,
                 block_timestamp: time,
                 receipts,
                 total_gas,
@@ -419,13 +419,13 @@ impl From<TransactionStatusPreconfirmations> for TxStatus {
                 total_fee,
                 ..
             }) => TxStatus::Failure {
+                reason: TransactionExecutionResult::reason(&receipts, &state),
                 block_height,
                 block_timestamp: time,
                 program_state: state,
                 receipts,
                 total_gas,
                 total_fee,
-                reason: "Reason".to_string(), // TODO[RC]: Update this
             },
             TransactionStatusPreconfirmations::SuccessDuringBlockProduction(
                 SuccessDuringBlockProductionStatus(block_height),
