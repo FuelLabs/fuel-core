@@ -43,7 +43,6 @@ use crate::{
         },
     },
 };
-
 use fuel_core_storage::{
     blueprint::BlueprintInspect,
     codec::Encode,
