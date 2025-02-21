@@ -1,5 +1,9 @@
 use crate::{
     column::Column,
+    error::{
+        InvalidBlock,
+        InvariantViolation,
+    },
     Blobs,
     Coins,
     ConsensusParametersVersions,
@@ -15,7 +19,6 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use anyhow::anyhow;
 use fuel_core_storage::{
     kv_store::KeyValueInspect,
     transactional::StorageTransaction,
@@ -83,10 +86,6 @@ use fuel_core_types::{
         ChainId,
     },
     fuel_vm::UploadedBytecode,
-    services::executor::{
-        Error as ExecutorError,
-        TransactionValidityError,
-    },
 };
 
 /// Main entrypoint to the update functionality
@@ -96,7 +95,7 @@ pub trait UpdateMerkleizedTables {
         &mut self,
         chain_id: ChainId,
         block: &Block,
-    ) -> anyhow::Result<&mut Self>;
+    ) -> crate::Result<&mut Self>;
 }
 
 impl<Storage> UpdateMerkleizedTables for StorageTransaction<Storage>
@@ -108,7 +107,7 @@ where
         &mut self,
         chain_id: ChainId,
         block: &Block,
-    ) -> anyhow::Result<&mut Self> {
+    ) -> crate::Result<&mut Self> {
         let mut update_transaction = UpdateMerkleizedTablesTransaction {
             chain_id,
             storage: self,
@@ -137,14 +136,14 @@ impl<'a, Storage> UpdateMerkleizedTablesTransaction<'a, Storage>
 where
     Storage: KeyValueInspect<Column = Column>,
 {
-    // TODO(#2588): Proper result type
     #[tracing::instrument(skip(self, block))]
-    pub fn process_block(&mut self, block: &Block) -> anyhow::Result<()> {
+    pub fn process_block(&mut self, block: &Block) -> crate::Result<()> {
         let block_height = *block.header().height();
+        tracing::info!(%block_height, "processing block");
 
         for (tx_idx, tx) in block.transactions().iter().enumerate() {
             let tx_idx: u16 =
-                u16::try_from(tx_idx).map_err(|_| ExecutorError::TooManyTransactions)?;
+                u16::try_from(tx_idx).map_err(|_| InvalidBlock::TooManyTransactions)?;
             self.process_transaction(block_height, tx_idx, tx)?;
         }
 
@@ -157,7 +156,7 @@ where
         block_height: BlockHeight,
         tx_idx: u16,
         tx: &Transaction,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         let tx_id = tx.id(&self.chain_id);
         let inputs = tx.inputs();
 
@@ -168,7 +167,7 @@ where
         let tx_pointer = TxPointer::new(block_height, tx_idx);
         for (output_index, output) in tx.outputs().iter().enumerate() {
             let output_index =
-                u16::try_from(output_index).map_err(|_| ExecutorError::TooManyOutputs)?;
+                u16::try_from(output_index).map_err(|_| InvalidBlock::TooManyOutputs)?;
 
             let utxo_id = UtxoId::new(tx_id, output_index);
             self.process_output(tx_pointer, utxo_id, &inputs, output)?;
@@ -188,7 +187,7 @@ where
     }
 
     #[tracing::instrument(skip(self, input))]
-    fn process_input(&mut self, input: &Input) -> anyhow::Result<()> {
+    fn process_input(&mut self, input: &Input) -> crate::Result<()> {
         match input {
             Input::CoinSigned(CoinSigned { utxo_id, .. })
             | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
@@ -228,7 +227,7 @@ where
         utxo_id: UtxoId,
         inputs: &[Input],
         output: &Output,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         match output {
             Output::Coin {
                 to,
@@ -266,7 +265,7 @@ where
     }
 
     #[tracing::instrument(skip(self))]
-    fn store_processed_transaction(&mut self, tx_id: TxId) -> anyhow::Result<()> {
+    fn store_processed_transaction(&mut self, tx_id: TxId) -> crate::Result<()> {
         tracing::debug!("storing processed transaction");
         let previous_tx = self
             .storage
@@ -274,7 +273,7 @@ where
             .replace(&tx_id, &())?;
 
         if previous_tx.is_some() {
-            anyhow::bail!("duplicate transaction detected")
+            Err(InvalidBlock::DuplicateTransaction(tx_id))?
         };
 
         Ok(())
@@ -288,7 +287,7 @@ where
         owner: Address,
         amount: Word,
         asset_id: AssetId,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         // Only insert a coin output if it has some amount.
         // This is because variable or transfer outputs won't have any value
         // if there's a revert or panic and shouldn't be added to the utxo set.
@@ -302,12 +301,10 @@ where
             .into();
 
             tracing::debug!("storing coin");
-            let previous_coin =
-                self.storage.storage::<Coins>().replace(&utxo_id, &coin)?;
-
-            // We should never overwrite coins.
-            // TODO(#2588): Return error instead.
-            assert!(previous_coin.is_none());
+            let None = self.storage.storage::<Coins>().replace(&utxo_id, &coin)? else {
+                // We should never overwrite coins.
+                return Err(InvariantViolation::CoinAlreadyExists(utxo_id).into())
+            };
         }
 
         Ok(())
@@ -320,7 +317,7 @@ where
         utxo_id: UtxoId,
         inputs: &[Input],
         contract: output::contract::Contract,
-    ) -> anyhow::Result<()> {
+    ) -> crate::Result<()> {
         if let Some(Input::Contract(input::contract::Contract { contract_id, .. })) =
             inputs.get(contract.input_index as usize)
         {
@@ -331,20 +328,23 @@ where
             )?;
         } else {
             tracing::warn!("invalid contract input index");
-            Err(ExecutorError::TransactionValidity(
-                TransactionValidityError::InvalidContractInputIndex(utxo_id),
+            Err(InvalidBlock::InvalidContractInputIndex(
+                contract.input_index,
             ))?;
         }
         Ok(())
     }
 
     #[tracing::instrument(skip(self, tx))]
-    fn process_create_transaction(&mut self, tx: &Create) -> anyhow::Result<()> {
+    fn process_create_transaction(&mut self, tx: &Create) -> crate::Result<()> {
         let bytecode_witness_index = tx.bytecode_witness_index();
         let witnesses = tx.witnesses();
         let bytecode = witnesses
             .get(usize::from(*bytecode_witness_index))
-            .ok_or_else(|| anyhow!("invalid witness index {bytecode_witness_index}"))?
+            .ok_or_else(|| InvalidBlock::MissingWitness {
+                txid: tx.id(&self.chain_id),
+                witness_index: usize::from(*bytecode_witness_index),
+            })?
             .as_vec();
 
         // The Fuel specs mandate that each create transaction has exactly one output of type `Output::ContractCreated`.
@@ -354,7 +354,7 @@ where
             .iter()
             .find(|output| matches!(output, Output::ContractCreated { .. }))
         else {
-            anyhow::bail!("Create transaction does not have contract created output")
+            Err(InvalidBlock::ContractCreatedOutputNotFound)?
         };
 
         tracing::debug!("storing contract code");
@@ -365,10 +365,12 @@ where
     }
 
     #[tracing::instrument(skip(self, tx))]
-    fn process_upgrade_transaction(&mut self, tx: &Upgrade) -> anyhow::Result<()> {
+    fn process_upgrade_transaction(&mut self, tx: &Upgrade) -> crate::Result<()> {
         let metadata = match tx.metadata() {
             Some(metadata) => metadata.body.clone(),
-            None => UpgradeMetadata::compute(tx).map_err(|e| anyhow::anyhow!(e))?,
+            None => {
+                UpgradeMetadata::compute(tx).map_err(InvalidBlock::TxValidityError)?
+            }
         };
 
         match metadata {
@@ -379,7 +381,7 @@ where
                 let Some(next_consensus_parameters_version) =
                     self.latest_consensus_parameters_version.checked_add(1)
                 else {
-                    return Err(anyhow::anyhow!("Invalid consensus parameters version"));
+                    return Err(InvalidBlock::ConsensusParametersVersionOutOfBounds.into())
                 };
                 self.latest_consensus_parameters_version =
                     next_consensus_parameters_version;
@@ -400,9 +402,7 @@ where
                     let Some(next_state_transition_bytecode_version) =
                         self.latest_state_transition_bytecode_version.checked_add(1)
                     else {
-                        return Err(anyhow::anyhow!(
-                            "Invalid state transition bytecode version"
-                        ));
+                        return Err(InvalidBlock::StateTransitionBytecodeVersionOutOfBounds.into());
                     };
                     self.latest_state_transition_bytecode_version =
                         next_state_transition_bytecode_version;
@@ -419,7 +419,7 @@ where
     }
 
     #[tracing::instrument(skip(self, tx))]
-    fn process_upload_transaction(&mut self, tx: &Upload) -> anyhow::Result<()> {
+    fn process_upload_transaction(&mut self, tx: &Upload) -> crate::Result<()> {
         let bytecode_root = *tx.bytecode_root();
         let uploaded_bytecode = self
             .storage
@@ -436,26 +436,33 @@ where
             uploaded_subsections_number,
         } = uploaded_bytecode
         else {
-            anyhow::bail!("expected uncompleted bytecode")
+            Err(InvalidBlock::BytecodeAlreadyCompleted)?
         };
 
         let expected_subsection_index = uploaded_subsections_number;
-        if expected_subsection_index != tx.body().subsection_index {
-            anyhow::bail!("expected subsection index {expected_subsection_index}");
+        let subsection_index = tx.body().subsection_index;
+
+        if expected_subsection_index != subsection_index {
+            Err(InvalidBlock::WrongSubsectionIndex {
+                expected: expected_subsection_index,
+                observed: subsection_index,
+            })?
         };
 
         let witness_index = usize::from(*tx.bytecode_witness_index());
-        let new_bytecode = tx
-            .witnesses()
-            .get(witness_index)
-            .ok_or_else(|| anyhow!("expected witness with bytecode"))?;
+        let new_bytecode =
+            tx.witnesses()
+                .get(witness_index)
+                .ok_or(InvalidBlock::MissingWitness {
+                    txid: tx.id(&self.chain_id),
+                    witness_index,
+                })?;
 
         bytecode.extend_from_slice(new_bytecode.as_ref());
 
-        let new_uploaded_subsections_number =
-            uploaded_subsections_number.checked_add(1).ok_or_else(|| {
-                anyhow!("overflow when incrementing uploaded subsection number")
-            })?;
+        let new_uploaded_subsections_number = uploaded_subsections_number
+            .checked_add(1)
+            .ok_or(InvalidBlock::SubsectionNumberOverflow)?;
 
         let new_uploaded_bytecode =
             if new_uploaded_subsections_number == tx.body().subsections_number {
@@ -476,17 +483,20 @@ where
     }
 
     #[tracing::instrument(skip(self, tx))]
-    fn process_blob_transaction(&mut self, tx: &Blob) -> anyhow::Result<()> {
+    fn process_blob_transaction(&mut self, tx: &Blob) -> crate::Result<()> {
         let BlobBody {
             id: blob_id,
             witness_index,
         } = tx.body();
 
-        let blob = tx
-            .witnesses()
-            .get(usize::from(*witness_index))
-             // TODO(#2588): Proper error type
-            .ok_or_else(|| anyhow!("transaction should have blob payload"))?;
+        let witness_index = usize::from(*witness_index);
+        let blob =
+            tx.witnesses()
+                .get(witness_index)
+                .ok_or(InvalidBlock::MissingWitness {
+                    txid: tx.id(&self.chain_id),
+                    witness_index,
+                })?;
 
         tracing::debug!("storing blob");
         self.storage
