@@ -508,23 +508,23 @@ where
         }
     }
 
-    async fn handle_txpool_triggered_event(&mut self) -> TaskNextAction {
-        match self.on_txpool_event().await {
-            Ok(()) => TaskNextAction::Continue,
-            Err(err) => {
-                // Wait some time in case of error to avoid spamming retry block production
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                TaskNextAction::ErrorContinue(err)
-            }
-        }
-    }
+    // async fn handle_txpool_triggered_event(&mut self) -> TaskNextAction {
+    //     match self.on_txpool_event().await {
+    //         Ok(()) => TaskNextAction::Continue,
+    //         Err(err) => {
+    //             // Wait some time in case of error to avoid spamming retry block production
+    //             tokio::time::sleep(Duration::from_secs(1)).await;
+    //             TaskNextAction::ErrorContinue(err)
+    //         }
+    //     }
+    // }
 
-    async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
-        match self.trigger {
-            Trigger::Instant => self.produce_next_block().await,
-            Trigger::Never | Trigger::Interval { .. } => Ok(()),
-        }
-    }
+    // async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
+    //     match self.trigger {
+    //         Trigger::Instant => self.produce_next_block().await,
+    //         Trigger::Never | Trigger::Interval { .. } => Ok(()),
+    //     }
+    // }
 }
 
 #[derive(Serialize)]
@@ -588,7 +588,14 @@ where
         }
 
         let next_block_production: BoxFuture<()> = match self.trigger {
-            Trigger::Never | Trigger::Instant => Box::pin(core::future::pending()),
+            Trigger::Never => Box::pin(core::future::pending()),
+            Trigger::Instant => Box::pin(async {
+                self.new_txs_watcher
+                    .changed()
+                    .await
+                    .expect("The PoA task should be the holder of the `Sender`");
+                ()
+            }),
             Trigger::Interval { block_time } => {
                 let next_block_time = match self
                     .last_block_created
@@ -612,9 +619,6 @@ where
             }
             _ = next_block_production => {
                 self.handle_normal_block_production().await
-            }
-            _ = self.new_txs_watcher.changed() => {
-                self.handle_txpool_triggered_event().await
             }
         }
     }
