@@ -33,16 +33,16 @@ use test_helpers::{
     transactions_from_subsections,
 };
 
-const QUERY: &str = r#"
-    query {
-        nodeInfo {
-            nodeVersion
-        }
-    }
-"#;
-
 #[tokio::test]
 async fn extension_fields_are_present() {
+    const QUERY: &str = r#"
+        query {
+            nodeInfo {
+                nodeVersion
+            }
+        }
+    "#;
+
     const REQUIRED_FIELDS: [&str; 3] = [
         "current_stf_version",
         "current_fuel_block_height",
