@@ -294,8 +294,6 @@ where
             max_queries_resolver_recursive_depth,
         ))
         .extension(async_graphql::extensions::Tracing)
-        // `RequiredFuelBlockHeightExtension` uses the view set by the ViewExtension.
-        // Do not reorder this line before adding the `ViewExtension`.
         .extension(RequiredFuelBlockHeightExtension::new(
             required_fuel_block_height_tolerance,
             required_fuel_block_height_timeout,
