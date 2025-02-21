@@ -139,6 +139,7 @@ where
     #[tracing::instrument(skip(self, block))]
     pub fn process_block(&mut self, block: &Block) -> crate::Result<()> {
         let block_height = *block.header().height();
+        tracing::info!(%block_height, "processing block");
 
         for (tx_idx, tx) in block.transactions().iter().enumerate() {
             let tx_idx: u16 =
@@ -340,8 +341,9 @@ where
         let witnesses = tx.witnesses();
         let bytecode = witnesses
             .get(usize::from(*bytecode_witness_index))
-            .ok_or_else(|| {
-                InvalidBlock::MissingWitness(usize::from(*bytecode_witness_index))
+            .ok_or_else(|| InvalidBlock::MissingWitness {
+                txid: tx.id(&self.chain_id),
+                witness_index: usize::from(*bytecode_witness_index),
             })?
             .as_vec();
 
@@ -448,10 +450,13 @@ where
         };
 
         let witness_index = usize::from(*tx.bytecode_witness_index());
-        let new_bytecode = tx
-            .witnesses()
-            .get(witness_index)
-            .ok_or(InvalidBlock::MissingWitness(witness_index))?;
+        let new_bytecode =
+            tx.witnesses()
+                .get(witness_index)
+                .ok_or(InvalidBlock::MissingWitness {
+                    txid: tx.id(&self.chain_id),
+                    witness_index,
+                })?;
 
         bytecode.extend_from_slice(new_bytecode.as_ref());
 
@@ -485,10 +490,13 @@ where
         } = tx.body();
 
         let witness_index = usize::from(*witness_index);
-        let blob = tx
-            .witnesses()
-            .get(witness_index)
-            .ok_or(InvalidBlock::MissingWitness(witness_index))?;
+        let blob =
+            tx.witnesses()
+                .get(witness_index)
+                .ok_or(InvalidBlock::MissingWitness {
+                    txid: tx.id(&self.chain_id),
+                    witness_index,
+                })?;
 
         tracing::debug!("storing blob");
         self.storage

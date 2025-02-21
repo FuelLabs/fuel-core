@@ -36,7 +36,13 @@ pub enum InvalidBlock {
     /// A transaction already exists.
     DuplicateTransaction(TxId),
     /// A transaction is missing a referenced witness.
-    MissingWitness(usize),
+    #[display(fmt = "missing witness at index {witness_index} in tx {txid}")]
+    MissingWitness {
+        /// Transaction ID
+        txid: TxId,
+        /// Index of missing witness
+        witness_index: usize,
+    },
     /// A create transaction is missing a contract created output.
     ContractCreatedOutputNotFound,
     /// An upload transaction tries to upload code that has already been completely uploaded.
