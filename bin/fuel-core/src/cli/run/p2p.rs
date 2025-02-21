@@ -95,8 +95,12 @@ pub struct P2PArgs {
     pub max_peers_connected: u32,
 
     /// Max number of connection that serves to discover new peers.
-    #[clap(long = "max-discovery-peers-connected", default_value = "1000", env)]
+    #[clap(long = "max-discovery-peers-connected", default_value = "10000", env)]
     pub max_discovery_peers_connected: u32,
+
+    /// Max number of outgoing connection from the node to other peers.
+    #[clap(long = "max-outgoing-connections", default_value = "10", env)]
+    pub max_outgoing_connections: u32,
 
     /// Max number of connections per single peer
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
@@ -326,6 +330,7 @@ impl P2PArgs {
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,
             enable_mdns: self.enable_mdns,
             max_discovery_peers_connected: self.max_discovery_peers_connected,
+            max_outgoing_connections: self.max_outgoing_connections,
             max_connections_per_peer: self.max_connections_per_peer,
             max_functional_peers_connected: self.max_peers_connected,
             allow_private_addresses: self.allow_private_addresses,

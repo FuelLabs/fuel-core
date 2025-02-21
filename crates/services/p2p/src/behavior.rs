@@ -134,7 +134,12 @@ impl FuelBehaviour {
         let connection_limits = connection_limits::Behaviour::new(
             ConnectionLimits::default()
                 .with_max_pending_incoming(Some(MAX_PENDING_INCOMING_CONNECTIONS))
-                .with_max_pending_outgoing(Some(MAX_PENDING_OUTGOING_CONNECTIONS))
+                .with_max_pending_outgoing(Some(
+                    p2p_config
+                        .max_outgoing_connections
+                        .min(MAX_PENDING_OUTGOING_CONNECTIONS),
+                ))
+                .with_max_established_outgoing(Some(p2p_config.max_outgoing_connections))
                 .with_max_established_per_peer(p2p_config.max_connections_per_peer)
                 .with_max_established(Some(p2p_config.max_discovery_peers_connected)),
             reserved_peer_ids,
