@@ -131,7 +131,7 @@ impl SharedState {
     }
 }
 
-fn update_cached_version<V, F, E>(
+fn update_cached_value<V, F, E>(
     current_version: &SharedRwLock<V>,
     new_version: V,
     cache_fn: F,
@@ -176,7 +176,7 @@ impl RunnableTask for Task {
                     .header();
 
                 let new_consensus_parameters_version = header.consensus_parameters_version();
-                if !update_cached_version(
+                if !update_cached_value(
                     &self.shared_state.latest_consensus_parameters_version,
                     new_consensus_parameters_version,
                     || self.shared_state.cache_consensus_parameters(new_consensus_parameters_version).map(|_| ())
@@ -185,7 +185,7 @@ impl RunnableTask for Task {
                 }
 
                 let new_stf_version = header.state_transition_bytecode_version();
-                if !update_cached_version(
+                if !update_cached_value(
                     &self.shared_state.latest_stf_version,
                     new_stf_version,
                     || Ok::<(), ()>(())

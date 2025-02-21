@@ -73,9 +73,8 @@ fn block_importer_for_event(event: Event) -> BoxStream<SharedImportResult> {
 fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
     block_importer: BoxStream<SharedImportResult>,
     database: D,
-) -> Task<MockTxPool, D, MockStfProvider> {
+) -> Task<MockTxPool, D> {
     let tx_pool = MockTxPool;
-    let stf_provider = MockStfProvider;
     let chain_id = Default::default();
     Task {
         tx_pool,
