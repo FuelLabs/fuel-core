@@ -305,28 +305,28 @@ fn test_tsc_inner(
     assert_eq!(model_out, out);
 }
 
-impl From<crate::schema::tx::types::TransactionStatusPreconfirmations> for TxStatus {
-    fn from(status: crate::schema::tx::types::TransactionStatusPreconfirmations) -> Self {
+impl From<crate::schema::tx::types::TransactionStatus> for TxStatus {
+    fn from(status: crate::schema::tx::types::TransactionStatus) -> Self {
         match status {
-            crate::schema::tx::types::TransactionStatusPreconfirmations::Submitted(_) => {
+            crate::schema::tx::types::TransactionStatus::Submitted(_) => {
                         TxStatus::Submitted
                     }
-            crate::schema::tx::types::TransactionStatusPreconfirmations::Success(_) => {
+            crate::schema::tx::types::TransactionStatus::Success(_) => {
                         TxStatus::Final(FinalTxStatus::Success)
                     }
-                    crate::schema::tx::types::TransactionStatusPreconfirmations::SuccessDuringBlockProduction(_) => {
+                    crate::schema::tx::types::TransactionStatus::SuccessDuringBlockProduction(_) => {
                         TxStatus::Final(FinalTxStatus::Success)
                     }
-            crate::schema::tx::types::TransactionStatusPreconfirmations::SqueezedOut(_) => {
+            crate::schema::tx::types::TransactionStatus::SqueezedOut(_) => {
                         TxStatus::Final(FinalTxStatus::Squeezed)
                     }
-                    crate::schema::tx::types::TransactionStatusPreconfirmations::SqueezedOutDuringBlockProduction(_) => {
+                    crate::schema::tx::types::TransactionStatus::SqueezedOutDuringBlockProduction(_) => {
                         TxStatus::Final(FinalTxStatus::Squeezed)
                     }
-            crate::schema::tx::types::TransactionStatusPreconfirmations::Failure(_) => {
+            crate::schema::tx::types::TransactionStatus::Failure(_) => {
                         TxStatus::Final(FinalTxStatus::Failed)
                     }
-                    crate::schema::tx::types::TransactionStatusPreconfirmations::FailureDuringBlockProduction(_) => {
+                    crate::schema::tx::types::TransactionStatus::FailureDuringBlockProduction(_) => {
                         TxStatus::Final(FinalTxStatus::Failed)
                     }
         }

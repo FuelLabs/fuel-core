@@ -20,7 +20,7 @@ use crate::{
         transaction_status_change,
         TxnStatusChangeState,
     },
-    schema::tx::types::TransactionStatusPreconfirmations,
+    schema::tx::types::TransactionStatus,
 };
 
 use super::*;
@@ -40,7 +40,7 @@ impl FuelService {
         &self,
         tx: Transaction,
     ) -> anyhow::Result<
-        impl Stream<Item = anyhow::Result<TransactionStatusPreconfirmations>> + '_,
+        impl Stream<Item = anyhow::Result<TransactionStatus>> + '_,
     > {
         let id = tx.id(&self
             .shared
@@ -58,7 +58,7 @@ impl FuelService {
     pub async fn submit_and_await_commit(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<TransactionStatusPreconfirmations> {
+    ) -> anyhow::Result<TransactionStatus> {
         let id = tx.id(&self
             .shared
             .config
@@ -69,7 +69,7 @@ impl FuelService {
         let stream = self.transaction_status_change(id).await?.filter(|status| {
             futures::future::ready(!matches!(
                 status,
-                Ok(TransactionStatusPreconfirmations::Submitted(_))
+                Ok(TransactionStatus::Submitted(_))
             ))
         });
         futures::pin_mut!(stream);
@@ -85,7 +85,7 @@ impl FuelService {
         &self,
         id: Bytes32,
     ) -> anyhow::Result<
-        impl Stream<Item = anyhow::Result<TransactionStatusPreconfirmations>> + '_,
+        impl Stream<Item = anyhow::Result<TransactionStatus>> + '_,
     > {
         let txpool = &self.shared.txpool_shared_state;
         let db = self.shared.database.off_chain().latest_view()?;

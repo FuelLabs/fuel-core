@@ -1,4 +1,4 @@
-use crate::schema::tx::types::TransactionStatusPreconfirmations as ApiTxStatus;
+use crate::schema::tx::types::TransactionStatus as ApiTxStatus;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{

@@ -29,7 +29,7 @@ use crate::{
             TransactionId,
             TxPointer,
         },
-        tx::types::TransactionStatusPreconfirmations,
+        tx::types::TransactionStatus,
         ReadViewProvider,
     },
     service::adapters::SharedMemoryPool,
@@ -421,7 +421,7 @@ impl TxStatusSubscription {
         ctx: &'a Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> anyhow::Result<
-        impl Stream<Item = async_graphql::Result<TransactionStatusPreconfirmations>> + 'a,
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
         let txpool = ctx.data_unchecked::<TxPool>();
         let rx = txpool.tx_update_subscribe(id.into())?;
@@ -442,14 +442,14 @@ impl TxStatusSubscription {
         ctx: &'a Context<'a>,
         tx: HexString,
     ) -> async_graphql::Result<
-        impl Stream<Item = async_graphql::Result<TransactionStatusPreconfirmations>> + 'a,
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
         use tokio_stream::StreamExt;
         let subscription = submit_and_await_status(ctx, tx).await?;
 
         Ok(subscription
             .skip_while(|event| {
-                matches!(event, Ok(TransactionStatusPreconfirmations::Submitted(..)))
+                matches!(event, Ok(TransactionStatus::Submitted(..)))
             })
             .take(1))
     }
@@ -463,7 +463,7 @@ impl TxStatusSubscription {
         ctx: &'a Context<'a>,
         tx: HexString,
     ) -> async_graphql::Result<
-        impl Stream<Item = async_graphql::Result<TransactionStatusPreconfirmations>> + 'a,
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
         submit_and_await_status(ctx, tx).await
     }
@@ -473,7 +473,7 @@ async fn submit_and_await_status<'a>(
     ctx: &'a Context<'a>,
     tx: HexString,
 ) -> async_graphql::Result<
-    impl Stream<Item = async_graphql::Result<TransactionStatusPreconfirmations>> + 'a,
+    impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
 > {
     use tokio_stream::StreamExt;
     let txpool = ctx.data_unchecked::<TxPool>();
@@ -489,7 +489,7 @@ async fn submit_and_await_status<'a>(
     Ok(subscription
         .map(move |event| match event {
             TxStatusMessage::Status(status) => {
-                let status = TransactionStatusPreconfirmations::new(tx_id, status);
+                let status = TransactionStatus::new(tx_id, status);
                 Ok(status)
             }
             TxStatusMessage::FailedStatus => {
