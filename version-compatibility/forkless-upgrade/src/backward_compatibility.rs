@@ -60,12 +60,12 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
     let genesis_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
     let genesis_port = select_port(format!("{}:{}.{}", file!(), line!(), column!()));
-    let genesis_node = GenesisFuelCoreDriver::spawn(&[
+    let _genesis_node = GenesisFuelCoreDriver::spawn(&[
         "--service-name",
         "GenesisProducer",
         "--debug",
-        "--poa-instant",
-        "true",
+        "--poa-interval-period",
+        "10ms",
         "--consensus-key",
         POA_SECRET_KEY,
         "--snapshot",
@@ -75,6 +75,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
         hexed_secret.as_str(),
         "--peering-port",
         genesis_port,
+        "--heartbeat-idle-duration=0",
     ])
     .await
     .unwrap();
@@ -101,6 +102,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
         genesis_multiaddr.as_str(),
         "--peering-port",
         "0",
+        "--heartbeat-idle-duration=10ms",
     ])
     .await
     .unwrap();
@@ -108,12 +110,6 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
 
     // When
     const BLOCKS_TO_PRODUCE: u32 = 10;
-    genesis_node
-        .client
-        .produce_blocks(BLOCKS_TO_PRODUCE, None)
-        .await
-        .unwrap();
-
     // Then
     for i in 0..BLOCKS_TO_PRODUCE {
         let _ = tokio::time::timeout(BLOCK_INCLUSION_TIMEOUT, imported_blocks.next())
@@ -129,12 +125,12 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
     let v36_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
     let v36_port = select_port(format!("{}:{}.{}", file!(), line!(), column!()));
-    let v36_node = Version36FuelCoreDriver::spawn(&[
+    let _v36_node = Version36FuelCoreDriver::spawn(&[
         "--service-name",
         "V36Producer",
         "--debug",
-        "--poa-instant",
-        "true",
+        "--poa-interval-period",
+        "10ms",
         "--consensus-key",
         POA_SECRET_KEY,
         "--snapshot",
@@ -144,6 +140,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
         hexed_secret.as_str(),
         "--peering-port",
         v36_port,
+        "--heartbeat-idle-duration=0",
     ])
     .await
     .unwrap();
@@ -170,6 +167,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
         v36_multiaddr.as_str(),
         "--peering-port",
         "0",
+        "--heartbeat-idle-duration=10ms",
     ])
     .await
     .unwrap();
@@ -177,12 +175,6 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
 
     // When
     const BLOCKS_TO_PRODUCE: u32 = 10;
-    v36_node
-        .client
-        .produce_blocks(BLOCKS_TO_PRODUCE, None)
-        .await
-        .unwrap();
-
     // Then
     for i in 0..BLOCKS_TO_PRODUCE {
         let _ = tokio::time::timeout(BLOCK_INCLUSION_TIMEOUT, imported_blocks.next())
@@ -215,6 +207,7 @@ async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_ge
         "--peering-port",
         genesis_port,
         "--utxo-validation",
+        "--heartbeat-idle-duration=10ms",
     ])
     .await
     .unwrap();
