@@ -64,7 +64,7 @@ If you want to participate in the Ignition network with your own node you can la
 
 ### From pre-compiled binaries
 
-Follow : https://docs.fuel.network/guides/running-a-node/running-a-mainnet-node/
+Follow : https://docs.fuel.network/docs/node-operator/fuel-ignition/mainnet-node/
 
 ### From source
 
@@ -83,7 +83,7 @@ Build your node binary:
 cargo build --release --bin fuel-core --no-default-features --features production
 ```
 
-To run the node follow : https://docs.fuel.network/guides/running-a-node/running-a-mainnet-node/
+To run the node follow : https://docs.fuel.network/docs/node-operator/fuel-ignition/mainnet-node/
 
 ## Running a Local network from source
 
@@ -97,7 +97,7 @@ Build your node binary:
 cargo build --release --bin fuel-core --no-default-features --features production
 ```
 
-To run the node follow : https://docs.fuel.network/guides/running-a-node/running-a-local-node/
+To run the node follow : https://docs.fuel.network/docs/node-operator/fuel-ignition/local-node/
 
 ## Setup to make contributions
 
