@@ -55,14 +55,14 @@ pub use not_fault_proving::*;
 #[cfg(feature = "fault-proving")]
 mod fault_proving {
     use super::*;
-    use crate::ports::RegistryRootGetter;
+    use crate::ports::GetRegistryRoot;
 
     pub trait CompressDb:
-        TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer + RegistryRootGetter
+        TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer + GetRegistryRoot
     {
     }
     impl<T> CompressDb for T where
-        T: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer + RegistryRootGetter
+        T: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer + GetRegistryRoot
     {
     }
 }

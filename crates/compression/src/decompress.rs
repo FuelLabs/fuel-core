@@ -60,16 +60,13 @@ pub use not_fault_proving::*;
 #[cfg(feature = "fault-proving")]
 pub mod fault_proving {
     use super::*;
-    use crate::ports::RegistryRootGetter;
+    use crate::ports::GetRegistryRoot;
 
     pub trait DecompressDb:
-        TemporalRegistryAll + HistoryLookup + RegistryRootGetter
+        TemporalRegistryAll + HistoryLookup + GetRegistryRoot
     {
     }
-    impl<T> DecompressDb for T where
-        T: TemporalRegistryAll + HistoryLookup + RegistryRootGetter
-    {
-    }
+    impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup + GetRegistryRoot {}
 }
 
 #[cfg(feature = "fault-proving")]

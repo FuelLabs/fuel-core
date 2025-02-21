@@ -79,17 +79,17 @@ where
 
 /// Get the whole temporal registry root
 #[cfg(feature = "fault-proving")]
-pub trait RegistryRootGetter {
+pub trait GetRegistryRoot {
     fn registry_root(&self) -> anyhow::Result<fuel_core_types::fuel_tx::Bytes32>;
 }
 
 #[cfg(feature = "fault-proving")]
-impl<D> RegistryRootGetter for &mut D
+impl<D> GetRegistryRoot for &mut D
 where
-    D: RegistryRootGetter,
+    D: GetRegistryRoot,
 {
     fn registry_root(&self) -> anyhow::Result<fuel_core_types::fuel_tx::Bytes32> {
-        <D as RegistryRootGetter>::registry_root(self)
+        <D as GetRegistryRoot>::registry_root(self)
     }
 }
 

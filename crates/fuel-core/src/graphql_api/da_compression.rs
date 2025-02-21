@@ -497,7 +497,7 @@ impl<'a, Tx> UtxoIdToPointer for CompressDbTx<'a, Tx> {
 }
 
 #[cfg(feature = "fault-proving")]
-impl<'a, Tx> fuel_core_compression::ports::RegistryRootGetter for CompressDbTx<'a, Tx>
+impl<'a, Tx> fuel_core_compression::ports::GetRegistryRoot for CompressDbTx<'a, Tx>
 where
     Tx: OffChainDatabaseTransaction,
 {
@@ -512,7 +512,7 @@ where
 }
 
 #[cfg(feature = "fault-proving")]
-impl<'a, Tx, ArbDb> fuel_core_compression::ports::RegistryRootGetter
+impl<'a, Tx, ArbDb> fuel_core_compression::ports::GetRegistryRoot
     for DecompressDbTx<'a, Tx, ArbDb>
 where
     Tx: OffChainDatabaseTransaction,
