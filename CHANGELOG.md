@@ -53,9 +53,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Breaking 
 - [2661](https://github.com/FuelLabs/fuel-core/pull/2661): Dry run now supports running in past blocks. `dry_run_opt` method now takes block number as the last argument. To retain old behavior, simply pass in `None` for the last argument.
 
-### Breaking 
-- [2661](https://github.com/FuelLabs/fuel-core/pull/2661): Dry run now supports running in past blocks. `dry_run_opt` method now takes block number as the last argument. To retain old behavior, simply pass in `None` for the last argument.
-
 ### Added
 - [2617](https://github.com/FuelLabs/fuel-core/pull/2617): Add integration skeleton of parallel-executor.
 - [2553](https://github.com/FuelLabs/fuel-core/pull/2553): Scaffold global merkle root storage crate.
