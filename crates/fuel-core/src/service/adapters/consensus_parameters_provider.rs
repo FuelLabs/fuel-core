@@ -147,7 +147,7 @@ impl RunnableTask for Task {
                     .header()
                     .consensus_parameters_version();
 
-                    let read_guard = self.shared_state.latest_consensus_parameters_version.upgradable_read();
+                let read_guard = self.shared_state.latest_consensus_parameters_version.upgradable_read();
                 if new_version > *read_guard {
                     match self.shared_state.cache_consensus_parameters(new_version) {
                         Ok(_) => {
