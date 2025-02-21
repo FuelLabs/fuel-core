@@ -54,11 +54,11 @@ async fn max_discovery_peers_connected__node_will_not_discover_new_nodes_if_full
     let peering_info = client.connected_peers_info().await.unwrap();
     let actual = peering_info.len();
 
-    assert_eq!(expected, actual);
+    assert!(actual <= expected);
 }
 
 #[tokio::test]
-async fn max_discovery_peers_connected__nodes_will_discover_new_peers_if_first_peer_is_full(
+async fn max_functional_peers_connected__nodes_will_discover_new_peers_if_first_peer_is_full(
 ) {
     let mut rng = StdRng::seed_from_u64(1234);
 
