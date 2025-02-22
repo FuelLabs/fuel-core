@@ -29,7 +29,6 @@ use fuel_core_types::{
     services::block_importer::SharedImportResult,
 };
 use futures::StreamExt;
-use parking_lot::RwLockUpgradableReadGuard;
 use std::{
     collections::HashMap,
     fmt::Debug,
@@ -61,13 +60,9 @@ impl Debug for Task {
 
 impl SharedState {
     fn new(database: Database) -> Self {
+        // We set versions in the `into_task` function during start of the service.
         let genesis_version = 0;
-
-        let latest_stf_version =
-            database.latest_view().map_or(Default::default(), |view| {
-                view.latest_state_transition_bytecode_version()
-                    .unwrap_or_default()
-            });
+        let latest_stf_version = 0;
 
         Self {
             latest_consensus_parameters_version: SharedRwLock::new(genesis_version),
@@ -109,6 +104,10 @@ impl SharedState {
         self.cache_consensus_parameters(*version)
     }
 
+    fn cache_consensus_parameters_version(&self, version: ConsensusParametersVersion) {
+        *self.latest_consensus_parameters_version.write() = version;
+    }
+
     pub fn latest_consensus_parameters(&self) -> Arc<ConsensusParameters> {
         self.latest_consensus_parameters_with_version().1
     }
@@ -126,38 +125,13 @@ impl SharedState {
         (version, params)
     }
 
+    fn cache_stf_version(&self, version: StateTransitionBytecodeVersion) {
+        *self.latest_stf_version.write() = version;
+    }
+
     pub fn latest_stf_version(&self) -> StateTransitionBytecodeVersion {
         *self.latest_stf_version.read()
     }
-}
-
-fn update_cached_value<V, F, E>(
-    current_version: &SharedRwLock<V>,
-    new_version: V,
-    cache_fn: F,
-) -> bool
-where
-    E: core::fmt::Debug,
-    V: PartialOrd,
-    F: FnOnce() -> Result<(), E>,
-{
-    let read_guard = current_version.upgradable_read();
-    if new_version > *read_guard {
-        match cache_fn() {
-            Ok(_) => {
-                let mut write_guard = RwLockUpgradableReadGuard::upgrade(read_guard);
-                *write_guard = new_version;
-            }
-            Err(err) => {
-                tracing::error!(
-                    "Failed to update cache in consensus parameters: {:?}",
-                    err
-                );
-                return false
-            }
-        };
-    }
-    true
 }
 
 impl RunnableTask for Task {
@@ -176,21 +150,21 @@ impl RunnableTask for Task {
                     .header();
 
                 let new_consensus_parameters_version = header.consensus_parameters_version();
-                if !update_cached_value(
-                    &self.shared_state.latest_consensus_parameters_version,
-                    new_consensus_parameters_version,
-                    || self.shared_state.cache_consensus_parameters(new_consensus_parameters_version).map(|_| ())
-                ) {
-                    return TaskNextAction::Stop
+                if new_consensus_parameters_version > self.shared_state.latest_consensus_parameters_version() {
+                    match self.shared_state.cache_consensus_parameters(new_consensus_parameters_version) {
+                        Ok(_) => {
+                            self.shared_state.cache_consensus_parameters_version(new_consensus_parameters_version);
+                        }
+                        Err(err) => {
+                            tracing::error!("Failed to cache consensus parameters: {:?}", err);
+                            return TaskNextAction::Stop
+                        }
+                    }
                 }
 
                 let new_stf_version = header.state_transition_bytecode_version();
-                if !update_cached_value(
-                    &self.shared_state.latest_stf_version,
-                    new_stf_version,
-                    || Ok::<(), ()>(())
-                ) {
-                    return TaskNextAction::Stop
+                if new_stf_version > self.shared_state.latest_stf_version() {
+                    self.shared_state.cache_stf_version(new_stf_version);
                 }
 
                 TaskNextAction::Continue
@@ -226,11 +200,11 @@ impl RunnableService for Task {
             .latest_view()?
             .latest_consensus_parameters_version()?;
         self.shared_state
+            .cache_consensus_parameters_version(latest_consensus_parameters_version);
+        self.shared_state
             .cache_consensus_parameters(latest_consensus_parameters_version)?;
-        *self
-            .shared_state
-            .latest_consensus_parameters_version
-            .write() = latest_consensus_parameters_version;
+        self.shared_state
+            .cache_stf_version(latest_consensus_parameters_version);
 
         Ok(self)
     }

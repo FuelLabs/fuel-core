@@ -375,6 +375,25 @@ impl FuelClient {
                 *c = Some(current_consensus_parameters_version);
             }
         }
+
+        let inner_required_height = match &self.require_height {
+            ConsistencyPolicy::Auto { height } => Some(height.clone()),
+            ConsistencyPolicy::Manual { .. } => None,
+        };
+
+        if let Some(inner_required_height) = inner_required_height {
+            if let Some(current_fuel_block_height) = response
+                .extensions
+                .as_ref()
+                .and_then(|e| e.current_fuel_block_height)
+            {
+                let mut lock = inner_required_height.lock().expect("Mutex poisoned");
+
+                if current_fuel_block_height >= lock.unwrap_or_default() {
+                    *lock = Some(current_fuel_block_height);
+                }
+            }
+        }
     }
 
     /// Send the GraphQL query to the client.
@@ -395,37 +414,14 @@ impl FuelClient {
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-        let inner_required_height = match &self.require_height {
-            ConsistencyPolicy::Auto { height } => Some(height.clone()),
-            ConsistencyPolicy::Manual { .. } => None,
-        };
-
-        self.decode_response(response, inner_required_height)
+        self.decode_response(response)
     }
 
-    fn decode_response<R, E>(
-        &self,
-        response: FuelGraphQlResponse<R, E>,
-        inner_required_height: Option<Arc<Mutex<Option<BlockHeight>>>>,
-    ) -> io::Result<R>
+    fn decode_response<R, E>(&self, response: FuelGraphQlResponse<R, E>) -> io::Result<R>
     where
         R: serde::de::DeserializeOwned + 'static,
     {
         self.update_chain_state_info(&response);
-
-        if let Some(inner_required_height) = inner_required_height {
-            if let Some(current_fuel_block_height) = response
-                .extensions
-                .as_ref()
-                .and_then(|e| e.current_fuel_block_height)
-            {
-                let mut lock = inner_required_height.lock().expect("Mutex poisoned");
-
-                if current_fuel_block_height >= lock.unwrap_or_default() {
-                    *lock = Some(current_fuel_block_height);
-                }
-            }
-        }
 
         if let Some(failed) = response
             .extensions
@@ -529,17 +525,11 @@ impl FuelClient {
 
         let mut last = None;
 
-        let inner_required_height = match &self.require_height {
-            ConsistencyPolicy::Auto { height } => Some(height.clone()),
-            _ => None,
-        };
-
         let stream = es::Client::stream(&client)
-            .zip(futures::stream::repeat(inner_required_height))
-            .take_while(|(result, _)| {
+            .take_while(|result| {
                 futures::future::ready(!matches!(result, Err(es::Error::Eof)))
             })
-            .filter_map(move |(result, inner_required_height)| {
+            .filter_map(move |result| {
                 tracing::debug!("Got result: {result:?}");
                 let r = match result {
                     Ok(es::SSE::Event(es::Event { data, .. })) => {
@@ -547,7 +537,7 @@ impl FuelClient {
                             &data,
                         ) {
                             Ok(resp) => {
-                                match self.decode_response(resp, inner_required_height) {
+                                match self.decode_response(resp) {
                                     Ok(resp) => {
                                         match last.replace(data) {
                                             // Remove duplicates
