@@ -50,7 +50,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
         "V36Producer",
         "--debug",
         "--poa-interval-period",
-        "10ms",
+        "50ms",
         "--consensus-key",
         POA_SECRET_KEY,
         "--snapshot",
@@ -140,8 +140,9 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
     // Then
     let mut imported_blocks = validator_node.node.shared.block_importer.events();
     for i in 0..BLOCKS_TO_PRODUCE {
+        // Big timeout because we need to compile the state transition function.
         let block =
-            tokio::time::timeout(Duration::from_secs(120), imported_blocks.next())
+            tokio::time::timeout(Duration::from_secs(360), imported_blocks.next())
                 .await
                 .expect(format!("Timed out waiting for block import {i}").as_str())
                 .expect(format!("Failed to import block {i}").as_str());
