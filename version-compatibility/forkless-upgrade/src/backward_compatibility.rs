@@ -1,7 +1,6 @@
 use crate::{
-    select_port,
+    bootstrap_node,
     tests_helper::{
-        default_multiaddr,
         GenesisFuelCoreDriver,
         LatestFuelCoreDriver,
         Version36FuelCoreDriver,
@@ -22,11 +21,7 @@ use latest_fuel_core_type::{
 };
 use libp2p::{
     futures::StreamExt,
-    identity::{
-        secp256k1::Keypair as SecpKeypair,
-        Keypair,
-    },
-    PeerId,
+    identity::secp256k1::Keypair as SecpKeypair,
 };
 use std::time::Duration;
 
@@ -56,16 +51,18 @@ async fn latest_binary_is_backward_compatible_and_can_load_testnet_config() {
 #[tokio::test]
 async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_genesis_binary(
 ) {
+    let (_bootstrap_node, addr) =
+        bootstrap_node(IGNITION_TESTNET_SNAPSHOT).await.unwrap();
+
     // Given
     let genesis_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
-    let genesis_port = select_port(format!("{}:{}.{}", file!(), line!(), column!()));
     let _genesis_node = GenesisFuelCoreDriver::spawn(&[
         "--service-name",
         "GenesisProducer",
         "--debug",
         "--poa-interval-period",
-        "10ms",
+        "1s",
         "--consensus-key",
         POA_SECRET_KEY,
         "--snapshot",
@@ -73,15 +70,13 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
         "--enable-p2p",
         "--keypair",
         hexed_secret.as_str(),
+        "--reserved-nodes",
+        addr.as_str(),
         "--peering-port",
-        genesis_port,
-        "--heartbeat-idle-duration=0",
+        "0",
     ])
     .await
     .unwrap();
-    let public_key = Keypair::from(genesis_keypair).public();
-    let genesis_peer_id = PeerId::from_public_key(&public_key);
-    let genesis_multiaddr = default_multiaddr(genesis_port, genesis_peer_id);
 
     // Starting node that uses latest fuel core.
     // It will connect to the genesis node and sync blocks.
@@ -99,10 +94,9 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
         "--keypair",
         hexed_secret.as_str(),
         "--reserved-nodes",
-        genesis_multiaddr.as_str(),
+        addr.as_str(),
         "--peering-port",
         "0",
-        "--heartbeat-idle-duration=10ms",
     ])
     .await
     .unwrap();
@@ -121,10 +115,11 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
 
 #[tokio::test]
 async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_binary() {
+    let (_bootstrap_node, addr) = bootstrap_node(V36_TESTNET_SNAPSHOT).await.unwrap();
+
     // Given
     let v36_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
-    let v36_port = select_port(format!("{}:{}.{}", file!(), line!(), column!()));
     let _v36_node = Version36FuelCoreDriver::spawn(&[
         "--service-name",
         "V36Producer",
@@ -138,14 +133,13 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
         "--enable-p2p",
         "--keypair",
         hexed_secret.as_str(),
+        "--reserved-nodes",
+        addr.as_str(),
         "--peering-port",
-        v36_port,
+        "0",
     ])
     .await
     .unwrap();
-    let public_key = Keypair::from(v36_keypair).public();
-    let v36_peer_id = PeerId::from_public_key(&public_key);
-    let v36_multiaddr = default_multiaddr(v36_port, v36_peer_id);
 
     // Starting node that uses latest fuel core.
     // It will connect to the v36 node and sync blocks.
@@ -163,7 +157,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
         "--keypair",
         hexed_secret.as_str(),
         "--reserved-nodes",
-        v36_multiaddr.as_str(),
+        addr.as_str(),
         "--peering-port",
         "0",
     ])
@@ -186,9 +180,6 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
 async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_genesis_binary(
 ) {
     // Given
-    let genesis_keypair = SecpKeypair::generate();
-    let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
-    let genesis_port = select_port(format!("{}:{}.{}", file!(), line!(), column!()));
     let node_with_genesis_transition = LatestFuelCoreDriver::spawn(&[
         "--service-name",
         "GenesisProducer",
@@ -199,13 +190,7 @@ async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_ge
         POA_SECRET_KEY,
         "--snapshot",
         IGNITION_TESTNET_SNAPSHOT,
-        "--enable-p2p",
-        "--keypair",
-        hexed_secret.as_str(),
-        "--peering-port",
-        genesis_port,
         "--utxo-validation",
-        "--heartbeat-idle-duration=10ms",
     ])
     .await
     .unwrap();

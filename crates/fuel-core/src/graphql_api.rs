@@ -59,7 +59,7 @@ pub struct ServiceConfig {
     pub costs: Costs,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Costs {
     pub balance_query: usize,
     pub coins_to_spend: usize,
@@ -122,9 +122,22 @@ pub fn query_costs() -> &'static Costs {
 
 pub static QUERY_COSTS: OnceLock<Costs> = OnceLock::new();
 
-fn initialize_query_costs(costs: Costs) -> anyhow::Result<()> {
+fn default_query_costs(balances_indexation_enabled: bool) -> Costs {
+    let mut cost = DEFAULT_QUERY_COSTS;
+
+    if !balances_indexation_enabled {
+        cost.balance_query = BALANCES_QUERY_COST_WITHOUT_INDEXATION;
+    }
+
+    cost
+}
+
+fn initialize_query_costs(
+    costs: Costs,
+    balances_indexation_enabled: bool,
+) -> anyhow::Result<()> {
     #[cfg(feature = "test-helpers")]
-    if costs != DEFAULT_QUERY_COSTS {
+    if costs != default_query_costs(balances_indexation_enabled) {
         // We don't support setting these values in test contexts, because
         // it can lead to unexpected behavior if multiple tests try to
         // initialize different values.

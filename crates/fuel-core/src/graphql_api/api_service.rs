@@ -249,7 +249,7 @@ where
         cost_config.balance_query = graphql_api::BALANCES_QUERY_COST_WITHOUT_INDEXATION;
     }
 
-    graphql_api::initialize_query_costs(cost_config)?;
+    graphql_api::initialize_query_costs(cost_config, balances_indexation_enabled)?;
 
     let network_addr = config.config.addr;
     let combined_read_database = ReadDatabase::new(

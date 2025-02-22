@@ -3,9 +3,8 @@
 //! and write a new test(only one) to track new forward compatibility.
 
 use crate::{
-    select_port,
+    bootstrap_node,
     tests_helper::{
-        default_multiaddr,
         transactions_from_subsections,
         upgrade_transaction,
         Version36FuelCoreDriver,
@@ -21,11 +20,7 @@ use fuel_tx::{
 };
 use libp2p::{
     futures::StreamExt,
-    identity::{
-        secp256k1::Keypair as SecpKeypair,
-        Keypair,
-    },
-    PeerId,
+    identity::secp256k1::Keypair as SecpKeypair,
 };
 use rand::{
     rngs::StdRng,
@@ -35,6 +30,8 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn latest_state_transition_function_is_forward_compatible_with_v36_binary() {
+    let (_bootstrap_node, addr) = bootstrap_node(V36_TESTNET_SNAPSHOT).await.unwrap();
+
     // The test has a v36 block producer and one v36 validator.
     // v36 nodes execute several blocks by using the v36 state transition function.
     // At some point, we upgrade the network to use the latest state transition function.
@@ -48,7 +45,6 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
 
     let v36_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
-    let v36_port = select_port(format!("{}:{}.{}", file!(), line!(), column!()));
     let _v36_node = Version36FuelCoreDriver::spawn(&[
         "--service-name",
         "V36Producer",
@@ -62,15 +58,14 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
         "--enable-p2p",
         "--keypair",
         hexed_secret.as_str(),
+        "--reserved-nodes",
+        addr.as_str(),
         "--peering-port",
-        v36_port,
+        "0",
         "--heartbeat-idle-duration=0",
     ])
     .await
     .unwrap();
-    let public_key = Keypair::from(v36_keypair).public();
-    let v36_peer_id = PeerId::from_public_key(&public_key);
-    let v36_multiaddr = default_multiaddr(v36_port, v36_peer_id);
 
     // Starting a v36 validator node.
     // It will connect to the v36 node and sync blocks.
@@ -88,7 +83,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
         "--keypair",
         hexed_secret.as_str(),
         "--reserved-nodes",
-        v36_multiaddr.as_str(),
+        addr.as_str(),
         "--peering-port",
         "0",
         "--heartbeat-idle-duration=0",

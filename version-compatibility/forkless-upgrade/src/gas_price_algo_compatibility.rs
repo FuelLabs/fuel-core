@@ -1,14 +1,9 @@
 #![allow(unused_imports)]
 
-use crate::{
-    select_port,
-    tests_helper::{
-        default_multiaddr,
-        LatestFuelCoreDriver,
-        Version36FuelCoreDriver,
-        IGNITION_TESTNET_SNAPSHOT,
-        POA_SECRET_KEY,
-    },
+use crate::tests_helper::{
+    default_multiaddr,
+    LatestFuelCoreDriver,
+    Version36FuelCoreDriver,
 };
 use latest_fuel_core_gas_price_service::{
     common::{
@@ -49,24 +44,13 @@ use version_36_fuel_core_storage::{
 #[tokio::test]
 async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     // Given
-    let genesis_keypair = SecpKeypair::generate();
-    let hexed_secret = hex::encode(genesis_keypair.secret().to_bytes());
     let starting_gas_price = 987;
     let old_driver = Version36FuelCoreDriver::spawn(&[
         "--service-name",
-        "GenesisProducer",
+        "V36Producer",
         "--debug",
         "--poa-instant",
         "true",
-        "--consensus-key",
-        POA_SECRET_KEY,
-        "--snapshot",
-        IGNITION_TESTNET_SNAPSHOT,
-        "--enable-p2p",
-        "--keypair",
-        hexed_secret.as_str(),
-        "--peering-port",
-        "0",
         "--starting-gas-price",
         starting_gas_price.to_string().as_str(),
     ])
@@ -98,8 +82,6 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     let temp_dir = old_driver.kill().await;
 
     // Starting node that uses latest fuel core.
-    let latest_keypair = SecpKeypair::generate();
-    let hexed_secret = hex::encode(latest_keypair.secret().to_bytes());
     let latest_node = LatestFuelCoreDriver::spawn_with_directory(
         temp_dir,
         &[
@@ -108,13 +90,9 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
             "--debug",
             "--poa-instant",
             "true",
-            "--snapshot",
-            IGNITION_TESTNET_SNAPSHOT,
-            "--enable-p2p",
-            "--keypair",
-            hexed_secret.as_str(),
-            "--peering-port",
-            "0",
+            // We want to use native executor to speed up the test.
+            "--native-executor-version",
+            "11",
         ],
     )
     .await
@@ -127,7 +105,7 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
         .produce_blocks(BLOCKS_TO_PRODUCE, None)
         .await
         .unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
     // Then
     let db = &latest_node.node.shared.database;
