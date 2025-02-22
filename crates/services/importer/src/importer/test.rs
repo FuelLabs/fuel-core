@@ -54,7 +54,7 @@ mockall::mock! {
         where
             Self: 'a;
 
-        fn storage_transaction(&mut self, changes: Changes) -> MockDatabaseTransaction;
+        fn storage_transaction(&self, changes: Changes) -> MockDatabaseTransaction;
     }
 
     impl ImporterDatabase for Database {
@@ -116,10 +116,13 @@ where
     }
 }
 
-fn db_transaction<H, B>(height: H, store_block: B) -> impl Fn() -> MockDatabaseTransaction
+fn db_transaction<H, B>(
+    height: H,
+    store_block: B,
+) -> impl Fn() -> MockDatabaseTransaction + Sync + Send + 'static + Clone
 where
-    H: Fn() -> StorageResult<Option<u32>> + Send + Clone + 'static,
-    B: Fn() -> StorageResult<bool> + Send + Clone + 'static,
+    H: Fn() -> StorageResult<Option<u32>> + Sync + Send + 'static + Clone,
+    B: Fn() -> StorageResult<bool> + Sync + Send + 'static + Clone,
 {
     move || {
         let height = height.clone();
@@ -208,7 +211,7 @@ where
     underlying_db(ok(None), 1),
     db_transaction(ok(None), ok(true))
     => Ok(());
-    "successfully imports block at arbitrary height when executor db expects it and last block not found" 
+    "successfully imports block at arbitrary height when executor db expects it and last block not found"
 )]
 #[test_case(
     genesis(0),
@@ -242,9 +245,9 @@ where
 async fn commit_result_genesis(
     sealed_block: SealedBlock,
     underlying_db: impl Fn() -> MockDatabase,
-    db_transaction: impl Fn() -> MockDatabaseTransaction,
+    db_transaction: impl Fn() -> MockDatabaseTransaction + Sync + Send + 'static,
 ) -> Result<(), Error> {
-    commit_result_assert(sealed_block, underlying_db(), db_transaction()).await
+    commit_result_assert(sealed_block, underlying_db(), db_transaction).await
 }
 
 //////////////////////////// PoA Block ////////////////////////////
@@ -312,19 +315,25 @@ async fn commit_result_genesis(
     "fails to import block when executor db fails to find block"
 )]
 #[tokio::test]
-async fn commit_result_and_execute_and_commit_poa(
+async fn commit_result_and_execute_and_commit_poa<DbTransaction>(
     sealed_block: SealedBlock,
     underlying_db: impl Fn() -> MockDatabase,
-    db_transaction: impl Fn() -> MockDatabaseTransaction,
-) -> Result<(), Error> {
+    db_transaction: DbTransaction,
+) -> Result<(), Error>
+where
+    DbTransaction: Sync + Send + 'static,
+    DbTransaction: Fn() -> MockDatabaseTransaction,
+    DbTransaction: Clone,
+{
     // `execute_and_commit` and `commit_result` should have the same
     // validation rules(-> test cases) during committing the result.
-    let transaction = db_transaction();
+    let db_transaction_1 = db_transaction.clone();
     let commit_result =
-        commit_result_assert(sealed_block.clone(), underlying_db(), transaction).await;
-    let transaction = db_transaction();
+        commit_result_assert(sealed_block.clone(), underlying_db(), db_transaction_1)
+            .await;
     let mut db = underlying_db();
-    db.expect_storage_transaction().return_once(|_| transaction);
+    db.expect_storage_transaction()
+        .returning(move |_| db_transaction());
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block,
         db,
@@ -339,13 +348,14 @@ async fn commit_result_and_execute_and_commit_poa(
 async fn commit_result_assert(
     sealed_block: SealedBlock,
     mut underlying_db: MockDatabase,
-    db_transaction: MockDatabaseTransaction,
+    db_transaction: impl Fn() -> MockDatabaseTransaction + Sync + Send + 'static,
 ) -> Result<(), Error> {
     underlying_db
         .expect_storage_transaction()
-        .return_once(|_| db_transaction);
+        .returning(move |_| db_transaction());
     let expected_to_broadcast = sealed_block.clone();
-    let importer = Importer::default_config(underlying_db, (), ());
+    let importer =
+        Importer::default_config(underlying_db, executor(ex_result), verifier(ok(())));
     let uncommitted_result = UncommittedResult::new(
         ImportResult::new_from_local(sealed_block, vec![], vec![]),
         Default::default(),
@@ -395,14 +405,18 @@ async fn execute_and_commit_assert(
 
 #[tokio::test]
 async fn commit_result_fail_when_locked() {
-    let importer = Importer::default_config(MockDatabase::default(), (), ());
+    let importer = Importer::default_config(
+        MockDatabase::default(),
+        executor(ex_result),
+        verifier(ok(())),
+    );
     let uncommitted_result =
         UncommittedResult::new(ImportResult::default(), Default::default());
 
     let _guard = importer.lock();
     assert_eq!(
         importer.commit_result(uncommitted_result).await,
-        Err(Error::SemaphoreError(TryAcquireError::NoPermits))
+        Err(Error::Semaphore(TryAcquireError::NoPermits))
     );
 }
 
@@ -417,7 +431,7 @@ async fn execute_and_commit_fail_when_locked() {
     let _guard = importer.lock();
     assert_eq!(
         importer.execute_and_commit(Default::default()).await,
-        Err(Error::SemaphoreError(TryAcquireError::NoPermits))
+        Err(Error::Semaphore(TryAcquireError::NoPermits))
     );
 }
 
@@ -432,7 +446,7 @@ fn one_lock_at_the_same_time() {
     let _guard = importer.lock();
     assert_eq!(
         importer.lock().map(|_| ()),
-        Err(Error::SemaphoreError(TryAcquireError::NoPermits))
+        Err(Error::Semaphore(TryAcquireError::NoPermits))
     );
 }
 
@@ -482,7 +496,8 @@ where
         sealed_block.clone(),
         block_after_execution.clone(),
         verifier_result.clone(),
-    );
+    )
+    .await;
 
     // We tested commit part in the `commit_result_and_execute_and_commit_poa` so setup the
     // databases to always pass the committing part.
@@ -490,7 +505,7 @@ where
     let previous_height = expected_height.checked_sub(1).unwrap_or_default();
     let mut db = underlying_db(ok(Some(previous_height)), commits)();
     db.expect_storage_transaction()
-        .return_once(move |_| db_transaction(ok(Some(previous_height)), ok(true))());
+        .returning(move |_| db_transaction(ok(Some(previous_height)), ok(true))());
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block,
         db,
@@ -502,7 +517,7 @@ where
     execute_and_commit_result
 }
 
-fn verify_and_execute_assert<P, V>(
+async fn verify_and_execute_assert<P, V>(
     sealed_block: SealedBlock,
     block_after_execution: P,
     verifier_result: V,
@@ -517,11 +532,14 @@ where
         verifier(verifier_result),
     );
 
-    importer.verify_and_execute_block(sealed_block).map(|_| ())
+    importer
+        .run_verify_and_execute_block(sealed_block)
+        .await
+        .map(|_| ())
 }
 
-#[test]
-fn verify_and_execute_allowed_when_locked() {
+#[tokio::test]
+async fn verify_and_execute_allowed_when_locked() {
     let importer = Importer::default_config(
         MockDatabase::default(),
         executor(ex_result),
@@ -529,5 +547,6 @@ fn verify_and_execute_allowed_when_locked() {
     );
 
     let _guard = importer.lock();
-    assert!(importer.verify_and_execute_block(poa_block(13)).is_ok());
+    let result = importer.run_verify_and_execute_block(poa_block(13)).await;
+    assert!(result.is_ok());
 }

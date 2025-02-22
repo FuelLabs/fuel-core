@@ -13,9 +13,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Version 0.41.6]
 
-### Changed
-- [2618](https://github.com/FuelLabs/fuel-core/pull/2618): Parallelize block/transaction changes creation in Importer
-
 ### Added
 - [2668](https://github.com/FuelLabs/fuel-core/pull/2668): Expose gas price service test helpers
 - [2621](https://github.com/FuelLabs/fuel-core/pull/2598): Global merkle root storage updates process upgrade transactions.
