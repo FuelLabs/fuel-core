@@ -1,16 +1,16 @@
 use crate::{
-    error::Error,
+    config::BlackList,
+    error::{
+        Error,
+        InputValidationError,
+    },
     ports::{
         ConsensusParametersProvider,
         GasPriceProvider,
         TxPoolPersistentStorage,
         WasmChecker,
     },
-    service::{
-        memory::MemoryPool,
-        Shared,
-        TxPool,
-    },
+    service::memory::MemoryPool,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -47,24 +47,14 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub(crate) struct Verification<View> {
     pub persistent_storage_provider: Arc<dyn AtomicView<LatestView = View>>,
     pub consensus_parameters_provider: Arc<dyn ConsensusParametersProvider>,
     pub gas_price_provider: Arc<dyn GasPriceProvider>,
     pub wasm_checker: Arc<dyn WasmChecker>,
     pub memory_pool: MemoryPool,
-}
-
-impl<V> Clone for Verification<V> {
-    fn clone(&self) -> Self {
-        Self {
-            persistent_storage_provider: self.persistent_storage_provider.clone(),
-            consensus_parameters_provider: self.consensus_parameters_provider.clone(),
-            gas_price_provider: self.gas_price_provider.clone(),
-            wasm_checker: self.wasm_checker.clone(),
-            memory_pool: self.memory_pool.clone(),
-        }
-    }
+    pub blacklist: BlackList,
 }
 
 impl<View> Verification<View>
@@ -74,7 +64,6 @@ where
     pub fn perform_all_verifications(
         &self,
         tx: Transaction,
-        pool: &Shared<TxPool>,
         current_height: BlockHeight,
         utxo_validation: bool,
     ) -> Result<PoolTransaction, Error> {
@@ -101,8 +90,8 @@ where
             .latest_view()
             .map_err(|e| Error::Database(format!("{:?}", e)))?;
 
-        let inputs_verified_tx =
-            gas_price_verified_tx.perform_inputs_verifications(pool, &view, metadata)?;
+        let inputs_verified_tx = gas_price_verified_tx
+            .perform_inputs_verifications(&self.blacklist, metadata)?;
 
         let fully_verified_tx = inputs_verified_tx
             .perform_input_computation_verifications(
@@ -170,25 +159,19 @@ impl BasicVerifiedTx {
 }
 
 impl GasPriceVerifiedTx {
-    pub fn perform_inputs_verifications<View>(
+    pub fn perform_inputs_verifications(
         self,
-        pool: &Shared<TxPool>,
-        view: &View,
+        blacklist: &BlackList,
         metadata: Metadata,
-    ) -> Result<InputDependenciesVerifiedTx, Error>
-    where
-        View: TxPoolPersistentStorage,
-    {
+    ) -> Result<InputDependenciesVerifiedTx, Error> {
         let pool_tx = checked_tx_into_pool(self.0, metadata)?;
-
-        let transaction = pool
-            .read()
-            .can_insert_transaction(Arc::new(pool_tx), view)?
-            .into_transaction();
-        // SAFETY: We created the arc just above and it's not shared.
-        let transaction =
-            Arc::try_unwrap(transaction).expect("We only the owner of the `Arc`; qed");
-        let checked_transaction: CheckedTransaction = transaction.into();
+        if pool_tx.max_gas() == 0 {
+            return Err(Error::InputValidation(InputValidationError::MaxGasZero))
+        }
+        blacklist
+            .check_blacklisting(&pool_tx)
+            .map_err(Error::Blacklisted)?;
+        let checked_transaction: CheckedTransaction = pool_tx.into();
         Ok(InputDependenciesVerifiedTx(checked_transaction.into()))
     }
 }
