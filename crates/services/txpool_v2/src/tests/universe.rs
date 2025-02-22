@@ -59,7 +59,10 @@ use tokio::sync::broadcast::Receiver;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
-    config::Config,
+    config::{
+        BlackList,
+        Config,
+    },
     error::Error,
     new_service,
     pool::{
@@ -162,7 +165,7 @@ impl TestPoolUniverse {
         &self,
         p2p: Option<MockP2P>,
         importer: Option<MockImporter>,
-    ) -> Service<MockDb> {
+    ) -> Service<MockDb, MockP2P> {
         let gas_price = 0;
         let mut p2p = p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
         // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
@@ -238,13 +241,10 @@ impl TestPoolUniverse {
                 consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
+                blacklist: BlackList::default(),
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                &pool.clone(),
-                Default::default(),
-                true,
-            )?;
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
             let tx = Arc::new(tx);
             Ok((tx.clone(), pool.write().insert(tx, &self.mock_db)?))
         } else {
@@ -271,13 +271,10 @@ impl TestPoolUniverse {
                 consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
+                blacklist: BlackList::default(),
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                &pool.clone(),
-                Default::default(),
-                true,
-            )?;
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");
@@ -304,13 +301,10 @@ impl TestPoolUniverse {
                 consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
                 wasm_checker: Arc::new(wasm_checker),
                 memory_pool: MemoryPool::new(),
+                blacklist: BlackList::default(),
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                &pool.clone(),
-                Default::default(),
-                true,
-            )?;
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
             pool.write().insert(Arc::new(tx), &self.mock_db)
         } else {
             panic!("Pool needs to be built first");
