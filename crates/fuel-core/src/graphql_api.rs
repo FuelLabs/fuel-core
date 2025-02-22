@@ -122,6 +122,7 @@ pub fn query_costs() -> &'static Costs {
 
 pub static QUERY_COSTS: OnceLock<Costs> = OnceLock::new();
 
+#[cfg(feature = "test-helpers")]
 fn default_query_costs(balances_indexation_enabled: bool) -> Costs {
     let mut cost = DEFAULT_QUERY_COSTS;
 
@@ -134,10 +135,10 @@ fn default_query_costs(balances_indexation_enabled: bool) -> Costs {
 
 fn initialize_query_costs(
     costs: Costs,
-    balances_indexation_enabled: bool,
+    _balances_indexation_enabled: bool,
 ) -> anyhow::Result<()> {
     #[cfg(feature = "test-helpers")]
-    if costs != default_query_costs(balances_indexation_enabled) {
+    if costs != default_query_costs(_balances_indexation_enabled) {
         // We don't support setting these values in test contexts, because
         // it can lead to unexpected behavior if multiple tests try to
         // initialize different values.
