@@ -3416,6 +3416,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",
+ "fuel-core-trace",
  "fuel-core-types 0.41.7",
  "futures",
  "hex",
@@ -3434,6 +3435,7 @@ dependencies = [
  "test-helpers",
  "tikv-jemallocator",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3667,7 +3669,7 @@ dependencies = [
 name = "fuel-core-global-merkle-root-storage"
 version = "0.41.7"
 dependencies = [
- "anyhow",
+ "derive_more 0.99.19",
  "enum-iterator",
  "fuel-core-global-merkle-root-storage",
  "fuel-core-storage",
