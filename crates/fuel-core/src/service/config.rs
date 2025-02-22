@@ -138,8 +138,8 @@ impl Config {
                 crate::state::historical_rocksdb::StateRewindPolicy::RewindFullRange,
         };
 
-        let chain_config = snapshot_reader.chain_config();
-        let network_name = chain_config.chain_name.clone();
+        #[cfg(feature = "p2p")]
+        let network_name = snapshot_reader.chain_config().chain_name.clone();
         let gas_price_config = GasPriceConfig::local_node();
 
         Self {
