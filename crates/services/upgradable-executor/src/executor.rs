@@ -825,7 +825,7 @@ where
     /// for instancy by calling `get_module` below.
     #[cfg(feature = "wasm-executor")]
     // TODO: This methods may compile the WASM binary inside. It can take a lot of time,
-    //  blocking hte runtime. Instead, we should make this function async and compile
+    //  blocking the runtime. Instead, we should make this function async and compile
     //  the WASM in a separate thread.
     fn get_module_by_root_and_validate(
         &self,
