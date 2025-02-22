@@ -28,7 +28,7 @@ use rand::{
 };
 use std::time::Duration;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn latest_state_transition_function_is_forward_compatible_with_v36_binary() {
     let (_bootstrap_node, addr) = bootstrap_node(V36_TESTNET_SNAPSHOT).await.unwrap();
 

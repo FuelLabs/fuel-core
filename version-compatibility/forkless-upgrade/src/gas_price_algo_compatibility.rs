@@ -41,7 +41,7 @@ use version_36_fuel_core_storage::{
     StorageAsRef as OldStorageAsRef,
 };
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     // Given
     let starting_gas_price = 987;

@@ -27,7 +27,7 @@ use std::time::Duration;
 
 const BLOCK_INCLUSION_TIMEOUT: Duration = Duration::from_secs(360);
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn latest_binary_is_backward_compatible_and_can_load_testnet_config() {
     // When
     let latest_node = LatestFuelCoreDriver::spawn(&[
@@ -48,7 +48,7 @@ async fn latest_binary_is_backward_compatible_and_can_load_testnet_config() {
     assert!(latest_node.node.state().started())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_genesis_binary(
 ) {
     let (_bootstrap_node, addr) =
@@ -113,7 +113,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_binary() {
     let (_bootstrap_node, addr) = bootstrap_node(V36_TESTNET_SNAPSHOT).await.unwrap();
 
@@ -176,7 +176,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_genesis_binary(
 ) {
     // Given
