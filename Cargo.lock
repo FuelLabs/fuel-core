@@ -3416,6 +3416,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",
+ "fuel-core-trace",
  "fuel-core-types 0.41.7",
  "futures",
  "hex",
@@ -3434,6 +3435,7 @@ dependencies = [
  "test-helpers",
  "tikv-jemallocator",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

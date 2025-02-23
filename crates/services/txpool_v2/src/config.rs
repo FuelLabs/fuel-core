@@ -154,7 +154,7 @@ pub struct PoolLimits {
     pub max_bytes_size: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ServiceChannelLimits {
     /// Maximum number of pending requests waiting in the write pool channel.
     pub max_pending_write_pool_requests: usize,

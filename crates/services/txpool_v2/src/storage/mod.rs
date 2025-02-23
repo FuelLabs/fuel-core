@@ -40,9 +40,6 @@ pub trait CheckedTransaction<StorageIndex> {
     /// Returns the underlying transaction.
     fn tx(&self) -> &ArcPoolTx;
 
-    /// Unwraps the transaction.
-    fn into_tx(self) -> ArcPoolTx;
-
     /// Returns the list of all dependencies of the transaction.
     fn all_dependencies(&self) -> &HashSet<StorageIndex>;
 }
