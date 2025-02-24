@@ -13,7 +13,7 @@ use fuel_core_storage::{
     transactional::{
         Changes,
         ConflictPolicy,
-        Modifiable,
+        ReadTransaction,
         StorageChanges,
         StorageTransaction,
         WriteTransaction,
@@ -40,7 +40,7 @@ use fuel_core_types::{
     },
 };
 
-#[cfg_attr(test, mockall::automock(type Database = crate::importer::test::MockDatabase;))]
+#[cfg_attr(any(test, feature = "test-helpers"), mockall::automock(type Database = crate::importer::test::MockDatabase;))]
 /// The executors port.
 pub trait Validator: Send + Sync {
     /// Executes the block and returns the result of execution with uncommitted database
@@ -59,7 +59,7 @@ pub trait Transactional {
         Self: 'a;
 
     /// Returns the storage transaction based on the `Changes`.
-    fn storage_transaction(&mut self, changes: Changes) -> Self::Transaction<'_>;
+    fn storage_transaction(&self, changes: Changes) -> Self::Transaction<'_>;
 }
 
 /// The alias port used by the block importer.
@@ -91,14 +91,11 @@ pub trait DatabaseTransaction {
         block: &SealedBlock,
     ) -> StorageResult<bool>;
 
-    /// Commits the changes to the underlying storage.
-    fn commit(self) -> StorageResult<()>;
-
     /// Returns the changes of the transaction.
     fn into_changes(self) -> Changes;
 }
 
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "test-helpers"), mockall::automock)]
 /// The verifier of the block.
 pub trait BlockVerifier: Send + Sync {
     /// Verifies the consistency of the block fields for the block's height.
@@ -115,12 +112,12 @@ pub trait BlockVerifier: Send + Sync {
 
 impl<S> Transactional for S
 where
-    S: KeyValueInspect<Column = Column> + Modifiable,
+    S: KeyValueInspect<Column = Column>,
 {
-    type Transaction<'a> = StorageTransaction<&'a mut S> where Self: 'a;
+    type Transaction<'a> = StorageTransaction<&'a S> where Self: 'a;
 
-    fn storage_transaction(&mut self, changes: Changes) -> Self::Transaction<'_> {
-        self.write_transaction()
+    fn storage_transaction(&self, changes: Changes) -> Self::Transaction<'_> {
+        self.read_transaction()
             .with_changes(changes)
             .with_policy(ConflictPolicy::Fail)
     }
@@ -128,7 +125,7 @@ where
 
 impl<S> DatabaseTransaction for StorageTransaction<S>
 where
-    S: KeyValueInspect<Column = Column> + Modifiable,
+    S: KeyValueInspect<Column = Column>,
 {
     fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>> {
         Ok(self
@@ -162,11 +159,6 @@ where
         }
         storage.commit()?;
         Ok(!found)
-    }
-
-    fn commit(self) -> StorageResult<()> {
-        self.commit()?;
-        Ok(())
     }
 
     fn into_changes(self) -> Changes {
