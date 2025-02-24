@@ -1,0 +1,53 @@
+---
+source: crates/client/src/client/schema/block.rs
+expression: operation.query
+snapshot_kind: text
+---
+query BlocksQuery($after: String, $before: String, $first: Int, $last: Int) {
+  blocks(after: $after, before: $before, first: $first, last: $last) {
+    edges {
+      cursor
+      node {
+        version
+        id
+        header {
+          version
+          id
+          daHeight
+          consensusParametersVersion
+          stateTransitionBytecodeVersion
+          transactionsCount
+          messageReceiptCount
+          transactionsRoot
+          messageOutboxRoot
+          eventInboxRoot
+          height
+          prevRoot
+          time
+          applicationHash
+          txIdCommitment
+        }
+        consensus {
+          __typename
+          ... on Genesis {
+            chainConfigHash
+            coinsRoot
+            contractsRoot
+            messagesRoot
+            transactionsRoot
+          }
+          ... on PoAConsensus {
+            signature
+          }
+        }
+        transactionIds
+      }
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+      hasPreviousPage
+      startCursor
+    }
+  }
+}

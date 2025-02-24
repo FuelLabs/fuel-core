@@ -1845,7 +1845,7 @@ pub mod tests {
         watcher: &mut StateWatcher,
     ) -> (FuelPeerId, AppScore, String) {
         loop {
-            task.run(watcher).await;
+            let _ = task.run(watcher).await;
             if let Ok((peer_id, recv_report, service)) = report_receiver.try_recv() {
                 return (peer_id, recv_report, service);
             }
@@ -1897,7 +1897,7 @@ pub mod tests {
 
         for _ in 0..100 {
             // When
-            task.run(&mut watcher).await;
+            let _ = task.run(&mut watcher).await;
 
             // Then
             block_processed_receiver

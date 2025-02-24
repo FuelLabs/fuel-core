@@ -126,7 +126,7 @@ mod tests {
             .insert(&key(), &123)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(Some(1u32.into()), transaction.into_changes().into())
             .unwrap();
 
         // Set the value at height 2 to be 321.
@@ -136,7 +136,7 @@ mod tests {
             .insert(&key(), &321)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(2u32.into()), transaction.into_changes())
+            .commit_changes(Some(2u32.into()), transaction.into_changes().into())
             .unwrap();
 
         // When
@@ -204,7 +204,7 @@ mod tests {
             .insert(&Default::default(), &123456)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(1u32.into()), transaction.into_changes())
+            .commit_changes(Some(1u32.into()), transaction.into_changes().into())
             .unwrap();
 
         // Set the value at height 2 to be 321.
@@ -218,7 +218,7 @@ mod tests {
             .insert(&Default::default(), &654321)
             .unwrap();
         historical_rocks_db
-            .commit_changes(Some(2u32.into()), transaction.into_changes())
+            .commit_changes(Some(2u32.into()), transaction.into_changes().into())
             .unwrap();
 
         // When

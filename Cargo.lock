@@ -3416,6 +3416,7 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",
+ "fuel-core-trace",
  "fuel-core-types 0.41.7",
  "futures",
  "hex",
@@ -3434,6 +3435,7 @@ dependencies = [
  "test-helpers",
  "tikv-jemallocator",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3485,7 +3487,7 @@ dependencies = [
  "anyhow",
  "bech32",
  "bytes",
- "derivative",
+ "educe",
  "fuel-core-chain-config",
  "fuel-core-storage",
  "fuel-core-types 0.41.7",
@@ -3667,7 +3669,7 @@ dependencies = [
 name = "fuel-core-global-merkle-root-storage"
 version = "0.41.7"
 dependencies = [
- "anyhow",
+ "derive_more 0.99.19",
  "enum-iterator",
  "fuel-core-global-merkle-root-storage",
  "fuel-core-storage",
@@ -3758,6 +3760,7 @@ dependencies = [
  "libp2p",
  "libp2p-mplex",
  "libp2p-swarm-test",
+ "parking_lot",
  "postcard",
  "prometheus-client",
  "quick-protobuf",
@@ -4056,8 +4059,8 @@ dependencies = [
  "aws-config",
  "aws-sdk-kms",
  "bs58",
- "derivative",
  "derive_more 0.99.19",
+ "educe",
  "fuel-vm 0.59.2",
  "k256",
  "rand",
@@ -9779,6 +9782,7 @@ dependencies = [
  "itertools 0.12.1",
  "rand",
  "reqwest 0.12.12",
+ "serde_json",
  "tempfile",
  "tokio",
 ]

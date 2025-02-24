@@ -47,8 +47,8 @@ codegen-units = 1
 lto = "fat"
 # The difference in performance for "fat" and "thin" is small,
 # but "thin" LTO is much faster to compile.
-# If you play with benchamrks or flamegraph, it is better to use "thin"
-# To speedup iterations between compialtion.
+# If you play with benchmarks or flamegraphs, it is better to use "thin"
+# To speedup iterations between compilation.
 #lto = "thin"
 panic = "unwind"
 
@@ -110,7 +110,12 @@ async-trait = "0.1"
 aws-sdk-kms = "1.37"
 cynic = { version = "3.1.0", features = ["http-reqwest"] }
 clap = "4.4"
-derivative = { version = "2" }
+educe = { version = "0.6", default-features = false, features = [
+  "Eq",
+  "PartialEq",
+  "Hash",
+  "Debug",
+] }
 derive_more = { version = "0.99" }
 enum_dispatch = "0.3.13"
 enum-iterator = "1.2"

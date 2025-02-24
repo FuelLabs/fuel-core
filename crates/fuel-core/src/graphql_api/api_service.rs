@@ -1,6 +1,5 @@
 use crate::{
     fuel_core_graphql_api::{
-        metrics_extension::MetricsExtension,
         ports::{
             BlockProducerPort,
             ConsensusModulePort,
@@ -11,12 +10,16 @@ use crate::{
             P2pPort,
             TxPoolPort,
         },
-        validation_extension::ValidationExtension,
         Config,
     },
     graphql_api::{
         self,
-        required_fuel_block_height_extension::RequiredFuelBlockHeightExtension,
+        extensions::{
+            chain_state_info::ChainStateInfoExtension,
+            metrics::MetricsExtension,
+            required_fuel_block_height::RequiredFuelBlockHeightExtension,
+            validation::ValidationExtension,
+        },
     },
     schema::{
         CoreSchema,
@@ -243,13 +246,13 @@ where
 {
     let balances_indexation_enabled = off_database.balances_indexation_enabled()?;
 
-    let mut cost_config = config.config.costs.clone();
+    let mut cost_config = config.config.costs;
 
     if !balances_indexation_enabled {
         cost_config.balance_query = graphql_api::BALANCES_QUERY_COST_WITHOUT_INDEXATION;
     }
 
-    graphql_api::initialize_query_costs(cost_config)?;
+    graphql_api::initialize_query_costs(cost_config, balances_indexation_enabled)?;
 
     let network_addr = config.config.addr;
     let combined_read_database = ReadDatabase::new(
@@ -294,8 +297,9 @@ where
         .extension(RequiredFuelBlockHeightExtension::new(
             required_fuel_block_height_tolerance,
             required_fuel_block_height_timeout,
-            block_height_subscriber,
+            block_height_subscriber.clone(),
         ))
+        .extension(ChainStateInfoExtension::new(block_height_subscriber))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";

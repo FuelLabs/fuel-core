@@ -1,0 +1,484 @@
+---
+source: crates/client/src/client/schema/chain.rs
+expression: operation.query
+snapshot_kind: text
+---
+query ChainQuery {
+  chain {
+    daHeight
+    name
+    latestBlock {
+      version
+      id
+      header {
+        version
+        id
+        daHeight
+        consensusParametersVersion
+        stateTransitionBytecodeVersion
+        transactionsCount
+        messageReceiptCount
+        transactionsRoot
+        messageOutboxRoot
+        eventInboxRoot
+        height
+        prevRoot
+        time
+        applicationHash
+        txIdCommitment
+      }
+      consensus {
+        __typename
+        ... on Genesis {
+          chainConfigHash
+          coinsRoot
+          contractsRoot
+          messagesRoot
+          transactionsRoot
+        }
+        ... on PoAConsensus {
+          signature
+        }
+      }
+      transactionIds
+    }
+    consensusParameters {
+      version
+      txParams {
+        version
+        maxInputs
+        maxOutputs
+        maxWitnesses
+        maxGasPerTx
+        maxSize
+        maxBytecodeSubsections
+      }
+      predicateParams {
+        version
+        maxPredicateLength
+        maxPredicateDataLength
+        maxMessageDataLength
+        maxGasPerPredicate
+      }
+      scriptParams {
+        version
+        maxScriptLength
+        maxScriptDataLength
+      }
+      contractParams {
+        version
+        contractMaxSize
+        maxStorageSlots
+      }
+      feeParams {
+        version
+        gasPriceFactor
+        gasPerByte
+      }
+      baseAssetId
+      blockGasLimit
+      blockTransactionSizeLimit
+      chainId
+      gasCosts {
+        version
+        add
+        addi
+        and
+        andi
+        bal
+        bhei
+        bhsh
+        burn
+        cb
+        cfsi
+        div
+        divi
+        eck1
+        ecr1
+        ed19
+        eq
+        exp
+        expi
+        flag
+        gm
+        gt
+        gtf
+        ji
+        jmp
+        jne
+        jnei
+        jnzi
+        jmpf
+        jmpb
+        jnzf
+        jnzb
+        jnef
+        jneb
+        lb
+        log
+        lt
+        lw
+        mint
+        mlog
+        modOp
+        modi
+        moveOp
+        movi
+        mroo
+        mul
+        muli
+        mldv
+        noop
+        not
+        or
+        ori
+        poph
+        popl
+        pshh
+        pshl
+        ret
+        rvrt
+        sb
+        sll
+        slli
+        srl
+        srli
+        srw
+        sub
+        subi
+        sw
+        sww
+        time
+        tr
+        tro
+        wdcm
+        wqcm
+        wdop
+        wqop
+        wdml
+        wqml
+        wddv
+        wqdv
+        wdmd
+        wqmd
+        wdam
+        wqam
+        wdmm
+        wqmm
+        xor
+        xori
+        ecop
+        alocDependentCost {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        bsiz {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        bldd {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        cfe {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        cfeiDependentCost {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        call {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        ccp {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        croo {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        csiz {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        ed19DependentCost {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        k256 {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        ldc {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        logd {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        mcl {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        mcli {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        mcp {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        mcpi {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        meq {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        retd {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        s256 {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        scwq {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        smo {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        srwq {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        swwq {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        epar {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        contractRoot {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        stateRoot {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        vmInitialization {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        newStoragePerByte
+      }
+      privilegedAddress
+    }
+  }
+}
