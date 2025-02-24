@@ -12,12 +12,10 @@ pub mod api_service;
 pub(crate) mod block_height_subscription;
 pub mod da_compression;
 pub mod database;
+pub(crate) mod extensions;
 pub(crate) mod indexation;
-pub(crate) mod metrics_extension;
 pub mod ports;
-pub(crate) mod required_fuel_block_height_extension;
 pub mod storage;
-pub(crate) mod validation_extension;
 pub mod worker_service;
 
 #[derive(Clone, Debug)]

@@ -1,6 +1,5 @@
 use crate::{
     fuel_core_graphql_api::{
-        metrics_extension::MetricsExtension,
         ports::{
             BlockProducerPort,
             ConsensusModulePort,
@@ -11,12 +10,16 @@ use crate::{
             P2pPort,
             TxPoolPort,
         },
-        validation_extension::ValidationExtension,
         Config,
     },
     graphql_api::{
         self,
-        required_fuel_block_height_extension::RequiredFuelBlockHeightExtension,
+        extensions::{
+            chain_state_info::ChainStateInfoExtension,
+            metrics::MetricsExtension,
+            required_fuel_block_height::RequiredFuelBlockHeightExtension,
+            validation::ValidationExtension,
+        },
     },
     schema::{
         CoreSchema,
@@ -294,8 +297,9 @@ where
         .extension(RequiredFuelBlockHeightExtension::new(
             required_fuel_block_height_tolerance,
             required_fuel_block_height_timeout,
-            block_height_subscriber,
+            block_height_subscriber.clone(),
         ))
+        .extension(ChainStateInfoExtension::new(block_height_subscriber))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";

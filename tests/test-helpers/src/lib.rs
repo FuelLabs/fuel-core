@@ -9,9 +9,14 @@ use fuel_core_types::{
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
+        policies::Policies,
+        AssetId,
+        Input,
         Output,
         Transaction,
         TransactionBuilder,
+        Upload,
+        UploadSubsection,
     },
 };
 use rand::{
@@ -24,6 +29,43 @@ use rand::{
 pub mod builder;
 pub mod counter_contract;
 pub mod fuel_core_driver;
+
+pub fn predicate() -> Vec<u8> {
+    vec![op::ret(1)].into_iter().collect::<Vec<u8>>()
+}
+
+pub fn valid_input(rng: &mut StdRng, amount: u64) -> Input {
+    let owner = Input::predicate_owner(predicate());
+    Input::coin_predicate(
+        rng.gen(),
+        owner,
+        amount,
+        AssetId::BASE,
+        Default::default(),
+        Default::default(),
+        predicate(),
+        vec![],
+    )
+}
+
+pub fn transactions_from_subsections(
+    rng: &mut StdRng,
+    subsections: Vec<UploadSubsection>,
+    amount: u64,
+) -> Vec<Upload> {
+    subsections
+        .into_iter()
+        .map(|subsection| {
+            Transaction::upload_from_subsection(
+                subsection,
+                Policies::new().with_max_fee(amount),
+                vec![valid_input(rng, amount)],
+                vec![],
+                vec![],
+            )
+        })
+        .collect()
+}
 
 pub async fn send_graph_ql_query(url: &str, query: &str) -> String {
     let client = reqwest::Client::new();
