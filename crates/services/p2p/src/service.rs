@@ -373,7 +373,7 @@ pub trait Broadcast: Send {
 
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()>;
 
-    fn confirmations_broadcast(
+    fn pre_confirmation_broadcast(
         &self,
         confirmations: ConfirmationsGossipData,
     ) -> anyhow::Result<()>;
@@ -404,7 +404,7 @@ impl Broadcast for SharedState {
         Ok(())
     }
 
-    fn confirmations_broadcast(
+    fn pre_confirmation_broadcast(
         &self,
         confirmations: ConfirmationsGossipData,
     ) -> anyhow::Result<()> {
@@ -474,7 +474,7 @@ impl<P, V, B: Broadcast, T> Task<P, V, B, T> {
             }
             GossipsubMessage::TxPreConfirmations(confirmations) => {
                 let data = GossipData::new(confirmations, peer_id, message_id);
-                let _ = self.broadcast.confirmations_broadcast(data);
+                let _ = self.broadcast.pre_confirmation_broadcast(data);
             }
         }
     }
@@ -1692,7 +1692,7 @@ pub mod task_tests {
             todo!()
         }
 
-        fn confirmations_broadcast(
+        fn pre_confirmation_broadcast(
             &self,
             confirmations: ConfirmationsGossipData,
         ) -> anyhow::Result<()> {
@@ -2060,7 +2060,7 @@ pub mod broadcast_tests {
 
         // when
         broadcast
-            .confirmations_broadcast(confirmations_gossip_data)
+            .pre_confirmation_broadcast(confirmations_gossip_data)
             .unwrap();
 
         // then
