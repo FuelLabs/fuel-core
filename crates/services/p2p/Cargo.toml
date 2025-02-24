@@ -39,6 +39,7 @@ libp2p = { version = "0.54.1", default-features = false, features = [
   "metrics",
 ] }
 libp2p-mplex = "0.41.0"
+parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
 quick-protobuf = "0.8.1"

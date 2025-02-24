@@ -27,10 +27,7 @@ use fuel_core_importer::ImporterResult;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
-use fuel_core_txpool::{
-    ports::GasPriceProvider as TxPoolGasPriceProvider,
-    BorrowedTxPool,
-};
+use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
@@ -305,12 +302,12 @@ impl TxPoolAdapter {
 }
 
 pub struct TransactionsSource {
-    tx_pool: BorrowedTxPool,
+    tx_pool: TxPoolSharedState,
     minimum_gas_price: u64,
 }
 
 impl TransactionsSource {
-    pub fn new(minimum_gas_price: u64, tx_pool: BorrowedTxPool) -> Self {
+    pub fn new(minimum_gas_price: u64, tx_pool: TxPoolSharedState) -> Self {
         Self {
             tx_pool,
             minimum_gas_price,
