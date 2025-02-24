@@ -106,7 +106,7 @@ async fn render_graphql_playground(graphql_endpoint: &str) -> impl IntoResponse 
     Html(
         GraphiQLSource::build()
             .endpoint(graphql_endpoint)
-            .title("Fuel Graphql Playground")
+            .title("Fuel Global Merkle Root Service Graphql Playground")
             .finish(),
     )
 }
