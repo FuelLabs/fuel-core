@@ -222,6 +222,20 @@ impl<Storage> From<StorageTransaction<Storage>> for Changes {
     }
 }
 
+/// The type describing the list of changes to the storage.
+pub enum StorageChanges {
+    /// A single batch of changes.
+    Changes(Changes),
+    /// A list of changes.
+    ChangesList(Vec<Changes>),
+}
+
+impl From<Changes> for StorageChanges {
+    fn from(value: Changes) -> Self {
+        StorageChanges::Changes(value)
+    }
+}
+
 /// The trait to convert the type into the storage transaction.
 pub trait IntoTransaction: Sized {
     /// Converts the type into the storage transaction consuming it.

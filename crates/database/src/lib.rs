@@ -11,7 +11,10 @@
 #![deny(warnings)]
 #![deny(unused_variables)]
 
-use fuel_core_storage::Error as StorageError;
+use fuel_core_storage::{
+    transactional::ReferenceBytesKey,
+    Error as StorageError,
+};
 use fuel_core_types::services::executor::Error as ExecutorError;
 
 /// The error occurred during work with any of databases.
@@ -83,6 +86,10 @@ pub enum Error {
     #[cfg(feature = "backup")]
     #[display(fmt = "Restore error: {}", _0)]
     RestoreError(anyhow::Error),
+
+    #[display(fmt = "During committing of the changes found conflicting \
+        modifications at column {column} for the key {key:?}")]
+    ConflictingChanges { column: u32, key: ReferenceBytesKey },
 
     /// Not related to database error.
     #[from]

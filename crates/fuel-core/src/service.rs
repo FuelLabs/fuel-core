@@ -32,6 +32,7 @@ use fuel_core_storage::{
     transactional::{
         AtomicView,
         ReadTransaction,
+        StorageChanges,
     },
     IsNotFound,
     StorageAsMut,
@@ -311,11 +312,10 @@ impl FuelService {
                     &Consensus::Genesis(initialized_genesis),
                 )?;
 
-            self.shared
-                .database
-                .on_chain()
-                .data
-                .commit_changes(Some(genesis_block_height), database_tx.into_changes())?;
+            self.shared.database.on_chain().data.commit_changes(
+                Some(genesis_block_height),
+                StorageChanges::Changes(database_tx.into_changes()),
+            )?;
         }
 
         Ok(())
