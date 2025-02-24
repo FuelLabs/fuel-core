@@ -4,7 +4,7 @@ use crate::service::adapters::{
     consensus_parameters_provider,
     gas_price_adapters::GasPriceSettings,
 };
-use fuel_core_services::SharedMutex;
+use fuel_core_services::SharedRwLock;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -15,14 +15,17 @@ fn settings__can_retrieve_settings() {
     // given
     let param_version =
         fuel_core_types::blockchain::header::ConsensusParametersVersion::default();
+    let stf_version =
+        fuel_core_types::blockchain::header::StateTransitionBytecodeVersion::default();
     let params =
         fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV1::default();
     let mut hash_map = HashMap::new();
     hash_map.insert(param_version, Arc::new(params.clone().into()));
     let shared_state = consensus_parameters_provider::SharedState {
-        latest_consensus_parameters_version: SharedMutex::new(param_version),
-        consensus_parameters: SharedMutex::new(hash_map),
+        latest_consensus_parameters_version: SharedRwLock::new(param_version),
+        consensus_parameters: SharedRwLock::new(hash_map),
         database: Default::default(),
+        latest_stf_version: SharedRwLock::new(stf_version),
     };
     let consensus_parameters_provider =
         crate::service::adapters::ConsensusParametersProvider::new(shared_state);

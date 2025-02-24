@@ -35,7 +35,10 @@ use fuel_core_txpool::{
     TxStatusMessage,
 };
 use fuel_core_types::{
-    blockchain::header::ConsensusParametersVersion,
+    blockchain::header::{
+        ConsensusParametersVersion,
+        StateTransitionBytecodeVersion,
+    },
     entities::relayer::message::MerkleProof,
     fuel_tx::{
         Bytes32,
@@ -198,8 +201,12 @@ impl GasPriceEstimate for StaticGasPrice {
 }
 
 impl ConsensusProvider for ConsensusParametersProvider {
-    fn latest_consensus_params(&self) -> Arc<ConsensusParameters> {
+    fn current_consensus_params(&self) -> Arc<ConsensusParameters> {
         self.shared_state.latest_consensus_parameters()
+    }
+
+    fn current_consensus_parameters_version(&self) -> ConsensusParametersVersion {
+        self.shared_state.latest_consensus_parameters_version()
     }
 
     fn consensus_params_at_version(
@@ -207,6 +214,10 @@ impl ConsensusProvider for ConsensusParametersProvider {
         version: &ConsensusParametersVersion,
     ) -> anyhow::Result<Arc<ConsensusParameters>> {
         Ok(self.shared_state.get_consensus_parameters(version)?)
+    }
+
+    fn current_stf_version(&self) -> StateTransitionBytecodeVersion {
+        self.shared_state.latest_stf_version()
     }
 }
 

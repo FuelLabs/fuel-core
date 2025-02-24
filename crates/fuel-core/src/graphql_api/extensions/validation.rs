@@ -1,11 +1,3 @@
-use crate::{
-    fuel_core_graphql_api::validation_extension::visitor::{
-        visit,
-        RuleError,
-        VisitorContext,
-    },
-    graphql_api::validation_extension::recursion_finder::RecursionFinder,
-};
 use async_graphql::{
     extensions::{
         Extension,
@@ -20,9 +12,15 @@ use async_graphql::{
     ValidationResult,
     Variables,
 };
+use recursion_finder::RecursionFinder;
 use std::sync::{
     Arc,
     Mutex,
+};
+use visitor::{
+    visit,
+    RuleError,
+    VisitorContext,
 };
 
 mod recursion_finder;

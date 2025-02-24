@@ -1,6 +1,5 @@
 use fuel_core_client::client::types::TransactionStatus;
 use fuel_core_types::{
-    fuel_asm::op,
     fuel_tx::{
         policies::Policies,
         AssetId,
@@ -10,7 +9,6 @@ use fuel_core_types::{
         Receipt,
         Transaction,
         UpgradePurpose,
-        Upload,
         UploadSubsection,
     },
     fuel_vm::UploadedBytecode,
@@ -21,49 +19,17 @@ use rand::{
     rngs::StdRng,
     Rng,
 };
-use test_helpers::builder::{
-    TestContext,
-    TestSetupBuilder,
+use test_helpers::{
+    builder::{
+        TestContext,
+        TestSetupBuilder,
+    },
+    predicate,
+    transactions_from_subsections,
+    valid_input,
 };
 
 const SUBSECTION_SIZE: usize = 64 * 1024;
-
-fn predicate() -> Vec<u8> {
-    vec![op::ret(1)].into_iter().collect::<Vec<u8>>()
-}
-
-fn valid_input(rng: &mut StdRng, amount: u64) -> Input {
-    let owner = Input::predicate_owner(predicate());
-    Input::coin_predicate(
-        rng.gen(),
-        owner,
-        amount,
-        AssetId::BASE,
-        Default::default(),
-        Default::default(),
-        predicate(),
-        vec![],
-    )
-}
-
-fn transactions_from_subsections(
-    rng: &mut StdRng,
-    subsections: Vec<UploadSubsection>,
-    amount: u64,
-) -> Vec<Upload> {
-    subsections
-        .into_iter()
-        .map(|subsection| {
-            Transaction::upload_from_subsection(
-                subsection,
-                Policies::new().with_max_fee(amount),
-                vec![valid_input(rng, amount)],
-                vec![],
-                vec![],
-            )
-        })
-        .collect_vec()
-}
 
 #[tokio::test]
 async fn can_upload_current_state_transition_function() {

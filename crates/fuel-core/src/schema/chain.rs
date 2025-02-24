@@ -814,7 +814,7 @@ impl ChainInfo {
     ) -> async_graphql::Result<ConsensusParameters> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
 
         Ok(ConsensusParameters(params))
     }
@@ -823,7 +823,7 @@ impl ChainInfo {
     async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
 
         Ok(GasCosts(params.gas_costs().clone()))
     }

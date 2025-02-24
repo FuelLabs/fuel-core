@@ -96,6 +96,7 @@ use std::fmt::Display;
 pub use sync::{
     Shared,
     SharedMutex,
+    SharedRwLock,
 };
 #[cfg(feature = "sync-processor")]
 pub use sync_processor::SyncProcessor;

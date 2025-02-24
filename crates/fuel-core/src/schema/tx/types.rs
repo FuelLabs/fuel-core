@@ -416,7 +416,7 @@ impl Transaction {
     async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
         let base_asset_id = params.base_asset_id();
         match &self.0 {
             fuel_tx::Transaction::Script(tx) => Some(
