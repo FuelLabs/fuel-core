@@ -25,6 +25,7 @@ query ChainQuery {
         prevRoot
         time
         applicationHash
+        txIdCommitment
       }
       consensus {
         __typename
