@@ -10,8 +10,8 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::txpool::{
         ArcPoolTx,
-        TransactionStatusPreconfirmations,
-    }
+        TransactionStatus,
+    },
 };
 use tokio::sync::{
     broadcast,
@@ -178,7 +178,7 @@ impl SharedState {
         &self,
         id: Bytes32,
         block_height: &BlockHeight,
-        status: TransactionStatusPreconfirmations,
+        status: TransactionStatus,
     ) {
         self.tx_status_sender.send_complete(
             id,

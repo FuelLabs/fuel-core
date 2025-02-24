@@ -349,7 +349,7 @@ pub mod worker {
         services::{
             block_importer::SharedImportResult,
             txpool::{
-                TransactionStatusPreconfirmations,
+                TransactionStatus,
                 TransactionStatusStorage,
             },
         },
@@ -456,7 +456,7 @@ pub mod worker {
             &self,
             id: Bytes32,
             block_height: &BlockHeight,
-            status: TransactionStatusPreconfirmations,
+            status: TransactionStatus,
         );
     }
 }

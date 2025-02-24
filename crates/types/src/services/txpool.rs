@@ -376,11 +376,11 @@ pub enum TransactionStatusStorage {
     },
 }
 
-impl From<TransactionStatusStorage> for TransactionStatusPreconfirmations {
+impl From<TransactionStatusStorage> for TransactionStatus {
     fn from(value: TransactionStatusStorage) -> Self {
         match value {
             TransactionStatusStorage::Submitted { time } => {
-                TransactionStatusPreconfirmations::Submitted { timestamp: time }
+                TransactionStatus::Submitted { timestamp: time }
             }
             TransactionStatusStorage::Success {
                 block_height,
@@ -389,7 +389,7 @@ impl From<TransactionStatusStorage> for TransactionStatusPreconfirmations {
                 receipts,
                 total_gas,
                 total_fee,
-            } => TransactionStatusPreconfirmations::Success {
+            } => TransactionStatus::Success {
                 block_height,
                 block_timestamp: time,
                 program_state: result,
@@ -398,7 +398,7 @@ impl From<TransactionStatusStorage> for TransactionStatusPreconfirmations {
                 total_fee,
             },
             TransactionStatusStorage::SqueezedOut { reason } => {
-                TransactionStatusPreconfirmations::SqueezedOut { reason }
+                TransactionStatus::SqueezedOut { reason }
             }
             TransactionStatusStorage::Failed {
                 block_height,
@@ -407,7 +407,7 @@ impl From<TransactionStatusStorage> for TransactionStatusPreconfirmations {
                 receipts,
                 total_gas,
                 total_fee,
-            } => TransactionStatusPreconfirmations::Failure {
+            } => TransactionStatus::Failure {
                 reason: TransactionExecutionResult::reason(&receipts, &result),
                 block_height,
                 block_timestamp: time,
@@ -423,7 +423,7 @@ impl From<TransactionStatusStorage> for TransactionStatusPreconfirmations {
 /// The status of the transaction during its life from the TxPool until the inclusion in the block.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TransactionStatusPreconfirmations {
+pub enum TransactionStatus {
     /// Transaction was submitted into the TxPool
     Submitted {
         /// Timestamp of submission into the TxPool

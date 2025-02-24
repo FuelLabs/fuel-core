@@ -25,7 +25,7 @@ use fuel_core_txpool::{
 };
 use fuel_core_types::{
     fuel_types::Bytes32,
-    services::txpool::TransactionStatusPreconfirmations,
+    services::txpool::TransactionStatus,
     tai64::Tai64,
 };
 use futures::StreamExt;
@@ -46,14 +46,14 @@ fn txn_id(i: u8) -> Bytes32 {
     [i; 32].into()
 }
 
-fn submitted() -> TransactionStatusPreconfirmations {
-    TransactionStatusPreconfirmations::Submitted {
+fn submitted() -> TransactionStatus {
+    TransactionStatus::Submitted {
         timestamp: Tai64(0),
     }
 }
 
-fn success() -> TransactionStatusPreconfirmations {
-    TransactionStatusPreconfirmations::Success {
+fn success() -> TransactionStatus {
+    TransactionStatus::Success {
         block_height: Default::default(),
         block_timestamp: Tai64(0),
         program_state: None,
@@ -63,14 +63,14 @@ fn success() -> TransactionStatusPreconfirmations {
     }
 }
 
-fn success_during_block_production() -> TransactionStatusPreconfirmations {
-    TransactionStatusPreconfirmations::SuccessDuringBlockProduction {
+fn success_during_block_production() -> TransactionStatus {
+    TransactionStatus::SuccessDuringBlockProduction {
         block_height: Default::default(),
     }
 }
 
-fn failure() -> TransactionStatusPreconfirmations {
-    TransactionStatusPreconfirmations::Failure {
+fn failure() -> TransactionStatus {
+    TransactionStatus::Failure {
         block_height: Default::default(),
         block_timestamp: Tai64(0),
         program_state: None,
@@ -81,20 +81,20 @@ fn failure() -> TransactionStatusPreconfirmations {
     }
 }
 
-fn failure_during_block_production() -> TransactionStatusPreconfirmations {
-    TransactionStatusPreconfirmations::FailureDuringBlockProduction {
+fn failure_during_block_production() -> TransactionStatus {
+    TransactionStatus::FailureDuringBlockProduction {
         block_height: Default::default(),
     }
 }
 
-fn squeezed() -> TransactionStatusPreconfirmations {
-    TransactionStatusPreconfirmations::SqueezedOut {
+fn squeezed() -> TransactionStatus {
+    TransactionStatus::SqueezedOut {
         reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }
 
-fn squeezed_during_block_production() -> TransactionStatusPreconfirmations {
-    TransactionStatusPreconfirmations::SqueezedOutDuringBlockProduction {
+fn squeezed_during_block_production() -> TransactionStatus {
+    TransactionStatus::SqueezedOutDuringBlockProduction {
         reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }
@@ -112,26 +112,32 @@ enum TxStatus {
 }
 
 /// Represents the final transaction statuses (Success, Squeezed, Failed).
-// TODO[RC]: Should this also include the "...DuringBlockProduction" variants?
 #[derive(Debug, Clone, PartialEq, Eq, Arbitrary)]
 enum FinalTxStatus {
     /// The transaction was successfully included in a block.
     Success,
+    /// The transaction has been executed, but the full block has not been produced yet.
+    SuccessDuringBlockProduction,
     /// The transaction was squeezed out of the txpool (or block)
     /// because it was not valid to include in the block.
     Squeezed,
+    /// Transaction was eligible for execution and inclusion in the block but
+    /// it was squeezed out by block producer.
+    SqueezedOutDuringBlockProduction,
     /// The transaction failed to execute and was included in a block.
     Failed,
+    /// Transaction was eligible for execution and inclusion in the block but
+    /// it failed during the execution.
+    FailureDuringBlockProduction,
 }
 
 /// Strategy to generate an Option<TransactionStatus>
-fn state() -> impl Strategy<Value = Option<TransactionStatusPreconfirmations>> {
+fn state() -> impl Strategy<Value = Option<TransactionStatus>> {
     prop::option::of(transaction_status())
 }
 
 /// Strategy to generate a Result<Option<TransactionStatus>, Error>
-fn state_result(
-) -> impl Strategy<Value = Result<Option<TransactionStatusPreconfirmations>, Error>> {
+fn state_result() -> impl Strategy<Value = Result<Option<TransactionStatus>, Error>> {
     prop::result::maybe_ok(state(), Just(Error))
 }
 
@@ -144,7 +150,7 @@ fn tx_status_message() -> impl Strategy<Value = TxStatusMessage> {
 }
 
 /// Strategy to generate a TransactionStatus
-fn transaction_status() -> impl Strategy<Value = TransactionStatusPreconfirmations> {
+fn transaction_status() -> impl Strategy<Value = TransactionStatus> {
     prop_oneof![
         Just(submitted()),
         Just(success()),
@@ -223,29 +229,22 @@ fn transaction_status_change_model(
 
 /// This function models the behavior of the real function by determining the next transaction status.
 /// Takes a `TransactionStatus` and returns a `Flow` value based on the given status.
-/// If the status is `Submitted`, the function returns a `Flow::Continue` with `Submitted`.
-/// If the status is `Success`, `SqueezedOut`, or `Failed`, the function returns a `Flow::Break` with the corresponding `FinalTxStatus`.
-fn next_state(state: TransactionStatusPreconfirmations) -> Flow {
+/// The flow continues only for `Submitted` status, otherwise it breaks with appropriate status.
+fn next_state(state: TransactionStatus) -> Flow {
     match state {
-        TransactionStatusPreconfirmations::Submitted { .. } => Flow::Continue(Submitted),
-        TransactionStatusPreconfirmations::Success { .. } => {
-            Flow::Break(FinalTxStatus::Success)
+        TransactionStatus::Submitted { .. } => Flow::Continue(Submitted),
+        TransactionStatus::Success { .. } => Flow::Break(FinalTxStatus::Success),
+        TransactionStatus::SuccessDuringBlockProduction { .. } => {
+            Flow::Break(FinalTxStatus::SuccessDuringBlockProduction)
         }
-        TransactionStatusPreconfirmations::SuccessDuringBlockProduction { .. } => {
-            Flow::Break(FinalTxStatus::Success)
+        TransactionStatus::Failure { .. } => Flow::Break(FinalTxStatus::Failed),
+        TransactionStatus::FailureDuringBlockProduction { .. } => {
+            Flow::Break(FinalTxStatus::FailureDuringBlockProduction)
         }
-        TransactionStatusPreconfirmations::Failure { .. } => {
-            Flow::Break(FinalTxStatus::Failed)
+        TransactionStatus::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
+        TransactionStatus::SqueezedOutDuringBlockProduction { .. } => {
+            Flow::Break(FinalTxStatus::SqueezedOutDuringBlockProduction)
         }
-        TransactionStatusPreconfirmations::FailureDuringBlockProduction { .. } => {
-            Flow::Break(FinalTxStatus::Failed)
-        }
-        TransactionStatusPreconfirmations::SqueezedOut { .. } => {
-            Flow::Break(FinalTxStatus::Squeezed)
-        }
-        TransactionStatusPreconfirmations::SqueezedOutDuringBlockProduction {
-            ..
-        } => Flow::Break(FinalTxStatus::Squeezed),
     }
 }
 
@@ -260,10 +259,7 @@ thread_local!(static RT: tokio::runtime::Runtime =
 /// Property-based test for transaction_status_change
 #[proptest]
 fn test_tsc(
-    #[strategy(state_result())] state: Result<
-        Option<TransactionStatusPreconfirmations>,
-        Error,
-    >,
+    #[strategy(state_result())] state: Result<Option<TransactionStatus>, Error>,
     #[strategy(input_stream())] stream: Vec<TxStatusMessage>,
 ) {
     test_tsc_inner(state, stream)
@@ -271,7 +267,7 @@ fn test_tsc(
 
 /// Helper function called by test_tsc to actually run the tests
 fn test_tsc_inner(
-    state: Result<Option<TransactionStatusPreconfirmations>, Error>,
+    state: Result<Option<TransactionStatus>, Error>,
     stream: Vec<TxStatusMessage>,
 ) {
     let model_out: Vec<_> = transaction_status_change_model(
@@ -315,19 +311,19 @@ impl From<crate::schema::tx::types::TransactionStatus> for TxStatus {
                         TxStatus::Final(FinalTxStatus::Success)
                     }
                     crate::schema::tx::types::TransactionStatus::SuccessDuringBlockProduction(_) => {
-                        TxStatus::Final(FinalTxStatus::Success)
+                        TxStatus::Final(FinalTxStatus::SuccessDuringBlockProduction)
                     }
             crate::schema::tx::types::TransactionStatus::SqueezedOut(_) => {
                         TxStatus::Final(FinalTxStatus::Squeezed)
                     }
                     crate::schema::tx::types::TransactionStatus::SqueezedOutDuringBlockProduction(_) => {
-                        TxStatus::Final(FinalTxStatus::Squeezed)
+                        TxStatus::Final(FinalTxStatus::SqueezedOutDuringBlockProduction)
                     }
             crate::schema::tx::types::TransactionStatus::Failure(_) => {
                         TxStatus::Final(FinalTxStatus::Failed)
                     }
                     crate::schema::tx::types::TransactionStatus::FailureDuringBlockProduction(_) => {
-                        TxStatus::Final(FinalTxStatus::Failed)
+                        TxStatus::Final(FinalTxStatus::FailureDuringBlockProduction)
                     }
         }
     }

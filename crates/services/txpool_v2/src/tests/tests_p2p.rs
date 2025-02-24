@@ -13,7 +13,7 @@ use fuel_core_types::{
             GossipsubMessageAcceptance,
             PeerId,
         },
-        txpool::TransactionStatusPreconfirmations,
+        txpool::TransactionStatus,
     },
 };
 use std::{
@@ -206,9 +206,7 @@ async fn can_insert_from_p2p() {
     let res = receiver.next().await;
     assert!(matches!(
         res,
-        Some(TxStatusMessage::Status(
-            TransactionStatusPreconfirmations::Submitted { .. }
-        ))
+        Some(TxStatusMessage::Status(TransactionStatus::Submitted { .. }))
     ));
 
     // fetch tx from pool
@@ -257,9 +255,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
     assert!(
         matches!(
             update,
-            Some(TxStatusMessage::Status(
-                TransactionStatusPreconfirmations::Submitted { .. }
-            ))
+            Some(TxStatusMessage::Status(TransactionStatus::Submitted { .. }))
         ),
         "Got {:?}",
         update
@@ -295,9 +291,7 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     let res = receiver.next().await;
     assert!(matches!(
         res,
-        Some(TxStatusMessage::Status(
-            TransactionStatusPreconfirmations::Submitted { .. }
-        ))
+        Some(TxStatusMessage::Status(TransactionStatus::Submitted { .. }))
     ));
 
     // verify tx was not broadcast to p2p

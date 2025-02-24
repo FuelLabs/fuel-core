@@ -4,7 +4,7 @@ use clap::Parser;
 use fuel_core::{
     chain_config::TESTNET_WALLET_SECRETS,
     combined_database::CombinedDatabase,
-    schema::tx::types::TransactionStatusPreconfirmations,
+    schema::tx::types::TransactionStatus,
     service::{
         config::fuel_core_importer::ports::Validator,
         FuelService,
@@ -109,10 +109,7 @@ async fn validate_block_at_any_height__only_transfers() -> anyhow::Result<()> {
         let mut blocks = node.shared.block_importer.events();
         let tx = transfer_transaction(MIN_AMOUNT, &mut rng);
         let result = node.submit_and_await_commit(tx).await.unwrap();
-        assert!(matches!(
-            result,
-            TransactionStatusPreconfirmations::Success(_)
-        ));
+        assert!(matches!(result, TransactionStatus::Success(_)));
 
         let block = blocks.next().await.unwrap();
         let block_height = *block.shared_result.sealed_block.entity.header().height();
@@ -188,7 +185,7 @@ async fn rollback_existing_chain_to_target_height_and_verify(
 
         let result = node.submit_and_await_commit(tx).await.unwrap();
         assert!(
-            matches!(result, TransactionStatusPreconfirmations::Success(_)),
+            matches!(result, TransactionStatus::Success(_)),
             "Transaction got unexpected status {:?}",
             result
         );
@@ -347,10 +344,7 @@ async fn backup_and_restore__should_work_with_state_rewind() -> anyhow::Result<(
         let mut blocks = node.shared.block_importer.events();
         let tx = transfer_transaction(MIN_AMOUNT, &mut rng);
         let result = node.submit_and_await_commit(tx).await.unwrap();
-        assert!(matches!(
-            result,
-            TransactionStatusPreconfirmations::Success(_)
-        ));
+        assert!(matches!(result, TransactionStatus::Success(_)));
 
         let block = blocks.next().await.unwrap();
         let block_height = *block.shared_result.sealed_block.entity.header().height();

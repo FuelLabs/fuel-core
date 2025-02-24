@@ -6,7 +6,7 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types::Bytes32,
-    services::txpool::TransactionStatusPreconfirmations as TxPoolTxStatus,
+    services::txpool::TransactionStatus as TxPoolTxStatus,
 };
 use futures::{
     Stream,
@@ -39,9 +39,7 @@ impl FuelService {
     pub async fn submit_and_status_change(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<
-        impl Stream<Item = anyhow::Result<TransactionStatus>> + '_,
-    > {
+    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>> + '_> {
         let id = tx.id(&self
             .shared
             .config
@@ -67,10 +65,7 @@ impl FuelService {
             .consensus_parameters
             .chain_id());
         let stream = self.transaction_status_change(id).await?.filter(|status| {
-            futures::future::ready(!matches!(
-                status,
-                Ok(TransactionStatus::Submitted(_))
-            ))
+            futures::future::ready(!matches!(status, Ok(TransactionStatus::Submitted(_))))
         });
         futures::pin_mut!(stream);
         self.submit(tx).await?;
@@ -84,9 +79,7 @@ impl FuelService {
     pub async fn transaction_status_change(
         &self,
         id: Bytes32,
-    ) -> anyhow::Result<
-        impl Stream<Item = anyhow::Result<TransactionStatus>> + '_,
-    > {
+    ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>> + '_> {
         let txpool = &self.shared.txpool_shared_state;
         let db = self.shared.database.off_chain().latest_view()?;
         let rx = txpool.tx_update_subscribe(id)?;

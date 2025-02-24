@@ -86,7 +86,7 @@ use fuel_core_types::{
         },
         txpool::{
             self,
-            TransactionStatusPreconfirmations as TxStatus,
+            TransactionStatus as TxStatus,
         },
     },
     tai64::Tai64,
@@ -344,9 +344,7 @@ impl TransactionStatus {
                 total_fee,
             }),
             TxStatus::SqueezedOut { reason } => {
-                TransactionStatus::SqueezedOut(SqueezedOutStatus {
-                    reason,
-                })
+                TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
             }
             TxStatus::Failure {
                 block_height,
@@ -406,9 +404,9 @@ impl From<TransactionStatus> for TxStatus {
                 total_gas,
                 total_fee,
             },
-            TransactionStatus::SqueezedOut(SqueezedOutStatus {
-                reason,
-            }) => TxStatus::SqueezedOut { reason },
+            TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
+                TxStatus::SqueezedOut { reason }
+            }
             TransactionStatus::Failure(FailureStatus {
                 block_height,
                 time,
@@ -1086,7 +1084,7 @@ pub(crate) async fn get_tx_status(
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query
         .tx_status(&id)
-        .into_api_result::<txpool::TransactionStatusPreconfirmations, StorageError>()?
+        .into_api_result::<txpool::TransactionStatus, StorageError>()?
     {
         Some(status) => {
             let status = TransactionStatus::new(id, status);
@@ -1098,11 +1096,9 @@ pub(crate) async fn get_tx_status(
                 .await
                 .map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
             match submitted_time {
-                Some(submitted_time) => {
-                    Ok(Some(TransactionStatus::Submitted(
-                        SubmittedStatus(submitted_time),
-                    )))
-                }
+                Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
+                    SubmittedStatus(submitted_time),
+                ))),
                 _ => Ok(None),
             }
         }

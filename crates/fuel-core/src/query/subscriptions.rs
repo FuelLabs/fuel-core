@@ -3,7 +3,7 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     fuel_types::Bytes32,
-    services::txpool::TransactionStatusPreconfirmations,
+    services::txpool::TransactionStatus,
 };
 use futures::{
     stream::BoxStream,
@@ -20,7 +20,7 @@ pub(crate) trait TxnStatusChangeState {
     async fn get_tx_status(
         &self,
         id: Bytes32,
-    ) -> StorageResult<Option<TransactionStatusPreconfirmations>>;
+    ) -> StorageResult<Option<TransactionStatus>>;
 }
 
 #[tracing::instrument(skip(state, stream), fields(transaction_id = %transaction_id))]
@@ -55,7 +55,7 @@ where
             // `Submitted`.
             if !matches!(
                 status,
-                TxStatusMessage::Status(TransactionStatusPreconfirmations::Submitted { .. })
+                TxStatusMessage::Status(TransactionStatus::Submitted { .. })
             ) {
                 if let Some(close) = close.take() {
                     let _ = close.send(());

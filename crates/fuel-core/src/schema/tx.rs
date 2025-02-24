@@ -420,9 +420,8 @@ impl TxStatusSubscription {
         &self,
         ctx: &'a Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
-    ) -> anyhow::Result<
-        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
-    > {
+    ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
+    {
         let txpool = ctx.data_unchecked::<TxPool>();
         let rx = txpool.tx_update_subscribe(id.into())?;
         let query = ctx.read_view()?;
@@ -448,9 +447,7 @@ impl TxStatusSubscription {
         let subscription = submit_and_await_status(ctx, tx).await?;
 
         Ok(subscription
-            .skip_while(|event| {
-                matches!(event, Ok(TransactionStatus::Submitted(..)))
-            })
+            .skip_while(|event| matches!(event, Ok(TransactionStatus::Submitted(..))))
             .take(1))
     }
 
@@ -508,7 +505,7 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(
         &self,
         id: Bytes32,
-    ) -> StorageResult<Option<txpool::TransactionStatusPreconfirmations>> {
+    ) -> StorageResult<Option<txpool::TransactionStatus>> {
         match self.query.tx_status(&id) {
             Ok(status) => Ok(Some(status.into())),
             Err(StorageError::NotFound(_, _)) => Ok(self
@@ -516,11 +513,7 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
                 .submission_time(id)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?
-                .map(
-                    |time| txpool::TransactionStatusPreconfirmations::Submitted {
-                        timestamp: time,
-                    },
-                )),
+                .map(|time| txpool::TransactionStatus::Submitted { timestamp: time })),
             Err(err) => Err(err),
         }
     }
