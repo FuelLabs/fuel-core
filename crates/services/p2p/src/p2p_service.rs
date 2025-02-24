@@ -125,7 +125,7 @@ pub struct FuelP2PService {
     /// to the peer that requested it.
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<V2ResponseMessage>>,
 
-    /// `PostcardCodec` as GossipsubCodec for encoding and decoding of Gossipsub messages    
+    /// `PostcardCodec` as GossipsubCodec for encoding and decoding of Gossipsub messages
     gossipsub_codec: GossipsubMessageHandler<PostcardCodec>,
 
     /// Stores additional p2p network info
@@ -857,27 +857,33 @@ impl FuelP2PService {
     }
 }
 
-#[allow(clippy::cast_possible_truncation)]
 #[cfg(test)]
 mod tests {
+    #![allow(non_snake_case)]
+    #![allow(clippy::cast_possible_truncation)]
+
     use super::{
         FuelP2PService,
         PublishError,
     };
     use crate::{
-        codecs::{
-            gossipsub::GossipsubMessageHandler,
-            request_response::RequestResponseMessageHandler,
-        },
         config::Config,
         gossipsub::{
             messages::{
+                GossipTopicTag,
                 GossipsubBroadcastRequest,
                 GossipsubMessage,
             },
-            topics::NEW_TX_GOSSIP_TOPIC,
+            topics::{
+                NEW_TX_GOSSIP_TOPIC,
+                TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
+            },
         },
-        p2p_service::FuelP2PEvent,
+        p2p_service::{
+            FuelP2PEvent,
+            GossipsubMessageHandler,
+            RequestResponseMessageHandler,
+        },
         peer_manager::PeerInfo,
         request_response::messages::{
             RequestMessage,
@@ -906,6 +912,7 @@ mod tests {
         services::p2p::{
             GossipsubMessageAcceptance,
             NetworkableTransactionPool,
+            PreConfirmationMessage,
             Transactions,
         },
     };
@@ -929,7 +936,10 @@ mod tests {
     use rand::Rng;
     use std::{
         collections::HashSet,
-        ops::Range,
+        ops::{
+            Deref,
+            Range,
+        },
         sync::Arc,
         time::Duration,
     };
@@ -940,7 +950,6 @@ mod tests {
         watch,
     };
     use tracing_attributes::instrument;
-
     type P2PService = FuelP2PService;
 
     /// helper function for building FuelP2PService
@@ -1112,9 +1121,9 @@ mod tests {
                 assert_eq!(node_a.peer_manager().total_peers_connected(), 0);
             }
         })
-        .await
-        // Then
-        .expect_err("The node should not connect to itself");
+            .await
+            // Then
+            .expect_err("The node should not connect to itself");
         assert_eq!(node_b.peer_manager().total_peers_connected(), 0);
     }
 
@@ -1449,7 +1458,7 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn gossipsub_broadcast_tx_with_accept() {
+    async fn gossipsub_broadcast_tx_with_accept__new_tx() {
         for _ in 0..100 {
             tokio::time::timeout(
                 Duration::from_secs(5),
@@ -1468,13 +1477,51 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn gossipsub_broadcast_tx_with_reject() {
+    async fn gossipsub_broadcast_tx_with_accept__tx_confirmations() {
+        for _ in 0..100 {
+            tokio::time::timeout(
+                Duration::from_secs(20),
+                gossipsub_broadcast(
+                    GossipsubBroadcastRequest::TxPreConfirmations(Arc::new(
+                        PreConfirmationMessage::default_test_confirmation(),
+                    )),
+                    GossipsubMessageAcceptance::Accept,
+                    None,
+                ),
+            )
+            .await
+            .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn gossipsub_broadcast_tx_with_reject__new_tx() {
         for _ in 0..100 {
             tokio::time::timeout(
                 Duration::from_secs(5),
                 gossipsub_broadcast(
                     GossipsubBroadcastRequest::NewTx(Arc::new(
                         Transaction::default_test_tx(),
+                    )),
+                    GossipsubMessageAcceptance::Reject,
+                    None,
+                ),
+            )
+            .await
+            .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn gossipsub_broadcast_tx_with_reject__tx_confirmations() {
+        for _ in 0..100 {
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                gossipsub_broadcast(
+                    GossipsubBroadcastRequest::TxPreConfirmations(Arc::new(
+                        PreConfirmationMessage::default_test_confirmation(),
                     )),
                     GossipsubMessageAcceptance::Reject,
                     None,
@@ -1617,13 +1664,25 @@ mod tests {
             p2p_config.max_functional_peers_connected = connection_limit;
         }
 
-        let selected_topic: Sha256Topic = {
-            let topic = match broadcast_request {
-                GossipsubBroadcastRequest::NewTx(_) => NEW_TX_GOSSIP_TOPIC,
+        p2p_config.subscribe_to_pre_confirmations = true;
+
+        let (selected_topic, selected_tag): (Sha256Topic, GossipTopicTag) = {
+            let (topic, tag) = match broadcast_request {
+                GossipsubBroadcastRequest::NewTx(_) => {
+                    (NEW_TX_GOSSIP_TOPIC, GossipTopicTag::NewTx)
+                }
+                GossipsubBroadcastRequest::TxPreConfirmations(_) => (
+                    TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
+                    GossipTopicTag::TxPreConfirmations,
+                ),
             };
 
-            Topic::new(format!("{}/{}", topic, p2p_config.network_name))
+            (
+                Topic::new(format!("{}/{}", topic, p2p_config.network_name)),
+                tag,
+            )
         };
+        tracing::info!("Selected Topic: {:?}", selected_topic);
 
         let mut message_sent = false;
 
@@ -1657,16 +1716,21 @@ mod tests {
 
             tokio::select! {
                 node_a_event = node_a.next_event() => {
-                    if let Some(FuelP2PEvent::NewSubscription { peer_id, .. }) = &node_a_event {
-                        if peer_id == &node_b.local_peer_id {
+                    if let Some(FuelP2PEvent::NewSubscription { peer_id, tag }) = &node_a_event {
+                        if tag != &selected_tag {
+                            tracing::info!("Wrong tag, expected: {:?}, actual: {:?}", selected_tag, tag);
+                        } else if peer_id == &node_b.local_peer_id {
                             a_connected_to_b = true;
                         }
                     }
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
-                    if let Some(FuelP2PEvent::NewSubscription { peer_id, .. }) = &node_b_event {
-                        if peer_id == &node_c.local_peer_id {
+                    if let Some(FuelP2PEvent::NewSubscription { peer_id,tag,  }) = &node_b_event {
+                        tracing::info!("New subscription for peer_id: {:?} with tag: {:?}", peer_id, tag);
+                        if tag != &selected_tag {
+                            tracing::info!("Wrong tag, expected: {:?}, actual: {:?}", selected_tag, tag);
+                        } else if peer_id == &node_c.local_peer_id {
                             b_connected_to_c = true;
                         }
                     }
@@ -1682,15 +1746,7 @@ mod tests {
                             panic!("Wrong Topic");
                         }
 
-                        // received value should match sent value
-                        match &message {
-                            GossipsubMessage::NewTx(tx) => {
-                                if tx != &Transaction::default_test_tx() {
-                                    tracing::error!("Wrong p2p message {:?}", message);
-                                    panic!("Wrong GossipsubMessage")
-                                }
-                            }
-                        }
+                        check_message_matches_request(&message, &broadcast_request);
 
                         // Node B received the correct message
                         // If we try to publish it again we will get `PublishError::Duplicate`
@@ -1726,6 +1782,22 @@ mod tests {
                     }
                 }
             };
+        }
+    }
+
+    fn check_message_matches_request(
+        message: &GossipsubMessage,
+        expected: &GossipsubBroadcastRequest,
+    ) {
+        match (message, expected) {
+            (GossipsubMessage::NewTx(received), GossipsubBroadcastRequest::NewTx(requested)) => {
+                assert_eq!(requested.deref(), received, "Both messages were `NewTx`s, but the received message did not match the requested message");
+            }
+            (
+                GossipsubMessage::TxPreConfirmations(received),
+                GossipsubBroadcastRequest::TxPreConfirmations(requested),
+            ) => assert_eq!(requested.deref(), received, "Both messages were `Confirmations`, but the received message did not match the requested message"),
+            _ => panic!("Message does not match the expected request, expected: {:?}, actual: {:?}", expected, message),
         }
     }
 
@@ -2160,16 +2232,16 @@ mod tests {
     #[tokio::test]
     async fn gossipsub_peer_limit_works() {
         tokio::time::timeout(
-                Duration::from_secs(5),
-                gossipsub_broadcast(
-                    GossipsubBroadcastRequest::NewTx(Arc::new(
-                        Transaction::default_test_tx(),
-                    )),
-                    GossipsubMessageAcceptance::Accept,
-                    Some(1) // limit to 1 peer, therefore the function will timeout, as it will not be able to propagate the message
-                ),
-            )
-                .await.expect_err("Should have timed out");
+            Duration::from_secs(5),
+            gossipsub_broadcast(
+                GossipsubBroadcastRequest::NewTx(Arc::new(
+                    Transaction::default_test_tx(),
+                )),
+                GossipsubMessageAcceptance::Accept,
+                Some(1) // limit to 1 peer, therefore the function will timeout, as it will not be able to propagate the message
+            ),
+        )
+            .await.expect_err("Should have timed out");
     }
 
     #[tokio::test]
