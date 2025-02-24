@@ -146,7 +146,7 @@
     "block_height": 0,
     "da_block_height": 0,
     "consensus_parameters_version": 0,
-    "state_transition_version": 11,
+    "state_transition_version": 10,
     "blocks_root": "801049f397f4fae0edc37c3496f0e78bd2c6a02d3971b4627e8224d257e19258"
   }
 }

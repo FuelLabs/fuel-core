@@ -118,16 +118,28 @@ pub struct Executor<S, R> {
 mod private {
     use std::sync::OnceLock;
     use wasmtime::{
+        Config,
         Engine,
         Module,
     };
 
     /// The default engine for the WASM executor. It is used to compile the WASM bytecode.
-    pub(crate) static DEFAULT_ENGINE: OnceLock<Engine> = OnceLock::new();
+    static DEFAULT_ENGINE: OnceLock<Engine> = OnceLock::new();
 
     /// The default module compiles the WASM bytecode of the native executor.
     /// It is used to create the WASM instance of the executor.
     pub(crate) static COMPILED_UNDERLYING_EXECUTOR: OnceLock<Module> = OnceLock::new();
+
+    pub(crate) fn default_engine() -> &'static Engine {
+        DEFAULT_ENGINE.get_or_init(|| {
+            let mut config = Config::default();
+            // Enables compilation caching.
+            config
+                .cache_config_load_default()
+                .expect("Failed to load the default cache config");
+            Engine::new(&config).expect("Failed to create the default engine")
+        })
+    }
 }
 
 #[cfg(feature = "wasm-executor")]
@@ -214,9 +226,7 @@ impl<S, R> Executor<S, R> {
             relayer_view_provider,
             config: Arc::new(config),
             #[cfg(feature = "wasm-executor")]
-            engine: private::DEFAULT_ENGINE
-                .get_or_init(wasmtime::Engine::default)
-                .clone(),
+            engine: private::default_engine().clone(),
             #[cfg(feature = "wasm-executor")]
             execution_strategy: ExecutionStrategy::Native,
             #[cfg(feature = "wasm-executor")]
@@ -230,7 +240,7 @@ impl<S, R> Executor<S, R> {
         relayer_view_provider: R,
         config: Config,
     ) -> Self {
-        let engine = private::DEFAULT_ENGINE.get_or_init(wasmtime::Engine::default);
+        let engine = private::default_engine();
         let module = private::COMPILED_UNDERLYING_EXECUTOR.get_or_init(|| {
             wasmtime::Module::new(engine, crate::WASM_BYTECODE)
                 .expect("Failed to validate the WASM bytecode")
@@ -814,6 +824,9 @@ where
     /// This is a slow operation, and the cached result should be used if possible,
     /// for instancy by calling `get_module` below.
     #[cfg(feature = "wasm-executor")]
+    // TODO: This methods may compile the WASM binary inside. It can take a lot of time,
+    //  blocking the runtime. Instead, we should make this function async and compile
+    //  the WASM in a separate thread.
     fn get_module_by_root_and_validate(
         &self,
         bytecode_root: Bytes32,
@@ -838,7 +851,7 @@ where
 
         // If the bytecode is the same as the native executor, we don't need to compile it.
         if bytecode == crate::WASM_BYTECODE {
-            let engine = private::DEFAULT_ENGINE.get_or_init(wasmtime::Engine::default);
+            let engine = private::default_engine();
             let module = private::COMPILED_UNDERLYING_EXECUTOR.get_or_init(|| {
                 wasmtime::Module::new(engine, crate::WASM_BYTECODE)
                     .expect("Failed to validate the WASM bytecode")

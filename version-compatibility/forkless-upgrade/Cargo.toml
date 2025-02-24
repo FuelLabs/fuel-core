@@ -16,6 +16,7 @@ tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
 
 # Neutral deps
+fuel-core = { path = "../../crates/fuel-core", features = ["test-helpers"] }
 fuel-core-trace = { path = "../../crates/trace" }
 fuel-crypto = { version = "0.57.0" }
 fuel-tx = { version = "0.57.0", features = ["random"] }
