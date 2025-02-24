@@ -1,0 +1,11 @@
+use thiserror::Error;
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+
+/// Errors that can occur during the pre-confirmation process.
+#[derive(Error, Debug)]
+pub enum Error {
+    // /// Error that occurs when the parent signature is invalid.
+    // #[error("Invalid parent signature: {0}")]
+    // InvalidParentSignature(String),
+}
