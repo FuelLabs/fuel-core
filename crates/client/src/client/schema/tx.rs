@@ -187,12 +187,19 @@ impl TryFrom<ProgramState> for fuel_vm::ProgramState {
 pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatus),
+    SuccessDuringBlockProductionStatus(SuccessDuringBlockProductionStatus),
     SqueezedOutStatus(SqueezedOutStatus),
+    SqueezedOutDuringBlockProductionStatus(SqueezedOutDuringBlockProductionStatus),
     FailureStatus(FailureStatus),
+    FailureDuringBlockProductionStatus(FailureDuringBlockProductionStatus),
     #[cynic(fallback)]
     Unknown,
 }
 
+// TODO[RC]: In the future we might be able to add "tx_id" to the "SuccessDuringBlockProductionStatus"
+// and "FailureDuringBlockProductionStatus" variants, which will enable us to
+// provide "SuccessDuringBlockProductionStatusWithTransaction" and "FailureDuringBlockProductionStatusWithTransaction"
+// variants.
 #[allow(clippy::enum_variant_names)]
 #[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(
@@ -202,8 +209,11 @@ pub enum TransactionStatus {
 pub enum StatusWithTransaction {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatusWithTransaction),
+    SuccessDuringBlockProductionStatus(SuccessDuringBlockProductionStatus),
     SqueezedOutStatus(SqueezedOutStatus),
+    SqueezedOutDuringBlockProductionStatus(SqueezedOutDuringBlockProductionStatus),
     FailureStatus(FailureStatusWithTransaction),
+    FailureDuringBlockProductionStatus(FailureDuringBlockProductionStatus),
     #[cynic(fallback)]
     Unknown,
 }
@@ -239,6 +249,12 @@ pub struct SuccessStatusWithTransaction {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
+pub struct SuccessDuringBlockProductionStatus {
+    pub block_height: U32,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub block_height: U32,
     pub time: Tai64Timestamp,
@@ -264,7 +280,19 @@ pub struct FailureStatusWithTransaction {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
+pub struct FailureDuringBlockProductionStatus {
+    pub block_height: U32,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SqueezedOutStatus {
+    pub reason: String,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct SqueezedOutDuringBlockProductionStatus {
     pub reason: String,
 }
 

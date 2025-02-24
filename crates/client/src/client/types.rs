@@ -101,8 +101,6 @@ pub struct StatusWithTransactionResponse {
     pub status: StatusWithTransaction,
 }
 
-// TODO[RC]: Update this to also distinguish between legacy TransactionStatusStorage (used in Storage)
-// and the new TransactionStatusWithPreconfirmations (used in the API)
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TransactionStatus {
     Submitted {
@@ -116,7 +114,13 @@ pub enum TransactionStatus {
         total_gas: u64,
         total_fee: u64,
     },
+    SuccessDuringBlockProduction {
+        block_height: BlockHeight,
+    },
     SqueezedOut {
+        reason: String,
+    },
+    SqueezedOutDuringBlockProduction {
         reason: String,
     },
     Failure {
@@ -127,6 +131,9 @@ pub enum TransactionStatus {
         receipts: Vec<Receipt>,
         total_gas: u64,
         total_fee: u64,
+    },
+    FailureDuringBlockProduction {
+        block_height: BlockHeight,
     },
 }
 
@@ -150,6 +157,11 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
             },
+            SchemaTxStatus::SuccessDuringBlockProductionStatus(s) => {
+                TransactionStatus::SuccessDuringBlockProduction {
+                    block_height: s.block_height.into(),
+                }
+            }
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
                 block_height: s.block_height.into(),
                 time: s.time.0,
@@ -163,8 +175,16 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
             },
+            SchemaTxStatus::FailureDuringBlockProductionStatus(s) => {
+                TransactionStatus::FailureDuringBlockProduction {
+                    block_height: s.block_height.into(),
+                }
+            }
             SchemaTxStatus::SqueezedOutStatus(s) => {
                 TransactionStatus::SqueezedOut { reason: s.reason }
+            }
+            SchemaTxStatus::SqueezedOutDuringBlockProductionStatus(s) => {
+                TransactionStatus::SqueezedOutDuringBlockProduction { reason: s.reason }
             }
             SchemaTxStatus::Unknown => {
                 return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
@@ -187,7 +207,13 @@ pub enum StatusWithTransaction {
         total_gas: u64,
         total_fee: u64,
     },
+    SuccessDuringBlockProduction {
+        block_height: BlockHeight,
+    },
     SqueezedOut {
+        reason: String,
+    },
+    SqueezedOutDuringBlockProduction {
         reason: String,
     },
     Failure {
@@ -199,6 +225,9 @@ pub enum StatusWithTransaction {
         receipts: Vec<Receipt>,
         total_gas: u64,
         total_fee: u64,
+    },
+    FailureDuringBlockProduction {
+        block_height: BlockHeight,
     },
 }
 
@@ -223,6 +252,13 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
             },
+
+            SchemaStatusWithTx::SuccessDuringBlockProductionStatus(s) => {
+                StatusWithTransaction::SuccessDuringBlockProduction {
+                    block_height: s.block_height.into(),
+                }
+            }
+
             SchemaStatusWithTx::FailureStatus(s) => StatusWithTransaction::Failure {
                 transaction: s.transaction.try_into()?,
                 block_height: s.block_height.into(),
@@ -237,8 +273,20 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
             },
+
+            SchemaStatusWithTx::FailureDuringBlockProductionStatus(s) => {
+                StatusWithTransaction::FailureDuringBlockProduction {
+                    block_height: s.block_height.into(),
+                }
+            }
+
             SchemaStatusWithTx::SqueezedOutStatus(s) => {
                 StatusWithTransaction::SqueezedOut { reason: s.reason }
+            }
+            SchemaStatusWithTx::SqueezedOutDuringBlockProductionStatus(s) => {
+                StatusWithTransaction::SqueezedOutDuringBlockProduction {
+                    reason: s.reason,
+                }
             }
             SchemaStatusWithTx::Unknown => {
                 return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
