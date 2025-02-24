@@ -167,6 +167,8 @@ async fn _gas_price_updater__can_recover_on_startup_when_gas_price_db_is_behind(
         Some(BlockHeight::new(height))
     );
 
+    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+
     let diff = height - lower_height;
     for _ in 0..diff {
         let _ = database.gas_price().rollback_last_block();

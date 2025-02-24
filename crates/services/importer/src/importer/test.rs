@@ -11,7 +11,10 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
-    transactional::Changes,
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
     Error as StorageError,
     MerkleRoot,
     Result as StorageResult,
@@ -51,13 +54,18 @@ mockall::mock! {
         where
             Self: 'a;
 
-        fn storage_transaction(&mut self, changes: Changes) -> MockDatabaseTransaction;
+        fn storage_transaction(&self, changes: Changes) -> MockDatabaseTransaction;
     }
 
     impl ImporterDatabase for Database {
         fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
 
         fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
+
+        fn commit_changes(
+            &mut self,
+            changes: StorageChanges,
+        ) -> StorageResult<()>;
     }
 }
 
@@ -89,7 +97,7 @@ fn poa_block(height: u32) -> SealedBlock {
     }
 }
 
-fn underlying_db<R>(result: R) -> impl Fn() -> MockDatabase
+fn underlying_db<R>(result: R, commits: usize) -> impl Fn() -> MockDatabase
 where
     R: Fn() -> StorageResult<Option<u32>> + Send + Clone + 'static,
 {
@@ -101,6 +109,9 @@ where
             .returning(move || result_height().map(|v| v.map(Into::into)));
         db.expect_latest_block_root()
             .returning(move || result_root().map(|v| v.map(u32_to_merkle_root)));
+        db.expect_commit_changes()
+            .times(commits)
+            .returning(|_| Ok(()));
         db
     }
 }
@@ -108,11 +119,10 @@ where
 fn db_transaction<H, B>(
     height: H,
     store_block: B,
-    commits: usize,
-) -> impl Fn() -> MockDatabaseTransaction
+) -> impl Fn() -> MockDatabaseTransaction + Sync + Send + 'static + Clone
 where
-    H: Fn() -> StorageResult<Option<u32>> + Send + Clone + 'static,
-    B: Fn() -> StorageResult<bool> + Send + Clone + 'static,
+    H: Fn() -> StorageResult<Option<u32>> + Sync + Send + 'static + Clone,
+    B: Fn() -> StorageResult<bool> + Sync + Send + 'static + Clone,
 {
     move || {
         let height = height.clone();
@@ -122,7 +132,7 @@ where
             .returning(move || height().map(|v| v.map(u32_to_merkle_root)));
         db.expect_store_new_block()
             .returning(move |_, _| store_block());
-        db.expect_commit().times(commits).returning(|| Ok(()));
+        db.expect_into_changes().returning(Changes::default);
         db
     }
 }
@@ -191,43 +201,43 @@ where
 //////////////// //////////// Genesis Block /////////// ////////////////
 #[test_case(
     genesis(0),
-    underlying_db(ok(None)),
-    db_transaction(ok(None), ok(true), 1)
+    underlying_db(ok(None), 1),
+    db_transaction(ok(None), ok(true))
     => Ok(());
     "successfully imports genesis block when latest block not found"
 )]
 #[test_case(
     genesis(113),
-    underlying_db(ok(None)),
-    db_transaction(ok(None), ok(true), 1)
+    underlying_db(ok(None), 1),
+    db_transaction(ok(None), ok(true))
     => Ok(());
-    "successfully imports block at arbitrary height when executor db expects it and last block not found" 
+    "successfully imports block at arbitrary height when executor db expects it and last block not found"
 )]
 #[test_case(
     genesis(0),
-    underlying_db(storage_failure),
-    db_transaction(ok(Some(0)), ok(true), 0)
+    underlying_db(storage_failure, 0),
+    db_transaction(ok(Some(0)), ok(true))
     => Err(storage_failure_error());
     "fails to import genesis when underlying database fails"
 )]
 #[test_case(
     genesis(0),
-    underlying_db(ok(Some(0))),
-    db_transaction(ok(Some(0)), ok(true), 0)
+    underlying_db(ok(Some(0)), 0),
+    db_transaction(ok(Some(0)), ok(true))
     => Err(Error::InvalidUnderlyingDatabaseGenesisState);
     "fails to import genesis block when already exists"
 )]
 #[test_case(
     genesis(1),
-    underlying_db(ok(None)),
-    db_transaction(ok(Some(0)), ok(true), 0)
+    underlying_db(ok(None), 0),
+    db_transaction(ok(Some(0)), ok(true))
     => Err(Error::InvalidDatabaseStateAfterExecution(None, Some(u32_to_merkle_root(0))));
     "fails to import genesis block when next height is not 0"
 )]
 #[test_case(
     genesis(0),
-    underlying_db(ok(None)),
-    db_transaction(ok(None), ok(false), 0)
+    underlying_db(ok(None), 0),
+    db_transaction(ok(None), ok(false))
     => Err(Error::NotUnique(0u32.into()));
     "fails to import genesis block when block exists for height 0"
 )]
@@ -235,89 +245,95 @@ where
 async fn commit_result_genesis(
     sealed_block: SealedBlock,
     underlying_db: impl Fn() -> MockDatabase,
-    db_transaction: impl Fn() -> MockDatabaseTransaction,
+    db_transaction: impl Fn() -> MockDatabaseTransaction + Sync + Send + 'static,
 ) -> Result<(), Error> {
-    commit_result_assert(sealed_block, underlying_db(), db_transaction()).await
+    commit_result_assert(sealed_block, underlying_db(), db_transaction).await
 }
 
 //////////////////////////// PoA Block ////////////////////////////
 #[test_case(
     poa_block(1),
-    underlying_db(ok(Some(0))),
-    db_transaction(ok(Some(0)), ok(true), 1)
+    underlying_db(ok(Some(0)), 1),
+    db_transaction(ok(Some(0)), ok(true))
     => Ok(());
     "successfully imports block at height 1 when latest block is genesis"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(Some(112))),
-    db_transaction(ok(Some(112)), ok(true), 1)
+    underlying_db(ok(Some(112)), 1),
+    db_transaction(ok(Some(112)), ok(true))
     => Ok(());
     "successfully imports block at arbitrary height when latest block height is one fewer and executor db expects it"
 )]
 #[test_case(
     poa_block(0),
-    underlying_db(ok(Some(0))),
-    db_transaction(ok(Some(1)), ok(true), 0)
+    underlying_db(ok(Some(0)), 0),
+    db_transaction(ok(Some(1)), ok(true))
     => Err(Error::ZeroNonGenericHeight);
     "fails to import PoA block with height 0"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(Some(111))),
-    db_transaction(ok(Some(113)), ok(true), 0)
+    underlying_db(ok(Some(111)), 0),
+    db_transaction(ok(Some(113)), ok(true))
     => Err(Error::IncorrectBlockHeight(112u32.into(), 113u32.into()));
     "fails to import block at height 113 when latest block height is 111"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(Some(114))),
-    db_transaction(ok(Some(113)), ok(true), 0)
+    underlying_db(ok(Some(114)), 0),
+    db_transaction(ok(Some(113)), ok(true))
     => Err(Error::IncorrectBlockHeight(115u32.into(), 113u32.into()));
     "fails to import block at height 113 when latest block height is 114"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(Some(112))),
-    db_transaction(ok(Some(114)), ok(true), 0)
+    underlying_db(ok(Some(112)), 0),
+    db_transaction(ok(Some(114)), ok(true))
     => Err(Error::InvalidDatabaseStateAfterExecution(Some(u32_to_merkle_root(112u32)), Some(u32_to_merkle_root(114u32))));
     "fails to import block 113 when executor db expects height 114"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(Some(112))),
-    db_transaction(storage_failure, ok(true), 0)
+    underlying_db(ok(Some(112)), 0),
+    db_transaction(storage_failure, ok(true))
     => Err(storage_failure_error());
     "fails to import block when executor db fails to find latest block"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(Some(112))),
-    db_transaction(ok(Some(112)), ok(false), 0)
+    underlying_db(ok(Some(112)), 0),
+    db_transaction(ok(Some(112)), ok(false))
     => Err(Error::NotUnique(113u32.into()));
     "fails to import block when block exists"
 )]
 #[test_case(
     poa_block(113),
-    underlying_db(ok(Some(112))),
-    db_transaction(ok(Some(112)), storage_failure, 0)
+    underlying_db(ok(Some(112)), 0),
+    db_transaction(ok(Some(112)), storage_failure)
     => Err(storage_failure_error());
     "fails to import block when executor db fails to find block"
 )]
 #[tokio::test]
-async fn commit_result_and_execute_and_commit_poa(
+async fn commit_result_and_execute_and_commit_poa<DbTransaction>(
     sealed_block: SealedBlock,
     underlying_db: impl Fn() -> MockDatabase,
-    db_transaction: impl Fn() -> MockDatabaseTransaction,
-) -> Result<(), Error> {
+    db_transaction: DbTransaction,
+) -> Result<(), Error>
+where
+    DbTransaction: Sync + Send + 'static,
+    DbTransaction: Fn() -> MockDatabaseTransaction,
+    DbTransaction: Clone,
+{
     // `execute_and_commit` and `commit_result` should have the same
     // validation rules(-> test cases) during committing the result.
-    let transaction = db_transaction();
+    let db_transaction_1 = db_transaction.clone();
     let commit_result =
-        commit_result_assert(sealed_block.clone(), underlying_db(), transaction).await;
-    let transaction = db_transaction();
+        commit_result_assert(sealed_block.clone(), underlying_db(), db_transaction_1)
+            .await;
     let mut db = underlying_db();
-    db.expect_storage_transaction().return_once(|_| transaction);
+    db.expect_storage_transaction()
+        .returning(move |_| db_transaction());
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block,
         db,
@@ -332,13 +348,14 @@ async fn commit_result_and_execute_and_commit_poa(
 async fn commit_result_assert(
     sealed_block: SealedBlock,
     mut underlying_db: MockDatabase,
-    db_transaction: MockDatabaseTransaction,
+    db_transaction: impl Fn() -> MockDatabaseTransaction + Sync + Send + 'static,
 ) -> Result<(), Error> {
     underlying_db
         .expect_storage_transaction()
-        .return_once(|_| db_transaction);
+        .returning(move |_| db_transaction());
     let expected_to_broadcast = sealed_block.clone();
-    let importer = Importer::default_config(underlying_db, (), ());
+    let importer =
+        Importer::default_config(underlying_db, executor(ex_result), verifier(ok(())));
     let uncommitted_result = UncommittedResult::new(
         ImportResult::new_from_local(sealed_block, vec![], vec![]),
         Default::default(),
@@ -388,14 +405,18 @@ async fn execute_and_commit_assert(
 
 #[tokio::test]
 async fn commit_result_fail_when_locked() {
-    let importer = Importer::default_config(MockDatabase::default(), (), ());
+    let importer = Importer::default_config(
+        MockDatabase::default(),
+        executor(ex_result),
+        verifier(ok(())),
+    );
     let uncommitted_result =
         UncommittedResult::new(ImportResult::default(), Default::default());
 
     let _guard = importer.lock();
     assert_eq!(
         importer.commit_result(uncommitted_result).await,
-        Err(Error::SemaphoreError(TryAcquireError::NoPermits))
+        Err(Error::Semaphore(TryAcquireError::NoPermits))
     );
 }
 
@@ -410,7 +431,7 @@ async fn execute_and_commit_fail_when_locked() {
     let _guard = importer.lock();
     assert_eq!(
         importer.execute_and_commit(Default::default()).await,
-        Err(Error::SemaphoreError(TryAcquireError::NoPermits))
+        Err(Error::Semaphore(TryAcquireError::NoPermits))
     );
 }
 
@@ -425,7 +446,7 @@ fn one_lock_at_the_same_time() {
     let _guard = importer.lock();
     assert_eq!(
         importer.lock().map(|_| ()),
-        Err(Error::SemaphoreError(TryAcquireError::NoPermits))
+        Err(Error::Semaphore(TryAcquireError::NoPermits))
     );
 }
 
@@ -475,16 +496,16 @@ where
         sealed_block.clone(),
         block_after_execution.clone(),
         verifier_result.clone(),
-    );
+    )
+    .await;
 
     // We tested commit part in the `commit_result_and_execute_and_commit_poa` so setup the
     // databases to always pass the committing part.
     let expected_height: u32 = (*sealed_block.entity.header().height()).into();
     let previous_height = expected_height.checked_sub(1).unwrap_or_default();
-    let mut db = underlying_db(ok(Some(previous_height)))();
-    db.expect_storage_transaction().return_once(move |_| {
-        db_transaction(ok(Some(previous_height)), ok(true), commits)()
-    });
+    let mut db = underlying_db(ok(Some(previous_height)), commits)();
+    db.expect_storage_transaction()
+        .returning(move |_| db_transaction(ok(Some(previous_height)), ok(true))());
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block,
         db,
@@ -496,7 +517,7 @@ where
     execute_and_commit_result
 }
 
-fn verify_and_execute_assert<P, V>(
+async fn verify_and_execute_assert<P, V>(
     sealed_block: SealedBlock,
     block_after_execution: P,
     verifier_result: V,
@@ -511,11 +532,14 @@ where
         verifier(verifier_result),
     );
 
-    importer.verify_and_execute_block(sealed_block).map(|_| ())
+    importer
+        .run_verify_and_execute_block(sealed_block)
+        .await
+        .map(|_| ())
 }
 
-#[test]
-fn verify_and_execute_allowed_when_locked() {
+#[tokio::test]
+async fn verify_and_execute_allowed_when_locked() {
     let importer = Importer::default_config(
         MockDatabase::default(),
         executor(ex_result),
@@ -523,5 +547,6 @@ fn verify_and_execute_allowed_when_locked() {
     );
 
     let _guard = importer.lock();
-    assert!(importer.verify_and_execute_block(poa_block(13)).is_ok());
+    let result = importer.run_verify_and_execute_block(poa_block(13)).await;
+    assert!(result.is_ok());
 }

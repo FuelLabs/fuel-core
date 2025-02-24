@@ -394,8 +394,7 @@ pub struct BlockProducerAdapter {
 
 #[derive(Clone)]
 pub struct BlockImporterAdapter {
-    pub block_importer:
-        Arc<fuel_core_importer::Importer<Database, ExecutorAdapter, VerifierAdapter>>,
+    pub block_importer: Arc<fuel_core_importer::Importer>,
 }
 
 impl BlockImporterAdapter {

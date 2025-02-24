@@ -6,7 +6,9 @@
 use fuel_core_types::services::block_importer::SharedImportResult;
 
 pub mod config;
+pub mod error;
 pub mod importer;
+pub mod local_runner;
 pub mod ports;
 
 pub use config::Config;
