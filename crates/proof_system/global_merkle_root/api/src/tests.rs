@@ -34,8 +34,7 @@ async fn schema__can_execute_valid_state_root_query() {
 
     let query = Query::new(storage);
     let schema = Schema::build(query, EmptyMutation, EmptySubscription).finish();
-    let request = "{ stateRoot(height: BLOCK_HEIGHT) }"
-        .replace("BLOCK_HEIGHT", &format!("\"{block_height}\""));
+    let request = "{ stateRoot(height: \"$\") }".replace("$", &block_height.to_string());
 
     // When
     let response = schema.execute(request).await;
@@ -44,7 +43,7 @@ async fn schema__can_execute_valid_state_root_query() {
     assert!(response.errors.is_empty());
     assert_eq!(
         response.data.to_string(),
-        "{stateRoot: \"0x0000000000000000000000000000000000000000000000000000000000000000\"}"
+        r#"{stateRoot: "0x0000000000000000000000000000000000000000000000000000000000000000"}"#
     );
 }
 
@@ -58,8 +57,7 @@ async fn schema__returns_error_on_invalid_state_root_query() {
 
     let query = Query::new(storage);
     let schema = Schema::build(query, EmptyMutation, EmptySubscription).finish();
-    let request = "{ stateGroot(eight: BLOCK_HEIGHT) }"
-        .replace("BLOCK_HEIGHT", &format!("\"{block_height}\""));
+    let request = "{ stateGroot(eight: \"$\") }".replace("$", &block_height.to_string());
 
     // When
     let response = schema.execute(request).await;
@@ -87,7 +85,10 @@ async fn service__can_serve_api() {
     let response = client.get_root_response_at(block_height).await;
 
     // Then
-    assert_eq!(response, "{\"data\":{\"stateRoot\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}}");
+    assert_eq!(
+        response,
+        r#"{"data":{"stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000"}}"#
+    );
 }
 
 #[derive(Default)]
@@ -130,8 +131,8 @@ impl TestClient {
             .post(url)
             .header("Content-Type", "application/json")
             .body(
-                r#"{"query":"{stateRoot(height: \"{$}\")}"}"#
-                .replace("$", &block_height.to_string())
+                r#"{"query":"{stateRoot(height: \"$\")}"}"#
+                    .replace("$", &block_height.to_string()),
             )
             .send()
             .await
