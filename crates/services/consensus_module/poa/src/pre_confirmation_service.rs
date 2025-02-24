@@ -1,3 +1,6 @@
+// TODO: Remove this
+#![allow(dead_code)]
+
 use crate::pre_confirmation_service::trigger::KeyRotationTrigger;
 use error::Result;
 use fuel_core_services::{
@@ -22,8 +25,8 @@ pub struct PreConfirmationTask<
     KeyRotationTrigger,
 > {
     tx_receiver: TxReceiver,
-    _broadcast: Broadcast,
-    _parent_signature: ParentSignature,
+    broadcast: Broadcast,
+    parent_signature: ParentSignature,
     key_generator: KeyGenerator,
     current_delegate_key: Key,
     key_rotation_trigger: KeyRotationTrigger,
@@ -31,7 +34,7 @@ pub struct PreConfirmationTask<
 
 #[async_trait::async_trait]
 pub trait TxReceiver: Send {
-    async fn receive(&mut self) -> Result<Vec<Transaction>>;
+    async fn _receive(&mut self) -> Result<Vec<Transaction>>;
 }
 
 #[async_trait::async_trait]
@@ -39,13 +42,9 @@ pub trait Broadcast: Send {
     async fn _broadcast<T: Send>(&self, data: T) -> Result<()>;
 }
 
-#[allow(dead_code)]
-pub struct Sealed<T> {
-    _phantom: std::marker::PhantomData<T>,
-}
-
 pub trait ParentSignature: Send {
-    fn _sign<T>(&self, data: T) -> Sealed<T>;
+    type SignedData<T>;
+    fn sign<T>(&self, data: T) -> Result<Self::SignedData<T>>;
 }
 
 #[async_trait::async_trait]
@@ -54,7 +53,7 @@ pub trait KeyGenerator: Send {
     async fn generate(&mut self) -> Result<Self::Key>;
 }
 
-pub trait SigningKey: Send {}
+pub trait SigningKey: Clone + Send {}
 
 impl<TxRcv, Brdcst, Parent, Gen, Key, Trigger>
     PreConfirmationTask<TxRcv, Brdcst, Parent, Gen, Key, Trigger>
@@ -69,13 +68,16 @@ where
     pub async fn _run(&mut self) -> Result<()> {
         tracing::debug!("Running pre-confirmation task");
         tokio::select! {
-            _txs = self.tx_receiver.receive() => {
-                tracing::debug!("Received transactions");
-                todo!();
-            }
+            // _txs = self.tx_receiver.receive() => {
+            //     tracing::debug!("Received transactions");
+            //     todo!();
+            // }
             _ = self.key_rotation_trigger.next_rotation() => {
                 tracing::debug!("Key rotation triggered");
-                self.current_delegate_key = self.key_generator.generate().await?;
+                let new_delegate_key = self.key_generator.generate().await?;
+                let _ = self.parent_signature.sign(new_delegate_key.clone())?;
+                // self.current_delegate_key = self.key_generator.generate().await?;
+
             }
         }
         Ok(())
