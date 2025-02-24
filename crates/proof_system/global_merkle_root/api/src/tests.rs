@@ -130,8 +130,8 @@ impl TestClient {
             .post(url)
             .header("Content-Type", "application/json")
             .body(
-                "{\"query\": \"{ stateRoot(height: \\\"BLOCK_HEIGHT\\\") }\"}"
-                    .replace("BLOCK_HEIGHT", &format!("{block_height}")),
+                r#"{"query":"{stateRoot(height: \"{$}\")}"}"#
+                .replace("$", &block_height.to_string())
             )
             .send()
             .await
