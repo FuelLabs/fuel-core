@@ -63,24 +63,28 @@ fn test_update_sender(
 #[test]
 fn test_update_sender_reg() {
     use Op::*;
-    use TransactionStatus::*;
     use TxStatusMessage::*;
 
     let ops = vec![
         Subscribe(0),
         Send(
             0,
-            Status(Success {
+            Status(TransactionStatus::Success {
                 block_height: Default::default(),
-                time: Tai64(0),
-                result: None,
+                block_timestamp: Tai64(0),
+                program_state: None,
                 receipts: vec![],
                 total_gas: 0,
                 total_fee: 0,
             }),
         ),
         Recv(0),
-        Send(0, Status(Submitted { time: Tai64(0) })),
+        Send(
+            0,
+            Status(TransactionStatus::Submitted {
+                timestamp: Tai64(0),
+            }),
+        ),
         Recv(0),
     ];
     test_update_sender_inner(ops);
