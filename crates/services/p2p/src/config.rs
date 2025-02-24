@@ -88,17 +88,20 @@ pub struct Config<State = Initialized> {
     /// Should the node only accept connection requests from the Reserved Nodes
     pub reserved_nodes_only_mode: bool,
 
-    // `PeerManager` fields
-    /// Max number of unique peers connected
-    /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
-    /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    /// The maximum number of connection related only to the `Discovery` protocol.
     pub max_discovery_peers_connected: u32,
+    pub max_connections_per_peer: Option<u32>,
 
-    /// Max number of gossipsub peers
-    pub max_gossipsub_peers_connected: u32,
+    /// Max number of unique functional peers connected to the node.
+    /// The functional peers are the peers that support useful protocols like
+    /// `Gossipsub` or `RequestResponse`.
+    /// This number should be at least number of `mesh_n` from `Gossipsub` configuration.
+    /// The total number of connections will be
+    /// `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
+    pub max_functional_peers_connected: u32,
 
-    /// Max number of request/response peers
-    pub max_request_response_peers_connected: u32,
+    /// Max number of outgoing connection from the node to other peers.
+    pub max_outgoing_connections: u32,
 
     /// The interval at which identification requests are sent to
     /// the remote on established connections after the first request
@@ -167,9 +170,9 @@ impl Config<NotInitialized> {
             bootstrap_nodes: self.bootstrap_nodes,
             enable_mdns: self.enable_mdns,
             max_discovery_peers_connected: self.max_discovery_peers_connected,
-            max_gossipsub_peers_connected: self.max_gossipsub_peers_connected,
-            max_request_response_peers_connected: self
-                .max_request_response_peers_connected,
+            max_functional_peers_connected: self.max_functional_peers_connected,
+            max_connections_per_peer: self.max_connections_per_peer,
+            max_outgoing_connections: self.max_outgoing_connections,
             allow_private_addresses: self.allow_private_addresses,
             random_walk: self.random_walk,
             connection_idle_timeout: self.connection_idle_timeout,
@@ -221,8 +224,9 @@ impl Config<NotInitialized> {
             bootstrap_nodes: vec![],
             enable_mdns: false,
             max_discovery_peers_connected: 50,
-            max_gossipsub_peers_connected: 50,
-            max_request_response_peers_connected: 50,
+            max_functional_peers_connected: 50,
+            max_connections_per_peer: None,
+            max_outgoing_connections: 10,
             allow_private_addresses: true,
             random_walk: Some(Duration::from_millis(500)),
             connection_idle_timeout: Some(Duration::from_secs(120)),

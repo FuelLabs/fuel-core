@@ -94,10 +94,18 @@ pub struct P2PArgs {
     #[clap(long = "max-peers-connected", default_value = "50", env)]
     pub max_peers_connected: u32,
 
+    /// Max number of connection that serves to discover new peers.
+    #[clap(long = "max-discovery-peers-connected", default_value = "10000", env)]
+    pub max_discovery_peers_connected: u32,
+
+    /// Max number of outgoing connection from the node to other peers.
+    #[clap(long = "max-outgoing-connections", default_value = "10", env)]
+    pub max_outgoing_connections: u32,
+
     /// Max number of connections per single peer
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
     #[clap(long = "max-connections-per-peer", default_value = "3", env)]
-    pub max_connections_per_peer: u32,
+    pub max_connections_per_peer: Option<u32>,
 
     /// Set the delay between random walks for p2p node discovery in seconds.
     /// If it's not set the random walk will be disabled.
@@ -249,10 +257,6 @@ impl From<SyncArgs> for fuel_core::sync::Config {
     }
 }
 
-/// We want to prevent the user from accidentally setting this value too high and causing a DOS
-/// threat unintentionally
-const MAX_PEERS_CONNECTED_SAFETY_LIMIT: u32 = 100;
-
 impl P2PArgs {
     pub fn into_config(
         self,
@@ -325,13 +329,10 @@ impl P2PArgs {
             reserved_nodes: self.reserved_nodes,
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,
             enable_mdns: self.enable_mdns,
-            max_discovery_peers_connected: self.max_peers_connected,
-            max_gossipsub_peers_connected: self
-                .max_peers_connected
-                .min(MAX_PEERS_CONNECTED_SAFETY_LIMIT),
-            max_request_response_peers_connected: self
-                .max_peers_connected
-                .min(MAX_PEERS_CONNECTED_SAFETY_LIMIT),
+            max_discovery_peers_connected: self.max_discovery_peers_connected,
+            max_outgoing_connections: self.max_outgoing_connections,
+            max_connections_per_peer: self.max_connections_per_peer,
+            max_functional_peers_connected: self.max_peers_connected,
             allow_private_addresses: self.allow_private_addresses,
             random_walk,
             connection_idle_timeout: Some(Duration::from_secs(

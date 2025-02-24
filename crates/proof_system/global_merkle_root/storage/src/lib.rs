@@ -21,6 +21,14 @@ pub mod structured_storage;
 /// Update logic
 pub mod update;
 
+/// Error type
+pub mod error;
+
+pub use error::{
+    Error,
+    Result,
+};
+
 /// Test helpers
 #[cfg(feature = "test-helpers")]
 pub mod test_helpers;

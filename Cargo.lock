@@ -3669,7 +3669,7 @@ dependencies = [
 name = "fuel-core-global-merkle-root-storage"
 version = "0.41.7"
 dependencies = [
- "anyhow",
+ "derive_more 0.99.19",
  "enum-iterator",
  "fuel-core-global-merkle-root-storage",
  "fuel-core-storage",
@@ -3760,6 +3760,7 @@ dependencies = [
  "libp2p",
  "libp2p-mplex",
  "libp2p-swarm-test",
+ "parking_lot",
  "postcard",
  "prometheus-client",
  "quick-protobuf",
