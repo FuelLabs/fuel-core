@@ -20,45 +20,30 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std", "serde"] }
 futures = { workspace = true }
 hex = { workspace = true }
-hickory-resolver = "0.24.1"
-ip_network = "0.4"
-libp2p = { version = "0.54.1", default-features = false, features = [
-  "dns",
-  "gossipsub",
-  "identify",
-  "kad",
-  "macros",
-  "mdns",
-  "noise",
-  "request-response",
-  "secp256k1",
-  "tcp",
-  "tokio",
-  "yamux",
-  "websocket",
-  "metrics",
-] }
-libp2p-mplex = "0.41.0"
+hickory-resolver = { workspace = true }
+ip_network = { workspace = true }
+libp2p = { workspace = true, features = ["dns", "gossipsub", "identify", "kad", "macros", "mdns", "noise", "request-response", "secp256k1", "tcp", "tokio", "yamux", "websocket", "metrics"] }
+libp2p-mplex = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
 prometheus-client = { workspace = true }
-quick-protobuf = "0.8.1"
-quick-protobuf-codec = "0.3.0"
-quick_cache = "0.6.9"
+quick-protobuf = { workspace = true }
+quick-protobuf-codec = { workspace = true }
+quick_cache = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
-sha2 = "0.10"
+sha2 = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-thiserror = "1.0.47"
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
-void = "1"
+void = { workspace = true }
 
 [dev-dependencies]
-ctor = "0.1"
+ctor = { workspace = true }
 fuel-core-p2p = { path = ".", features = ["test-helpers"] }
 fuel-core-services = { path = "../../services", features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
@@ -67,9 +52,7 @@ rand = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-attributes = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
-
-[dev-dependencies.libp2p-swarm-test]
-version = "0.4.0"
+libp2p-swarm-test= { workspace = true }
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]

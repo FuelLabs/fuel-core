@@ -19,17 +19,17 @@ fuel-core-client = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = { workspace = true }
 hex = { workspace = true }
-humantime-serde = "1.1"
+humantime-serde = { workspace = true }
 itertools = { workspace = true }
-libtest-mimic = "0.6.0"
+libtest-mimic = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true }
-toml = { version = "0.5" }
+toml = { workspace = true }
 
 [dev-dependencies]
-assert_cmd = "2.0"
+assert_cmd = { workspace = true }
 fuel-core = { workspace = true, features = [
   "rocksdb",
   "wasm-executor",

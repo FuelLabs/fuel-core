@@ -21,7 +21,7 @@ fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = { workspace = true }
 num-rational = { workspace = true }
 parking_lot = { workspace = true }
-petgraph = "0.6.5"
+petgraph = { workspace = true }
 tokio = { workspace = true, default-features = false, features = ["sync"] }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }

@@ -12,25 +12,23 @@ description = "Tx client and schema specification."
 
 [dependencies]
 anyhow = { workspace = true }
-base64 = { version = "0.22.1", optional = true }
+base64 = { workspace = true, optional = true }
 cynic = { workspace = true }
 derive_more = { workspace = true }
-eventsource-client = { version = "0.13.0", optional = true }
+eventsource-client = { workspace = true, optional = true }
 fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 futures = { workspace = true, optional = true }
 hex = { workspace = true }
 # Included to enable webpki in the eventsource client
-hyper-rustls = { version = "0.24", features = [
-  "webpki-tokio",
-], optional = true }
+hyper-rustls = { workspace = true, features = ["webpki-tokio"], optional = true }
 itertools = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { version = "1.0", features = ["raw_value"] }
+serde_json = { workspace = true, features = ["raw_value"] }
 # We force the version because 4.1.0 update leap seconds that breaks our timestamps
-tai64 = { version = "=4.0.0", features = ["serde"] }
-thiserror = "1.0"
-tracing = "0.1"
+tai64 = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-types = { workspace = true, features = [
@@ -41,8 +39,8 @@ fuel-core-types = { workspace = true, features = [
 insta = { workspace = true }
 
 [build-dependencies]
-schemafy_lib = { version = "0.5" }
-serde_json = { version = "1.0", features = ["raw_value"] }
+schemafy_lib = { workspace = true }
+serde_json = { workspace = true, features = ["raw_value"] }
 
 [features]
 std = ["fuel-core-types/std"]

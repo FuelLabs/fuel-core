@@ -12,16 +12,13 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-async-graphql = { version = "7.0.11", features = [
-  "graphiql",
-  "tracing",
-], default-features = false }
-async-graphql-value = "7.0.11"
+async-graphql = { workspace = true, features = ["graphiql", "tracing"] }
+async-graphql-value = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
-cosmrs = { version = "0.21", optional = true }
-derive_more = { version = "0.99" }
+cosmrs = { workspace = true, optional = true }
+derive_more = { workspace = true }
 enum-iterator = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
 fuel-core-compression = { workspace = true }
@@ -48,33 +45,30 @@ hex = { workspace = true }
 hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
-num_cpus = { version = "1.16.0", optional = true }
+num_cpus = { workspace = true, optional = true }
 parking_lot = { workspace = true }
 paste = { workspace = true }
 postcard = { workspace = true, optional = true }
 rand = { workspace = true }
-rocksdb = { version = "0.21", default-features = false, features = [
-  "lz4",
-  "multi-threaded-cf",
-], optional = true }
+rocksdb = { workspace = true, features = ["lz4", "multi-threaded-cf"], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 tempfile = { workspace = true, optional = true }
-thiserror = "1.0"
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-rayon = { workspace = true }
 tokio-stream = { workspace = true, features = ["sync"] }
 tokio-util = { workspace = true }
-tower = { version = "0.4", features = ["limit"] }
-tower-http = { version = "0.4", features = ["set-header", "trace", "timeout"] }
+tower = { workspace = true, features = ["limit"] }
+tower-http = { workspace = true, features = ["set-header", "trace", "timeout"] }
 tracing = { workspace = true }
 url = { workspace = true }
-uuid = { version = "1.1", features = ["v4"] }
+uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
-assert_matches = "1.5"
+assert_matches = { workspace = true }
 fuel-core = { path = ".", features = ["smt", "test-helpers"] }
 fuel-core-executor = { workspace = true, features = [
   "std",

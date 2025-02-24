@@ -19,13 +19,11 @@ path = "tests/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-config = { version = "1.1.7", features = [
-  "behavior-version-latest",
-], optional = true }
-aws-sdk-kms = { version = "1.37.0", optional = true }
+aws-config = { workspace = true, features = ["behavior-version-latest"], optional = true }
+aws-sdk-kms = { workspace = true, optional = true }
 clap = { workspace = true }
 cynic = { workspace = true }
-ethers = "2"
+ethers = { workspace = true }
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
   "smt",
   "p2p",
@@ -34,7 +32,7 @@ fuel-core = { path = "../crates/fuel-core", default-features = false, features =
   "test-helpers",
   "backup",
 ] }
-fuel-core-benches = { path = "../benches" }
+fuel-core-benches = { workspace = true }
 fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-compression = { path = "../crates/compression" }
@@ -60,17 +58,17 @@ hex = { workspace = true }
 hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
-k256 = { version = "0.13.3", features = ["ecdsa-core"] }
+k256 = { workspace = true, features = ["ecdsa-core"] }
 postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
-rstest = "0.15"
+rstest = { workspace = true }
 serde_json = { workspace = true }
-spki = "0.7.3"
+spki = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
-test-helpers = { path = "./test-helpers" }
+test-helpers = { workspace = true }
 tokio = { workspace = true, features = [
   "macros",
   "rt-multi-thread",
@@ -81,7 +79,7 @@ url = { workspace = true }
 
 [dev-dependencies]
 fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
-pretty_assertions = "1.4"
+pretty_assertions = { workspace = true }
 proptest = { workspace = true }
 tracing = { workspace = true }
 
