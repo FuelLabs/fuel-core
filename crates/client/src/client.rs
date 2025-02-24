@@ -52,6 +52,10 @@ use cynic::{
     QueryBuilder,
 };
 use fuel_core_types::{
+    blockchain::header::{
+        ConsensusParametersVersion,
+        StateTransitionBytecodeVersion,
+    },
     fuel_asm::{
         Instruction,
         Word,
@@ -210,6 +214,28 @@ impl Clone for ConsistencyPolicy {
     }
 }
 
+#[derive(Debug, Default)]
+struct ChainStateInfo {
+    current_stf_version: Arc<Mutex<Option<StateTransitionBytecodeVersion>>>,
+    current_consensus_parameters_version: Arc<Mutex<Option<ConsensusParametersVersion>>>,
+}
+
+impl Clone for ChainStateInfo {
+    fn clone(&self) -> Self {
+        Self {
+            current_stf_version: Arc::new(Mutex::new(
+                self.current_stf_version.lock().ok().and_then(|v| *v),
+            )),
+            current_consensus_parameters_version: Arc::new(Mutex::new(
+                self.current_consensus_parameters_version
+                    .lock()
+                    .ok()
+                    .and_then(|v| *v),
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct FuelClient {
     client: reqwest::Client,
@@ -217,6 +243,7 @@ pub struct FuelClient {
     cookie: std::sync::Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
     require_height: ConsistencyPolicy,
+    chain_state_info: ChainStateInfo,
 }
 
 impl FromStr for FuelClient {
@@ -247,6 +274,7 @@ impl FromStr for FuelClient {
                 require_height: ConsistencyPolicy::Auto {
                     height: Arc::new(Mutex::new(None)),
                 },
+                chain_state_info: Default::default(),
             })
         }
 
@@ -259,6 +287,7 @@ impl FromStr for FuelClient {
                 require_height: ConsistencyPolicy::Auto {
                     height: Arc::new(Mutex::new(None)),
                 },
+                chain_state_info: Default::default(),
             })
         }
     }
@@ -322,6 +351,51 @@ impl FuelClient {
         }
     }
 
+    fn update_chain_state_info<R, E>(&self, response: &FuelGraphQlResponse<R, E>) {
+        if let Some(current_sft_version) = response
+            .extensions
+            .as_ref()
+            .and_then(|e| e.current_stf_version)
+        {
+            if let Ok(mut c) = self.chain_state_info.current_stf_version.lock() {
+                *c = Some(current_sft_version);
+            }
+        }
+
+        if let Some(current_consensus_parameters_version) = response
+            .extensions
+            .as_ref()
+            .and_then(|e| e.current_consensus_parameters_version)
+        {
+            if let Ok(mut c) = self
+                .chain_state_info
+                .current_consensus_parameters_version
+                .lock()
+            {
+                *c = Some(current_consensus_parameters_version);
+            }
+        }
+
+        let inner_required_height = match &self.require_height {
+            ConsistencyPolicy::Auto { height } => Some(height.clone()),
+            ConsistencyPolicy::Manual { .. } => None,
+        };
+
+        if let Some(inner_required_height) = inner_required_height {
+            if let Some(current_fuel_block_height) = response
+                .extensions
+                .as_ref()
+                .and_then(|e| e.current_fuel_block_height)
+            {
+                let mut lock = inner_required_height.lock().expect("Mutex poisoned");
+
+                if current_fuel_block_height >= lock.unwrap_or_default() {
+                    *lock = Some(current_fuel_block_height);
+                }
+            }
+        }
+    }
+
     /// Send the GraphQL query to the client.
     pub async fn query<ResponseData, Vars>(
         &self,
@@ -340,34 +414,14 @@ impl FuelClient {
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-        let inner_required_height = match &self.require_height {
-            ConsistencyPolicy::Auto { height } => Some(height.clone()),
-            _ => None,
-        };
-
-        Self::decode_response(response, inner_required_height)
+        self.decode_response(response)
     }
 
-    fn decode_response<R, E>(
-        response: FuelGraphQlResponse<R, E>,
-        inner_required_height: Option<Arc<Mutex<Option<BlockHeight>>>>,
-    ) -> io::Result<R>
+    fn decode_response<R, E>(&self, response: FuelGraphQlResponse<R, E>) -> io::Result<R>
     where
         R: serde::de::DeserializeOwned + 'static,
     {
-        if let Some(inner_required_height) = inner_required_height {
-            if let Some(current_fuel_block_height) = response
-                .extensions
-                .as_ref()
-                .and_then(|e| e.current_fuel_block_height)
-            {
-                let mut lock = inner_required_height.lock().expect("Mutex poisoned");
-
-                if current_fuel_block_height >= lock.unwrap_or_default() {
-                    *lock = Some(current_fuel_block_height);
-                }
-            }
-        }
+        self.update_chain_state_info(&response);
 
         if let Some(failed) = response
             .extensions
@@ -398,7 +452,7 @@ impl FuelClient {
     async fn subscribe<ResponseData, Vars>(
         &self,
         q: StreamingOperation<ResponseData, Vars>,
-    ) -> io::Result<impl futures::Stream<Item = io::Result<ResponseData>>>
+    ) -> io::Result<impl futures::Stream<Item = io::Result<ResponseData>> + '_>
     where
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
@@ -471,17 +525,11 @@ impl FuelClient {
 
         let mut last = None;
 
-        let inner_required_height = match &self.require_height {
-            ConsistencyPolicy::Auto { height } => Some(height.clone()),
-            _ => None,
-        };
-
         let stream = es::Client::stream(&client)
-            .zip(futures::stream::repeat(inner_required_height))
-            .take_while(|(result, _)| {
+            .take_while(|result| {
                 futures::future::ready(!matches!(result, Err(es::Error::Eof)))
             })
-            .filter_map(move |(result, inner_required_height)| {
+            .filter_map(move |result| {
                 tracing::debug!("Got result: {result:?}");
                 let r = match result {
                     Ok(es::SSE::Event(es::Event { data, .. })) => {
@@ -489,7 +537,7 @@ impl FuelClient {
                             &data,
                         ) {
                             Ok(resp) => {
-                                match Self::decode_response(resp, inner_required_height) {
+                                match self.decode_response(resp) {
                                     Ok(resp) => {
                                         match last.replace(data) {
                                             // Remove duplicates
@@ -525,6 +573,24 @@ impl FuelClient {
             });
 
         Ok(stream)
+    }
+
+    pub fn latest_stf_version(&self) -> Option<StateTransitionBytecodeVersion> {
+        self.chain_state_info
+            .current_stf_version
+            .lock()
+            .ok()
+            .and_then(|value| *value)
+    }
+
+    pub fn latest_consensus_parameters_version(
+        &self,
+    ) -> Option<ConsensusParametersVersion> {
+        self.chain_state_info
+            .current_consensus_parameters_version
+            .lock()
+            .ok()
+            .and_then(|value| *value)
     }
 
     pub async fn health(&self) -> io::Result<bool> {
@@ -764,10 +830,10 @@ impl FuelClient {
     /// Compared to the `submit_and_await_commit`, the stream also contains
     /// `SubmittedStatus` as an intermediate state.
     #[cfg(feature = "subscriptions")]
-    pub async fn submit_and_await_status(
-        &self,
-        tx: &Transaction,
-    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>>> {
+    pub async fn submit_and_await_status<'a>(
+        &'a self,
+        tx: &'a Transaction,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
         let tx = tx.clone().to_bytes();
         let s = schema::tx::SubmitAndAwaitStatusSubscription::build(TxArg {
@@ -926,10 +992,10 @@ impl FuelClient {
     #[tracing::instrument(skip(self), level = "debug")]
     #[cfg(feature = "subscriptions")]
     /// Subscribe to the status of a transaction
-    pub async fn subscribe_transaction_status(
-        &self,
-        id: &TxId,
-    ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>>> {
+    pub async fn subscribe_transaction_status<'a>(
+        &'a self,
+        id: &'a TxId,
+    ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
         let tx_id: TransactionId = (*id).into();
         let s = schema::tx::StatusChangeSubscription::build(TxIdArgs { id: tx_id });
