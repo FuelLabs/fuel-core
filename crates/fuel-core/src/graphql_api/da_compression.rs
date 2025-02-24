@@ -86,192 +86,399 @@ pub struct DecompressDbTx<'a, Tx, Onchain> {
     pub onchain_db: Onchain,
 }
 
-macro_rules! impl_temporal_registry {
-    ($type:ty) => { paste::paste! {
-        impl<'a, Tx> TemporalRegistry<$type> for DbTx<'a, Tx>
-        where
-            Tx: OffChainDatabaseTransaction,
-        {
-            fn read_registry(
-                &self,
-                key: &fuel_core_types::fuel_compression::RegistryKey,
-            ) -> anyhow::Result<$type> {
-                Ok(self
-                    .db_tx
-                    .storage_as_ref::<[< DaCompressionTemporalRegistry $type >]>()
-                    .get(key)?
-                    .ok_or(not_found!([< DaCompressionTemporalRegistry $type>]))?
-                    .into_owned())
-            }
+#[cfg(not(feature = "fault-proving"))]
+mod v1_impl_temporal_registry {
+    use super::*;
 
-            fn read_timestamp(
-                &self,
-                key: &fuel_core_types::fuel_compression::RegistryKey,
-            ) -> anyhow::Result<Tai64> {
-                Ok(self
-                    .db_tx
-                    .storage_as_ref::<[< DaCompressionTemporalRegistryTimestamps >]>()
-                    .get(&TimestampKey {
-                        keyspace: TimestampKeyspace::$type,
-                        key: *key,
-                    })?
-                    .ok_or(not_found!(DaCompressionTemporalRegistryTimestamps))?
-                    .into_owned())
-            }
-
-            fn write_registry(
-                &mut self,
-                key: &fuel_core_types::fuel_compression::RegistryKey,
-                value: &$type,
-                timestamp: Tai64,
-            ) -> anyhow::Result<()> {
-                // Write the actual value
-                let old_value = self.db_tx
-                    .storage_as_mut::<[< DaCompressionTemporalRegistry $type >]>()
-                    .replace(key, value)?;
-
-                // Remove the overwritten value from index, if any
-                if let Some(old_value) = old_value {
-                    let old_reverse_key = (&old_value).into();
-                    self.db_tx
-                        .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
-                        .remove(&old_reverse_key)?;
+    macro_rules! impl_temporal_registry {
+        ($type:ty) => { paste::paste! {
+            impl<'a, Tx> TemporalRegistry<$type> for DbTx<'a, Tx>
+            where
+                Tx: OffChainDatabaseTransaction,
+            {
+                fn read_registry(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<$type> {
+                    Ok(self
+                        .db_tx
+                        .storage_as_ref::<[< DaCompressionTemporalRegistry $type >]>()
+                        .get(key)?
+                        .ok_or(not_found!([< DaCompressionTemporalRegistry $type>]))?
+                        .into_owned())
                 }
 
-                // Add the new value to the index
-                let reverse_key = value.into();
-                self.db_tx
-                    .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
-                    .insert(&reverse_key, key)?;
+                fn read_timestamp(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<Tai64> {
+                    Ok(self
+                        .db_tx
+                        .storage_as_ref::<[< DaCompressionTemporalRegistryTimestamps >]>()
+                        .get(&TimestampKey {
+                            keyspace: TimestampKeyspace::$type,
+                            key: *key,
+                        })?
+                        .ok_or(not_found!(DaCompressionTemporalRegistryTimestamps))?
+                        .into_owned())
+                }
 
-                // Update the timestamp
-                self.db_tx
-                    .storage_as_mut::<DaCompressionTemporalRegistryTimestamps>()
-                    .insert(&TimestampKey { keyspace: TimestampKeyspace::$type, key: *key }, &timestamp)?;
+                fn write_registry(
+                    &mut self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                    value: &$type,
+                    timestamp: Tai64,
+                ) -> anyhow::Result<()> {
+                    // Write the actual value
+                    let old_value = self.db_tx
+                        .storage_as_mut::<[< DaCompressionTemporalRegistry $type >]>()
+                        .replace(key, value)?;
 
-                Ok(())
+                    // Remove the overwritten value from index, if any
+                    if let Some(old_value) = old_value {
+                        let old_reverse_key = (&old_value).into();
+                        self.db_tx
+                            .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
+                            .remove(&old_reverse_key)?;
+                    }
+
+                    // Add the new value to the index
+                    let reverse_key = value.into();
+                    self.db_tx
+                        .storage_as_mut::<DaCompressionTemporalRegistryIndex>()
+                        .insert(&reverse_key, key)?;
+
+                    // Update the timestamp
+                    self.db_tx
+                        .storage_as_mut::<DaCompressionTemporalRegistryTimestamps>()
+                        .insert(&TimestampKey { keyspace: TimestampKeyspace::$type, key: *key }, &timestamp)?;
+
+                    Ok(())
+                }
+
+                fn registry_index_lookup(
+                    &self,
+                    value: &$type,
+                ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+                {
+                    let reverse_key = value.into();
+                    Ok(self
+                        .db_tx
+                        .storage_as_ref::<DaCompressionTemporalRegistryIndex>()
+                        .get(&reverse_key)?
+                        .map(|v| v.into_owned()))
+                }
             }
 
-            fn registry_index_lookup(
-                &self,
-                value: &$type,
-            ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+            impl<'a, Tx> TemporalRegistry<$type> for CompressDbTx<'a, Tx>
+            where
+                Tx: OffChainDatabaseTransaction,
             {
-                let reverse_key = value.into();
-                Ok(self
-                    .db_tx
-                    .storage_as_ref::<DaCompressionTemporalRegistryIndex>()
-                    .get(&reverse_key)?
-                    .map(|v| v.into_owned()))
-            }
-        }
+                fn read_registry(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<$type> {
+                    self.db_tx.read_registry(key)
+                }
 
-        impl<'a, Tx> TemporalRegistry<$type> for CompressDbTx<'a, Tx>
-        where
-            Tx: OffChainDatabaseTransaction,
-        {
-            fn read_registry(
-                &self,
-                key: &fuel_core_types::fuel_compression::RegistryKey,
-            ) -> anyhow::Result<$type> {
-                self.db_tx.read_registry(key)
-            }
+                fn read_timestamp(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<Tai64> {
+                    <_ as TemporalRegistry<$type>>::read_timestamp(&self.db_tx, key)
+                }
 
-            fn read_timestamp(
-                &self,
-                key: &fuel_core_types::fuel_compression::RegistryKey,
-            ) -> anyhow::Result<Tai64> {
-                <_ as TemporalRegistry<$type>>::read_timestamp(&self.db_tx, key)
-            }
+                fn write_registry(
+                    &mut self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                    value: &$type,
+                    timestamp: Tai64,
+                ) -> anyhow::Result<()> {
+                    self.db_tx.write_registry(key, value, timestamp)
+                }
 
-            fn write_registry(
-                &mut self,
-                key: &fuel_core_types::fuel_compression::RegistryKey,
-                value: &$type,
-                timestamp: Tai64,
-            ) -> anyhow::Result<()> {
-                self.db_tx.write_registry(key, value, timestamp)
+                fn registry_index_lookup(
+                    &self,
+                    value: &$type,
+                ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+                {
+                    self.db_tx.registry_index_lookup(value)
+                }
             }
 
-            fn registry_index_lookup(
-                &self,
-                value: &$type,
-            ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+            impl<'a, Tx, Offchain> TemporalRegistry<$type> for DecompressDbTx<'a, Tx, Offchain>
+            where
+                Tx: OffChainDatabaseTransaction,
             {
-                self.db_tx.registry_index_lookup(value)
-            }
-        }
+                fn read_registry(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<$type> {
+                    self.db_tx.read_registry(key)
+                }
 
-        impl<'a, Tx, Offchain> TemporalRegistry<$type> for DecompressDbTx<'a, Tx, Offchain>
-        where
-            Tx: OffChainDatabaseTransaction,
-        {
-            fn read_registry(
-                &self,
-                key: &fuel_core_types::fuel_compression::RegistryKey,
-            ) -> anyhow::Result<$type> {
-                self.db_tx.read_registry(key)
+                fn read_timestamp(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<Tai64> {
+                    <_ as TemporalRegistry<$type>>::read_timestamp(&self.db_tx, key)
+                }
+
+                fn write_registry(
+                    &mut self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                    value: &$type,
+                    timestamp: Tai64,
+                ) -> anyhow::Result<()> {
+                    self.db_tx.write_registry(key, value, timestamp)
+                }
+
+                fn registry_index_lookup(
+                    &self,
+                    value: &$type,
+                ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+                {
+                    self.db_tx.registry_index_lookup(value)
+                }
             }
 
-            fn read_timestamp(
-                &self,
-                key: &fuel_core_types::fuel_compression::RegistryKey,
-            ) -> anyhow::Result<Tai64> {
-                <_ as TemporalRegistry<$type>>::read_timestamp(&self.db_tx, key)
-            }
-
-            fn write_registry(
-                &mut self,
-                key: &fuel_core_types::fuel_compression::RegistryKey,
-                value: &$type,
-                timestamp: Tai64,
-            ) -> anyhow::Result<()> {
-                self.db_tx.write_registry(key, value, timestamp)
-            }
-
-            fn registry_index_lookup(
-                &self,
-                value: &$type,
-            ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+            impl<'a, Tx> EvictorDb<$type> for CompressDbTx<'a, Tx>
+            where
+                Tx: OffChainDatabaseTransaction,
             {
-                self.db_tx.registry_index_lookup(value)
-            }
-        }
+                fn set_latest_assigned_key(
+                    &mut self,
+                    key: fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<()> {
+                    self.db_tx.db_tx
+                        .storage_as_mut::<DaCompressionTemporalRegistryEvictorCache>()
+                        .insert(&MetadataKey::$type, &key)?;
+                    Ok(())
+                }
 
-        impl<'a, Tx> EvictorDb<$type> for CompressDbTx<'a, Tx>
-        where
-            Tx: OffChainDatabaseTransaction,
-        {
-            fn set_latest_assigned_key(
-                &mut self,
-                key: fuel_core_types::fuel_compression::RegistryKey,
-            ) -> anyhow::Result<()> {
-                self.db_tx.db_tx
-                    .storage_as_mut::<DaCompressionTemporalRegistryEvictorCache>()
-                    .insert(&MetadataKey::$type, &key)?;
-                Ok(())
+                fn get_latest_assigned_key(
+                    &self,
+                ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>> {
+                    Ok(self
+                        .db_tx.db_tx
+                        .storage_as_ref::<DaCompressionTemporalRegistryEvictorCache>()
+                        .get(&MetadataKey::$type)?
+                        .map(|v| v.into_owned())
+                    )
+                }
             }
 
-            fn get_latest_assigned_key(
-                &self,
-            ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>> {
-                Ok(self
-                    .db_tx.db_tx
-                    .storage_as_ref::<DaCompressionTemporalRegistryEvictorCache>()
-                    .get(&MetadataKey::$type)?
-                    .map(|v| v.into_owned())
-                )
-            }
-        }
+        }};
+    }
 
-    }};
+    impl_temporal_registry!(Address);
+    impl_temporal_registry!(AssetId);
+    impl_temporal_registry!(ContractId);
+    impl_temporal_registry!(ScriptCode);
+    impl_temporal_registry!(PredicateCode);
 }
 
-impl_temporal_registry!(Address);
-impl_temporal_registry!(AssetId);
-impl_temporal_registry!(ContractId);
-impl_temporal_registry!(ScriptCode);
-impl_temporal_registry!(PredicateCode);
+#[cfg(feature = "fault-proving")]
+mod v2_impl_temporal_registry {
+    use super::*;
+
+    use v2::{
+        address::DaCompressionTemporalRegistryAddressV2,
+        asset_id::DaCompressionTemporalRegistryAssetIdV2,
+        contract_id::DaCompressionTemporalRegistryContractIdV2,
+        evictor_cache::DaCompressionTemporalRegistryEvictorCacheV2,
+        predicate_code::DaCompressionTemporalRegistryPredicateCodeV2,
+        registry_index::DaCompressionTemporalRegistryIndexV2,
+        script_code::DaCompressionTemporalRegistryScriptCodeV2,
+        timestamps::DaCompressionTemporalRegistryTimestampsV2,
+    };
+
+    macro_rules! impl_temporal_registry_v2 {
+        ($type:ty) => { paste::paste! {
+            impl<'a, Tx> TemporalRegistry<$type> for DbTx<'a, Tx>
+            where
+                Tx: OffChainDatabaseTransaction,
+            {
+                fn read_registry(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<$type> {
+                    Ok(self
+                        .db_tx
+                        .storage_as_ref::<[< DaCompressionTemporalRegistry $type V2>]>()
+                        .get(key)?
+                        .ok_or(not_found!([< DaCompressionTemporalRegistry $type V2>]))?
+                        .into_owned())
+                }
+
+                fn read_timestamp(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<Tai64> {
+                    Ok(self
+                        .db_tx
+                        .storage_as_ref::<[< DaCompressionTemporalRegistryTimestampsV2 >]>()
+                        .get(&TimestampKey {
+                            keyspace: TimestampKeyspace::$type,
+                            key: *key,
+                        })?
+                        .ok_or(not_found!(DaCompressionTemporalRegistryTimestampsV2))?
+                        .into_owned())
+                }
+
+                fn write_registry(
+                    &mut self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                    value: &$type,
+                    timestamp: Tai64,
+                ) -> anyhow::Result<()> {
+                    // Write the actual value
+                    let old_value = self.db_tx
+                        .storage_as_mut::<[< DaCompressionTemporalRegistry $type V2>]>()
+                        .replace(key, value)?;
+
+                    // Remove the overwritten value from index, if any
+                    if let Some(old_value) = old_value {
+                        let old_reverse_key = (&old_value).into();
+                        self.db_tx
+                            .storage_as_mut::<DaCompressionTemporalRegistryIndexV2>()
+                            .remove(&old_reverse_key)?;
+                    }
+
+                    // Add the new value to the index
+                    let reverse_key = value.into();
+                    self.db_tx
+                        .storage_as_mut::<DaCompressionTemporalRegistryIndexV2>()
+                        .insert(&reverse_key, key)?;
+
+                    // Update the timestamp
+                    self.db_tx
+                        .storage_as_mut::<DaCompressionTemporalRegistryTimestampsV2>()
+                        .insert(&TimestampKey { keyspace: TimestampKeyspace::$type, key: *key }, &timestamp)?;
+
+                    Ok(())
+                }
+
+                fn registry_index_lookup(
+                    &self,
+                    value: &$type,
+                ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+                {
+                    let reverse_key = value.into();
+                    Ok(self
+                        .db_tx
+                        .storage_as_ref::<DaCompressionTemporalRegistryIndexV2>()
+                        .get(&reverse_key)?
+                        .map(|v| v.into_owned()))
+                }
+            }
+
+            impl<'a, Tx> TemporalRegistry<$type> for CompressDbTx<'a, Tx>
+            where
+                Tx: OffChainDatabaseTransaction,
+            {
+                fn read_registry(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<$type> {
+                    self.db_tx.read_registry(key)
+                }
+
+                fn read_timestamp(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<Tai64> {
+                    <_ as TemporalRegistry<$type>>::read_timestamp(&self.db_tx, key)
+                }
+
+                fn write_registry(
+                    &mut self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                    value: &$type,
+                    timestamp: Tai64,
+                ) -> anyhow::Result<()> {
+                    self.db_tx.write_registry(key, value, timestamp)
+                }
+
+                fn registry_index_lookup(
+                    &self,
+                    value: &$type,
+                ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+                {
+                    self.db_tx.registry_index_lookup(value)
+                }
+            }
+
+            impl<'a, Tx, Offchain> TemporalRegistry<$type> for DecompressDbTx<'a, Tx, Offchain>
+            where
+                Tx: OffChainDatabaseTransaction,
+            {
+                fn read_registry(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<$type> {
+                    self.db_tx.read_registry(key)
+                }
+
+                fn read_timestamp(
+                    &self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<Tai64> {
+                    <_ as TemporalRegistry<$type>>::read_timestamp(&self.db_tx, key)
+                }
+
+                fn write_registry(
+                    &mut self,
+                    key: &fuel_core_types::fuel_compression::RegistryKey,
+                    value: &$type,
+                    timestamp: Tai64,
+                ) -> anyhow::Result<()> {
+                    self.db_tx.write_registry(key, value, timestamp)
+                }
+
+                fn registry_index_lookup(
+                    &self,
+                    value: &$type,
+                ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>>
+                {
+                    self.db_tx.registry_index_lookup(value)
+                }
+            }
+
+            impl<'a, Tx> EvictorDb<$type> for CompressDbTx<'a, Tx>
+            where
+                Tx: OffChainDatabaseTransaction,
+            {
+                fn set_latest_assigned_key(
+                    &mut self,
+                    key: fuel_core_types::fuel_compression::RegistryKey,
+                ) -> anyhow::Result<()> {
+                    self.db_tx.db_tx
+                        .storage_as_mut::<DaCompressionTemporalRegistryEvictorCacheV2>()
+                        .insert(&MetadataKey::$type, &key)?;
+                    Ok(())
+                }
+
+                fn get_latest_assigned_key(
+                    &self,
+                ) -> anyhow::Result<Option<fuel_core_types::fuel_compression::RegistryKey>> {
+                    Ok(self
+                        .db_tx.db_tx
+                        .storage_as_ref::<DaCompressionTemporalRegistryEvictorCacheV2>()
+                        .get(&MetadataKey::$type)?
+                        .map(|v| v.into_owned())
+                    )
+                }
+            }
+        }};
+    }
+
+    impl_temporal_registry_v2!(Address);
+    impl_temporal_registry_v2!(AssetId);
+    impl_temporal_registry_v2!(ContractId);
+    impl_temporal_registry_v2!(ScriptCode);
+    impl_temporal_registry_v2!(PredicateCode);
+}
 
 impl<'a, Tx> UtxoIdToPointer for CompressDbTx<'a, Tx> {
     fn lookup(
