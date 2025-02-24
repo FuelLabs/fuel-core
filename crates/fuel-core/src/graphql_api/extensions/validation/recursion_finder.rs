@@ -1,7 +1,3 @@
-use crate::fuel_core_graphql_api::validation_extension::visitor::{
-    Visitor,
-    VisitorContext,
-};
 use async_graphql::{
     parser::types::Field,
     Positioned,
@@ -9,6 +5,11 @@ use async_graphql::{
 use std::collections::{
     hash_map::Entry,
     HashMap,
+};
+
+use super::visitor::{
+    Visitor,
+    VisitorContext,
 };
 
 pub(super) struct RecursionFinder<'a> {
@@ -51,6 +52,7 @@ impl<'a> Visitor<'a> for RecursionFinder<'a> {
             }
         }
     }
+
     fn exit_field(&mut self, ctx: &mut VisitorContext<'a>, _: &'a Positioned<Field>) {
         let ty = ctx.type_stack.last();
 

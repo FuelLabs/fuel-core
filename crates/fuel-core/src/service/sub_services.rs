@@ -13,8 +13,11 @@ use crate::relayer::Config as RelayerConfig;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
-    fuel_core_graphql_api,
-    fuel_core_graphql_api::Config as GraphQLConfig,
+    fuel_core_graphql_api::{
+        self,
+        Config as GraphQLConfig,
+    },
+    graphql_api::worker_service,
     schema::build_schema,
     service::{
         adapters::{
@@ -328,15 +331,17 @@ pub fn init_sub_services(
 
     let graphql_block_importer =
         GraphQLBlockImporter::new(importer_adapter.clone(), import_result_provider);
-    let graphql_worker = fuel_core_graphql_api::worker_service::new_service(
-        tx_pool_adapter.clone(),
-        graphql_block_importer,
-        database.on_chain().clone(),
-        database.off_chain().clone(),
-        config.da_compression.clone(),
-        config.continue_on_error,
-        &chain_config.consensus_parameters,
-    )?;
+    let graphql_worker_context = worker_service::Context {
+        tx_pool: tx_pool_adapter.clone(),
+        block_importer: graphql_block_importer,
+        on_chain_database: database.on_chain().clone(),
+        off_chain_database: database.off_chain().clone(),
+        da_compression_config: config.da_compression.clone(),
+        continue_on_error: config.continue_on_error,
+        consensus_parameters: &chain_config.consensus_parameters,
+    };
+    let graphql_worker =
+        fuel_core_graphql_api::worker_service::new_service(graphql_worker_context)?;
 
     let graphql_block_height_subscription_handle = graphql_worker.shared.clone();
 
