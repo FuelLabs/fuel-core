@@ -71,7 +71,7 @@ impl BalanceQuery {
         let query = ctx.read_view()?;
         let base_asset_id = *ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params()
+            .current_consensus_params()
             .base_asset_id();
         let balance = query
             .balance(owner.0, asset_id.0, base_asset_id)
@@ -124,7 +124,7 @@ impl BalanceQuery {
         }
         let base_asset_id = *ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params()
+            .current_consensus_params()
             .base_asset_id();
         let owner = filter.owner.into();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {

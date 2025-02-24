@@ -326,7 +326,7 @@ impl DapMutation {
         let db = ctx.data_unchecked::<Database>();
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
 
         let id =
             ctx.data_unchecked::<GraphStorage>()
@@ -359,7 +359,7 @@ impl DapMutation {
         let db = ctx.data_unchecked::<Database>();
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
 
         ctx.data_unchecked::<GraphStorage>()
             .lock()
@@ -450,7 +450,7 @@ impl DapMutation {
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
         let params = ctx
             .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .current_consensus_params();
 
         let vm = locked
             .vm

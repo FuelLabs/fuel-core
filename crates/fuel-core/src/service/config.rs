@@ -138,6 +138,8 @@ impl Config {
                 crate::state::historical_rocksdb::StateRewindPolicy::RewindFullRange,
         };
 
+        #[cfg(feature = "p2p")]
+        let network_name = snapshot_reader.chain_config().chain_name.clone();
         let gas_price_config = GasPriceConfig::local_node();
 
         Self {
@@ -187,7 +189,7 @@ impl Config {
             #[cfg(feature = "relayer")]
             relayer: None,
             #[cfg(feature = "p2p")]
-            p2p: Some(P2PConfig::<NotInitialized>::default("test_network")),
+            p2p: Some(P2PConfig::<NotInitialized>::default(network_name.as_str())),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
             #[cfg(feature = "shared-sequencer")]
