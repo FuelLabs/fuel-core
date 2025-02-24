@@ -3760,6 +3760,7 @@ dependencies = [
  "libp2p",
  "libp2p-mplex",
  "libp2p-swarm-test",
+ "parking_lot",
  "postcard",
  "prometheus-client",
  "quick-protobuf",
