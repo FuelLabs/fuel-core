@@ -8,4 +8,7 @@ pub enum Error {
     // /// Error that occurs when the parent signature is invalid.
     // #[error("Invalid parent signature: {0}")]
     // InvalidParentSignature(String),
+    /// Error occurred when broadcasting data
+    #[error("Broadcast error: {0}")]
+    BroadcastError(String),
 }

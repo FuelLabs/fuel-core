@@ -2,6 +2,7 @@
 // TODO: Remove
 
 use super::*;
+use crate::pre_confirmation_service::error::Error;
 use fuel_core_services::StateWatcher;
 use std::{
     sync::Arc,
@@ -20,49 +21,62 @@ impl TxReceiver for FakeTxReceiver {
     }
 }
 
-struct FakeBroadcast;
+struct FakeBroadcast {
+    sender: Option<tokio::sync::oneshot::Sender<FakeSignedData<FakeSigningKey>>>,
+}
 
 #[async_trait::async_trait]
-impl Broadcast for FakeBroadcast {
-    async fn _broadcast<T: Send>(&self, _data: T) -> Result<()> {
-        todo!()
+impl Broadcast<FakeSignedData<FakeSigningKey>> for FakeBroadcast {
+    async fn broadcast(&mut self, data: FakeSignedData<FakeSigningKey>) -> Result<()> {
+        match self.sender.take() {
+            Some(sender) => {
+                let _ = sender.send(data).map_err(|data| {
+                    Error::BroadcastError(format!(
+                        "Could not sent {:?} over oneshot channel",
+                        data
+                    ))
+                })?;
+            }
+            None => {
+                tracing::warn!("Broadcast channel already closed");
+            }
+        }
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone)]
 struct FakeParentSignature {
     dummy_signature: String,
-    notify: Arc<Notify>,
 }
 
-struct FakeSignedDat<T> {
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct FakeSignedData<T> {
     data: T,
     dummy_signature: String,
 }
 
 impl ParentSignature for FakeParentSignature {
-    type SignedData<T> = FakeSignedDat<T>;
-    fn sign<T>(&self, data: T) -> Result<Self::SignedData<T>> {
-        self.notify.notify_one();
-        Ok(FakeSignedDat {
+    type SignedData<T>
+        = FakeSignedData<T>
+    where
+        T: Send;
+    fn sign<T: Send>(&self, data: T) -> Result<Self::SignedData<T>> {
+        Ok(FakeSignedData {
             data,
             dummy_signature: self.dummy_signature.clone(),
         })
     }
 }
 
+#[derive(Debug, Clone)]
 struct FakeKeyGenerator {
-    pub inner: Arc<Notify>,
     pub key: FakeSigningKey,
 }
 
 impl FakeKeyGenerator {
-    pub fn new(key: FakeSigningKey) -> (Self, Arc<Notify>) {
-        let notify = Notify::new();
-        let inner = Arc::new(notify);
-        let handle = inner.clone();
-        let key_generator = Self { inner, key };
-        (key_generator, handle)
+    pub fn new(key: FakeSigningKey) -> Self {
+        Self { key }
     }
 }
 
@@ -70,7 +84,6 @@ impl FakeKeyGenerator {
 impl KeyGenerator for FakeKeyGenerator {
     type Key = FakeSigningKey;
     async fn generate(&mut self) -> Result<Self::Key> {
-        self.inner.notify_one();
         Ok(self.key.clone())
     }
 }
@@ -114,28 +127,19 @@ impl FakeTrigger {
 
 struct TestImplHandles {
     pub trigger_handle: Arc<Notify>,
-    pub gen_handle: Arc<Notify>,
-    pub parent_signature_handle: Arc<Notify>,
+    pub broadcast_handle: tokio::sync::oneshot::Receiver<FakeSignedData<FakeSigningKey>>,
 }
 
 struct TaskBuilder {
-    tx_receiver: Option<FakeTxReceiver>,
-    broadcast: Option<FakeBroadcast>,
-    parent_signature: Option<(FakeParentSignature, Arc<Notify>)>,
+    parent_signature: Option<FakeParentSignature>,
     key_generator: Option<FakeKeyGenerator>,
-    current_delegate_key: Option<FakeSigningKey>,
-    key_rotation_trigger: Option<FakeTrigger>,
 }
 
 impl TaskBuilder {
     pub fn new() -> Self {
         Self {
-            tx_receiver: None,
-            broadcast: None,
             parent_signature: None,
             key_generator: None,
-            current_delegate_key: None,
-            key_rotation_trigger: None,
         }
     }
 
@@ -154,12 +158,12 @@ impl TaskBuilder {
     ) {
         let (key_rotation_trigger, trigger_handle) = FakeTrigger::new();
         let current_delegate_key = "first key".into();
-        let next_delegate_key = "second key".into();
-        let (key_generator, gen_handle) = FakeKeyGenerator::new(next_delegate_key);
-        let (parent_signature, parent_signature_handle) = self.get_parant_signature();
+        let key_generator = self.get_key_generator();
+        let parent_signature = self.get_parant_signature();
+        let (broadcast, broadcast_handle) = self.get_broadcast();
         let task = PreConfirmationTask {
             tx_receiver: FakeTxReceiver,
-            broadcast: FakeBroadcast,
+            broadcast,
             parent_signature,
             key_generator,
             current_delegate_key,
@@ -167,79 +171,84 @@ impl TaskBuilder {
         };
         let handles = TestImplHandles {
             trigger_handle,
-            gen_handle,
-            parent_signature_handle,
+            broadcast_handle,
         };
         (task, handles)
     }
 
-    fn get_parant_signature(&self) -> (FakeParentSignature, Arc<Notify>) {
-        self.parent_signature.clone().unwrap_or_else(|| {
-            let notify = Notify::new();
-            let inner = Arc::new(notify);
-            let handle = inner.clone();
-            let task = FakeParentSignature {
-                dummy_signature: "dummy signature".into(),
-                notify: inner,
-            };
-            (task, handle)
+    fn get_key_generator(&self) -> FakeKeyGenerator {
+        self.key_generator.clone().unwrap_or_else(|| {
+            self.key_generator.clone().unwrap_or(FakeKeyGenerator {
+                key: "dummy key".into(),
+            })
         })
+    }
+
+    fn get_parant_signature(&self) -> FakeParentSignature {
+        self.parent_signature.clone().unwrap_or({
+            FakeParentSignature {
+                dummy_signature: "dummy signature".into(),
+            }
+        })
+    }
+
+    fn get_broadcast(
+        &self,
+    ) -> (
+        FakeBroadcast,
+        tokio::sync::oneshot::Receiver<FakeSignedData<FakeSigningKey>>,
+    ) {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let broadcast = FakeBroadcast {
+            sender: Some(sender),
+        };
+        (broadcast, receiver)
+    }
+
+    pub fn with_generated_key<T: Into<String>>(mut self, generated_key: T) -> Self {
+        let key_raw: String = generated_key.into();
+        let key_generator = FakeKeyGenerator::new(key_raw.into());
+        self.key_generator = Some(key_generator);
+        self
     }
 
     pub fn with_dummy_parent_signature<T: Into<String>>(
         mut self,
         dummy_signature: T,
     ) -> Self {
-        let notify = Notify::new();
-        let inner = Arc::new(notify);
-        let handle = inner.clone();
         let parent_signature = FakeParentSignature {
             dummy_signature: dummy_signature.into(),
-            notify: inner,
         };
-        self.parent_signature = Some((parent_signature, handle));
+        self.parent_signature = Some(parent_signature);
         self
     }
 }
 
 #[tokio::test]
-async fn run__will_generate_key_on_trigger() {
+async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_signature() {
     // let _ = tracing_subscriber::fmt()
     //     .with_max_level(tracing::Level::DEBUG)
     //     .try_init();
 
     // given
-    let (mut task, handles) = TaskBuilder::new().build_with_handles();
-    let mut state_watcher = StateWatcher::started();
-
-    // when
-    let _ = tokio::task::spawn(async move { task.run(&mut state_watcher).await });
-    handles.trigger_handle.notify_one();
-
-    // then
-    let timeout = Duration::from_millis(100);
-    let _ = tokio::time::timeout(timeout, handles.gen_handle.notified())
-        .await
-        .expect("Should get hit and not time out");
-}
-
-#[tokio::test]
-async fn run__generated_key_will_get_signed_by_parent() {
-    // given
-    let (mut task, handles) = TaskBuilder::new()
-        .with_dummy_parent_signature("dummy signature")
+    let generated_key = "some generated key";
+    let dummy_signature = "dummy signature";
+    let (mut task, mut handles) = TaskBuilder::new()
+        .with_generated_key(generated_key)
+        .with_dummy_parent_signature(dummy_signature)
         .build_with_handles();
-    let mut state_watcher = StateWatcher::started();
 
     // when
+    let mut state_watcher = StateWatcher::started();
     let _ = tokio::task::spawn(async move { task.run(&mut state_watcher).await });
     handles.trigger_handle.notify_one();
+    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // then
-    let timeout = Duration::from_millis(100);
-    let _ = tokio::time::timeout(timeout, handles.parent_signature_handle.notified())
-        .await
-        .expect("Should get hit and not time out");
+    let actual = handles.broadcast_handle.try_recv().unwrap();
+    let expected = FakeSignedData {
+        data: generated_key.into(),
+        dummy_signature: dummy_signature.into(),
+    };
+    assert_eq!(expected, actual);
 }
-
-

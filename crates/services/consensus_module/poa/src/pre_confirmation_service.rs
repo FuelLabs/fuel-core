@@ -38,13 +38,15 @@ pub trait TxReceiver: Send {
 }
 
 #[async_trait::async_trait]
-pub trait Broadcast: Send {
-    async fn _broadcast<T: Send>(&self, data: T) -> Result<()>;
+pub trait Broadcast<T>: Send {
+    async fn broadcast(&mut self, data: T) -> Result<()>;
 }
 
 pub trait ParentSignature: Send {
-    type SignedData<T>;
-    fn sign<T>(&self, data: T) -> Result<Self::SignedData<T>>;
+    type SignedData<T>: Send
+    where
+        T: Send;
+    fn sign<T: Send>(&self, data: T) -> Result<Self::SignedData<T>>;
 }
 
 #[async_trait::async_trait]
@@ -59,7 +61,7 @@ impl<TxRcv, Brdcst, Parent, Gen, Key, Trigger>
     PreConfirmationTask<TxRcv, Brdcst, Parent, Gen, Key, Trigger>
 where
     TxRcv: TxReceiver,
-    Brdcst: Broadcast,
+    Brdcst: Broadcast<Parent::SignedData<Key>>,
     Parent: ParentSignature,
     Gen: KeyGenerator<Key = Key>,
     Key: SigningKey,
@@ -75,8 +77,10 @@ where
             _ = self.key_rotation_trigger.next_rotation() => {
                 tracing::debug!("Key rotation triggered");
                 let new_delegate_key = self.key_generator.generate().await?;
-                let _ = self.parent_signature.sign(new_delegate_key.clone())?;
-                // self.current_delegate_key = self.key_generator.generate().await?;
+                tracing::debug!("Generated new delegate key");
+                let signed_key = self.parent_signature.sign(new_delegate_key.clone())?;
+                tracing::debug!("Signed new delegate key");
+                self.broadcast.broadcast(signed_key).await?;
 
             }
         }
@@ -88,7 +92,7 @@ impl<TxRcv, Brdcst, Parent, Gen, Key, Trigger> RunnableTask
     for PreConfirmationTask<TxRcv, Brdcst, Parent, Gen, Key, Trigger>
 where
     TxRcv: TxReceiver,
-    Brdcst: Broadcast,
+    Brdcst: Broadcast<Parent::SignedData<Key>>,
     Parent: ParentSignature,
     Gen: KeyGenerator<Key = Key>,
     Key: SigningKey,
