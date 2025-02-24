@@ -8,18 +8,14 @@ use super::{
 use std::{
     borrow::Cow,
     io,
+    num::NonZeroU32,
 };
 
 #[derive(Clone, Default)]
 pub struct PostcardCodec;
 
 impl RequestResponseMessageHandler<PostcardCodec> {
-    pub fn new(max_block_size: usize) -> Self {
-        assert_ne!(
-            max_block_size, 0,
-            "RequestResponseMessageHandler does not support zero block size"
-        );
-
+    pub fn new(max_block_size: NonZeroU32) -> Self {
         Self {
             codec: PostcardCodec,
             max_response_size: max_block_size,
@@ -76,7 +72,6 @@ mod tests {
                 ResponseMessageErrorCode,
                 V1ResponseMessage,
                 V2ResponseMessage,
-                MAX_REQUEST_SIZE,
             },
             protocols::RequestResponseProtocol,
         },
@@ -100,7 +95,7 @@ mod tests {
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -128,7 +123,7 @@ mod tests {
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -156,7 +151,7 @@ mod tests {
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -187,7 +182,7 @@ mod tests {
             ResponseMessageErrorCode::RequestedRangeTooLarge,
         ));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -217,7 +212,7 @@ mod tests {
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -243,7 +238,7 @@ mod tests {
         // Given
         let response = V1ResponseMessage::SealedHeaders(None);
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
 
         // When
         let buf = codec

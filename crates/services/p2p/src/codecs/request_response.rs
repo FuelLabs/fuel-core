@@ -31,7 +31,7 @@ pub struct RequestResponseMessageHandler<Codec> {
     /// Used for `max_size` parameter when reading Response Message
     /// Necessary in order to avoid DoS attacks
     /// Currently the size mostly depends on the max size of the Block
-    pub(crate) max_response_size: NonZeroU32,
+    pub(crate) max_response_size: std::num::NonZeroU32,
 }
 
 /// Since Postcard does not support async reads or writes out of the box
