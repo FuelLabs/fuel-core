@@ -25,6 +25,7 @@ query BlocksQuery($after: String, $before: String, $first: Int, $last: Int) {
           prevRoot
           time
           applicationHash
+          txIdCommitment
         }
         consensus {
           __typename
