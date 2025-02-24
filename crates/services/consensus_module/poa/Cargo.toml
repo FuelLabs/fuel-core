@@ -33,6 +33,7 @@ mockall = { workspace = true }
 rand = { workspace = true }
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
+tracing-subscriber = { workspace = true }
 
 [features]
 test-helpers = [
