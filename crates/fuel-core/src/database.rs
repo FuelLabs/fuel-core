@@ -44,6 +44,7 @@ use fuel_core_storage::{
         ConflictPolicy,
         HistoricalView,
         Modifiable,
+        StorageChanges,
         StorageTransaction,
     },
     Error as StorageError,
@@ -452,23 +453,23 @@ impl Modifiable for Database<Relayer> {
 
 impl Modifiable for GenesisDatabase<OnChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(None, changes)
+        self.data.as_ref().commit_changes(None, changes.into())
     }
 }
 
 impl Modifiable for GenesisDatabase<OffChain> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(None, changes)
+        self.data.as_ref().commit_changes(None, changes.into())
     }
 }
 
 impl Modifiable for GenesisDatabase<Relayer> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        self.data.as_ref().commit_changes(None, changes)
+        self.data.as_ref().commit_changes(None, changes.into())
     }
 }
 
-pub fn commit_changes_with_height_update<Description>(
+pub fn commit_changes_with_height_update<Description, Changes>(
     database: &mut Database<Description>,
     changes: Changes,
     heights_lookup: impl Fn(
@@ -480,8 +481,10 @@ where
     Description::Height: Debug + PartialOrd + DatabaseHeight,
     for<'a> StorageTransaction<&'a &'a mut Database<Description>>:
         StorageMutate<MetadataTable<Description>, Error = StorageError>,
+    Changes: Into<StorageChanges>,
 {
     // Gets the all new heights from the `changes`
+    let mut changes = changes.into();
     let iterator = ChangesIterator::<Description::Column>::new(&changes);
     let new_heights = heights_lookup(&iterator)?;
 
@@ -533,14 +536,14 @@ where
         }
     };
 
-    let updated_changes = if let Some(new_height) = new_height {
+    if let Some(new_height) = new_height {
         // We want to update the metadata table to include a new height.
-        // For that, we are building a new storage transaction around `changes`.
-        // Modifying this transaction will include all required updates into the `changes`.
+        // For that, we are building a new storage transaction.
+        // We get the changes from the database and add to our list of changes.
         let mut transaction = StorageTransaction::transaction(
             &database,
             ConflictPolicy::Overwrite,
-            changes,
+            Default::default(),
         );
         let maybe_current_metadata = transaction
             .storage_as_mut::<MetadataTable<Description>>()
@@ -550,14 +553,20 @@ where
             .storage_as_mut::<MetadataTable<Description>>()
             .insert(&(), &metadata)?;
 
-        transaction.into_changes()
-    } else {
-        changes
+        changes = match changes {
+            StorageChanges::Changes(c) => {
+                StorageChanges::ChangesList(vec![c, transaction.into_changes()])
+            }
+            StorageChanges::ChangesList(mut list) => {
+                list.push(transaction.into_changes());
+                StorageChanges::ChangesList(list)
+            }
+        }
     };
 
     // Atomically commit the changes to the database, and to the mutex-protected field.
     let mut guard = database.stage.height.lock();
-    database.data.commit_changes(new_height, updated_changes)?;
+    database.data.commit_changes(new_height, changes)?;
 
     // Update the block height
     if let Some(new_height) = new_height {
