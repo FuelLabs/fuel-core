@@ -1,6 +1,9 @@
 use crate::{
     cached_view::CachedView,
-    codecs::postcard::PostcardCodec,
+    codecs::{
+        gossipsub::GossipsubMessageHandler,
+        request_response::RequestResponseMessageHandler,
+    },
     config::{
         Config,
         NotInitialized,
@@ -824,7 +827,8 @@ where
         let mut p2p_service = FuelP2PService::new(
             broadcast.reserved_peers_broadcast.clone(),
             config,
-            PostcardCodec::new(max_block_size),
+            GossipsubMessageHandler::new(),
+            RequestResponseMessageHandler::new(max_block_size),
         )
         .await?;
         p2p_service.update_block_height(last_height);
@@ -1841,7 +1845,7 @@ pub mod tests {
         watcher: &mut StateWatcher,
     ) -> (FuelPeerId, AppScore, String) {
         loop {
-            task.run(watcher).await;
+            let _ = task.run(watcher).await;
             if let Ok((peer_id, recv_report, service)) = report_receiver.try_recv() {
                 return (peer_id, recv_report, service);
             }
@@ -1893,7 +1897,7 @@ pub mod tests {
 
         for _ in 0..100 {
             // When
-            task.run(&mut watcher).await;
+            let _ = task.run(&mut watcher).await;
 
             // Then
             block_processed_receiver

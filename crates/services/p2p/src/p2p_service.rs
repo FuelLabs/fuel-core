@@ -3,9 +3,10 @@ use crate::{
         FuelBehaviour,
         FuelBehaviourEvent,
     },
-    bounded_hashset::BoundedHashset,
     codecs::{
+        gossipsub::GossipsubMessageHandler,
         postcard::PostcardCodec,
+        request_response::RequestResponseMessageHandler,
         GossipsubCodec,
     },
     config::{
@@ -64,6 +65,7 @@ use libp2p::{
     request_response::{
         self,
         InboundRequestId,
+        OutboundFailure,
         OutboundRequestId,
         ResponseChannel,
     },
@@ -123,8 +125,8 @@ pub struct FuelP2PService {
     /// to the peer that requested it.
     inbound_requests_table: HashMap<InboundRequestId, ResponseChannel<V2ResponseMessage>>,
 
-    /// NetworkCodec used as `<GossipsubCodec>` for encoding and decoding of Gossipsub messages
-    network_codec: PostcardCodec,
+    /// `PostcardCodec` as GossipsubCodec for encoding and decoding of Gossipsub messages    
+    gossipsub_codec: GossipsubMessageHandler<PostcardCodec>,
 
     /// Stores additional p2p network info
     network_metadata: NetworkMetadata,
@@ -137,12 +139,6 @@ pub struct FuelP2PService {
 
     /// Holds peers' information, and manages existing connections
     peer_manager: PeerManager,
-
-    /// Connection Limiter for gossipsub
-    gossipsub_peer_limiter: BoundedHashset<PeerId>,
-
-    /// Connection Limiter for request_response
-    request_response_peer_limiter: BoundedHashset<PeerId>,
 }
 
 #[derive(Debug)]
@@ -219,7 +215,8 @@ impl FuelP2PService {
     pub async fn new(
         reserved_peers_updates: broadcast::Sender<usize>,
         config: Config,
-        codec: PostcardCodec,
+        gossipsub_codec: GossipsubMessageHandler<PostcardCodec>,
+        request_response_codec: RequestResponseMessageHandler<PostcardCodec>,
     ) -> anyhow::Result<Self> {
         let metrics = config.metrics;
 
@@ -238,7 +235,7 @@ impl FuelP2PService {
             build_transport_function(&config, connection_state_reader);
         let tcp_config = tcp::Config::new();
 
-        let behaviour = FuelBehaviour::new(&config, codec.clone())?;
+        let behaviour = FuelBehaviour::new(&config, request_response_codec)?;
 
         let swarm_builder = SwarmBuilder::with_existing_identity(config.keypair.clone())
             .with_tokio()
@@ -298,15 +295,9 @@ impl FuelP2PService {
             local_address: config.address,
             tcp_port: config.tcp_port,
             swarm,
-            network_codec: codec,
+            gossipsub_codec,
             outbound_requests_table: HashMap::default(),
             inbound_requests_table: HashMap::default(),
-            gossipsub_peer_limiter: BoundedHashset::new(usize::try_from(
-                config.max_gossipsub_peers_connected,
-            )?),
-            request_response_peer_limiter: BoundedHashset::new(usize::try_from(
-                config.max_request_response_peers_connected,
-            )?),
             network_metadata,
             metrics,
             libp2p_metrics_registry,
@@ -398,7 +389,7 @@ impl FuelP2PService {
             .topics
             .get_gossipsub_topic_hash(&message);
 
-        match self.network_codec.encode(message) {
+        match self.gossipsub_codec.encode(message) {
             Ok(encoded_data) => self
                 .swarm
                 .behaviour_mut()
@@ -551,12 +542,6 @@ impl FuelP2PService {
                 );
                 None
             }
-            SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                // clean up the peer from the limiters
-                self.gossipsub_peer_limiter.remove(peer_id);
-                self.request_response_peer_limiter.remove(peer_id);
-                None
-            }
             _ => {
                 self.update_libp2p_metrics(&event);
                 None
@@ -616,15 +601,8 @@ impl FuelP2PService {
                 message,
                 message_id,
             } => {
-                if !self
-                    .gossipsub_peer_limiter
-                    .insert_new_if_room(propagation_source)
-                {
-                    return None;
-                }
-
                 let correct_topic = self.get_topic_tag(&message.topic)?;
-                match self.network_codec.decode(&message.data, correct_topic) {
+                match self.gossipsub_codec.decode(&message.data, correct_topic) {
                     Ok(decoded_message) => Some(FuelP2PEvent::GossipsubMessage {
                         peer_id: propagation_source,
                         message_id,
@@ -644,15 +622,8 @@ impl FuelP2PService {
                 }
             }
             gossipsub::Event::Subscribed { peer_id, topic } => {
-                if !self.gossipsub_peer_limiter.insert_new_if_room(peer_id) {
-                    return None;
-                }
                 let tag = self.get_topic_tag(&topic)?;
                 Some(FuelP2PEvent::NewSubscription { peer_id, tag })
-            }
-            gossipsub::Event::Unsubscribed { peer_id, .. } => {
-                self.gossipsub_peer_limiter.remove(peer_id);
-                None
             }
             _ => None,
         }
@@ -686,117 +657,99 @@ impl FuelP2PService {
         event: request_response::Event<RequestMessage, V2ResponseMessage>,
     ) -> Option<FuelP2PEvent> {
         match event {
-            request_response::Event::Message { peer, message } => {
-                // We only clean up the limiter *after* the peer disconnects
-                // This is to ensure that the req/res protocol has a stable
-                // connection to the peer for the duration of the connection
-                // If a peer receives None, it will try a different peer for the same request
-                if !self.request_response_peer_limiter.insert_new_if_room(peer) {
-                    return None;
+            request_response::Event::Message { peer, message } => match message {
+                request_response::Message::Request {
+                    request,
+                    channel,
+                    request_id,
+                } => {
+                    self.inbound_requests_table.insert(request_id, channel);
+
+                    return Some(FuelP2PEvent::InboundRequestMessage {
+                        request_id,
+                        request_message: request,
+                    });
                 }
+                request_response::Message::Response {
+                    request_id,
+                    response,
+                } => {
+                    let Some(channel) = self.outbound_requests_table.remove(&request_id)
+                    else {
+                        debug!("Send channel not found for {:?}", request_id);
+                        return None;
+                    };
 
-                match message {
-                    request_response::Message::Request {
-                        request,
-                        channel,
-                        request_id,
-                    } => {
-                        self.inbound_requests_table.insert(request_id, channel);
+                    let send_ok = match channel {
+                        ResponseSender::SealedHeaders(c) => match response {
+                            V2ResponseMessage::SealedHeaders(v) => {
+                                c.send(Ok((peer, Ok(v)))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send(Ok((peer, Err(ResponseError::TypeMismatch))))
+                                    .is_ok()
+                            }
+                        },
+                        ResponseSender::Transactions(c) => match response {
+                            V2ResponseMessage::Transactions(v) => {
+                                c.send(Ok((peer, Ok(v)))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send(Ok((peer, Err(ResponseError::TypeMismatch))))
+                                    .is_ok()
+                            }
+                        },
+                        ResponseSender::TransactionsFromPeer(c) => match response {
+                            V2ResponseMessage::Transactions(v) => {
+                                c.send((peer, Ok(v))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
+                            }
+                        },
+                        ResponseSender::TxPoolAllTransactionsIds(c) => match response {
+                            V2ResponseMessage::TxPoolAllTransactionsIds(v) => {
+                                c.send((peer, Ok(v))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
+                            }
+                        },
+                        ResponseSender::TxPoolFullTransactions(c) => match response {
+                            V2ResponseMessage::TxPoolFullTransactions(v) => {
+                                c.send((peer, Ok(v))).is_ok()
+                            }
+                            _ => {
+                                warn!(
+                                    "Invalid response type received for request {:?}",
+                                    request_id
+                                );
+                                c.send((peer, Err(ResponseError::TypeMismatch))).is_ok()
+                            }
+                        },
+                    };
 
-                        return Some(FuelP2PEvent::InboundRequestMessage {
-                            request_id,
-                            request_message: request,
-                        });
-                    }
-                    request_response::Message::Response {
-                        request_id,
-                        response,
-                    } => {
-                        let Some(channel) =
-                            self.outbound_requests_table.remove(&request_id)
-                        else {
-                            debug!("Send channel not found for {:?}", request_id);
-                            return None;
-                        };
-
-                        let send_ok = match channel {
-                            ResponseSender::SealedHeaders(c) => match response {
-                                V2ResponseMessage::SealedHeaders(v) => {
-                                    c.send(Ok((peer, Ok(v)))).is_ok()
-                                }
-                                _ => {
-                                    warn!(
-                                        "Invalid response type received for request {:?}",
-                                        request_id
-                                    );
-                                    c.send(Ok((peer, Err(ResponseError::TypeMismatch))))
-                                        .is_ok()
-                                }
-                            },
-                            ResponseSender::Transactions(c) => match response {
-                                V2ResponseMessage::Transactions(v) => {
-                                    c.send(Ok((peer, Ok(v)))).is_ok()
-                                }
-                                _ => {
-                                    warn!(
-                                        "Invalid response type received for request {:?}",
-                                        request_id
-                                    );
-                                    c.send(Ok((peer, Err(ResponseError::TypeMismatch))))
-                                        .is_ok()
-                                }
-                            },
-                            ResponseSender::TransactionsFromPeer(c) => match response {
-                                V2ResponseMessage::Transactions(v) => {
-                                    c.send((peer, Ok(v))).is_ok()
-                                }
-                                _ => {
-                                    warn!(
-                                        "Invalid response type received for request {:?}",
-                                        request_id
-                                    );
-                                    c.send((peer, Err(ResponseError::TypeMismatch)))
-                                        .is_ok()
-                                }
-                            },
-                            ResponseSender::TxPoolAllTransactionsIds(c) => match response
-                            {
-                                V2ResponseMessage::TxPoolAllTransactionsIds(v) => {
-                                    c.send((peer, Ok(v))).is_ok()
-                                }
-                                _ => {
-                                    warn!(
-                                        "Invalid response type received for request {:?}",
-                                        request_id
-                                    );
-                                    c.send((peer, Err(ResponseError::TypeMismatch)))
-                                        .is_ok()
-                                }
-                            },
-                            ResponseSender::TxPoolFullTransactions(c) => match response {
-                                V2ResponseMessage::TxPoolFullTransactions(v) => {
-                                    c.send((peer, Ok(v))).is_ok()
-                                }
-                                _ => {
-                                    warn!(
-                                        "Invalid response type received for request {:?}",
-                                        request_id
-                                    );
-                                    c.send((peer, Err(ResponseError::TypeMismatch)))
-                                        .is_ok()
-                                }
-                            },
-                        };
-
-                        if !send_ok {
-                            warn!(
-                                "Failed to send through the channel for {:?}",
-                                request_id
-                            );
-                        }
+                    if !send_ok {
+                        warn!("Failed to send through the channel for {:?}", request_id);
                     }
                 }
-            }
+            },
             request_response::Event::InboundFailure {
                 peer,
                 error,
@@ -812,6 +765,12 @@ impl FuelP2PService {
                 error,
                 request_id,
             } => {
+                // If the remote peer doesn't support the protocol, it is better to disconnect
+                // to find another peer that supports it.
+                if let OutboundFailure::UnsupportedProtocols = error {
+                    let _ = self.swarm.disconnect_peer_id(peer);
+                }
+
                 tracing::error!("RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
 
                 if let Some(channel) = self.outbound_requests_table.remove(&request_id) {
@@ -906,7 +865,10 @@ mod tests {
         PublishError,
     };
     use crate::{
-        codecs::postcard::PostcardCodec,
+        codecs::{
+            gossipsub::GossipsubMessageHandler,
+            request_response::RequestResponseMessageHandler,
+        },
         config::Config,
         gossipsub::{
             messages::{
@@ -988,10 +950,14 @@ mod tests {
         let (sender, _) =
             broadcast::channel(p2p_config.reserved_nodes.len().saturating_add(1));
 
-        let mut service =
-            FuelP2PService::new(sender, p2p_config, PostcardCodec::new(max_block_size))
-                .await
-                .unwrap();
+        let mut service = FuelP2PService::new(
+            sender,
+            p2p_config,
+            GossipsubMessageHandler::new(),
+            RequestResponseMessageHandler::new(max_block_size),
+        )
+        .await
+        .unwrap();
         service.start().await.unwrap();
         service
     }
@@ -1053,7 +1019,7 @@ mod tests {
 
         let mut sentry_node = {
             let mut p2p_config = p2p_config.clone();
-            p2p_config.max_discovery_peers_connected = max_peers_allowed as u32;
+            p2p_config.max_functional_peers_connected = max_peers_allowed as u32;
 
             p2p_config.bootstrap_nodes = bootstrap_multiaddrs;
 
@@ -1128,7 +1094,8 @@ mod tests {
             let mut service = FuelP2PService::new(
                 sender,
                 p2p_config,
-                PostcardCodec::new(max_block_size),
+                GossipsubMessageHandler::new(),
+                RequestResponseMessageHandler::new(max_block_size),
             )
             .await
             .unwrap();
@@ -1647,7 +1614,7 @@ mod tests {
         let mut p2p_config = Config::default_initialized("gossipsub_exchanges_messages");
 
         if let Some(connection_limit) = connection_limit {
-            p2p_config.max_gossipsub_peers_connected = connection_limit;
+            p2p_config.max_functional_peers_connected = connection_limit;
         }
 
         let selected_topic: Sha256Topic = {
@@ -1800,7 +1767,7 @@ mod tests {
         let mut p2p_config = Config::default_initialized("request_response_works_with");
 
         if let Some(connection_limit) = connection_limit {
-            p2p_config.max_request_response_peers_connected = connection_limit;
+            p2p_config.max_functional_peers_connected = connection_limit;
         }
 
         // Node A
@@ -2210,14 +2177,17 @@ mod tests {
         let handle = tokio::spawn(async {
             let arbitrary_range = 2..6;
 
-            request_response_works_with(
-                RequestMessage::Transactions(arbitrary_range),
-                Some(0), // limit to 0 peers,
+            tokio::time::timeout(
+                Duration::from_secs(5),
+                request_response_works_with(
+                    RequestMessage::Transactions(arbitrary_range),
+                    Some(0), // limit to 0 peers,
+                ),
             )
-            .await;
+            .await
         });
 
-        let result = handle.await;
+        let result = handle.await.expect("Should have completed");
         assert!(result.is_err());
     }
 }

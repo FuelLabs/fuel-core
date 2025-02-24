@@ -23,7 +23,10 @@ use fuel_core_chain_config::{
     StateConfig,
 };
 use fuel_core_p2p::{
-    codecs::postcard::PostcardCodec,
+    codecs::{
+        gossipsub::GossipsubMessageHandler,
+        request_response::RequestResponseMessageHandler,
+    },
     network_service::FuelP2PService,
     p2p_service::FuelP2PEvent,
     request_response::messages::{
@@ -87,6 +90,7 @@ pub enum BootstrapType {
 #[derive(Clone, Debug)]
 pub struct CustomizeConfig {
     min_exec_gas_price: Option<u64>,
+    max_functional_peers_connected: Option<u32>,
     max_discovery_peers_connected: Option<u32>,
 }
 
@@ -94,12 +98,18 @@ impl CustomizeConfig {
     pub fn no_overrides() -> Self {
         Self {
             min_exec_gas_price: None,
+            max_functional_peers_connected: None,
             max_discovery_peers_connected: None,
         }
     }
 
     pub fn min_gas_price(mut self, min_gas_price: u64) -> Self {
         self.min_exec_gas_price = Some(min_gas_price);
+        self
+    }
+
+    pub fn max_functional_peers_connected(mut self, max_peers_connected: u32) -> Self {
+        self.max_functional_peers_connected = Some(max_peers_connected);
         self
     }
 
@@ -172,10 +182,18 @@ impl Bootstrap {
     /// Spawn a bootstrap node.
     pub async fn new(node_config: &Config) -> anyhow::Result<Self> {
         let bootstrap_config = extract_p2p_config(node_config).await;
-        let codec = PostcardCodec::new(bootstrap_config.max_block_size);
+        let request_response_codec =
+            RequestResponseMessageHandler::new(bootstrap_config.max_block_size);
+        let gossipsub_codec = GossipsubMessageHandler::new();
         let (sender, _) =
             broadcast::channel(bootstrap_config.reserved_nodes.len().saturating_add(1));
-        let mut bootstrap = FuelP2PService::new(sender, bootstrap_config, codec).await?;
+        let mut bootstrap = FuelP2PService::new(
+            sender,
+            bootstrap_config,
+            gossipsub_codec,
+            request_response_codec,
+        )
+        .await?;
         bootstrap.start().await?;
 
         let listeners = bootstrap.multiaddrs();
@@ -470,11 +488,17 @@ pub fn make_config(
     if let Some(min_gas_price) = config_overrides.min_exec_gas_price {
         node_config.gas_price_config.min_exec_gas_price = min_gas_price;
     }
-    if let Some(max_discovery_peers_connected) =
-        config_overrides.max_discovery_peers_connected
-    {
-        if let Some(p2p) = &mut node_config.p2p {
+    if let Some(p2p) = &mut node_config.p2p {
+        if let Some(max_discovery_peers_connected) =
+            config_overrides.max_discovery_peers_connected
+        {
             p2p.max_discovery_peers_connected = max_discovery_peers_connected;
+        }
+
+        if let Some(max_functional_peers_connected) =
+            config_overrides.max_functional_peers_connected
+        {
+            p2p.max_functional_peers_connected = max_functional_peers_connected;
         }
     }
     node_config

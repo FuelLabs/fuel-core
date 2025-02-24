@@ -109,6 +109,10 @@ impl Behaviour {
             )),
         }
     }
+
+    pub fn reserved_nodes_multiaddr(&self) -> &BTreeMap<PeerId, Vec<Multiaddr>> {
+        &self.reserved_nodes_multiaddr
+    }
 }
 
 impl NetworkBehaviour for Behaviour {

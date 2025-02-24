@@ -22,7 +22,7 @@ pub fn new_service<B, S>(
 ) -> ServiceRunner<UpdateMerkleRootTask<B, S>>
 where
     B: BlockStream + Send + 'static,
-    B::Error: std::error::Error + Send + Sync + 'static,
+    B::Error: core::error::Error + Send + Sync + 'static,
     S: ServiceStorage + Send + 'static,
 {
     ServiceRunner::new(UpdateMerkleRootTask::new(chain_id, storage, blocks))
@@ -50,7 +50,7 @@ impl<B, S> UpdateMerkleRootTask<B, S> {
 impl<B, S> RunnableService for UpdateMerkleRootTask<B, S>
 where
     B: BlockStream + Send,
-    B::Error: std::error::Error + Send + Sync + 'static,
+    B::Error: core::error::Error + Send + Sync + 'static,
     S: ServiceStorage + Send,
 {
     const NAME: &'static str = "MerkleRootService";
@@ -75,7 +75,7 @@ where
 impl<B, S> RunnableTask for UpdateMerkleRootTask<B, S>
 where
     B: BlockStream + Send,
-    B::Error: std::error::Error + Send + Sync + 'static,
+    B::Error: core::error::Error + Send + Sync + 'static,
     S: ServiceStorage + Send,
 {
     #[tracing::instrument(skip(self, watcher))]
@@ -99,7 +99,7 @@ where
 impl<B, S> UpdateMerkleRootTask<B, S>
 where
     B: BlockStream,
-    B::Error: std::error::Error + Send + Sync + 'static,
+    B::Error: core::error::Error + Send + Sync + 'static,
     S: ServiceStorage,
 {
     #[tracing::instrument(skip(self))]

@@ -37,4 +37,5 @@ crates/fraud_proofs @xgreenx @netrome @acerone85 @rymnc
 
 # Code owners for common files
 CHANGELOG.md @xgreenx @Dentosal @MitchTurner @netrome @acerone85 @rafal-ch @rymnc @AurelienFT
+.changes/ @xgreenx @Dentosal @MitchTurner @netrome @acerone85 @rafal-ch @rymnc @AurelienFT
 Cargo.lock @xgreenx @Dentosal @MitchTurner @netrome @acerone85 @rafal-ch @rymnc @AurelienFT

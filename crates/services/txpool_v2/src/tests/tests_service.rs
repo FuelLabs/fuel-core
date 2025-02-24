@@ -309,6 +309,18 @@ async fn prune_expired_transactions() {
     );
 
     // When
+    let mut update_1 = service
+        .shared
+        .tx_update_subscribe(tx1.id(&ChainId::default()))
+        .unwrap();
+    let mut update_2 = service
+        .shared
+        .tx_update_subscribe(tx2.id(&ChainId::default()))
+        .unwrap();
+    let mut update_3 = service
+        .shared
+        .tx_update_subscribe(tx3.id(&ChainId::default()))
+        .unwrap();
     sender
         .send(Arc::new(ImportResult::new_from_local(
             expiration_block,
@@ -317,6 +329,10 @@ async fn prune_expired_transactions() {
         )))
         .await
         .unwrap();
+
+    update_1.next().await.expect("tx1 should be pruned");
+    update_2.next().await.expect("tx2 should be pruned");
+    update_3.next().await.expect("tx3 should be pruned");
 
     // Then
     assert_eq!(
