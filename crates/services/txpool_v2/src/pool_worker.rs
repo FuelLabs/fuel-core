@@ -13,7 +13,10 @@ use fuel_core_types::{
 use std::{
     ops::Deref,
     sync::Arc,
-    time::SystemTime,
+    time::{
+        Duration,
+        SystemTime,
+    },
 };
 use tokio::sync::{
     mpsc,
@@ -28,7 +31,12 @@ use crate::{
     config::ServiceChannelLimits,
     error::{
         Error,
+        InputValidationError,
         RemovedReason,
+    },
+    pending_pool::{
+        MissingInput,
+        PendingPool,
     },
     ports::TxPoolPersistentStorage,
     service::{
@@ -94,6 +102,8 @@ impl PoolWorkerInterface {
                 request_insert_receiver,
                 notification_sender,
                 pool: tx_pool,
+                // TODO: Configurable pending pool TTL
+                pending_pool: PendingPool::new(Duration::from_secs(3)),
                 view_provider,
             };
 
@@ -237,6 +247,7 @@ pub(super) struct PoolWorker<View> {
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
     request_insert_receiver: Receiver<PoolInsertRequest>,
     pool: TxPool,
+    pending_pool: PendingPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
     notification_sender: Sender<PoolNotification>,
 }
@@ -274,7 +285,7 @@ where
                 for remove in remove_buffer {
                     match remove {
                         PoolRemoveRequest::ExecutedTransactions { tx_ids } => {
-                            self.remove(tx_ids);
+                            self.remove_executed_transactions(tx_ids);
                         }
                         PoolRemoveRequest::CoinDependents { dependents_ids } => {
                             self.remove_coin_dependents(dependents_ids);
@@ -328,7 +339,7 @@ where
         let expiration = tx.expiration();
         let result = self.view_provider.latest_view();
         let res = match result {
-            Ok(view) => self.pool.insert(tx, &view),
+            Ok(view) => self.pool.insert(tx.clone(), &view),
             Err(err) => Err(Error::Database(format!("{:?}", err))),
         };
 
@@ -377,7 +388,27 @@ where
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
                 }
+                self.pending_pool.new_known_txs(vec![tx]);
             }
+            // Review question: What should we return to the user in this case if the source is RPC or P2P ?
+            // I think we can make a new notification just for that if needed but idk.
+            Err(Error::InputValidation(InputValidationError::UtxoNotFound(utxo_id))) => {
+                self.pending_pool
+                    .insert_transaction(tx, MissingInput::Utxo(utxo_id));
+            }
+            Err(Error::InputValidation(
+                InputValidationError::NotInsertedInputContractDoesNotExist(contract_id),
+            )) => {
+                self.pending_pool
+                    .insert_transaction(tx, MissingInput::Contract(contract_id));
+            }
+            // Review question: Should we manage messages ?
+            // Err(Error::InputValidation(
+            //     InputValidationError::NotInsertedInputMessageUnknown(nonce),
+            // )) => {
+            //     self.pending_pool
+            //         .insert_transaction(tx, MissingInput::Message(nonce));
+            // }
             Err(error) => {
                 if let Err(e) =
                     self.notification_sender
@@ -404,8 +435,9 @@ where
         }
     }
 
-    fn remove(&mut self, tx_ids: Vec<TxId>) {
-        self.pool.remove_transaction(tx_ids);
+    fn remove_executed_transactions(&mut self, tx_ids: Vec<TxId>) {
+        let removed_transactions = self.pool.remove_transactions(tx_ids);
+        self.pending_pool.new_known_txs(removed_transactions);
     }
 
     fn remove_coin_dependents(&mut self, parent_txs: Vec<(TxId, Error)>) {
