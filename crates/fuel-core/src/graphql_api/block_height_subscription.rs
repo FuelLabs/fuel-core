@@ -33,7 +33,7 @@ impl Handler {
             // get all sending endpoint corresponding to subscribers that are waiting for a block height
             // that is at most `block_height`.
             let to_notify = inner_map.tx_handles.split_off(&Reverse(block_height));
-            inner_map.latest_seen_block_height = block_height;
+            inner_map.current_block_height = block_height;
 
             to_notify.into_values().flatten()
         };
@@ -59,7 +59,7 @@ impl Subscriber {
         let future = {
             let mut inner_map = self.inner.write();
 
-            if inner_map.latest_seen_block_height >= block_height {
+            if inner_map.current_block_height >= block_height {
                 return Ok(());
             }
 
@@ -77,22 +77,22 @@ impl Subscriber {
         })
     }
 
-    pub fn latest_seen_block_height(&self) -> BlockHeight {
-        self.inner.read().latest_seen_block_height
+    pub fn current_block_height(&self) -> BlockHeight {
+        self.inner.read().current_block_height
     }
 }
 
 #[derive(Debug, Default)]
 struct HandlersMapInner {
     tx_handles: BTreeMap<Reverse<BlockHeight>, Vec<oneshot::Sender<()>>>,
-    latest_seen_block_height: BlockHeight,
+    current_block_height: BlockHeight,
 }
 
 impl HandlersMapInner {
-    fn new(latest_seen_block_height: BlockHeight) -> Self {
+    fn new(current_block_height: BlockHeight) -> Self {
         Self {
             tx_handles: BTreeMap::new(),
-            latest_seen_block_height,
+            current_block_height,
         }
     }
 }
