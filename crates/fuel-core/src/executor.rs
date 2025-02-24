@@ -3167,6 +3167,7 @@ mod tests {
                 IteratorOverTable,
             },
             tables::FuelBlocks,
+            transactional::StorageChanges,
             StorageAsMut,
         };
         use fuel_core_types::{
@@ -3310,6 +3311,7 @@ mod tests {
             let (result, changes) = producer.produce_without_commit(block.into())?.into();
 
             // Then
+            let changes = StorageChanges::Changes(changes);
             let view = ChangesIterator::<Column>::new(&changes);
             assert_eq!(
                 view.iter_all::<Messages>(None).count() as u64,
@@ -3919,6 +3921,7 @@ mod tests {
                 .into();
 
             // Then
+            let changes = StorageChanges::Changes(changes);
             let view = ChangesIterator::<Column>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);
@@ -3961,6 +3964,7 @@ mod tests {
                 .into();
 
             // Then
+            let changes = StorageChanges::Changes(changes);
             let view = ChangesIterator::<Column>::new(&changes);
             assert!(result.skipped_transactions.is_empty());
             assert_eq!(view.iter_all::<Messages>(None).count() as u64, 0);

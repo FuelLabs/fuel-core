@@ -104,14 +104,22 @@ pub struct TestSetupBuilder {
     pub max_txs: usize,
     pub database_type: DbType,
     pub database_config: DatabaseConfig,
+    pub chain_config: Option<ChainConfig>,
+    pub number_threads_pool_verif: usize,
 }
 
 impl TestSetupBuilder {
     pub fn new(seed: u64) -> TestSetupBuilder {
         Self {
             rng: StdRng::seed_from_u64(seed),
+            number_threads_pool_verif: 0,
             ..Default::default()
         }
+    }
+
+    pub fn set_chain_config(&mut self, chain_config: ChainConfig) -> &mut Self {
+        self.chain_config = Some(chain_config);
+        self
     }
 
     /// setup a contract and add to genesis configuration
@@ -195,7 +203,7 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
-        let mut chain_conf = local_chain_config();
+        let mut chain_conf = self.chain_config.clone().unwrap_or_else(local_chain_config);
 
         if let Some(gas_limit) = self.gas_limit {
             let tx_params = *chain_conf.consensus_parameters.tx_params();
@@ -244,6 +252,8 @@ impl TestSetupBuilder {
             max_pending_read_pool_requests: self.max_txs,
         };
         txpool.heavy_work.size_of_verification_queue = self.max_txs;
+        txpool.heavy_work.number_threads_to_verify_transactions =
+            self.number_threads_pool_verif;
 
         let gas_price_config = GasPriceConfig {
             starting_exec_gas_price: self.starting_gas_price,
@@ -287,6 +297,8 @@ impl Default for TestSetupBuilder {
             max_txs: 100000,
             database_type: DbType::RocksDb,
             database_config: DatabaseConfig::config_for_tests(),
+            chain_config: None,
+            number_threads_pool_verif: 0,
         }
     }
 }

@@ -1,7 +1,4 @@
-use anyhow::{
-    anyhow,
-    Context,
-};
+use anyhow::anyhow;
 use std::{
     sync::Arc,
     time::Duration,
@@ -434,25 +431,6 @@ where
         Ok(())
     }
 
-    async fn on_txpool_event(&mut self) -> anyhow::Result<()> {
-        match self.trigger {
-            Trigger::Instant => self.produce_next_block().await,
-            Trigger::Never | Trigger::Interval { .. } => Ok(()),
-        }
-    }
-
-    async fn on_timer(&mut self) -> anyhow::Result<()> {
-        match self.trigger {
-            Trigger::Instant | Trigger::Never => {
-                unreachable!("Timer is never set in this mode");
-            }
-            // In the Interval mode the timer expires only when a new block should be created.
-            Trigger::Interval { .. } => {
-                self.produce_next_block().await?;
-                Ok(())
-            }
-        }
-    }
     fn update_last_block_values(&mut self, block_header: &Arc<BlockHeader>) {
         let (last_height, last_timestamp, last_block_created) =
             Self::extract_block_info(self.clock.now(), block_header);
@@ -460,6 +438,73 @@ where
             self.last_height = last_height;
             self.last_timestamp = last_timestamp;
             self.last_block_created = last_block_created;
+        }
+    }
+
+    async fn ensure_synced(
+        &mut self,
+        watcher: &mut StateWatcher,
+    ) -> Option<TaskNextAction> {
+        let mut sync_state = self.sync_task_handle.shared.clone();
+
+        if *sync_state.borrow_and_update() == SyncState::NotSynced {
+            tokio::select! {
+                biased;
+                result = watcher.while_started() => {
+                    return Some(result.map(|state| state.started()).into())
+                }
+                _ = sync_state.changed() => {}
+            }
+        }
+
+        if let SyncState::Synced(block_header) = &*sync_state.borrow_and_update() {
+            self.update_last_block_values(block_header);
+        }
+        None
+    }
+
+    async fn maybe_produce_predefined_block(&mut self) -> Option<TaskNextAction> {
+        let next_height = self.next_height();
+        let maybe_block = match self.predefined_blocks.get_block(&next_height) {
+            Ok(option) => option,
+            Err(err) => return Some(TaskNextAction::ErrorContinue(err)),
+        };
+        if let Some(block) = maybe_block {
+            let res = self.produce_predefined_block(&block).await;
+            return match res {
+                Ok(()) => Some(TaskNextAction::Continue),
+                Err(err) => Some(TaskNextAction::ErrorContinue(err)),
+            }
+        }
+        None
+    }
+
+    async fn handle_requested_production(
+        &mut self,
+        request: Option<Request>,
+    ) -> TaskNextAction {
+        if let Some(request) = request {
+            match request {
+                Request::ManualBlocks((block, response)) => {
+                    let result = self.produce_manual_blocks(block).await;
+                    let _ = response.send(result);
+                }
+            }
+            TaskNextAction::Continue
+        } else {
+            tracing::error!("The PoA task should be the holder of the `Sender`");
+            TaskNextAction::Stop
+        }
+    }
+
+    async fn handle_normal_block_production(&mut self) -> TaskNextAction {
+        match self.produce_next_block().await {
+            Ok(()) => TaskNextAction::Continue,
+            Err(err) => {
+                // Wait some time in case of error to avoid spamming retry block production
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                TaskNextAction::ErrorContinue(err)
+            }
         }
     }
 }
@@ -516,37 +561,19 @@ where
     C: GetTime,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        let mut sync_state = self.sync_task_handle.shared.clone();
-        // make sure we're synced first
-        if *sync_state.borrow_and_update() == SyncState::NotSynced {
-            tokio::select! {
-                biased;
-                result = watcher.while_started() => {
-                    return result.map(|state| state.started()).into()
-                }
-                _ = sync_state.changed() => {}
-            }
+        if let Some(action) = self.ensure_synced(watcher).await {
+            return action;
         }
 
-        if let SyncState::Synced(block_header) = &*sync_state.borrow_and_update() {
-            self.update_last_block_values(block_header);
-        }
-
-        let next_height = self.next_height();
-        let maybe_block = match self.predefined_blocks.get_block(&next_height) {
-            Ok(option) => option,
-            Err(err) => return TaskNextAction::ErrorContinue(err),
-        };
-        if let Some(block) = maybe_block {
-            let res = self.produce_predefined_block(&block).await;
-            return match res {
-                Ok(()) => TaskNextAction::Continue,
-                Err(err) => TaskNextAction::ErrorContinue(err),
-            }
+        if let Some(action) = self.maybe_produce_predefined_block().await {
+            return action;
         }
 
         let next_block_production: BoxFuture<()> = match self.trigger {
-            Trigger::Never | Trigger::Instant => Box::pin(core::future::pending()),
+            Trigger::Never => Box::pin(core::future::pending()),
+            Trigger::Instant => Box::pin(async {
+                let _ = self.new_txs_watcher.changed().await;
+            }),
             Trigger::Interval { block_time } => {
                 let next_block_time = match self
                     .last_block_created
@@ -566,32 +593,10 @@ where
                 TaskNextAction::Stop
             }
             request = self.request_receiver.recv() => {
-                if let Some(request) = request {
-                    match request {
-                        Request::ManualBlocks((block, response)) => {
-                            let result = self.produce_manual_blocks(block).await;
-                            let _ = response.send(result);
-                        }
-                    }
-                    TaskNextAction::Continue
-                } else {
-                    tracing::error!("The PoA task should be the holder of the `Sender`");
-                    TaskNextAction::Stop
-                }
+                self.handle_requested_production(request).await
             }
             _ = next_block_production => {
-                match self.on_timer().await.context("While processing timer event") {
-                    Ok(()) => TaskNextAction::Continue,
-                    Err(err) => {
-                        // Wait some time in case of error to avoid spamming retry block production
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                        TaskNextAction::ErrorContinue(err)
-                    }
-                }
-            }
-            _ = self.new_txs_watcher.changed() => {
-                let res = self.on_txpool_event().await.context("While processing txpool event");
-                TaskNextAction::always_continue(res)
+                self.handle_normal_block_production().await
             }
         }
     }

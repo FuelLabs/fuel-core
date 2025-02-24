@@ -5,9 +5,13 @@ use fuel_core_types::{
     },
     fuel_tx::{
         self,
-        field::Expiration,
+        field::{
+            Expiration,
+            Inputs,
+        },
         Chargeable,
         ConsensusParameters,
+        Input,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -117,10 +121,25 @@ impl MaybeCheckedTransaction {
 }
 
 pub trait TransactionExt {
+    fn inputs(&self) -> ExecutorResult<&Vec<Input>>;
+
     fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64>;
 }
 
 impl TransactionExt for Transaction {
+    fn inputs(&self) -> ExecutorResult<&Vec<Input>> {
+        match self {
+            Transaction::Script(tx) => Ok(tx.inputs()),
+            Transaction::Create(tx) => Ok(tx.inputs()),
+            Transaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have inputs".to_string(),
+            )),
+            Transaction::Upgrade(tx) => Ok(tx.inputs()),
+            Transaction::Upload(tx) => Ok(tx.inputs()),
+            Transaction::Blob(tx) => Ok(tx.inputs()),
+        }
+    }
+
     fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64> {
         let fee_params = consensus_params.fee_params();
         let gas_costs = consensus_params.gas_costs();
@@ -138,6 +157,19 @@ impl TransactionExt for Transaction {
 }
 
 impl TransactionExt for CheckedTransaction {
+    fn inputs(&self) -> ExecutorResult<&Vec<Input>> {
+        match self {
+            CheckedTransaction::Script(tx) => Ok(tx.transaction().inputs()),
+            CheckedTransaction::Create(tx) => Ok(tx.transaction().inputs()),
+            CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have max_gas".to_string(),
+            )),
+            CheckedTransaction::Upgrade(tx) => Ok(tx.transaction().inputs()),
+            CheckedTransaction::Upload(tx) => Ok(tx.transaction().inputs()),
+            CheckedTransaction::Blob(tx) => Ok(tx.transaction().inputs()),
+        }
+    }
+
     fn max_gas(&self, _: &ConsensusParameters) -> ExecutorResult<u64> {
         match self {
             CheckedTransaction::Script(tx) => Ok(tx.metadata().max_gas),
@@ -153,6 +185,13 @@ impl TransactionExt for CheckedTransaction {
 }
 
 impl TransactionExt for MaybeCheckedTransaction {
+    fn inputs(&self) -> ExecutorResult<&Vec<Input>> {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.inputs(),
+            MaybeCheckedTransaction::Transaction(tx) => tx.inputs(),
+        }
+    }
+
     fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64> {
         match self {
             MaybeCheckedTransaction::CheckedTransaction(tx, _) => {
