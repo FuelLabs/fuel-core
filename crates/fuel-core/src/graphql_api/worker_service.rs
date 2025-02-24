@@ -111,6 +111,16 @@ use std::{
 #[cfg(test)]
 mod tests;
 
+pub(crate) struct Context<'a, TxPool, BlockImporter, OnChain, OffChain> {
+    pub(crate) tx_pool: TxPool,
+    pub(crate) block_importer: BlockImporter,
+    pub(crate) on_chain_database: OnChain,
+    pub(crate) off_chain_database: OffChain,
+    pub(crate) da_compression_config: DaCompressionConfig,
+    pub(crate) continue_on_error: bool,
+    pub(crate) consensus_parameters: &'a ConsensusParameters,
+}
+
 #[derive(Debug, Clone)]
 pub enum DaCompressionConfig {
     Disabled,
@@ -728,14 +738,9 @@ where
     }
 }
 
-pub fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
-    tx_pool: TxPool,
-    block_importer: BlockImporter,
-    on_chain_database: OnChain,
-    off_chain_database: OffChain,
-    da_compression_config: DaCompressionConfig,
-    continue_on_error: bool,
-    consensus_parameters: &ConsensusParameters,
+#[allow(clippy::type_complexity)]
+pub(crate) fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
+    context: Context<TxPool, BlockImporter, OnChain, OffChain>,
 ) -> anyhow::Result<ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>>
 where
     TxPool: ports::worker::TxPool,
@@ -743,6 +748,16 @@ where
     OffChain: ports::worker::OffChainDatabase,
     BlockImporter: ports::worker::BlockImporter,
 {
+    let Context {
+        tx_pool,
+        block_importer,
+        on_chain_database,
+        off_chain_database,
+        da_compression_config,
+        continue_on_error,
+        consensus_parameters,
+    } = context;
+
     let off_chain_block_height = off_chain_database.latest_height()?.unwrap_or_default();
 
     let service = ServiceRunner::new(InitializeTask {
