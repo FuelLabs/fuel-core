@@ -49,12 +49,8 @@ fn local_executor_executes_two_tasks_in_parallel() {
     let start = Instant::now();
 
     // Given
-    let task_1 = || {
-        std::thread::sleep(sleep_time)
-    };
-    let task_2 = || {
-        std::thread::sleep(sleep_time)
-    };
+    let task_1 = || std::thread::sleep(sleep_time);
+    let task_2 = || std::thread::sleep(sleep_time);
 
     // When
     runner.run_in_parallel(task_1, task_2);
