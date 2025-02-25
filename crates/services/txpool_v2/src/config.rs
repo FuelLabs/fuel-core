@@ -142,6 +142,8 @@ pub struct Config {
     pub black_list: BlackList,
     /// TTL for transactions inside the pending pool.
     pub pending_pool_tx_ttl: Duration,
+    /// Maximum percentage of the pool size to be used for the pending pool.
+    pub max_pending_pool_size_percentage: u16,
     /// Enable metrics when set to true
     pub metrics: bool,
 }
@@ -204,6 +206,7 @@ impl Default for Config {
                 max_pending_read_pool_requests: 1000,
             },
             pending_pool_tx_ttl: Duration::from_secs(3),
+            max_pending_pool_size_percentage: 50,
             metrics: false,
         }
     }

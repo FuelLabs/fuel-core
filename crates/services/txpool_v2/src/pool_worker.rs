@@ -397,7 +397,30 @@ where
                 self.pending_pool.new_known_txs(vec![tx]);
             }
             Err(InsertionErrorType::MissingInputs(missing_inputs)) => {
-                // TODO: Verify percentage used if full return first missing input
+                if missing_inputs.is_empty() {
+                    debug_assert!(false, "Missing inputs should not be empty");
+                    return;
+                }
+                if !self.has_enough_space_in_pools(&tx) {
+                    // SAFETY: missing_inputs is not empty, checked just above
+                    let error = missing_inputs
+                        .first()
+                        .expect("Missing inputs is not empty; qed")
+                        .into();
+                    if let Err(e) = self.notification_sender.try_send(
+                        PoolNotification::ErrorInsertion {
+                            tx_id,
+                            source,
+                            error,
+                        },
+                    ) {
+                        tracing::error!(
+                            "Failed to send error insertion notification: {}",
+                            e
+                        );
+                    }
+                    return;
+                }
                 self.pending_pool.insert_transaction(tx, missing_inputs);
             }
             Err(InsertionErrorType::Error(error)) => {
@@ -503,5 +526,60 @@ where
         if response_channel.send(non_existing_txs).is_err() {
             tracing::error!("Failed to send non existing txs");
         }
+    }
+
+    fn has_enough_space_in_pools(&self, tx: &ArcPoolTx) -> bool {
+        let tx_gas = tx.max_gas();
+        let bytes_size = tx.metered_bytes_size();
+
+        // Check maximum limits pool in general
+        let gas_left = self.pool.current_gas.saturating_add(tx_gas);
+        let bytes_left = self.pool.current_bytes_size.saturating_add(bytes_size);
+        let txs_left = self.pool.tx_id_to_storage_id.len().saturating_add(1);
+        if gas_left <= self.pool.config.pool_limits.max_gas
+            && bytes_left <= self.pool.config.pool_limits.max_bytes_size
+            && txs_left <= self.pool.config.pool_limits.max_txs
+        {
+            return false;
+        }
+
+        // Check the percentage used by the pending pool
+        let gas_used = self.pending_pool.current_gas.saturating_add(tx_gas);
+        let bytes_used = self.pending_pool.current_bytes.saturating_add(bytes_size);
+        let txs_used = self.pending_pool.current_txs.saturating_add(1);
+
+        if gas_used
+            <= self
+                .pool
+                .config
+                .pool_limits
+                .max_gas
+                .saturating_mul(self.pool.config.max_pending_pool_size_percentage as u64)
+                .saturating_div(100)
+            && bytes_used
+                <= self
+                    .pool
+                    .config
+                    .pool_limits
+                    .max_bytes_size
+                    .saturating_mul(
+                        self.pool.config.max_pending_pool_size_percentage as usize,
+                    )
+                    .saturating_div(100)
+            && txs_used
+                <= self
+                    .pool
+                    .config
+                    .pool_limits
+                    .max_txs
+                    .saturating_mul(
+                        self.pool.config.max_pending_pool_size_percentage as usize,
+                    )
+                    .saturating_div(100)
+        {
+            return false;
+        }
+
+        true
     }
 }

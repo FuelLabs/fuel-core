@@ -96,7 +96,7 @@ pub enum DependencyError {
     DependentTransactionIsADiamondDeath,
 }
 
-pub enum InsertionErrorType {
+pub(crate) enum InsertionErrorType {
     Error(Error),
     MissingInputs(Vec<MissingInput>),
 }

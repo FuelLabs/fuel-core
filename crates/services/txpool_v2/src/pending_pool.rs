@@ -20,6 +20,11 @@ use fuel_core_types::{
     services::txpool::ArcPoolTx,
 };
 
+use crate::error::{
+    Error,
+    InputValidationError,
+};
+
 // This is a simple temporary storage for transactions that doesn't have all of their input created yet.
 // This storage should not have a lot of complexity.
 //
@@ -29,23 +34,49 @@ use fuel_core_types::{
 // Deletion rules:
 // - If the transaction missing inputs hasn't been known for a certain amount of time.
 // - If the transaction missing inputs becomes known.
-pub struct PendingPool {
+pub(crate) struct PendingPool {
     ttl: Duration,
     unresolved_txs_by_inputs: HashMap<MissingInput, Vec<TxId>>,
     unresolved_inputs_by_tx: HashMap<TxId, (ArcPoolTx, Vec<MissingInput>)>,
     ttl_check: VecDeque<(SystemTime, TxId)>,
-    current_bytes: usize,
-    current_txs: usize,
-    current_gas: u64,
+    pub(crate) current_bytes: usize,
+    pub(crate) current_txs: usize,
+    pub(crate) current_gas: u64,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Copy, Clone)]
-pub enum MissingInput {
+pub(crate) enum MissingInput {
     Utxo(UtxoId),
     Contract(ContractId),
 }
 
-pub struct UpdateMissingTxs {
+impl From<MissingInput> for Error {
+    fn from(value: MissingInput) -> Self {
+        match value {
+            MissingInput::Utxo(utxo) => {
+                Error::InputValidation(InputValidationError::UtxoNotFound(utxo))
+            }
+            MissingInput::Contract(contract) => Error::InputValidation(
+                InputValidationError::NotInsertedInputContractDoesNotExist(contract),
+            ),
+        }
+    }
+}
+
+impl From<&MissingInput> for Error {
+    fn from(value: &MissingInput) -> Self {
+        match value {
+            MissingInput::Utxo(utxo) => {
+                Error::InputValidation(InputValidationError::UtxoNotFound(*utxo))
+            }
+            MissingInput::Contract(contract) => Error::InputValidation(
+                InputValidationError::NotInsertedInputContractDoesNotExist(*contract),
+            ),
+        }
+    }
+}
+
+pub(crate) struct UpdateMissingTxs {
     pub resolved_txs: Vec<ArcPoolTx>,
     pub expired_txs: Vec<ArcPoolTx>,
 }
@@ -61,18 +92,6 @@ impl PendingPool {
             current_txs: 0,
             current_gas: 0,
         }
-    }
-
-    pub fn current_bytes(&self) -> usize {
-        self.current_bytes
-    }
-
-    pub fn current_txs(&self) -> usize {
-        self.current_txs
-    }
-
-    pub fn current_gas(&self) -> u64 {
-        self.current_gas
     }
 
     pub fn insert_transaction(
@@ -430,18 +449,16 @@ mod tests {
 
         // Given
         let mut pending_pool = PendingPool::new(Duration::from_millis(1));
-        let tx1 = create_pool_tx(
-            vec![],
-            vec![],
-            &mut rng,
+        let tx1 = create_pool_tx(vec![], vec![], &mut rng);
+        let tx2 = create_pool_tx(vec![], vec![], &mut rng);
+        pending_pool.insert_transaction(
+            tx1.clone(),
+            vec![MissingInput::Utxo(UtxoId::new(tx1.id(), 0))],
         );
-        let tx2 = create_pool_tx(
-            vec![],
-            vec![],
-            &mut rng,
+        pending_pool.insert_transaction(
+            tx2.clone(),
+            vec![MissingInput::Utxo(UtxoId::new(tx2.id(), 0))],
         );
-        pending_pool.insert_transaction(tx1.clone(), vec![MissingInput::Utxo(UtxoId::new(tx1.id(), 0))]);
-        pending_pool.insert_transaction(tx2.clone(), vec![MissingInput::Utxo(UtxoId::new(tx2.id(), 0))]);
 
         // When
         let updated_txs = pending_pool.new_known_txs(vec![]);

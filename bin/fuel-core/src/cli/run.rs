@@ -539,6 +539,7 @@ impl Command {
             tx_max_pending_read_requests,
             tx_max_pending_write_requests,
             tx_pending_pool_ttl,
+            tx_pending_pool_size_percentage,
         } = tx_pool;
 
         let black_list = BlackList::new(
@@ -658,6 +659,7 @@ impl Command {
                 heavy_work: pool_heavy_work_config,
                 service_channel_limits,
                 pending_pool_tx_ttl: tx_pending_pool_ttl.into(),
+                max_pending_pool_size_percentage: tx_pending_pool_size_percentage,
                 metrics: disabled_metrics.is_enabled(Module::TxPool),
             },
             block_producer: ProducerConfig {
