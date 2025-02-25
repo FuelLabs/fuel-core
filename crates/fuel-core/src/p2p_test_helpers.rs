@@ -587,8 +587,8 @@ impl Node {
                     result = wait_transaction.next() => {
                         let status = result.unwrap().unwrap();
 
-                        if matches!(status, TransactionStatus::Failure { .. }) || matches!(status, TransactionStatus::FailureDuringBlockProduction { .. })
-                            || matches!(status, TransactionStatus::Success { .. })|| matches!(status, TransactionStatus::SuccessDuringBlockProduction { .. }) {
+                        if matches!(status, TransactionStatus::Failed { .. })
+                            || matches!(status, TransactionStatus::Success { .. }) {
                             break
                         }
                     }
