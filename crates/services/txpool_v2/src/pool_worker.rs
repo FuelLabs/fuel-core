@@ -155,6 +155,7 @@ enum ThreadManagementRequest {
 }
 
 #[allow(clippy::upper_case_acronyms)]
+#[derive(Debug)]
 pub(super) enum InsertionSource {
     P2P {
         from_peer_info: GossipsubMessageInfo,
@@ -394,7 +395,26 @@ where
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
                 }
-                self.pending_pool.new_known_txs(vec![tx]);
+                let updated_txs = self.pending_pool.new_known_txs(vec![tx]);
+                for (tx, source) in updated_txs.resolved_txs {
+                    self.insert(tx, source);
+                }
+                for (tx, source, missing_inputs) in updated_txs.expired_txs {
+                    if let Some(missing_input) = missing_inputs.first() {
+                        if let Err(e) = self.notification_sender.try_send(
+                            PoolNotification::ErrorInsertion {
+                                tx_id: tx.id(),
+                                source,
+                                error: missing_input.into(),
+                            },
+                        ) {
+                            tracing::error!(
+                                "Failed to send error insertion notification: {}",
+                                e
+                            );
+                        }
+                    }
+                }
             }
             Err(InsertionErrorType::MissingInputs(missing_inputs)) => {
                 if missing_inputs.is_empty() {
@@ -421,7 +441,8 @@ where
                     }
                     return;
                 }
-                self.pending_pool.insert_transaction(tx, missing_inputs);
+                self.pending_pool
+                    .insert_transaction(tx, source, missing_inputs);
             }
             Err(InsertionErrorType::Error(error)) => {
                 if let Err(e) =
@@ -451,7 +472,24 @@ where
 
     fn remove_executed_transactions(&mut self, tx_ids: Vec<TxId>) {
         let removed_transactions = self.pool.remove_transactions(tx_ids);
-        self.pending_pool.new_known_txs(removed_transactions);
+        let updated_txs = self.pending_pool.new_known_txs(removed_transactions);
+        for (tx, source) in updated_txs.resolved_txs {
+            self.insert(tx, source);
+        }
+        for (tx, source, missing_inputs) in updated_txs.expired_txs {
+            if let Some(missing_input) = missing_inputs.first() {
+                if let Err(e) =
+                    self.notification_sender
+                        .try_send(PoolNotification::ErrorInsertion {
+                            tx_id: tx.id(),
+                            source,
+                            error: missing_input.into(),
+                        })
+                {
+                    tracing::error!("Failed to send error insertion notification: {}", e);
+                }
+            }
+        }
     }
 
     fn remove_coin_dependents(&mut self, parent_txs: Vec<(TxId, Error)>) {
@@ -533,12 +571,12 @@ where
         let bytes_size = tx.metered_bytes_size();
 
         // Check maximum limits pool in general
-        let gas_left = self.pool.current_gas.saturating_add(tx_gas);
-        let bytes_left = self.pool.current_bytes_size.saturating_add(bytes_size);
-        let txs_left = self.pool.tx_id_to_storage_id.len().saturating_add(1);
-        if gas_left <= self.pool.config.pool_limits.max_gas
-            && bytes_left <= self.pool.config.pool_limits.max_bytes_size
-            && txs_left <= self.pool.config.pool_limits.max_txs
+        let gas_used = self.pool.current_gas.saturating_add(tx_gas);
+        let bytes_used = self.pool.current_bytes_size.saturating_add(bytes_size);
+        let txs_used = self.pool.tx_id_to_storage_id.len().saturating_add(1);
+        if gas_used > self.pool.config.pool_limits.max_gas
+            && bytes_used > self.pool.config.pool_limits.max_bytes_size
+            && txs_used > self.pool.config.pool_limits.max_txs
         {
             return false;
         }
@@ -549,7 +587,7 @@ where
         let txs_used = self.pending_pool.current_txs.saturating_add(1);
 
         if gas_used
-            <= self
+            > self
                 .pool
                 .config
                 .pool_limits
@@ -557,7 +595,7 @@ where
                 .saturating_mul(self.pool.config.max_pending_pool_size_percentage as u64)
                 .saturating_div(100)
             && bytes_used
-                <= self
+                > self
                     .pool
                     .config
                     .pool_limits
@@ -567,7 +605,7 @@ where
                     )
                     .saturating_div(100)
             && txs_used
-                <= self
+                > self
                     .pool
                     .config
                     .pool_limits
