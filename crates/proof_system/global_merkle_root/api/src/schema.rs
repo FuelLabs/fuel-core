@@ -35,13 +35,10 @@ impl<Storage> Query<Storage>
 where
     Storage: ports::GetStateRoot + Send + Sync,
 {
-    async fn state_root(
-        &self,
-        height: BlockHeight,
-    ) -> async_graphql::Result<Option<MerkleRoot>> {
+    async fn state_root(&self, height: BlockHeight) -> async_graphql::Result<MerkleRoot> {
         let state_root = self.storage.state_root_at(height.0.into())?;
 
-        Ok(state_root.map(|root| MerkleRoot(*root)))
+        Ok(MerkleRoot(*state_root))
     }
 }
 
