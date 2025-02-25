@@ -62,11 +62,11 @@ impl SharedState {
     fn new(database: Database) -> Self {
         // We set versions in the `into_task` function during start of the service.
         let genesis_version = 0;
-        let latest_stf_version = 0;
+        let genesis_stf_version = 0;
 
         Self {
             latest_consensus_parameters_version: SharedRwLock::new(genesis_version),
-            latest_stf_version: SharedRwLock::new(latest_stf_version),
+            latest_stf_version: SharedRwLock::new(genesis_stf_version),
             consensus_parameters: Default::default(),
             database,
         }
