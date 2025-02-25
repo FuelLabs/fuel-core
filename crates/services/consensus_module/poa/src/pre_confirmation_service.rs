@@ -1,17 +1,30 @@
 // TODO: Remove this
 #![allow(dead_code)]
 
-use crate::pre_confirmation_service::trigger::KeyRotationTrigger;
 use error::Result;
 use fuel_core_services::{
     RunnableTask,
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_types::fuel_tx::Transaction;
+
+use crate::pre_confirmation_service::{
+    broadcast::Broadcast,
+    key_generator::KeyGenerator,
+    parent_signature::ParentSignature,
+    signing_key::SigningKey,
+    trigger::KeyRotationTrigger,
+    tx_receiver::TxReceiver,
+};
 
 pub mod error;
 pub mod trigger;
+pub mod tx_receiver;
+
+pub mod broadcast;
+pub mod key_generator;
+pub mod parent_signature;
+pub mod signing_key;
 
 #[cfg(test)]
 pub mod tests;
@@ -21,66 +34,46 @@ pub struct PreConfirmationTask<
     Broadcast,
     ParentSignature,
     KeyGenerator,
-    Key,
+    DelegateKey,
     KeyRotationTrigger,
 > {
     tx_receiver: TxReceiver,
     broadcast: Broadcast,
     parent_signature: ParentSignature,
     key_generator: KeyGenerator,
-    current_delegate_key: Key,
+    current_delegate_key: DelegateKey,
     key_rotation_trigger: KeyRotationTrigger,
 }
 
-#[async_trait::async_trait]
-pub trait TxReceiver: Send {
-    async fn _receive(&mut self) -> Result<Vec<Transaction>>;
-}
-
-#[async_trait::async_trait]
-pub trait Broadcast<T>: Send {
-    async fn broadcast(&mut self, data: T) -> Result<()>;
-}
-
-pub trait ParentSignature: Send {
-    type SignedData<T>: Send
-    where
-        T: Send;
-    fn sign<T: Send>(&self, data: T) -> Result<Self::SignedData<T>>;
-}
-
-#[async_trait::async_trait]
-pub trait KeyGenerator: Send {
-    type Key: SigningKey;
-    async fn generate(&mut self) -> Result<Self::Key>;
-}
-
-pub trait SigningKey: Clone + Send {}
-
-impl<TxRcv, Brdcst, Parent, Gen, Key, Trigger>
-    PreConfirmationTask<TxRcv, Brdcst, Parent, Gen, Key, Trigger>
+impl<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+    PreConfirmationTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver,
-    Brdcst: Broadcast<Parent::SignedData<Key>>,
+    Brdcst: Broadcast<
+        DelegateKey = DelegateKey,
+        ParentSignature<DelegateKey> = Parent::SignedData<DelegateKey>,
+        PreConfirmations: From<TxRcv::Txs>,
+    >,
     Parent: ParentSignature,
-    Gen: KeyGenerator<Key = Key>,
-    Key: SigningKey,
+    Gen: KeyGenerator<Key = DelegateKey>,
+    DelegateKey: SigningKey,
     Trigger: KeyRotationTrigger,
 {
     pub async fn _run(&mut self) -> Result<()> {
         tracing::debug!("Running pre-confirmation task");
         tokio::select! {
-            // _txs = self.tx_receiver.receive() => {
-            //     tracing::debug!("Received transactions");
-            //     todo!();
-            // }
+            res = self.tx_receiver.receive() => {
+                tracing::debug!("Received transactions");
+                let txs = res?;
+                let pre_confirmations = Brdcst::PreConfirmations::from(txs);
+                let signed = self.current_delegate_key.sign(pre_confirmations)?;
+                self.broadcast.broadcast_txs(signed).await?;
+            }
             _ = self.key_rotation_trigger.next_rotation() => {
                 tracing::debug!("Key rotation triggered");
                 let new_delegate_key = self.key_generator.generate().await?;
-                tracing::debug!("Generated new delegate key");
-                let signed_key = self.parent_signature.sign(new_delegate_key.clone())?;
-                tracing::debug!("Signed new delegate key");
-                self.broadcast.broadcast(signed_key).await?;
+                let signed_key = self.parent_signature.sign(new_delegate_key.clone()).await?;
+                self.broadcast.broadcast_delegate_key(signed_key).await?;
                 self.current_delegate_key = new_delegate_key;
             }
         }
@@ -88,14 +81,18 @@ where
     }
 }
 
-impl<TxRcv, Brdcst, Parent, Gen, Key, Trigger> RunnableTask
-    for PreConfirmationTask<TxRcv, Brdcst, Parent, Gen, Key, Trigger>
+impl<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger> RunnableTask
+    for PreConfirmationTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver,
-    Brdcst: Broadcast<Parent::SignedData<Key>>,
+    Brdcst: Broadcast<
+        DelegateKey = DelegateKey,
+        ParentSignature<DelegateKey> = Parent::SignedData<DelegateKey>,
+        PreConfirmations: From<TxRcv::Txs>,
+    >,
     Parent: ParentSignature,
-    Gen: KeyGenerator<Key = Key>,
-    Key: SigningKey,
+    Gen: KeyGenerator<Key = DelegateKey>,
+    DelegateKey: SigningKey,
     Trigger: KeyRotationTrigger,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {

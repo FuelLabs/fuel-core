@@ -2,8 +2,12 @@
 // TODO: Remove
 
 use super::*;
-use crate::pre_confirmation_service::error::Error;
+use crate::pre_confirmation_service::{
+    error::Error,
+    tx_receiver::Status,
+};
 use fuel_core_services::StateWatcher;
+use fuel_core_types::fuel_tx::Transaction;
 use std::{
     sync::Arc,
     time::Duration,
@@ -11,36 +15,55 @@ use std::{
 use tokio::sync::Notify;
 use tracing_subscriber as _;
 
-struct FakeTxReceiver;
+use fuel_core_types::fuel_types::BlockHeight;
+struct FakeTxReceiver {
+    recv: tokio::sync::mpsc::Receiver<Vec<(Transaction, Status)>>,
+}
 
 #[async_trait::async_trait]
 impl TxReceiver for FakeTxReceiver {
-    async fn _receive(&mut self) -> Result<Vec<Transaction>> {
-        let _: () = std::future::pending().await;
-        todo!()
+    type Txs = Vec<(Transaction, Status)>;
+
+    async fn receive(&mut self) -> Result<Vec<(Transaction, Status)>> {
+        let txs = self.recv.recv().await;
+        match txs {
+            Some(txs) => Ok(txs),
+            None => Err(Error::TxReceiverError("No txs received".into())),
+        }
     }
 }
 
 struct FakeBroadcast {
-    sender: Option<tokio::sync::oneshot::Sender<FakeSignedData<FakeSigningKey>>>,
+    delegation_key_sender: tokio::sync::mpsc::Sender<FakeSignedData<FakeSigningKey>>,
+    tx_sender: tokio::sync::mpsc::Sender<FakeSignedData<Vec<(Transaction, Status)>>>,
 }
 
 #[async_trait::async_trait]
-impl Broadcast<FakeSignedData<FakeSigningKey>> for FakeBroadcast {
-    async fn broadcast(&mut self, data: FakeSignedData<FakeSigningKey>) -> Result<()> {
-        match self.sender.take() {
-            Some(sender) => {
-                let _ = sender.send(data).map_err(|data| {
-                    Error::BroadcastError(format!(
-                        "Could not sent {:?} over oneshot channel",
-                        data
-                    ))
-                })?;
-            }
-            None => {
-                tracing::warn!("Broadcast channel already closed");
-            }
-        }
+impl Broadcast for FakeBroadcast {
+    type PreConfirmations = Vec<(Transaction, Status)>;
+    type ParentSignature<T> = FakeSignedData<T>;
+    type DelegateKey = FakeSigningKey;
+
+    async fn broadcast_txs(
+        &mut self,
+        txs: <Self::DelegateKey as SigningKey>::Signature<Self::PreConfirmations>,
+    ) -> Result<()> {
+        self.tx_sender.send(txs).await.map_err(|error| {
+            Error::BroadcastError(format!("Could not send {:?} over channel", error))
+        })?;
+        Ok(())
+    }
+
+    async fn broadcast_delegate_key(
+        &mut self,
+        delegate_key: Self::ParentSignature<Self::DelegateKey>,
+    ) -> Result<()> {
+        self.delegation_key_sender
+            .send(delegate_key)
+            .await
+            .map_err(|error| {
+                Error::BroadcastError(format!("Could not send {:?} over channel", error))
+            })?;
         Ok(())
     }
 }
@@ -56,12 +79,13 @@ struct FakeSignedData<T> {
     dummy_signature: String,
 }
 
+#[async_trait::async_trait]
 impl ParentSignature for FakeParentSignature {
     type SignedData<T>
         = FakeSignedData<T>
     where
         T: Send;
-    fn sign<T: Send>(&self, data: T) -> Result<Self::SignedData<T>> {
+    async fn sign<T: Send>(&self, data: T) -> Result<Self::SignedData<T>> {
         Ok(FakeSignedData {
             data,
             dummy_signature: self.dummy_signature.clone(),
@@ -101,7 +125,19 @@ impl<T: Into<String>> From<T> for FakeSigningKey {
     }
 }
 
-impl SigningKey for FakeSigningKey {}
+impl SigningKey for FakeSigningKey {
+    type Signature<T>
+        = FakeSignedData<T>
+    where
+        T: Send + Clone;
+
+    fn sign<T: Send + Clone>(&self, data: T) -> Result<Self::Signature<T>> {
+        Ok(FakeSignedData {
+            data,
+            dummy_signature: self.inner.clone(),
+        })
+    }
+}
 
 struct FakeTrigger {
     pub inner: Arc<Notify>,
@@ -127,10 +163,15 @@ impl FakeTrigger {
 
 struct TestImplHandles {
     pub trigger_handle: Arc<Notify>,
-    pub broadcast_handle: tokio::sync::oneshot::Receiver<FakeSignedData<FakeSigningKey>>,
+    pub broadcast_delegation_key_handle:
+        tokio::sync::mpsc::Receiver<FakeSignedData<FakeSigningKey>>,
+    pub broadcast_tx_handle:
+        tokio::sync::mpsc::Receiver<FakeSignedData<Vec<(Transaction, Status)>>>,
+    pub tx_sender_handle: tokio::sync::mpsc::Sender<Vec<(Transaction, Status)>>,
 }
 
 struct TaskBuilder {
+    current_delegate_key: Option<String>,
     parent_signature: Option<FakeParentSignature>,
     key_generator: Option<FakeKeyGenerator>,
 }
@@ -138,6 +179,7 @@ struct TaskBuilder {
 impl TaskBuilder {
     pub fn new() -> Self {
         Self {
+            current_delegate_key: None,
             parent_signature: None,
             key_generator: None,
         }
@@ -157,12 +199,14 @@ impl TaskBuilder {
         TestImplHandles,
     ) {
         let (key_rotation_trigger, trigger_handle) = FakeTrigger::new();
-        let current_delegate_key = "first key".into();
+        let current_delegate_key = self.get_current_delegate_key();
         let key_generator = self.get_key_generator();
         let parent_signature = self.get_parant_signature();
-        let (broadcast, broadcast_handle) = self.get_broadcast();
+        let (broadcast, broadcast_delegation_key_handle, broadcast_tx_handle) =
+            self.get_broadcast();
+        let (tx_receiver, tx_sender_handle) = self.get_tx_receiver();
         let task = PreConfirmationTask {
-            tx_receiver: FakeTxReceiver,
+            tx_receiver,
             broadcast,
             parent_signature,
             key_generator,
@@ -171,9 +215,19 @@ impl TaskBuilder {
         };
         let handles = TestImplHandles {
             trigger_handle,
-            broadcast_handle,
+            broadcast_delegation_key_handle,
+            broadcast_tx_handle,
+            tx_sender_handle,
         };
         (task, handles)
+    }
+
+    fn get_current_delegate_key(&self) -> FakeSigningKey {
+        let raw = self
+            .current_delegate_key
+            .clone()
+            .unwrap_or("first key".to_string());
+        FakeSigningKey::from(raw)
     }
 
     fn get_key_generator(&self) -> FakeKeyGenerator {
@@ -196,13 +250,36 @@ impl TaskBuilder {
         &self,
     ) -> (
         FakeBroadcast,
-        tokio::sync::oneshot::Receiver<FakeSignedData<FakeSigningKey>>,
+        tokio::sync::mpsc::Receiver<FakeSignedData<FakeSigningKey>>,
+        tokio::sync::mpsc::Receiver<FakeSignedData<Vec<(Transaction, Status)>>>,
     ) {
-        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let (delegation_key_sender, delegation_key_receiver) =
+            tokio::sync::mpsc::channel(10);
+        let (tx_sender, tx_receiver) = tokio::sync::mpsc::channel(10);
         let broadcast = FakeBroadcast {
-            sender: Some(sender),
+            delegation_key_sender,
+            tx_sender,
         };
-        (broadcast, receiver)
+        (broadcast, delegation_key_receiver, tx_receiver)
+    }
+
+    fn get_tx_receiver(
+        &self,
+    ) -> (
+        FakeTxReceiver,
+        tokio::sync::mpsc::Sender<Vec<(Transaction, Status)>>,
+    ) {
+        let (tx_sender, tx_receiver) = tokio::sync::mpsc::channel(1);
+        let tx_receiver = FakeTxReceiver { recv: tx_receiver };
+        (tx_receiver, tx_sender)
+    }
+
+    pub fn with_current_delegate_key<T: Into<String>>(
+        mut self,
+        current_delegate_key: T,
+    ) -> Self {
+        self.current_delegate_key = Some(current_delegate_key.into());
+        self
     }
 
     pub fn with_generated_key<T: Into<String>>(mut self, generated_key: T) -> Self {
@@ -241,7 +318,7 @@ async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_sig
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // then
-    let actual = handles.broadcast_handle.try_recv().unwrap();
+    let actual = handles.broadcast_delegation_key_handle.try_recv().unwrap();
     let expected = FakeSignedData {
         data: generated_key.into(),
         dummy_signature: dummy_signature.into(),
@@ -273,6 +350,50 @@ async fn run__key_rotation_updates_current_key() {
 }
 
 #[tokio::test]
-async fn run__received_tx_will_be_broadcast_with_current_delegate_key() {
-    todo!()
+async fn run__received_tx_will_be_broadcast_with_current_delegate_key_signature() {
+    // let _ = tracing_subscriber::fmt()
+    //     .with_max_level(tracing::Level::DEBUG)
+    //     .try_init();
+
+    // given
+    let current_delegate_key = "foobar delegate key";
+    let (mut task, mut handles) = TaskBuilder::new()
+        .with_current_delegate_key(current_delegate_key)
+        .build_with_handles();
+    let mut state_watcher = StateWatcher::started();
+
+    // when
+    let txs = vec![
+        (
+            Transaction::default(),
+            Status::Success {
+                height: BlockHeight::from(1),
+            },
+        ),
+        (
+            Transaction::default(),
+            Status::Fail {
+                height: BlockHeight::from(2),
+            },
+        ),
+    ];
+    tokio::task::spawn(async move {
+        let _ = task.run(&mut state_watcher).await;
+    });
+
+    handles
+        .tx_sender_handle
+        .send(txs.clone())
+        .await
+        .expect("Failed to send txs");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // then
+    let actual = handles.broadcast_tx_handle.try_recv().unwrap();
+    let dummy_signature = current_delegate_key.to_string();
+    let expected = FakeSignedData {
+        data: txs,
+        dummy_signature,
+    };
+    assert_eq!(expected, actual);
 }

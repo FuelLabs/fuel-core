@@ -11,4 +11,8 @@ pub enum Error {
     /// Error occurred when broadcasting data
     #[error("Broadcast error: {0}")]
     BroadcastError(String),
+
+    /// Error occurred when receiving transactions
+    #[error("Transaction receiver error: {0}")]
+    TxReceiverError(String),
 }
