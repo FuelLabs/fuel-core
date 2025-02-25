@@ -48,6 +48,7 @@ pub struct Header {
     pub prev_root: MerkleRoot,
     pub time: Tai64,
     pub application_hash: Hash,
+    #[cfg(feature = "fault-proving")]
     pub tx_id_commitment: Option<Hash>,
 }
 
@@ -95,6 +96,7 @@ impl TryFrom<schema::block::Header> for Header {
                 prev_root: value.prev_root.into(),
                 time: value.time.0,
                 application_hash: value.application_hash.into(),
+                #[cfg(feature = "fault-proving")]
                 tx_id_commitment: None,
             }),
             HeaderVersion::V2 => Ok(Self {
@@ -113,6 +115,7 @@ impl TryFrom<schema::block::Header> for Header {
                 prev_root: value.prev_root.into(),
                 time: value.time.0,
                 application_hash: value.application_hash.into(),
+                #[cfg(feature = "fault-proving")]
                 tx_id_commitment: value.tx_id_commitment.map(Into::into),
             }),
             _ => Err(ConversionError::UnknownVariant("HeaderVersion")),

@@ -30,7 +30,8 @@ use std::{
     str::FromStr,
 };
 
-const MAX_RESPONSE_SIZE_STR: &str = const_format::formatcp!("{MAX_RESPONSE_SIZE}");
+const MAX_RESPONSE_SIZE_STR: &str =
+    const_format::formatcp!("{}", MAX_RESPONSE_SIZE.get());
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
@@ -59,7 +60,7 @@ pub struct P2PArgs {
 
     /// Max Block size
     #[clap(long = "max-block-size", default_value = MAX_RESPONSE_SIZE_STR, env)]
-    pub max_block_size: usize,
+    pub max_block_size: u32,
 
     /// Max number of blocks/headers in a single headers request response
     #[clap(long = "max-headers-per-request", default_value = "100", env)]
@@ -308,6 +309,9 @@ impl P2PArgs {
             )
         };
 
+        let max_block_size = NonZeroU32::new(self.max_block_size)
+            .ok_or(anyhow!("max block size must be greater than zero"))?;
+
         let config = Config {
             keypair: local_keypair,
             network_name,
@@ -317,7 +321,7 @@ impl P2PArgs {
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
             public_address: self.public_address,
             tcp_port: self.peering_port,
-            max_block_size: self.max_block_size,
+            max_block_size,
             max_headers_per_request: self.max_headers_per_request,
             max_txs_per_request: self.max_txs_per_request,
             bootstrap_nodes: self.bootstrap_nodes,
