@@ -1,6 +1,3 @@
-// TODO: Remove this
-#![allow(dead_code)]
-
 use error::Result;
 use fuel_core_services::{
     RunnableTask,

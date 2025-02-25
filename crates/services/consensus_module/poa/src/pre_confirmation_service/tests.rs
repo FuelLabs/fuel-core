@@ -12,6 +12,7 @@ use tokio::sync::Notify;
 
 use fuel_core_types::fuel_types::BlockHeight;
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Status {
     Success { height: BlockHeight },
