@@ -9,9 +9,9 @@ pub trait GasPriceProvider {
     fn dry_run_gas_price(&self) -> anyhow::Result<u64>;
 }
 
-/// Interface for retrieving the consensus parameters.
+/// Interface for retrieving the chain state info.
 #[cfg_attr(feature = "test-helpers", mockall::automock)]
-pub trait ConsensusParametersProvider {
+pub trait ChainStateInfoProvider {
     /// Retrieve the consensus parameters for the `version`.
     fn consensus_params_at_version(
         &self,
