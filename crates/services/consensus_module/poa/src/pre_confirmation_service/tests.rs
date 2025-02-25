@@ -1,11 +1,7 @@
 #![allow(non_snake_case)]
-// TODO: Remove
 
 use super::*;
-use crate::pre_confirmation_service::{
-    error::Error,
-    tx_receiver::Status,
-};
+use crate::pre_confirmation_service::error::Error;
 use fuel_core_services::StateWatcher;
 use fuel_core_types::fuel_tx::Transaction;
 use std::{
@@ -16,6 +12,14 @@ use tokio::sync::Notify;
 use tracing_subscriber as _;
 
 use fuel_core_types::fuel_types::BlockHeight;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Status {
+    Success { height: BlockHeight },
+    Fail { height: BlockHeight },
+    SqueezedOut { reason: String },
+}
+
 struct FakeTxReceiver {
     recv: tokio::sync::mpsc::Receiver<Vec<(Transaction, Status)>>,
 }
@@ -201,7 +205,7 @@ impl TaskBuilder {
         let (key_rotation_trigger, trigger_handle) = FakeTrigger::new();
         let current_delegate_key = self.get_current_delegate_key();
         let key_generator = self.get_key_generator();
-        let parent_signature = self.get_parant_signature();
+        let parent_signature = self.get_parent_signature();
         let (broadcast, broadcast_delegation_key_handle, broadcast_tx_handle) =
             self.get_broadcast();
         let (tx_receiver, tx_sender_handle) = self.get_tx_receiver();
@@ -238,7 +242,7 @@ impl TaskBuilder {
         })
     }
 
-    fn get_parant_signature(&self) -> FakeParentSignature {
+    fn get_parent_signature(&self) -> FakeParentSignature {
         self.parent_signature.clone().unwrap_or({
             FakeParentSignature {
                 dummy_signature: "dummy signature".into(),
