@@ -107,6 +107,6 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        todo!()
+        Ok(())
     }
 }
