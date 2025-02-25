@@ -226,10 +226,6 @@ impl TaskBuilder {
 
 #[tokio::test]
 async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_signature() {
-    // let _ = tracing_subscriber::fmt()
-    //     .with_max_level(tracing::Level::DEBUG)
-    //     .try_init();
-
     // given
     let generated_key = "some generated key";
     let dummy_signature = "dummy signature";
@@ -251,4 +247,32 @@ async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_sig
         dummy_signature: dummy_signature.into(),
     };
     assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn run__key_rotation_updates_current_key() {
+    // given
+    let generated_key = "another generated key";
+    let (mut task, handles) = TaskBuilder::new()
+        .with_generated_key(generated_key)
+        .build_with_handles();
+
+    // when
+    let mut state_watcher = StateWatcher::started();
+    let fut_current_key = tokio::task::spawn(async move {
+        let _ = task.run(&mut state_watcher).await;
+        task.current_delegate_key
+    });
+    handles.trigger_handle.notify_one();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // then
+    let actual = fut_current_key.await.unwrap();
+    let expected = FakeSigningKey::from(generated_key);
+    assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn run__received_tx_will_be_broadcast_with_current_delegate_key() {
+    todo!()
 }

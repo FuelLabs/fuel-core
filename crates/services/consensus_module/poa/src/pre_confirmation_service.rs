@@ -81,7 +81,7 @@ where
                 let signed_key = self.parent_signature.sign(new_delegate_key.clone())?;
                 tracing::debug!("Signed new delegate key");
                 self.broadcast.broadcast(signed_key).await?;
-
+                self.current_delegate_key = new_delegate_key;
             }
         }
         Ok(())
