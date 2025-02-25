@@ -39,3 +39,4 @@ crates/fraud_proofs @xgreenx @netrome @acerone85 @rymnc
 CHANGELOG.md @FuelLabs/client
 .changes/ @FuelLabs/client
 Cargo.lock @FuelLabs/client
+.github/CODEOWNERS @FuelLabs/client @FuelLabs/engineering-managers
