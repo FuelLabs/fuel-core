@@ -1,0 +1,37 @@
+[package]
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+description = "GraphQL API for the global merkle root service."
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies", "fuel-client", "fuel-core"]
+license = { workspace = true }
+name = "fuel-core-global-merkle-root-api"
+repository = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-graphql = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+derive_more = { workspace = true }
+fuel-core-services = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["alloc"] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "serde",
+  "alloc",
+] }
+hex = { workspace = true }
+hyper = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+fuel-core-storage = { workspace = true, features = ["std", "test-helpers"] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "serde",
+  "random",
+  "test-helpers",
+] }
+reqwest = { workspace = true }

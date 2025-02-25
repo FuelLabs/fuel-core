@@ -81,7 +81,7 @@ pub(crate) fn default_gossipsub_config() -> gossipsub::Config {
         .gossip_lazy(6)
         .history_length(5)
         .history_gossip(3)
-        .max_transmit_size(MAX_RESPONSE_SIZE)
+        .max_transmit_size(MAX_RESPONSE_SIZE.get() as usize)
         .heartbeat_interval(Duration::from_millis(700))
         .fanout_ttl(Duration::from_secs(60))
         .build()
