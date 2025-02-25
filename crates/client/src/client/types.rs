@@ -53,6 +53,8 @@ use fuel_core_types::{
     fuel_tx::{
         Receipt,
         Transaction,
+        TxId,
+        TxPointer,
     },
     fuel_types::{
         canonical::Deserialize,
@@ -115,7 +117,9 @@ pub enum TransactionStatus {
         total_fee: u64,
     },
     SuccessDuringBlockProduction {
-        block_height: BlockHeight,
+        tx_pointer: TxPointer,
+        transaction_id: Option<TxId>,
+        receipts: Option<Vec<Receipt>>,
     },
     SqueezedOut {
         reason: String,
@@ -159,7 +163,18 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
             },
             SchemaTxStatus::SuccessDuringBlockProductionStatus(s) => {
                 TransactionStatus::SuccessDuringBlockProduction {
-                    block_height: s.block_height.into(),
+                    tx_pointer: s.tx_pointer.into(),
+                    transaction_id: s.transaction_id.map(Into::into),
+                    receipts: if let Some(receipts) = s.receipts {
+                        Some(
+                            receipts
+                                .into_iter()
+                                .map(TryInto::try_into)
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    } else {
+                        None
+                    },
                 }
             }
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
@@ -208,7 +223,9 @@ pub enum StatusWithTransaction {
         total_fee: u64,
     },
     SuccessDuringBlockProduction {
-        block_height: BlockHeight,
+        tx_pointer: TxPointer,
+        transaction_id: Option<TxId>,
+        receipts: Option<Vec<Receipt>>,
     },
     SqueezedOut {
         reason: String,
@@ -255,7 +272,18 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
 
             SchemaStatusWithTx::SuccessDuringBlockProductionStatus(s) => {
                 StatusWithTransaction::SuccessDuringBlockProduction {
-                    block_height: s.block_height.into(),
+                    tx_pointer: s.tx_pointer.into(),
+                    transaction_id: s.transaction_id.map(Into::into),
+                    receipts: if let Some(receipts) = s.receipts {
+                        Some(
+                            receipts
+                                .into_iter()
+                                .map(TryInto::try_into)
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    } else {
+                        None
+                    },
                 }
             }
 

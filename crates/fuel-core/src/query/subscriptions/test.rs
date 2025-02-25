@@ -65,7 +65,9 @@ fn success() -> TransactionStatus {
 
 fn success_during_block_production() -> TransactionStatus {
     TransactionStatus::SuccessDuringBlockProduction {
-        block_height: Default::default(),
+        tx_pointer: Default::default(),
+        tx_id: None,
+        receipts: None,
     }
 }
 

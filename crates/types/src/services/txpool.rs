@@ -23,6 +23,7 @@ use crate::{
         Script,
         Transaction,
         TxId,
+        TxPointer,
         Upgrade,
         Upload,
     },
@@ -444,10 +445,14 @@ pub enum TransactionStatus {
         /// The total fee paid by the transaction
         total_fee: u64,
     },
-    /// Transaction was successfully included in a block
+    /// Transaction was successfully executed by block producer
     SuccessDuringBlockProduction {
-        /// The block height that was being produced when the transaction succeeded
-        block_height: BlockHeight,
+        /// Transaction pointer
+        tx_pointer: TxPointer,
+        /// Transaction ID
+        tx_id: Option<TxId>,
+        /// Receipts
+        receipts: Option<Vec<Receipt>>,
     },
     /// Transaction was squeezed out of the TxPool
     SqueezedOut {

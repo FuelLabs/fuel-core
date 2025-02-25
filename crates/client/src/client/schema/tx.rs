@@ -9,6 +9,7 @@ use crate::client::{
         PageInfo,
         Tai64Timestamp,
         TransactionId,
+        TxPointer,
         U32,
         U64,
     },
@@ -18,7 +19,9 @@ use crate::client::{
     PaginationRequest,
 };
 use fuel_core_types::{
-    fuel_tx,
+    fuel_tx::{
+        self,
+    },
     fuel_types::{
         canonical::Deserialize,
         Bytes32,
@@ -196,10 +199,6 @@ pub enum TransactionStatus {
     Unknown,
 }
 
-// TODO[RC]: In the future we might be able to add "tx_id" to the "SuccessDuringBlockProductionStatus"
-// and "FailureDuringBlockProductionStatus" variants, which will enable us to
-// provide "SuccessDuringBlockProductionStatusWithTransaction" and "FailureDuringBlockProductionStatusWithTransaction"
-// variants.
 #[allow(clippy::enum_variant_names)]
 #[derive(cynic::InlineFragments, Clone, Debug)]
 #[cynic(
@@ -250,7 +249,9 @@ pub struct SuccessStatusWithTransaction {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessDuringBlockProductionStatus {
-    pub block_height: U32,
+    pub tx_pointer: TxPointer,
+    pub transaction_id: Option<TransactionId>,
+    pub receipts: Option<Vec<Receipt>>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

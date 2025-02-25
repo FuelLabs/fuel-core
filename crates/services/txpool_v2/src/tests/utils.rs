@@ -50,7 +50,9 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
             total_fee: 0,
         }),
         Just(TransactionStatus::SuccessDuringBlockProduction {
-            block_height: Default::default()
+            tx_pointer: Default::default(),
+            tx_id: None,
+            receipts: None,
         }),
         Just(TransactionStatus::Failure {
             block_height: Default::default(),

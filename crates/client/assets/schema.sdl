@@ -1215,7 +1215,10 @@ type Subscription {
 }
 
 type SuccessDuringBlockProductionStatus {
-	blockHeight: U32!
+	txPointer: TxPointer!
+	transactionId: TransactionId
+	transaction: Transaction
+	receipts: [Receipt!]
 }
 
 type SuccessStatus {
