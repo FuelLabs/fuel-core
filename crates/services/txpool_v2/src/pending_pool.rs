@@ -158,15 +158,20 @@ impl PendingPool {
     fn expire_transactions(&mut self, updated_txs: &mut UpdateMissingTxs) {
         let now = SystemTime::now();
         while let Some((ttl, tx_id)) = self.ttl_check.back() {
-            if *ttl > now {
+            if *ttl < now {
                 break;
             }
             if let Some((tx, missing_inputs)) = self.unresolved_inputs_by_tx.remove(tx_id)
             {
                 updated_txs.expired_txs.push(tx);
                 for input in missing_inputs {
+                    // Remove tx_id from the list of unresolved transactions for this input
+                    // If the list becomes empty, remove the entry
                     if let Some(tx_ids) = self.unresolved_txs_by_inputs.get_mut(&input) {
-                        tx_ids.retain(|id| *id != *tx_id)
+                        tx_ids.retain(|id| *id != *tx_id);
+                        if tx_ids.is_empty() {
+                            self.unresolved_txs_by_inputs.remove(&input);
+                        }
                     }
                 }
             }
@@ -254,10 +259,12 @@ mod tests {
         SeedableRng,
     };
 
+    use super::*;
+
     fn create_pool_tx(
         inputs: Vec<UtxoId>,
         outputs: Vec<Output>,
-        _rng: &mut StdRng,
+        rng: &mut StdRng,
     ) -> ArcPoolTx {
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
         let owner = Input::predicate_owner(&predicate);
@@ -266,7 +273,7 @@ mod tests {
         if inputs.is_empty() {
             tx.add_input(Input::coin_predicate(
                 UtxoId::new([0; 32].into(), 0),
-                owner.clone(),
+                owner,
                 outputs
                     .iter()
                     .map(|output| match output {
@@ -284,7 +291,7 @@ mod tests {
             for input in inputs {
                 tx.add_input(Input::coin_predicate(
                     input,
-                    owner.clone(),
+                    owner,
                     10,
                     AssetId::default(),
                     Default::default(),
@@ -297,6 +304,8 @@ mod tests {
         for output in outputs {
             tx.add_output(output);
         }
+        // To differentiates the transactions
+        tx.add_random_fee_input(rng);
         let mut tx = tx.finalize();
         tx.estimate_predicates(
             &CheckPredicateParams::default(),
@@ -312,12 +321,10 @@ mod tests {
 
     #[test]
     fn test_pending_pool_one_tx_one_dependent_input() {
-        use super::*;
-        use std::time::Duration;
-
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
+        // Given
         let dependency_tx = create_pool_tx(
             vec![],
             vec![Output::Coin {
@@ -327,17 +334,121 @@ mod tests {
             }],
             &mut rng,
         );
-
         let utxo = UtxoId::new(dependency_tx.id(), 0);
         let dependent_tx = create_pool_tx(vec![utxo], vec![], &mut rng);
+
+        // When
         pending_pool
             .insert_transaction(dependent_tx.clone(), vec![MissingInput::Utxo(utxo)]);
-
         let new_known_txs = vec![dependency_tx.clone()];
         let updated_txs = pending_pool.new_known_txs(new_known_txs);
+
+        // Then
         assert_eq!(updated_txs.resolved_txs.len(), 1);
         assert_eq!(updated_txs.resolved_txs[0].id(), dependent_tx.id());
         assert!(updated_txs.expired_txs.is_empty());
+        assert!(pending_pool.is_empty());
+    }
+
+    #[test]
+    fn test_pending_pool_two_tx_one_dependent_input() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let mut pending_pool = PendingPool::new(Duration::from_secs(1));
+
+        // Given
+        let dependency_tx = create_pool_tx(
+            vec![],
+            vec![Output::Coin {
+                to: Address::default(),
+                asset_id: AssetId::default(),
+                amount: 100,
+            }],
+            &mut rng,
+        );
+        let utxo = UtxoId::new(dependency_tx.id(), 0);
+        let dependent_tx_1 = create_pool_tx(vec![utxo], vec![], &mut rng);
+        let dependent_tx_2 = create_pool_tx(vec![utxo], vec![], &mut rng);
+
+        // When
+        pending_pool
+            .insert_transaction(dependent_tx_1.clone(), vec![MissingInput::Utxo(utxo)]);
+        pending_pool
+            .insert_transaction(dependent_tx_2.clone(), vec![MissingInput::Utxo(utxo)]);
+        let new_known_txs = vec![dependency_tx.clone()];
+        let updated_txs = pending_pool.new_known_txs(new_known_txs);
+
+        // Then
+        assert_eq!(updated_txs.resolved_txs.len(), 2);
+        assert!(updated_txs.expired_txs.is_empty());
+        assert!(pending_pool.is_empty());
+    }
+
+    #[test]
+    fn test_pending_pool_one_tx_two_dependent_inputs() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let mut pending_pool = PendingPool::new(Duration::from_secs(1));
+
+        // Given
+        let dependency_tx = create_pool_tx(
+            vec![],
+            vec![
+                Output::Coin {
+                    to: Address::default(),
+                    asset_id: AssetId::default(),
+                    amount: 100,
+                },
+                Output::Coin {
+                    to: Address::default(),
+                    asset_id: AssetId::default(),
+                    amount: 100,
+                },
+            ],
+            &mut rng,
+        );
+        let utxo_1 = UtxoId::new(dependency_tx.id(), 0);
+        let utxo_2 = UtxoId::new(dependency_tx.id(), 1);
+        let dependent_tx = create_pool_tx(vec![utxo_1, utxo_2], vec![], &mut rng);
+
+        // When
+        pending_pool.insert_transaction(
+            dependent_tx.clone(),
+            vec![MissingInput::Utxo(utxo_1), MissingInput::Utxo(utxo_2)],
+        );
+        let new_known_txs = vec![dependency_tx.clone()];
+        let updated_txs = pending_pool.new_known_txs(new_known_txs);
+
+        // Then
+        assert_eq!(updated_txs.resolved_txs.len(), 1);
+        assert_eq!(updated_txs.resolved_txs[0].id(), dependent_tx.id());
+        assert!(updated_txs.expired_txs.is_empty());
+        assert!(pending_pool.is_empty());
+    }
+
+    #[test]
+    fn test_pending_pool_two_txs_expired() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+
+        // Given
+        let mut pending_pool = PendingPool::new(Duration::from_millis(1));
+        let tx1 = create_pool_tx(
+            vec![],
+            vec![],
+            &mut rng,
+        );
+        let tx2 = create_pool_tx(
+            vec![],
+            vec![],
+            &mut rng,
+        );
+        pending_pool.insert_transaction(tx1.clone(), vec![MissingInput::Utxo(UtxoId::new(tx1.id(), 0))]);
+        pending_pool.insert_transaction(tx2.clone(), vec![MissingInput::Utxo(UtxoId::new(tx2.id(), 0))]);
+
+        // When
+        let updated_txs = pending_pool.new_known_txs(vec![]);
+
+        // Then
+        assert_eq!(updated_txs.resolved_txs.len(), 0);
+        assert_eq!(updated_txs.expired_txs.len(), 2);
         assert!(pending_pool.is_empty());
     }
 }
