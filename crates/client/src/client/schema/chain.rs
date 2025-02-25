@@ -554,6 +554,12 @@ mod tests {
         use cynic::QueryBuilder;
         let operation = ChainQuery::build(());
 
-        insta::assert_snapshot!(operation.query)
+        let snapshot_name = if cfg!(feature = "fault-proving") {
+            "chain_gql_query_output_with_tx_id_commitment"
+        } else {
+            "chain_gql_query_output"
+        };
+
+        insta::assert_snapshot!(snapshot_name, operation.query)
     }
 }
