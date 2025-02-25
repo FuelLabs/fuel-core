@@ -283,6 +283,19 @@ impl BlockHeader {
         }
     }
 
+    /// Set the stf version
+    pub fn set_stf_version(&mut self, version: StateTransitionBytecodeVersion) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_stf_version(version);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_stf_version(version);
+            }
+        }
+    }
+
     /// Set the application hash
     pub fn set_application_hash(&mut self, hash: Bytes32) {
         match self {

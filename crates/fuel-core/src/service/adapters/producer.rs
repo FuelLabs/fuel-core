@@ -3,7 +3,7 @@ use crate::{
     service::{
         adapters::{
             BlockProducerAdapter,
-            ConsensusParametersProvider,
+            ChainStateInfoProvider,
             ExecutorAdapter,
             MaybeRelayerAdapter,
             StaticGasPrice,
@@ -15,7 +15,7 @@ use crate::{
 };
 use fuel_core_producer::{
     block_producer::gas_price::{
-        ConsensusParametersProvider as ConsensusParametersProviderTrait,
+        ChainStateInfoProvider as ChainStateInfoProviderTrait,
         GasPriceProvider,
     },
     ports::{
@@ -281,7 +281,7 @@ impl GasPriceProvider for StaticGasPrice {
     }
 }
 
-impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
+impl ChainStateInfoProviderTrait for ChainStateInfoProvider {
     fn consensus_params_at_version(
         &self,
         version: &ConsensusParametersVersion,

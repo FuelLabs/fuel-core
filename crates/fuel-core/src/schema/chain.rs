@@ -1,6 +1,6 @@
 use crate::{
     fuel_core_graphql_api::{
-        api_service::ConsensusProvider,
+        api_service::ChainInfoProvider,
         query_costs,
     },
     graphql_api::Config,
@@ -813,7 +813,7 @@ impl ChainInfo {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<ConsensusParameters> {
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
+            .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params();
 
         Ok(ConsensusParameters(params))
@@ -822,7 +822,7 @@ impl ChainInfo {
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn gas_costs(&self, ctx: &Context<'_>) -> async_graphql::Result<GasCosts> {
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
+            .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params();
 
         Ok(GasCosts(params.gas_costs().clone()))

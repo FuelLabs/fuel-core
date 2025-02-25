@@ -2,7 +2,7 @@ use crate::{
     ports::{
         AtomicView,
         BlockImporter as BlockImporterTrait,
-        ConsensusParametersProvider,
+        ChainStateInfoProvider,
         GasPriceProvider,
         NotifyP2P,
         P2PRequests,
@@ -251,9 +251,9 @@ impl WasmChecker for MockWasmChecker {
 }
 
 mockall::mock! {
-    pub ConsensusParametersProvider {}
+    pub ChainStateInfoProvider {}
 
-    impl ConsensusParametersProvider for ConsensusParametersProvider {
+    impl ChainStateInfoProvider for ChainStateInfoProvider {
         fn latest_consensus_parameters(&self) -> (ConsensusParametersVersion, Arc<ConsensusParameters>);
     }
 }
