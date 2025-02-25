@@ -100,6 +100,11 @@ impl PendingPool {
         missing_inputs: Vec<MissingInput>,
     ) {
         let tx_id = transaction.id();
+        self.current_bytes = self
+            .current_bytes
+            .saturating_add(transaction.metered_bytes_size());
+        self.current_gas = self.current_gas.saturating_add(transaction.max_gas());
+        self.current_txs = self.current_txs.saturating_add(1);
         for input in &missing_inputs {
             self.unresolved_txs_by_inputs
                 .entry(*input)
@@ -182,6 +187,10 @@ impl PendingPool {
             }
             if let Some((tx, missing_inputs)) = self.unresolved_inputs_by_tx.remove(tx_id)
             {
+                self.current_bytes =
+                    self.current_bytes.saturating_sub(tx.metered_bytes_size());
+                self.current_gas = self.current_gas.saturating_sub(tx.max_gas());
+                self.current_txs = self.current_txs.saturating_sub(1);
                 updated_txs.expired_txs.push(tx);
                 for input in missing_inputs {
                     // Remove tx_id from the list of unresolved transactions for this input
