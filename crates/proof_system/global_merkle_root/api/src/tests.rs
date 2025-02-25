@@ -29,8 +29,12 @@ async fn schema__can_execute_valid_state_root_query() {
     // Given
     let block_height = 1337;
     let mut storage = TestStorage::default();
+    let state_root: Bytes32 =
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
 
-    storage.insert_zeroed_root_at(block_height.into());
+    storage.insert_root_at(block_height.into(), state_root);
 
     let query = Query::new(storage);
     let schema = Schema::build(query, EmptyMutation, EmptySubscription).finish();
@@ -43,7 +47,7 @@ async fn schema__can_execute_valid_state_root_query() {
     assert!(response.errors.is_empty());
     assert_eq!(
         response.data.to_string(),
-        r#"{stateRoot: "0x0000000000000000000000000000000000000000000000000000000000000000"}"#
+        r#"{stateRoot: "0x0000000000000000000000000000000000000000000000000000000000000001"}"#
     );
 }
 
@@ -52,8 +56,12 @@ async fn schema__returns_error_on_invalid_state_root_query() {
     // Given
     let block_height = 1337;
     let mut storage = TestStorage::default();
+    let state_root: Bytes32 =
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
 
-    storage.insert_zeroed_root_at(block_height.into());
+    storage.insert_root_at(block_height.into(), state_root);
 
     let query = Query::new(storage);
     let schema = Schema::build(query, EmptyMutation, EmptySubscription).finish();
@@ -72,8 +80,12 @@ async fn service__can_serve_api() {
     // Given
     let block_height = 1337;
     let mut storage = TestStorage::default();
+    let state_root: Bytes32 =
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
 
-    storage.insert_zeroed_root_at(block_height.into());
+    storage.insert_root_at(block_height.into(), state_root);
 
     let network_address = "127.0.0.1:0";
 
@@ -87,7 +99,7 @@ async fn service__can_serve_api() {
     // Then
     assert_eq!(
         response,
-        r#"{"data":{"stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000"}}"#
+        r#"{"data":{"stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000001"}}"#
     );
 }
 
@@ -97,8 +109,8 @@ struct TestStorage {
 }
 
 impl TestStorage {
-    fn insert_zeroed_root_at(&mut self, height: BlockHeight) {
-        self.state_roots.insert(height, Bytes32::zeroed());
+    fn insert_root_at(&mut self, height: BlockHeight, root: Bytes32) {
+        self.state_roots.insert(height, root);
     }
 }
 
@@ -106,8 +118,8 @@ impl GetStateRoot for TestStorage {
     fn state_root_at(
         &self,
         height: BlockHeight,
-    ) -> Result<Option<Bytes32>, fuel_core_storage::Error> {
-        Ok(self.state_roots.get(&height).copied())
+    ) -> Result<Bytes32, fuel_core_storage::Error> {
+        Ok(self.state_roots.get(&height).copied().unwrap_or_default())
     }
 }
 

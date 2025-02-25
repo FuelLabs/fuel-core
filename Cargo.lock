@@ -3342,6 +3342,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-block-fetcher"
+version = "0.0.1"
+source = "git+https://github.com/FuelLabs/network-watchtower.git#004b6a6b645d0ceb11d140a0a1da48ebbd34c950"
+dependencies = [
+ "anyhow",
+ "fuel-core-client 0.41.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fuel-core-client-ext",
+ "fuel-core-compression",
+ "fuel-core-types 0.41.7",
+ "futures",
+ "itertools 0.14.0",
+ "postcard",
+]
+
+[[package]]
 name = "fuel-compression"
 version = "0.60.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3556,14 +3571,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-client"
+version = "0.41.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5b35c44c16742bc634c56801fe956871193b19ba4a27c822ad4ceaa28cae93a"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "cynic",
+ "derive_more 0.99.19",
+ "eventsource-client",
+ "fuel-core-types 0.41.7",
+ "futures",
+ "hex",
+ "hyper-rustls 0.24.2",
+ "itertools 0.12.1",
+ "reqwest 0.12.12",
+ "schemafy_lib",
+ "serde",
+ "serde_json",
+ "tai64",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
 name = "fuel-core-client-bin"
 version = "0.41.7"
 dependencies = [
  "clap",
- "fuel-core-client",
+ "fuel-core-client 0.41.7",
  "fuel-core-types 0.41.7",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "fuel-core-client-ext"
+version = "0.0.1"
+source = "git+https://github.com/FuelLabs/network-watchtower.git#004b6a6b645d0ceb11d140a0a1da48ebbd34c950"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "cynic",
+ "fuel-core-client 0.41.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fuel-core-types 0.41.7",
+ "itertools 0.14.0",
 ]
 
 [[package]]
@@ -3629,7 +3682,7 @@ dependencies = [
  "assert_cmd",
  "fuel-core",
  "fuel-core-chain-config",
- "fuel-core-client",
+ "fuel-core-client 0.41.7",
  "fuel-core-trace",
  "fuel-core-types 0.41.7",
  "futures",
@@ -3956,6 +4009,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-srs"
+version = "0.41.7"
+dependencies = [
+ "anyhow",
+ "async-graphql",
+ "async-trait",
+ "axum 0.5.17",
+ "clap",
+ "derive_more 0.99.19",
+ "fuel-block-fetcher",
+ "fuel-core",
+ "fuel-core-database",
+ "fuel-core-global-merkle-root-api",
+ "fuel-core-global-merkle-root-service",
+ "fuel-core-global-merkle-root-storage",
+ "fuel-core-services",
+ "fuel-core-storage",
+ "fuel-core-types 0.41.7",
+ "hex",
+ "hyper 0.14.32",
+ "itertools 0.12.1",
+ "reqwest 0.12.12",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fuel-core-storage"
 version = "0.41.7"
 dependencies = [
@@ -4012,7 +4095,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-benches",
  "fuel-core-bin",
- "fuel-core-client",
+ "fuel-core-client 0.41.7",
  "fuel-core-compression",
  "fuel-core-executor",
  "fuel-core-gas-price-service",
@@ -9849,7 +9932,7 @@ dependencies = [
  "clap",
  "fuel-core",
  "fuel-core-bin",
- "fuel-core-client",
+ "fuel-core-client 0.41.7",
  "fuel-core-p2p",
  "fuel-core-poa",
  "fuel-core-relayer",

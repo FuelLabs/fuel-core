@@ -15,6 +15,7 @@ members = [
   "crates/keygen",
   "crates/metrics",
   "crates/proof_system/global_merkle_root/api",
+  "crates/proof_system/global_merkle_root/app",
   "crates/proof_system/global_merkle_root/service",
   "crates/proof_system/global_merkle_root/storage",
   "crates/services",
@@ -104,9 +105,12 @@ fuel-gas-price-algorithm = { version = "0.41.7", path = "crates/fuel-gas-price-a
 # Proof system
 fuel-core-global-merkle-root-storage = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/storage" }
 fuel-core-global-merkle-root-service = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/service" }
+fuel-core-global-merkle-root-api = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/api" }
+fuel-core-srs = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/cli" }
 
 # Fuel dependencies
 fuel-vm-private = { version = "0.60.0", package = "fuel-vm", default-features = false }
+fuel-block-fetcher = { version = "0.0.1", git = "https://github.com/FuelLabs/network-watchtower.git" }
 
 # Common dependencies
 anyhow = "1.0"
@@ -177,3 +181,7 @@ insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
 url = "2.2"
+
+[patch.crates-io]
+fuel-core-types = { path = "./crates/types" }
+fuel-core-compression = { path = "./crates/compression" }

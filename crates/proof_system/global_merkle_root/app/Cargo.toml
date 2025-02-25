@@ -1,0 +1,48 @@
+[package]
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+description = "GraphQL API for the global merkle root service."
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "cryptocurrencies", "fuel-client", "fuel-core"]
+license = { workspace = true }
+name = "fuel-core-srs"
+repository = { workspace = true }
+version = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-graphql = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
+clap = { workspace = true }
+derive_more = { workspace = true }
+fuel-block-fetcher = { workspace = true }
+fuel-core = { workspace = true }
+fuel-core-database = { workspace = true }
+fuel-core-global-merkle-root-api = { workspace = true }
+fuel-core-global-merkle-root-service = { workspace = true }
+fuel-core-global-merkle-root-storage = { workspace = true }
+fuel-core-services = { workspace = true }
+fuel-core-storage = { workspace = true, features = ["alloc"] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "serde",
+  "alloc",
+] }
+hex = { workspace = true }
+hyper = { workspace = true }
+itertools = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+fuel-core-storage = { workspace = true, features = ["std", "test-helpers"] }
+fuel-core-types = { workspace = true, default-features = false, features = [
+  "serde",
+  "random",
+  "test-helpers",
+] }
+reqwest = { workspace = true }
