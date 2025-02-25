@@ -9,7 +9,6 @@ use std::{
     time::Duration,
 };
 use tokio::sync::Notify;
-use tracing_subscriber as _;
 
 use fuel_core_types::fuel_types::BlockHeight;
 
@@ -355,10 +354,6 @@ async fn run__key_rotation_updates_current_key() {
 
 #[tokio::test]
 async fn run__received_tx_will_be_broadcast_with_current_delegate_key_signature() {
-    // let _ = tracing_subscriber::fmt()
-    //     .with_max_level(tracing::Level::DEBUG)
-    //     .try_init();
-
     // given
     let current_delegate_key = "foobar delegate key";
     let (mut task, mut handles) = TaskBuilder::new()
