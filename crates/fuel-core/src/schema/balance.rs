@@ -1,7 +1,7 @@
 use crate::{
     database::database_description::IndexationKind,
     fuel_core_graphql_api::{
-        api_service::ConsensusProvider,
+        api_service::ChainInfoProvider,
         query_costs,
     },
     schema::{
@@ -70,7 +70,7 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Balance> {
         let query = ctx.read_view()?;
         let base_asset_id = *ctx
-            .data_unchecked::<ConsensusProvider>()
+            .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params()
             .base_asset_id();
         let balance = query
@@ -123,7 +123,7 @@ impl BalanceQuery {
             .into())
         }
         let base_asset_id = *ctx
-            .data_unchecked::<ConsensusProvider>()
+            .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params()
             .base_asset_id();
         let owner = filter.owner.into();

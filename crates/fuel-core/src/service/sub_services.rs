@@ -21,14 +21,14 @@ use crate::{
     schema::build_schema,
     service::{
         adapters::{
+            chain_state_info_provider,
             consensus_module::poa::InDirectoryPredefinedBlocks,
-            consensus_parameters_provider,
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
             BlockImporterAdapter,
             BlockProducerAdapter,
-            ConsensusParametersProvider,
+            ChainStateInfoProvider,
             ExecutorAdapter,
             MaybeRelayerAdapter,
             PoAAdapter,
@@ -79,7 +79,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     TxPoolAdapter,
     ExecutorAdapter,
     FuelGasPriceProvider<AlgorithmV1, u32, u64>,
-    ConsensusParametersProvider,
+    ChainStateInfoProvider,
 >;
 
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
@@ -148,14 +148,12 @@ pub fn init_sub_services(
         verifier.clone(),
     );
 
-    let consensus_parameters_provider_service =
-        consensus_parameters_provider::new_service(
-            database.on_chain().clone(),
-            &importer_adapter,
-        );
-    let consensus_parameters_provider = ConsensusParametersProvider::new(
-        consensus_parameters_provider_service.shared.clone(),
+    let chain_state_info_provider_service = chain_state_info_provider::new_service(
+        database.on_chain().clone(),
+        &importer_adapter,
     );
+    let chain_state_info_provider =
+        ChainStateInfoProvider::new(chain_state_info_provider_service.shared.clone());
 
     #[cfg(feature = "relayer")]
     let relayer_service = if let Some(config) = &config.relayer {
@@ -206,7 +204,7 @@ pub fn init_sub_services(
     let p2p_adapter = P2PAdapter::new();
 
     let genesis_block_height = *genesis_block.header().height();
-    let settings = consensus_parameters_provider.clone();
+    let settings = chain_state_info_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
     let committer_api =
@@ -240,7 +238,7 @@ pub fn init_sub_services(
         p2p_adapter.clone(),
         importer_adapter.clone(),
         database.on_chain().clone(),
-        consensus_parameters_provider.clone(),
+        chain_state_info_provider.clone(),
         last_height,
         universal_gas_price_provider.clone(),
         executor.clone(),
@@ -271,7 +269,7 @@ pub fn init_sub_services(
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
         gas_price_provider: producer_gas_price_provider.clone(),
-        consensus_parameters_provider: consensus_parameters_provider.clone(),
+        chain_state_info_provider: chain_state_info_provider.clone(),
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
 
@@ -369,7 +367,7 @@ pub fn init_sub_services(
         Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),
         Box::new(universal_gas_price_provider),
-        Box::new(consensus_parameters_provider),
+        Box::new(chain_state_info_provider),
         SharedMemoryPool::new(config.memory_pool_size),
         graphql_block_height_subscription_handle,
     )?;
@@ -393,7 +391,7 @@ pub fn init_sub_services(
     let mut services: SubServices = vec![
         Box::new(gas_price_service_v1),
         Box::new(txpool),
-        Box::new(consensus_parameters_provider_service),
+        Box::new(chain_state_info_provider_service),
     ];
 
     if let Some(poa) = poa {

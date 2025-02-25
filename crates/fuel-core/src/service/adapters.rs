@@ -56,8 +56,8 @@ use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
 
 pub mod block_importer;
+pub mod chain_state_info_provider;
 pub mod consensus_module;
-pub mod consensus_parameters_provider;
 pub mod executor;
 pub mod fuel_gas_price_provider;
 pub mod gas_price_adapters;
@@ -75,12 +75,12 @@ pub mod sync;
 pub mod txpool;
 
 #[derive(Debug, Clone)]
-pub struct ConsensusParametersProvider {
-    shared_state: consensus_parameters_provider::SharedState,
+pub struct ChainStateInfoProvider {
+    shared_state: chain_state_info_provider::SharedState,
 }
 
-impl ConsensusParametersProvider {
-    pub fn new(shared_state: consensus_parameters_provider::SharedState) -> Self {
+impl ChainStateInfoProvider {
+    pub fn new(shared_state: chain_state_info_provider::SharedState) -> Self {
         Self { shared_state }
     }
 }

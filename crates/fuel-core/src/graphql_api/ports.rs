@@ -464,7 +464,7 @@ pub mod worker {
     }
 }
 
-pub trait ConsensusProvider: Send + Sync {
+pub trait ChainStateProvider: Send + Sync {
     /// Returns current consensus parameters.
     fn current_consensus_params(&self) -> Arc<ConsensusParameters>;
 
