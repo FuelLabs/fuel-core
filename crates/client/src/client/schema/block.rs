@@ -147,6 +147,7 @@ pub struct Header {
     pub prev_root: Bytes32,
     pub time: Tai64Timestamp,
     pub application_hash: Bytes32,
+    #[cfg(feature = "fault-proving")]
     pub tx_id_commitment: Option<Bytes32>,
 }
 
@@ -207,7 +208,14 @@ mod tests {
         let operation = BlockByIdQuery::build(BlockByIdArgs {
             id: Some(BlockId::default()),
         });
-        insta::assert_snapshot!(operation.query)
+
+        let snapshot_name = if cfg!(feature = "fault-proving") {
+            "block_by_id_query_gql_output_with_tx_id_commitment"
+        } else {
+            "block_by_id_query_gql_output"
+        };
+
+        insta::assert_snapshot!(snapshot_name, operation.query)
     }
 
     #[test]
@@ -216,7 +224,14 @@ mod tests {
         let operation = BlockByHeightQuery::build(BlockByHeightArgs {
             height: Some(U32(0)),
         });
-        insta::assert_snapshot!(operation.query)
+
+        let snapshot_name = if cfg!(feature = "fault-proving") {
+            "block_by_height_query_gql_output_with_tx_id_commitment"
+        } else {
+            "block_by_height_query_gql_output"
+        };
+
+        insta::assert_snapshot!(snapshot_name, operation.query)
     }
 
     #[test]
@@ -239,6 +254,13 @@ mod tests {
             last: None,
         };
         let operation = BlocksQuery::build(args);
-        insta::assert_snapshot!(operation.query)
+
+        let snapshot_name = if cfg!(feature = "fault-proving") {
+            "blocks_connection_query_gql_output_with_tx_id_commitment"
+        } else {
+            "blocks_connection_query_gql_output"
+        };
+
+        insta::assert_snapshot!(snapshot_name, operation.query)
     }
 }
