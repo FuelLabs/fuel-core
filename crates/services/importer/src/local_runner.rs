@@ -58,7 +58,6 @@ fn local_executor_executes_two_tasks_in_parallel() {
         std::thread::sleep(sleep_time)
     };
 
-    println!("Running futures");
     // When
     runner.run_in_parallel(task_1, task_2);
 
