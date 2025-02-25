@@ -250,6 +250,7 @@ impl TaskBuilder {
         })
     }
 
+    #[allow(clippy::type_complexity)]
     fn get_broadcast(
         &self,
     ) -> (
@@ -317,7 +318,7 @@ async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_sig
 
     // when
     let mut state_watcher = StateWatcher::started();
-    let _ = tokio::task::spawn(async move { task.run(&mut state_watcher).await });
+    tokio::task::spawn(async move { task.run(&mut state_watcher).await });
     handles.trigger_handle.notify_one();
     tokio::time::sleep(Duration::from_millis(100)).await;
 
