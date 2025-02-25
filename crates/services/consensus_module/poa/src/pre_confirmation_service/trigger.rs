@@ -1,5 +1,5 @@
 use super::*;
-#[async_trait::async_trait]
+use std::future::Future;
 pub trait KeyRotationTrigger: Send {
-    async fn next_rotation(&self) -> Result<()>;
+    fn next_rotation(&self) -> impl Future<Output = Result<()>> + Send;
 }

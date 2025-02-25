@@ -24,7 +24,6 @@ struct FakeTxReceiver {
     recv: tokio::sync::mpsc::Receiver<Vec<(Transaction, Status)>>,
 }
 
-#[async_trait::async_trait]
 impl TxReceiver for FakeTxReceiver {
     type Txs = Vec<(Transaction, Status)>;
 
@@ -42,7 +41,6 @@ struct FakeBroadcast {
     tx_sender: tokio::sync::mpsc::Sender<FakeSignedData<Vec<(Transaction, Status)>>>,
 }
 
-#[async_trait::async_trait]
 impl Broadcast for FakeBroadcast {
     type PreConfirmations = Vec<(Transaction, Status)>;
     type ParentSignature<T> = FakeSignedData<T>;
@@ -83,7 +81,6 @@ struct FakeSignedData<T> {
     dummy_signature: String,
 }
 
-#[async_trait::async_trait]
 impl ParentSignature for FakeParentSignature {
     type SignedData<T>
         = FakeSignedData<T>
@@ -108,7 +105,6 @@ impl FakeKeyGenerator {
     }
 }
 
-#[async_trait::async_trait]
 impl KeyGenerator for FakeKeyGenerator {
     type Key = FakeSigningKey;
     async fn generate(&mut self) -> Result<Self::Key> {
@@ -147,7 +143,6 @@ struct FakeTrigger {
     pub inner: Arc<Notify>,
 }
 
-#[async_trait::async_trait]
 impl KeyRotationTrigger for FakeTrigger {
     async fn next_rotation(&self) -> Result<()> {
         self.inner.notified().await;

@@ -1,18 +1,18 @@
 use super::*;
+use std::future::Future;
 
-#[async_trait::async_trait]
 pub trait Broadcast: Send {
     type PreConfirmations: Send + Clone;
     type ParentSignature<T>;
     type DelegateKey: SigningKey;
 
-    async fn broadcast_txs(
+    fn broadcast_txs(
         &mut self,
         txs: <Self::DelegateKey as SigningKey>::Signature<Self::PreConfirmations>,
-    ) -> Result<()>;
+    ) -> impl Future<Output = Result<()>> + Send;
 
-    async fn broadcast_delegate_key(
+    fn broadcast_delegate_key(
         &mut self,
         delegate_key: Self::ParentSignature<Self::DelegateKey>,
-    ) -> Result<()>;
+    ) -> impl Future<Output = Result<()>> + Send;
 }

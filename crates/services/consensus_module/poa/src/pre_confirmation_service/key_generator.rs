@@ -1,8 +1,8 @@
 use super::*;
 use crate::pre_confirmation_service::signing_key::SigningKey;
+use std::future::Future;
 
-#[async_trait::async_trait]
 pub trait KeyGenerator: Send {
     type Key: SigningKey;
-    async fn generate(&mut self) -> Result<Self::Key>;
+    fn generate(&mut self) -> impl Future<Output = Result<Self::Key>> + Send;
 }

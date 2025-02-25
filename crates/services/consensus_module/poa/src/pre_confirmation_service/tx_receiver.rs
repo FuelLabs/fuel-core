@@ -1,7 +1,7 @@
 use super::*;
+use std::future::Future;
 
-#[async_trait::async_trait]
 pub trait TxReceiver: Send {
     type Txs: Send;
-    async fn receive(&mut self) -> Result<Self::Txs>;
+    fn receive(&mut self) -> impl Future<Output = Result<Self::Txs>> + Send;
 }
