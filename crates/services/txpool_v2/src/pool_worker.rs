@@ -31,13 +31,10 @@ use crate::{
     config::ServiceChannelLimits,
     error::{
         Error,
-        InputValidationError,
+        InsertionErrorType,
         RemovedReason,
     },
-    pending_pool::{
-        MissingInput,
-        PendingPool,
-    },
+    pending_pool::PendingPool,
     ports::TxPoolPersistentStorage,
     service::{
         TxInfo,
@@ -338,10 +335,23 @@ where
         let tx_id = tx.id();
         let expiration = tx.expiration();
         let result = self.view_provider.latest_view();
-        let res = match result {
-            Ok(view) => self.pool.insert(tx.clone(), &view),
-            Err(err) => Err(Error::Database(format!("{:?}", err))),
+        let view = match result {
+            Ok(view) => view,
+            Err(err) => {
+                if let Err(e) =
+                    self.notification_sender
+                        .try_send(PoolNotification::ErrorInsertion {
+                            tx_id,
+                            source,
+                            error: Error::Database(format!("{:?}", err)),
+                        })
+                {
+                    tracing::error!("Failed to send error insertion notification: {}", e);
+                }
+                return;
+            }
         };
+        let res = self.pool.insert(tx.clone(), &view);
 
         match res {
             Ok(removed_txs) => {
@@ -390,26 +400,10 @@ where
                 }
                 self.pending_pool.new_known_txs(vec![tx]);
             }
-            // Review question: What should we return to the user in this case if the source is RPC or P2P ?
-            // I think we can make a new notification just for that if needed but idk.
-            Err(Error::InputValidation(InputValidationError::UtxoNotFound(utxo_id))) => {
-                self.pending_pool
-                    .insert_transaction(tx, MissingInput::Utxo(utxo_id));
+            Err(InsertionErrorType::MissingInputs(missing_inputs)) => {
+                self.pending_pool.insert_transaction(tx, missing_inputs);
             }
-            Err(Error::InputValidation(
-                InputValidationError::NotInsertedInputContractDoesNotExist(contract_id),
-            )) => {
-                self.pending_pool
-                    .insert_transaction(tx, MissingInput::Contract(contract_id));
-            }
-            // Review question: Should we manage messages ?
-            // Err(Error::InputValidation(
-            //     InputValidationError::NotInsertedInputMessageUnknown(nonce),
-            // )) => {
-            //     self.pending_pool
-            //         .insert_transaction(tx, MissingInput::Message(nonce));
-            // }
-            Err(error) => {
+            Err(InsertionErrorType::Error(error)) => {
                 if let Err(e) =
                     self.notification_sender
                         .try_send(PoolNotification::ErrorInsertion {

@@ -14,6 +14,7 @@ use fuel_core_types::{
     fuel_tx::{
         ContractId,
         Output,
+        TxId,
         UtxoId,
     },
     services::txpool::ArcPoolTx,
@@ -30,8 +31,9 @@ use fuel_core_types::{
 // - If the transaction missing inputs becomes known.
 pub struct PendingPool {
     ttl: Duration,
-    unresolved_txs: HashMap<MissingInput, ArcPoolTx>,
-    ttl_check: VecDeque<(SystemTime, MissingInput)>,
+    unresolved_txs_by_inputs: HashMap<MissingInput, Vec<TxId>>,
+    unresolved_inputs_by_tx: HashMap<TxId, (ArcPoolTx, Vec<MissingInput>)>,
+    ttl_check: VecDeque<(SystemTime, TxId)>,
 }
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone)]
@@ -50,28 +52,110 @@ impl PendingPool {
     pub fn new(ttl: Duration) -> Self {
         Self {
             ttl,
-            unresolved_txs: HashMap::default(),
+            unresolved_txs_by_inputs: HashMap::default(),
+            unresolved_inputs_by_tx: HashMap::default(),
             ttl_check: VecDeque::new(),
         }
     }
 
-    // Review question: When we are missing an input in `validate_inputs` we return directly an error.
-    // It means that it can be possible that we are waiting for 2 UTXOs and we will only get one.
-    // Should we change the behavior of `validate_inputs` to return all the missing inputs ?
-    //
-    // Review question: Should we add collision resolution if there is already a transaction with the same missing input ?
-    // I think yes
     pub fn insert_transaction(
         &mut self,
         transaction: ArcPoolTx,
-        missing_input: MissingInput,
+        missing_inputs: Vec<MissingInput>,
     ) {
-        self.unresolved_txs.insert(missing_input, transaction);
-        self.ttl_check
-            .push_front((SystemTime::now() + self.ttl, missing_input));
+        let tx_id = transaction.id();
+        for input in &missing_inputs {
+            self.unresolved_txs_by_inputs
+                .entry(*input)
+                .or_default()
+                .push(tx_id);
+        }
+        self.unresolved_inputs_by_tx
+            .insert(transaction.id(), (transaction, missing_inputs));
+        self.ttl_check.push_front((
+            SystemTime::now()
+                .checked_add(self.ttl)
+                .expect("The system time should be valid; qed"),
+            tx_id,
+        ));
     }
 
-    // Review question: Is it ok to check ttl of pending transactions in this function ?
+    fn new_known_utxo(&mut self, utxo_id: UtxoId, resolved_txs: &mut Vec<ArcPoolTx>) {
+        if let Some(tx_ids) = self
+            .unresolved_txs_by_inputs
+            .remove(&MissingInput::Utxo(utxo_id))
+        {
+            for tx_id in tx_ids {
+                if let Some((tx, missing_inputs)) =
+                    self.unresolved_inputs_by_tx.remove(&tx_id)
+                {
+                    let missing_inputs: Vec<MissingInput> = missing_inputs
+                        .into_iter()
+                        .filter(|input| match input {
+                            MissingInput::Utxo(utxo) => *utxo != utxo_id,
+                            _ => true,
+                        })
+                        .collect();
+                    if missing_inputs.is_empty() {
+                        resolved_txs.push(tx);
+                    } else {
+                        self.unresolved_inputs_by_tx
+                            .insert(tx_id, (tx, missing_inputs));
+                    }
+                }
+            }
+        }
+    }
+
+    fn new_known_contract(
+        &mut self,
+        contract_id: ContractId,
+        resolved_txs: &mut Vec<ArcPoolTx>,
+    ) {
+        if let Some(tx_ids) = self
+            .unresolved_txs_by_inputs
+            .remove(&MissingInput::Contract(contract_id))
+        {
+            for tx_id in tx_ids {
+                if let Some((tx, missing_inputs)) =
+                    self.unresolved_inputs_by_tx.remove(&tx_id)
+                {
+                    let missing_inputs: Vec<MissingInput> = missing_inputs
+                        .into_iter()
+                        .filter(|input| match input {
+                            MissingInput::Contract(contract) => *contract != contract_id,
+                            _ => true,
+                        })
+                        .collect();
+                    if missing_inputs.is_empty() {
+                        resolved_txs.push(tx);
+                    } else {
+                        self.unresolved_inputs_by_tx
+                            .insert(tx_id, (tx, missing_inputs));
+                    }
+                }
+            }
+        }
+    }
+
+    fn expire_transactions(&mut self, updated_txs: &mut UpdateMissingTxs) {
+        let now = SystemTime::now();
+        while let Some((ttl, tx_id)) = self.ttl_check.back() {
+            if *ttl > now {
+                break;
+            }
+            if let Some((tx, missing_inputs)) = self.unresolved_inputs_by_tx.remove(tx_id)
+            {
+                updated_txs.expired_txs.push(tx);
+                for input in missing_inputs {
+                    if let Some(tx_ids) = self.unresolved_txs_by_inputs
+                        .get_mut(&input) { tx_ids.retain(|id| *id != *tx_id) }
+                }
+            }
+            self.ttl_check.pop_back();
+        }
+    }
+
     // We expect it to be called a lot (every new block, every new tx in the pool).
     pub fn new_known_txs(&mut self, new_known_txs: Vec<ArcPoolTx>) -> UpdateMissingTxs {
         let mut updated_txs = UpdateMissingTxs {
@@ -88,40 +172,21 @@ impl PendingPool {
                 );
                 let utxo_id = UtxoId::new(tx_id, index);
                 match output {
-                    // Review question: Should we check `Variable` and `Change` outputs ? Or they
-                    // are resolved to `Coin` after execution of transaction ?
                     Output::Coin { .. } => {
-                        if let Some(tx) =
-                            self.unresolved_txs.remove(&MissingInput::Utxo(utxo_id))
-                        {
-                            updated_txs.resolved_txs.push(tx);
-                        }
+                        self.new_known_utxo(utxo_id, &mut updated_txs.resolved_txs);
                     }
                     Output::ContractCreated { contract_id, .. } => {
-                        if let Some(tx) = self
-                            .unresolved_txs
-                            .remove(&MissingInput::Contract(*contract_id))
-                        {
-                            updated_txs.resolved_txs.push(tx);
-                        }
+                        self.new_known_contract(
+                            *contract_id,
+                            &mut updated_txs.resolved_txs,
+                        );
                     }
                     _ => {}
                 }
             }
         }
 
-        // Expire transactions
-        let now = SystemTime::now();
-
-        while let Some((ttl, missing_input)) = self.ttl_check.back() {
-            if *ttl > now {
-                break;
-            }
-            if let Some(tx) = self.unresolved_txs.remove(missing_input) {
-                updated_txs.expired_txs.push(tx);
-            }
-            self.ttl_check.pop_back();
-        }
+        self.expire_transactions(&mut updated_txs);
         updated_txs
     }
 }

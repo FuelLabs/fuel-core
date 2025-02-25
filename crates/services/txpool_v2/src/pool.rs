@@ -33,6 +33,7 @@ use crate::{
         DependencyError,
         Error,
         InputValidationError,
+        InsertionErrorType,
     },
     ports::TxPoolPersistentStorage,
     selection_algorithms::{
@@ -118,7 +119,7 @@ where
         &mut self,
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<Vec<ArcPoolTx>, Error> {
+    ) -> Result<Vec<ArcPoolTx>, InsertionErrorType> {
         let insertion_result = self.insert_inner(tx, persistent_storage);
         self.register_transaction_counts();
         insertion_result
@@ -128,7 +129,7 @@ where
         &mut self,
         tx: std::sync::Arc<PoolTransaction>,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<Vec<std::sync::Arc<PoolTransaction>>, Error> {
+    ) -> Result<Vec<std::sync::Arc<PoolTransaction>>, InsertionErrorType> {
         let CanStoreTransaction {
             checked_transaction,
             transactions_to_remove,
@@ -204,15 +205,17 @@ where
         &self,
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<CanStoreTransaction<S>, Error> {
+    ) -> Result<CanStoreTransaction<S>, InsertionErrorType> {
         if tx.max_gas() == 0 {
-            return Err(Error::InputValidation(InputValidationError::MaxGasZero))
+            return Err(InsertionErrorType::Error(Error::InputValidation(
+                InputValidationError::MaxGasZero,
+            )))
         }
 
         let tx_id = tx.id();
         if self.tx_id_to_storage_id.contains_key(&tx_id) {
-            return Err(Error::InputValidation(InputValidationError::DuplicateTxId(
-                tx_id,
+            return Err(InsertionErrorType::Error(Error::InputValidation(
+                InputValidationError::DuplicateTxId(tx_id),
             )))
         }
 
@@ -233,9 +236,9 @@ where
 
         for collision in collisions.keys() {
             if checked_transaction.all_dependencies().contains(collision) {
-                return Err(Error::Dependency(
+                return Err(InsertionErrorType::Error(Error::Dependency(
                     DependencyError::NotInsertedCollisionIsDependency,
-                ));
+                )));
             }
         }
 
