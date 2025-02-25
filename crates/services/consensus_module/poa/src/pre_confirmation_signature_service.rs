@@ -39,6 +39,7 @@ pub mod tx_receiver;
 #[cfg(test)]
 pub mod tests;
 
+#[allow(dead_code)]
 pub struct PreConfirmationSignatureTask<
     TxReceiver,
     Broadcast,
@@ -154,6 +155,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 async fn create_delegate_key<Gen, DelegateKey, Parent>(
     key_generator: &mut Gen,
     parent_signature: &Parent,
