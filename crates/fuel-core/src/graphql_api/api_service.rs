@@ -2,8 +2,8 @@ use crate::{
     fuel_core_graphql_api::{
         ports::{
             BlockProducerPort,
+            ChainStateProvider as ChainStateProviderTrait,
             ConsensusModulePort,
-            ConsensusProvider as ConsensusProviderTrait,
             GasPriceEstimate,
             OffChainDatabase,
             OnChainDatabase,
@@ -107,7 +107,7 @@ pub type P2pService = Box<dyn P2pPort>;
 
 pub type GasPriceProvider = Box<dyn GasPriceEstimate>;
 
-pub type ChainInfoProvider = Box<dyn ConsensusProviderTrait>;
+pub type ChainInfoProvider = Box<dyn ChainStateProviderTrait>;
 
 #[derive(Clone)]
 pub struct SharedState {

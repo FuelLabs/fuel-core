@@ -90,7 +90,8 @@ impl From<Error> for anyhow::Error {
     }
 }
 
-pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider> {
+pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
+{
     pub config: Config,
     pub view_provider: ViewProvider,
     pub txpool: TxPool,
@@ -100,15 +101,15 @@ pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusP
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
     pub gas_price_provider: GasPriceProvider,
-    pub chain_state_info_provider: ConsensusProvider,
+    pub chain_state_info_provider: ChainStateProvider,
 }
 
-impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
 where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
-    ConsensusProvider: ChainStateInfoProvider,
+    ChainStateProvider: ChainStateInfoProvider,
 {
     pub async fn produce_and_execute_predefined(
         &self,
@@ -174,13 +175,13 @@ where
         Ok(result)
     }
 }
-impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
 where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
     GasPriceProvider: GasPriceProviderConstraint,
-    ConsensusProvider: ChainStateInfoProvider,
+    ChainStateProvider: ChainStateInfoProvider,
 {
     /// Produces and execute block for the specified height.
     async fn produce_and_execute<TxSource, F>(
@@ -259,15 +260,15 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, TxSource, GasPriceProvider, ConsensusProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+impl<ViewProvider, TxPool, Executor, TxSource, GasPriceProvider, ChainStateProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
 where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
     Executor: ports::BlockProducer<TxSource> + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
-    ConsensusProvider: ChainStateInfoProvider,
+    ChainStateProvider: ChainStateInfoProvider,
 {
     /// Produces and execute block for the specified height with transactions from the `TxPool`.
     pub async fn produce_and_execute_block_txpool(
@@ -284,14 +285,14 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
 where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
     Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
-    ConsensusProvider: ChainStateInfoProvider,
+    ChainStateProvider: ChainStateInfoProvider,
 {
     /// Produces and execute block for the specified height with `transactions`.
     pub async fn produce_and_execute_block_transactions(
@@ -305,14 +306,14 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
 where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
     Executor: ports::DryRunner + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
-    ConsensusProvider: ChainStateInfoProvider,
+    ChainStateProvider: ChainStateInfoProvider,
 {
     /// Simulates multiple transactions without altering any state. Does not acquire the production lock.
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
@@ -384,14 +385,14 @@ where
     }
 }
 
-impl<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
-    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ConsensusProvider>
+impl<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
+    Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
 where
     ViewProvider: HistoricalView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
     Executor: ports::StorageReadReplayRecorder + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
-    ConsensusProvider: ChainStateInfoProvider,
+    ChainStateProvider: ChainStateInfoProvider,
 {
     /// Re-executes an old block, getting the storage read events.
     pub async fn storage_read_replay(
@@ -413,12 +414,12 @@ where
 
 pub const NO_NEW_DA_HEIGHT_FOUND: &str = "No new da_height found";
 
-impl<ViewProvider, TxPool, Executor, GP, ConsensusProvider>
-    Producer<ViewProvider, TxPool, Executor, GP, ConsensusProvider>
+impl<ViewProvider, TxPool, Executor, GP, ChainStateProvider>
+    Producer<ViewProvider, TxPool, Executor, GP, ChainStateProvider>
 where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
-    ConsensusProvider: ChainStateInfoProvider,
+    ChainStateProvider: ChainStateInfoProvider,
 {
     /// Create the header for a new block at the provided height
     async fn new_header_with_new_da_height(
