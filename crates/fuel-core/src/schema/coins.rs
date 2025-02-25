@@ -15,7 +15,7 @@ use crate::{
         IntoApiResult,
     },
     graphql_api::{
-        api_service::ConsensusProvider,
+        api_service::ChainInfoProvider,
         database::ReadView,
     },
     query::asset_query::AssetSpendTarget,
@@ -116,7 +116,7 @@ impl MessageCoin {
     #[graphql(complexity = "query_costs().storage_read")]
     async fn asset_id(&self, ctx: &Context<'_>) -> AssetId {
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
+            .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params();
 
         let base_asset_id = *params.base_asset_id();
@@ -256,7 +256,7 @@ impl CoinQuery {
         >,
     ) -> async_graphql::Result<Vec<Vec<CoinType>>> {
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
+            .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params();
         let max_input = params.tx_params().max_inputs();
 

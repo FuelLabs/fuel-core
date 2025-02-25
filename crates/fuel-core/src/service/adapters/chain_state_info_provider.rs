@@ -180,7 +180,7 @@ impl RunnableTask for Task {
 
 #[async_trait::async_trait]
 impl RunnableService for Task {
-    const NAME: &'static str = "ConsensusParametersProviderTask";
+    const NAME: &'static str = "ChainStateInfoProviderTask";
     type SharedData = SharedState;
     type Task = Self;
     type TaskParams = ();
@@ -230,7 +230,7 @@ pub fn new_service(
 mod tests {
     use crate::{
         database::Database,
-        service::adapters::consensus_parameters_provider::{
+        service::adapters::chain_state_info_provider::{
             SharedState,
             Task,
         },

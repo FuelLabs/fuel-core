@@ -1,6 +1,6 @@
 use crate::{
     database::OnChainIterableKeyValueView,
-    service::adapters::ConsensusParametersProvider,
+    service::adapters::ChainStateInfoProvider,
 };
 use fuel_core_gas_price_service::{
     common::{
@@ -109,7 +109,7 @@ impl From<Config> for V1AlgorithmConfig {
     }
 }
 
-impl GasPriceSettingsProvider for ConsensusParametersProvider {
+impl GasPriceSettingsProvider for ChainStateInfoProvider {
     fn settings(
         &self,
         param_version: &ConsensusParametersVersion,

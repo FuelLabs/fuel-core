@@ -107,7 +107,7 @@ pub type P2pService = Box<dyn P2pPort>;
 
 pub type GasPriceProvider = Box<dyn GasPriceEstimate>;
 
-pub type ConsensusProvider = Box<dyn ConsensusProviderTrait>;
+pub type ChainInfoProvider = Box<dyn ConsensusProviderTrait>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -234,7 +234,7 @@ pub fn new_service<OnChain, OffChain>(
     consensus_module: ConsensusModule,
     p2p_service: P2pService,
     gas_price_provider: GasPriceProvider,
-    consensus_parameters_provider: ConsensusProvider,
+    chain_state_info_provider: ChainInfoProvider,
     memory_pool: SharedMemoryPool,
     block_height_subscriber: block_height_subscription::Subscriber,
 ) -> anyhow::Result<Service>
@@ -287,7 +287,7 @@ where
         .data(consensus_module)
         .data(p2p_service)
         .data(gas_price_provider)
-        .data(consensus_parameters_provider)
+        .data(chain_state_info_provider)
         .data(memory_pool)
         .data(block_height_subscriber.clone())
         .extension(ValidationExtension::new(

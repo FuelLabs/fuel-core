@@ -5,7 +5,7 @@ use crate::{
         InputValidationError,
     },
     ports::{
-        ConsensusParametersProvider,
+        ChainStateInfoProvider,
         GasPriceProvider,
         TxPoolPersistentStorage,
         WasmChecker,
@@ -50,7 +50,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub(crate) struct Verification<View> {
     pub persistent_storage_provider: Arc<dyn AtomicView<LatestView = View>>,
-    pub consensus_parameters_provider: Arc<dyn ConsensusParametersProvider>,
+    pub chain_state_info_provider: Arc<dyn ChainStateInfoProvider>,
     pub gas_price_provider: Arc<dyn GasPriceProvider>,
     pub wasm_checker: Arc<dyn WasmChecker>,
     pub memory_pool: MemoryPool,
@@ -67,9 +67,8 @@ where
         current_height: BlockHeight,
         utxo_validation: bool,
     ) -> Result<PoolTransaction, Error> {
-        let (version, consensus_params) = self
-            .consensus_parameters_provider
-            .latest_consensus_parameters();
+        let (version, consensus_params) =
+            self.chain_state_info_provider.latest_consensus_parameters();
 
         let unverified = UnverifiedTx(tx);
 

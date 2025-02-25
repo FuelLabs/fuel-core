@@ -4,7 +4,7 @@ use crate::{
     block_producer::{
         gas_price::{
             GasPriceProvider,
-            MockConsensusParametersProvider,
+            MockChainStateInfoProvider,
         },
         Bytes32,
         Error,
@@ -909,7 +909,7 @@ impl<Executor> TestContext<Executor> {
         MockTxPool,
         Executor,
         MockProducerGasPrice,
-        MockConsensusParametersProvider,
+        MockChainStateInfoProvider,
     > {
         let gas_price = self.gas_price;
         let static_gas_price = MockProducerGasPrice::new(gas_price);
@@ -918,9 +918,8 @@ impl<Executor> TestContext<Executor> {
         consensus_params.set_block_gas_limit(self.block_gas_limit);
         let consensus_params = Arc::new(consensus_params);
 
-        let mut consensus_parameters_provider =
-            MockConsensusParametersProvider::default();
-        consensus_parameters_provider
+        let mut chain_state_info_provider = MockChainStateInfoProvider::default();
+        chain_state_info_provider
             .expect_consensus_params_at_version()
             .returning(move |_| Ok(consensus_params.clone()));
 
@@ -932,7 +931,7 @@ impl<Executor> TestContext<Executor> {
             relayer: Box::new(self.relayer),
             lock: Default::default(),
             gas_price_provider: static_gas_price,
-            consensus_parameters_provider,
+            chain_state_info_provider,
         }
     }
 
@@ -944,7 +943,7 @@ impl<Executor> TestContext<Executor> {
         MockTxPool,
         Executor,
         MockProducerGasPrice,
-        MockConsensusParametersProvider,
+        MockChainStateInfoProvider,
     > {
         self.gas_price = gas_price;
         self.producer()

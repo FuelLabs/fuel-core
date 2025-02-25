@@ -39,7 +39,7 @@ use fuel_core_txpool::{
     ports::{
         AtomicView,
         BlockImporter as BlockImporterTrait,
-        ConsensusParametersProvider,
+        ChainStateInfoProvider,
         GasPriceProvider as GasPriceProviderTrait,
         P2PRequests,
         P2PSubscriptions,
@@ -710,7 +710,7 @@ pub fn new_service<
     BlockImporter,
     PSProvider,
     PSView,
-    ConsensusParamsProvider,
+    ChainStateProvider,
     GasPriceProvider,
     WasmChecker,
 >(
@@ -719,7 +719,7 @@ pub fn new_service<
     p2p: P2P,
     block_importer: BlockImporter,
     ps_provider: PSProvider,
-    consensus_parameters_provider: ConsensusParamsProvider,
+    chain_state_info_provider: ChainStateProvider,
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
     wasm_checker: WasmChecker,
@@ -729,7 +729,7 @@ where
     P2P: P2PRequests,
     PSProvider: AtomicView<LatestView = PSView> + 'static,
     PSView: TxPoolPersistentStorage,
-    ConsensusParamsProvider: ConsensusParametersProvider,
+    ChainStateProvider: ChainStateInfoProvider,
     GasPriceProvider: GasPriceProviderTrait,
     WasmChecker: WasmCheckerTrait,
     BlockImporter: BlockImporterTrait,
@@ -768,7 +768,7 @@ where
     let storage_provider = Arc::new(ps_provider);
     let verification = Verification {
         persistent_storage_provider: storage_provider.clone(),
-        consensus_parameters_provider: Arc::new(consensus_parameters_provider),
+        chain_state_info_provider: Arc::new(chain_state_info_provider),
         gas_price_provider: Arc::new(gas_price_provider),
         wasm_checker: Arc::new(wasm_checker),
         memory_pool: MemoryPool::new(),
