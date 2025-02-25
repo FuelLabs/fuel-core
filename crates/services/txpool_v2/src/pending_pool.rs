@@ -34,9 +34,12 @@ pub struct PendingPool {
     unresolved_txs_by_inputs: HashMap<MissingInput, Vec<TxId>>,
     unresolved_inputs_by_tx: HashMap<TxId, (ArcPoolTx, Vec<MissingInput>)>,
     ttl_check: VecDeque<(SystemTime, TxId)>,
+    current_bytes: usize,
+    current_txs: usize,
+    current_gas: u64,
 }
 
-#[derive(Hash, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Copy, Clone)]
 pub enum MissingInput {
     Utxo(UtxoId),
     Contract(ContractId),
@@ -48,14 +51,28 @@ pub struct UpdateMissingTxs {
 }
 
 impl PendingPool {
-    // Review question: Should we add size ?
     pub fn new(ttl: Duration) -> Self {
         Self {
             ttl,
             unresolved_txs_by_inputs: HashMap::default(),
             unresolved_inputs_by_tx: HashMap::default(),
             ttl_check: VecDeque::new(),
+            current_bytes: 0,
+            current_txs: 0,
+            current_gas: 0,
         }
+    }
+
+    pub fn current_bytes(&self) -> usize {
+        self.current_bytes
+    }
+
+    pub fn current_txs(&self) -> usize {
+        self.current_txs
+    }
+
+    pub fn current_gas(&self) -> u64 {
+        self.current_gas
     }
 
     pub fn insert_transaction(
@@ -189,5 +206,138 @@ impl PendingPool {
 
         self.expire_transactions(&mut updated_txs);
         updated_txs
+    }
+
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
+        self.unresolved_inputs_by_tx.is_empty()
+            && self.unresolved_txs_by_inputs.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use fuel_core_types::{
+        fuel_asm::{
+            op,
+            RegId,
+        },
+        fuel_tx::{
+            Address,
+            AssetId,
+            ConsensusParameters,
+            Finalizable,
+            Input,
+            Output,
+            TransactionBuilder,
+            UtxoId,
+        },
+        fuel_vm::{
+            checked_transaction::{
+                CheckPredicateParams,
+                EstimatePredicates,
+                IntoChecked,
+            },
+            interpreter::MemoryInstance,
+            predicate::EmptyStorage,
+        },
+        services::txpool::{
+            ArcPoolTx,
+            Metadata,
+            PoolTransaction,
+        },
+    };
+    use rand::{
+        rngs::StdRng,
+        SeedableRng,
+    };
+
+    fn create_pool_tx(
+        inputs: Vec<UtxoId>,
+        outputs: Vec<Output>,
+        _rng: &mut StdRng,
+    ) -> ArcPoolTx {
+        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+        let owner = Input::predicate_owner(&predicate);
+        let mut tx = TransactionBuilder::script(vec![], vec![]);
+        tx.script_gas_limit(1000000);
+        if inputs.is_empty() {
+            tx.add_input(Input::coin_predicate(
+                UtxoId::new([0; 32].into(), 0),
+                owner.clone(),
+                outputs
+                    .iter()
+                    .map(|output| match output {
+                        Output::Coin { amount, .. } => *amount,
+                        _ => 0,
+                    })
+                    .sum(),
+                AssetId::default(),
+                Default::default(),
+                Default::default(),
+                predicate.clone(),
+                Default::default(),
+            ));
+        } else {
+            for input in inputs {
+                tx.add_input(Input::coin_predicate(
+                    input,
+                    owner.clone(),
+                    10,
+                    AssetId::default(),
+                    Default::default(),
+                    Default::default(),
+                    predicate.clone(),
+                    Default::default(),
+                ));
+            }
+        }
+        for output in outputs {
+            tx.add_output(output);
+        }
+        let mut tx = tx.finalize();
+        tx.estimate_predicates(
+            &CheckPredicateParams::default(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Failed to estimate predicates");
+        let tx = tx
+            .into_checked_basic(1u32.into(), &ConsensusParameters::default())
+            .unwrap();
+        Arc::new(PoolTransaction::Script(tx, Metadata::new(1, 1, 0)))
+    }
+
+    #[test]
+    fn test_pending_pool_one_tx_one_dependent_input() {
+        use super::*;
+        use std::time::Duration;
+
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let mut pending_pool = PendingPool::new(Duration::from_secs(1));
+
+        let dependency_tx = create_pool_tx(
+            vec![],
+            vec![Output::Coin {
+                to: Address::default(),
+                asset_id: AssetId::default(),
+                amount: 100,
+            }],
+            &mut rng,
+        );
+
+        let utxo = UtxoId::new(dependency_tx.id(), 0);
+        let dependent_tx = create_pool_tx(vec![utxo], vec![], &mut rng);
+        pending_pool
+            .insert_transaction(dependent_tx.clone(), vec![MissingInput::Utxo(utxo)]);
+
+        let new_known_txs = vec![dependency_tx.clone()];
+        let updated_txs = pending_pool.new_known_txs(new_known_txs);
+        assert_eq!(updated_txs.resolved_txs.len(), 1);
+        assert_eq!(updated_txs.resolved_txs[0].id(), dependent_tx.id());
+        assert!(updated_txs.expired_txs.is_empty());
+        assert!(pending_pool.is_empty());
     }
 }

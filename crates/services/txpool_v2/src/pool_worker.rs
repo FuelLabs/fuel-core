@@ -397,6 +397,7 @@ where
                 self.pending_pool.new_known_txs(vec![tx]);
             }
             Err(InsertionErrorType::MissingInputs(missing_inputs)) => {
+                // TODO: Verify percentage used if full return first missing input
                 self.pending_pool.insert_transaction(tx, missing_inputs);
             }
             Err(InsertionErrorType::Error(error)) => {
