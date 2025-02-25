@@ -336,7 +336,11 @@ input ExcludeInput {
 }
 
 type FailureDuringBlockProductionStatus {
-	blockHeight: U32!
+	reason: String!
+	txPointer: TxPointer!
+	transactionId: TransactionId
+	transaction: Transaction
+	receipts: [Receipt!]
 }
 
 type FailureStatus {

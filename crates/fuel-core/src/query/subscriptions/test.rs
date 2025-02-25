@@ -85,7 +85,10 @@ fn failure() -> TransactionStatus {
 
 fn failure_during_block_production() -> TransactionStatus {
     TransactionStatus::FailureDuringBlockProduction {
-        block_height: Default::default(),
+        tx_pointer: Default::default(),
+        tx_id: None,
+        receipts: None,
+        reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }
 

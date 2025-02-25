@@ -483,8 +483,14 @@ pub enum TransactionStatus {
     },
     /// Transaction was not included in a block
     FailureDuringBlockProduction {
-        /// The block height that was being produced when the transaction failed
-        block_height: BlockHeight,
+        /// Transaction pointer
+        tx_pointer: TxPointer,
+        /// Transaction ID
+        tx_id: Option<TxId>,
+        /// Receipts
+        receipts: Option<Vec<Receipt>>,
+        /// The reason why the transaction has failed
+        reason: String,
     },
 }
 

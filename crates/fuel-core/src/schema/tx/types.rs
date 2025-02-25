@@ -312,14 +312,43 @@ impl FailureStatus {
 }
 
 #[derive(Debug)]
-pub struct FailureDuringBlockProductionStatus(
-    pub fuel_core_types::fuel_types::BlockHeight,
-);
+pub struct FailureDuringBlockProductionStatus {
+    pub tx_pointer: TxPointer,
+    pub tx_id: Option<TxId>,
+    pub receipts: Option<Vec<fuel_tx::Receipt>>,
+    pub reason: String,
+}
 
 #[Object]
 impl FailureDuringBlockProductionStatus {
-    async fn block_height(&self) -> U32 {
-        self.0.into()
+    async fn reason(&self) -> String {
+        self.reason.clone()
+    }
+
+    async fn tx_pointer(&self) -> TxPointer {
+        self.tx_pointer
+    }
+
+    async fn transaction_id(&self) -> Option<TransactionId> {
+        self.tx_id.map(Into::into)
+    }
+
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn transaction(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Option<async_graphql::Result<Transaction>> {
+        self.tx_id.map(|tx_id| {
+            let query = ctx.read_view()?;
+            let transaction = query.transaction(&tx_id)?;
+            Ok(Transaction::from_tx(tx_id, transaction))
+        })
+    }
+
+    async fn receipts(&self) -> Option<async_graphql::Result<Vec<Receipt>>> {
+        self.receipts
+            .as_ref()
+            .map(|receipts| Ok(receipts.iter().map(Into::into).collect()))
     }
 }
 
@@ -403,11 +432,19 @@ impl TransactionStatus {
                     SqueezedOutDuringBlockProductionStatus(reason),
                 )
             }
-            TxStatus::FailureDuringBlockProduction { block_height } => {
-                TransactionStatus::FailureDuringBlockProduction(
-                    FailureDuringBlockProductionStatus(block_height),
-                )
-            }
+            TxStatus::FailureDuringBlockProduction {
+                tx_pointer,
+                tx_id,
+                receipts,
+                reason,
+            } => TransactionStatus::FailureDuringBlockProduction(
+                FailureDuringBlockProductionStatus {
+                    tx_pointer: tx_pointer.into(),
+                    tx_id,
+                    receipts,
+                    reason,
+                },
+            ),
         }
     }
 }
@@ -457,20 +494,30 @@ impl From<TransactionStatus> for TxStatus {
             TransactionStatus::SuccessDuringBlockProduction(
                 SuccessDuringBlockProductionStatus {
                     tx_pointer,
-                    tx_id: transaction_id,
+                    tx_id,
                     receipts,
                 },
             ) => TxStatus::SuccessDuringBlockProduction {
                 tx_pointer: tx_pointer.into(),
-                tx_id: transaction_id,
+                tx_id,
                 receipts,
             },
             TransactionStatus::SqueezedOutDuringBlockProduction(
                 SqueezedOutDuringBlockProductionStatus(reason),
             ) => TxStatus::SqueezedOutDuringBlockProduction { reason },
             TransactionStatus::FailureDuringBlockProduction(
-                FailureDuringBlockProductionStatus(block_height),
-            ) => TxStatus::FailureDuringBlockProduction { block_height },
+                FailureDuringBlockProductionStatus {
+                    tx_pointer,
+                    tx_id,
+                    receipts,
+                    reason,
+                },
+            ) => TxStatus::FailureDuringBlockProduction {
+                tx_pointer: tx_pointer.into(),
+                tx_id,
+                receipts,
+                reason,
+            },
         }
     }
 }

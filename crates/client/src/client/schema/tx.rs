@@ -282,7 +282,10 @@ pub struct FailureStatusWithTransaction {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureDuringBlockProductionStatus {
-    pub block_height: U32,
+    pub tx_pointer: TxPointer,
+    pub transaction_id: Option<TransactionId>,
+    pub receipts: Option<Vec<Receipt>>,
+    pub reason: String,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

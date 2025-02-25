@@ -64,7 +64,10 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
             reason: "failure".to_string(),
         }),
         Just(TransactionStatus::FailureDuringBlockProduction {
-            block_height: Default::default()
+            tx_pointer: Default::default(),
+            tx_id: None,
+            receipts: None,
+            reason: "failure during block production".to_string(),
         }),
         Just(TransactionStatus::SqueezedOut {
             reason: Default::default(),
