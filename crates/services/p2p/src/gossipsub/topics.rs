@@ -10,7 +10,7 @@ use super::messages::{
 };
 
 pub const NEW_TX_GOSSIP_TOPIC: &str = "new_tx";
-pub const TX_PRECONFIRMATIONS_GOSSIP_TOPIC: &str = "tx_confirmations";
+pub const TX_PRECONFIRMATIONS_GOSSIP_TOPIC: &str = "tx_preconfirmations";
 
 /// Holds used Gossipsub Topics
 /// Each field contains TopicHash of existing topics
