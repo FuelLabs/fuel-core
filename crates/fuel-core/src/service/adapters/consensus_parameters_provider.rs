@@ -199,12 +199,17 @@ impl RunnableService for Task {
             .database
             .latest_view()?
             .latest_consensus_parameters_version()?;
+        let latest_stf_version = self
+            .shared_state
+            .database
+            .latest_view()?
+            .latest_state_transition_bytecode_version()?;
+
         self.shared_state
             .cache_consensus_parameters_version(latest_consensus_parameters_version);
         self.shared_state
             .cache_consensus_parameters(latest_consensus_parameters_version)?;
-        self.shared_state
-            .cache_stf_version(latest_consensus_parameters_version);
+        self.shared_state.cache_stf_version(latest_stf_version);
 
         Ok(self)
     }
