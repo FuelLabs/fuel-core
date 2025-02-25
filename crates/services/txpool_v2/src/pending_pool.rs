@@ -148,8 +148,9 @@ impl PendingPool {
             {
                 updated_txs.expired_txs.push(tx);
                 for input in missing_inputs {
-                    if let Some(tx_ids) = self.unresolved_txs_by_inputs
-                        .get_mut(&input) { tx_ids.retain(|id| *id != *tx_id) }
+                    if let Some(tx_ids) = self.unresolved_txs_by_inputs.get_mut(&input) {
+                        tx_ids.retain(|id| *id != *tx_id)
+                    }
                 }
             }
             self.ttl_check.pop_back();

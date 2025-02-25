@@ -13,10 +13,7 @@ use fuel_core_types::{
 use std::{
     ops::Deref,
     sync::Arc,
-    time::{
-        Duration,
-        SystemTime,
-    },
+    time::SystemTime,
 };
 use tokio::sync::{
     mpsc,
@@ -98,9 +95,8 @@ impl PoolWorkerInterface {
                 extract_block_transactions_receiver,
                 request_insert_receiver,
                 notification_sender,
+                pending_pool: PendingPool::new(tx_pool.config.pending_pool_tx_ttl),
                 pool: tx_pool,
-                // TODO: Configurable pending pool TTL
-                pending_pool: PendingPool::new(Duration::from_secs(3)),
                 view_provider,
             };
 
