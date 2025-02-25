@@ -191,10 +191,13 @@ impl PendingPool {
         }
     }
 
-    fn expire_transactions(&mut self, updated_txs: &mut UpdateMissingTxs) {
+    fn expire_transactions(
+        &mut self,
+        expired_txs: &mut Vec<(ArcPoolTx, InsertionSource, Vec<MissingInput>)>,
+    ) {
         let now = SystemTime::now();
         while let Some((ttl, tx_id)) = self.ttl_check.back() {
-            if *ttl < now {
+            if *ttl > now {
                 break;
             }
             if let Some(((tx, source), missing_inputs)) =
@@ -214,7 +217,7 @@ impl PendingPool {
                         }
                     }
                 }
-                updated_txs.expired_txs.push((tx, source, missing_inputs));
+                expired_txs.push((tx, source, missing_inputs));
             }
             self.ttl_check.pop_back();
         }
@@ -250,7 +253,7 @@ impl PendingPool {
             }
         }
 
-        self.expire_transactions(&mut updated_txs);
+        self.expire_transactions(&mut updated_txs.expired_txs);
         updated_txs
     }
 
@@ -488,7 +491,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         // Given
-        let mut pending_pool = PendingPool::new(Duration::from_millis(1));
+        let mut pending_pool = PendingPool::new(Duration::from_nanos(1));
         let tx1 = create_pool_tx(vec![], vec![], &mut rng);
         let tx2 = create_pool_tx(vec![], vec![], &mut rng);
         pending_pool.insert_transaction(

@@ -396,6 +396,7 @@ where
                     }
                 }
                 let updated_txs = self.pending_pool.new_known_txs(vec![tx]);
+
                 for (tx, source) in updated_txs.resolved_txs {
                     self.insert(tx, source);
                 }
@@ -575,8 +576,8 @@ where
         let bytes_used = self.pool.current_bytes_size.saturating_add(bytes_size);
         let txs_used = self.pool.tx_id_to_storage_id.len().saturating_add(1);
         if gas_used > self.pool.config.pool_limits.max_gas
-            && bytes_used > self.pool.config.pool_limits.max_bytes_size
-            && txs_used > self.pool.config.pool_limits.max_txs
+            || bytes_used > self.pool.config.pool_limits.max_bytes_size
+            || txs_used > self.pool.config.pool_limits.max_txs
         {
             return false;
         }
@@ -594,7 +595,7 @@ where
                 .max_gas
                 .saturating_mul(self.pool.config.max_pending_pool_size_percentage as u64)
                 .saturating_div(100)
-            && bytes_used
+            || bytes_used
                 > self
                     .pool
                     .config
@@ -604,7 +605,7 @@ where
                         self.pool.config.max_pending_pool_size_percentage as usize,
                     )
                     .saturating_div(100)
-            && txs_used
+            || txs_used
                 > self
                     .pool
                     .config
