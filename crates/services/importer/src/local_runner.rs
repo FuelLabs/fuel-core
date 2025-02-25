@@ -50,7 +50,6 @@ fn local_executor_executes_two_tasks_in_parallel() {
 
     // Given
     let task_1 = || {
-        println!("Thread 1 started");
         std::thread::sleep(sleep_time)
     };
     let task_2 = || {
