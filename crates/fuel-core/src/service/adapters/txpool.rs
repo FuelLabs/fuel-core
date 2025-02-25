@@ -2,7 +2,7 @@ use crate::{
     database::OnChainIterableKeyValueView,
     service::adapters::{
         BlockImporterAdapter,
-        ConsensusParametersProvider,
+        ChainStateInfoProvider,
         P2PAdapter,
         StaticGasPrice,
     },
@@ -19,7 +19,7 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::ports::{
     BlockImporter,
-    ConsensusParametersProvider as ConsensusParametersProviderTrait,
+    ChainStateInfoProvider as ChainStateInfoProviderTrait,
     GasPriceProvider,
 };
 use fuel_core_types::{
@@ -220,7 +220,7 @@ impl GasPriceProvider for StaticGasPrice {
     }
 }
 
-impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
+impl ChainStateInfoProviderTrait for ChainStateInfoProvider {
     fn latest_consensus_parameters(
         &self,
     ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>) {

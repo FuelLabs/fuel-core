@@ -89,7 +89,7 @@ use crate::{
 };
 
 use super::mocks::{
-    MockConsensusParametersProvider,
+    MockChainStateInfoProvider,
     MockImporter,
     MockP2P,
     MockTxPoolGasPrice,
@@ -179,9 +179,8 @@ impl TestPoolUniverse {
 
         let importer = importer.unwrap_or_else(|| MockImporter::with_blocks(vec![]));
         let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
-        let mut consensus_parameters_provider =
-            MockConsensusParametersProvider::default();
-        consensus_parameters_provider
+        let mut chain_state_info_provider = MockChainStateInfoProvider::default();
+        chain_state_info_provider
             .expect_latest_consensus_parameters()
             .returning(|| (0, Arc::new(Default::default())));
 
@@ -191,7 +190,7 @@ impl TestPoolUniverse {
             p2p,
             importer,
             MockDBProvider(self.mock_db.clone()),
-            consensus_parameters_provider,
+            chain_state_info_provider,
             Default::default(),
             gas_price_provider,
             MockWasmChecker { result: Ok(()) },
@@ -228,9 +227,9 @@ impl TestPoolUniverse {
         tx: Transaction,
     ) -> Result<(ArcPoolTx, Vec<ArcPoolTx>), Error> {
         if let Some(pool) = &self.pool {
-            let mut mock_consensus_params_provider =
-                MockConsensusParametersProvider::default();
-            mock_consensus_params_provider
+            let mut mock_chain_state_info_provider =
+                MockChainStateInfoProvider::default();
+            mock_chain_state_info_provider
                 .expect_latest_consensus_parameters()
                 .returning(|| (0, Arc::new(ConsensusParameters::standard())));
             let verification = Verification {
@@ -238,7 +237,7 @@ impl TestPoolUniverse {
                     self.mock_db.clone(),
                 )),
                 gas_price_provider: Arc::new(MockTxPoolGasPrice::new(0)),
-                consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
+                chain_state_info_provider: Arc::new(mock_chain_state_info_provider),
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
                 blacklist: BlackList::default(),
@@ -258,9 +257,8 @@ impl TestPoolUniverse {
         gas_price: GasPrice,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         if let Some(pool) = &self.pool {
-            let mut mock_consensus_params_provider =
-                MockConsensusParametersProvider::default();
-            mock_consensus_params_provider
+            let mut mock_chain_state_info = MockChainStateInfoProvider::default();
+            mock_chain_state_info
                 .expect_latest_consensus_parameters()
                 .returning(|| (0, Arc::new(ConsensusParameters::standard())));
             let verification = Verification {
@@ -268,7 +266,7 @@ impl TestPoolUniverse {
                     self.mock_db.clone(),
                 )),
                 gas_price_provider: Arc::new(MockTxPoolGasPrice::new(gas_price)),
-                consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
+                chain_state_info_provider: Arc::new(mock_chain_state_info),
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
                 blacklist: BlackList::default(),
@@ -288,9 +286,9 @@ impl TestPoolUniverse {
         wasm_checker: MockWasmChecker,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         if let Some(pool) = &self.pool {
-            let mut mock_consensus_params_provider =
-                MockConsensusParametersProvider::default();
-            mock_consensus_params_provider
+            let mut mock_chain_state_info_provider =
+                MockChainStateInfoProvider::default();
+            mock_chain_state_info_provider
                 .expect_latest_consensus_parameters()
                 .returning(move || (0, Arc::new(consensus_params.clone())));
             let verification = Verification {
@@ -298,7 +296,7 @@ impl TestPoolUniverse {
                     self.mock_db.clone(),
                 )),
                 gas_price_provider: Arc::new(MockTxPoolGasPrice::new(0)),
-                consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
+                chain_state_info_provider: Arc::new(mock_chain_state_info_provider),
                 wasm_checker: Arc::new(wasm_checker),
                 memory_pool: MemoryPool::new(),
                 blacklist: BlackList::default(),

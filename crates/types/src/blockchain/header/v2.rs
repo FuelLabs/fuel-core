@@ -171,6 +171,14 @@ impl BlockHeaderV2 {
         self.recalculate_metadata();
     }
 
+    pub(crate) fn set_stf_version(
+        &mut self,
+        version: super::StateTransitionBytecodeVersion,
+    ) {
+        self.application_mut().state_transition_bytecode_version = version;
+        self.recalculate_metadata();
+    }
+
     pub(crate) fn set_application_hash(&mut self, hash: Bytes32) {
         self.consensus_mut().generated.application_hash = hash;
     }
