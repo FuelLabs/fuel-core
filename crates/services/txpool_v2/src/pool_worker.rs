@@ -28,8 +28,10 @@ use crate::{
     config::ServiceChannelLimits,
     error::{
         Error,
+        InsertionErrorType,
         RemovedReason,
     },
+    pending_pool::PendingPool,
     ports::TxPoolPersistentStorage,
     service::{
         TxInfo,
@@ -93,6 +95,7 @@ impl PoolWorkerInterface {
                 extract_block_transactions_receiver,
                 request_insert_receiver,
                 notification_sender,
+                pending_pool: PendingPool::new(tx_pool.config.pending_pool_tx_ttl),
                 pool: tx_pool,
                 view_provider,
             };
@@ -152,6 +155,7 @@ enum ThreadManagementRequest {
 }
 
 #[allow(clippy::upper_case_acronyms)]
+#[derive(Debug)]
 pub(super) enum InsertionSource {
     P2P {
         from_peer_info: GossipsubMessageInfo,
@@ -237,6 +241,7 @@ pub(super) struct PoolWorker<View> {
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
     request_insert_receiver: Receiver<PoolInsertRequest>,
     pool: TxPool,
+    pending_pool: PendingPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
     notification_sender: Sender<PoolNotification>,
 }
@@ -274,7 +279,7 @@ where
                 for remove in remove_buffer {
                     match remove {
                         PoolRemoveRequest::ExecutedTransactions { tx_ids } => {
-                            self.remove(tx_ids);
+                            self.remove_executed_transactions(tx_ids);
                         }
                         PoolRemoveRequest::CoinDependents { dependents_ids } => {
                             self.remove_coin_dependents(dependents_ids);
@@ -327,10 +332,23 @@ where
         let tx_id = tx.id();
         let expiration = tx.expiration();
         let result = self.view_provider.latest_view();
-        let res = match result {
-            Ok(view) => self.pool.insert(tx, &view),
-            Err(err) => Err(Error::Database(format!("{:?}", err))),
+        let view = match result {
+            Ok(view) => view,
+            Err(err) => {
+                if let Err(e) =
+                    self.notification_sender
+                        .try_send(PoolNotification::ErrorInsertion {
+                            tx_id,
+                            source,
+                            error: Error::Database(format!("{:?}", err)),
+                        })
+                {
+                    tracing::error!("Failed to send error insertion notification: {}", e);
+                }
+                return;
+            }
         };
+        let res = self.pool.insert(tx.clone(), &view);
 
         match res {
             Ok(removed_txs) => {
@@ -377,8 +395,57 @@ where
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
                 }
+                let updated_txs = self.pending_pool.new_known_txs(vec![tx]);
+
+                for (tx, source) in updated_txs.resolved_txs {
+                    self.insert(tx, source);
+                }
+                for (tx, source, missing_inputs) in updated_txs.expired_txs {
+                    if let Some(missing_input) = missing_inputs.first() {
+                        if let Err(e) = self.notification_sender.try_send(
+                            PoolNotification::ErrorInsertion {
+                                tx_id: tx.id(),
+                                source,
+                                error: missing_input.into(),
+                            },
+                        ) {
+                            tracing::error!(
+                                "Failed to send error insertion notification: {}",
+                                e
+                            );
+                        }
+                    }
+                }
             }
-            Err(error) => {
+            Err(InsertionErrorType::MissingInputs(missing_inputs)) => {
+                if missing_inputs.is_empty() {
+                    debug_assert!(false, "Missing inputs should not be empty");
+                    return;
+                }
+                if !self.has_enough_space_in_pools(&tx) {
+                    // SAFETY: missing_inputs is not empty, checked just above
+                    let error = missing_inputs
+                        .first()
+                        .expect("Missing inputs is not empty; qed")
+                        .into();
+                    if let Err(e) = self.notification_sender.try_send(
+                        PoolNotification::ErrorInsertion {
+                            tx_id,
+                            source,
+                            error,
+                        },
+                    ) {
+                        tracing::error!(
+                            "Failed to send error insertion notification: {}",
+                            e
+                        );
+                    }
+                    return;
+                }
+                self.pending_pool
+                    .insert_transaction(tx, source, missing_inputs);
+            }
+            Err(InsertionErrorType::Error(error)) => {
                 if let Err(e) =
                     self.notification_sender
                         .try_send(PoolNotification::ErrorInsertion {
@@ -404,8 +471,26 @@ where
         }
     }
 
-    fn remove(&mut self, tx_ids: Vec<TxId>) {
-        self.pool.remove_transaction(tx_ids);
+    fn remove_executed_transactions(&mut self, tx_ids: Vec<TxId>) {
+        let removed_transactions = self.pool.remove_transactions(tx_ids);
+        let updated_txs = self.pending_pool.new_known_txs(removed_transactions);
+        for (tx, source) in updated_txs.resolved_txs {
+            self.insert(tx, source);
+        }
+        for (tx, source, missing_inputs) in updated_txs.expired_txs {
+            if let Some(missing_input) = missing_inputs.first() {
+                if let Err(e) =
+                    self.notification_sender
+                        .try_send(PoolNotification::ErrorInsertion {
+                            tx_id: tx.id(),
+                            source,
+                            error: missing_input.into(),
+                        })
+                {
+                    tracing::error!("Failed to send error insertion notification: {}", e);
+                }
+            }
+        }
     }
 
     fn remove_coin_dependents(&mut self, parent_txs: Vec<(TxId, Error)>) {
@@ -480,5 +565,60 @@ where
         if response_channel.send(non_existing_txs).is_err() {
             tracing::error!("Failed to send non existing txs");
         }
+    }
+
+    fn has_enough_space_in_pools(&self, tx: &ArcPoolTx) -> bool {
+        let tx_gas = tx.max_gas();
+        let bytes_size = tx.metered_bytes_size();
+
+        // Check maximum limits pool in general
+        let gas_used = self.pool.current_gas.saturating_add(tx_gas);
+        let bytes_used = self.pool.current_bytes_size.saturating_add(bytes_size);
+        let txs_used = self.pool.tx_id_to_storage_id.len().saturating_add(1);
+        if gas_used > self.pool.config.pool_limits.max_gas
+            || bytes_used > self.pool.config.pool_limits.max_bytes_size
+            || txs_used > self.pool.config.pool_limits.max_txs
+        {
+            return false;
+        }
+
+        // Check the percentage used by the pending pool
+        let gas_used = self.pending_pool.current_gas.saturating_add(tx_gas);
+        let bytes_used = self.pending_pool.current_bytes.saturating_add(bytes_size);
+        let txs_used = self.pending_pool.current_txs.saturating_add(1);
+
+        if gas_used
+            > self
+                .pool
+                .config
+                .pool_limits
+                .max_gas
+                .saturating_mul(self.pool.config.max_pending_pool_size_percentage as u64)
+                .saturating_div(100)
+            || bytes_used
+                > self
+                    .pool
+                    .config
+                    .pool_limits
+                    .max_bytes_size
+                    .saturating_mul(
+                        self.pool.config.max_pending_pool_size_percentage as usize,
+                    )
+                    .saturating_div(100)
+            || txs_used
+                > self
+                    .pool
+                    .config
+                    .pool_limits
+                    .max_txs
+                    .saturating_mul(
+                        self.pool.config.max_pending_pool_size_percentage as usize,
+                    )
+                    .saturating_div(100)
+        {
+            return false;
+        }
+
+        true
     }
 }
