@@ -50,8 +50,6 @@ pub use rand::Rng;
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
-use base64ct as _;
-
 fn new_db() -> VmStorage<StorageTransaction<GenesisDatabase>> {
     // when rocksdb is enabled, this creates a new db instance with a temporary path
     VmStorage::default()
