@@ -232,6 +232,8 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
     );
 
+    let _tx_status_manager = fuel_core_tx_status_manager::Manager {};
+
     let txpool = fuel_core_txpool::new_service(
         chain_id,
         config.txpool.clone(),

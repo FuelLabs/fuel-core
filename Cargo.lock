@@ -3363,6 +3363,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-sync",
  "fuel-core-trace",
+ "fuel-core-tx-status-manager",
  "fuel-core-txpool",
  "fuel-core-types 0.41.7",
  "fuel-core-upgradable-executor",
@@ -4025,6 +4026,34 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "fuel-core-tx-status-manager"
+version = "0.41.7"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "enum-iterator",
+ "fuel-core-metrics",
+ "fuel-core-services",
+ "fuel-core-storage",
+ "fuel-core-types 0.41.7",
+ "fuel-gas-price-algorithm",
+ "futures",
+ "mockito",
+ "num_enum",
+ "parking_lot",
+ "reqwest 0.12.12",
+ "serde",
+ "serde_json",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "url",
 ]
 
 [[package]]
