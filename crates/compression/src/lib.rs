@@ -60,6 +60,8 @@ impl VersionedCompressedBlock {
         header: &BlockHeader,
         registrations: RegistrationsPerTable,
         transactions: Vec<CompressedTransaction>,
+        #[cfg(feature = "fault-proving")]
+        registry_root: fuel_core_types::fuel_tx::Bytes32,
     ) -> Self {
         #[cfg(not(feature = "fault-proving"))]
         return Self::V0(CompressedBlockPayloadV0::new(
@@ -72,6 +74,7 @@ impl VersionedCompressedBlock {
             header,
             registrations,
             transactions,
+            registry_root,
         ))
     }
 }
@@ -247,7 +250,10 @@ mod tests {
             CompressedBlockHeader,
             CompressedBlockPayloadV1,
         };
-        use fuel_core_types::blockchain::primitives::BlockId;
+        use fuel_core_types::{
+            blockchain::primitives::BlockId,
+            fuel_tx::Bytes32,
+        };
         use std::str::FromStr;
 
         proptest!(|(strategy in postcard_roundtrip_strategy())| {
@@ -274,6 +280,7 @@ mod tests {
                     generated: Empty,
                 },
                 block_id: BlockId::from_str("0xecea85c17070bc2e65f911310dbd01198f4436052ebba96cded9ddf30c58dd1a").unwrap(),
+                registry_root: Bytes32::from_str("0xecea85c17070bc2e65f911310dbd01198f4436052ebba96cded9ddf30c58dd1b").unwrap(),
             };
 
 
@@ -302,6 +309,7 @@ mod tests {
 
             if let VersionedCompressedBlock::V1(block) = decompressed {
                 assert_eq!(block.header.block_id, header.block_id);
+                assert_eq!(block.header.registry_root, header.registry_root);
             } else {
                 panic!("Expected V1 block, got {:?}", decompressed);
             }
