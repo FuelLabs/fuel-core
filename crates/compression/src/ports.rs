@@ -77,6 +77,22 @@ where
     }
 }
 
+/// Get the whole temporal registry root
+#[cfg(feature = "fault-proving")]
+pub trait GetRegistryRoot {
+    fn registry_root(&self) -> anyhow::Result<fuel_core_types::fuel_tx::Bytes32>;
+}
+
+#[cfg(feature = "fault-proving")]
+impl<D> GetRegistryRoot for &mut D
+where
+    D: GetRegistryRoot,
+{
+    fn registry_root(&self) -> anyhow::Result<fuel_core_types::fuel_tx::Bytes32> {
+        <D as GetRegistryRoot>::registry_root(self)
+    }
+}
+
 /// Lookup for history of UTXOs and messages, used for decompression.
 pub trait HistoryLookup {
     fn utxo_id(&self, c: CompressedUtxoId) -> anyhow::Result<UtxoId>;

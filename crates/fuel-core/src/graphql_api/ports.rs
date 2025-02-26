@@ -438,6 +438,9 @@ pub mod worker {
 
         /// Commits the underlying changes into the database.
         fn commit(self) -> StorageResult<()>;
+
+        #[cfg(feature = "fault-proving")]
+        fn registry_root(&self) -> StorageResult<Bytes32>;
     }
 
     #[cfg(feature = "fault-proving")]
