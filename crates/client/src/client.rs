@@ -852,10 +852,10 @@ impl FuelClient {
 
     /// Requests all storage slots for the `contract_id`.
     #[cfg(feature = "subscriptions")]
-    pub async fn contract_storage_slots(
-        &self,
-        contract_id: &ContractId,
-    ) -> io::Result<impl Stream<Item = io::Result<(Bytes32, Vec<u8>)>>> {
+    pub async fn contract_storage_slots<'a>(
+        &'a self,
+        contract_id: &'a ContractId,
+    ) -> io::Result<impl Stream<Item = io::Result<(Bytes32, Vec<u8>)>> + 'a> {
         use cynic::SubscriptionBuilder;
         use schema::storage::ContractStorageSlotsArgs;
         let s = schema::storage::ContractStorageSlots::build(ContractStorageSlotsArgs {
@@ -874,10 +874,10 @@ impl FuelClient {
 
     /// Requests all storage balances for the `contract_id`.
     #[cfg(feature = "subscriptions")]
-    pub async fn contract_storage_balances(
-        &self,
-        contract_id: &ContractId,
-    ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>>>
+    pub async fn contract_storage_balances<'a>(
+        &'a self,
+        contract_id: &'a ContractId,
+    ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>> + 'a>
     {
         use cynic::SubscriptionBuilder;
         use schema::{
