@@ -10,7 +10,5 @@ fuel-core-types = { path = "../../crates/types", features = [
   "random",
   "test-helpers",
 ] }
-# Remove when we upgrade rust version
-base64ct = "=1.6.0"
 
 [workspace]

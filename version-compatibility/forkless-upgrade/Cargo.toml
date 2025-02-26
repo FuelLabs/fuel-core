@@ -14,8 +14,6 @@ hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
-# Remove when we upgrade rust version
-base64ct = "=1.6.0"
 
 # Neutral deps
 fuel-core = { path = "../../crates/fuel-core", features = ["test-helpers"] }
