@@ -35,6 +35,14 @@ use alloc::{
     string::ToString,
     vec::Vec,
 };
+use fuel_core_types::fuel_tx::{
+    field::{
+        Outputs,
+        Witnesses,
+    },
+    Output,
+    Witness,
+};
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]
@@ -123,7 +131,19 @@ impl MaybeCheckedTransaction {
 pub trait TransactionExt {
     fn inputs(&self) -> ExecutorResult<&Vec<Input>>;
 
+    fn outputs(&self) -> ExecutorResult<&Vec<Output>>;
+
+    fn witnesses(&self) -> ExecutorResult<&Vec<Witness>>;
+
     fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64>;
+}
+
+pub trait TransactionWriteExt {
+    fn inputs_mut(&mut self) -> ExecutorResult<&mut Vec<Input>>;
+
+    fn outputs_mut(&mut self) -> ExecutorResult<&mut Vec<Output>>;
+
+    fn witnesses_mut(&mut self) -> ExecutorResult<&mut Vec<Witness>>;
 }
 
 impl TransactionExt for Transaction {
@@ -137,6 +157,32 @@ impl TransactionExt for Transaction {
             Transaction::Upgrade(tx) => Ok(tx.inputs()),
             Transaction::Upload(tx) => Ok(tx.inputs()),
             Transaction::Blob(tx) => Ok(tx.inputs()),
+        }
+    }
+
+    fn outputs(&self) -> ExecutorResult<&Vec<Output>> {
+        match self {
+            Transaction::Script(tx) => Ok(tx.outputs()),
+            Transaction::Create(tx) => Ok(tx.outputs()),
+            Transaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have outputs".to_string(),
+            )),
+            Transaction::Upgrade(tx) => Ok(tx.outputs()),
+            Transaction::Upload(tx) => Ok(tx.outputs()),
+            Transaction::Blob(tx) => Ok(tx.outputs()),
+        }
+    }
+
+    fn witnesses(&self) -> ExecutorResult<&Vec<Witness>> {
+        match self {
+            Transaction::Script(tx) => Ok(tx.witnesses()),
+            Transaction::Create(tx) => Ok(tx.witnesses()),
+            Transaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have outputs".to_string(),
+            )),
+            Transaction::Upgrade(tx) => Ok(tx.witnesses()),
+            Transaction::Upload(tx) => Ok(tx.witnesses()),
+            Transaction::Blob(tx) => Ok(tx.witnesses()),
         }
     }
 
@@ -156,17 +202,84 @@ impl TransactionExt for Transaction {
     }
 }
 
+impl TransactionWriteExt for Transaction {
+    fn inputs_mut(&mut self) -> ExecutorResult<&mut Vec<Input>> {
+        match self {
+            Transaction::Script(tx) => Ok(tx.inputs_mut()),
+            Transaction::Create(tx) => Ok(tx.inputs_mut()),
+            Transaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have inputs".to_string(),
+            )),
+            Transaction::Upgrade(tx) => Ok(tx.inputs_mut()),
+            Transaction::Upload(tx) => Ok(tx.inputs_mut()),
+            Transaction::Blob(tx) => Ok(tx.inputs_mut()),
+        }
+    }
+
+    fn outputs_mut(&mut self) -> ExecutorResult<&mut Vec<Output>> {
+        match self {
+            Transaction::Script(tx) => Ok(tx.outputs_mut()),
+            Transaction::Create(tx) => Ok(tx.outputs_mut()),
+            Transaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have outputs".to_string(),
+            )),
+            Transaction::Upgrade(tx) => Ok(tx.outputs_mut()),
+            Transaction::Upload(tx) => Ok(tx.outputs_mut()),
+            Transaction::Blob(tx) => Ok(tx.outputs_mut()),
+        }
+    }
+
+    fn witnesses_mut(&mut self) -> ExecutorResult<&mut Vec<Witness>> {
+        match self {
+            Transaction::Script(tx) => Ok(tx.witnesses_mut()),
+            Transaction::Create(tx) => Ok(tx.witnesses_mut()),
+            Transaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have outputs".to_string(),
+            )),
+            Transaction::Upgrade(tx) => Ok(tx.witnesses_mut()),
+            Transaction::Upload(tx) => Ok(tx.witnesses_mut()),
+            Transaction::Blob(tx) => Ok(tx.witnesses_mut()),
+        }
+    }
+}
+
 impl TransactionExt for CheckedTransaction {
     fn inputs(&self) -> ExecutorResult<&Vec<Input>> {
         match self {
             CheckedTransaction::Script(tx) => Ok(tx.transaction().inputs()),
             CheckedTransaction::Create(tx) => Ok(tx.transaction().inputs()),
             CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have max_gas".to_string(),
+                "Mint transaction doesn't have inputs".to_string(),
             )),
             CheckedTransaction::Upgrade(tx) => Ok(tx.transaction().inputs()),
             CheckedTransaction::Upload(tx) => Ok(tx.transaction().inputs()),
             CheckedTransaction::Blob(tx) => Ok(tx.transaction().inputs()),
+        }
+    }
+
+    fn outputs(&self) -> ExecutorResult<&Vec<Output>> {
+        match self {
+            CheckedTransaction::Script(tx) => Ok(tx.transaction().outputs()),
+            CheckedTransaction::Create(tx) => Ok(tx.transaction().outputs()),
+            CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have outputs".to_string(),
+            )),
+            CheckedTransaction::Upgrade(tx) => Ok(tx.transaction().outputs()),
+            CheckedTransaction::Upload(tx) => Ok(tx.transaction().outputs()),
+            CheckedTransaction::Blob(tx) => Ok(tx.transaction().outputs()),
+        }
+    }
+
+    fn witnesses(&self) -> ExecutorResult<&Vec<Witness>> {
+        match self {
+            CheckedTransaction::Script(tx) => Ok(tx.transaction().witnesses()),
+            CheckedTransaction::Create(tx) => Ok(tx.transaction().witnesses()),
+            CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
+                "Mint transaction doesn't have outputs".to_string(),
+            )),
+            CheckedTransaction::Upgrade(tx) => Ok(tx.transaction().witnesses()),
+            CheckedTransaction::Upload(tx) => Ok(tx.transaction().witnesses()),
+            CheckedTransaction::Blob(tx) => Ok(tx.transaction().witnesses()),
         }
     }
 
@@ -189,6 +302,20 @@ impl TransactionExt for MaybeCheckedTransaction {
         match self {
             MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.inputs(),
             MaybeCheckedTransaction::Transaction(tx) => tx.inputs(),
+        }
+    }
+
+    fn outputs(&self) -> ExecutorResult<&Vec<Output>> {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.outputs(),
+            MaybeCheckedTransaction::Transaction(tx) => tx.outputs(),
+        }
+    }
+
+    fn witnesses(&self) -> ExecutorResult<&Vec<Witness>> {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.witnesses(),
+            MaybeCheckedTransaction::Transaction(tx) => tx.witnesses(),
         }
     }
 

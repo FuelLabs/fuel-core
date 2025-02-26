@@ -1,8 +1,11 @@
 use super::scalars::{
+    AssetId,
     U32,
     U64,
+    U8,
 };
 use crate::{
+    coins_query::CoinsQueryError,
     fuel_core_graphql_api::{
         api_service::{
             BlockProducer,
@@ -18,10 +21,17 @@ use crate::{
         ports::MemoryPool,
     },
     query::{
+        asset_query::Exclude,
         transaction_status_change,
         TxnStatusChangeState,
     },
     schema::{
+        coins::{
+            CoinType,
+            ExcludeInput,
+            SpendQueryElementInput,
+        },
+        gas_price::EstimateGasPriceExt,
         scalars::{
             Address,
             HexString,
@@ -29,7 +39,10 @@ use crate::{
             TransactionId,
             TxPointer,
         },
-        tx::types::TransactionStatus,
+        tx::types::{
+            AssembleTransactionResult,
+            TransactionStatus,
+        },
         ReadViewProvider,
     },
     service::adapters::SharedMemoryPool,
@@ -43,7 +56,10 @@ use async_graphql::{
     Object,
     Subscription,
 };
-use fuel_core_executor::ports::TransactionExt;
+use fuel_core_executor::ports::{
+    TransactionExt,
+    TransactionWriteExt,
+};
 use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,
@@ -51,7 +67,16 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
+    entities::coins::CoinId,
+    fuel_tx,
     fuel_tx::{
+        input::{
+            coin::CoinSigned,
+            message::{
+                MessageCoinSigned,
+                MessageDataSigned,
+            },
+        },
         Bytes32,
         Cacheable,
         Transaction as FuelTx,
@@ -61,9 +86,12 @@ use fuel_core_types::{
         self,
         canonical::Deserialize,
     },
-    fuel_vm::checked_transaction::{
-        CheckPredicateParams,
-        EstimatePredicates,
+    fuel_vm::{
+        checked_transaction::{
+            CheckPredicateParams,
+            EstimatePredicates,
+        },
+        Signature,
     },
     services::txpool,
 };
@@ -73,6 +101,11 @@ use futures::{
 };
 use std::{
     borrow::Cow,
+    collections::{
+        hash_map::Entry,
+        HashMap,
+        HashSet,
+    },
     iter,
 };
 use types::{
@@ -239,6 +272,354 @@ impl TxQuery {
             },
         )
         .await
+    }
+
+    /// Assembles the transaction based on the provided requirements.
+    /// The return transaction contains:
+    /// - Input coins to cover `required_balances`
+    /// - Input coins to cover the fee of the transaction based on the gas price from `block_horizon`
+    /// - `Change` or `Destroy` outputs for all assets from the inputs
+    /// - `Variable` outputs in the case they are required during the execution
+    /// - `Contract` inputs and outputs in the case they are required during the execution
+    /// - Reserved witness slots for signed coins filled with `64` zeroes
+    /// - Set script gas limit(unless `script` is empty)
+    /// - Estimated predicates, if `estimate_predicates == true`
+    ///
+    /// Returns an error if:
+    /// - The number of required balances exceeds the maximum number of inputs allowed.
+    /// - The fee address index is out of bounds.
+    /// - The same asset has multiple change policies(either the receiver of
+    ///     the change is different, or one of the policies states about the destruction
+    ///     of the token while the other does not). The `Change` output from the transaction
+    ///     also count as a `ChangePolicy`.
+    /// - The number of excluded coin IDs exceeds the maximum number of inputs allowed.
+    /// - Required assets have multiple entries.
+    /// - If accounts don't have sufficient amounts to cover the transaction requirements in assets.
+    /// - If a constructed transaction breaks the rules defined by consensus parameters.
+    #[graphql(complexity = "query_costs().assemble_tx")]
+    async fn assemble_tx(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(
+            desc = "The original transaction that contains application level logic only"
+        )]
+        tx: HexString,
+        #[graphql(
+            desc = "Number of blocks into the future to estimate the gas price for"
+        )]
+        block_horizon: U32,
+        #[graphql(
+            desc = "The list of required balances for the transaction to include as inputs. \
+                    The list should be created based on the application-required assets. \
+                    The base asset requirement should not require assets to cover the \
+                    transaction fee, which will be calculated and added automatically \
+                    at the end of the assembly process."
+        )]
+        required_balances: Vec<schema_types::RequiredBalance>,
+        #[graphql(desc = "The index from the `required_balances` list \
+                that points to the address who pays fee for the transaction. \
+                If you only want to cover the fee of transaction, you can set the required balance \
+                to 0, set base asset and point to this required address.")]
+        fee_address_index: U8,
+        #[graphql(
+            desc = "The list of resources to exclude from the selection for the inputs"
+        )]
+        exclude_input: Option<ExcludeInput>,
+        #[graphql(
+            desc = "Perform the estimation of the predicates before cover fee of the transaction"
+        )]
+        estimate_predicates: Option<bool>,
+        #[graphql(
+            desc = "During the phase of the fee calculation, adds `reserve_gas` to the \
+                    total gas used by the transaction and fetch assets to cover the fee."
+        )]
+        reserve_gas: Option<U64>,
+    ) -> async_graphql::Result<AssembleTransactionResult> {
+        let consensus_params = ctx
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params();
+
+        let max_input = consensus_params.tx_params().max_inputs();
+
+        if required_balances.len() > max_input as usize {
+            return Err(CoinsQueryError::TooManyCoinsSelected {
+                required: required_balances.len(),
+                max: max_input,
+            }
+            .into());
+        }
+
+        let fee_index: u8 = fee_address_index.into();
+
+        if fee_index as usize >= required_balances.len() {
+            return Err(anyhow::anyhow!("The fee address index is out of bounds").into());
+        }
+
+        let excluded_id_count = exclude_input.as_ref().map_or(0, |exclude| {
+            exclude.utxos.len().saturating_add(exclude.messages.len())
+        });
+        if excluded_id_count > max_input as usize {
+            return Err(CoinsQueryError::TooManyExcludedId {
+                provided: excluded_id_count,
+                allowed: max_input,
+            }
+            .into());
+        }
+
+        let required_balances: Vec<RequiredBalance> =
+            required_balances.into_iter().map(Into::into).collect();
+        let mut duplicate_checker = HashSet::with_capacity(required_balances.len());
+        for required_balance in &required_balances {
+            let asset_id = required_balance.asset_id;
+            if !duplicate_checker.insert(asset_id) {
+                return Err(CoinsQueryError::DuplicateAssets(asset_id).into());
+            }
+        }
+
+        let gas_price = ctx.estimate_gas_price(Some(block_horizon.into()))?;
+
+        let mut tx = FuelTx::from_bytes(&tx.0)?;
+
+        let mut change_output_policies = HashMap::<fuel_tx::AssetId, ChangePolicy>::new();
+        let mut available_change_outputs = HashSet::<fuel_tx::AssetId>::new();
+
+        for output in tx.outputs()? {
+            if let fuel_tx::Output::Change { to, asset_id, .. } = output {
+                change_output_policies
+                    .insert(*asset_id, ChangePolicy::Change((*to).into()));
+                available_change_outputs.insert(*asset_id);
+            }
+        }
+
+        for required_balance in &required_balances {
+            let asset_id = required_balance.asset_id;
+
+            let entry = change_output_policies.entry(asset_id);
+
+            match entry {
+                Entry::Occupied(old) => {
+                    if old.get() != &required_balance.change_policy {
+                        return Err(anyhow::anyhow!(
+                            "The asset {} has multiple change policies",
+                            asset_id
+                        )
+                        .into());
+                    }
+                }
+                Entry::Vacant(vacant) => {
+                    vacant.insert(required_balance.change_policy);
+                }
+            }
+        }
+
+        let mut exclude: Exclude = exclude_input.into();
+        let mut signature_witness_indexes = HashMap::<fuel_tx::Address, u16>::new();
+
+        // Exclude inputs that already are used by the transaction
+        let inputs = tx.inputs()?;
+        for input in inputs {
+            if let Some(utxo_id) = input.utxo_id() {
+                exclude.exclude(CoinId::Utxo(*utxo_id));
+            }
+
+            if let Some(nonce) = input.nonce() {
+                exclude.exclude(CoinId::Message(*nonce));
+            }
+
+            match input {
+                fuel_tx::Input::CoinSigned(CoinSigned {
+                    owner,
+                    witness_index,
+                    ..
+                })
+                | fuel_tx::Input::MessageCoinSigned(MessageCoinSigned {
+                    recipient: owner,
+                    witness_index,
+                    ..
+                })
+                | fuel_tx::Input::MessageDataSigned(MessageDataSigned {
+                    recipient: owner,
+                    witness_index,
+                    ..
+                }) => {
+                    signature_witness_indexes.insert(*owner, *witness_index);
+                }
+                fuel_tx::Input::Contract(_)
+                | fuel_tx::Input::CoinPredicate(_)
+                | fuel_tx::Input::MessageCoinPredicate(_)
+                | fuel_tx::Input::MessageDataPredicate(_) => {
+                    // Do nothing
+                }
+            }
+        }
+
+        let read_view = ctx.read_view()?;
+        let mut number_of_witnesses =
+            u16::try_from(tx.witnesses()?.len()).unwrap_or(u16::MAX);
+
+        for required_balance in &required_balances {
+            let used_inputs = u16::try_from(tx.inputs()?.len()).unwrap_or(u16::MAX);
+            let remaining_input_slots = max_input.saturating_sub(used_inputs);
+            if remaining_input_slots == 0 {
+                return Err(anyhow::anyhow!(
+                    "Filling required balances occupies a number \
+                    of inputs more than can fit into the transaction"
+                )
+                .into());
+            }
+
+            let asset_id = required_balance.asset_id;
+            let query_per_asset = SpendQueryElementInput {
+                asset_id: asset_id.into(),
+                amount: (required_balance.amount as u128).into(),
+                max: None,
+            };
+            let owner = required_balance.account.owner();
+
+            let selected_coins = read_view
+                .coins_to_spend(
+                    owner,
+                    &[query_per_asset],
+                    &exclude,
+                    &consensus_params,
+                    remaining_input_slots,
+                )
+                .await?
+                .into_iter()
+                .next()
+                .expect("The query returns a single result; qed");
+
+            if available_change_outputs.insert(asset_id) {
+                match change_output_policies
+                    .get(&asset_id)
+                    .expect("Policy was inserted above; qed")
+                {
+                    ChangePolicy::Change(change_receiver) => {
+                        tx.outputs_mut()?.push(fuel_tx::Output::change(
+                            *change_receiver,
+                            0,
+                            asset_id,
+                        ));
+                    }
+                    ChangePolicy::Destroy => {
+                        // Do nothing for now, since `fuel-tx` crate doesn't have
+                        // `Destroy` output yet.
+                        // https://github.com/FuelLabs/fuel-specs/issues/621
+                    }
+                }
+            }
+
+            for coin in selected_coins {
+                let mut add_witness = None;
+
+                let input = match &required_balance.account {
+                    Account::Address(account) => {
+                        let signature_index = signature_witness_indexes
+                            .get(account)
+                            .cloned()
+                            .unwrap_or_else(|| {
+                                let vacant_index = number_of_witnesses;
+                                add_witness = Some((*account, vacant_index));
+
+                                vacant_index
+                            });
+
+                        match coin {
+                            CoinType::Coin(coin) => fuel_tx::Input::coin_signed(
+                                coin.0.utxo_id,
+                                coin.0.owner,
+                                coin.0.amount,
+                                coin.0.asset_id,
+                                coin.0.tx_pointer,
+                                signature_index,
+                            ),
+                            CoinType::MessageCoin(message) => {
+                                fuel_tx::Input::message_coin_signed(
+                                    message.0.sender,
+                                    message.0.recipient,
+                                    message.0.amount,
+                                    message.0.nonce,
+                                    signature_index,
+                                )
+                            }
+                        }
+                    }
+                    Account::Predicate(predicate) => {
+                        let predicate_gas_used = 0;
+                        match coin {
+                            CoinType::Coin(coin) => fuel_tx::Input::coin_predicate(
+                                coin.0.utxo_id,
+                                predicate.predicate_address,
+                                coin.0.amount,
+                                coin.0.asset_id,
+                                coin.0.tx_pointer,
+                                predicate_gas_used,
+                                predicate.predicate.clone(),
+                                predicate.predicate_data.clone(),
+                            ),
+                            CoinType::MessageCoin(message) => {
+                                fuel_tx::Input::message_coin_predicate(
+                                    message.0.sender,
+                                    message.0.recipient,
+                                    message.0.amount,
+                                    message.0.nonce,
+                                    predicate_gas_used,
+                                    predicate.predicate.clone(),
+                                    predicate.predicate_data.clone(),
+                                )
+                            }
+                        }
+                    }
+                };
+                tx.inputs_mut()?.push(input);
+
+                if let Some((owner, index)) = add_witness {
+                    tx.witnesses_mut()?.push(vec![0; Signature::LEN].into());
+                    signature_witness_indexes.insert(owner, index);
+                    number_of_witnesses = number_of_witnesses.saturating_add(1);
+                }
+            }
+        }
+
+        let block_producer = ctx.data_unchecked::<BlockProducer>();
+        todo!()
+
+        // if block_height.is_some() && !config.historical_execution {
+        //     return Err(anyhow::anyhow!(
+        //         "The `blockHeight` parameter requires the `--historical-execution` option"
+        //     )
+        //     .into());
+        // }
+        //
+        // let mut transactions = txs
+        //     .iter()
+        //     .map(|tx| FuelTx::from_bytes(&tx.0))
+        //     .collect::<Result<Vec<FuelTx>, _>>()?;
+        // transactions.iter_mut().try_fold::<_, _, async_graphql::Result<u64>>(0u64, |acc, tx| {
+        //     let gas = tx.max_gas(&consensus_params)?;
+        //     let gas = gas.saturating_add(acc);
+        //     if gas > block_gas_limit {
+        //         return Err(anyhow::anyhow!("The sum of the gas usable by the transactions is greater than the block gas limit").into());
+        //     }
+        //     tx.precompute(&consensus_params.chain_id())?;
+        //     Ok(gas)
+        // })?;
+        //
+        // let tx_statuses = block_producer
+        //     .dry_run_txs(
+        //         transactions,
+        //         block_height.map(|x| x.into()),
+        //         None, // TODO(#1749): Pass parameter from API
+        //         utxo_validation,
+        //         gas_price.map(|x| x.into()),
+        //     )
+        //     .await?;
+        // let tx_statuses = tx_statuses
+        //     .into_iter()
+        //     .map(DryRunTransactionExecutionStatus)
+        //     .collect();
+        //
+        // Ok(tx_statuses)
     }
 
     /// Estimate the predicate gas for the provided transaction
@@ -515,6 +896,114 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
                 .map_err(|e| anyhow::anyhow!(e))?
                 .map(|time| txpool::TransactionStatus::Submitted { time })),
             Err(err) => Err(err),
+        }
+    }
+}
+
+pub mod schema_types {
+    use super::*;
+
+    #[derive(async_graphql::OneofObject)]
+    pub enum ChangePolicy {
+        /// Adds `Output::Change` to the transaction if it is not already present.
+        /// Sending remaining assets to the provided address.
+        Change(Address),
+        /// Destroys the remaining assets by the transaction for provided address.
+        Destroy(bool),
+    }
+
+    #[derive(async_graphql::OneofObject)]
+    pub enum Account {
+        Address(Address),
+        Predicate(Predicate),
+    }
+
+    #[derive(async_graphql::InputObject)]
+    pub struct Predicate {
+        // The address of the predicate can be different from teh actual bytecode.
+        // This feature is used by wallets during estimation of the predicate that requires
+        // signature verification. They provide a mocked version of the predicate that
+        // returns `true` even if the signature doesn't match.
+        pub predicate_address: Address,
+        pub predicate: Vec<u8>,
+        pub predicate_data: Vec<u8>,
+    }
+
+    #[derive(async_graphql::InputObject)]
+    pub struct RequiredBalance {
+        pub asset_id: AssetId,
+        pub amount: U64,
+        pub account: Account,
+        pub change_policy: ChangePolicy,
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ChangePolicy {
+    /// Adds `Output::Change` to the transaction if it is not already present.
+    /// Sending remaining assets to the provided address.
+    Change(fuel_tx::Address),
+    /// Destroys the remaining assets by the transaction for provided address.
+    Destroy,
+}
+
+pub enum Account {
+    Address(fuel_tx::Address),
+    Predicate(Predicate),
+}
+
+impl Account {
+    pub fn owner(&self) -> fuel_tx::Address {
+        match self {
+            Account::Address(address) => *address,
+            Account::Predicate(predicate) => predicate.predicate_address,
+        }
+    }
+}
+
+pub struct Predicate {
+    pub predicate_address: fuel_tx::Address,
+    pub predicate: Vec<u8>,
+    pub predicate_data: Vec<u8>,
+}
+
+struct RequiredBalance {
+    asset_id: fuel_tx::AssetId,
+    amount: fuel_tx::Word,
+    account: Account,
+    change_policy: ChangePolicy,
+}
+
+impl From<schema_types::RequiredBalance> for RequiredBalance {
+    fn from(required_balance: schema_types::RequiredBalance) -> Self {
+        let asset_id: fuel_tx::AssetId = required_balance.asset_id.into();
+        let amount: fuel_tx::Word = required_balance.amount.into();
+        let account = match required_balance.account {
+            schema_types::Account::Address(address) => Account::Address(address.into()),
+            schema_types::Account::Predicate(predicate) => {
+                let predicate_address = predicate.predicate_address.into();
+                let predicate_data = predicate.predicate_data;
+                let predicate = predicate.predicate;
+                Account::Predicate(Predicate {
+                    predicate_address,
+                    predicate,
+                    predicate_data,
+                })
+            }
+        };
+
+        let change_policy = match required_balance.change_policy {
+            schema_types::ChangePolicy::Change(address) => {
+                ChangePolicy::Change(address.into())
+            }
+            schema_types::ChangePolicy::Destroy(_) => ChangePolicy::Destroy,
+        };
+
+        Self {
+            asset_id,
+            amount,
+            account,
+            change_policy,
         }
     }
 }
