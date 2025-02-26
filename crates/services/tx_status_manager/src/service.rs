@@ -6,8 +6,7 @@ use fuel_core_services::{
     TaskNextAction,
 };
 
-#[derive(Clone)]
-pub struct SharedState {}
+use crate::SharedState;
 
 pub struct Task {
     shared_state: SharedState,
@@ -29,6 +28,7 @@ impl RunnableService for Task {
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        // TODO[RC]: Needed?
         todo!()
     }
 }
@@ -38,7 +38,7 @@ impl RunnableTask for Task {
         &mut self,
         _watcher: &mut fuel_core_services::StateWatcher,
     ) -> TaskNextAction {
-        todo!()
+        TaskNextAction::Continue
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -47,5 +47,7 @@ impl RunnableTask for Task {
 }
 
 pub fn new_service() -> ServiceRunner<Task> {
-    todo!()
+    ServiceRunner::new(Task {
+        shared_state: SharedState {},
+    })
 }

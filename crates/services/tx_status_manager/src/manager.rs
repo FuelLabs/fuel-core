@@ -1,1 +1,1 @@
-pub struct Manager {}
+pub struct TxStatusManager {}

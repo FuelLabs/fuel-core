@@ -36,6 +36,10 @@ use crate::GasPrice;
 
 pub use fuel_core_storage::transactional::AtomicView;
 
+pub trait TxStatusManager {
+    fn foo(&self) -> u32;
+}
+
 pub trait BlockImporter {
     /// Wait until the next block is available
     fn block_events(&self) -> BoxStream<SharedImportResult>;

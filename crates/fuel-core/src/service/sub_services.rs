@@ -4,6 +4,7 @@ use super::{
     adapters::{
         FuelBlockSigner,
         P2PAdapter,
+        TxStatusManagerAdapter,
     },
     genesis::create_genesis_block,
     DbType,
@@ -81,8 +82,8 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     FuelGasPriceProvider<AlgorithmV1, u32, u64>,
     ChainStateInfoProvider,
 >;
-
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
+pub type TxStatusManagerSharedState = fuel_core_tx_status_manager::SharedState;
 
 // TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
 pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
@@ -232,7 +233,9 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
     );
 
-    let _tx_status_manager = fuel_core_tx_status_manager::new_service();
+    let tx_status_manager = fuel_core_tx_status_manager::new_service();
+    let tx_status_manager_adapter =
+        TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
 
     let txpool = fuel_core_txpool::new_service(
         chain_id,
@@ -244,6 +247,7 @@ pub fn init_sub_services(
         last_height,
         universal_gas_price_provider.clone(),
         executor.clone(),
+        tx_status_manager_adapter.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 

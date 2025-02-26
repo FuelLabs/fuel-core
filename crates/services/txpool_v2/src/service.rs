@@ -44,6 +44,7 @@ use fuel_core_txpool::{
         P2PRequests,
         P2PSubscriptions,
         TxPoolPersistentStorage,
+        TxStatusManager as StatusManagerTrait,
         WasmChecker as WasmCheckerTrait,
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
@@ -713,6 +714,7 @@ pub fn new_service<
     ChainStateProvider,
     GasPriceProvider,
     WasmChecker,
+    StatusManager,
 >(
     chain_id: ChainId,
     config: Config,
@@ -723,6 +725,7 @@ pub fn new_service<
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
     wasm_checker: WasmChecker,
+    status_manager: StatusManager,
 ) -> Service<PSView, P2P>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
@@ -733,7 +736,11 @@ where
     GasPriceProvider: GasPriceProviderTrait,
     WasmChecker: WasmCheckerTrait,
     BlockImporter: BlockImporterTrait,
+    StatusManager: StatusManagerTrait,
 {
+    let x = status_manager.foo();
+    tracing::error!("x: {}", x);
+
     let mut ttl_timer = tokio::time::interval(config.ttl_check_interval);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
