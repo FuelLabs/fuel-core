@@ -21,6 +21,7 @@ fuel-core-global-merkle-root-storage = { workspace = true }
 fuel-core-global-merkle-root-service = { workspace = true }
 fuel-core-global-merkle-root-api = { workspace = true }
 fuel-core-services = { workspace = true }
+fuel-core-database = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["alloc"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
