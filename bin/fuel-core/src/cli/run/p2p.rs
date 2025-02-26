@@ -205,6 +205,10 @@ pub struct P2PArgs {
     /// Number of threads to read from the tx pool.
     #[clap(long = "p2p-txpool-threads", default_value = "0", env)]
     pub tx_pool_threads: usize,
+
+    /// Subscribe to pre-confirmation gossip topic
+    #[clap(long = "subscribe-to-pre-confirmations", env)]
+    subscribe_to_pre_confirmations: bool,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -349,6 +353,7 @@ impl P2PArgs {
             database_read_threads: self.database_read_threads,
             tx_pool_threads: self.tx_pool_threads,
             state: NotInitialized,
+            subscribe_to_pre_confirmations: self.subscribe_to_pre_confirmations,
         };
         Ok(Some(config))
     }
