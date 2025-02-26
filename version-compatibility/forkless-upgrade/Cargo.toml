@@ -43,7 +43,7 @@ genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", default
   "parquet",
   "p2p",
   "rocksdb",
-  "env"
+  "env",
 ] }
 genesis-fuel-core-client = { version = "0.26.0", package = "fuel-core-client" }
 genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services" }
@@ -53,7 +53,7 @@ version-36-fuel-core-bin = { version = "0.36.0", package = "fuel-core-bin", defa
   "parquet",
   "p2p",
   "rocksdb",
-  "env"
+  "env",
 ] }
 version-36-fuel-core-client = { version = "0.36.0", package = "fuel-core-client" }
 version-36-fuel-core-services = { version = "0.36.0", package = "fuel-core-services" }
