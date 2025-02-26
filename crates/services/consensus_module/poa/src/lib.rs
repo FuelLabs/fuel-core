@@ -14,7 +14,7 @@ pub mod ports;
 pub mod service;
 pub mod verifier;
 
-mod pre_confirmation_service;
+mod pre_confirmation_signature_service;
 
 pub use config::{
     Config,

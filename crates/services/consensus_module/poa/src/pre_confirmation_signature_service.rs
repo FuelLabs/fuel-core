@@ -5,7 +5,7 @@ use fuel_core_services::{
     TaskNextAction,
 };
 
-use crate::pre_confirmation_service::{
+use crate::pre_confirmation_signature_service::{
     broadcast::Broadcast,
     key_generator::KeyGenerator,
     parent_signature::ParentSignature,
@@ -26,7 +26,7 @@ pub mod signing_key;
 #[cfg(test)]
 pub mod tests;
 
-pub struct PreConfirmationTask<
+pub struct PreConfirmationSignatureTask<
     TxReceiver,
     Broadcast,
     ParentSignature,
@@ -43,7 +43,7 @@ pub struct PreConfirmationTask<
 }
 
 impl<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
-    PreConfirmationTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+    PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver,
     Brdcst: Broadcast<
@@ -79,7 +79,7 @@ where
 }
 
 impl<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger> RunnableTask
-    for PreConfirmationTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+    for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver,
     Brdcst: Broadcast<

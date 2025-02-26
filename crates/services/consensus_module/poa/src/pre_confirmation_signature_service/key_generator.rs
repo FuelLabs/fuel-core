@@ -1,5 +1,5 @@
 use super::*;
-use crate::pre_confirmation_service::signing_key::SigningKey;
+use crate::pre_confirmation_signature_service::signing_key::SigningKey;
 use std::future::Future;
 
 /// Defines the mechanism for generating new delegate keys

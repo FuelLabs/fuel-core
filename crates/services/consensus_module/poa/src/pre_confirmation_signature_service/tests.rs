@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use crate::pre_confirmation_service::error::Error;
+use crate::pre_confirmation_signature_service::error::Error;
 use fuel_core_services::StateWatcher;
 use fuel_core_types::fuel_tx::Transaction;
 use std::{
@@ -187,7 +187,7 @@ impl TaskBuilder {
     pub fn build_with_handles(
         self,
     ) -> (
-        PreConfirmationTask<
+        PreConfirmationSignatureTask<
             FakeTxReceiver,
             FakeBroadcast,
             FakeParentSignature,
@@ -204,7 +204,7 @@ impl TaskBuilder {
         let (broadcast, broadcast_delegation_key_handle, broadcast_tx_handle) =
             self.get_broadcast();
         let (tx_receiver, tx_sender_handle) = self.get_tx_receiver();
-        let task = PreConfirmationTask {
+        let task = PreConfirmationSignatureTask {
             tx_receiver,
             broadcast,
             parent_signature,
