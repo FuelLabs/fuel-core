@@ -1,4 +1,6 @@
 use super::*;
+
+/// Abstraction of the delegate signing key that can be used to sign data and produce a signature.
 pub trait SigningKey: Clone + Send {
     type Signature<T>: Clone + Send
     where

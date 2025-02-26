@@ -1,6 +1,7 @@
 use super::*;
 use std::future::Future;
 
+/// Broadcasts the delegate key as well as the pre-confirmed transactions to the network
 pub trait Broadcast: Send {
     type PreConfirmations: Send + Clone;
     type ParentSignature<T>;
