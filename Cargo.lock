@@ -3584,6 +3584,7 @@ dependencies = [
  "fuel-core-types 0.41.7",
  "itertools 0.12.1",
  "num_cpus",
+ "postcard",
  "rocksdb",
  "serde",
  "strum 0.25.0",

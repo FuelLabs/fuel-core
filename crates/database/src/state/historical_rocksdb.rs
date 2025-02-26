@@ -3,11 +3,7 @@ use crate::{
         DatabaseDescription,
         DatabaseHeight,
     },
-    Error as DatabaseError,
-    Result as DatabaseResult,
-}
-
-use crate::state::{
+    state::{
         iterable_key_value_view::IterableKeyValueViewWrapper,
         key_value_view::KeyValueViewWrapper,
         rocks_db::RocksDb,
@@ -16,7 +12,9 @@ use crate::state::{
         IterableKeyValueView,
         KeyValueView,
         TransactableStorage,
-
+    },
+    Error as DatabaseError,
+    Result as DatabaseResult,
 };
 use fuel_core_storage::{
     iter::{
@@ -58,12 +56,12 @@ use std::{
     path::Path,
 };
 
-            use description::{
-                historical_duplicate_column_id,
-                Column,
-                Historical,
-            };
-            use view_at_height::ViewAtHeight;
+use description::{
+    historical_duplicate_column_id,
+    Column,
+    Historical,
+};
+use view_at_height::ViewAtHeight;
 
 use super::rocks_db::DatabaseConfig;
 

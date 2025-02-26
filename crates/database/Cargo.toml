@@ -25,6 +25,7 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 itertools = { workspace = true }
 num_cpus = { version = "1.16.0" } # TODO: Make workspace dependency + feature flag
+postcard = { workspace = true }
 rocksdb = { version = "0.21", default-features = false, features = [
   "lz4",
   "multi-threaded-cf",

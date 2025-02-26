@@ -15,7 +15,7 @@ use crate::database_description::DatabaseDescription;
 // pub mod data_source;
 pub mod generic_database;
 //#[cfg(feature = "rocksdb")]
-// pub mod historical_rocksdb;
+pub mod historical_rocksdb;
 // pub mod in_memory;
 pub mod iterable_key_value_view;
 pub mod key_value_view;
