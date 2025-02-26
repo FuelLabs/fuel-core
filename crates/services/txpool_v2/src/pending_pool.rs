@@ -212,7 +212,7 @@ impl PendingPool {
                     if let Some(tx_ids) = self.unresolved_txs_by_inputs.get_mut(input) {
                         tx_ids.retain(|id| *id != *tx_id);
                         if tx_ids.is_empty() {
-                            self.unresolved_txs_by_inputs.remove(&input);
+                            self.unresolved_txs_by_inputs.remove(input);
                         }
                     }
                 }
