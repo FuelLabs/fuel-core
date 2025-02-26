@@ -1,3 +1,15 @@
+use fuel_core_storage::{
+    iter::IterableStore,
+    kv_store::StorageColumn,
+    transactional::StorageChanges,
+    Result as StorageResult,
+};
+use generic_database::GenericDatabase;
+use iterable_key_value_view::IterableKeyValueViewWrapper;
+use key_value_view::KeyValueViewWrapper;
+
+use std::fmt::Debug;
+
 use crate::database_description::DatabaseDescription;
 
 // pub mod data_source;
@@ -14,3 +26,67 @@ pub mod rocks_db_key_iterator;
 
 pub type ColumnType<Description> = <Description as DatabaseDescription>::Column;
 pub type HeightType<Description> = <Description as DatabaseDescription>::Height;
+
+/// A type extends the `KeyValueView`, allowing iteration over the storage.
+pub type IterableKeyValueView<Column, BlockHeight> =
+    GenericDatabase<IterableKeyValueViewWrapper<Column>, BlockHeight>;
+
+/// The basic view available for the key value storage.
+pub type KeyValueView<Column, BlockHeight> =
+    GenericDatabase<KeyValueViewWrapper<Column>, BlockHeight>;
+
+impl<Column, Height> IterableKeyValueView<Column, Height>
+where
+    Column: StorageColumn + 'static,
+{
+    /// Downgrades the `IterableKeyValueView` into the `KeyValueView`.
+    pub fn into_key_value_view(self) -> KeyValueView<Column, Height> {
+        let (iterable, metadata) = self.into_inner();
+        let storage = KeyValueViewWrapper::new(iterable);
+        KeyValueView::from_storage_and_metadata(storage, metadata)
+    }
+}
+
+pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
+    /// Commits the changes into the storage.
+    fn commit_changes(
+        &self,
+        height: Option<Height>,
+        changes: StorageChanges,
+    ) -> StorageResult<()>;
+
+    fn view_at_height(
+        &self,
+        height: &Height,
+    ) -> StorageResult<KeyValueView<Self::Column, Height>>;
+
+    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column, Height>>;
+
+    fn rollback_block_to(&self, height: &Height) -> StorageResult<()>;
+}
+
+// It is used only to allow conversion of the `StorageTransaction` into the `DataSource`.
+#[cfg(feature = "test-helpers")]
+impl<Height, S> TransactableStorage<Height>
+    for fuel_core_storage::transactional::StorageTransaction<S>
+where
+    S: IterableStore + Debug + Send + Sync,
+{
+    fn commit_changes(&self, _: Option<Height>, _: StorageChanges) -> StorageResult<()> {
+        unimplemented!()
+    }
+
+    fn view_at_height(
+        &self,
+        _: &Height,
+    ) -> StorageResult<KeyValueView<Self::Column, Height>> {
+        unimplemented!()
+    }
+
+    fn latest_view(&self) -> StorageResult<IterableKeyValueView<Self::Column, Height>> {
+        unimplemented!()
+    }
+    fn rollback_block_to(&self, _: &Height) -> StorageResult<()> {
+        unimplemented!()
+    }
+}
