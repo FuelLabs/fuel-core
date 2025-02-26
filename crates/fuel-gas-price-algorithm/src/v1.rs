@@ -355,14 +355,12 @@ impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data<U: UnrecordedBlocks>(
         &mut self,
         heights: RangeInclusive<u32>,
-        recorded_bytes: u32,
         recording_cost: u128,
         unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
         if !heights.is_empty() {
             self.da_block_update(
                 heights,
-                recorded_bytes as u128,
                 recording_cost,
                 unrecorded_blocks,
             )?;
@@ -510,8 +508,8 @@ impl AlgorithmUpdaterV1 {
                     0u64
                 }
             });
-        tracing::debug!("Profit: {}", self.last_profit);
-        tracing::debug!(
+        tracing::info!("Profit: {}", self.last_profit);
+        tracing::info!(
             "DA gas price change: p: {}, d: {}, change: {}, new: {}",
             p,
             d,
@@ -595,27 +593,27 @@ impl AlgorithmUpdaterV1 {
     fn da_block_update<U: UnrecordedBlocks>(
         &mut self,
         heights: RangeInclusive<u32>,
-        recorded_bytes: u128,
         recording_cost: u128,
         unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
-        self.update_unrecorded_block_bytes(heights, unrecorded_blocks)?;
+        let removed_bytes =
+            self.update_unrecorded_block_bytes(heights, unrecorded_blocks)?;
 
         let new_da_block_cost = self
             .latest_known_total_da_cost
             .saturating_add(recording_cost);
         self.latest_known_total_da_cost = new_da_block_cost;
 
-        let compressed_cost_per_bytes = recording_cost
-            .checked_div(recorded_bytes)
+
+        let uncompressed_cost_per_bytes = recording_cost
+            .checked_div(removed_bytes)
             .ok_or(Error::CouldNotCalculateCostPerByte {
-                bytes: recorded_bytes,
+                bytes: removed_bytes,
                 cost: recording_cost,
             })?;
 
-        // This is often "pessimistic" in the sense that we are charging for the compressed blocks
-        // and we will use it to calculate base on the uncompressed blocks
-        self.latest_da_cost_per_byte = compressed_cost_per_bytes;
+        self.latest_da_cost_per_byte = uncompressed_cost_per_bytes;
+
         Ok(())
     }
 
@@ -625,7 +623,7 @@ impl AlgorithmUpdaterV1 {
         &mut self,
         heights: RangeInclusive<u32>,
         unrecorded_blocks: &mut U,
-    ) -> Result<(), Error> {
+    ) -> Result<u128, Error> {
         let mut total: u128 = 0;
         for expected_height in heights {
             let maybe_bytes = unrecorded_blocks
@@ -643,7 +641,7 @@ impl AlgorithmUpdaterV1 {
         }
         self.unrecorded_blocks_bytes = self.unrecorded_blocks_bytes.saturating_sub(total);
 
-        Ok(())
+        Ok(total)
     }
 
     fn recalculate_projected_cost(&mut self) {
