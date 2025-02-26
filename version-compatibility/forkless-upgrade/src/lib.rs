@@ -2,6 +2,9 @@
 #![deny(warnings)]
 
 #[cfg(test)]
+use base64ct as _;
+
+#[cfg(test)]
 use fuel_core::{
     chain_config::{
         SnapshotMetadata,
