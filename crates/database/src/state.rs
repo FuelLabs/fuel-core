@@ -1,7 +1,7 @@
 use crate::database_description::DatabaseDescription;
 
 // pub mod data_source;
-// pub mod generic_database;
+pub mod generic_database;
 //#[cfg(feature = "rocksdb")]
 // pub mod historical_rocksdb;
 // pub mod in_memory;
