@@ -3325,20 +3325,22 @@ dependencies = [
 
 [[package]]
 name = "fuel-asm"
-version = "0.59.1"
+version = "0.60.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/release-0.60.0#d1e69d6ce756110ae0535f39863db1b605d1e0ce"
 dependencies = [
  "bitflags 2.8.0",
- "fuel-types 0.59.1",
+ "fuel-types 0.60.0",
  "serde",
  "strum 0.24.1",
 ]
 
 [[package]]
 name = "fuel-compression"
-version = "0.59.1"
+version = "0.60.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/release-0.60.0#d1e69d6ce756110ae0535f39863db1b605d1e0ce"
 dependencies = [
- "fuel-derive 0.59.1",
- "fuel-types 0.59.1",
+ "fuel-derive 0.60.0",
+ "fuel-types 0.60.0",
  "serde",
 ]
 
@@ -3945,7 +3947,7 @@ dependencies = [
  "enum-iterator",
  "fuel-core-storage",
  "fuel-core-types 0.41.7",
- "fuel-vm 0.59.1",
+ "fuel-vm 0.60.0",
  "impl-tools",
  "itertools 0.12.1",
  "mockall",
@@ -4091,7 +4093,7 @@ dependencies = [
  "bs58",
  "derive_more 0.99.19",
  "educe",
- "fuel-vm 0.59.1",
+ "fuel-vm 0.60.0",
  "k256",
  "rand",
  "secrecy",
@@ -4150,14 +4152,15 @@ dependencies = [
 
 [[package]]
 name = "fuel-crypto"
-version = "0.59.1"
+version = "0.60.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/release-0.60.0#d1e69d6ce756110ae0535f39863db1b605d1e0ce"
 dependencies = [
  "base64ct",
  "coins-bip32",
  "coins-bip39",
  "ecdsa",
  "ed25519-dalek",
- "fuel-types 0.59.1",
+ "fuel-types 0.60.0",
  "k256",
  "p256",
  "rand",
@@ -4181,7 +4184,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-derive"
-version = "0.59.1"
+version = "0.60.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/release-0.60.0#d1e69d6ce756110ae0535f39863db1b605d1e0ce"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4217,11 +4221,12 @@ dependencies = [
 
 [[package]]
 name = "fuel-merkle"
-version = "0.59.1"
+version = "0.60.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/release-0.60.0#d1e69d6ce756110ae0535f39863db1b605d1e0ce"
 dependencies = [
  "derive_more 0.99.19",
  "digest 0.10.7",
- "fuel-storage 0.59.1",
+ "fuel-storage 0.60.0",
  "hashbrown 0.13.2",
  "hex",
  "serde",
@@ -4248,7 +4253,8 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 
 [[package]]
 name = "fuel-storage"
-version = "0.59.1"
+version = "0.60.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/release-0.60.0#d1e69d6ce756110ae0535f39863db1b605d1e0ce"
 
 [[package]]
 name = "fuel-tx"
@@ -4274,16 +4280,17 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.59.1"
+version = "0.60.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/release-0.60.0#d1e69d6ce756110ae0535f39863db1b605d1e0ce"
 dependencies = [
  "bitflags 2.8.0",
  "derive_more 1.0.0",
  "educe",
- "fuel-asm 0.59.1",
+ "fuel-asm 0.60.0",
  "fuel-compression",
- "fuel-crypto 0.59.1",
- "fuel-merkle 0.59.1",
- "fuel-types 0.59.1",
+ "fuel-crypto 0.60.0",
+ "fuel-merkle 0.60.0",
+ "fuel-types 0.60.0",
  "hashbrown 0.14.5",
  "itertools 0.10.5",
  "postcard",
@@ -4306,9 +4313,10 @@ dependencies = [
 
 [[package]]
 name = "fuel-types"
-version = "0.59.1"
+version = "0.60.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/release-0.60.0#d1e69d6ce756110ae0535f39863db1b605d1e0ce"
 dependencies = [
- "fuel-derive 0.59.1",
+ "fuel-derive 0.60.0",
  "hex",
  "rand",
  "serde",
@@ -4347,7 +4355,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.59.1"
+version = "0.60.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento/release-0.60.0#d1e69d6ce756110ae0535f39863db1b605d1e0ce"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4356,13 +4365,13 @@ dependencies = [
  "derive_more 0.99.19",
  "educe",
  "ethnum",
- "fuel-asm 0.59.1",
+ "fuel-asm 0.60.0",
  "fuel-compression",
- "fuel-crypto 0.59.1",
- "fuel-merkle 0.59.1",
- "fuel-storage 0.59.1",
- "fuel-tx 0.59.1",
- "fuel-types 0.59.1",
+ "fuel-crypto 0.60.0",
+ "fuel-merkle 0.60.0",
+ "fuel-storage 0.60.0",
+ "fuel-tx 0.60.0",
+ "fuel-types 0.60.0",
  "hashbrown 0.14.5",
  "itertools 0.10.5",
  "libm",

@@ -919,7 +919,8 @@ where
         let Some(value) = self
             .db
             .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
-            .map_err(|e| DatabaseError::Other(e.into()))? else {
+            .map_err(|e| DatabaseError::Other(e.into()))?
+        else {
             return Ok(false);
         };
 
@@ -937,8 +938,10 @@ where
 
         let starting_from_offset = &value[start..end];
         buf[..].copy_from_slice(starting_from_offset);
-        
-        self.metrics.bytes_read.inc_by(starting_from_offset.len() as u64);
+
+        self.metrics
+            .bytes_read
+            .inc_by(starting_from_offset.len() as u64);
 
         Ok(true)
     }

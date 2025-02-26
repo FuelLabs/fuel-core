@@ -409,8 +409,10 @@ where
         key: &M::Key,
         buf: &[u8],
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-            Ok(<M as TableWithBlueprint>::Blueprint::replace(self, key, M::column(), buf)?
-                .map(|prev| prev.into()))
+        Ok(
+            <M as TableWithBlueprint>::Blueprint::replace(self, key, M::column(), buf)?
+                .map(|prev| prev.into()),
+        )
     }
 
     fn take_bytes(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {

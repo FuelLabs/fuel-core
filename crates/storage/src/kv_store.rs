@@ -71,22 +71,22 @@ pub trait KeyValueInspect {
             return Ok(false);
         };
 
-                let bytes_len = value.as_ref().len();
-                let start = offset;
-                let buf_len = buf.len();
-                let end = offset.saturating_add(buf_len);
+        let bytes_len = value.as_ref().len();
+        let start = offset;
+        let buf_len = buf.len();
+        let end = offset.saturating_add(buf_len);
 
-                if end > bytes_len {
-                    return Err(anyhow::anyhow!(
+        if end > bytes_len {
+            return Err(anyhow::anyhow!(
                         "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}`",
                         key
                     )
                     .into());
-                }
+        }
 
-                let starting_from_offset = &value.as_ref()[start..end];
-                buf[..].copy_from_slice(starting_from_offset);
-                Ok(true)
+        let starting_from_offset = &value.as_ref()[start..end];
+        buf[..].copy_from_slice(starting_from_offset);
+        Ok(true)
     }
 }
 

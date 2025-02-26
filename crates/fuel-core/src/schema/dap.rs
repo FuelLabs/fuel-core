@@ -207,7 +207,7 @@ impl ConcreteStorage {
     pub fn exec(&mut self, id: &ID, op: Instruction) -> anyhow::Result<()> {
         self.vm
             .get_mut(id)
-            .map(|vm| vm.instruction(op))
+            .map(|vm| vm.instruction::<_, false>(op))
             .transpose()
             .map_err(|e| anyhow::anyhow!(e))?
             .map(|_| ())
