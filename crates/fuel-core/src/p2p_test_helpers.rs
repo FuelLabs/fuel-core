@@ -90,6 +90,7 @@ pub enum BootstrapType {
 #[derive(Clone, Debug)]
 pub struct CustomizeConfig {
     min_exec_gas_price: Option<u64>,
+    max_functional_peers_connected: Option<u32>,
     max_discovery_peers_connected: Option<u32>,
 }
 
@@ -97,12 +98,18 @@ impl CustomizeConfig {
     pub fn no_overrides() -> Self {
         Self {
             min_exec_gas_price: None,
+            max_functional_peers_connected: None,
             max_discovery_peers_connected: None,
         }
     }
 
     pub fn min_gas_price(mut self, min_gas_price: u64) -> Self {
         self.min_exec_gas_price = Some(min_gas_price);
+        self
+    }
+
+    pub fn max_functional_peers_connected(mut self, max_peers_connected: u32) -> Self {
+        self.max_functional_peers_connected = Some(max_peers_connected);
         self
     }
 
@@ -481,11 +488,17 @@ pub fn make_config(
     if let Some(min_gas_price) = config_overrides.min_exec_gas_price {
         node_config.gas_price_config.min_exec_gas_price = min_gas_price;
     }
-    if let Some(max_discovery_peers_connected) =
-        config_overrides.max_discovery_peers_connected
-    {
-        if let Some(p2p) = &mut node_config.p2p {
+    if let Some(p2p) = &mut node_config.p2p {
+        if let Some(max_discovery_peers_connected) =
+            config_overrides.max_discovery_peers_connected
+        {
             p2p.max_discovery_peers_connected = max_discovery_peers_connected;
+        }
+
+        if let Some(max_functional_peers_connected) =
+            config_overrides.max_functional_peers_connected
+        {
+            p2p.max_functional_peers_connected = max_functional_peers_connected;
         }
     }
     node_config

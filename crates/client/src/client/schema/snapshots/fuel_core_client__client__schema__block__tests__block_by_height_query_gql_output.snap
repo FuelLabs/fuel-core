@@ -21,7 +21,6 @@ query BlockByHeightQuery($height: U32) {
       prevRoot
       time
       applicationHash
-      txIdCommitment
     }
     consensus {
       __typename

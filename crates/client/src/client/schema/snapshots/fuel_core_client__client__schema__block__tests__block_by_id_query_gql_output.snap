@@ -1,6 +1,7 @@
 ---
 source: crates/client/src/client/schema/block.rs
 expression: operation.query
+snapshot_kind: text
 ---
 query BlockByIdQuery($id: BlockId) {
   block(id: $id) {
@@ -21,7 +22,6 @@ query BlockByIdQuery($id: BlockId) {
       prevRoot
       time
       applicationHash
-      txIdCommitment
     }
     consensus {
       __typename

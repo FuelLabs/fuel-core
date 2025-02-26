@@ -4,7 +4,7 @@ use crate::{
         Database,
         OnChainIterableKeyValueView,
     },
-    fuel_core_graphql_api::api_service::ConsensusProvider,
+    fuel_core_graphql_api::api_service::ChainInfoProvider,
     schema::scalars::{
         U32,
         U64,
@@ -325,8 +325,8 @@ impl DapMutation {
 
         let db = ctx.data_unchecked::<Database>();
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params();
 
         let id =
             ctx.data_unchecked::<GraphStorage>()
@@ -358,8 +358,8 @@ impl DapMutation {
         require_debug(ctx)?;
         let db = ctx.data_unchecked::<Database>();
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params();
 
         ctx.data_unchecked::<GraphStorage>()
             .lock()
@@ -449,8 +449,8 @@ impl DapMutation {
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params();
 
         let vm = locked
             .vm

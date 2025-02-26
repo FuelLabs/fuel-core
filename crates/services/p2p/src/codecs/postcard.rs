@@ -8,18 +8,14 @@ use super::{
 use std::{
     borrow::Cow,
     io,
+    num::NonZeroU32,
 };
 
 #[derive(Clone, Default)]
 pub struct PostcardCodec;
 
 impl RequestResponseMessageHandler<PostcardCodec> {
-    pub fn new(max_block_size: usize) -> Self {
-        assert_ne!(
-            max_block_size, 0,
-            "RequestResponseMessageHandler does not support zero block size"
-        );
-
+    pub fn new(max_block_size: NonZeroU32) -> Self {
         Self {
             codec: PostcardCodec,
             max_response_size: max_block_size,
@@ -39,7 +35,10 @@ impl<T> Encode<T> for PostcardCodec
 where
     T: ?Sized + serde::Serialize,
 {
-    type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
+    type Encoder<'a>
+        = Cow<'a, [u8]>
+    where
+        T: 'a;
     type Error = io::Error;
 
     fn encode<'a>(&self, value: &'a T) -> Result<Self::Encoder<'a>, Self::Error> {
@@ -76,17 +75,20 @@ mod tests {
                 ResponseMessageErrorCode,
                 V1ResponseMessage,
                 V2ResponseMessage,
-                MAX_REQUEST_SIZE,
             },
             protocols::RequestResponseProtocol,
         },
     };
 
+    const MAX_REQUEST_SIZE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(1024) };
+
     #[test]
     fn test_request_size_fits() {
         let arbitrary_range = 2..6;
         let m = RequestMessage::Transactions(arbitrary_range);
-        assert!(postcard::to_stdvec(&m).unwrap().len() <= MAX_REQUEST_SIZE);
+        assert!(
+            postcard::to_stdvec(&m).unwrap().len() <= MAX_REQUEST_SIZE.get() as usize
+        );
     }
 
     #[tokio::test]
@@ -96,7 +98,7 @@ mod tests {
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -124,7 +126,7 @@ mod tests {
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -152,7 +154,7 @@ mod tests {
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -183,7 +185,7 @@ mod tests {
             ResponseMessageErrorCode::RequestedRangeTooLarge,
         ));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -213,7 +215,7 @@ mod tests {
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
         ));
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
         let mut buf = Vec::with_capacity(1024);
 
         // When
@@ -239,7 +241,7 @@ mod tests {
         // Given
         let response = V1ResponseMessage::SealedHeaders(None);
         let mut codec: RequestResponseMessageHandler<PostcardCodec> =
-            RequestResponseMessageHandler::new(1024);
+            RequestResponseMessageHandler::new(MAX_REQUEST_SIZE);
 
         // When
         let buf = codec

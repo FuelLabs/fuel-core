@@ -27,10 +27,7 @@ use fuel_core_importer::ImporterResult;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
-use fuel_core_txpool::{
-    ports::GasPriceProvider as TxPoolGasPriceProvider,
-    BorrowedTxPool,
-};
+use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
@@ -59,8 +56,8 @@ use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
 
 pub mod block_importer;
+pub mod chain_state_info_provider;
 pub mod consensus_module;
-pub mod consensus_parameters_provider;
 pub mod executor;
 pub mod fuel_gas_price_provider;
 pub mod gas_price_adapters;
@@ -78,12 +75,12 @@ pub mod sync;
 pub mod txpool;
 
 #[derive(Debug, Clone)]
-pub struct ConsensusParametersProvider {
-    shared_state: consensus_parameters_provider::SharedState,
+pub struct ChainStateInfoProvider {
+    shared_state: chain_state_info_provider::SharedState,
 }
 
-impl ConsensusParametersProvider {
-    pub fn new(shared_state: consensus_parameters_provider::SharedState) -> Self {
+impl ChainStateInfoProvider {
+    pub fn new(shared_state: chain_state_info_provider::SharedState) -> Self {
         Self { shared_state }
     }
 }
@@ -305,12 +302,12 @@ impl TxPoolAdapter {
 }
 
 pub struct TransactionsSource {
-    tx_pool: BorrowedTxPool,
+    tx_pool: TxPoolSharedState,
     minimum_gas_price: u64,
 }
 
 impl TransactionsSource {
-    pub fn new(minimum_gas_price: u64, tx_pool: BorrowedTxPool) -> Self {
+    pub fn new(minimum_gas_price: u64, tx_pool: TxPoolSharedState) -> Self {
         Self {
             tx_pool,
             minimum_gas_price,
@@ -397,8 +394,7 @@ pub struct BlockProducerAdapter {
 
 #[derive(Clone)]
 pub struct BlockImporterAdapter {
-    pub block_importer:
-        Arc<fuel_core_importer::Importer<Database, ExecutorAdapter, VerifierAdapter>>,
+    pub block_importer: Arc<fuel_core_importer::Importer>,
 }
 
 impl BlockImporterAdapter {
