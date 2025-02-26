@@ -59,16 +59,18 @@ pub trait KeyValueInspect {
     /// Returns the value from the storage.
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>>;
 
-    /// Reads the value from the storage into the `buf` and returns the number of read bytes.
+    /// Reads the value from the storage into the `buf` and returns the whether the value exists.
     fn read(
         &self,
         key: &[u8],
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<Option<usize>> {
-        self.get(key, column)?
-            .map(|value| {
+    ) -> StorageResult<bool> {
+        let Some(value) = self.get(key, column)? else {
+            return Ok(false);
+        };
+
                 let bytes_len = value.as_ref().len();
                 let start = offset;
                 let buf_len = buf.len();
@@ -84,9 +86,7 @@ pub trait KeyValueInspect {
 
                 let starting_from_offset = &value.as_ref()[start..end];
                 buf[..].copy_from_slice(starting_from_offset);
-                Ok(buf_len)
-            })
-            .transpose()
+                Ok(true)
     }
 }
 
@@ -119,7 +119,7 @@ where
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<Option<usize>> {
+    ) -> StorageResult<bool> {
         self.deref().read(key, column, offset, buf)
     }
 }
