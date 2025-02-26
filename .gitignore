@@ -8,7 +8,6 @@
 .direnv
 .cov
 lcov.info
-version-compatibility/Cargo.lock
 benches/benches-outputs/src/test_gas_costs_output.rs
 .idea
 .env
