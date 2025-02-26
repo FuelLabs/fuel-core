@@ -13,6 +13,7 @@ use fuel_core_storage::{
     iter::{
         BoxedIter,
         IntoBoxedIter,
+        IterDirection,
         IterableStore,
     },
     kv_store::{

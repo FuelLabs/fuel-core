@@ -3578,13 +3578,17 @@ dependencies = [
  "anyhow",
  "derive_more 0.99.19",
  "enum-iterator",
+ "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.41.7",
+ "itertools 0.12.1",
  "num_cpus",
  "rocksdb",
  "serde",
  "strum 0.25.0",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

@@ -20,13 +20,17 @@ description = "The crates contains databases used by Fuel core protocol."
 anyhow = { workspace = true }
 derive_more = { workspace = true }
 enum-iterator = { workspace = true }
+fuel-core-metrics = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
+itertools = { workspace = true }
 num_cpus = { version = "1.16.0" } # TODO: Make workspace dependency + feature flag
 rocksdb = { version = "0.21", default-features = false, features = [
   "lz4",
   "multi-threaded-cf",
 ]} # TODO: Make workspace dependency + feature flag it
+tempfile = { workspace = true } # TODO: Feature flag it
+tracing = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 
