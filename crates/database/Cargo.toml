@@ -22,6 +22,11 @@ derive_more = { workspace = true }
 enum-iterator = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
+num_cpus = { version = "1.16.0" } # TODO: Make workspace dependency + feature flag
+rocksdb = { version = "0.21", default-features = false, features = [
+  "lz4",
+  "multi-threaded-cf",
+]} # TODO: Make workspace dependency + feature flag it
 serde = { workspace = true }
 strum = { workspace = true }
 

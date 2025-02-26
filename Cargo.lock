@@ -3581,6 +3581,8 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.41.7",
+ "num_cpus",
+ "rocksdb",
  "serde",
  "strum 0.25.0",
 ]

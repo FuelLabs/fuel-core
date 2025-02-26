@@ -11,6 +11,9 @@
 //#![deny(warnings)] // TODO: Reenable
 #![deny(unused_variables)]
 
+/// Database implementations
+pub mod state;
+
 /// Database description types
 pub mod database_description;
 
@@ -18,3 +21,4 @@ pub mod database_description;
 pub mod error;
 
 pub use error::Error;
+pub type Result<T> = core::result::Result<T, Error>;
