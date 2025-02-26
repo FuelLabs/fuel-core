@@ -24,13 +24,10 @@ fuel-core-metrics = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 itertools = { workspace = true }
-num_cpus = { version = "1.16.0" } # TODO: Make workspace dependency + feature flag
-postcard = { workspace = true }
-rocksdb = { version = "0.21", default-features = false, features = [
-  "lz4",
-  "multi-threaded-cf",
-]} # TODO: Make workspace dependency + feature flag it
-tempfile = { workspace = true } # TODO: Feature flag it
+num_cpus = { workspace = true, optional = true }
+postcard = { workspace = true, optional = true }
+rocksdb = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
 tracing = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
@@ -39,6 +36,8 @@ strum = { workspace = true }
 fuel-core-trace = { path = "../trace" }
 
 [features]
+default = ["rocksdb"]
+rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus", "dep:postcard"]
 test-helpers = []
 backup = []
 fault-proving = [

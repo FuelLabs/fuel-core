@@ -126,6 +126,7 @@ enum_dispatch = "0.3.13"
 enum-iterator = "1.2"
 hex = { version = "0.4", features = ["serde"] }
 hyper = { version = "0.14.26" }
+num_cpus = { version = "1.16.0" }
 num-rational = "0.4.2"
 primitive-types = { version = "0.12", default-features = false }
 rand = "0.8"
@@ -138,6 +139,10 @@ tracing = "0.1"
 thiserror = "1.0"
 futures = "0.3"
 postcard = "1.0"
+rocksdb = { version = "0.21", default-features = false, features = [
+  "lz4",
+  "multi-threaded-cf",
+]}
 tracing-attributes = "0.1"
 tracing-subscriber = "0.3"
 serde = "1.0"
