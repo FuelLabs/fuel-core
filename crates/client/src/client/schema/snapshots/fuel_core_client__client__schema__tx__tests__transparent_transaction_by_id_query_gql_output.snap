@@ -135,7 +135,44 @@ query TransactionQuery($id: TransactionId!) {
         totalGas
         totalFee
       }
+      ... on SuccessDuringBlockProductionStatus {
+        txPointer
+        transactionId
+        receipts {
+          param1
+          param2
+          amount
+          assetId
+          gas
+          digest
+          id
+          is
+          pc
+          ptr
+          ra
+          rb
+          rc
+          rd
+          reason
+          receiptType
+          to
+          toAddress
+          val
+          len
+          result
+          gasUsed
+          data
+          sender
+          recipient
+          nonce
+          contractId
+          subId
+        }
+      }
       ... on SqueezedOutStatus {
+        reason
+      }
+      ... on SqueezedOutDuringBlockProductionStatus {
         reason
       }
       ... on FailureStatus {
@@ -178,6 +215,41 @@ query TransactionQuery($id: TransactionId!) {
         }
         totalGas
         totalFee
+      }
+      ... on FailureDuringBlockProductionStatus {
+        txPointer
+        transactionId
+        receipts {
+          param1
+          param2
+          amount
+          assetId
+          gas
+          digest
+          id
+          is
+          pc
+          ptr
+          ra
+          rb
+          rc
+          rd
+          reason
+          receiptType
+          to
+          toAddress
+          val
+          len
+          result
+          gasUsed
+          data
+          sender
+          recipient
+          nonce
+          contractId
+          subId
+        }
+        reason
       }
     }
     witnesses
