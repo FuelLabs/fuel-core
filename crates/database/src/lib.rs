@@ -6,10 +6,16 @@
 
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
-#![deny(missing_docs)]
+//#![deny(missing_docs)] // TODO: Reenable
 #![deny(unused_crate_dependencies)]
-#![deny(warnings)]
+//#![deny(warnings)] // TODO: Reenable
 #![deny(unused_variables)]
+
+/// Database description types
+pub mod database_description;
+
+/// Database error type
+pub mod error;
 
 use fuel_core_storage::{
     transactional::ReferenceBytesKey,

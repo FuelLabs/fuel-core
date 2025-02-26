@@ -3577,9 +3577,12 @@ version = "0.41.7"
 dependencies = [
  "anyhow",
  "derive_more 0.99.19",
+ "enum-iterator",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.41.7",
+ "serde",
+ "strum 0.25.0",
 ]
 
 [[package]]
