@@ -882,6 +882,7 @@ mod tests {
             .arg("check")
             .arg("--manifest-path")
             .arg(&manifest_path)
+            .arg("--locked")
             .output()
             .unwrap();
         println!("{}", String::from_utf8(output.stderr).unwrap());
