@@ -1,7 +1,6 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-#[cfg(test)]
 use base64ct as _;
 
 #[cfg(test)]
