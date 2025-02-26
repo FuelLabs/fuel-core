@@ -1,7 +1,8 @@
 //! This crate ...
-pub mod manager;
+mod manager;
+mod service;
 
-pub use manager::Manager;
+pub use service::new_service;
 
 //#[cfg(test)]
 // mod tests;
