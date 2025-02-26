@@ -8,6 +8,8 @@ version = "0.0.0"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+# Remove when we upgrade rust version
+base64ct = "=1.6.0"
 clap = { workspace = true, features = ["derive"] }
 criterion = { version = "0.5", features = [
   "html_reports",
