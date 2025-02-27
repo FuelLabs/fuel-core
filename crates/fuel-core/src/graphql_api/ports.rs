@@ -541,6 +541,7 @@ pub mod worker {
     }
 }
 
+#[cfg_attr(feature = "test-helpers", mockall::automock)]
 pub trait ChainStateProvider: Send + Sync {
     /// Returns current consensus parameters.
     fn current_consensus_params(&self) -> Arc<ConsensusParameters>;

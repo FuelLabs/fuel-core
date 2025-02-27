@@ -1,5 +1,6 @@
 use crate::{
     fuel_core_graphql_api::{
+        extensions::unify_response,
         ports::{
             BlockProducerPort,
             ChainStateProvider as ChainStateProviderTrait,
@@ -283,13 +284,9 @@ where
         .limit_depth(config.config.max_queries_depth)
         .limit_recursive_depth(config.config.max_queries_recursive_depth)
         .limit_directives(config.config.max_queries_directives)
-        // The ordering for extensions meters, the `RequiredFuelBlockHeightExtension` should be the
-        // first, because it creates a view of the database on a required block height.
-        .extension(RequiredFuelBlockHeightExtension::new(
-            required_fuel_block_height_tolerance,
-            required_fuel_block_height_timeout,
-            block_height_subscriber.clone(),
-        ))
+        // The ordering for extensions meters, the `ChainStateInfoExtension` should be the
+        // first, because it adds additional information to the final response.
+        .extension(ChainStateInfoExtension::new(block_height_subscriber.clone()))
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
         ))
@@ -307,7 +304,11 @@ where
             max_queries_resolver_recursive_depth,
         ))
         .extension(async_graphql::extensions::Tracing)
-        .extension(ChainStateInfoExtension::new(block_height_subscriber))
+        .extension(RequiredFuelBlockHeightExtension::new(
+            required_fuel_block_height_tolerance,
+            required_fuel_block_height_timeout,
+            block_height_subscriber,
+        ))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";
@@ -384,16 +385,20 @@ async fn graphql_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Json<Response> {
-    schema.execute(req.0).await.into()
+    let response = schema.execute(req.0).await;
+    let response = unify_response(response);
+
+    response.into()
 }
 
 async fn graphql_subscription_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
-    let stream = schema
-        .execute_stream(req.0)
-        .map(|r| Event::default().json_data(r));
+    let stream = schema.execute_stream(req.0).map(|response| {
+        let response = unify_response(response);
+        Event::default().json_data(response)
+    });
     Sse::new(stream)
         .keep_alive(axum::response::sse::KeepAlive::new().text("keep-alive-text"))
 }
