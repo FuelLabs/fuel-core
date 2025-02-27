@@ -172,7 +172,3 @@ insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
 url = "2.2"
-
-[patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "dento/release-0.60.0" }
-fuel-storage = { git = "https://github.com/FuelLabs/fuel-vm", branch = "dento/release-0.60.0" }
