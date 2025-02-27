@@ -395,7 +395,7 @@ where
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
                 }
-                let updated_txs = self.pending_pool.new_known_txs(vec![tx]);
+                let updated_txs = self.pending_pool.new_known_tx(tx);
 
                 for (tx, source) in updated_txs.resolved_txs {
                     self.insert(tx, source);

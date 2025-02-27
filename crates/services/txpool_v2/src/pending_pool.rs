@@ -39,8 +39,8 @@ use crate::{
 // - If the transaction missing inputs becomes known.
 pub(crate) struct PendingPool {
     ttl: Duration,
-    unresolved_txs_by_inputs: HashMap<MissingInput, HashSet<TxId>>,
-    unresolved_inputs_by_tx:
+    pending_txs_by_inputs: HashMap<MissingInput, HashSet<TxId>>,
+    pending_inputs_by_tx:
         HashMap<TxId, ((ArcPoolTx, InsertionSource), Vec<MissingInput>)>,
     ttl_check: VecDeque<(SystemTime, TxId)>,
     pub(crate) current_bytes: usize,
@@ -81,7 +81,7 @@ impl From<&MissingInput> for Error {
 }
 
 #[derive(Debug)]
-pub(crate) struct UpdateMissingTxs {
+pub(crate) struct UpdatePendingTxs {
     pub resolved_txs: Vec<(ArcPoolTx, InsertionSource)>,
     pub expired_txs: Vec<(ArcPoolTx, InsertionSource, Vec<MissingInput>)>,
 }
@@ -90,8 +90,8 @@ impl PendingPool {
     pub fn new(ttl: Duration) -> Self {
         Self {
             ttl,
-            unresolved_txs_by_inputs: HashMap::default(),
-            unresolved_inputs_by_tx: HashMap::default(),
+            pending_txs_by_inputs: HashMap::default(),
+            pending_inputs_by_tx: HashMap::default(),
             ttl_check: VecDeque::new(),
             current_bytes: 0,
             current_txs: 0,
@@ -112,12 +112,12 @@ impl PendingPool {
         self.current_gas = self.current_gas.saturating_add(transaction.max_gas());
         self.current_txs = self.current_txs.saturating_add(1);
         for input in &missing_inputs {
-            self.unresolved_txs_by_inputs
+            self.pending_txs_by_inputs
                 .entry(*input)
                 .or_default()
                 .insert(tx_id);
         }
-        self.unresolved_inputs_by_tx
+        self.pending_inputs_by_tx
             .insert(tx_id, ((transaction, insertion_source), missing_inputs));
         self.ttl_check.push_front((
             SystemTime::now()
@@ -133,25 +133,25 @@ impl PendingPool {
         resolved_txs: &mut Vec<(ArcPoolTx, InsertionSource)>,
     ) {
         if let Some(tx_ids) = self
-            .unresolved_txs_by_inputs
+            .pending_txs_by_inputs
             .remove(&MissingInput::Utxo(utxo_id))
         {
             for tx_id in tx_ids {
                 if let Some((tx_data, missing_inputs)) =
-                    self.unresolved_inputs_by_tx.remove(&tx_id)
+                    self.pending_inputs_by_tx.remove(&tx_id)
                 {
                     let missing_inputs: Vec<MissingInput> = missing_inputs
                         .into_iter()
                         .filter(|input| match input {
                             MissingInput::Utxo(utxo) => *utxo != utxo_id,
-                            _ => true,
+                            MissingInput::Contract(_) => true,
                         })
                         .collect();
                     if missing_inputs.is_empty() {
                         self.decrease_pool_size(&tx_data.0);
                         resolved_txs.push(tx_data);
                     } else {
-                        self.unresolved_inputs_by_tx
+                        self.pending_inputs_by_tx
                             .insert(tx_id, (tx_data, missing_inputs));
                     }
                 }
@@ -165,25 +165,25 @@ impl PendingPool {
         resolved_txs: &mut Vec<(ArcPoolTx, InsertionSource)>,
     ) {
         if let Some(tx_ids) = self
-            .unresolved_txs_by_inputs
+            .pending_txs_by_inputs
             .remove(&MissingInput::Contract(contract_id))
         {
             for tx_id in tx_ids {
                 if let Some((tx_data, missing_inputs)) =
-                    self.unresolved_inputs_by_tx.remove(&tx_id)
+                    self.pending_inputs_by_tx.remove(&tx_id)
                 {
                     let missing_inputs: Vec<MissingInput> = missing_inputs
                         .into_iter()
                         .filter(|input| match input {
                             MissingInput::Contract(contract) => *contract != contract_id,
-                            _ => true,
+                            MissingInput::Utxo(_) => true,
                         })
                         .collect();
                     if missing_inputs.is_empty() {
                         self.decrease_pool_size(&tx_data.0);
                         resolved_txs.push(tx_data);
                     } else {
-                        self.unresolved_inputs_by_tx
+                        self.pending_inputs_by_tx
                             .insert(tx_id, (tx_data, missing_inputs));
                     }
                 }
@@ -201,16 +201,16 @@ impl PendingPool {
                 break;
             }
             if let Some(((tx, source), missing_inputs)) =
-                self.unresolved_inputs_by_tx.remove(&tx_id)
+                self.pending_inputs_by_tx.remove(&tx_id)
             {
                 self.decrease_pool_size(&tx);
                 for input in &missing_inputs {
                     // Remove tx_id from the list of unresolved transactions for this input
                     // If the list becomes empty, remove the entry
-                    if let Some(tx_ids) = self.unresolved_txs_by_inputs.get_mut(input) {
+                    if let Some(tx_ids) = self.pending_txs_by_inputs.get_mut(input) {
                         tx_ids.remove(&tx_id);
                         if tx_ids.is_empty() {
-                            self.unresolved_txs_by_inputs.remove(input);
+                            self.pending_txs_by_inputs.remove(input);
                         }
                     }
                 }
@@ -226,44 +226,65 @@ impl PendingPool {
         self.current_txs = self.current_txs.saturating_sub(1);
     }
 
-    // We expect it to be called a lot (every new block, every new tx in the pool).
-    pub fn new_known_txs(&mut self, new_known_txs: Vec<ArcPoolTx>) -> UpdateMissingTxs {
-        let mut updated_txs = UpdateMissingTxs {
+    // We expect it to be called a lot (every new tx in the pool).
+    pub fn new_known_tx(&mut self, new_known_tx: ArcPoolTx) -> UpdatePendingTxs {
+        let mut updated_txs = UpdatePendingTxs {
+            resolved_txs: Vec::new(),
+            expired_txs: Vec::new(),
+        };
+        self.new_known_tx_inner(new_known_tx, &mut updated_txs);
+
+        self.expire_transactions(&mut updated_txs.expired_txs);
+        updated_txs
+    }
+
+    // We expect it to be called a lot (every new block).
+    pub fn new_known_txs(&mut self, new_known_txs: Vec<ArcPoolTx>) -> UpdatePendingTxs {
+        let mut updated_txs = UpdatePendingTxs {
             resolved_txs: Vec::new(),
             expired_txs: Vec::new(),
         };
         // Resolve transactions
         for tx in new_known_txs {
-            let tx_id = tx.id();
-            for (index, output) in tx.outputs().iter().enumerate() {
-                // SAFETY: We deal with CheckedTransaction there which should already check this
-                let index = u16::try_from(index).expect(
-                    "The number of outputs in a transaction should be less than `u16::max`",
-                );
-                let utxo_id = UtxoId::new(tx_id, index);
-                match output {
-                    Output::Coin { .. } => {
-                        self.new_known_utxo(utxo_id, &mut updated_txs.resolved_txs);
-                    }
-                    Output::ContractCreated { contract_id, .. } => {
-                        self.new_known_contract(
-                            *contract_id,
-                            &mut updated_txs.resolved_txs,
-                        );
-                    }
-                    _ => {}
-                }
-            }
+            self.new_known_tx_inner(tx, &mut updated_txs);
         }
 
         self.expire_transactions(&mut updated_txs.expired_txs);
         updated_txs
     }
 
+    fn new_known_tx_inner(
+        &mut self,
+        new_known_tx: ArcPoolTx,
+        update_pending_txs: &mut UpdatePendingTxs,
+    ) {
+        let tx_id = new_known_tx.id();
+        for (index, output) in new_known_tx.outputs().iter().enumerate() {
+            // SAFETY: We deal with CheckedTransaction there which should already check this
+            let index = u16::try_from(index).expect(
+                "The number of outputs in a transaction should be less than `u16::max`",
+            );
+            let utxo_id = UtxoId::new(tx_id, index);
+            match output {
+                Output::Coin { .. } => {
+                    self.new_known_utxo(utxo_id, &mut update_pending_txs.resolved_txs);
+                }
+                Output::ContractCreated { contract_id, .. } => {
+                    self.new_known_contract(
+                        *contract_id,
+                        &mut update_pending_txs.resolved_txs,
+                    );
+                }
+                Output::Contract { .. } => {}
+                Output::Change { .. } => {}
+                Output::Variable { .. } => {}
+            }
+        }
+    }
+
     #[cfg(test)]
     fn is_empty(&self) -> bool {
-        self.unresolved_inputs_by_tx.is_empty()
-            && self.unresolved_txs_by_inputs.is_empty()
+        self.pending_inputs_by_tx.is_empty() && self.pending_txs_by_inputs.is_empty()
     }
 }
 
