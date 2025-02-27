@@ -28,10 +28,10 @@ use std::{
     num::NonZeroU32,
     path::PathBuf,
     str::FromStr,
-    time::Duration,
 };
 
-const MAX_RESPONSE_SIZE_STR: &str = const_format::formatcp!("{MAX_RESPONSE_SIZE}");
+const MAX_RESPONSE_SIZE_STR: &str =
+    const_format::formatcp!("{}", MAX_RESPONSE_SIZE.get());
 
 #[derive(Debug, Clone, Args)]
 pub struct P2PArgs {
@@ -60,7 +60,7 @@ pub struct P2PArgs {
 
     /// Max Block size
     #[clap(long = "max-block-size", default_value = MAX_RESPONSE_SIZE_STR, env)]
-    pub max_block_size: usize,
+    pub max_block_size: u32,
 
     /// Max number of blocks/headers in a single headers request response
     #[clap(long = "max-headers-per-request", default_value = "100", env)]
@@ -94,17 +94,25 @@ pub struct P2PArgs {
     #[clap(long = "max-peers-connected", default_value = "50", env)]
     pub max_peers_connected: u32,
 
+    /// Max number of connection that serves to discover new peers.
+    #[clap(long = "max-discovery-peers-connected", default_value = "10000", env)]
+    pub max_discovery_peers_connected: u32,
+
+    /// Max number of outgoing connection from the node to other peers.
+    #[clap(long = "max-outgoing-connections", default_value = "10", env)]
+    pub max_outgoing_connections: u32,
+
     /// Max number of connections per single peer
     /// The total number of connections will be `(max_peers_connected + reserved_nodes.len()) * max_connections_per_peer`
     #[clap(long = "max-connections-per-peer", default_value = "3", env)]
-    pub max_connections_per_peer: u32,
+    pub max_connections_per_peer: Option<u32>,
 
     /// Set the delay between random walks for p2p node discovery in seconds.
     /// If it's not set the random walk will be disabled.
     /// Also if `reserved_nodes_only_mode` is set to `true`,
     /// the random walk will be disabled.
-    #[clap(long = "random-walk", default_value = "0", env)]
-    pub random_walk: u64,
+    #[clap(long = "random-walk", env)]
+    pub random_walk: Option<humantime::Duration>,
 
     /// Choose to include private IPv4/IPv6 addresses as discoverable
     /// except for the ones stored in `bootstrap_nodes`
@@ -112,17 +120,17 @@ pub struct P2PArgs {
     pub allow_private_addresses: bool,
 
     /// Choose how long will connection keep alive if idle
-    #[clap(long = "connection-idle-timeout", default_value = "120", env)]
-    pub connection_idle_timeout: u64,
+    #[clap(long = "connection-idle-timeout", default_value = "120s", env)]
+    pub connection_idle_timeout: humantime::Duration,
 
     /// Choose how often to receive PeerInfo from other nodes
-    #[clap(long = "info-interval", default_value = "3", env)]
-    pub info_interval: u64,
+    #[clap(long = "info-interval", default_value = "3s", env)]
+    pub info_interval: humantime::Duration,
 
     /// Choose the interval at which identification requests are sent to
     /// the remote on established connections after the first request
-    #[clap(long = "identify-interval", default_value = "5", env)]
-    pub identify_interval: u64,
+    #[clap(long = "identify-interval", default_value = "5s", env)]
+    pub identify_interval: humantime::Duration,
 
     /// Choose max mesh size for gossipsub protocol
     #[clap(long = "max-mesh-size", default_value = "12", env)]
@@ -153,24 +161,24 @@ pub struct P2PArgs {
     pub max_transmit_size: usize,
 
     /// Choose timeout for sent requests in RequestResponse protocol
-    #[clap(long = "request-timeout", default_value = "20", env)]
-    pub request_timeout: u64,
+    #[clap(long = "request-timeout", default_value = "20s", env)]
+    pub request_timeout: humantime::Duration,
 
     /// Choose max concurrent streams for RequestResponse protocol
     #[clap(long = "request-max-concurrent-streams", default_value = "256", env)]
     pub max_concurrent_streams: usize,
 
     /// Choose how long RequestResponse protocol connections will live if idle
-    #[clap(long = "connection-keep-alive", default_value = "20", env)]
-    pub connection_keep_alive: u64,
+    #[clap(long = "connection-keep-alive", default_value = "20s", env)]
+    pub connection_keep_alive: humantime::Duration,
 
     /// Sending of `BlockHeight` should not take longer than this duration, in seconds.
-    #[clap(long = "heartbeat-send-duration", default_value = "2", env)]
-    pub heartbeat_send_duration: u64,
+    #[clap(long = "heartbeat-send-duration", default_value = "2s", env)]
+    pub heartbeat_send_duration: humantime::Duration,
 
     /// Idle time in seconds before sending next `BlockHeight`
-    #[clap(long = "heartbeat-idle-duration", default_value = "1", env)]
-    pub heartbeat_idle_duration: u64,
+    #[clap(long = "heartbeat-idle-duration", default_value = "100ms", env)]
+    pub heartbeat_idle_duration: humantime::Duration,
 
     /// Max failures allowed at `Heartbeat` protocol.
     /// If reached, the protocol will request disconnect.
@@ -179,16 +187,16 @@ pub struct P2PArgs {
     pub heartbeat_max_failures: NonZeroU32,
 
     /// For peer reputations, the interval at which to check heartbeat health for all peers
-    #[clap(long = "heartbeat-check-interval", default_value = "5", env)]
-    pub heartbeat_check_interval: u64,
+    #[clap(long = "heartbeat-check-interval", default_value = "5s", env)]
+    pub heartbeat_check_interval: humantime::Duration,
 
     /// For peer reputations, the maximum average interval between heartbeats for a peer before penalty
-    #[clap(long = "heartbeat-max-avg-interval", default_value = "20", env)]
-    pub heartbeat_max_avg_interval: u64,
+    #[clap(long = "heartbeat-max-avg-interval", default_value = "20s", env)]
+    pub heartbeat_max_avg_interval: humantime::Duration,
 
     /// For peer reputations, the maximum time since last heartbeat before penalty
-    #[clap(long = "heartbeat-max-time-since-last", default_value = "40", env)]
-    pub heartbeat_max_time_since_last: u64,
+    #[clap(long = "heartbeat-max-time-since-last", default_value = "40s", env)]
+    pub heartbeat_max_time_since_last: humantime::Duration,
 
     /// Number of threads to read from the database.
     #[clap(long = "p2p-database-read-threads", default_value = "2", env)]
@@ -253,10 +261,6 @@ impl From<SyncArgs> for fuel_core::sync::Config {
     }
 }
 
-/// We want to prevent the user from accidentally setting this value too high and causing a DOS
-/// threat unintentionally
-const MAX_PEERS_CONNECTED_SAFETY_LIMIT: u32 = 100;
-
 impl P2PArgs {
     pub fn into_config(
         self,
@@ -297,21 +301,20 @@ impl P2PArgs {
             .build()
             .expect("valid gossipsub configuration");
 
-        let random_walk = if self.random_walk == 0 {
-            None
-        } else {
-            Some(Duration::from_secs(self.random_walk))
-        };
+        let random_walk = self.random_walk.map(Into::into);
 
         let heartbeat_config = {
-            let send_duration = Duration::from_secs(self.heartbeat_send_duration);
-            let idle_duration = Duration::from_secs(self.heartbeat_idle_duration);
+            let send_duration = self.heartbeat_send_duration.into();
+            let idle_duration = self.heartbeat_idle_duration.into();
             heartbeat::Config::new(
                 send_duration,
                 idle_duration,
                 self.heartbeat_max_failures,
             )
         };
+
+        let max_block_size = NonZeroU32::new(self.max_block_size)
+            .ok_or(anyhow!("max block size must be greater than zero"))?;
 
         let config = Config {
             keypair: local_keypair,
@@ -322,39 +325,30 @@ impl P2PArgs {
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
             public_address: self.public_address,
             tcp_port: self.peering_port,
-            max_block_size: self.max_block_size,
+            max_block_size,
             max_headers_per_request: self.max_headers_per_request,
             max_txs_per_request: self.max_txs_per_request,
             bootstrap_nodes: self.bootstrap_nodes,
             reserved_nodes: self.reserved_nodes,
             reserved_nodes_only_mode: self.reserved_nodes_only_mode,
             enable_mdns: self.enable_mdns,
-            max_discovery_peers_connected: self.max_peers_connected,
-            max_gossipsub_peers_connected: self
-                .max_peers_connected
-                .min(MAX_PEERS_CONNECTED_SAFETY_LIMIT),
-            max_request_response_peers_connected: self
-                .max_peers_connected
-                .min(MAX_PEERS_CONNECTED_SAFETY_LIMIT),
+            max_discovery_peers_connected: self.max_discovery_peers_connected,
+            max_outgoing_connections: self.max_outgoing_connections,
+            max_connections_per_peer: self.max_connections_per_peer,
+            max_functional_peers_connected: self.max_peers_connected,
             allow_private_addresses: self.allow_private_addresses,
             random_walk,
-            connection_idle_timeout: Some(Duration::from_secs(
-                self.connection_idle_timeout,
-            )),
+            connection_idle_timeout: Some(self.connection_idle_timeout.into()),
             gossipsub_config,
             heartbeat_config,
-            set_request_timeout: Duration::from_secs(self.request_timeout),
+            set_request_timeout: self.request_timeout.into(),
             max_concurrent_streams: self.max_concurrent_streams,
-            set_connection_keep_alive: Duration::from_secs(self.connection_keep_alive),
-            heartbeat_check_interval: Duration::from_secs(self.heartbeat_check_interval),
-            heartbeat_max_avg_interval: Duration::from_secs(
-                self.heartbeat_max_avg_interval,
-            ),
-            heartbeat_max_time_since_last: Duration::from_secs(
-                self.heartbeat_max_time_since_last,
-            ),
-            info_interval: Some(Duration::from_secs(self.info_interval)),
-            identify_interval: Some(Duration::from_secs(self.identify_interval)),
+            set_connection_keep_alive: self.connection_keep_alive.into(),
+            heartbeat_check_interval: self.heartbeat_check_interval.into(),
+            heartbeat_max_avg_interval: self.heartbeat_max_avg_interval.into(),
+            heartbeat_max_time_since_last: self.heartbeat_max_time_since_last.into(),
+            info_interval: Some(self.info_interval.into()),
+            identify_interval: Some(self.identify_interval.into()),
             metrics,
             database_read_threads: self.database_read_threads,
             tx_pool_threads: self.tx_pool_threads,

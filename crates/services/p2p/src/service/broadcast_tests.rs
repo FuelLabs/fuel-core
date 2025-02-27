@@ -23,7 +23,7 @@ async fn shared_state__broadcast__tx_confirmations() {
 
     // when
     broadcast
-        .confirmations_broadcast(confirmations_gossip_data)
+        .pre_confirmation_broadcast(confirmations_gossip_data)
         .unwrap();
 
     // then

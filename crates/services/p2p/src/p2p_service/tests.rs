@@ -799,7 +799,7 @@ async fn gossipsub_broadcast(
     let mut p2p_config = Config::default_initialized("gossipsub_exchanges_messages");
 
     if let Some(connection_limit) = connection_limit {
-        p2p_config.max_gossipsub_peers_connected = connection_limit;
+        p2p_config.max_functional_peers_connected = connection_limit;
     }
 
     p2p_config.subscribe_to_pre_confirmations = true;
@@ -973,7 +973,7 @@ async fn request_response_works_with(
     let mut p2p_config = Config::default_initialized("request_response_works_with");
 
     if let Some(connection_limit) = connection_limit {
-        p2p_config.max_request_response_peers_connected = connection_limit;
+        p2p_config.max_functional_peers_connected = connection_limit;
     }
 
     // Node A

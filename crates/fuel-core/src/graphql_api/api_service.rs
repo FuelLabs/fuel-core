@@ -1,22 +1,25 @@
 use crate::{
     fuel_core_graphql_api::{
-        metrics_extension::MetricsExtension,
         ports::{
             BlockProducerPort,
+            ChainStateProvider as ChainStateProviderTrait,
             ConsensusModulePort,
-            ConsensusProvider as ConsensusProviderTrait,
             GasPriceEstimate,
             OffChainDatabase,
             OnChainDatabase,
             P2pPort,
             TxPoolPort,
         },
-        validation_extension::ValidationExtension,
         Config,
     },
     graphql_api::{
         self,
-        required_fuel_block_height_extension::RequiredFuelBlockHeightExtension,
+        extensions::{
+            chain_state_info::ChainStateInfoExtension,
+            metrics::MetricsExtension,
+            required_fuel_block_height::RequiredFuelBlockHeightExtension,
+            validation::ValidationExtension,
+        },
     },
     schema::{
         CoreSchema,
@@ -104,7 +107,7 @@ pub type P2pService = Box<dyn P2pPort>;
 
 pub type GasPriceProvider = Box<dyn GasPriceEstimate>;
 
-pub type ConsensusProvider = Box<dyn ConsensusProviderTrait>;
+pub type ChainInfoProvider = Box<dyn ChainStateProviderTrait>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -231,7 +234,7 @@ pub fn new_service<OnChain, OffChain>(
     consensus_module: ConsensusModule,
     p2p_service: P2pService,
     gas_price_provider: GasPriceProvider,
-    consensus_parameters_provider: ConsensusProvider,
+    chain_state_info_provider: ChainInfoProvider,
     memory_pool: SharedMemoryPool,
     block_height_subscriber: block_height_subscription::Subscriber,
 ) -> anyhow::Result<Service>
@@ -243,13 +246,13 @@ where
 {
     let balances_indexation_enabled = off_database.balances_indexation_enabled()?;
 
-    let mut cost_config = config.config.costs.clone();
+    let mut cost_config = config.config.costs;
 
     if !balances_indexation_enabled {
         cost_config.balance_query = graphql_api::BALANCES_QUERY_COST_WITHOUT_INDEXATION;
     }
 
-    graphql_api::initialize_query_costs(cost_config)?;
+    graphql_api::initialize_query_costs(cost_config, balances_indexation_enabled)?;
 
     let network_addr = config.config.addr;
     let combined_read_database = ReadDatabase::new(
@@ -284,7 +287,7 @@ where
         .data(consensus_module)
         .data(p2p_service)
         .data(gas_price_provider)
-        .data(consensus_parameters_provider)
+        .data(chain_state_info_provider)
         .data(memory_pool)
         .data(block_height_subscriber.clone())
         .extension(ValidationExtension::new(
@@ -294,8 +297,9 @@ where
         .extension(RequiredFuelBlockHeightExtension::new(
             required_fuel_block_height_tolerance,
             required_fuel_block_height_timeout,
-            block_height_subscriber,
+            block_height_subscriber.clone(),
         ))
+        .extension(ChainStateInfoExtension::new(block_height_subscriber))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";

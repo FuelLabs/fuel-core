@@ -6,7 +6,7 @@ use crate::{
     fuel_core_graphql_api::{
         api_service::{
             BlockProducer,
-            ConsensusProvider,
+            ChainInfoProvider,
             TxPool,
         },
         query_costs,
@@ -215,8 +215,8 @@ impl TxQuery {
         use futures::stream::StreamExt;
         let query = ctx.read_view()?;
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params();
         let owner = fuel_types::Address::from(owner);
 
         crate::schema::query_pagination(
@@ -253,8 +253,8 @@ impl TxQuery {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
 
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params();
 
         let memory_pool = ctx.data_unchecked::<SharedMemoryPool>();
         let memory = memory_pool.get_memory().await;
@@ -330,8 +330,8 @@ impl TxMutation {
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
         let block_producer = ctx.data_unchecked::<BlockProducer>();
         let consensus_params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params();
         let block_gas_limit = consensus_params.block_gas_limit();
 
         if block_height.is_some() && !config.historical_execution {
@@ -383,8 +383,8 @@ impl TxMutation {
     ) -> async_graphql::Result<Transaction> {
         let txpool = ctx.data_unchecked::<TxPool>();
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
-            .latest_consensus_params();
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params();
         let tx = FuelTx::from_bytes(&tx.0)?;
 
         txpool
@@ -475,8 +475,8 @@ async fn submit_and_await_status<'a>(
     use tokio_stream::StreamExt;
     let txpool = ctx.data_unchecked::<TxPool>();
     let params = ctx
-        .data_unchecked::<ConsensusProvider>()
-        .latest_consensus_params();
+        .data_unchecked::<ChainInfoProvider>()
+        .current_consensus_params();
     let tx = FuelTx::from_bytes(&tx.0)?;
     let tx_id = tx.id(&params.chain_id());
     let subscription = txpool.tx_update_subscribe(tx_id)?;

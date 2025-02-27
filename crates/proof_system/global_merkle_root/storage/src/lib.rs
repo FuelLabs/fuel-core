@@ -21,6 +21,9 @@ pub mod structured_storage;
 /// Update logic
 pub mod update;
 
+/// Merkle root computation logic
+pub mod compute;
+
 /// Error type
 pub mod error;
 

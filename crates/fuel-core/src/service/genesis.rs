@@ -206,6 +206,11 @@ pub async fn execute_and_commit_genesis_block(
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
+    use fuel_core_importer::ports::{
+        MockBlockVerifier,
+        MockValidator,
+    };
+
     let result = execute_genesis_block(StateWatcher::default(), config, db).await?;
     let importer = fuel_core_importer::Importer::new(
         config
@@ -215,8 +220,8 @@ pub async fn execute_and_commit_genesis_block(
             .chain_id(),
         config.block_importer.clone(),
         db.on_chain().clone(),
-        (),
-        (),
+        MockValidator::default(),
+        MockBlockVerifier::default(),
     );
     importer.commit_result(result).await?;
     Ok(())

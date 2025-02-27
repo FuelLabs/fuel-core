@@ -234,7 +234,7 @@ impl Broadcast for FakeBroadcast {
         todo!()
     }
 
-    fn confirmations_broadcast(
+    fn pre_confirmation_broadcast(
         &self,
         confirmations: ConfirmationsGossipData,
     ) -> anyhow::Result<()> {
