@@ -31,7 +31,7 @@ impl TxReceiver for FakeTxReceiver {
         let txs = self.recv.recv().await;
         match txs {
             Some(txs) => Ok(txs),
-            None => Err(Error::TxReceiverError("No txs received".into())),
+            None => Err(Error::TxReceiver("No txs received".into())),
         }
     }
 }
@@ -51,7 +51,7 @@ impl Broadcast for FakeBroadcast {
         txs: Signed<Self::DelegateKey, Self::PreConfirmations>,
     ) -> Result<()> {
         self.tx_sender.send(txs).await.map_err(|error| {
-            Error::BroadcastError(format!("Could not send {:?} over channel", error))
+            Error::Broadcast(format!("Could not send {:?} over channel", error))
         })?;
         Ok(())
     }
@@ -64,7 +64,7 @@ impl Broadcast for FakeBroadcast {
             .send(delegate_key)
             .await
             .map_err(|error| {
-                Error::BroadcastError(format!("Could not send {:?} over channel", error))
+                Error::Broadcast(format!("Could not send {:?} over channel", error))
             })?;
         Ok(())
     }
