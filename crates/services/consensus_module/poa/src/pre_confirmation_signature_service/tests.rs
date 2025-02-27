@@ -48,7 +48,7 @@ impl Broadcast for FakeBroadcast {
 
     async fn broadcast_txs(
         &mut self,
-        txs: <Self::DelegateKey as SigningKey>::Signature<Self::PreConfirmations>,
+        txs: Signed<Self::DelegateKey, Self::PreConfirmations>,
     ) -> Result<()> {
         self.tx_sender.send(txs).await.map_err(|error| {
             Error::BroadcastError(format!("Could not send {:?} over channel", error))

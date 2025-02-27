@@ -23,6 +23,8 @@ pub mod key_generator;
 pub mod parent_signature;
 pub mod signing_key;
 
+pub type Signed<K, T> = <K as SigningKey>::Signature<T>;
+
 #[cfg(test)]
 pub mod tests;
 

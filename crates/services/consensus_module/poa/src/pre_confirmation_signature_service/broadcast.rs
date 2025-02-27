@@ -9,7 +9,7 @@ pub trait Broadcast: Send {
 
     fn broadcast_txs(
         &mut self,
-        txs: <Self::DelegateKey as SigningKey>::Signature<Self::PreConfirmations>,
+        txs: Signed<Self::DelegateKey, Self::PreConfirmations>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     fn broadcast_delegate_key(
