@@ -717,7 +717,7 @@ pub mod schema_types {
 
     #[derive(async_graphql::InputObject)]
     pub struct Predicate {
-        // The address of the predicate can be different from teh actual bytecode.
+        // The address of the predicate can be different from the actual bytecode.
         // This feature is used by wallets during estimation of the predicate that requires
         // signature verification. They provide a mocked version of the predicate that
         // returns `true` even if the signature doesn't match.
