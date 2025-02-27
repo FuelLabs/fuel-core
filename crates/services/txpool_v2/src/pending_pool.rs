@@ -258,6 +258,7 @@ mod tests {
             RegId,
         },
         fuel_tx::{
+            output::contract::Contract as OutputContract,
             Address,
             AssetId,
             ConsensusParameters,
@@ -275,6 +276,7 @@ mod tests {
             },
             interpreter::MemoryInstance,
             predicate::EmptyStorage,
+            Contract,
         },
         services::txpool::{
             ArcPoolTx,
@@ -290,7 +292,7 @@ mod tests {
     use super::*;
 
     fn create_pool_tx(
-        inputs: Vec<UtxoId>,
+        inputs: Vec<MissingInput>,
         outputs: Vec<Output>,
         rng: &mut StdRng,
     ) -> ArcPoolTx {
@@ -316,17 +318,36 @@ mod tests {
                 Default::default(),
             ));
         } else {
-            for input in inputs {
-                tx.add_input(Input::coin_predicate(
-                    input,
-                    owner,
-                    10,
-                    AssetId::default(),
-                    Default::default(),
-                    Default::default(),
-                    predicate.clone(),
-                    Default::default(),
-                ));
+            for (idx, input) in inputs.iter().enumerate() {
+                match input {
+                    MissingInput::Utxo(input) => {
+                        tx.add_input(Input::coin_predicate(
+                            *input,
+                            owner,
+                            10,
+                            AssetId::default(),
+                            Default::default(),
+                            Default::default(),
+                            predicate.clone(),
+                            Default::default(),
+                        ));
+                    }
+                    MissingInput::Contract(contract_id) => {
+                        tx.add_input(Input::contract(
+                            UtxoId::default(),
+                            Default::default(),
+                            Default::default(),
+                            Default::default(),
+                            *contract_id,
+                        ));
+
+                        tx.add_output(Output::Contract(OutputContract {
+                            input_index: idx.try_into().unwrap(),
+                            balance_root: Default::default(),
+                            state_root: Default::default(),
+                        }));
+                    }
+                }
             }
         }
         for output in outputs {
@@ -348,7 +369,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_one_tx_one_dependent_input() {
+    fn test_pending_pool_one_tx_one_dependent_input_utxo() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
@@ -363,7 +384,8 @@ mod tests {
             &mut rng,
         );
         let utxo = UtxoId::new(dependency_tx.id(), 0);
-        let dependent_tx = create_pool_tx(vec![utxo], vec![], &mut rng);
+        let dependent_tx =
+            create_pool_tx(vec![MissingInput::Utxo(utxo)], vec![], &mut rng);
 
         // When
         pending_pool.insert_transaction(
@@ -372,6 +394,59 @@ mod tests {
                 response_channel: None,
             },
             vec![MissingInput::Utxo(utxo)],
+        );
+        let new_known_txs = vec![dependency_tx.clone()];
+        let updated_txs = pending_pool.new_known_txs(new_known_txs);
+
+        // Then
+        assert_eq!(updated_txs.resolved_txs.len(), 1);
+        assert_eq!(updated_txs.resolved_txs[0].0.id(), dependent_tx.id());
+        assert!(updated_txs.expired_txs.is_empty());
+        assert!(pending_pool.is_empty());
+    }
+
+    #[test]
+    fn test_pending_pool_one_tx_one_dependent_input_contract() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let mut pending_pool = PendingPool::new(Duration::from_secs(1));
+
+        // Given
+        let bytecode = op::ret(RegId::ONE).to_bytes().to_vec();
+        let contract = Contract::from(bytecode.clone());
+        let contract_root = contract.root();
+        let state_root = Contract::default_state_root();
+        let contract_id = contract.id(&Default::default(), &contract_root, &state_root);
+        let mut dependency_tx = TransactionBuilder::create(
+            bytecode.into(),
+            Default::default(),
+            Default::default(),
+        );
+        dependency_tx.add_output(Output::ContractCreated {
+            contract_id,
+            state_root: Default::default(),
+        });
+        dependency_tx.add_random_fee_input(&mut rng);
+        let mut tx = dependency_tx.finalize();
+        tx.estimate_predicates(
+            &CheckPredicateParams::default(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Failed to estimate predicates");
+        let tx = tx
+            .into_checked_basic(1u32.into(), &ConsensusParameters::default())
+            .unwrap();
+        let dependency_tx = Arc::new(PoolTransaction::Create(tx, Metadata::new(1, 1, 0)));
+        let dependent_tx =
+            create_pool_tx(vec![MissingInput::Contract(contract_id)], vec![], &mut rng);
+
+        // When
+        pending_pool.insert_transaction(
+            dependent_tx.clone(),
+            InsertionSource::RPC {
+                response_channel: None,
+            },
+            vec![MissingInput::Contract(contract_id)],
         );
         let new_known_txs = vec![dependency_tx.clone()];
         let updated_txs = pending_pool.new_known_txs(new_known_txs);
@@ -399,8 +474,10 @@ mod tests {
             &mut rng,
         );
         let utxo = UtxoId::new(dependency_tx.id(), 0);
-        let dependent_tx_1 = create_pool_tx(vec![utxo], vec![], &mut rng);
-        let dependent_tx_2 = create_pool_tx(vec![utxo], vec![], &mut rng);
+        let dependent_tx_1 =
+            create_pool_tx(vec![MissingInput::Utxo(utxo)], vec![], &mut rng);
+        let dependent_tx_2 =
+            create_pool_tx(vec![MissingInput::Utxo(utxo)], vec![], &mut rng);
 
         // When
         pending_pool.insert_transaction(
@@ -450,7 +527,11 @@ mod tests {
         );
         let utxo_1 = UtxoId::new(dependency_tx.id(), 0);
         let utxo_2 = UtxoId::new(dependency_tx.id(), 1);
-        let dependent_tx = create_pool_tx(vec![utxo_1, utxo_2], vec![], &mut rng);
+        let dependent_tx = create_pool_tx(
+            vec![MissingInput::Utxo(utxo_1), MissingInput::Utxo(utxo_2)],
+            vec![],
+            &mut rng,
+        );
 
         // When
         pending_pool.insert_transaction(
