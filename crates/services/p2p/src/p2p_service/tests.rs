@@ -1380,13 +1380,16 @@ async fn request_response_peer_limit_works() {
     let handle = tokio::spawn(async {
         let arbitrary_range = 2..6;
 
-        request_response_works_with(
-            RequestMessage::Transactions(arbitrary_range),
-            Some(0), // limit to 0 peers,
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            request_response_works_with(
+                RequestMessage::Transactions(arbitrary_range),
+                Some(0), // limit to 0 peers,
+            ),
         )
-        .await;
+        .await
     });
 
-    let result = handle.await;
+    let result = handle.await.expect("Should have completed");
     assert!(result.is_err());
 }
