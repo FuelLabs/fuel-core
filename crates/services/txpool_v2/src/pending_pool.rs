@@ -1,6 +1,7 @@
 use std::{
     collections::{
         HashMap,
+        HashSet,
         VecDeque,
     },
     time::{
@@ -38,7 +39,7 @@ use crate::{
 // - If the transaction missing inputs becomes known.
 pub(crate) struct PendingPool {
     ttl: Duration,
-    unresolved_txs_by_inputs: HashMap<MissingInput, Vec<TxId>>,
+    unresolved_txs_by_inputs: HashMap<MissingInput, HashSet<TxId>>,
     unresolved_inputs_by_tx:
         HashMap<TxId, ((ArcPoolTx, InsertionSource), Vec<MissingInput>)>,
     ttl_check: VecDeque<(SystemTime, TxId)>,
@@ -114,12 +115,10 @@ impl PendingPool {
             self.unresolved_txs_by_inputs
                 .entry(*input)
                 .or_default()
-                .push(tx_id);
+                .insert(tx_id);
         }
-        self.unresolved_inputs_by_tx.insert(
-            transaction.id(),
-            ((transaction, insertion_source), missing_inputs),
-        );
+        self.unresolved_inputs_by_tx
+            .insert(tx_id, ((transaction, insertion_source), missing_inputs));
         self.ttl_check.push_front((
             SystemTime::now()
                 .checked_add(self.ttl)
@@ -138,7 +137,7 @@ impl PendingPool {
             .remove(&MissingInput::Utxo(utxo_id))
         {
             for tx_id in tx_ids {
-                if let Some((tx, missing_inputs)) =
+                if let Some((tx_data, missing_inputs)) =
                     self.unresolved_inputs_by_tx.remove(&tx_id)
                 {
                     let missing_inputs: Vec<MissingInput> = missing_inputs
@@ -149,10 +148,11 @@ impl PendingPool {
                         })
                         .collect();
                     if missing_inputs.is_empty() {
-                        resolved_txs.push(tx);
+                        self.decrease_pool_size(&tx_data.0);
+                        resolved_txs.push(tx_data);
                     } else {
                         self.unresolved_inputs_by_tx
-                            .insert(tx_id, (tx, missing_inputs));
+                            .insert(tx_id, (tx_data, missing_inputs));
                     }
                 }
             }
@@ -169,7 +169,7 @@ impl PendingPool {
             .remove(&MissingInput::Contract(contract_id))
         {
             for tx_id in tx_ids {
-                if let Some((tx, missing_inputs)) =
+                if let Some((tx_data, missing_inputs)) =
                     self.unresolved_inputs_by_tx.remove(&tx_id)
                 {
                     let missing_inputs: Vec<MissingInput> = missing_inputs
@@ -180,10 +180,11 @@ impl PendingPool {
                         })
                         .collect();
                     if missing_inputs.is_empty() {
-                        resolved_txs.push(tx);
+                        self.decrease_pool_size(&tx_data.0);
+                        resolved_txs.push(tx_data);
                     } else {
                         self.unresolved_inputs_by_tx
-                            .insert(tx_id, (tx, missing_inputs));
+                            .insert(tx_id, (tx_data, missing_inputs));
                     }
                 }
             }
@@ -195,22 +196,19 @@ impl PendingPool {
         expired_txs: &mut Vec<(ArcPoolTx, InsertionSource, Vec<MissingInput>)>,
     ) {
         let now = SystemTime::now();
-        while let Some((ttl, tx_id)) = self.ttl_check.back() {
-            if *ttl > now {
+        while let Some((ttl, tx_id)) = self.ttl_check.back().copied() {
+            if ttl > now {
                 break;
             }
             if let Some(((tx, source), missing_inputs)) =
-                self.unresolved_inputs_by_tx.remove(tx_id)
+                self.unresolved_inputs_by_tx.remove(&tx_id)
             {
-                self.current_bytes =
-                    self.current_bytes.saturating_sub(tx.metered_bytes_size());
-                self.current_gas = self.current_gas.saturating_sub(tx.max_gas());
-                self.current_txs = self.current_txs.saturating_sub(1);
+                self.decrease_pool_size(&tx);
                 for input in &missing_inputs {
                     // Remove tx_id from the list of unresolved transactions for this input
                     // If the list becomes empty, remove the entry
                     if let Some(tx_ids) = self.unresolved_txs_by_inputs.get_mut(input) {
-                        tx_ids.retain(|id| *id != *tx_id);
+                        tx_ids.remove(&tx_id);
                         if tx_ids.is_empty() {
                             self.unresolved_txs_by_inputs.remove(input);
                         }
@@ -220,6 +218,12 @@ impl PendingPool {
             }
             self.ttl_check.pop_back();
         }
+    }
+
+    fn decrease_pool_size(&mut self, tx: &ArcPoolTx) {
+        self.current_bytes = self.current_bytes.saturating_sub(tx.metered_bytes_size());
+        self.current_gas = self.current_gas.saturating_sub(tx.max_gas());
+        self.current_txs = self.current_txs.saturating_sub(1);
     }
 
     // We expect it to be called a lot (every new block, every new tx in the pool).
