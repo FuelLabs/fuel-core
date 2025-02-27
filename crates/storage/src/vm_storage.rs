@@ -195,7 +195,7 @@ where
         key: &M::Key,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<Option<usize>, Self::Error> {
+    ) -> Result<bool, Self::Error> {
         StorageRead::<M>::read(&self.database, key, offset, buf)
     }
 
@@ -211,7 +211,7 @@ impl<D, M: Mappable> StorageWrite<M> for VmStorage<D>
 where
     D: StorageWrite<M, Error = StorageError>,
 {
-    fn write_bytes(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
+    fn write_bytes(&mut self, key: &M::Key, buf: &[u8]) -> Result<(), Self::Error> {
         StorageWrite::<M>::write_bytes(&mut self.database, key, buf)
     }
 
@@ -219,7 +219,7 @@ where
         &mut self,
         key: &M::Key,
         buf: &[u8],
-    ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
         StorageWrite::<M>::replace_bytes(&mut self.database, key, buf)
     }
 
