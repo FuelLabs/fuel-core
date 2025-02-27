@@ -57,22 +57,21 @@ where
     for<'a> StorageTransaction<&'a Storage>: StorageWrite<M, Error = StorageError>,
     Self: Modifiable,
 {
-    fn write_bytes(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
+    fn write_bytes(&mut self, key: &M::Key, buf: &[u8]) -> Result<(), Self::Error> {
         let mut transaction = StorageTransaction::transaction(
             self.as_ref(),
             ConflictPolicy::Overwrite,
             Default::default(),
         );
-        let prev = <_ as StorageWrite<M>>::write_bytes(&mut transaction, key, buf)?;
-        self.commit_changes(transaction.into_changes())?;
-        Ok(prev)
+        <_ as StorageWrite<M>>::write_bytes(&mut transaction, key, buf)?;
+        self.commit_changes(transaction.into_changes())
     }
 
     fn replace_bytes(
         &mut self,
         key: &M::Key,
         buf: &[u8],
-    ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
         let mut transaction = StorageTransaction::transaction(
             self.as_ref(),
             ConflictPolicy::Overwrite,
