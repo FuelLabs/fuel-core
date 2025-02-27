@@ -1,5 +1,6 @@
 use std::{
     collections::{
+        hash_map::Entry,
         HashMap,
         HashSet,
         VecDeque,
@@ -127,64 +128,32 @@ impl PendingPool {
         ));
     }
 
-    fn new_known_utxo(
+    fn new_known_input_from_output(
         &mut self,
         utxo_id: UtxoId,
+        output: &Output,
         resolved_txs: &mut Vec<(ArcPoolTx, InsertionSource)>,
     ) {
-        if let Some(tx_ids) = self
-            .pending_txs_by_inputs
-            .remove(&MissingInput::Utxo(utxo_id))
-        {
-            for tx_id in tx_ids {
-                if let Some((tx_data, missing_inputs)) =
-                    self.pending_inputs_by_tx.remove(&tx_id)
-                {
-                    let missing_inputs: Vec<MissingInput> = missing_inputs
-                        .into_iter()
-                        .filter(|input| match input {
-                            MissingInput::Utxo(utxo) => *utxo != utxo_id,
-                            MissingInput::Contract(_) => true,
-                        })
-                        .collect();
-                    if missing_inputs.is_empty() {
-                        self.decrease_pool_size(&tx_data.0);
-                        resolved_txs.push(tx_data);
-                    } else {
-                        self.pending_inputs_by_tx
-                            .insert(tx_id, (tx_data, missing_inputs));
-                    }
-                }
+        let missing_input = match output {
+            Output::Coin { .. } => MissingInput::Utxo(utxo_id),
+            Output::ContractCreated { contract_id, .. } => {
+                MissingInput::Contract(*contract_id)
             }
-        }
-    }
+            Output::Contract { .. } | Output::Change { .. } | Output::Variable { .. } => {
+                return;
+            }
+        };
 
-    fn new_known_contract(
-        &mut self,
-        contract_id: ContractId,
-        resolved_txs: &mut Vec<(ArcPoolTx, InsertionSource)>,
-    ) {
-        if let Some(tx_ids) = self
-            .pending_txs_by_inputs
-            .remove(&MissingInput::Contract(contract_id))
-        {
-            for tx_id in tx_ids {
-                if let Some((tx_data, missing_inputs)) =
-                    self.pending_inputs_by_tx.remove(&tx_id)
+        if let Entry::Occupied(entry) = self.pending_txs_by_inputs.entry(missing_input) {
+            for tx_id in entry.remove() {
+                if let Entry::Occupied(mut entry) = self.pending_inputs_by_tx.entry(tx_id)
                 {
-                    let missing_inputs: Vec<MissingInput> = missing_inputs
-                        .into_iter()
-                        .filter(|input| match input {
-                            MissingInput::Contract(contract) => *contract != contract_id,
-                            MissingInput::Utxo(_) => true,
-                        })
-                        .collect();
+                    let (_, missing_inputs) = entry.get_mut();
+                    missing_inputs.retain(|input| *input != missing_input);
                     if missing_inputs.is_empty() {
+                        let tx_data = entry.remove().0;
                         self.decrease_pool_size(&tx_data.0);
                         resolved_txs.push(tx_data);
-                    } else {
-                        self.pending_inputs_by_tx
-                            .insert(tx_id, (tx_data, missing_inputs));
                     }
                 }
             }
@@ -265,20 +234,11 @@ impl PendingPool {
                 "The number of outputs in a transaction should be less than `u16::max`",
             );
             let utxo_id = UtxoId::new(tx_id, index);
-            match output {
-                Output::Coin { .. } => {
-                    self.new_known_utxo(utxo_id, &mut update_pending_txs.resolved_txs);
-                }
-                Output::ContractCreated { contract_id, .. } => {
-                    self.new_known_contract(
-                        *contract_id,
-                        &mut update_pending_txs.resolved_txs,
-                    );
-                }
-                Output::Contract { .. } => {}
-                Output::Change { .. } => {}
-                Output::Variable { .. } => {}
-            }
+            self.new_known_input_from_output(
+                utxo_id,
+                output,
+                &mut update_pending_txs.resolved_txs,
+            );
         }
     }
 
