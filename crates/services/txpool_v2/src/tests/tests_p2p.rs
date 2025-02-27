@@ -382,6 +382,7 @@ async fn test_gossipped_mint_rejected() {
 async fn test_gossipped_transaction_with_transient_error_ignored() {
     // verify that gossipped transactions that fails stateful checks are ignored (but not punished)
     let mut universe = TestPoolUniverse::default();
+    universe.config.pending_pool_tx_ttl = Duration::from_micros(0);
     // add coin to builder db and generate a valid tx
     // intentionally muck up the tx such that it will return a coin not found error
     // by adding an input that doesn't exist in the builder db
