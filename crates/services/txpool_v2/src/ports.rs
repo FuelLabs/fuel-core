@@ -41,8 +41,8 @@ pub trait BlockImporter {
     fn block_events(&self) -> BoxStream<SharedImportResult>;
 }
 
-/// Trait for getting the latest consensus parameters.
-pub trait ConsensusParametersProvider: Send + Sync + 'static {
+/// Trait for getting the latest chain state info.
+pub trait ChainStateInfoProvider: Send + Sync + 'static {
     /// Get latest consensus parameters.
     fn latest_consensus_parameters(
         &self,

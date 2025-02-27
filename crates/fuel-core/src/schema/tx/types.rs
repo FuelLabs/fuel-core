@@ -6,7 +6,7 @@ use super::{
 use crate::{
     fuel_core_graphql_api::{
         api_service::{
-            ConsensusProvider,
+            ChainInfoProvider,
             TxPool,
         },
         database::ReadView,
@@ -415,7 +415,7 @@ impl Transaction {
     #[graphql(complexity = "query_costs().storage_read")]
     async fn input_asset_ids(&self, ctx: &Context<'_>) -> Option<Vec<AssetId>> {
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
+            .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params();
         let base_asset_id = params.base_asset_id();
         match &self.0 {
