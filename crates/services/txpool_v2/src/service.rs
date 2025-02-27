@@ -738,9 +738,6 @@ where
     BlockImporter: BlockImporterTrait,
     StatusManager: StatusManagerTrait,
 {
-    let x = status_manager.foo();
-    tracing::error!("x: {}", x);
-
     let mut ttl_timer = tokio::time::interval(config.ttl_check_interval);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
 

@@ -29,6 +29,7 @@ use fuel_core_types::{
             NetworkData,
             PeerId,
         },
+        txpool::TransactionStatus,
     },
 };
 
@@ -37,7 +38,8 @@ use crate::GasPrice;
 pub use fuel_core_storage::transactional::AtomicView;
 
 pub trait TxStatusManager {
-    fn foo(&self) -> u32;
+    fn add_status(&self, tx_id: &TxId, tx_status: &TransactionStatus);
+    fn status(&self, tx_id: &TxId) -> Option<&TransactionStatus>;
 }
 
 pub trait BlockImporter {

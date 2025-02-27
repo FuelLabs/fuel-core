@@ -48,6 +48,6 @@ impl RunnableTask for Task {
 
 pub fn new_service() -> ServiceRunner<Task> {
     ServiceRunner::new(Task {
-        shared_state: SharedState {},
+        shared_state: SharedState::new(),
     })
 }
