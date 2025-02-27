@@ -1,8 +1,10 @@
 use crate::client::{
     schema::{
+        coins::ExcludeInput,
         schema,
         tx::transparent_receipt::Receipt,
         Address,
+        AssetId,
         ConnectionArgsFields,
         ConversionError,
         HexString,
@@ -11,6 +13,7 @@ use crate::client::{
         TransactionId,
         U32,
         U64,
+        U8,
     },
     types::TransactionResponse,
     PageDirection,
@@ -426,6 +429,76 @@ pub struct TxArg {
 pub struct EstimatePredicates {
     #[arguments(tx: $tx)]
     pub estimate_predicates: OpaqueTransaction,
+}
+
+#[derive(cynic::InputObject, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct Predicate {
+    pub predicate_address: Address,
+    pub predicate: Vec<i32>, // TODO: Use hex string
+    pub predicate_data: Vec<i32>,
+}
+
+// TODO: Comment oneoff
+#[derive(cynic::InputObject, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct Account {
+    pub address: Option<Address>,
+    pub predicate: Option<Predicate>,
+}
+
+// TODO: Comment oneoff
+#[derive(cynic::InputObject, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct ChangePolicy {
+    pub change: Option<Address>,
+    pub destroy: bool,
+}
+
+#[derive(cynic::InputObject, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct RequiredBalance {
+    pub asset_id: AssetId,
+    pub amount: U64,
+    pub account: Account,
+    pub change_policy: ChangePolicy,
+}
+
+#[derive(cynic::QueryVariables)]
+pub struct AssembleTxArg {
+    pub tx: HexString,
+    pub block_horizon: U32,
+    pub required_balances: Vec<RequiredBalance>,
+    pub fee_address_index: U8,
+    pub exclude_input: ExcludeInput,
+    pub estimate_predicates: bool,
+    pub reserve_gas: Option<U64>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "AssembleTxArg"
+)]
+pub struct AssembleTx {
+    #[arguments(
+        tx: $tx,
+        blockHorizon: $block_horizon,
+        requiredBalances: $required_balances,
+        feeAddressIndex: $fee_address_index,
+        excludeInput: $exclude_input,
+        estimatePredicates: $estimate_predicates,
+        reserveGas: $reserve_gas,
+    )]
+    pub assemble_tx: AssembleTransactionResult,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct AssembleTransactionResult {
+    pub transaction: OpaqueTransactionWithStatus,
+    pub status: DryRunTransactionStatus,
 }
 
 #[derive(cynic::QueryVariables)]
