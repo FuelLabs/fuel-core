@@ -722,8 +722,8 @@ pub mod schema_types {
         // signature verification. They provide a mocked version of the predicate that
         // returns `true` even if the signature doesn't match.
         pub predicate_address: Address,
-        pub predicate: Vec<u8>,
-        pub predicate_data: Vec<u8>,
+        pub predicate: HexString,
+        pub predicate_data: HexString,
     }
 
     #[derive(async_graphql::InputObject)]
@@ -781,8 +781,8 @@ impl From<schema_types::RequiredBalance> for RequiredBalance {
             schema_types::Account::Address(address) => Account::Address(address.into()),
             schema_types::Account::Predicate(predicate) => {
                 let predicate_address = predicate.predicate_address.into();
-                let predicate_data = predicate.predicate_data;
-                let predicate = predicate.predicate;
+                let predicate_data = predicate.predicate_data.into();
+                let predicate = predicate.predicate.into();
                 Account::Predicate(Predicate {
                     predicate_address,
                     predicate,

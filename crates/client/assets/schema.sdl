@@ -889,8 +889,8 @@ type Policies {
 
 input Predicate {
 	predicateAddress: Address!
-	predicate: [Int!]!
-	predicateData: [Int!]!
+	predicate: HexString!
+	predicateData: HexString!
 }
 
 type PredicateParameters {
@@ -1002,7 +1002,7 @@ type Query {
 		"""
 		The index from the `required_balances` list that points to the address who pays fee for the transaction. If you only want to cover the fee of transaction, you can set the required balance to 0, set base asset and point to this required address.
 		"""
-		feeAddressIndex: U8!,
+		feeAddressIndex: U16!,
 		"""
 		The list of resources to exclude from the selection for the inputs
 		"""
@@ -1421,8 +1421,6 @@ scalar U16
 scalar U32
 
 scalar U64
-
-scalar U8
 
 union UpgradePurpose = ConsensusParametersPurpose | StateTransitionPurpose
 

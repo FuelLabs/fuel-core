@@ -11,6 +11,7 @@ use fuel_core_types::{
 use crate::client::schema::{
     self,
     ConversionError,
+    HexString,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -24,8 +25,8 @@ pub struct RequiredBalance {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Predicate {
     pub address: Address,
-    pub predicate: Vec<u8>,
-    pub predicate_data: Vec<u8>,
+    pub predicate: HexString,
+    pub predicate_data: HexString,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -93,13 +94,26 @@ impl From<Account> for schema::tx::Account {
 }
 
 impl From<Predicate> for schema::tx::Predicate {
-    fn from(_value: Predicate) -> Self {
-        todo!()
+    fn from(value: Predicate) -> Self {
+        let predicate_address = value.address.into();
+        let predicate = value.predicate.into();
+        let predicate_data = value.predicate_data.into();
+
+        Self {
+            predicate_address,
+            predicate,
+            predicate_data,
+        }
     }
 }
 
 impl From<ChangePolicy> for schema::tx::ChangePolicy {
-    fn from(_value: ChangePolicy) -> Self {
-        todo!()
+    fn from(value: ChangePolicy) -> Self {
+        let (change, destroy) = match value {
+            ChangePolicy::Change(address) => (Some(address.into()), None),
+            ChangePolicy::Destroy => (None, Some(true)),
+        };
+
+        Self { change, destroy }
     }
 }

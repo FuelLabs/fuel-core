@@ -11,9 +11,9 @@ use crate::client::{
         PageInfo,
         Tai64Timestamp,
         TransactionId,
+        U16,
         U32,
         U64,
-        U8,
     },
     types::TransactionResponse,
     PageDirection,
@@ -435,11 +435,10 @@ pub struct EstimatePredicates {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Predicate {
     pub predicate_address: Address,
-    pub predicate: Vec<i32>, // TODO: Use hex string
-    pub predicate_data: Vec<i32>,
+    pub predicate: HexString,
+    pub predicate_data: HexString,
 }
 
-// TODO: Comment oneoff
 #[derive(cynic::InputObject, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Account {
@@ -447,12 +446,11 @@ pub struct Account {
     pub predicate: Option<Predicate>,
 }
 
-// TODO: Comment oneoff
 #[derive(cynic::InputObject, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ChangePolicy {
     pub change: Option<Address>,
-    pub destroy: bool,
+    pub destroy: Option<bool>,
 }
 
 #[derive(cynic::InputObject, Clone, Debug)]
@@ -469,7 +467,7 @@ pub struct AssembleTxArg {
     pub tx: HexString,
     pub block_horizon: U32,
     pub required_balances: Vec<RequiredBalance>,
-    pub fee_address_index: U8,
+    pub fee_address_index: U16,
     pub exclude_input: ExcludeInput,
     pub estimate_predicates: bool,
     pub reserve_gas: Option<U64>,

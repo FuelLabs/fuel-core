@@ -775,7 +775,7 @@ impl FuelClient {
         tx: &Transaction,
         block_horizon: u32,
         required_balances: Vec<RequiredBalance>,
-        fee_address_index: u8,
+        fee_address_index: u16,
         exclude_utxos: Vec<UtxoId>,
         exclude_messages: Vec<Nonce>,
         estimate_predicates: bool,

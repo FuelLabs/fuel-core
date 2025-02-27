@@ -178,7 +178,7 @@ impl LowerHex for TxPointer {
     }
 }
 
-#[derive(cynic::Scalar, Debug, Clone)]
+#[derive(cynic::Scalar, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct HexString(pub Bytes);
 
 impl From<HexString> for Vec<u8> {
@@ -195,7 +195,7 @@ impl Deref for HexString {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Bytes(pub Vec<u8>);
 
 impl FromStr for Bytes {
@@ -277,7 +277,6 @@ number_scalar!(U128, u128);
 number_scalar!(U64, u64);
 number_scalar!(U32, u32);
 number_scalar!(U16, u16);
-number_scalar!(U8, u8);
 
 impl TryFrom<U64> for PanicInstruction {
     type Error = ConversionError;
