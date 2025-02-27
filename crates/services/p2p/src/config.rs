@@ -146,6 +146,9 @@ pub struct Config<State = Initialized> {
     /// with the `NotInitialized` state. But it can be set into the `Initialized` state only with
     /// the `init` method.
     pub state: State,
+
+    /// If true, the node will subscribe to pre-confirmations topic
+    pub subscribe_to_pre_confirmations: bool,
 }
 
 /// The initialized state can be achieved only by the `init` function because `()` is private.
@@ -195,6 +198,7 @@ impl Config<NotInitialized> {
             database_read_threads: self.database_read_threads,
             tx_pool_threads: self.tx_pool_threads,
             state: Initialized(()),
+            subscribe_to_pre_confirmations: self.subscribe_to_pre_confirmations,
         })
     }
 }
@@ -249,6 +253,7 @@ impl Config<NotInitialized> {
             database_read_threads: 0,
             tx_pool_threads: 0,
             state: NotInitialized,
+            subscribe_to_pre_confirmations: false,
         }
     }
 }

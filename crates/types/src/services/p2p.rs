@@ -6,8 +6,18 @@ use serde::{
     Serialize,
 };
 
+use super::txpool::ArcPoolTx;
+#[cfg(feature = "serde")]
+use super::txpool::PoolTransaction;
 use crate::{
-    fuel_tx::Transaction,
+    fuel_crypto::{
+        PublicKey,
+        Signature,
+    },
+    fuel_tx::{
+        Transaction,
+        TxId,
+    },
     fuel_types::BlockHeight,
 };
 use std::{
@@ -20,11 +30,7 @@ use std::{
     str::FromStr,
     time::SystemTime,
 };
-
-use super::txpool::ArcPoolTx;
-
-#[cfg(feature = "serde")]
-use super::txpool::PoolTransaction;
+use tai64::Tai64;
 
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
@@ -71,6 +77,108 @@ pub struct GossipData<T> {
 
 /// Transactions gossiped by peers for inclusion into a block
 pub type TransactionGossipData = GossipData<Transaction>;
+
+/// Transactions that have been confirmed by block producer
+pub type ConfirmationsGossipData = GossipData<PreConfirmationMessage>;
+
+/// A value and an associated signature
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Sealed<Entity> {
+    /// The actual value
+    pub entity: Entity,
+    /// Seal
+    pub signature: Signature,
+}
+
+/// A key that will be used to sign a pre-confirmations
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DelegatePreConfirmationKey {
+    /// The public key of the person who is allowed to create pre-confirmations.
+    public_key: PublicKey,
+    /// The time at which the key will expire. Used to indicate to the recipient which key
+    /// to use to verify the pre-confirmations--serves the second purpose of being a nonce of
+    /// each key
+    expiration: Tai64,
+}
+
+/// A pre-confirmation is a message that is sent by the block producer to give the _final_
+/// status of a transaction
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Preconfirmation {
+    /// The ID of the transaction that is being pre-confirmed
+    tx_id: TxId,
+    /// The status of the transaction that is being pre-confirmed
+    status: PreconfirmationStatus,
+}
+
+/// Status of a transaction that has been pre-confirmed by block producer
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum PreconfirmationStatus {
+    /// Transaction was squeezed out by the tx pool
+    SqueezedOutByBlockProducer {
+        /// Reason the transaction was squeezed out
+        reason: String,
+    },
+    /// Transaction has been confirmed and will be included in block_height
+    SuccessByBlockProducer {
+        /// The block height at which the transaction will be included
+        block_height: BlockHeight,
+    },
+    /// Transaction will not be included in a block, rejected at `block_height`
+    FailureByBlockProducer {
+        /// The block height at which the transaction will be rejected
+        block_height: BlockHeight,
+    },
+}
+
+/// A collection of pre-confirmations that have been signed by a delegate
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Preconfirmations {
+    /// The expiration time of the key used to sign
+    expiration: Tai64,
+    /// The transactions which have been pre-confirmed
+    preconfirmations: Vec<Preconfirmation>,
+}
+
+/// A signed key delegation
+pub type SignedByBlockProducerDelegation = Sealed<DelegatePreConfirmationKey>;
+
+/// A signed pre-confirmation
+pub type SignedPreconfirmationByDelegate = Sealed<Preconfirmations>;
+
+/// The possible messages sent by the parties pre-confirming transactinos
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PreConfirmationMessage {
+    /// Notification of key delegation
+    Delegate(SignedByBlockProducerDelegation),
+    /// Notification of pre-confirmations
+    Preconfirmations(SignedPreconfirmationByDelegate),
+}
+
+#[cfg(feature = "test-helpers")]
+impl PreConfirmationMessage {
+    /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
+    pub fn default_test_confirmation() -> Self {
+        Self::Preconfirmations(SignedPreconfirmationByDelegate {
+            entity: Preconfirmations {
+                expiration: Tai64::UNIX_EPOCH,
+                preconfirmations: vec![Preconfirmation {
+                    tx_id: TxId::default(),
+                    status: PreconfirmationStatus::SuccessByBlockProducer {
+                        block_height: BlockHeight::new(0),
+                    },
+                }],
+            },
+            signature: Signature::default(),
+        })
+    }
+}
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// The source of some network data.

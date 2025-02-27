@@ -35,7 +35,10 @@ impl<T> Encode<T> for PostcardCodec
 where
     T: ?Sized + serde::Serialize,
 {
-    type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
+    type Encoder<'a>
+        = Cow<'a, [u8]>
+    where
+        T: 'a;
     type Error = io::Error;
 
     fn encode<'a>(&self, value: &'a T) -> Result<Self::Encoder<'a>, Self::Error> {

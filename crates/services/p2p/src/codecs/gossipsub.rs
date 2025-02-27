@@ -1,11 +1,15 @@
-use std::io;
-
-use fuel_core_types::fuel_tx::Transaction;
-
 use crate::gossipsub::messages::{
     GossipTopicTag,
     GossipsubBroadcastRequest,
     GossipsubMessage,
+};
+use fuel_core_types::{
+    fuel_tx::Transaction,
+    services::p2p::PreConfirmationMessage,
+};
+use std::{
+    io,
+    ops::Deref,
 };
 
 use super::{
@@ -22,8 +26,10 @@ pub struct GossipsubMessageHandler<Codec> {
 
 impl<Codec> GossipsubCodec for GossipsubMessageHandler<Codec>
 where
-    Codec:
-        Encode<Transaction, Error = io::Error> + Decode<Transaction, Error = io::Error>,
+    Codec: Encode<Transaction, Error = io::Error>
+        + Decode<Transaction, Error = io::Error>
+        + Encode<PreConfirmationMessage, Error = io::Error>
+        + Decode<PreConfirmationMessage, Error = io::Error>,
 {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;
@@ -31,7 +37,10 @@ where
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         match data {
             GossipsubBroadcastRequest::NewTx(tx) => {
-                Ok(self.codec.encode(&tx)?.into_bytes())
+                Ok(self.codec.encode(tx.deref())?.into_bytes())
+            }
+            GossipsubBroadcastRequest::TxPreConfirmations(msg) => {
+                Ok(self.codec.encode(msg.deref())?.into_bytes())
             }
         }
     }
@@ -44,6 +53,9 @@ where
         let decoded_response = match gossipsub_tag {
             GossipTopicTag::NewTx => {
                 GossipsubMessage::NewTx(self.codec.decode(encoded_data)?)
+            }
+            GossipTopicTag::TxPreConfirmations => {
+                GossipsubMessage::TxPreConfirmations(self.codec.decode(encoded_data)?)
             }
         };
 
