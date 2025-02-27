@@ -131,8 +131,10 @@ where
 
 pub type Database<Description = OnChain, Stage = RegularStage<Description>> =
     GenericDatabase<DataSource<Description, Stage>, Empty>;
+pub type OnChainKeyValueView = KeyValueView<ColumnType<OnChain>, HeightType<OnChain>>;
 pub type OnChainIterableKeyValueView =
     IterableKeyValueView<ColumnType<OnChain>, HeightType<OnChain>>;
+pub type OffChainKeyValueView = KeyValueView<ColumnType<OffChain>, HeightType<OffChain>>;
 pub type OffChainIterableKeyValueView =
     IterableKeyValueView<ColumnType<OffChain>, HeightType<OffChain>>;
 pub type RelayerIterableKeyValueView =
