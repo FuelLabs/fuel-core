@@ -252,6 +252,10 @@ pub trait TxPoolPort: Send + Sync {
     fn latest_pool_stats(&self) -> TxPoolStats;
 }
 
+pub trait TxStatusManagerPort: Send + Sync {
+    fn status(&self, tx_id: &TxId) -> Option<&TransactionStatus>;
+}
+
 #[async_trait]
 pub trait BlockProducerPort: Send + Sync {
     async fn dry_run_txs(

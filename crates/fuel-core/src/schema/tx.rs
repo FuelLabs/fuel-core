@@ -102,6 +102,7 @@ impl TxQuery {
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
+        // TODO[RC]: Here we read tx from pool and if missing then from storage.
         if let Some(transaction) = txpool.transaction(id).await? {
             Ok(Some(Transaction(transaction, id)))
         } else {

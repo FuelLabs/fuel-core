@@ -38,7 +38,7 @@ use crate::GasPrice;
 pub use fuel_core_storage::transactional::AtomicView;
 
 pub trait TxStatusManager {
-    fn add_status(&self, tx_id: &TxId, tx_status: &TransactionStatus);
+    fn add_status(&mut self, tx_id: &TxId, tx_status: &TransactionStatus);
     fn status(&self, tx_id: &TxId) -> Option<&TransactionStatus>;
 }
 

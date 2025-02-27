@@ -358,16 +358,12 @@ async fn submit() {
         .add_fee_input()
         .finalize_as_transaction();
 
-    client.submit_and_await_commit(&tx).await.unwrap();
+    let x = client.submit_and_await_commit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
-    let ret_tx: Transaction = client
-        .transaction(&tx.id(&ChainId::default()))
-        .await
-        .unwrap()
-        .unwrap()
-        .transaction
-        .try_into()
-        .unwrap();
+    let ret_tx = client.transaction(&tx.id(&ChainId::default())).await;
+    dbg!(&ret_tx);
+
+    let ret_tx: Transaction = ret_tx.unwrap().unwrap().transaction.try_into().unwrap();
     assert_eq!(tx.id(&ChainId::default()), ret_tx.id(&ChainId::default()));
 }
 

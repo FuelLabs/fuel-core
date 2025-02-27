@@ -370,7 +370,7 @@ impl Command {
             );
         }
 
-        let addr = net::SocketAddr::new(graphql.ip, graphql.port);
+        let addr_stefan = net::SocketAddr::new(graphql.ip, graphql.port);
 
         let snapshot_reader = match snapshot.as_ref() {
             None => crate::cli::local_testnet_reader(),
@@ -591,7 +591,7 @@ impl Command {
 
         let config = Config {
             graphql_config: GraphQLConfig {
-                addr,
+                addr: addr_stefan,
                 number_of_threads: graphql.graphql_number_of_threads,
                 database_batch_size: graphql.database_batch_size,
                 max_queries_depth: graphql.graphql_max_depth,

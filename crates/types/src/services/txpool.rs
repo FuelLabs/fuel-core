@@ -331,6 +331,7 @@ impl From<&PoolTransaction> for CheckedTransaction {
 }
 
 /// The status of the transaction during its life from the tx pool until the block.
+// TODO[RC]: This type to be moved into TxStatusManager
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransactionStatus {

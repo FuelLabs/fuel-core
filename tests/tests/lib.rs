@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 #![deny(unused_must_use)]
-#![deny(warnings)]
+//#![deny(warnings)]
 
 #[cfg(not(feature = "only-p2p"))]
 mod assets;
@@ -34,7 +34,7 @@ mod gas_price;
 mod graphql_extensions;
 #[cfg(not(feature = "only-p2p"))]
 mod health;
-#[cfg(not(feature = "only-p2p"))]
+//#[cfg(not(feature = "only-p2p"))]
 mod helpers;
 #[cfg(not(feature = "only-p2p"))]
 mod local_node;
@@ -62,7 +62,7 @@ mod state_rewind;
 mod storage_read_replay;
 #[cfg(not(feature = "only-p2p"))]
 mod trigger_integration;
-#[cfg(not(feature = "only-p2p"))]
+//#[cfg(not(feature = "only-p2p"))]
 mod tx;
 #[cfg(not(feature = "only-p2p"))]
 mod vm_storage;

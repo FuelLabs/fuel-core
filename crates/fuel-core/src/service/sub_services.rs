@@ -369,6 +369,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.off_chain().clone(),
         Box::new(tx_pool_adapter),
+        Box::new(tx_status_manager_adapter),
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),

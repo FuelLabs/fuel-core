@@ -9,6 +9,7 @@ use crate::{
             OnChainDatabase,
             P2pPort,
             TxPoolPort,
+            TxStatusManagerPort,
         },
         Config,
     },
@@ -102,6 +103,7 @@ pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should
 //  use only `Database` to receive all information about transactions.
 pub type TxPool = Box<dyn TxPoolPort>;
+pub type TxStatusManager = Box<dyn TxStatusManagerPort>;
 pub type ConsensusModule = Box<dyn ConsensusModulePort>;
 pub type P2pService = Box<dyn P2pPort>;
 
@@ -230,6 +232,7 @@ pub fn new_service<OnChain, OffChain>(
     on_database: OnChain,
     off_database: OffChain,
     txpool: TxPool,
+    tx_status_manager: TxStatusManager,
     producer: BlockProducer,
     consensus_module: ConsensusModule,
     p2p_service: P2pService,
@@ -283,6 +286,7 @@ where
         .data(config)
         .data(combined_read_database)
         .data(txpool)
+        .data(tx_status_manager)
         .data(producer)
         .data(consensus_module)
         .data(p2p_service)

@@ -4,12 +4,15 @@ use super::{
     ChainStateInfoProvider,
     SharedMemoryPool,
     StaticGasPrice,
+    TxStatusManagerAdapter,
 };
 use crate::{
     database::OnChainIterableKeyValueView,
     fuel_core_graphql_api::ports::{
-        worker,
-        worker::BlockAt,
+        worker::{
+            self,
+            BlockAt,
+        },
         BlockProducerPort,
         ChainStateProvider,
         DatabaseMessageProof,
@@ -17,7 +20,10 @@ use crate::{
         P2pPort,
         TxPoolPort,
     },
-    graphql_api::ports::MemoryPool,
+    graphql_api::ports::{
+        MemoryPool,
+        TxStatusManagerPort,
+    },
     service::{
         adapters::{
             import_result_provider::ImportResultProvider,
@@ -65,6 +71,12 @@ use std::{
 
 mod off_chain;
 mod on_chain;
+
+impl TxStatusManagerPort for TxStatusManagerAdapter {
+    fn status(&self, tx_id: &TxId) -> Option<&TransactionStatus> {
+        self.service.status(tx_id)
+    }
+}
 
 #[async_trait]
 impl TxPoolPort for TxPoolAdapter {

@@ -13,6 +13,7 @@ use crate::{
         query_costs,
         IntoApiResult,
     },
+    graphql_api::api_service::TxStatusManager,
     schema::{
         block::Block,
         scalars::{
@@ -695,10 +696,21 @@ impl Transaction {
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.1;
         let query = ctx.read_view()?;
-        let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, query.as_ref(), txpool)
-            .await
-            .map_err(Into::into)
+
+        // dbg!("[RC]: reading tx status from txpool, this is to be removed");
+        // let txpool = ctx.data_unchecked::<TxPool>();
+        // let tx_pool_status = get_tx_status(id, query.as_ref(), txpool)
+        //     .await
+        //     .map_err(Into::into);
+
+        dbg!("[RC]: reading tx status from tx status manager");
+        let tx_status_manager = ctx.data_unchecked::<TxStatusManager>();
+        let tx_status_manager_status =
+            get_tx_status_from_manager(id, query.as_ref(), tx_status_manager)
+                .await
+                .map_err(Into::into);
+
+        tx_status_manager_status
     }
 
     async fn script(&self) -> Option<HexString> {
@@ -1019,6 +1031,12 @@ pub(crate) async fn get_tx_status(
     query: &ReadView,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
+    // TODO[RC]: Tries to read from storage first, then from txpool, but only ever returns Submitted
+    // So these cases are possible:
+    // 1. Tx is in storage - return status from storage
+    // 2. Tx is not in storage, does txpool know about it?
+    //     - yes - return "Submitted"
+    //     - no - return None
     match query
         .tx_status(&id)
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
@@ -1038,6 +1056,46 @@ pub(crate) async fn get_tx_status(
                 ))),
                 _ => Ok(None),
             }
+        }
+    }
+}
+
+#[tracing::instrument(level = "debug", skip(query, tx_status_manager), ret, err)]
+pub(crate) async fn get_tx_status_from_manager(
+    id: fuel_core_types::fuel_types::Bytes32,
+    query: &ReadView,
+    tx_status_manager: &TxStatusManager,
+) -> Result<Option<TransactionStatus>, StorageError> {
+    // TODO[RC]: Tries to read from storage first, then from tx status manager
+    match query
+        .tx_status(&id)
+        .into_api_result::<txpool::TransactionStatus, StorageError>()?
+    {
+        Some(status) => {
+            dbg!("[RC]: got from storage");
+            let status = TransactionStatus::new(id, status);
+            Ok(Some(status))
+        }
+        None => {
+            let x = tx_status_manager.status(&id);
+            match x {
+                Some(status) => {
+                    dbg!("[RC]: got from manager");
+                    let status = TransactionStatus::new(id, status.clone());
+                    Ok(Some(status))
+                }
+                None => Ok(None),
+            }
+            // let submitted_time = txpool
+            // .submission_time(id)
+            // .await
+            // .map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
+            // match submitted_time {
+            // Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
+            // SubmittedStatus(submitted_time),
+            // ))),
+            // _ => Ok(None),
+            // }
         }
     }
 }
