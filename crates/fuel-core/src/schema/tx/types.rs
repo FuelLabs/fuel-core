@@ -142,8 +142,11 @@ impl From<VmProgramState> for ProgramState {
 pub enum TransactionStatus {
     Submitted(SubmittedStatus),
     Success(SuccessStatus),
+    SuccessDuringBlockProduction(SuccessDuringBlockProductionStatus),
     SqueezedOut(SqueezedOutStatus),
-    Failed(FailureStatus),
+    SqueezedOutDuringBlockProduction(SqueezedOutDuringBlockProductionStatus),
+    Failure(FailureStatus),
+    FailureDuringBlockProduction(FailureDuringBlockProductionStatus),
 }
 
 #[derive(Debug)]
@@ -213,6 +216,42 @@ impl SuccessStatus {
 }
 
 #[derive(Debug)]
+pub struct SuccessDuringBlockProductionStatus {
+    pub tx_pointer: TxPointer,
+    pub tx_id: Option<TxId>,
+    pub receipts: Option<Vec<fuel_tx::Receipt>>,
+}
+
+#[Object]
+impl SuccessDuringBlockProductionStatus {
+    async fn tx_pointer(&self) -> TxPointer {
+        self.tx_pointer
+    }
+
+    async fn transaction_id(&self) -> Option<TransactionId> {
+        self.tx_id.map(Into::into)
+    }
+
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn transaction(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Option<async_graphql::Result<Transaction>> {
+        self.tx_id.map(|tx_id| {
+            let query = ctx.read_view()?;
+            let transaction = query.transaction(&tx_id)?;
+            Ok(Transaction::from_tx(tx_id, transaction))
+        })
+    }
+
+    async fn receipts(&self) -> Option<async_graphql::Result<Vec<Receipt>>> {
+        self.receipts
+            .as_ref()
+            .map(|receipts| Ok(receipts.iter().map(Into::into).collect()))
+    }
+}
+
+#[derive(Debug)]
 pub struct FailureStatus {
     tx_id: TxId,
     block_height: fuel_core_types::fuel_types::BlockHeight,
@@ -273,6 +312,47 @@ impl FailureStatus {
 }
 
 #[derive(Debug)]
+pub struct FailureDuringBlockProductionStatus {
+    pub tx_pointer: TxPointer,
+    pub tx_id: Option<TxId>,
+    pub receipts: Option<Vec<fuel_tx::Receipt>>,
+    pub reason: String,
+}
+
+#[Object]
+impl FailureDuringBlockProductionStatus {
+    async fn reason(&self) -> String {
+        self.reason.clone()
+    }
+
+    async fn tx_pointer(&self) -> TxPointer {
+        self.tx_pointer
+    }
+
+    async fn transaction_id(&self) -> Option<TransactionId> {
+        self.tx_id.map(Into::into)
+    }
+
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn transaction(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Option<async_graphql::Result<Transaction>> {
+        self.tx_id.map(|tx_id| {
+            let query = ctx.read_view()?;
+            let transaction = query.transaction(&tx_id)?;
+            Ok(Transaction::from_tx(tx_id, transaction))
+        })
+    }
+
+    async fn receipts(&self) -> Option<async_graphql::Result<Vec<Receipt>>> {
+        self.receipts
+            .as_ref()
+            .map(|receipts| Ok(receipts.iter().map(Into::into).collect()))
+    }
+}
+
+#[derive(Debug)]
 pub struct SqueezedOutStatus {
     pub reason: String,
 }
@@ -284,24 +364,34 @@ impl SqueezedOutStatus {
     }
 }
 
+#[derive(Debug)]
+pub struct SqueezedOutDuringBlockProductionStatus(pub String);
+
+#[Object]
+impl SqueezedOutDuringBlockProductionStatus {
+    async fn reason(&self) -> String {
+        self.0.clone()
+    }
+}
+
 impl TransactionStatus {
     pub fn new(tx_id: TxId, tx_status: TxStatus) -> Self {
         match tx_status {
-            TxStatus::Submitted { time } => {
-                TransactionStatus::Submitted(SubmittedStatus(time))
+            TxStatus::Submitted { timestamp } => {
+                TransactionStatus::Submitted(SubmittedStatus(timestamp))
             }
             TxStatus::Success {
                 block_height,
-                result,
-                time,
+                block_timestamp,
+                program_state,
                 receipts,
                 total_gas,
                 total_fee,
             } => TransactionStatus::Success(SuccessStatus {
                 tx_id,
                 block_height,
-                result,
-                time,
+                result: program_state,
+                time: block_timestamp,
                 receipts,
                 total_gas,
                 total_fee,
@@ -309,22 +399,52 @@ impl TransactionStatus {
             TxStatus::SqueezedOut { reason } => {
                 TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
             }
-            TxStatus::Failed {
+            TxStatus::Failure {
                 block_height,
-                time,
-                result,
+                block_timestamp,
+                program_state,
                 receipts,
                 total_gas,
                 total_fee,
-            } => TransactionStatus::Failed(FailureStatus {
+                ..
+            } => TransactionStatus::Failure(FailureStatus {
                 tx_id,
                 block_height,
-                time,
-                state: result,
+                time: block_timestamp,
+                state: program_state,
                 receipts,
                 total_gas,
                 total_fee,
             }),
+            TxStatus::SuccessDuringBlockProduction {
+                tx_pointer,
+                tx_id,
+                receipts,
+            } => TransactionStatus::SuccessDuringBlockProduction(
+                SuccessDuringBlockProductionStatus {
+                    tx_pointer: tx_pointer.into(),
+                    tx_id,
+                    receipts,
+                },
+            ),
+            TxStatus::SqueezedOutDuringBlockProduction { reason } => {
+                TransactionStatus::SqueezedOutDuringBlockProduction(
+                    SqueezedOutDuringBlockProductionStatus(reason),
+                )
+            }
+            TxStatus::FailureDuringBlockProduction {
+                tx_pointer,
+                tx_id,
+                receipts,
+                reason,
+            } => TransactionStatus::FailureDuringBlockProduction(
+                FailureDuringBlockProductionStatus {
+                    tx_pointer: tx_pointer.into(),
+                    tx_id,
+                    receipts,
+                    reason,
+                },
+            ),
         }
     }
 }
@@ -332,8 +452,8 @@ impl TransactionStatus {
 impl From<TransactionStatus> for TxStatus {
     fn from(s: TransactionStatus) -> Self {
         match s {
-            TransactionStatus::Submitted(SubmittedStatus(time)) => {
-                TxStatus::Submitted { time }
+            TransactionStatus::Submitted(SubmittedStatus(timestamp)) => {
+                TxStatus::Submitted { timestamp }
             }
             TransactionStatus::Success(SuccessStatus {
                 block_height,
@@ -345,8 +465,8 @@ impl From<TransactionStatus> for TxStatus {
                 ..
             }) => TxStatus::Success {
                 block_height,
-                result,
-                time,
+                program_state: result,
+                block_timestamp: time,
                 receipts,
                 total_gas,
                 total_fee,
@@ -354,21 +474,49 @@ impl From<TransactionStatus> for TxStatus {
             TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
                 TxStatus::SqueezedOut { reason }
             }
-            TransactionStatus::Failed(FailureStatus {
+            TransactionStatus::Failure(FailureStatus {
                 block_height,
                 time,
-                state: result,
+                state,
                 receipts,
                 total_gas,
                 total_fee,
                 ..
-            }) => TxStatus::Failed {
+            }) => TxStatus::Failure {
+                reason: TransactionExecutionResult::reason(&receipts, &state),
                 block_height,
-                time,
-                result,
+                block_timestamp: time,
+                program_state: state,
                 receipts,
                 total_gas,
                 total_fee,
+            },
+            TransactionStatus::SuccessDuringBlockProduction(
+                SuccessDuringBlockProductionStatus {
+                    tx_pointer,
+                    tx_id,
+                    receipts,
+                },
+            ) => TxStatus::SuccessDuringBlockProduction {
+                tx_pointer: tx_pointer.into(),
+                tx_id,
+                receipts,
+            },
+            TransactionStatus::SqueezedOutDuringBlockProduction(
+                SqueezedOutDuringBlockProductionStatus(reason),
+            ) => TxStatus::SqueezedOutDuringBlockProduction { reason },
+            TransactionStatus::FailureDuringBlockProduction(
+                FailureDuringBlockProductionStatus {
+                    tx_pointer,
+                    tx_id,
+                    receipts,
+                    reason,
+                },
+            ) => TxStatus::FailureDuringBlockProduction {
+                tx_pointer: tx_pointer.into(),
+                tx_id,
+                receipts,
+                reason,
             },
         }
     }
