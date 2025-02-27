@@ -355,15 +355,12 @@ impl AlgorithmUpdaterV1 {
     pub fn update_da_record_data<U: UnrecordedBlocks>(
         &mut self,
         heights: RangeInclusive<u32>,
+        _recorded_bytes: u32,
         recording_cost: u128,
         unrecorded_blocks: &mut U,
     ) -> Result<(), Error> {
         if !heights.is_empty() {
-            self.da_block_update(
-                heights,
-                recording_cost,
-                unrecorded_blocks,
-            )?;
+            self.da_block_update(heights, recording_cost, unrecorded_blocks)?;
             self.recalculate_projected_cost();
             self.update_da_gas_price();
         }
@@ -603,7 +600,6 @@ impl AlgorithmUpdaterV1 {
             .latest_known_total_da_cost
             .saturating_add(recording_cost);
         self.latest_known_total_da_cost = new_da_block_cost;
-
 
         let uncompressed_cost_per_bytes = recording_cost
             .checked_div(removed_bytes)
