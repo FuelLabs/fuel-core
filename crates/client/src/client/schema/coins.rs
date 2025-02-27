@@ -6,6 +6,7 @@ use crate::client::{
         Nonce,
         PageInfo,
         UtxoId,
+        U128,
         U16,
         U32,
         U64,
@@ -145,9 +146,9 @@ pub struct SpendQueryElementInput {
     /// asset ID of the coins
     pub asset_id: AssetId,
     /// the amount to cover with this asset
-    pub amount: U64,
+    pub amount: U128,
     /// the maximum number of coins per asset from the owner to return.
-    pub max: Option<U32>,
+    pub max: Option<U16>,
 }
 
 #[derive(cynic::QueryFragment, Debug, Clone)]
@@ -209,7 +210,7 @@ impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
     variables = "CoinsToSpendArgs"
 )]
 pub struct CoinsToSpendQuery {
-    #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludedIds: $ excluded_ids)]
+    #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludeInput: $ excluded_ids)]
     pub coins_to_spend: Vec<Vec<CoinType>>,
 }
 

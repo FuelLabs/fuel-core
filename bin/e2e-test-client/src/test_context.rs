@@ -125,7 +125,11 @@ impl Wallet {
         // select coins
         let coins = &self
             .client
-            .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
+            .coins_to_spend(
+                &self.address,
+                vec![(asset_id, u128::from(total_amount), None)],
+                None,
+            )
             .await?[0];
 
         // build transaction
@@ -170,7 +174,11 @@ impl Wallet {
             .client
             .coins_to_spend(
                 &self.address,
-                vec![(*self.consensus_params.base_asset_id(), BASE_AMOUNT, None)],
+                vec![(
+                    *self.consensus_params.base_asset_id(),
+                    u128::from(BASE_AMOUNT),
+                    None,
+                )],
                 None,
             )
             .await?[0];
@@ -280,7 +288,11 @@ impl Wallet {
         // select coins
         let coins = &self
             .client
-            .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
+            .coins_to_spend(
+                &self.address,
+                vec![(asset_id, u128::from(total_amount), None)],
+                None,
+            )
             .await?[0];
 
         let ContractConfig {

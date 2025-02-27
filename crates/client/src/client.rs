@@ -1234,7 +1234,7 @@ impl FuelClient {
     pub async fn coins_to_spend(
         &self,
         owner: &Address,
-        spend_query: Vec<(AssetId, u64, Option<u32>)>,
+        spend_query: Vec<(AssetId, u128, Option<u16>)>,
         // (Utxos, Messages Nonce)
         excluded_ids: Option<(Vec<UtxoId>, Vec<Nonce>)>,
     ) -> io::Result<Vec<Vec<types::CoinType>>> {
