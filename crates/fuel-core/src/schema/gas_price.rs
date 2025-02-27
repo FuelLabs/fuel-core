@@ -98,7 +98,13 @@ impl EstimateGasPriceQuery {
                 "Invalid block horizon. Overflows latest block :{latest_block_height:?}"
             )))?;
 
-        let gas_price_provider = ctx.data_unchecked::<GasPriceProvider>();
+        let gas_price_provider = match ctx.data::<GasPriceProvider>() {
+            Ok(provider) => provider,
+            Err(_) => return Err(async_graphql::Error::new(
+                "Gas price estimation service is not enabled"
+            )),
+        };
+
         let gas_price = gas_price_provider
             .worst_case_gas_price(target_block.into())
             .ok_or(async_graphql::Error::new(format!(
