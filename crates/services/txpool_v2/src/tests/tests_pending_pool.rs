@@ -17,29 +17,27 @@ use crate::{
 async fn test_tx_keep_missing_input() {
     let mut universe = TestPoolUniverse::default();
     universe.config.utxo_validation = true;
+    let timeout = tokio::time::Duration::from_secs(1);
+    universe.config.pending_pool_tx_ttl = timeout;
 
     let (output, unset_input) = universe.create_output_and_input();
     let tx1 = universe.build_script_transaction(None, Some(vec![output]), 10);
     let tx_id1 = tx1.id(&Default::default());
     let input = unset_input.into_input(UtxoId::new(tx_id1, 0));
     let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
+    let tx_id2 = tx2.id(&Default::default());
 
     let service = universe.build_service(None, None);
     service.start_and_await().await.unwrap();
 
     // Given
+    let mut status_stream = service.shared.tx_update_subscribe(tx_id2).unwrap();
     service.shared.try_insert(vec![tx2.clone()]).unwrap();
 
     // When
-    tokio::time::timeout(
-        tokio::time::Duration::from_secs(1),
-        universe.waiting_txs_insertion(
-            service.shared.new_tx_notification_subscribe(),
-            vec![tx2.id(&Default::default())],
-        ),
-    )
-    .await
-    .unwrap_err();
+    tokio::time::timeout(timeout, status_stream.next())
+        .await
+        .unwrap_err();
     service.shared.try_insert(vec![tx1.clone()]).unwrap();
 
     universe
@@ -50,6 +48,12 @@ async fn test_tx_keep_missing_input() {
         .await;
 
     // Then
+    let status = status_stream.next().await.unwrap();
+    assert!(matches!(
+        status,
+        TxStatusMessage::Status(TransactionStatus::Submitted { .. })
+    ));
+
     service.stop_and_await().await.unwrap();
 }
 
