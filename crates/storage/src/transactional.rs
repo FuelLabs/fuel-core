@@ -408,7 +408,7 @@ where
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<Option<usize>> {
+    ) -> StorageResult<bool> {
         if let Some(operation) = self.get_from_changes(key, column) {
             match operation {
                 WriteOperation::Insert(value) => {
@@ -427,9 +427,9 @@ where
 
                     let starting_from_offset = &value.as_ref()[start..end];
                     buf[..].copy_from_slice(starting_from_offset);
-                    Ok(Some(buf_len))
+                    Ok(true)
                 }
-                WriteOperation::Remove => Ok(None),
+                WriteOperation::Remove => Ok(false),
             }
         } else {
             self.storage.read(key, column, offset, buf)
@@ -690,7 +690,7 @@ mod test {
             let mut buf = [0; 3];
             let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
             // verify
-            assert_eq!(ret, Some(3));
+            assert!(ret);
             assert_eq!(buf, [1, 2, 3]);
         }
 
@@ -706,7 +706,7 @@ mod test {
             let mut buf = [0; 2];
             let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
             // verify
-            assert_eq!(ret, Some(2));
+            assert!(ret);
             assert_eq!(buf, [1, 2]);
         }
 
@@ -722,7 +722,7 @@ mod test {
             let mut buf = [0; 2];
             let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap();
             // verify
-            assert_eq!(ret, Some(2));
+            assert!(ret);
             assert_eq!(buf, [2, 3]);
         }
 
