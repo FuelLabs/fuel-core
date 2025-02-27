@@ -150,6 +150,15 @@ pub enum CoinType {
     MessageCoin(MessageCoin),
 }
 
+impl CoinType {
+    pub fn amount(&self) -> u64 {
+        match self {
+            CoinType::Coin(coin) => coin.0.amount,
+            CoinType::MessageCoin(coin) => coin.0.amount,
+        }
+    }
+}
+
 impl From<coins::CoinType> for CoinType {
     fn from(value: coins::CoinType) -> Self {
         match value {
@@ -317,9 +326,11 @@ impl CoinQuery {
         query_per_asset.truncate(max_input as usize);
 
         let read_view = ctx.read_view()?;
-        read_view
+        let result = read_view
             .coins_to_spend(owner, &query_per_asset, &exclude, &params, max_input)
-            .await
+            .await?;
+
+        Ok(result)
     }
 }
 
@@ -331,7 +342,7 @@ impl ReadView {
         excluded: &Exclude,
         params: &ConsensusParameters,
         max_input: u16,
-    ) -> async_graphql::Result<Vec<Vec<CoinType>>> {
+    ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
         let indexation_available = self
             .indexation_flags
             .contains(&IndexationKind::CoinsToSpend);
@@ -360,7 +371,7 @@ async fn coins_to_spend_without_cache(
     max_input: u16,
     base_asset_id: &fuel_tx::AssetId,
     db: &ReadView,
-) -> async_graphql::Result<Vec<Vec<CoinType>>> {
+) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let query_per_asset = query_per_asset
         .iter()
         .map(|e| {
@@ -407,7 +418,7 @@ async fn coins_to_spend_with_cache(
     excluded: &Exclude,
     max_input: u16,
     db: &ReadView,
-) -> async_graphql::Result<Vec<Vec<CoinType>>> {
+) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let mut all_coins = Vec::with_capacity(query_per_asset.len());
 
     for asset in query_per_asset {

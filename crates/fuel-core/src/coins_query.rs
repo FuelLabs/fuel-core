@@ -61,6 +61,8 @@ pub enum CoinsQueryError {
     UnexpectedInternalState(&'static str),
     #[error("coins to spend index contains incorrect key")]
     IncorrectCoinsToSpendIndexKey,
+    #[error("unknown error: {0}")]
+    Other(anyhow::Error),
 }
 
 #[cfg(test)]
@@ -407,6 +409,12 @@ fn skip_big_coins_up_to_amount(
 impl From<StorageError> for CoinsQueryError {
     fn from(e: StorageError) -> Self {
         CoinsQueryError::StorageError(e)
+    }
+}
+
+impl From<anyhow::Error> for CoinsQueryError {
+    fn from(e: anyhow::Error) -> Self {
+        CoinsQueryError::Other(e)
     }
 }
 

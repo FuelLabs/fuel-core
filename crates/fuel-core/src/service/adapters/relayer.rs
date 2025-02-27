@@ -11,7 +11,10 @@ use fuel_core_storage::transactional::{
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
 impl Transactional for Database<Relayer> {
-    type Transaction<'a> = StorageTransaction<&'a mut Self> where Self: 'a;
+    type Transaction<'a>
+        = StorageTransaction<&'a mut Self>
+    where
+        Self: 'a;
 
     fn transaction(&mut self) -> Self::Transaction<'_> {
         self.into_transaction()

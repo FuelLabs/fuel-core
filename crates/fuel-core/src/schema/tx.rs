@@ -1,8 +1,8 @@
 use super::scalars::{
     AssetId,
+    U16,
     U32,
     U64,
-    U8,
 };
 use crate::{
     coins_query::CoinsQueryError,
@@ -26,11 +26,7 @@ use crate::{
         TxnStatusChangeState,
     },
     schema::{
-        coins::{
-            CoinType,
-            ExcludeInput,
-            SpendQueryElementInput,
-        },
+        coins::ExcludeInput,
         gas_price::EstimateGasPriceExt,
         scalars::{
             Address,
@@ -39,9 +35,15 @@ use crate::{
             TransactionId,
             TxPointer,
         },
-        tx::types::{
-            AssembleTransactionResult,
-            TransactionStatus,
+        tx::{
+            assemble_tx::{
+                AssembleArguments,
+                AssembleTx,
+            },
+            types::{
+                AssembleTransactionResult,
+                TransactionStatus,
+            },
         },
         ReadViewProvider,
     },
@@ -56,10 +58,7 @@ use async_graphql::{
     Object,
     Subscription,
 };
-use fuel_core_executor::ports::{
-    TransactionExt,
-    TransactionWriteExt,
-};
+use fuel_core_executor::ports::TransactionExt;
 use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,
@@ -67,16 +66,8 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
-    entities::coins::CoinId,
     fuel_tx,
     fuel_tx::{
-        input::{
-            coin::CoinSigned,
-            message::{
-                MessageCoinSigned,
-                MessageDataSigned,
-            },
-        },
         Bytes32,
         Cacheable,
         Transaction as FuelTx,
@@ -86,12 +77,9 @@ use fuel_core_types::{
         self,
         canonical::Deserialize,
     },
-    fuel_vm::{
-        checked_transaction::{
-            CheckPredicateParams,
-            EstimatePredicates,
-        },
-        Signature,
+    fuel_vm::checked_transaction::{
+        CheckPredicateParams,
+        EstimatePredicates,
     },
     services::txpool,
 };
@@ -101,12 +89,8 @@ use futures::{
 };
 use std::{
     borrow::Cow,
-    collections::{
-        hash_map::Entry,
-        HashMap,
-        HashSet,
-    },
     iter,
+    sync::Arc,
 };
 use types::{
     DryRunTransactionExecutionStatus,
@@ -114,6 +98,7 @@ use types::{
     Transaction,
 };
 
+mod assemble_tx;
 pub mod input;
 pub mod output;
 pub mod receipt;
@@ -320,7 +305,7 @@ impl TxQuery {
                 that points to the address who pays fee for the transaction. \
                 If you only want to cover the fee of transaction, you can set the required balance \
                 to 0, set base asset and point to this required address.")]
-        fee_address_index: U8,
+        fee_address_index: U16,
         #[graphql(
             desc = "The list of resources to exclude from the selection for the inputs"
         )]
@@ -335,11 +320,11 @@ impl TxQuery {
         )]
         reserve_gas: Option<U64>,
     ) -> async_graphql::Result<AssembleTransactionResult> {
-        let consensus_params = ctx
+        let consensus_parameters = ctx
             .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params();
 
-        let max_input = consensus_params.tx_params().max_inputs();
+        let max_input = consensus_parameters.tx_params().max_inputs();
 
         if required_balances.len() > max_input as usize {
             return Err(CoinsQueryError::TooManyCoinsSelected {
@@ -349,11 +334,9 @@ impl TxQuery {
             .into());
         }
 
-        let fee_index: u8 = fee_address_index.into();
-
-        if fee_index as usize >= required_balances.len() {
-            return Err(anyhow::anyhow!("The fee address index is out of bounds").into());
-        }
+        let fee_index: u16 = fee_address_index.into();
+        let estimate_predicates: bool = estimate_predicates.unwrap_or(false);
+        let reserve_gas: u64 = reserve_gas.map(Into::into).unwrap_or(0);
 
         let excluded_id_count = exclude_input.as_ref().map_or(0, |exclude| {
             exclude.utxos.len().saturating_add(exclude.messages.len())
@@ -368,258 +351,72 @@ impl TxQuery {
 
         let required_balances: Vec<RequiredBalance> =
             required_balances.into_iter().map(Into::into).collect();
-        let mut duplicate_checker = HashSet::with_capacity(required_balances.len());
-        for required_balance in &required_balances {
-            let asset_id = required_balance.asset_id;
-            if !duplicate_checker.insert(asset_id) {
-                return Err(CoinsQueryError::DuplicateAssets(asset_id).into());
-            }
-        }
+        let exclude: Exclude = exclude_input.into();
 
         let gas_price = ctx.estimate_gas_price(Some(block_horizon.into()))?;
 
-        let mut tx = FuelTx::from_bytes(&tx.0)?;
+        let tx = FuelTx::from_bytes(&tx.0)?;
 
-        let mut change_output_policies = HashMap::<fuel_tx::AssetId, ChangePolicy>::new();
-        let mut available_change_outputs = HashSet::<fuel_tx::AssetId>::new();
-
-        for output in tx.outputs()? {
-            if let fuel_tx::Output::Change { to, asset_id, .. } = output {
-                change_output_policies
-                    .insert(*asset_id, ChangePolicy::Change((*to).into()));
-                available_change_outputs.insert(*asset_id);
-            }
-        }
-
-        for required_balance in &required_balances {
-            let asset_id = required_balance.asset_id;
-
-            let entry = change_output_policies.entry(asset_id);
-
-            match entry {
-                Entry::Occupied(old) => {
-                    if old.get() != &required_balance.change_policy {
-                        return Err(anyhow::anyhow!(
-                            "The asset {} has multiple change policies",
-                            asset_id
-                        )
-                        .into());
-                    }
-                }
-                Entry::Vacant(vacant) => {
-                    vacant.insert(required_balance.change_policy);
-                }
-            }
-        }
-
-        let mut exclude: Exclude = exclude_input.into();
-        let mut signature_witness_indexes = HashMap::<fuel_tx::Address, u16>::new();
-
-        // Exclude inputs that already are used by the transaction
-        let inputs = tx.inputs()?;
-        for input in inputs {
-            if let Some(utxo_id) = input.utxo_id() {
-                exclude.exclude(CoinId::Utxo(*utxo_id));
-            }
-
-            if let Some(nonce) = input.nonce() {
-                exclude.exclude(CoinId::Message(*nonce));
-            }
-
-            match input {
-                fuel_tx::Input::CoinSigned(CoinSigned {
-                    owner,
-                    witness_index,
-                    ..
-                })
-                | fuel_tx::Input::MessageCoinSigned(MessageCoinSigned {
-                    recipient: owner,
-                    witness_index,
-                    ..
-                })
-                | fuel_tx::Input::MessageDataSigned(MessageDataSigned {
-                    recipient: owner,
-                    witness_index,
-                    ..
-                }) => {
-                    signature_witness_indexes.insert(*owner, *witness_index);
-                }
-                fuel_tx::Input::Contract(_)
-                | fuel_tx::Input::CoinPredicate(_)
-                | fuel_tx::Input::MessageCoinPredicate(_)
-                | fuel_tx::Input::MessageDataPredicate(_) => {
-                    // Do nothing
-                }
-            }
-        }
-
-        let read_view = ctx.read_view()?;
-        let mut number_of_witnesses =
-            u16::try_from(tx.witnesses()?.len()).unwrap_or(u16::MAX);
-
-        for required_balance in &required_balances {
-            let used_inputs = u16::try_from(tx.inputs()?.len()).unwrap_or(u16::MAX);
-            let remaining_input_slots = max_input.saturating_sub(used_inputs);
-            if remaining_input_slots == 0 {
-                return Err(anyhow::anyhow!(
-                    "Filling required balances occupies a number \
-                    of inputs more than can fit into the transaction"
-                )
-                .into());
-            }
-
-            let asset_id = required_balance.asset_id;
-            let query_per_asset = SpendQueryElementInput {
-                asset_id: asset_id.into(),
-                amount: (required_balance.amount as u128).into(),
-                max: None,
-            };
-            let owner = required_balance.account.owner();
-
-            let selected_coins = read_view
-                .coins_to_spend(
-                    owner,
-                    &[query_per_asset],
-                    &exclude,
-                    &consensus_params,
-                    remaining_input_slots,
-                )
-                .await?
-                .into_iter()
-                .next()
-                .expect("The query returns a single result; qed");
-
-            if available_change_outputs.insert(asset_id) {
-                match change_output_policies
-                    .get(&asset_id)
-                    .expect("Policy was inserted above; qed")
-                {
-                    ChangePolicy::Change(change_receiver) => {
-                        tx.outputs_mut()?.push(fuel_tx::Output::change(
-                            *change_receiver,
-                            0,
-                            asset_id,
-                        ));
-                    }
-                    ChangePolicy::Destroy => {
-                        // Do nothing for now, since `fuel-tx` crate doesn't have
-                        // `Destroy` output yet.
-                        // https://github.com/FuelLabs/fuel-specs/issues/621
-                    }
-                }
-            }
-
-            for coin in selected_coins {
-                let mut add_witness = None;
-
-                let input = match &required_balance.account {
-                    Account::Address(account) => {
-                        let signature_index = signature_witness_indexes
-                            .get(account)
-                            .cloned()
-                            .unwrap_or_else(|| {
-                                let vacant_index = number_of_witnesses;
-                                add_witness = Some((*account, vacant_index));
-
-                                vacant_index
-                            });
-
-                        match coin {
-                            CoinType::Coin(coin) => fuel_tx::Input::coin_signed(
-                                coin.0.utxo_id,
-                                coin.0.owner,
-                                coin.0.amount,
-                                coin.0.asset_id,
-                                coin.0.tx_pointer,
-                                signature_index,
-                            ),
-                            CoinType::MessageCoin(message) => {
-                                fuel_tx::Input::message_coin_signed(
-                                    message.0.sender,
-                                    message.0.recipient,
-                                    message.0.amount,
-                                    message.0.nonce,
-                                    signature_index,
-                                )
-                            }
-                        }
-                    }
-                    Account::Predicate(predicate) => {
-                        let predicate_gas_used = 0;
-                        match coin {
-                            CoinType::Coin(coin) => fuel_tx::Input::coin_predicate(
-                                coin.0.utxo_id,
-                                predicate.predicate_address,
-                                coin.0.amount,
-                                coin.0.asset_id,
-                                coin.0.tx_pointer,
-                                predicate_gas_used,
-                                predicate.predicate.clone(),
-                                predicate.predicate_data.clone(),
-                            ),
-                            CoinType::MessageCoin(message) => {
-                                fuel_tx::Input::message_coin_predicate(
-                                    message.0.sender,
-                                    message.0.recipient,
-                                    message.0.amount,
-                                    message.0.nonce,
-                                    predicate_gas_used,
-                                    predicate.predicate.clone(),
-                                    predicate.predicate_data.clone(),
-                                )
-                            }
-                        }
-                    }
-                };
-                tx.inputs_mut()?.push(input);
-
-                if let Some((owner, index)) = add_witness {
-                    tx.witnesses_mut()?.push(vec![0; Signature::LEN].into());
-                    signature_witness_indexes.insert(owner, index);
-                    number_of_witnesses = number_of_witnesses.saturating_add(1);
-                }
-            }
-        }
-
+        let read_view = Arc::new(ctx.read_view()?.into_owned());
         let block_producer = ctx.data_unchecked::<BlockProducer>();
-        todo!()
+        let shared_memory_pool = ctx.data_unchecked::<SharedMemoryPool>();
 
-        // if block_height.is_some() && !config.historical_execution {
-        //     return Err(anyhow::anyhow!(
-        //         "The `blockHeight` parameter requires the `--historical-execution` option"
-        //     )
-        //     .into());
-        // }
-        //
-        // let mut transactions = txs
-        //     .iter()
-        //     .map(|tx| FuelTx::from_bytes(&tx.0))
-        //     .collect::<Result<Vec<FuelTx>, _>>()?;
-        // transactions.iter_mut().try_fold::<_, _, async_graphql::Result<u64>>(0u64, |acc, tx| {
-        //     let gas = tx.max_gas(&consensus_params)?;
-        //     let gas = gas.saturating_add(acc);
-        //     if gas > block_gas_limit {
-        //         return Err(anyhow::anyhow!("The sum of the gas usable by the transactions is greater than the block gas limit").into());
-        //     }
-        //     tx.precompute(&consensus_params.chain_id())?;
-        //     Ok(gas)
-        // })?;
-        //
-        // let tx_statuses = block_producer
-        //     .dry_run_txs(
-        //         transactions,
-        //         block_height.map(|x| x.into()),
-        //         None, // TODO(#1749): Pass parameter from API
-        //         utxo_validation,
-        //         gas_price.map(|x| x.into()),
-        //     )
-        //     .await?;
-        // let tx_statuses = tx_statuses
-        //     .into_iter()
-        //     .map(DryRunTransactionExecutionStatus)
-        //     .collect();
-        //
-        // Ok(tx_statuses)
+        let arguments = AssembleArguments {
+            fee_index,
+            required_balances,
+            exclude,
+            estimate_predicates,
+            reserve_gas,
+            consensus_parameters,
+            gas_price,
+            block_producer,
+            read_view,
+            shared_memory_pool,
+        };
+
+        let assembled_tx: fuel_tx::Transaction = match tx {
+            fuel_tx::Transaction::Script(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
+            fuel_tx::Transaction::Create(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
+            fuel_tx::Transaction::Mint(_) => {
+                return Err(anyhow::anyhow!("Mint transaction is not supported").into());
+            }
+            fuel_tx::Transaction::Upgrade(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
+            fuel_tx::Transaction::Upload(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
+            fuel_tx::Transaction::Blob(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
+        };
+
+        let status = block_producer
+            .dry_run_txs(
+                vec![assembled_tx.clone()],
+                None,
+                None,
+                Some(false),
+                Some(gas_price),
+            )
+            .await?
+            .into_iter()
+            .next()
+            .ok_or(anyhow::anyhow!(
+                "Failed to do the final `dry_run` of the assembled transaction"
+            ))?;
+
+        let result = AssembleTransactionResult {
+            tx_id: status.id,
+            tx: assembled_tx,
+            status: status.result,
+        };
+
+        Ok(result)
     }
 
     /// Estimate the predicate gas for the provided transaction
@@ -947,6 +744,7 @@ pub enum ChangePolicy {
     Destroy,
 }
 
+#[derive(Clone)]
 pub enum Account {
     Address(fuel_tx::Address),
     Predicate(Predicate),
@@ -961,6 +759,7 @@ impl Account {
     }
 }
 
+#[derive(Clone)]
 pub struct Predicate {
     pub predicate_address: fuel_tx::Address,
     pub predicate: Vec<u8>,
