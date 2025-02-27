@@ -458,6 +458,12 @@ where
                 }
             }
         }
+        // Allow in tests to use a ttl of 0 for pending pool and directly
+        // trigger the removal of expired transactions
+        #[cfg(any(feature = "test-helpers", test))]
+        {
+            self.remove_executed_transactions(vec![]);
+        }
     }
 
     fn extract_block_transactions(
