@@ -650,7 +650,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     let query = client
         .coins_to_spend(
             &recipient,
-            vec![(base_asset_id, NON_RETRYABLE_AMOUNT, None)],
+            vec![(base_asset_id, NON_RETRYABLE_AMOUNT as u128, None)],
             None,
         )
         .await
@@ -673,7 +673,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     let query = client
         .coins_to_spend(
             &recipient,
-            vec![(base_asset_id, NON_RETRYABLE_AMOUNT + 1, None)],
+            vec![(base_asset_id, (NON_RETRYABLE_AMOUNT + 1) as u128, None)],
             None,
         )
         .await

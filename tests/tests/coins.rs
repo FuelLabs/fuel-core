@@ -286,8 +286,8 @@ mod coin {
             .coins_to_spend(
                 &owner,
                 vec![
-                    (asset_id_a, 300, Some(MAX as u32)),
-                    (asset_id_b, 300, Some(MAX as u32)),
+                    (asset_id_a, 300, Some(MAX as u16)),
+                    (asset_id_b, 300, Some(MAX as u16)),
                 ],
                 None,
             )
@@ -507,7 +507,7 @@ mod message_coin {
         // not enough inputs
         let coins_per_asset = context
             .client
-            .coins_to_spend(&owner, vec![(base_asset_id, 300, Some(MAX as u32))], None)
+            .coins_to_spend(&owner, vec![(base_asset_id, 300, Some(MAX as u16))], None)
             .await;
         assert!(coins_per_asset.is_err());
         assert_eq!(
@@ -732,8 +732,8 @@ mod all_coins {
             .coins_to_spend(
                 &owner,
                 vec![
-                    (asset_id_a, 300, Some(MAX as u32)),
-                    (asset_id_b, 300, Some(MAX as u32)),
+                    (asset_id_a, 300, Some(MAX as u16)),
+                    (asset_id_b, 300, Some(MAX as u16)),
                 ],
                 None,
             )
