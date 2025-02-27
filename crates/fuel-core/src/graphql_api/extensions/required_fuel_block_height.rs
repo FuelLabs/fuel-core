@@ -1,3 +1,7 @@
+use crate::fuel_core_graphql_api::{
+    api_service::ReadDatabase,
+    block_height_subscription,
+};
 use async_graphql::{
     extensions::{
         Extension,
@@ -6,6 +10,7 @@ use async_graphql::{
         NextExecute,
         NextPrepareRequest,
     },
+    Data,
     Pos,
     Request,
     Response,
@@ -19,10 +24,7 @@ use std::sync::{
     Arc,
     OnceLock,
 };
-
 use tokio::time::Duration;
-
-use crate::graphql_api::block_height_subscription;
 
 const REQUIRED_FUEL_BLOCK_HEIGHT: &str = "required_fuel_block_height";
 const FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED: &str =
@@ -197,7 +199,26 @@ impl Extension for RequiredFuelBlockHeightInner {
             }
         };
 
-        let mut response = next.run(ctx, operation_name).await;
+        let database: &ReadDatabase = ctx.data_unchecked();
+        let view = match database.view() {
+            Ok(view) => view,
+            Err(e) => {
+                let (line, column) = (line!(), column!());
+                tracing::error!("Failed get the `ReadView`: {}", e);
+                return Response::from_errors(vec![ServerError::new(
+                    "Failed get the `ReadView`",
+                    Some(Pos {
+                        line: line as usize,
+                        column: column as usize,
+                    }),
+                )]);
+            }
+        };
+
+        let mut query_data = Data::default();
+        query_data.insert(view);
+
+        let mut response = next.run_with_data(&ctx, operation_name, query_data).await;
 
         if self.required_height.get().is_some() {
             response.extensions.insert(

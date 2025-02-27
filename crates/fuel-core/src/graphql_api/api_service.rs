@@ -283,6 +283,13 @@ where
         .limit_depth(config.config.max_queries_depth)
         .limit_recursive_depth(config.config.max_queries_recursive_depth)
         .limit_directives(config.config.max_queries_directives)
+        // The ordering for extensions meters, the `RequiredFuelBlockHeightExtension` should be the
+        // first, because it creates a view of the database on a required block height.
+        .extension(RequiredFuelBlockHeightExtension::new(
+            required_fuel_block_height_tolerance,
+            required_fuel_block_height_timeout,
+            block_height_subscriber.clone(),
+        ))
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
         ))
@@ -300,11 +307,6 @@ where
             max_queries_resolver_recursive_depth,
         ))
         .extension(async_graphql::extensions::Tracing)
-        .extension(RequiredFuelBlockHeightExtension::new(
-            required_fuel_block_height_tolerance,
-            required_fuel_block_height_timeout,
-            block_height_subscriber.clone(),
-        ))
         .extension(ChainStateInfoExtension::new(block_height_subscriber))
         .finish();
 
