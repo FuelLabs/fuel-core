@@ -207,21 +207,32 @@ pub fn init_sub_services(
     let settings = chain_state_info_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
 
-    let committer_api =
-        BlockCommitterHttpApi::new(config.gas_price_config.da_committer_url.clone());
-    let da_source = BlockCommitterDaBlockCosts::new(committer_api);
-    let v1_config = V1AlgorithmConfig::from(config.clone());
+    let (gas_price_algo, latest_gas_price) = if config.gas_price_config.enabled {
+        let committer_api = BlockCommitterHttpApi::new(config.gas_price_config.da_committer_url.clone());
+        let da_source = BlockCommitterDaBlockCosts::new(committer_api);
+        let v1_config = V1AlgorithmConfig::from(config.clone());
 
-    let gas_price_service_v1 = new_gas_price_service_v1(
-        v1_config,
-        genesis_block_height,
-        settings,
-        block_stream,
-        database.gas_price().clone(),
-        da_source,
-        database.on_chain().clone(),
-    )?;
-    let (gas_price_algo, latest_gas_price) = gas_price_service_v1.shared.clone();
+        let gas_price_service_v1 = new_gas_price_service_v1(
+            v1_config,
+            genesis_block_height,
+            settings,
+            block_stream,
+            database.gas_price().clone(),
+            da_source,
+            database.on_chain().clone(),
+        )?;
+        gas_price_service_v1.shared.clone()
+    } else {
+        // Create a static gas price provider that always returns the minimum gas price
+        let gas_price_algo = Arc::new(());
+        let latest_gas_price = Arc::new(UniversalGasPriceProvider::new(
+            genesis_block_height,
+            config.gas_price_config.min_exec_gas_price,
+            DEFAULT_GAS_PRICE_CHANGE_PERCENT,
+        ));
+        (gas_price_algo, latest_gas_price)
+    };
+
     let universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
         latest_gas_price,
         DEFAULT_GAS_PRICE_CHANGE_PERCENT,
