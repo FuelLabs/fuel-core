@@ -760,7 +760,7 @@ type Mutation {
 	"""
 	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
 	"""
-	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]! @deprecated(reason: "This doesn't acually change state. Use query of the same name.")
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]! @deprecated(reason: "This doesn't need to be a mutation. Use query of the same name instead.")
 	"""
 	Submits transaction to the `TxPool`.
 	
