@@ -9,6 +9,7 @@ use fuel_core::{
         Config,
         FuelService,
     },
+    state::historical_rocksdb::StateRewindPolicy,
 };
 use fuel_core_client::client::{
     pagination::{
@@ -24,14 +25,19 @@ use fuel_core_client::client::{
     },
     FuelClient,
 };
+use fuel_core_poa::Trigger;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_tx::{
+        Bytes32,
+        ContractIdExt,
         Input,
         Output,
         TransactionBuilder,
     },
 };
+use rand::SeedableRng;
+use test_helpers::mint_contract;
 
 const RETRYABLE: &[u8] = &[1];
 const NON_RETRYABLE: &[u8] = &[];
@@ -586,4 +592,50 @@ mod pagination {
             .unwrap();
         assert!(paginated_result.results.is_empty());
     }
+}
+
+#[tokio::test]
+async fn contract_balances_in_the_past() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+    let mut config = Config::local_node();
+    config.block_production = Trigger::Instant;
+    config.combined_db_config.state_rewind_policy = StateRewindPolicy::RewindFullRange;
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // Given
+    let sub_asset_id = Bytes32::new([1u8; 32]);
+    let amount = 1234;
+
+    let (deployed_height, contract_id) = mint_contract::deploy(&client, &mut rng).await;
+    let minted_height =
+        mint_contract::mint(&client, &mut rng, contract_id, sub_asset_id, amount).await;
+
+    // When
+    let balances_at_deployed = client
+        .contract_balance_values(
+            &contract_id,
+            Some(deployed_height),
+            vec![contract_id.asset_id(&sub_asset_id)],
+        )
+        .await
+        .unwrap();
+    let balances_at_minted = client
+        .contract_balance_values(
+            &contract_id,
+            Some(minted_height),
+            vec![contract_id.asset_id(&sub_asset_id)],
+        )
+        .await
+        .unwrap();
+
+    // Then
+    assert!(balances_at_deployed.is_empty());
+    assert_eq!(balances_at_minted.len(), 1);
+    assert_eq!(balances_at_minted[0].amount.0, amount);
+    assert_eq!(
+        balances_at_minted[0].asset_id.0 .0,
+        contract_id.asset_id(&sub_asset_id)
+    );
 }

@@ -1,3 +1,4 @@
+use async_graphql::Context;
 use fuel_core_storage::{
     Error as StorageError,
     IsNotFound,
@@ -166,5 +167,17 @@ impl<T> IntoApiResult<T> for Result<T, StorageError> {
         } else {
             Ok(Some(self?.into()))
         }
+    }
+}
+
+pub fn require_historical_execution(ctx: &Context<'_>) -> async_graphql::Result<()> {
+    let config = ctx.data_unchecked::<Config>();
+
+    if config.historical_execution {
+        Ok(())
+    } else {
+        Err(async_graphql::Error::new(
+            "`--historical-execution` is required for this operation",
+        ))
     }
 }

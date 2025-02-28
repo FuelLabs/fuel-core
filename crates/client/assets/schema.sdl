@@ -1034,6 +1034,18 @@ type Query {
 	consensusParameters(version: Int!): ConsensusParameters!
 	stateTransitionBytecodeByVersion(version: Int!): StateTransitionBytecode
 	stateTransitionBytecodeByRoot(root: HexString!): StateTransitionBytecode!
+	"""
+	Get storage slot values for a contract at a specific block height.
+	Use the latest block height if not provided.
+	Requires historical execution config to be enabled.
+	"""
+	contractSlotValues(contractId: ContractId!, blockHeight: U32, storageSlots: [Bytes32!]!): [StorageSlot!]!
+	"""
+	Get balance values for a contract at a specific block height.
+	Use the latest block height if not provided.
+	Requires historical execution config to be enabled.
+	"""
+	contractBalanceValues(contractId: ContractId!, blockHeight: U32, assets: [AssetId!]!): [ContractBalance!]!
 }
 
 type Receipt {
@@ -1166,6 +1178,11 @@ type StorageReadReplayEvent {
 	value: HexString
 }
 
+type StorageSlot {
+	key: Bytes32!
+	value: HexString!
+}
+
 
 scalar SubId
 
@@ -1204,6 +1221,8 @@ type Subscription {
 	SubmittedStatus` as an intermediate state.
 	"""
 	submitAndAwaitStatus(tx: HexString!): TransactionStatus!
+	contractStorageSlots(contractId: ContractId!): StorageSlot!
+	contractStorageBalances(contractId: ContractId!): ContractBalance!
 }
 
 type SuccessStatus {

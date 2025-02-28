@@ -229,6 +229,16 @@ pub trait DatabaseContracts:
         start_asset: Option<AssetId>,
         direction: IterDirection,
     ) -> BoxedIter<StorageResult<ContractBalance>>;
+
+    fn contract_storage_slots(
+        &self,
+        contract: ContractId,
+    ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>>;
+
+    fn contract_storage_balances(
+        &self,
+        contract: ContractId,
+    ) -> BoxedIter<StorageResult<ContractBalance>>;
 }
 
 /// Trait that specifies all the getters required for chain metadata.
@@ -531,6 +541,7 @@ pub mod worker {
     }
 }
 
+#[cfg_attr(feature = "test-helpers", mockall::automock)]
 pub trait ChainStateProvider: Send + Sync {
     /// Returns current consensus parameters.
     fn current_consensus_params(&self) -> Arc<ConsensusParameters>;
@@ -547,3 +558,19 @@ pub trait ChainStateProvider: Send + Sync {
     /// Returns the current state transition bytecode version.
     fn current_stf_version(&self) -> StateTransitionBytecodeVersion;
 }
+
+pub trait OnChainDatabaseAt: Send + Sync {
+    fn contract_slot_values(
+        &self,
+        contract_id: ContractId,
+        storage_slots: Vec<Bytes32>,
+    ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>>;
+
+    fn contract_balance_values(
+        &self,
+        contract_id: ContractId,
+        assets: Vec<AssetId>,
+    ) -> BoxedIter<StorageResult<ContractBalance>>;
+}
+
+pub trait OffChainDatabaseAt: Send + Sync {}

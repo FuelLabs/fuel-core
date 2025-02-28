@@ -6,11 +6,13 @@ use crate::{
         },
         Database,
         OffChainIterableKeyValueView,
+        OffChainKeyValueView,
     },
     fuel_core_graphql_api::{
         ports::{
             worker,
             OffChainDatabase,
+            OffChainDatabaseAt,
         },
         storage::{
             contracts::ContractsInfo,
@@ -428,3 +430,5 @@ impl worker::OffChainDatabase for Database<OffChain> {
         self.indexation_available(IndexationKind::AssetMetadata)
     }
 }
+
+impl OffChainDatabaseAt for OffChainKeyValueView {}
