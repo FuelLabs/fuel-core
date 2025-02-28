@@ -233,7 +233,7 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
     );
 
-    let tx_status_manager = fuel_core_tx_status_manager::new_service();
+    let tx_status_manager = fuel_core_tx_status_manager::new_service(p2p_adapter.clone());
     let tx_status_manager_adapter =
         TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
 

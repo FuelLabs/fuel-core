@@ -5,8 +5,12 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
+use fuel_core_types::services::p2p::TransactionStatusGossipData;
 
-use crate::SharedState;
+use crate::{
+    ports::P2PSubscriptions,
+    SharedState,
+};
 
 pub struct Task {
     shared_state: SharedState,
@@ -28,16 +32,23 @@ impl RunnableService for Task {
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        // TODO[RC]: Needed?
-        todo!()
+        Ok(self)
     }
 }
 
 impl RunnableTask for Task {
     async fn run(
         &mut self,
-        _watcher: &mut fuel_core_services::StateWatcher,
+        watcher: &mut fuel_core_services::StateWatcher,
     ) -> TaskNextAction {
+        tokio::select! {
+            biased;
+
+            _ = watcher.while_started() => {
+                return TaskNextAction::Stop
+            }
+        }
+
         TaskNextAction::Continue
     }
 
@@ -46,7 +57,12 @@ impl RunnableTask for Task {
     }
 }
 
-pub fn new_service() -> ServiceRunner<Task> {
+pub fn new_service<P2P>(p2p: P2P) -> ServiceRunner<Task>
+where
+    P2P: P2PSubscriptions<GossipedStatuses = TransactionStatusGossipData>,
+{
+    let tx_status_from_p2p_stream = p2p.gossiped_tx_statuses();
+
     ServiceRunner::new(Task {
         shared_state: SharedState::new(),
     })

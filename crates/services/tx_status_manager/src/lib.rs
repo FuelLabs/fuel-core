@@ -1,5 +1,6 @@
 //! This crate ...
 mod manager;
+pub mod ports;
 mod service;
 mod shared_state;
 

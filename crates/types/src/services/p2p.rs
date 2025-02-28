@@ -21,7 +21,10 @@ use std::{
     time::SystemTime,
 };
 
-use super::txpool::ArcPoolTx;
+use super::txpool::{
+    ArcPoolTx,
+    TransactionStatus,
+};
 
 #[cfg(feature = "serde")]
 use super::txpool::PoolTransaction;
@@ -68,6 +71,9 @@ pub struct GossipData<T> {
     /// The message id that corresponds to a message payload (typically a unique hash)
     pub message_id: Vec<u8>,
 }
+
+/// Transaction statuses gossiped by peers
+pub type TransactionStatusGossipData = GossipData<TransactionStatus>;
 
 /// Transactions gossiped by peers for inclusion into a block
 pub type TransactionGossipData = GossipData<Transaction>;
