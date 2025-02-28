@@ -187,6 +187,12 @@ impl From<HexString> for Vec<u8> {
     }
 }
 
+impl From<Vec<u8>> for HexString {
+    fn from(s: Vec<u8>) -> Self {
+        HexString(Bytes(s))
+    }
+}
+
 impl Deref for HexString {
     type Target = Bytes;
 

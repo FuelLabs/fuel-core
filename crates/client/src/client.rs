@@ -763,21 +763,21 @@ impl FuelClient {
     /// - The number of required balances exceeds the maximum number of inputs allowed.
     /// - The fee address index is out of bounds.
     /// - The same asset has multiple change policies(either the receiver of
-    /// the change is different, or one of the policies states about the destruction
-    /// of the token while the other does not). The `Change` output from the transaction
-    /// also count as a `ChangePolicy`.
+    ///     the change is different, or one of the policies states about the destruction
+    ///     of the token while the other does not). The `Change` output from the transaction
+    ///     also count as a `ChangePolicy`.
     /// - The number of excluded coin IDs exceeds the maximum number of inputs allowed.
     /// - Required assets have multiple entries.
     /// - If accounts don't have sufficient amounts to cover the transaction requirements in assets.
     /// - If a constructed transaction breaks the rules defined by consensus parameters.
+    #[allow(clippy::too_many_arguments)]
     pub async fn assemble_tx(
         &self,
         tx: &Transaction,
         block_horizon: u32,
         required_balances: Vec<RequiredBalance>,
         fee_address_index: u16,
-        exclude_utxos: Vec<UtxoId>,
-        exclude_messages: Vec<Nonce>,
+        exclude: Option<(Vec<UtxoId>, Vec<Nonce>)>,
         estimate_predicates: bool,
         reserve_gas: Option<u64>,
     ) -> io::Result<AssembleTransactionResult> {
@@ -791,17 +791,7 @@ impl FuelClient {
 
         let fee_address_index = fee_address_index.into();
 
-        let exclude_input = (
-            exclude_utxos
-                .into_iter()
-                .map(schema::UtxoId::from)
-                .collect::<Vec<_>>(),
-            exclude_messages
-                .into_iter()
-                .map(schema::Nonce::from)
-                .collect::<Vec<_>>(),
-        )
-            .into();
+        let exclude_input = exclude.map(Into::into);
 
         let reserve_gas = reserve_gas.map(U64::from);
 
@@ -1326,16 +1316,7 @@ impl FuelClient {
                 })
             })
             .try_collect()?;
-        let excluded_ids: Option<ExcludeInput> = excluded_ids
-            .map(
-                |(utxos, nonces)| -> (Vec<schema::UtxoId>, Vec<schema::Nonce>) {
-                    (
-                        utxos.into_iter().map(Into::into).collect(),
-                        nonces.into_iter().map(Into::into).collect(),
-                    )
-                },
-            )
-            .map(Into::into);
+        let excluded_ids: Option<ExcludeInput> = excluded_ids.map(Into::into);
         let args =
             schema::coins::CoinsToSpendArgs::from((owner, spend_query, excluded_ids));
         let query = schema::coins::CoinsToSpendQuery::build(args);

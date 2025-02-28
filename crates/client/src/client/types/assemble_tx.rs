@@ -11,7 +11,6 @@ use fuel_core_types::{
 use crate::client::schema::{
     self,
     ConversionError,
-    HexString,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -25,14 +24,23 @@ pub struct RequiredBalance {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Predicate {
     pub address: Address,
-    pub predicate: HexString,
-    pub predicate_data: HexString,
+    pub predicate: Vec<u8>,
+    pub predicate_data: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Account {
     Address(Address),
     Predicate(Predicate),
+}
+
+impl Account {
+    pub fn owner(&self) -> Address {
+        match self {
+            Account::Address(address) => *address,
+            Account::Predicate(predicate) => predicate.address,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

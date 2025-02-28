@@ -63,7 +63,6 @@ use hyper::{
 };
 use rand::{
     prelude::StdRng,
-    Rng,
     SeedableRng,
 };
 use serde_json::json;
@@ -75,6 +74,10 @@ use std::{
     },
     sync::Arc,
     time::Duration,
+};
+use test_helpers::assemble_tx::{
+    FuelCoreClientExt,
+    SigningAccount,
 };
 use tokio::sync::oneshot::Sender;
 
@@ -152,6 +155,8 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let mut rng = StdRng::seed_from_u64(1234);
     let mut config = Config::local_node();
     config.relayer = Some(relayer::Config::default());
+    config.utxo_validation = true;
+    config.gas_price_config.min_exec_gas_price = 1000;
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
     let eth_node = MockMiddleware::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
@@ -184,8 +189,6 @@ async fn messages_are_spendable_after_relayer_is_synced() {
         .as_str()
         .try_into()
         .unwrap()]);
-
-    config.utxo_validation = true;
 
     // setup fuel node with mocked eth url
     let db = Database::in_memory();
@@ -226,14 +229,8 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     assert_eq!(query.results.len(), 1);
 
     // attempt to spend the message downloaded from the relayer
-    let tx = TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
-        .script_gas_limit(10_000)
-        .add_unsigned_message_input(secret_key, sender, nonce, amount, vec![])
-        .add_output(Output::change(rng.gen(), 0, AssetId::BASE))
-        .finalize();
-
     let status = client
-        .submit_and_await_commit(&tx.clone().into())
+        .run_script(vec![op::ret(0)], vec![], SigningAccount::Wallet(secret_key))
         .await
         .unwrap();
 

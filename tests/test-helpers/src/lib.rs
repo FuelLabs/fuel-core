@@ -26,6 +26,7 @@ use rand::{
     RngCore,
 };
 
+pub mod assemble_tx;
 pub mod builder;
 pub mod counter_contract;
 pub mod fuel_core_driver;

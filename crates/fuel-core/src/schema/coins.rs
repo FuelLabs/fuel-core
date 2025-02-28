@@ -378,10 +378,7 @@ async fn coins_to_spend_without_cache(
             AssetSpendTarget::new(
                 e.asset_id.0,
                 e.amount.0,
-                e.max
-                    .and_then(|max| u16::try_from(max.0).ok())
-                    .unwrap_or(max_input)
-                    .min(max_input),
+                e.max.map(|max| max.0).unwrap_or(max_input).min(max_input),
             )
         })
         .collect_vec();
@@ -426,7 +423,7 @@ async fn coins_to_spend_with_cache(
         let total_amount = asset.amount.0;
         let max = asset
             .max
-            .and_then(|max| u16::try_from(max.0).ok())
+            .map(|max| max.0)
             .unwrap_or(max_input)
             .min(max_input);
 

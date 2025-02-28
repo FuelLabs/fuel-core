@@ -1,5 +1,4 @@
 use crate::{
-    coins_query::CoinsQueryError,
     fuel_core_graphql_api::{
         api_service::BlockProducer,
         database::ReadView,
@@ -20,7 +19,10 @@ use crate::{
     service::adapters::SharedMemoryPool,
 };
 use fuel_core_types::{
-    entities::coins::CoinId,
+    entities::coins::{
+        coin::Coin,
+        CoinId,
+    },
     fuel_asm::{
         PanicReason,
         Word,
@@ -31,6 +33,7 @@ use fuel_core_types::{
             Inputs,
             MaxFeeLimit,
             Outputs,
+            Policies,
             Script as ScriptField,
             ScriptGasLimit,
             WitnessLimit,
@@ -42,6 +45,7 @@ use fuel_core_types::{
                 MessageDataSigned,
             },
         },
+        policies::PolicyType,
         Address,
         AssetId,
         Chargeable,
@@ -50,8 +54,13 @@ use fuel_core_types::{
         Output,
         Receipt,
         Script,
+        Transaction,
+        UtxoId,
     },
-    fuel_types::canonical::Serialize,
+    fuel_types::{
+        canonical::Serialize,
+        Bytes32,
+    },
     fuel_vm::{
         checked_transaction::CheckPredicateParams,
         interpreter::ExecutableTransaction,
@@ -93,6 +102,10 @@ impl<'a> AssembleArguments<'a> {
         amount: u64,
         remaining_input_slots: u16,
     ) -> anyhow::Result<Vec<CoinType>> {
+        if amount == 0 {
+            return Ok(Vec::new());
+        }
+
         let query_per_asset = SpendQueryElementInput {
             asset_id: asset_id.into(),
             amount: (amount as u128).into(),
@@ -119,7 +132,7 @@ impl<'a> AssembleArguments<'a> {
     async fn dry_run(
         &self,
         script: Script,
-    ) -> anyhow::Result<TransactionExecutionStatus> {
+    ) -> anyhow::Result<(Transaction, TransactionExecutionStatus)> {
         self.block_producer
             .dry_run_txs(
                 vec![script.into()],
@@ -144,6 +157,9 @@ pub struct AssembleTx<'a, Tx> {
     added_fake_coin: bool,
     // The amount of the base asset that is reserved for the application logic
     base_asset_reserved: u64,
+    index_of_first_fake_variable_output: Option<u16>,
+    original_max_fee: u64,
+    original_witness_limit: u64,
     fee_payer_account: Account,
 }
 
@@ -153,15 +169,18 @@ where
 {
     pub fn new(tx: Tx, mut arguments: AssembleArguments<'a>) -> anyhow::Result<Self> {
         if arguments.fee_index as usize >= arguments.required_balances.len() {
-            return Err(anyhow::anyhow!("The fee address index is out of bounds").into());
+            return Err(anyhow::anyhow!("The fee address index is out of bounds"));
         }
 
         let mut duplicate_checker =
             HashSet::with_capacity(arguments.required_balances.len());
         for required_balance in &arguments.required_balances {
             let asset_id = required_balance.asset_id;
-            if !duplicate_checker.insert(asset_id) {
-                return Err(CoinsQueryError::DuplicateAssets(asset_id).into());
+            let owner = required_balance.account.owner();
+            if !duplicate_checker.insert((asset_id, owner)) {
+                return Err(anyhow::anyhow!(
+                    "The same asset and account pair is used multiple times in required balances"
+                ));
             }
         }
 
@@ -210,37 +229,37 @@ where
 
         for output in tx.outputs() {
             if let Output::Change { to, asset_id, .. } = output {
-                change_output_policies
-                    .insert(*asset_id, ChangePolicy::Change((*to).into()));
+                change_output_policies.insert(*asset_id, ChangePolicy::Change(*to));
                 set_change_outputs.insert(*asset_id);
             }
         }
 
-        let mut base_asset_reserved = None;
+        let mut base_asset_reserved: Option<u64> = None;
         let base_asset_id = *arguments.consensus_parameters.base_asset_id();
-
-        for required_balance in &arguments.required_balances {
-            let asset_id = required_balance.asset_id;
-
-            if asset_id == base_asset_id {
-                base_asset_reserved = Some(required_balance.amount);
-            }
-        }
 
         let fee_payer_account = arguments.required_balances[arguments.fee_index as usize]
             .account
             .clone();
 
+        for required_balance in &mut arguments.required_balances {
+            let asset_id = required_balance.asset_id;
+
+            if asset_id == base_asset_id
+                && fee_payer_account.owner() == required_balance.account.owner()
+            {
+                base_asset_reserved = Some(required_balance.amount);
+            }
+        }
+
         // If the user didn't provide the base asset, we add it to the required balances
-        // with minimal amount `1` and `ChangePolicy::Change` policy.
-        if !base_asset_reserved.is_none() {
+        // with minimal amount `0` and `ChangePolicy::Change` policy.
+        if base_asset_reserved.is_none() {
             let recipient = fee_payer_account.owner();
 
             arguments.required_balances.push(RequiredBalance {
                 account: fee_payer_account.clone(),
                 asset_id: base_asset_id,
-                // `coins` query requires non-zero amount
-                amount: 1,
+                amount: 0,
                 change_policy: ChangePolicy::Change(recipient),
             });
             base_asset_reserved = Some(0);
@@ -257,8 +276,7 @@ where
                         return Err(anyhow::anyhow!(
                             "The asset {} has multiple change policies",
                             asset_id
-                        )
-                        .into());
+                        ));
                     }
                 }
                 Entry::Vacant(vacant) => {
@@ -266,6 +284,9 @@ where
                 }
             }
         }
+
+        let original_max_fee = tx.max_fee_limit();
+        let original_witness_limit = tx.witness_limit();
 
         let _self = Self {
             tx,
@@ -275,6 +296,9 @@ where
             set_change_outputs,
             added_fake_coin: false,
             base_asset_reserved: base_asset_reserved.expect("Set above; qed"),
+            index_of_first_fake_variable_output: None,
+            original_max_fee,
+            original_witness_limit,
             fee_payer_account,
         };
 
@@ -287,6 +311,8 @@ where
         self.add_fake_coin()?;
         self.fill_with_variable_outputs();
 
+        // At this point, we have the maximum number of witnesses because all inputs were
+        // added(the fake coin adds a witness for the fee payer if it was not there before).
         self.adjust_witness_limit();
 
         if self.arguments.estimate_predicates {
@@ -298,8 +324,7 @@ where
         self.remove_unused_variable_outputs();
         self.remove_fake_coin();
 
-        self.cover_fee().await?;
-        self.set_max_fee();
+        self = self.cover_fee().await?;
 
         Ok(self.tx)
     }
@@ -312,8 +337,7 @@ where
             return Err(anyhow::anyhow!(
                 "Filling required balances occupies a number \
                     of inputs more than can fit into the transaction"
-            )
-            .into());
+            ));
         }
 
         Ok(max_input.saturating_sub(used_inputs))
@@ -419,12 +443,15 @@ where
 
     fn add_change_outputs(&mut self) {
         let base_asset_id = *self.arguments.consensus_parameters.base_asset_id();
-        let asset_ids = self
+        let mut asset_ids = self
             .tx
             .inputs()
             .iter()
             .filter_map(|input| input.asset_id(&base_asset_id).cloned())
             .collect::<HashSet<AssetId>>();
+
+        // Add the base asset since it will be used to cover the fee at the end.
+        asset_ids.insert(base_asset_id);
 
         for asset_id in asset_ids {
             if self.set_change_outputs.insert(asset_id) {
@@ -451,32 +478,28 @@ where
     }
 
     fn add_fake_coin(&mut self) -> anyhow::Result<()> {
-        if !self.is_runnable_script() {
-            return Ok(())
-        }
-
         let remaining_input_slots = self.remaining_input_slots()?;
 
         if remaining_input_slots == 0 {
             return Ok(())
         }
 
-        let owner = self.arguments.required_balances[self.arguments.fee_index as usize]
-            .account
-            .owner();
+        let fee_payer_account = self.fee_payer_account.clone();
+        let owner = fee_payer_account.owner();
         let asset_id = *self.arguments.consensus_parameters.base_asset_id();
-        let witness_index = self.reserve_witness_index(&owner);
 
-        let input = Input::coin_signed(
-            Default::default(),
-            owner,
-            FAKE_AMOUNT,
-            asset_id,
-            Default::default(),
-            witness_index,
+        let fake_coin = CoinType::Coin(
+            Coin {
+                utxo_id: UtxoId::new(Bytes32::new([255; 32]), u16::MAX),
+                owner,
+                amount: FAKE_AMOUNT,
+                asset_id,
+                tx_pointer: Default::default(),
+            }
+            .into(),
         );
 
-        self.tx.inputs_mut().push(input);
+        self.add_input_and_witness(&fee_payer_account, fake_coin);
 
         self.added_fake_coin = true;
 
@@ -484,10 +507,6 @@ where
     }
 
     fn remove_fake_coin(&mut self) {
-        if !self.is_runnable_script() {
-            return
-        }
-
         if !self.added_fake_coin {
             return
         }
@@ -519,14 +538,12 @@ where
             .max_outputs();
 
         let outputs = u16::try_from(self.tx.outputs().len()).unwrap_or(u16::MAX);
+        self.tx.outputs_mut().resize(
+            max_outputs as usize,
+            Output::variable(Default::default(), Default::default(), Default::default()),
+        );
 
-        for _ in outputs..max_outputs {
-            self.tx.outputs_mut().push(Output::variable(
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            ));
-        }
+        self.index_of_first_fake_variable_output = Some(outputs);
     }
 
     fn remove_unused_variable_outputs(&mut self) {
@@ -545,11 +562,15 @@ where
                 break;
             }
         }
+        self.index_of_first_fake_variable_output = None;
     }
 
     fn adjust_witness_limit(&mut self) {
-        let witness_size = self.tx.witnesses().size_dynamic();
-        self.tx.set_witness_limit(witness_size as u64);
+        // If the user sets the `WitnessLimit` policy, we are only allowed to increase
+        // it in the case if the transaction got more witnesses when we inserted new inputs.
+        let mut witness_size = self.tx.witnesses().size_dynamic() as u64;
+        witness_size = witness_size.max(self.original_witness_limit);
+        self.tx.set_witness_limit(witness_size);
     }
 
     async fn estimate_predicates(mut self) -> anyhow::Result<Self> {
@@ -577,17 +598,42 @@ where
     }
 
     async fn estimate_script_if_possible(&mut self) -> anyhow::Result<()> {
-        if let Some(script) = self.tx.as_script_mut() {
-            *script.script_gas_limit_mut() = 0;
+        if !self.is_runnable_script() {
+            return Ok(())
+        }
 
-            if script.script().is_empty() {
-                return Ok(());
-            }
+        let Some(script_ref) = self.tx.as_script_mut() else {
+            unreachable!("The transaction is a script, checked above; qed");
+        };
 
-            let gas_costs = self.arguments.consensus_parameters.gas_costs();
-            let fee_params = self.arguments.consensus_parameters.fee_params();
+        // Trick to avoid cloning `Script`
+        let dummy_script = Transaction::script(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        );
+        let mut script = core::mem::replace(script_ref, dummy_script);
 
-            let gas_used_by_tx = script.max_gas(gas_costs, fee_params);
+        *script.script_gas_limit_mut() = 0;
+
+        // If `max_fee` policy is not set, set it because it affects the maximum gas
+        // used by transaction.
+        if script.policies().get(PolicyType::MaxFee).is_none() {
+            script.set_max_fee_limit(0);
+        }
+
+        let gas_costs = self.arguments.consensus_parameters.gas_costs();
+        let fee_params = self.arguments.consensus_parameters.fee_params();
+
+        let mut status;
+        let mut gas_used_by_tx;
+
+        loop {
+            gas_used_by_tx = script.min_gas(gas_costs, fee_params);
             let max_tx_gas = self
                 .arguments
                 .consensus_parameters
@@ -598,59 +644,105 @@ where
 
             *script.script_gas_limit_mut() = max_gas_limit;
 
-            let mut status;
+            // Update `max_fee` to be according to the new gas limit.
+            set_max_fee(
+                &mut script,
+                &self.arguments.consensus_parameters,
+                self.arguments.reserve_gas,
+                self.arguments.gas_price,
+                self.original_max_fee,
+            );
 
-            loop {
-                status = self.arguments.dry_run(script.clone()).await?;
+            let (updated_tx, new_status) = self.arguments.dry_run(script).await?;
+            let Transaction::Script(updated_script) = updated_tx else {
+                return Err(anyhow::anyhow!(
+                    "During script gas limit estimation, \
+                        dry-run returned incorrect transaction"
+                ));
+            };
 
-                let mut contract_not_in_inputs = None;
+            script = updated_script;
+            status = new_status;
 
-                match &status.result {
-                    TransactionExecutionResult::Success { .. } => break,
-                    TransactionExecutionResult::Failed { receipts, .. } => {
-                        for receipt in receipts.iter().rev() {
-                            if let Receipt::Panic { reason, id, .. } = receipt {
-                                if reason.reason() == &PanicReason::ContractNotInInputs {
-                                    contract_not_in_inputs = Some(*id);
-                                    break;
-                                }
+            let mut contract_not_in_inputs = None;
+
+            match &status.result {
+                TransactionExecutionResult::Success { .. } => break,
+                TransactionExecutionResult::Failed { receipts, .. } => {
+                    for receipt in receipts.iter().rev() {
+                        if let Receipt::Panic {
+                            reason,
+                            contract_id,
+                            ..
+                        } = receipt
+                        {
+                            if reason.reason() == &PanicReason::ContractNotInInputs {
+                                contract_not_in_inputs = *contract_id;
+                                break;
                             }
                         }
                     }
                 }
+            }
 
-                // TODO: Use https://github.com/FuelLabs/fuel-vm/pull/915
-                if let Some(contract_id) = contract_not_in_inputs {
-                    let inptus = script.inputs_mut();
-                    let contract_idx = u16::try_from(inptus.len()).unwrap_or(u16::MAX);
+            // TODO: Use https://github.com/FuelLabs/fuel-vm/pull/915
+            if let Some(contract_id) = contract_not_in_inputs {
+                let inptus = script.inputs_mut();
 
-                    inptus.push(Input::contract(
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        Default::default(),
-                        contract_id,
-                    ));
+                // Fake coin always should be the last
+                let fake_coin = if self.added_fake_coin {
+                    inptus.pop()
+                } else {
+                    None
+                };
 
-                    script.outputs_mut().push(Output::contract(
+                let contract_idx = u16::try_from(inptus.len()).unwrap_or(u16::MAX);
+
+                inptus.push(Input::contract(
+                    Default::default(),
+                    Default::default(),
+                    Default::default(),
+                    Default::default(),
+                    contract_id,
+                ));
+
+                // Fake coin always should be the last
+                if let Some(fake_coin) = fake_coin {
+                    inptus.push(fake_coin);
+                }
+
+                let slot = self
+                    .index_of_first_fake_variable_output
+                    .and_then(|index| script.outputs_mut().get_mut(index as usize));
+
+                if let Some(slot) = slot {
+                    *slot = Output::contract(
                         contract_idx,
                         Default::default(),
                         Default::default(),
-                    ));
+                    );
+                    self.index_of_first_fake_variable_output = self
+                        .index_of_first_fake_variable_output
+                        .and_then(|index| index.checked_add(1));
                 } else {
-                    break;
+                    return Err(anyhow::anyhow!(
+                        "Run out of slots for the contract outputs"
+                    ));
                 }
+            } else {
+                break;
             }
-
-            let new_script_limit =
-                status.result.total_gas().saturating_sub(gas_used_by_tx);
-            *script.script_gas_limit_mut() = new_script_limit;
         }
+
+        let new_script_limit = status.result.total_gas().saturating_sub(gas_used_by_tx);
+        *script.script_gas_limit_mut() = new_script_limit;
+
+        *script_ref = script;
 
         Ok(())
     }
 
-    async fn cover_fee(&mut self) -> anyhow::Result<()> {
+    async fn cover_fee(mut self) -> anyhow::Result<Self> {
         let base_asset_id = *self.arguments.consensus_parameters.base_asset_id();
         let gas_costs = self.arguments.consensus_parameters.gas_costs().clone();
         let fee_params = *self.arguments.consensus_parameters.fee_params();
@@ -660,6 +752,7 @@ where
             .tx_params()
             .max_gas_per_tx();
         let gas_price_factor = fee_params.gas_price_factor();
+        let fee_payer_account = self.fee_payer_account.clone();
 
         let mut total_base_asset = 0u64;
 
@@ -670,16 +763,17 @@ where
             let Some(asset_id) = input.asset_id(&base_asset_id) else {
                 continue;
             };
+            let Some(owner) = input.input_owner() else {
+                continue;
+            };
 
-            if asset_id == &base_asset_id {
+            if asset_id == &base_asset_id && &fee_payer_account.owner() == owner {
                 total_base_asset =
                     total_base_asset.checked_add(amount).ok_or(anyhow::anyhow!(
                         "The total base asset amount used by the transaction is too big"
                     ))?;
             }
         }
-
-        let fee_payer_account = self.fee_payer_account.clone();
 
         loop {
             let remaining_input_slots = self.remaining_input_slots()?;
@@ -710,6 +804,12 @@ where
                 )
                 .await?;
 
+            if coins.is_empty() {
+                return Err(anyhow::anyhow!(
+                    "Unable to find any coins to pay for the fee"
+                ));
+            }
+
             for coin in coins {
                 total_base_asset = total_base_asset.checked_add(coin.amount()).ok_or(
                     anyhow::anyhow!(
@@ -719,30 +819,52 @@ where
                 )?;
                 self.add_input_and_witness(&fee_payer_account, coin);
             }
+
+            // In the case when predicates iterates over the inputs,
+            // it increases its used gas. So we need to re-estimate predicates.
+
+            if self.arguments.estimate_predicates {
+                self = self.estimate_predicates().await?;
+            }
         }
 
-        Ok(())
+        set_max_fee(
+            &mut self.tx,
+            &self.arguments.consensus_parameters,
+            self.arguments.reserve_gas,
+            self.arguments.gas_price,
+            self.original_max_fee,
+        );
+
+        Ok(self)
     }
+}
 
-    fn set_max_fee(&mut self) {
-        let gas_costs = self.arguments.consensus_parameters.gas_costs();
-        let fee_params = self.arguments.consensus_parameters.fee_params();
-        let max_gas_per_tx = self
-            .arguments
-            .consensus_parameters
-            .tx_params()
-            .max_gas_per_tx();
-        let gas_price_factor = fee_params.gas_price_factor();
+fn set_max_fee<Tx>(
+    tx: &mut Tx,
+    consensus_parameters: &ConsensusParameters,
+    reserve_gas: u64,
+    gas_price: u64,
+    original_max_fee: u64,
+) where
+    Tx: ExecutableTransaction,
+{
+    let gas_costs = consensus_parameters.gas_costs();
+    let fee_params = consensus_parameters.fee_params();
+    let max_gas_per_tx = consensus_parameters.tx_params().max_gas_per_tx();
+    let gas_price_factor = fee_params.gas_price_factor();
 
-        let max_gas = self.tx.max_gas(gas_costs, fee_params);
-        let max_gas_with_reserve = max_gas.saturating_add(self.arguments.reserve_gas);
+    let max_gas = tx.max_gas(gas_costs, fee_params);
+    let max_gas_with_reserve = max_gas.saturating_add(reserve_gas);
 
-        let final_gas = max_gas_with_reserve.min(max_gas_per_tx);
-        let final_fee = gas_to_fee(final_gas, self.arguments.gas_price, gas_price_factor);
-        let final_fee = u64::try_from(final_fee).unwrap_or(u64::MAX);
+    let final_gas = max_gas_with_reserve.min(max_gas_per_tx);
+    let final_fee = gas_to_fee(final_gas, gas_price, gas_price_factor);
+    let mut final_fee = u64::try_from(final_fee).unwrap_or(u64::MAX);
 
-        self.tx.set_max_fee_limit(final_fee);
-    }
+    // If the user sets the `MaxFee` policy, we are only allowed to increase
+    // it in the case if the transaction requires more fee to cover it.
+    final_fee = final_fee.max(original_max_fee);
+    tx.set_max_fee_limit(final_fee);
 }
 
 fn gas_to_fee(gas: Word, gas_price: Word, factor: Word) -> u128 {

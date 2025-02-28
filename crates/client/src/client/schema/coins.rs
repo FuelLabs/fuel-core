@@ -14,6 +14,10 @@ use crate::client::{
     PageDirection,
     PaginationRequest,
 };
+use fuel_core_types::{
+    fuel_tx,
+    fuel_types,
+};
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct CoinByIdArgs {
@@ -137,6 +141,17 @@ impl From<(Vec<UtxoId>, Vec<Nonce>)> for ExcludeInput {
     fn from(value: (Vec<UtxoId>, Vec<Nonce>)) -> Self {
         let (utxos, messages) = value;
         Self { utxos, messages }
+    }
+}
+
+impl From<(Vec<fuel_tx::UtxoId>, Vec<fuel_types::Nonce>)> for ExcludeInput {
+    fn from(value: (Vec<fuel_tx::UtxoId>, Vec<fuel_types::Nonce>)) -> Self {
+        let vectors: (Vec<UtxoId>, Vec<Nonce>) = (
+            value.0.into_iter().map(Into::into).collect(),
+            value.1.into_iter().map(Into::into).collect(),
+        );
+
+        vectors.into()
     }
 }
 

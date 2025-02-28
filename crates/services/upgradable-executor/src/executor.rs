@@ -367,7 +367,7 @@ where
         component: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
         at_height: Option<BlockHeight>,
-    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+    ) -> ExecutorResult<Vec<(Transaction, TransactionExecutionStatus)>> {
         if at_height.is_some() && !self.config.allow_historical_execution {
             return Err(ExecutorError::Other(
                 "The historical execution is not allowed".to_string(),
@@ -393,6 +393,7 @@ where
         };
 
         let ExecutionResult {
+            block,
             skipped_transactions,
             tx_status,
             ..
@@ -412,7 +413,10 @@ where
             return Err(err)
         }
 
-        Ok(tx_status)
+        let (_, txs) = block.into_inner();
+        let result = txs.into_iter().zip(tx_status).collect();
+
+        Ok(result)
     }
 
     pub fn validate(

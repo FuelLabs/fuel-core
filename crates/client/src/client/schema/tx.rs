@@ -442,14 +442,18 @@ pub struct Predicate {
 #[derive(cynic::InputObject, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Account {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub address: Option<Address>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub predicate: Option<Predicate>,
 }
 
 #[derive(cynic::InputObject, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ChangePolicy {
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub change: Option<Address>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
     pub destroy: Option<bool>,
 }
 
@@ -468,7 +472,7 @@ pub struct AssembleTxArg {
     pub block_horizon: U32,
     pub required_balances: Vec<RequiredBalance>,
     pub fee_address_index: U16,
-    pub exclude_input: ExcludeInput,
+    pub exclude_input: Option<ExcludeInput>,
     pub estimate_predicates: bool,
     pub reserve_gas: Option<U64>,
 }

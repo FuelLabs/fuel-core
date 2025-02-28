@@ -24,6 +24,7 @@ itertools = { workspace = true }
 libtest-mimic = "0.6.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
+test-helpers = { path = "../../tests/test-helpers" }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true }
 toml = { version = "0.5" }

@@ -282,6 +282,7 @@ impl TxQuery {
     /// - If accounts don't have sufficient amounts to cover the transaction requirements in assets.
     /// - If a constructed transaction breaks the rules defined by consensus parameters.
     #[graphql(complexity = "query_costs().assemble_tx")]
+    #[allow(clippy::too_many_arguments)]
     async fn assemble_tx(
         &self,
         ctx: &Context<'_>,
@@ -395,14 +396,8 @@ impl TxQuery {
             }
         };
 
-        let status = block_producer
-            .dry_run_txs(
-                vec![assembled_tx.clone()],
-                None,
-                None,
-                Some(false),
-                Some(gas_price),
-            )
+        let (assembled_tx, status) = block_producer
+            .dry_run_txs(vec![assembled_tx], None, None, Some(false), Some(gas_price))
             .await?
             .into_iter()
             .next()
@@ -544,7 +539,7 @@ impl TxMutation {
             .await?;
         let tx_statuses = tx_statuses
             .into_iter()
-            .map(DryRunTransactionExecutionStatus)
+            .map(|(_, status)| DryRunTransactionExecutionStatus(status))
             .collect();
 
         Ok(tx_statuses)
