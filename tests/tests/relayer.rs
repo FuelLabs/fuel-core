@@ -203,16 +203,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     // wait for relayer to catch up to eth node
     srv.await_relayer_synced().await.unwrap();
     // Wait for the block producer to create a block that targets the latest da height.
-    srv.shared
-        .poa_adapter
-        .manually_produce_blocks(
-            None,
-            Mode::Blocks {
-                number_of_blocks: 1,
-            },
-        )
-        .await
-        .unwrap();
+    client.produce_blocks(1, None).await.unwrap();
 
     // verify we have downloaded the message
     let query = client
