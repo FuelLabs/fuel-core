@@ -32,6 +32,7 @@ impl Task {
     fn new_tx_status_from_p2p(&mut self, (tx_id, tx_status): (TxId, TransactionStatus)) {
         // TODO[RC]: Capacity checks?
         // TODO[RC]: Purge old statuses?
+        // TODO[RC]: Remember to remove the status from the manager upon putting the status into storage.
         self.shared_state.add_status(&tx_id, tx_status);
     }
 }
