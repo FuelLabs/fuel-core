@@ -375,7 +375,7 @@ impl TxMutation {
     /// Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
     #[graphql(
         complexity = "query_costs().dry_run * txs.len() + child_complexity * txs.len()",
-        deprecation = "This doens't need to be a mutation. Use query of the same name instead."
+        deprecation = "This doesn't need to be a mutation. Use query of the same name instead."
     )]
     async fn dry_run(
         &self,
