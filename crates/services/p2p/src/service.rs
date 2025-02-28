@@ -63,6 +63,7 @@ use fuel_core_types::{
             PeerReport,
         },
         BlockHeightHeartbeatData,
+        ConfirmationsGossipData,
         GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
@@ -80,6 +81,7 @@ use futures::{
 use libp2p::{
     gossipsub::{
         MessageAcceptance,
+        MessageId,
         PublishError,
     },
     request_response::InboundRequestId,
@@ -372,6 +374,11 @@ pub trait Broadcast: Send {
 
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()>;
 
+    fn pre_confirmation_broadcast(
+        &self,
+        confirmations: ConfirmationsGossipData,
+    ) -> anyhow::Result<()>;
+
     fn new_tx_subscription_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
 }
 
@@ -395,6 +402,14 @@ impl Broadcast for SharedState {
 
     fn tx_broadcast(&self, transaction: TransactionGossipData) -> anyhow::Result<()> {
         self.tx_broadcast.send(transaction)?;
+        Ok(())
+    }
+
+    fn pre_confirmation_broadcast(
+        &self,
+        confirmations: ConfirmationsGossipData,
+    ) -> anyhow::Result<()> {
+        self.confirmations_broadcast.send(confirmations)?;
         Ok(())
     }
 
@@ -442,6 +457,28 @@ pub struct Task<P, V, B, T> {
     heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
     // cached view
     cached_view: Arc<CachedView>,
+}
+
+impl<P, V, B: Broadcast, T> Task<P, V, B, T> {
+    pub(crate) fn broadcast_gossip_message(
+        &self,
+        message: GossipsubMessage,
+        message_id: MessageId,
+        peer_id: PeerId,
+    ) {
+        let message_id = message_id.0;
+
+        match message {
+            GossipsubMessage::NewTx(transaction) => {
+                let next_transaction = GossipData::new(transaction, peer_id, message_id);
+                let _ = self.broadcast.tx_broadcast(next_transaction);
+            }
+            GossipsubMessage::TxPreConfirmations(confirmations) => {
+                let data = GossipData::new(confirmations, peer_id, message_id);
+                let _ = self.broadcast.pre_confirmation_broadcast(data);
+            }
+        }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -991,14 +1028,8 @@ where
                         let _ = self.broadcast.block_height_broadcast(block_height_data);
                     }
                     Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
-                        let message_id = message_id.0;
-
-                        match message {
-                            GossipsubMessage::NewTx(transaction) => {
-                                let next_transaction = GossipData::new(transaction, peer_id, message_id);
-                                let _ = self.broadcast.tx_broadcast(next_transaction);
-                            },
-                        }
+                        tracing::info!("Received gossip message from peer {:?}", peer_id);
+                        self.broadcast_gossip_message(message, message_id, peer_id);
                     },
                     Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {
                         let res = self.process_request(request_message, request_id);
@@ -1054,7 +1085,10 @@ pub struct SharedState {
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
     /// Sender of p2p transaction statuses used for subscribing.
+    /// TODO[RC]: We need either `tx_status_broadcast` or `confirmations_broadcast`.
     tx_status_broadcast: broadcast::Sender<TransactionStatusGossipData>,
+    /// Sender of p2p tx confirmations used for subscribing.
+    confirmations_broadcast: broadcast::Sender<ConfirmationsGossipData>,
     /// Sender of reserved peers connection updates.
     reserved_peers_broadcast: broadcast::Sender<usize>,
     /// Used for communicating with the `Task`.
@@ -1290,6 +1324,12 @@ impl SharedState {
         self.tx_status_broadcast.subscribe()
     }
 
+    pub fn subscribe_confirmations(
+        &self,
+    ) -> broadcast::Receiver<ConfirmationsGossipData> {
+        self.confirmations_broadcast.subscribe()
+    }
+
     pub fn subscribe_block_height(
         &self,
     ) -> broadcast::Receiver<BlockHeightHeartbeatData> {
@@ -1333,6 +1373,7 @@ pub fn build_shared_state(
     let (request_sender, request_receiver) = mpsc::channel(CHANNEL_SIZE);
     let (tx_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
     let (tx_status_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
+    let (confirmations_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
     let (new_tx_subscription_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
     let (block_height_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
 
@@ -1350,6 +1391,7 @@ pub fn build_shared_state(
             new_tx_subscription_broadcast,
             tx_broadcast,
             tx_status_broadcast,
+            confirmations_broadcast,
             reserved_peers_broadcast,
             block_height_broadcast,
             max_txs_per_request: config.max_txs_per_request,
@@ -1418,15 +1460,17 @@ fn report_message(
         warn!(target: "fuel-p2p", "Failed to read PeerId from received GossipsubMessageId: {}", msg_id);
     }
 }
-
 #[cfg(test)]
-pub mod tests {
+pub mod task_tests {
     #![allow(non_snake_case)]
     use crate::ports::P2pDb;
 
     use super::*;
 
-    use crate::peer_manager::heartbeat_data::HeartbeatData;
+    use crate::{
+        gossipsub::topics::TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
+        peer_manager::heartbeat_data::HeartbeatData,
+    };
     use fuel_core_services::{
         Service,
         State,
@@ -1435,8 +1479,10 @@ pub mod tests {
     use fuel_core_types::{
         blockchain::consensus::Genesis,
         fuel_types::BlockHeight,
+        services::p2p::PreConfirmationMessage,
     };
     use futures::FutureExt;
+    use libp2p::gossipsub::TopicHash;
     use std::{
         collections::VecDeque,
         time::SystemTime,
@@ -1626,6 +1672,7 @@ pub mod tests {
 
     struct FakeBroadcast {
         pub peer_reports: mpsc::Sender<(FuelPeerId, AppScore, String)>,
+        pub confirmation_gossip_broadcast: mpsc::Sender<ConfirmationsGossipData>,
     }
 
     impl Broadcast for FakeBroadcast {
@@ -1655,6 +1702,14 @@ pub mod tests {
             _transaction: TransactionGossipData,
         ) -> anyhow::Result<()> {
             todo!()
+        }
+
+        fn pre_confirmation_broadcast(
+            &self,
+            confirmations: ConfirmationsGossipData,
+        ) -> anyhow::Result<()> {
+            self.confirmation_gossip_broadcast.try_send(confirmations)?;
+            Ok(())
         }
 
         fn new_tx_subscription_broadcast(
@@ -1697,6 +1752,7 @@ pub mod tests {
         let (report_sender, mut report_receiver) = mpsc::channel(100);
         let broadcast = FakeBroadcast {
             peer_reports: report_sender,
+            confirmation_gossip_broadcast: mpsc::channel(100).0,
         };
 
         // Less than actual
@@ -1790,6 +1846,7 @@ pub mod tests {
         let (report_sender, mut report_receiver) = mpsc::channel(100);
         let broadcast = FakeBroadcast {
             peer_reports: report_sender,
+            confirmation_gossip_broadcast: mpsc::channel(100).0,
         };
 
         // Greater than actual
@@ -1881,6 +1938,7 @@ pub mod tests {
         let (request_sender, request_receiver) = mpsc::channel(100);
         let broadcast = FakeBroadcast {
             peer_reports: mpsc::channel(100).0,
+            confirmation_gossip_broadcast: mpsc::channel(100).0,
         };
         let mut task = Task {
             chain_id: Default::default(),
@@ -1915,5 +1973,110 @@ pub mod tests {
                 .try_recv()
                 .expect("Should process the block height even under p2p pressure");
         }
+    }
+
+    fn arb_tx_confirmation_gossip_message() -> FuelP2PEvent {
+        let peer_id = PeerId::random();
+        let message_id = vec![1, 2, 3, 4, 5].into();
+        let topic_hash = TopicHash::from_raw(TX_PRECONFIRMATIONS_GOSSIP_TOPIC);
+        let confirmations = PreConfirmationMessage::default_test_confirmation();
+        let message = GossipsubMessage::TxPreConfirmations(confirmations);
+        FuelP2PEvent::GossipsubMessage {
+            peer_id,
+            message_id,
+            topic_hash,
+            message,
+        }
+    }
+
+    #[tokio::test]
+    async fn run__gossip_message_from_p2p_service_is_broadcasted__tx_confirmations() {
+        // given
+        let gossip_message_event = arb_tx_confirmation_gossip_message();
+        let events = vec![gossip_message_event.clone()];
+        let event_stream = futures::stream::iter(events);
+        let p2p_service = FakeP2PService {
+            peer_info: vec![],
+            next_event_stream: Box::pin(event_stream),
+        };
+        let (confirmations_sender, mut confirmations_receiver) = mpsc::channel(100);
+        let broadcast = FakeBroadcast {
+            peer_reports: mpsc::channel(100).0,
+            confirmation_gossip_broadcast: confirmations_sender,
+        };
+        let (request_sender, request_receiver) = mpsc::channel(100);
+        let mut task = Task {
+            chain_id: Default::default(),
+            response_timeout: Default::default(),
+            p2p_service,
+            view_provider: FakeDB,
+            next_block_height: FakeBlockImporter.next_block_height(),
+            tx_pool: FakeTxPool,
+            request_receiver,
+            request_sender,
+            db_heavy_task_processor: SyncProcessor::new("Test", 1, 1).unwrap(),
+            tx_pool_heavy_task_processor: AsyncProcessor::new("Test", 1, 1).unwrap(),
+            broadcast,
+            max_headers_per_request: 0,
+            max_txs_per_request: 100,
+            heartbeat_check_interval: Duration::from_secs(0),
+            heartbeat_max_avg_interval: Default::default(),
+            heartbeat_max_time_since_last: Default::default(),
+            next_check_time: Instant::now(),
+            heartbeat_peer_reputation_config: Default::default(),
+            cached_view: Arc::new(CachedView::new(100, false)),
+        };
+
+        // when
+        let mut watcher = StateWatcher::started();
+        let _ = task.run(&mut watcher).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // then
+        let actual = confirmations_receiver.try_recv().unwrap().data.unwrap();
+        let FuelP2PEvent::GossipsubMessage { message, .. } = gossip_message_event else {
+            panic!("Expected GossipsubMessage event");
+        };
+        let GossipsubMessage::TxPreConfirmations(expected) = message else {
+            panic!("Expected Confirmations message");
+        };
+        assert_eq!(expected, actual);
+    }
+}
+
+#[cfg(test)]
+pub mod broadcast_tests {
+
+    #![allow(non_snake_case)]
+
+    use super::*;
+    use fuel_core_types::services::p2p::PreConfirmationMessage;
+
+    fn arb_shared_state() -> SharedState {
+        let config = Config::default("test network");
+        let (shared_state, _) = build_shared_state(config);
+        shared_state
+    }
+
+    #[tokio::test]
+    async fn shared_state__broadcast__tx_confirmations() {
+        // given
+        let broadcast = arb_shared_state();
+        let confirmations = PreConfirmationMessage::default_test_confirmation();
+        let confirmations_gossip_data = ConfirmationsGossipData {
+            data: Some(confirmations.clone()),
+            peer_id: FuelPeerId::from(PeerId::random().to_bytes().to_vec()),
+            message_id: vec![1, 2, 3, 4],
+        };
+        let mut confirmations_receiver = broadcast.subscribe_confirmations();
+
+        // when
+        broadcast
+            .pre_confirmation_broadcast(confirmations_gossip_data)
+            .unwrap();
+
+        // then
+        let actual = confirmations_receiver.try_recv().unwrap().data.unwrap();
+        assert_eq!(confirmations, actual);
     }
 }

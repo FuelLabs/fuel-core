@@ -149,7 +149,7 @@ where
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<Option<usize>> {
+    ) -> StorageResult<bool> {
         self.inner.read(key, column, offset, buf)
     }
 }
@@ -361,7 +361,7 @@ where
         key: &<M as Mappable>::Key,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<Option<usize>, Self::Error> {
+    ) -> Result<bool, Self::Error> {
         let key_encoder =
             <M::Blueprint as BlueprintInspect<M, StructuredStorage<S>>>::KeyCodec::encode(
                 key,
@@ -400,22 +400,19 @@ where
     //  without deserialization into `OwnedValue`.
     M::OwnedValue: Into<Vec<u8>>,
 {
-    fn write_bytes(&mut self, key: &M::Key, buf: &[u8]) -> Result<usize, Self::Error> {
+    fn write_bytes(&mut self, key: &M::Key, buf: &[u8]) -> Result<(), Self::Error> {
         <M as TableWithBlueprint>::Blueprint::put(self, key, M::column(), buf)
-            .map(|_| buf.len())
     }
 
     fn replace_bytes(
         &mut self,
         key: &M::Key,
         buf: &[u8],
-    ) -> Result<(usize, Option<Vec<u8>>), Self::Error> {
-        let bytes_written = buf.len();
-        let prev =
+    ) -> Result<Option<Vec<u8>>, Self::Error> {
+        Ok(
             <M as TableWithBlueprint>::Blueprint::replace(self, key, M::column(), buf)?
-                .map(|prev| prev.into());
-        let result = (bytes_written, prev);
-        Ok(result)
+                .map(|prev| prev.into()),
+        )
     }
 
     fn take_bytes(&mut self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
