@@ -630,9 +630,6 @@ async fn contract_balances_in_the_past() {
         .await
         .unwrap();
 
-    dbg!(&balances_at_deployed);
-    dbg!(&balances_at_minted);
-
     // Then
     assert!(balances_at_deployed.is_empty());
     assert_eq!(balances_at_minted.len(), 1);
