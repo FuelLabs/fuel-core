@@ -27,7 +27,7 @@ use fuel_core_types::{
 };
 use rand::SeedableRng;
 use test_helpers::assemble_tx::{
-    FuelCoreClientExt,
+    AssembleAndRunTx,
     SigningAccount,
 };
 

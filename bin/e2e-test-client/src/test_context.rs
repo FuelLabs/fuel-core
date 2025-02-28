@@ -42,7 +42,7 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 use test_helpers::assemble_tx::{
-    FuelCoreClientExt,
+    AssembleAndRunTx,
     SigningAccount,
 };
 

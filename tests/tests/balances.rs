@@ -23,7 +23,7 @@ use fuel_core_client::client::{
 };
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use test_helpers::{
-    assemble_tx::FuelCoreClientExt,
+    assemble_tx::AssembleAndRunTx,
     default_signing_wallet,
 };
 

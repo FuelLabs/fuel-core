@@ -29,7 +29,7 @@ use std::{
     io,
 };
 
-pub trait FuelCoreClientExt {
+pub trait AssembleAndRunTx {
     fn transfer(
         &self,
         wallet: SigningAccount,
@@ -62,7 +62,7 @@ pub trait FuelCoreClientExt {
         wallet: SigningAccount,
     ) -> impl Future<Output = io::Result<TransactionStatus>> + Send;
 
-    fn assemble_opt(
+    fn assemble_transaction(
         &self,
         tx_to_assemble: &Transaction,
         wallet: SigningAccount,
@@ -105,7 +105,7 @@ impl SigningAccount {
     }
 }
 
-impl FuelCoreClientExt for FuelClient {
+impl AssembleAndRunTx for FuelClient {
     async fn transfer(
         &self,
         wallet: SigningAccount,
@@ -142,7 +142,8 @@ impl FuelCoreClientExt for FuelClient {
 
         let tx = tx_to_assemble.finalize_as_transaction();
 
-        self.assemble_opt(&tx, wallet, required_balances).await
+        self.assemble_transaction(&tx, wallet, required_balances)
+            .await
     }
 
     async fn run_transfer(
@@ -165,7 +166,8 @@ impl FuelCoreClientExt for FuelClient {
             TransactionBuilder::script(script.into_iter().collect(), script_data)
                 .finalize_as_transaction();
 
-        self.assemble_opt(&tx_to_assemble, wallet, vec![]).await
+        self.assemble_transaction(&tx_to_assemble, wallet, vec![])
+            .await
     }
 
     async fn run_script(
@@ -185,13 +187,13 @@ impl FuelCoreClientExt for FuelClient {
         wallet: SigningAccount,
     ) -> io::Result<TransactionStatus> {
         let tx = self
-            .assemble_opt(tx_to_assemble, wallet, Vec::new())
+            .assemble_transaction(tx_to_assemble, wallet, Vec::new())
             .await?;
 
         self.submit_and_await_commit(&tx).await
     }
 
-    async fn assemble_opt(
+    async fn assemble_transaction(
         &self,
         tx_to_assemble: &Transaction,
         wallet: SigningAccount,

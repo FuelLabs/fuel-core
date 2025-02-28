@@ -39,7 +39,7 @@ use fuel_core_types::{
 };
 use test_helpers::{
     assemble_tx::{
-        FuelCoreClientExt,
+        AssembleAndRunTx,
         SigningAccount,
     },
     config_with_fee,

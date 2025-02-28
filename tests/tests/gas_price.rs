@@ -81,7 +81,7 @@ use std::{
     time::Duration,
 };
 use test_helpers::{
-    assemble_tx::FuelCoreClientExt,
+    assemble_tx::AssembleAndRunTx,
     default_signing_wallet,
     fuel_core_driver::FuelCoreDriver,
 };

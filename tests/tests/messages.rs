@@ -43,7 +43,7 @@ use rstest::rstest;
 use std::ops::Deref;
 use test_helpers::{
     assemble_tx::{
-        FuelCoreClientExt,
+        AssembleAndRunTx,
         SigningAccount,
     },
     config_with_fee,
@@ -429,7 +429,7 @@ async fn can_get_message_proof() {
             change_policy: ChangePolicy::Change(predicate_account.owner()),
         };
         let tx = client
-            .assemble_opt(&script_tx, predicate_account, vec![money_for_smo])
+            .assemble_transaction(&script_tx, predicate_account, vec![money_for_smo])
             .await
             .unwrap();
 

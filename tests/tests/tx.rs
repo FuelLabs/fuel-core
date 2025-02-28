@@ -53,7 +53,7 @@ use std::{
     time::Duration,
 };
 use test_helpers::{
-    assemble_tx::FuelCoreClientExt,
+    assemble_tx::AssembleAndRunTx,
     config_with_fee,
     default_signing_wallet,
 };

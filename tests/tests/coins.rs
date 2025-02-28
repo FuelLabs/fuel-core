@@ -20,7 +20,7 @@ use rand::{
     SeedableRng,
 };
 use test_helpers::{
-    assemble_tx::FuelCoreClientExt,
+    assemble_tx::AssembleAndRunTx,
     builder::TestContext,
 };
 
