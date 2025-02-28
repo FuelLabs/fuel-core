@@ -17,4 +17,8 @@ pub enum Error {
     /// Error occurred inside of trigger
     #[error("Trigger error: {0}")]
     Trigger(String),
+
+    /// Error occurred with parent signature
+    #[error("Parent signature error: {0}")]
+    ParentSignature(String),
 }

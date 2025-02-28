@@ -49,7 +49,6 @@ async fn next_rotation__subsequent_triggers_are_same_interval() {
     let rotation_interval = 10;
     let rotation_interval_duration = Duration::from_secs(rotation_interval);
     let fake_time = TokioTime::new();
-    let fake_time_2 = TokioTime::new();
 
     let mut trigger = TimeBasedTrigger::new(fake_time, rotation_interval_duration);
 
