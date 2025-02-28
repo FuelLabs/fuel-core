@@ -637,5 +637,8 @@ async fn contract_balances_in_the_past() {
     assert!(balances_at_deployed.is_empty());
     assert_eq!(balances_at_minted.len(), 1);
     assert_eq!(balances_at_minted[0].amount.0, amount);
-    assert_eq!(balances_at_minted[0].asset_id.0.0, contract_id.asset_id(&sub_asset_id));
+    assert_eq!(
+        balances_at_minted[0].asset_id.0 .0,
+        contract_id.asset_id(&sub_asset_id)
+    );
 }

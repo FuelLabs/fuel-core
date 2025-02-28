@@ -11,10 +11,21 @@ use fuel_core_types::{
         RegId,
     },
     fuel_tx::{
-        field::Outputs, Bytes32, ContractId, Finalizable, Input, Output, Receipt, StorageSlot, Transaction, TransactionBuilder
+        field::Outputs,
+        Bytes32,
+        ContractId,
+        Finalizable,
+        Input,
+        Output,
+        Receipt,
+        StorageSlot,
+        Transaction,
+        TransactionBuilder,
     },
     fuel_types::{
-        bytes::WORD_SIZE, canonical::Serialize, BlockHeight
+        bytes::WORD_SIZE,
+        canonical::Serialize,
+        BlockHeight,
     },
     fuel_vm::{
         Call,
@@ -35,9 +46,12 @@ pub async fn deploy(
     let chain_info = client.chain_info().await.expect("failed to get chain info");
     let base_asset_id = chain_info.consensus_parameters.base_asset_id();
 
-    let code: Vec<_> = [op::mint(REG_AMOUNT, REG_SUB_ASSET_ID_PTR), op::ret(RegId::ONE)]
-        .into_iter()
-        .collect();
+    let code: Vec<_> = [
+        op::mint(REG_AMOUNT, REG_SUB_ASSET_ID_PTR),
+        op::ret(RegId::ONE),
+    ]
+    .into_iter()
+    .collect();
 
     let tx = TransactionBuilder::create(
         code.into(),
@@ -73,7 +87,11 @@ pub fn mint_tx(
     let script = [
         op::gtf_args(0x20, RegId::ZERO, GTFArgs::ScriptData),
         op::addi(REG_SUB_ASSET_ID_PTR, 0x20, Call::LEN as _),
-        op::lw(REG_AMOUNT, REG_SUB_ASSET_ID_PTR, (Bytes32::LEN / WORD_SIZE) as _),
+        op::lw(
+            REG_AMOUNT,
+            REG_SUB_ASSET_ID_PTR,
+            (Bytes32::LEN / WORD_SIZE) as _,
+        ),
         op::call(0x20, RegId::ZERO, RegId::ZERO, RegId::CGAS),
         op::ret(RegId::RET),
     ];
@@ -115,14 +133,22 @@ pub async fn mint(
 ) -> BlockHeight {
     let tx = mint_tx(rng, contract_id, sub_asset_id, amount);
 
-    let Ok(TransactionStatus::Success { block_height,receipts, .. }) =
-        client.submit_and_await_commit(&tx).await
+    let Ok(TransactionStatus::Success {
+        block_height,
+        receipts,
+        ..
+    }) = client.submit_and_await_commit(&tx).await
     else {
         panic!("Tx wasn't included in a block");
     };
-    
+
     // Self-test: ensure mint receipt is correct
-    let Some(Receipt::Mint { contract_id: r_contract_id, sub_id, .. }) = receipts.get(1) else {
+    let Some(Receipt::Mint {
+        contract_id: r_contract_id,
+        sub_id,
+        ..
+    }) = receipts.get(1)
+    else {
         panic!("Expected mint receipt");
     };
     assert_eq!(contract_id, *r_contract_id);
