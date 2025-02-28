@@ -12,4 +12,3 @@ pub mod trigger;
 pub mod tx_receiver;
 
 pub type Preconfirmations = Vec<(TxId, PreconfirmationStatus)>;
-
