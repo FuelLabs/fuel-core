@@ -1,10 +1,7 @@
 #![allow(non_snake_case)]
 
 use fuel_core::{
-    chain_config::{
-        StateConfig,
-        TESTNET_WALLET_SECRETS,
-    },
+    chain_config::StateConfig,
     database::{
         database_description::on_chain::OnChain,
         Database,
@@ -25,7 +22,6 @@ use fuel_core_types::{
         Instruction,
         RegId,
     },
-    fuel_crypto::SecretKey,
     fuel_tx::{
         BlobBody,
         BlobId,
@@ -41,9 +37,12 @@ use fuel_core_types::{
         ZERO,
     },
 };
-use test_helpers::assemble_tx::{
-    FuelCoreClientExt,
-    SigningAccount,
+use test_helpers::{
+    assemble_tx::{
+        FuelCoreClientExt,
+        SigningAccount,
+    },
+    config_with_fee,
 };
 use tokio::io;
 
@@ -54,13 +53,8 @@ struct TestContext {
 
 impl TestContext {
     async fn new() -> Self {
-        let mut config = Config {
-            debug: true,
-            utxo_validation: true,
-            ..Config::local_node()
-        };
-
-        config.gas_price_config.min_exec_gas_price = 1000;
+        let mut config = config_with_fee();
+        config.debug = true;
 
         Self::new_with_config(config).await
     }
@@ -121,13 +115,7 @@ impl TestContext {
 fn unwrap_account(account: Option<SigningAccount>) -> SigningAccount {
     match account {
         Some(account) => account,
-        None => {
-            let wallet_secret: SecretKey = TESTNET_WALLET_SECRETS[1]
-                .parse()
-                .expect("Expected valid secret");
-
-            SigningAccount::Wallet(wallet_secret)
-        }
+        None => test_helpers::default_signing_wallet(),
     }
 }
 

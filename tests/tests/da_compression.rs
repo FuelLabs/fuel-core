@@ -45,9 +45,12 @@ use rand::{
     SeedableRng,
 };
 use std::str::FromStr;
-use test_helpers::assemble_tx::{
-    FuelCoreClientExt,
-    SigningAccount,
+use test_helpers::{
+    assemble_tx::{
+        FuelCoreClientExt,
+        SigningAccount,
+    },
+    config_with_fee,
 };
 
 #[tokio::test]
@@ -55,10 +58,8 @@ async fn can_fetch_da_compressed_block_from_graphql() {
     let mut rng = StdRng::seed_from_u64(10);
     let poa_secret = SecretKey::random(&mut rng);
 
-    let mut config = Config::local_node();
+    let mut config = config_with_fee();
     config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
-    config.utxo_validation = true;
-    config.gas_price_config.min_exec_gas_price = 1000;
     let compression_config = fuel_core_compression::Config {
         temporal_registry_retention: Duration::from_secs(3600),
     };

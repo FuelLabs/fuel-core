@@ -75,9 +75,12 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use test_helpers::assemble_tx::{
-    FuelCoreClientExt,
-    SigningAccount,
+use test_helpers::{
+    assemble_tx::{
+        FuelCoreClientExt,
+        SigningAccount,
+    },
+    config_with_fee,
 };
 use tokio::sync::oneshot::Sender;
 
@@ -153,10 +156,8 @@ async fn relayer_can_download_logs() {
 #[tokio::test(flavor = "multi_thread")]
 async fn messages_are_spendable_after_relayer_is_synced() {
     let mut rng = StdRng::seed_from_u64(1234);
-    let mut config = Config::local_node();
+    let mut config = config_with_fee();
     config.relayer = Some(relayer::Config::default());
-    config.utxo_validation = true;
-    config.gas_price_config.min_exec_gas_price = 1000;
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
     let eth_node = MockMiddleware::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];

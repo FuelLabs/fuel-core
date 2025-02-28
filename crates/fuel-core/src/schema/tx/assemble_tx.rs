@@ -19,11 +19,9 @@ use crate::{
     service::adapters::SharedMemoryPool,
 };
 use fuel_core_types::{
-    entities::coins::{
-        coin::Coin,
-        CoinId,
-    },
+    entities::coins::CoinId,
     fuel_asm::{
+        op,
         PanicReason,
         Word,
     },
@@ -36,6 +34,7 @@ use fuel_core_types::{
             Policies,
             Script as ScriptField,
             ScriptGasLimit,
+            Tip,
             WitnessLimit,
         },
         input::{
@@ -48,6 +47,7 @@ use fuel_core_types::{
         policies::PolicyType,
         Address,
         AssetId,
+        Cacheable,
         Chargeable,
         ConsensusParameters,
         Input,
@@ -55,12 +55,8 @@ use fuel_core_types::{
         Receipt,
         Script,
         Transaction,
-        UtxoId,
     },
-    fuel_types::{
-        canonical::Serialize,
-        Bytes32,
-    },
+    fuel_types::canonical::Serialize,
     fuel_vm::{
         checked_transaction::CheckPredicateParams,
         interpreter::ExecutableTransaction,
@@ -78,8 +74,6 @@ use std::{
     },
     sync::Arc,
 };
-
-const FAKE_AMOUNT: u64 = 1_000_000_000_000;
 
 pub struct AssembleArguments<'a> {
     pub fee_index: u16,
@@ -129,18 +123,14 @@ impl<'a> AssembleArguments<'a> {
         Ok(result)
     }
 
+    /// Dry run the transaction to estimate the script gas limit.
+    /// It uses zero gas price to not depend on the coins to cover the fee.
     async fn dry_run(
         &self,
         script: Script,
     ) -> anyhow::Result<(Transaction, TransactionExecutionStatus)> {
         self.block_producer
-            .dry_run_txs(
-                vec![script.into()],
-                None,
-                None,
-                Some(false),
-                Some(self.gas_price),
-            )
+            .dry_run_txs(vec![script.into()], None, None, Some(false), Some(0))
             .await?
             .into_iter()
             .next()
@@ -154,9 +144,9 @@ pub struct AssembleTx<'a, Tx> {
     signature_witness_indexes: HashMap<Address, u16>,
     change_output_policies: HashMap<AssetId, ChangePolicy>,
     set_change_outputs: HashSet<AssetId>,
-    added_fake_coin: bool,
     // The amount of the base asset that is reserved for the application logic
     base_asset_reserved: u64,
+    has_predicates: bool,
     index_of_first_fake_variable_output: Option<u16>,
     original_max_fee: u64,
     original_witness_limit: u64,
@@ -165,7 +155,7 @@ pub struct AssembleTx<'a, Tx> {
 
 impl<'a, Tx> AssembleTx<'a, Tx>
 where
-    Tx: ExecutableTransaction + Send + 'static,
+    Tx: ExecutableTransaction + Cacheable + Send + 'static,
 {
     pub fn new(tx: Tx, mut arguments: AssembleArguments<'a>) -> anyhow::Result<Self> {
         if arguments.fee_index as usize >= arguments.required_balances.len() {
@@ -187,6 +177,7 @@ where
         let mut signature_witness_indexes = HashMap::<Address, u16>::new();
 
         // Exclude inputs that already are used by the transaction
+        let mut has_predicates = false;
         let inputs = tx.inputs();
         for input in inputs {
             if let Some(utxo_id) = input.utxo_id() {
@@ -215,11 +206,14 @@ where
                 }) => {
                     signature_witness_indexes.insert(*owner, *witness_index);
                 }
-                Input::Contract(_)
-                | Input::CoinPredicate(_)
+                Input::Contract(_) => {
+                    // Do nothing
+                }
+
+                Input::CoinPredicate(_)
                 | Input::MessageCoinPredicate(_)
                 | Input::MessageDataPredicate(_) => {
-                    // Do nothing
+                    has_predicates = true;
                 }
             }
         }
@@ -294,8 +288,8 @@ where
             signature_witness_indexes,
             change_output_policies,
             set_change_outputs,
-            added_fake_coin: false,
             base_asset_reserved: base_asset_reserved.expect("Set above; qed"),
+            has_predicates,
             index_of_first_fake_variable_output: None,
             original_max_fee,
             original_witness_limit,
@@ -306,25 +300,19 @@ where
     }
 
     pub async fn assemble(mut self) -> anyhow::Result<Tx> {
-        self.add_inputs_and_witnesses().await?;
-        self.add_change_outputs();
-        self.add_fake_coin()?;
+        self.add_inputs_and_witnesses_and_changes().await?;
+        self.cover_tip().await?;
         self.fill_with_variable_outputs();
 
-        // At this point, we have the maximum number of witnesses because all inputs were
-        // added(the fake coin adds a witness for the fee payer if it was not there before).
-        self.adjust_witness_limit();
-
-        if self.arguments.estimate_predicates {
-            self = self.estimate_predicates().await?;
-        }
+        self = self.estimate_predicates().await?;
 
         self.estimate_script_if_possible().await?;
 
         self.remove_unused_variable_outputs();
-        self.remove_fake_coin();
 
         self = self.cover_fee().await?;
+
+        self.adjust_witness_limit();
 
         Ok(self.tx)
     }
@@ -343,7 +331,7 @@ where
         Ok(max_input.saturating_sub(used_inputs))
     }
 
-    async fn add_inputs_and_witnesses(&mut self) -> anyhow::Result<()> {
+    async fn add_inputs_and_witnesses_and_changes(&mut self) -> anyhow::Result<()> {
         let required_balance = core::mem::take(&mut self.arguments.required_balances);
 
         for required_balance in required_balance {
@@ -359,7 +347,7 @@ where
                 .await?;
 
             for coin in selected_coins {
-                self.add_input_and_witness(&required_balance.account, coin);
+                self.add_input_and_witness_and_change(&required_balance.account, coin);
             }
         }
 
@@ -381,7 +369,9 @@ where
             })
     }
 
-    fn add_input_and_witness(&mut self, account: &Account, coin: CoinType) {
+    fn add_input_and_witness_and_change(&mut self, account: &Account, coin: CoinType) {
+        let base_asset_id = *self.arguments.consensus_parameters.base_asset_id();
+
         let input = match account {
             Account::Address(account) => {
                 let signature_index = self.reserve_witness_index(account);
@@ -405,6 +395,7 @@ where
                 }
             }
             Account::Predicate(predicate) => {
+                self.has_predicates = true;
                 let predicate_gas_used = 0;
                 match coin {
                     CoinType::Coin(coin) => Input::coin_predicate(
@@ -438,22 +429,11 @@ where
             self.arguments.exclude.exclude(CoinId::Message(*nonce));
         }
 
+        let asset_id = input.asset_id(&base_asset_id).cloned();
+
         self.tx.inputs_mut().push(input);
-    }
 
-    fn add_change_outputs(&mut self) {
-        let base_asset_id = *self.arguments.consensus_parameters.base_asset_id();
-        let mut asset_ids = self
-            .tx
-            .inputs()
-            .iter()
-            .filter_map(|input| input.asset_id(&base_asset_id).cloned())
-            .collect::<HashSet<AssetId>>();
-
-        // Add the base asset since it will be used to cover the fee at the end.
-        asset_ids.insert(base_asset_id);
-
-        for asset_id in asset_ids {
+        if let Some(asset_id) = asset_id {
             if self.set_change_outputs.insert(asset_id) {
                 match self
                     .change_output_policies
@@ -477,42 +457,24 @@ where
         }
     }
 
-    fn add_fake_coin(&mut self) -> anyhow::Result<()> {
+    async fn cover_tip(&mut self) -> anyhow::Result<()> {
         let remaining_input_slots = self.remaining_input_slots()?;
+        let base_asset_id = *self.arguments.consensus_parameters.base_asset_id();
 
-        if remaining_input_slots == 0 {
-            return Ok(())
+        let account = self.fee_payer_account.clone();
+        let owner = account.owner();
+        let amount = self.tx.tip();
+
+        let selected_coins = self
+            .arguments
+            .coins(owner, base_asset_id, amount, remaining_input_slots)
+            .await?;
+
+        for coin in selected_coins {
+            self.add_input_and_witness_and_change(&account, coin);
         }
-
-        let fee_payer_account = self.fee_payer_account.clone();
-        let owner = fee_payer_account.owner();
-        let asset_id = *self.arguments.consensus_parameters.base_asset_id();
-
-        let fake_coin = CoinType::Coin(
-            Coin {
-                utxo_id: UtxoId::new(Bytes32::new([255; 32]), u16::MAX),
-                owner,
-                amount: FAKE_AMOUNT,
-                asset_id,
-                tx_pointer: Default::default(),
-            }
-            .into(),
-        );
-
-        self.add_input_and_witness(&fee_payer_account, fake_coin);
-
-        self.added_fake_coin = true;
 
         Ok(())
-    }
-
-    fn remove_fake_coin(&mut self) {
-        if !self.added_fake_coin {
-            return
-        }
-
-        self.tx.inputs_mut().pop();
-        self.added_fake_coin = false;
     }
 
     fn is_runnable_script(&self) -> bool {
@@ -574,7 +536,19 @@ where
     }
 
     async fn estimate_predicates(mut self) -> anyhow::Result<Self> {
+        if !self.arguments.estimate_predicates {
+            return Ok(self)
+        }
+
+        if !self.has_predicates {
+            return Ok(self)
+        }
+
         let memory = self.arguments.shared_memory_pool.get_memory().await;
+        let chain_id = self.arguments.consensus_parameters.chain_id();
+        self.tx
+            .precompute(&chain_id)
+            .map_err(|err| anyhow::anyhow!("{:?}", err))?;
 
         let parameters =
             CheckPredicateParams::from(self.arguments.consensus_parameters.as_ref());
@@ -620,6 +594,31 @@ where
 
         *script.script_gas_limit_mut() = 0;
 
+        let dry_run_gas_price = 0;
+        set_max_fee(
+            &mut script,
+            &self.arguments.consensus_parameters,
+            self.arguments.reserve_gas,
+            dry_run_gas_price,
+            self.original_max_fee,
+        );
+
+        let max_tx_gas = self
+            .arguments
+            .consensus_parameters
+            .tx_params()
+            .max_gas_per_tx();
+
+        let has_spendable_input = script.inputs().iter().any(|input| match input {
+            Input::CoinSigned(_)
+            | Input::CoinPredicate(_)
+            | Input::MessageCoinSigned(_)
+            | Input::MessageCoinPredicate(_) => true,
+            Input::MessageDataSigned(_)
+            | Input::MessageDataPredicate(_)
+            | Input::Contract(_) => false,
+        });
+
         // If `max_fee` policy is not set, set it because it affects the maximum gas
         // used by transaction.
         if script.policies().get(PolicyType::MaxFee).is_none() {
@@ -633,25 +632,15 @@ where
         let mut gas_used_by_tx;
 
         loop {
+            if !has_spendable_input {
+                script.inputs_mut().push(fake_input());
+            }
+
             gas_used_by_tx = script.min_gas(gas_costs, fee_params);
-            let max_tx_gas = self
-                .arguments
-                .consensus_parameters
-                .tx_params()
-                .max_gas_per_tx();
 
             let max_gas_limit = max_tx_gas.saturating_sub(gas_used_by_tx);
 
             *script.script_gas_limit_mut() = max_gas_limit;
-
-            // Update `max_fee` to be according to the new gas limit.
-            set_max_fee(
-                &mut script,
-                &self.arguments.consensus_parameters,
-                self.arguments.reserve_gas,
-                self.arguments.gas_price,
-                self.original_max_fee,
-            );
 
             let (updated_tx, new_status) = self.arguments.dry_run(script).await?;
             let Transaction::Script(updated_script) = updated_tx else {
@@ -663,6 +652,10 @@ where
 
             script = updated_script;
             status = new_status;
+
+            if !has_spendable_input {
+                script.inputs_mut().pop();
+            }
 
             let mut contract_not_in_inputs = None;
 
@@ -689,13 +682,6 @@ where
             if let Some(contract_id) = contract_not_in_inputs {
                 let inptus = script.inputs_mut();
 
-                // Fake coin always should be the last
-                let fake_coin = if self.added_fake_coin {
-                    inptus.pop()
-                } else {
-                    None
-                };
-
                 let contract_idx = u16::try_from(inptus.len()).unwrap_or(u16::MAX);
 
                 inptus.push(Input::contract(
@@ -705,11 +691,6 @@ where
                     Default::default(),
                     contract_id,
                 ));
-
-                // Fake coin always should be the last
-                if let Some(fake_coin) = fake_coin {
-                    inptus.push(fake_coin);
-                }
 
                 let slot = self
                     .index_of_first_fake_variable_output
@@ -783,9 +764,11 @@ where
             let final_gas = max_gas_with_reserve.min(max_gas_per_tx);
             let final_fee =
                 gas_to_fee(final_gas, self.arguments.gas_price, gas_price_factor);
-            let final_fee = u64::try_from(final_fee).map_err(|_| {
-                anyhow::anyhow!("The final fee is too big to fit into `u64`")
-            })?;
+            let final_fee = u64::try_from(final_fee)
+                .map_err(|_| {
+                    anyhow::anyhow!("The final fee is too big to fit into `u64`")
+                })?
+                .saturating_add(self.tx.tip());
 
             let need_to_cover = final_fee.saturating_add(self.base_asset_reserved);
 
@@ -817,15 +800,12 @@ where
                         became too big when tried to cover fee"
                     ),
                 )?;
-                self.add_input_and_witness(&fee_payer_account, coin);
+                self.add_input_and_witness_and_change(&fee_payer_account, coin);
             }
 
             // In the case when predicates iterates over the inputs,
             // it increases its used gas. So we need to re-estimate predicates.
-
-            if self.arguments.estimate_predicates {
-                self = self.estimate_predicates().await?;
-            }
+            self = self.estimate_predicates().await?;
         }
 
         set_max_fee(
@@ -860,6 +840,7 @@ fn set_max_fee<Tx>(
     let final_gas = max_gas_with_reserve.min(max_gas_per_tx);
     let final_fee = gas_to_fee(final_gas, gas_price, gas_price_factor);
     let mut final_fee = u64::try_from(final_fee).unwrap_or(u64::MAX);
+    final_fee = final_fee.saturating_add(tx.tip());
 
     // If the user sets the `MaxFee` policy, we are only allowed to increase
     // it in the case if the transaction requires more fee to cover it.
@@ -872,4 +853,17 @@ fn gas_to_fee(gas: Word, gas_price: Word, factor: Word) -> u128 {
         .checked_mul(gas_price as u128)
         .expect("Impossible to overflow because multiplication of two `u64` <= `u128`");
     total_price.div_ceil(factor as u128)
+}
+
+fn fake_input() -> Input {
+    Input::coin_predicate(
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        [op::ret(1)].into_iter().collect(),
+        Default::default(),
+    )
 }

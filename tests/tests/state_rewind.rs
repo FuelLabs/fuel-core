@@ -51,6 +51,7 @@ use test_helpers::{
         FuelCoreClientExt,
         SigningAccount,
     },
+    config_with_fee,
     counter_contract,
     fuel_core_driver::FuelCoreDriver,
     produce_block_with_tx,
@@ -406,10 +407,8 @@ async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
     let poa_secret = SecretKey::random(&mut rng);
 
-    let mut config = fuel_core::service::Config::local_node();
+    let mut config = config_with_fee();
     config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
-    config.utxo_validation = true;
-    config.gas_price_config.min_exec_gas_price = 1000;
     let base_asset_id = config.base_asset_id();
 
     let srv = FuelService::new_node(config).await.unwrap();
