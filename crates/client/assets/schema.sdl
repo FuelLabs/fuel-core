@@ -1069,7 +1069,7 @@ type Query {
 		"""
 		The excluded coins from the selection.
 		"""
-		excludeInput: ExcludeInput
+		excludedIds: ExcludeInput
 	): [[CoinType!]!]!
 	daCompressedBlock(
 		"""

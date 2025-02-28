@@ -285,7 +285,7 @@ impl CoinQuery {
             to reach, and the `max` number of coins in the selection. Several entries with the \
             same asset id are not allowed. The result can't contain more coins than `max_inputs`.")]
         mut query_per_asset: Vec<SpendQueryElementInput>,
-        #[graphql(desc = "The excluded coins from the selection.")] exclude_input: Option<
+        #[graphql(desc = "The excluded coins from the selection.")] excluded_ids: Option<
             ExcludeInput,
         >,
     ) -> async_graphql::Result<Vec<Vec<CoinType>>> {
@@ -294,7 +294,7 @@ impl CoinQuery {
             .current_consensus_params();
         let max_input = params.tx_params().max_inputs();
 
-        let excluded_id_count = exclude_input.as_ref().map_or(0, |exclude| {
+        let excluded_id_count = excluded_ids.as_ref().map_or(0, |exclude| {
             exclude.utxos.len().saturating_add(exclude.messages.len())
         });
         if excluded_id_count > max_input as usize {
@@ -305,7 +305,7 @@ impl CoinQuery {
             .into());
         }
 
-        let exclude: Exclude = exclude_input.into();
+        let exclude: Exclude = excluded_ids.into();
 
         let mut duplicate_checker = HashSet::with_capacity(query_per_asset.len());
         for query in &query_per_asset {

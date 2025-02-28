@@ -225,7 +225,7 @@ impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
     variables = "CoinsToSpendArgs"
 )]
 pub struct CoinsToSpendQuery {
-    #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludeInput: $ excluded_ids)]
+    #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludedIds: $ excluded_ids)]
     pub coins_to_spend: Vec<Vec<CoinType>>,
 }
 

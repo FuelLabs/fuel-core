@@ -499,7 +499,7 @@ pub struct AssembleTx {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct AssembleTransactionResult {
-    pub transaction: OpaqueTransactionWithStatus,
+    pub transaction: OpaqueTransaction,
     pub status: DryRunTransactionStatus,
 }
 
