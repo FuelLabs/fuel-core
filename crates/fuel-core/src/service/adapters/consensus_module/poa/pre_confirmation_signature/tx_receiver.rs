@@ -1,32 +1,60 @@
-#![allow(non_snake_case)]
-use super::*;
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_poa::pre_confirmation_signature_service::{
+    error::{
+        Error as PoaError,
+        Result as PoAResult,
+    },
+    tx_receiver::TxReceiver,
+};
+use fuel_core_types::{
+    fuel_tx::TxId,
+    services::p2p::PreconfirmationStatus,
+};
 
-#[tokio::test]
-async fn receive__gets_what_is_sent_through_channel() {
-    // given
-    let (sender, receiver) = tokio::sync::mpsc::channel(1);
-    let txs = vec![
-        (
-            TxId::default(),
-            PreconfirmationStatus::SuccessByBlockProducer {
-                block_height: BlockHeight::from(123),
-            },
-        ),
-        (
-            TxId::default(),
-            PreconfirmationStatus::SqueezedOutByBlockProducer {
-                reason: "test".to_string(),
-            },
-        ),
-    ];
+pub struct MPSCTxReceiver<T> {
+    receiver: tokio::sync::mpsc::Receiver<T>,
+}
 
-    let mut receiver = MPSCTxReceiver { receiver };
+impl TxReceiver for MPSCTxReceiver<Vec<(TxId, PreconfirmationStatus)>> {
+    type Txs = Vec<(TxId, PreconfirmationStatus)>;
 
-    // when
-    sender.send(txs.clone()).await.unwrap();
+    async fn receive(&mut self) -> PoAResult<Self::Txs> {
+        self.receiver.recv().await.ok_or(PoaError::TxReceiver(
+            "Failed to receive transaction, channel closed".to_string(),
+        ))
+    }
+}
+#[cfg(test)]
+mod tests {
+    #![allow(non_snake_case)]
+    use super::*;
+    use fuel_core_types::fuel_types::BlockHeight;
 
-    // then
-    let received_txs = receiver.receive().await.unwrap();
-    assert_eq!(txs, received_txs);
+    #[tokio::test]
+    async fn receive__gets_what_is_sent_through_channel() {
+        // given
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        let txs = vec![
+            (
+                TxId::default(),
+                PreconfirmationStatus::SuccessByBlockProducer {
+                    block_height: BlockHeight::from(123),
+                },
+            ),
+            (
+                TxId::default(),
+                PreconfirmationStatus::SqueezedOutByBlockProducer {
+                    reason: "test".to_string(),
+                },
+            ),
+        ];
+
+        let mut receiver = MPSCTxReceiver { receiver };
+
+        // when
+        sender.send(txs.clone()).await.unwrap();
+
+        // then
+        let received_txs = receiver.receive().await.unwrap();
+        assert_eq!(txs, received_txs);
+    }
 }
