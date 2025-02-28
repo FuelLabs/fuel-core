@@ -62,7 +62,7 @@ use fuel_core_types::{
     fuel_vm::BlobData,
     services::{
         graphql_api::ContractBalance,
-        txpool::TransactionStatus,
+        txpool::TransactionStatusStorage,
     },
 };
 use futures::Stream;
@@ -384,7 +384,7 @@ impl ReadView {
         self.off_chain.da_compressed_block(height)
     }
 
-    pub fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatus> {
+    pub fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionStatusStorage> {
         self.off_chain.tx_status(tx_id)
     }
 

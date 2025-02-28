@@ -36,8 +36,8 @@ pub(crate) fn validate_tx_update_stream_state(
     match (state, transition) {
         (
             Empty,
-            AddMsg(TxStatusMessage::Status(TransactionStatus::Submitted { time })),
-        ) => Initial(TransactionStatus::Submitted { time }),
+            AddMsg(TxStatusMessage::Status(TransactionStatus::Submitted { timestamp })),
+        ) => Initial(TransactionStatus::Submitted { timestamp }),
         // If not Submitted, it's an early success.
         (Empty, AddMsg(TxStatusMessage::Status(s))) => EarlySuccess(s),
         (Empty, AddMsg(TxStatusMessage::FailedStatus)) => Failed,

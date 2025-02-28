@@ -335,6 +335,14 @@ input ExcludeInput {
 	messages: [Nonce!]!
 }
 
+type FailureDuringBlockProductionStatus {
+	reason: String!
+	txPointer: TxPointer!
+	transactionId: TransactionId
+	transaction: Transaction
+	receipts: [Receipt!]
+}
+
 type FailureStatus {
 	transactionId: TransactionId!
 	blockHeight: U32!
@@ -1147,6 +1155,10 @@ input SpendQueryElementInput {
 	max: U32
 }
 
+type SqueezedOutDuringBlockProductionStatus {
+	reason: String!
+}
+
 type SqueezedOutStatus {
 	reason: String!
 }
@@ -1204,6 +1216,13 @@ type Subscription {
 	SubmittedStatus` as an intermediate state.
 	"""
 	submitAndAwaitStatus(tx: HexString!): TransactionStatus!
+}
+
+type SuccessDuringBlockProductionStatus {
+	txPointer: TxPointer!
+	transactionId: TransactionId
+	transaction: Transaction
+	receipts: [Receipt!]
 }
 
 type SuccessStatus {
@@ -1292,7 +1311,7 @@ type TransactionEdge {
 
 scalar TransactionId
 
-union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
+union TransactionStatus = SubmittedStatus | SuccessStatus | SuccessDuringBlockProductionStatus | SqueezedOutStatus | SqueezedOutDuringBlockProductionStatus | FailureStatus | FailureDuringBlockProductionStatus
 
 type TxParameters {
 	version: TxParametersVersion!

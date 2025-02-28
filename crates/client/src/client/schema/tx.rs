@@ -9,6 +9,7 @@ use crate::client::{
         PageInfo,
         Tai64Timestamp,
         TransactionId,
+        TxPointer,
         U32,
         U64,
     },
@@ -18,7 +19,9 @@ use crate::client::{
     PaginationRequest,
 };
 use fuel_core_types::{
-    fuel_tx,
+    fuel_tx::{
+        self,
+    },
     fuel_types::{
         canonical::Deserialize,
         Bytes32,
@@ -187,8 +190,11 @@ impl TryFrom<ProgramState> for fuel_vm::ProgramState {
 pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatus),
+    SuccessDuringBlockProductionStatus(SuccessDuringBlockProductionStatus),
     SqueezedOutStatus(SqueezedOutStatus),
+    SqueezedOutDuringBlockProductionStatus(SqueezedOutDuringBlockProductionStatus),
     FailureStatus(FailureStatus),
+    FailureDuringBlockProductionStatus(FailureDuringBlockProductionStatus),
     #[cynic(fallback)]
     Unknown,
 }
@@ -202,8 +208,11 @@ pub enum TransactionStatus {
 pub enum StatusWithTransaction {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatusWithTransaction),
+    SuccessDuringBlockProductionStatus(SuccessDuringBlockProductionStatus),
     SqueezedOutStatus(SqueezedOutStatus),
+    SqueezedOutDuringBlockProductionStatus(SqueezedOutDuringBlockProductionStatus),
     FailureStatus(FailureStatusWithTransaction),
+    FailureDuringBlockProductionStatus(FailureDuringBlockProductionStatus),
     #[cynic(fallback)]
     Unknown,
 }
@@ -239,6 +248,14 @@ pub struct SuccessStatusWithTransaction {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
+pub struct SuccessDuringBlockProductionStatus {
+    pub tx_pointer: TxPointer,
+    pub transaction_id: Option<TransactionId>,
+    pub receipts: Option<Vec<Receipt>>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub block_height: U32,
     pub time: Tai64Timestamp,
@@ -264,7 +281,22 @@ pub struct FailureStatusWithTransaction {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
+pub struct FailureDuringBlockProductionStatus {
+    pub tx_pointer: TxPointer,
+    pub transaction_id: Option<TransactionId>,
+    pub receipts: Option<Vec<Receipt>>,
+    pub reason: String,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SqueezedOutStatus {
+    pub reason: String,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct SqueezedOutDuringBlockProductionStatus {
     pub reason: String,
 }
 

@@ -84,8 +84,8 @@ fn test_send_reg() {
         tx_id: Bytes32::from([2; 32]),
         message: TxStatusMessage::Status(TransactionStatus::Success {
             block_height: Default::default(),
-            time: Tai64(0),
-            result: None,
+            block_timestamp: Tai64(0),
+            program_state: None,
             receipts: vec![],
             total_gas: 0,
             total_fee: 0,
@@ -97,10 +97,16 @@ fn test_send_reg() {
             2,
             &[
                 SenderData::closed(Success(
-                    TransactionStatus::Submitted { time: Tai64(0) },
-                    TransactionStatus::Submitted { time: Tai64(0) },
+                    TransactionStatus::Submitted {
+                        timestamp: Tai64(0),
+                    },
+                    TransactionStatus::Submitted {
+                        timestamp: Tai64(0),
+                    },
                 )),
-                SenderData::ok(Initial(TransactionStatus::Submitted { time: Tai64(0) })),
+                SenderData::ok(Initial(TransactionStatus::Submitted {
+                    timestamp: Tai64(0),
+                })),
             ],
         )]),
     );
