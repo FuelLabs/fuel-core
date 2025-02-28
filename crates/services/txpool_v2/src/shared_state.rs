@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use anyhow::anyhow;
 use fuel_core_types::{
@@ -26,11 +29,12 @@ use tokio::sync::{
 use crate::{
     error::Error,
     pool::TxPoolStats,
-    pool_worker,
     pool_worker::{
+        self,
         PoolReadRequest,
         PoolRemoveRequest,
     },
+    ports::TxStatusManager as TxStatusManagerTrait,
     service::{
         TxInfo,
         WritePoolRequest,
@@ -47,7 +51,10 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct SharedState {
+pub struct SharedState<TxStatusManager>
+where
+    TxStatusManager: TxStatusManagerTrait,
+{
     pub(crate) request_remove_sender: mpsc::Sender<PoolRemoveRequest>,
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
@@ -56,9 +63,13 @@ pub struct SharedState {
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
     pub(crate) latest_stats: tokio::sync::watch::Receiver<TxPoolStats>,
+    pub(crate) tx_status_manager: Arc<Mutex<TxStatusManager>>,
 }
 
-impl SharedState {
+impl<TxStatusManager> SharedState<TxStatusManager>
+where
+    TxStatusManager: TxStatusManagerTrait + Clone,
+{
     pub fn try_insert(&self, transactions: Vec<Transaction>) -> Result<(), Error> {
         let transactions = transactions.into_iter().map(Arc::new).collect();
         self.write_pool_requests_sender
@@ -180,6 +191,12 @@ impl SharedState {
         block_height: &BlockHeight,
         status: TransactionStatus,
     ) {
+        // TODO[RC]: Do not use `send_complete` anymore
+        self.tx_status_manager
+            .lock()
+            .unwrap()
+            .upsert_status(&id, status.clone());
+
         self.tx_status_sender.send_complete(
             id,
             block_height,
@@ -194,6 +211,13 @@ impl SharedState {
             .into_iter()
             .map(|(tx_id, reason)| {
                 let error = Error::SkippedTransaction(reason);
+                // TODO[RC]: Do not use `send_squeezed_out` anymore
+                self.tx_status_manager.lock().unwrap().upsert_status(
+                    &tx_id,
+                    TransactionStatus::SqueezedOut {
+                        reason: error.to_string(),
+                    },
+                );
                 self.tx_status_sender
                     .send_squeezed_out(tx_id, error.clone());
                 (tx_id, error)

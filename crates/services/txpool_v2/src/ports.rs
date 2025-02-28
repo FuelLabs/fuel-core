@@ -37,8 +37,9 @@ use crate::GasPrice;
 
 pub use fuel_core_storage::transactional::AtomicView;
 
-pub trait TxStatusManager {
-    fn add_status(&mut self, tx_id: &TxId, tx_status: TransactionStatus);
+// TODO[RC]: Should not be in txpool
+pub trait TxStatusManager: Send + Sync + Clone + 'static {
+    fn upsert_status(&mut self, tx_id: &TxId, tx_status: TransactionStatus);
     fn status(&self, tx_id: &TxId) -> Option<&TransactionStatus>;
 }
 

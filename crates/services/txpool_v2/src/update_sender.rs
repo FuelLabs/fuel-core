@@ -59,6 +59,7 @@ impl TxStatusChange {
         }
     }
 
+    // TODO[RC]: Also cover other statuses from other components, for example, "Failed".
     pub fn send_complete(
         &self,
         id: Bytes32,

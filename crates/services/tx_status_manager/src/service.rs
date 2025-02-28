@@ -33,7 +33,7 @@ impl Task {
         // TODO[RC]: Capacity checks?
         // TODO[RC]: Purge old statuses?
         // TODO[RC]: Remember to remove the status from the manager upon putting the status into storage.
-        self.shared_state.add_status(&tx_id, tx_status);
+        self.shared_state.upsert_status(&tx_id, tx_status);
     }
 }
 

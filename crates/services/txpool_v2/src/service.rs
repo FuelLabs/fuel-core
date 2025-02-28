@@ -44,7 +44,7 @@ use fuel_core_txpool::{
         P2PRequests,
         P2PSubscriptions,
         TxPoolPersistentStorage,
-        TxStatusManager as StatusManagerTrait,
+        TxStatusManager as TxStatusManagerTrait,
         WasmChecker as WasmCheckerTrait,
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
@@ -97,7 +97,10 @@ use std::{
         HashSet,
         VecDeque,
     },
-    sync::Arc,
+    sync::{
+        Arc,
+        Mutex,
+    },
     time::{
         SystemTime,
         SystemTimeError,
@@ -126,7 +129,8 @@ pub type TxPool = Pool<
 
 pub(crate) type Shared<T> = Arc<RwLock<T>>;
 
-pub type Service<View, P2P> = ServiceRunner<Task<View, P2P>>;
+pub type Service<View, P2P, TxStatusManager> =
+    ServiceRunner<Task<View, P2P, TxStatusManager>>;
 
 /// Structure returned to others modules containing the transaction and
 /// some useful infos
@@ -173,7 +177,10 @@ pub enum WritePoolRequest {
     },
 }
 
-pub struct Task<View, P2P> {
+pub struct Task<View, P2P, TxStatusManager>
+where
+    TxStatusManager: TxStatusManagerTrait,
+{
     chain_id: ChainId,
     utxo_validation: bool,
     subscriptions: Subscriptions,
@@ -186,21 +193,22 @@ pub struct Task<View, P2P> {
     current_height_writer: SeqLockWriter<BlockHeight>,
     current_height_reader: SeqLockReader<BlockHeight>,
     tx_sync_history: Shared<HashSet<PeerId>>,
-    shared_state: SharedState,
+    shared_state: SharedState<TxStatusManager>,
     metrics: bool,
 }
 
 #[async_trait::async_trait]
-impl<View, P2P> RunnableService for Task<View, P2P>
+impl<View, P2P, TxStatusManager> RunnableService for Task<View, P2P, TxStatusManager>
 where
     View: TxPoolPersistentStorage,
     P2P: P2PRequests,
+    TxStatusManager: TxStatusManagerTrait,
 {
     const NAME: &'static str = "TxPool";
 
-    type SharedData = SharedState;
+    type SharedData = SharedState<TxStatusManager>;
 
-    type Task = Task<View, P2P>;
+    type Task = Task<View, P2P, TxStatusManager>;
 
     type TaskParams = ();
 
@@ -217,10 +225,11 @@ where
     }
 }
 
-impl<View, P2P> RunnableTask for Task<View, P2P>
+impl<View, P2P, TxStatusManager> RunnableTask for Task<View, P2P, TxStatusManager>
 where
     View: TxPoolPersistentStorage,
     P2P: P2PRequests,
+    TxStatusManager: TxStatusManagerTrait,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -288,10 +297,11 @@ where
     }
 }
 
-impl<View, P2P> Task<View, P2P>
+impl<View, P2P, TxStatusManager> Task<View, P2P, TxStatusManager>
 where
     View: TxPoolPersistentStorage,
     P2P: P2PRequests,
+    TxStatusManager: TxStatusManagerTrait,
 {
     fn import_block(&mut self, result: SharedImportResult) -> TaskNextAction {
         let new_height = *result.sealed_block.entity.header().height();
@@ -404,6 +414,17 @@ where
 
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
 
+                // TODO[RC]: Do not use `send_submitted` anymore
+                self.shared_state
+                    .tx_status_manager
+                    .lock()
+                    .expect("poisoned")
+                    .upsert_status(
+                        &tx_id,
+                        TransactionStatus::Submitted {
+                            time: Tai64::from_unix(duration),
+                        },
+                    );
                 self.shared_state
                     .tx_status_sender
                     .send_submitted(tx_id, Tai64::from_unix(duration));
@@ -437,11 +458,33 @@ where
                     }
                 }
 
+                // TODO[RC]: Do not use `send_squeezed_out` anymore
+                self.shared_state
+                    .tx_status_manager
+                    .lock()
+                    .expect("poisoned")
+                    .upsert_status(
+                        &tx_id,
+                        TransactionStatus::SqueezedOut {
+                            reason: error.to_string(),
+                        },
+                    );
                 self.shared_state
                     .tx_status_sender
                     .send_squeezed_out(tx_id, error);
             }
             PoolNotification::Removed { tx_id, error } => {
+                // TODO[RC]: Do not use `send_squeezed_out` anymore
+                self.shared_state
+                    .tx_status_manager
+                    .lock()
+                    .expect("poisoned")
+                    .upsert_status(
+                        &tx_id,
+                        TransactionStatus::SqueezedOut {
+                            reason: error.to_string(),
+                        },
+                    );
                 self.shared_state
                     .tx_status_sender
                     .send_squeezed_out(tx_id, error);
@@ -526,6 +569,14 @@ where
                             }
                         }
                     }
+
+                    // TODO[RC]: Do not use `send_squeezed_out` anymore
+                    // self.tx_status_manager.upsert_status(
+                    // &tx_id,
+                    // TransactionStatus::SqueezedOut {
+                    // reason: err.to_string(),
+                    // },
+                    // );
                     shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
                     return
                 }
@@ -544,6 +595,7 @@ where
                 tracing::error!("Failed to send the insert request: {}", e);
             }
         };
+
         move || {
             if metrics {
                 let start_time = tokio::time::Instant::now();
@@ -714,7 +766,7 @@ pub fn new_service<
     ChainStateProvider,
     GasPriceProvider,
     WasmChecker,
-    StatusManager,
+    TxStatusManager,
 >(
     chain_id: ChainId,
     config: Config,
@@ -725,8 +777,8 @@ pub fn new_service<
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
     wasm_checker: WasmChecker,
-    status_manager: StatusManager,
-) -> Service<PSView, P2P>
+    tx_status_manager: TxStatusManager,
+) -> Service<PSView, P2P, TxStatusManager>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
     P2P: P2PRequests,
@@ -736,7 +788,7 @@ where
     GasPriceProvider: GasPriceProviderTrait,
     WasmChecker: WasmCheckerTrait,
     BlockImporter: BlockImporterTrait,
-    StatusManager: StatusManagerTrait,
+    TxStatusManager: TxStatusManagerTrait,
 {
     let mut ttl_timer = tokio::time::interval(config.ttl_check_interval);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -821,6 +873,8 @@ where
     let pool_worker =
         PoolWorkerInterface::new(txpool, storage_provider, &service_channel_limits);
 
+    let tx_status_manager = Arc::new(Mutex::new(tx_status_manager));
+
     let shared_state = SharedState {
         request_remove_sender: pool_worker.request_remove_sender.clone(),
         request_read_sender: pool_worker.request_read_sender.clone(),
@@ -831,6 +885,7 @@ where
             .clone(),
         new_txs_notifier,
         latest_stats: pool_stats_receiver,
+        tx_status_manager,
     };
 
     Service::new(Task {
