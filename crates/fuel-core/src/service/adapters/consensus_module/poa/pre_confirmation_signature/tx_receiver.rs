@@ -1,3 +1,4 @@
+use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::Preconfirmations;
 use fuel_core_poa::pre_confirmation_signature_service::{
     error::{
         Error as PoaError,
@@ -15,7 +16,7 @@ pub struct MPSCTxReceiver<T> {
 }
 
 impl TxReceiver for MPSCTxReceiver<Vec<(TxId, PreconfirmationStatus)>> {
-    type Txs = Vec<(TxId, PreconfirmationStatus)>;
+    type Txs = Preconfirmations;
 
     async fn receive(&mut self) -> PoAResult<Self::Txs> {
         self.receiver.recv().await.ok_or(PoaError::TxReceiver(

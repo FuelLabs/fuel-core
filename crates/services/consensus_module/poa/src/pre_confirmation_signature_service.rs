@@ -15,13 +15,12 @@ use crate::pre_confirmation_signature_service::{
 };
 
 pub mod error;
-pub mod trigger;
-pub mod tx_receiver;
-
 pub mod broadcast;
 pub mod key_generator;
 pub mod parent_signature;
 pub mod signing_key;
+pub mod trigger;
+pub mod tx_receiver;
 
 pub type Signed<K, T> = <K as SigningKey>::Signature<T>;
 
