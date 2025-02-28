@@ -1,7 +1,7 @@
 use super::{
     BlockImporterAdapter,
     BlockProducerAdapter,
-    ConsensusParametersProvider,
+    ChainStateInfoProvider,
     SharedMemoryPool,
     StaticGasPrice,
 };
@@ -11,7 +11,7 @@ use crate::{
         worker,
         worker::BlockAt,
         BlockProducerPort,
-        ConsensusProvider,
+        ChainStateProvider,
         DatabaseMessageProof,
         GasPriceEstimate,
         P2pPort,
@@ -200,7 +200,7 @@ impl GasPriceEstimate for StaticGasPrice {
     }
 }
 
-impl ConsensusProvider for ConsensusParametersProvider {
+impl ChainStateProvider for ChainStateInfoProvider {
     fn current_consensus_params(&self) -> Arc<ConsensusParameters> {
         self.shared_state.latest_consensus_parameters()
     }

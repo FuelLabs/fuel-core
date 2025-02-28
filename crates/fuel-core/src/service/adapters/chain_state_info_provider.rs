@@ -62,11 +62,11 @@ impl SharedState {
     fn new(database: Database) -> Self {
         // We set versions in the `into_task` function during start of the service.
         let genesis_version = 0;
-        let latest_stf_version = 0;
+        let genesis_stf_version = 0;
 
         Self {
             latest_consensus_parameters_version: SharedRwLock::new(genesis_version),
-            latest_stf_version: SharedRwLock::new(latest_stf_version),
+            latest_stf_version: SharedRwLock::new(genesis_stf_version),
             consensus_parameters: Default::default(),
             database,
         }
@@ -180,7 +180,7 @@ impl RunnableTask for Task {
 
 #[async_trait::async_trait]
 impl RunnableService for Task {
-    const NAME: &'static str = "ConsensusParametersProviderTask";
+    const NAME: &'static str = "ChainStateInfoProviderTask";
     type SharedData = SharedState;
     type Task = Self;
     type TaskParams = ();
@@ -199,12 +199,17 @@ impl RunnableService for Task {
             .database
             .latest_view()?
             .latest_consensus_parameters_version()?;
+        let latest_stf_version = self
+            .shared_state
+            .database
+            .latest_view()?
+            .latest_state_transition_bytecode_version()?;
+
         self.shared_state
             .cache_consensus_parameters_version(latest_consensus_parameters_version);
         self.shared_state
             .cache_consensus_parameters(latest_consensus_parameters_version)?;
-        self.shared_state
-            .cache_stf_version(latest_consensus_parameters_version);
+        self.shared_state.cache_stf_version(latest_stf_version);
 
         Ok(self)
     }
@@ -225,7 +230,7 @@ pub fn new_service(
 mod tests {
     use crate::{
         database::Database,
-        service::adapters::consensus_parameters_provider::{
+        service::adapters::chain_state_info_provider::{
             SharedState,
             Task,
         },
@@ -237,17 +242,26 @@ mod tests {
         StateWatcher,
     };
     use fuel_core_storage::{
-        tables::ConsensusParametersVersions,
+        tables::{
+            ConsensusParametersVersions,
+            StateTransitionBytecodeVersions,
+        },
         transactional::IntoTransaction,
         StorageAsMut,
     };
     use fuel_core_types::{
         blockchain::{
             block::Block,
-            header::ConsensusParametersVersion,
+            header::{
+                ConsensusParametersVersion,
+                StateTransitionBytecodeVersion,
+            },
             SealedBlock,
         },
-        fuel_tx::ConsensusParameters,
+        fuel_tx::{
+            Bytes32,
+            ConsensusParameters,
+        },
         services::block_importer::{
             ImportResult,
             SharedImportResult,
@@ -255,27 +269,39 @@ mod tests {
     };
     use futures::stream;
 
-    fn add_consensus_parameters(
+    fn add_consensus_parameters_and_stf_version(
         database: Database,
         consensus_parameters_version: ConsensusParametersVersion,
         consensus_parameters: &ConsensusParameters,
+        stf_version: StateTransitionBytecodeVersion,
     ) -> Database {
         let mut database = database.into_transaction();
         database
             .storage_as_mut::<ConsensusParametersVersions>()
             .insert(&consensus_parameters_version, consensus_parameters)
             .unwrap();
+
+        const BYTECODE_ROOT: Bytes32 = Bytes32::zeroed();
+        database
+            .storage_as_mut::<StateTransitionBytecodeVersions>()
+            .insert(&stf_version, &BYTECODE_ROOT)
+            .unwrap();
         database.commit().unwrap()
     }
 
     #[tokio::test]
     async fn latest_consensus_parameters_works() {
-        let version = 0;
+        let consensus_parameters_version = 0;
         let consensus_parameters = Default::default();
+        let stf_version = Default::default();
 
         // Given
-        let database =
-            add_consensus_parameters(Database::default(), version, &consensus_parameters);
+        let database = add_consensus_parameters_and_stf_version(
+            Database::default(),
+            consensus_parameters_version,
+            &consensus_parameters,
+            stf_version,
+        );
         let state = SharedState::new(database);
 
         // When
@@ -287,12 +313,17 @@ mod tests {
 
     #[tokio::test]
     async fn into_task_works_with_non_empty_database() {
-        let version = 0;
+        let consensus_parameters_version = 0;
         let consensus_parameters = Default::default();
+        let stf_version = Default::default();
 
         // Given
-        let non_empty_database =
-            add_consensus_parameters(Database::default(), version, &consensus_parameters);
+        let non_empty_database = add_consensus_parameters_and_stf_version(
+            Database::default(),
+            consensus_parameters_version,
+            &consensus_parameters,
+            stf_version,
+        );
         let task = Task {
             blocks_events: stream::empty().into_boxed(),
             shared_state: SharedState::new(non_empty_database),
@@ -302,7 +333,7 @@ mod tests {
         let result = task.into_task(&Default::default(), ()).await;
 
         // Then
-        result.expect("Initialization should succeed because database contains consensus parameters.");
+        result.expect("Initialization should succeed because database contains consensus parameters and stf version.");
     }
 
     #[tokio::test]
@@ -319,11 +350,11 @@ mod tests {
 
         // Then
         result.expect_err(
-            "Initialization should fails because of lack of consensus parameters",
+            "Initialization should fails because of lack of consensus parameters and stf version",
         );
     }
 
-    fn result_with_new_version(
+    fn result_with_new_consensus_parameters_version(
         version: ConsensusParametersVersion,
     ) -> SharedImportResult {
         let mut block = Block::default();
@@ -343,8 +374,10 @@ mod tests {
     async fn run_updates_the_latest_consensus_parameters_from_imported_block() {
         use futures::StreamExt;
 
-        let old_version = 0;
-        let new_version = 1234;
+        let stf_version = Default::default();
+
+        let old_consensus_parameters_version = 0;
+        let new_consensus_parameters_version = 1234;
         let old_consensus_parameters = ConsensusParameters::default();
         let mut new_consensus_parameters = ConsensusParameters::default();
         new_consensus_parameters.set_privileged_address([123; 32].into());
@@ -352,10 +385,11 @@ mod tests {
 
         let (block_sender, block_receiver) =
             tokio::sync::broadcast::channel::<SharedImportResult>(1);
-        let database_with_old_parameters = add_consensus_parameters(
+        let database_with_old_parameters = add_consensus_parameters_and_stf_version(
             Database::default(),
-            old_version,
+            old_consensus_parameters_version,
             &old_consensus_parameters,
+            stf_version,
         );
         let mut task = Task {
             blocks_events: IntoBoxStream::into_boxed(
@@ -373,14 +407,17 @@ mod tests {
         );
 
         // Given
-        add_consensus_parameters(
+        add_consensus_parameters_and_stf_version(
             database_with_old_parameters,
-            new_version,
+            new_consensus_parameters_version,
             &new_consensus_parameters,
+            stf_version,
         );
 
         // When
-        let result_with_new_version = result_with_new_version(new_version);
+        let result_with_new_version = result_with_new_consensus_parameters_version(
+            new_consensus_parameters_version,
+        );
         let _ = block_sender.send(result_with_new_version);
         let _ = task.run(&mut StateWatcher::started()).await;
 
@@ -389,5 +426,68 @@ mod tests {
             task.shared_state.latest_consensus_parameters().as_ref(),
             &new_consensus_parameters
         );
+    }
+
+    fn result_with_new_stf_version(
+        version: StateTransitionBytecodeVersion,
+    ) -> SharedImportResult {
+        let mut block = Block::default();
+        block.header_mut().set_stf_version(version);
+        let sealed_block = SealedBlock {
+            entity: block,
+            consensus: Default::default(),
+        };
+        std::sync::Arc::new(ImportResult::new_from_local(
+            sealed_block,
+            Default::default(),
+            Default::default(),
+        ))
+    }
+
+    #[tokio::test]
+    async fn run_updates_the_latest_stf_version_from_imported_block() {
+        use futures::StreamExt;
+
+        let old_stf_version = 0;
+        let new_stf_version = 1234;
+
+        let consensus_parameters_version = 0;
+        let consensus_parameters = ConsensusParameters::default();
+
+        let (block_sender, block_receiver) =
+            tokio::sync::broadcast::channel::<SharedImportResult>(1);
+        let database_with_old_parameters = add_consensus_parameters_and_stf_version(
+            Database::default(),
+            consensus_parameters_version,
+            &consensus_parameters,
+            old_stf_version,
+        );
+        let mut task = Task {
+            blocks_events: IntoBoxStream::into_boxed(
+                tokio_stream::wrappers::BroadcastStream::new(block_receiver)
+                    .filter_map(|r| futures::future::ready(r.ok())),
+            ),
+            shared_state: SharedState::new(database_with_old_parameters.clone()),
+        }
+        .into_task(&Default::default(), ())
+        .await
+        .unwrap();
+        assert_eq!(task.shared_state.latest_stf_version(), old_stf_version);
+
+        // Given
+        add_consensus_parameters_and_stf_version(
+            database_with_old_parameters,
+            consensus_parameters_version,
+            &consensus_parameters,
+            new_stf_version,
+        );
+
+        // When
+        let result_with_new_version = result_with_new_stf_version(new_stf_version);
+        let _ = block_sender.send(result_with_new_version);
+        let _ = task.run(&mut StateWatcher::started()).await;
+
+        // Then
+        assert_eq!(task.shared_state.latest_stf_version(), new_stf_version);
     }
 }

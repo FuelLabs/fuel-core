@@ -2,7 +2,7 @@ use crate::{
     ports::{
         AtomicView,
         BlockImporter as BlockImporterTrait,
-        ConsensusParametersProvider,
+        ChainStateInfoProvider,
         GasPriceProvider,
         NotifyP2P,
         P2PRequests,
@@ -130,25 +130,23 @@ impl StorageRead<BlobData> for MockDb {
         key: &<BlobData as Mappable>::Key,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<Option<usize>, Self::Error> {
+    ) -> Result<bool, Self::Error> {
         let table = self.data.lock().unwrap();
-        let bytes = table.blobs.get(key);
+        let Some(bytes) = table.blobs.get(key) else {
+            return Ok(false);
+        };
 
-        bytes
-            .map(|bytes| {
-                let bytes_len = bytes.as_ref().len();
-                let start = offset;
-                let end = offset.saturating_add(buf.len());
+        let bytes_len = bytes.as_ref().len();
+        let start = offset;
+        let end = offset.saturating_add(buf.len());
 
-                if end > bytes_len {
-                    return Err(());
-                }
+        if end > bytes_len {
+            return Err(());
+        }
 
-                let starting_from_offset = &bytes.as_ref()[start..end];
-                buf[..].copy_from_slice(starting_from_offset);
-                Ok(buf.len())
-            })
-            .transpose()
+        let starting_from_offset = &bytes.as_ref()[start..end];
+        buf[..].copy_from_slice(starting_from_offset);
+        Ok(true)
     }
 
     fn read_alloc(
@@ -251,9 +249,9 @@ impl WasmChecker for MockWasmChecker {
 }
 
 mockall::mock! {
-    pub ConsensusParametersProvider {}
+    pub ChainStateInfoProvider {}
 
-    impl ConsensusParametersProvider for ConsensusParametersProvider {
+    impl ChainStateInfoProvider for ChainStateInfoProvider {
         fn latest_consensus_parameters(&self) -> (ConsensusParametersVersion, Arc<ConsensusParameters>);
     }
 }

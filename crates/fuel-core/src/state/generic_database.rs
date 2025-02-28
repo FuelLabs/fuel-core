@@ -93,7 +93,7 @@ where
         key: &M::Key,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<Option<usize>, Self::Error> {
+    ) -> Result<bool, Self::Error> {
         self.storage.storage::<M>().read(key, offset, buf)
     }
 
@@ -141,7 +141,7 @@ where
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<Option<usize>> {
+    ) -> StorageResult<bool> {
         KeyValueInspect::read(&self.storage, key, column, offset, buf)
     }
 }
