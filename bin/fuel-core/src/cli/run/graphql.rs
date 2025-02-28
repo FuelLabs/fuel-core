@@ -131,6 +131,14 @@ pub struct QueryCosts {
     )]
     pub dry_run: usize,
 
+    /// Query costs for assembling the transaction.
+    #[clap(
+        long = "query-cost-assemble-tx",
+        default_value = DEFAULT_QUERY_COSTS.assemble_tx.to_string(),
+        env
+    )]
+    pub assemble_tx: usize,
+
     /// Query costs for generating execution trace for a block.
     #[clap(
         long = "query-cost-storage-read-replay",

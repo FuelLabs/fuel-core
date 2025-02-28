@@ -162,7 +162,7 @@ impl TransactionExt for CheckedTransaction {
             CheckedTransaction::Script(tx) => Ok(tx.transaction().inputs()),
             CheckedTransaction::Create(tx) => Ok(tx.transaction().inputs()),
             CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have max_gas".to_string(),
+                "Mint transaction doesn't have inputs".to_string(),
             )),
             CheckedTransaction::Upgrade(tx) => Ok(tx.transaction().inputs()),
             CheckedTransaction::Upload(tx) => Ok(tx.transaction().inputs()),

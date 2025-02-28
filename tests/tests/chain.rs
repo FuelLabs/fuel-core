@@ -22,14 +22,14 @@ use fuel_core_client::client::{
 };
 use fuel_core_types::{
     fuel_crypto::SecretKey,
-    fuel_tx::{
-        Input,
-        Output,
-        TransactionBuilder,
-    },
+    fuel_tx::Input,
     fuel_types::ChainId,
 };
 use rand::SeedableRng;
+use test_helpers::assemble_tx::{
+    AssembleAndRunTx,
+    SigningAccount,
+};
 
 #[tokio::test]
 async fn chain_info() {
@@ -77,34 +77,19 @@ async fn network_operates_with_non_zero_chain_id() {
     // Given
     let chain_id = ChainId::new(0xDEAD);
     chain_config.consensus_parameters.set_chain_id(chain_id);
-    let node_config = Config {
+    let mut node_config = Config {
         debug: true,
         utxo_validation: true,
         ..Config::local_node_with_configs(chain_config, state_config)
     };
+    node_config.gas_price_config.min_exec_gas_price = 1000;
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
-    let script = TransactionBuilder::script(vec![], vec![])
-        .with_chain_id(chain_id)
-        .max_fee_limit(amount)
-        .add_unsigned_coin_input(
-            secret,
-            utxo_id,
-            amount,
-            AssetId::BASE,
-            Default::default(),
-        )
-        .add_output(Output::Change {
-            to: owner,
-            amount,
-            asset_id: AssetId::BASE,
-        })
-        .finalize_as_transaction();
 
     // When
     let result = client
-        .submit_and_await_commit(&script)
+        .run_script(vec![], vec![], SigningAccount::Wallet(secret))
         .await
         .expect("transaction should insert");
 
@@ -152,25 +137,10 @@ async fn network_operates_with_non_zero_base_asset_id() {
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
-    let script = TransactionBuilder::script(vec![], vec![])
-        .max_fee_limit(amount)
-        .add_unsigned_coin_input(
-            secret,
-            utxo_id,
-            amount,
-            new_base_asset_id,
-            Default::default(),
-        )
-        .add_output(Output::Change {
-            to: owner,
-            amount,
-            asset_id: new_base_asset_id,
-        })
-        .finalize_as_transaction();
 
     // When
     let result = client
-        .submit_and_await_commit(&script)
+        .run_script(vec![], vec![], SigningAccount::Wallet(secret))
         .await
         .expect("transaction should insert");
 
