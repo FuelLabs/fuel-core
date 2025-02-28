@@ -32,6 +32,9 @@ pub struct StorageQuery;
 
 #[Object]
 impl StorageQuery {
+    /// Get storage slot values for a contract at a specific block height.
+    /// Use the latest block height if not provided.
+    /// Requires historical execution config to be enabled.
     async fn contract_slot_values(
         &self,
         ctx: &Context<'_>,
@@ -64,6 +67,9 @@ impl StorageQuery {
         Ok(stream)
     }
 
+    /// Get balance values for a contract at a specific block height.
+    /// Use the latest block height if not provided.
+    /// Requires historical execution config to be enabled.
     async fn contract_balance_values(
         &self,
         ctx: &Context<'_>,
