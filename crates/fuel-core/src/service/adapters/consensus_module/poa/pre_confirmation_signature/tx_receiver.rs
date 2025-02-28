@@ -4,7 +4,10 @@ use fuel_core_poa::pre_confirmation_signature_service::{
         Error as PoaError,
         Result as PoAResult,
     },
-    tx_receiver::TxReceiver,
+    tx_receiver::{
+        TxReceiver,
+        TxSender,
+    },
 };
 use fuel_core_types::{
     fuel_tx::TxId,
@@ -12,18 +15,42 @@ use fuel_core_types::{
 };
 
 pub struct MPSCTxReceiver<T> {
+    sender: tokio::sync::mpsc::Sender<T>,
     receiver: tokio::sync::mpsc::Receiver<T>,
+}
+
+pub struct MPSCTxSender<T> {
+    sender: tokio::sync::mpsc::Sender<T>,
 }
 
 impl TxReceiver for MPSCTxReceiver<Vec<(TxId, PreconfirmationStatus)>> {
     type Txs = Preconfirmations;
+    type Sender = MPSCTxSender<Vec<(TxId, PreconfirmationStatus)>>;
 
     async fn receive(&mut self) -> PoAResult<Self::Txs> {
         self.receiver.recv().await.ok_or(PoaError::TxReceiver(
             "Failed to receive transaction, channel closed".to_string(),
         ))
     }
+
+    fn get_sender(&self) -> PoAResult<Self::Sender> {
+        Ok(MPSCTxSender {
+            sender: self.sender.clone(),
+        })
+    }
 }
+
+impl TxSender for MPSCTxSender<Vec<(TxId, PreconfirmationStatus)>> {
+    type Txs = Preconfirmations;
+
+    async fn send(&mut self, txs: Self::Txs) -> PoAResult<()> {
+        self.sender
+            .send(txs)
+            .await
+            .map_err(|e| PoaError::TxReceiver(format!("{}", e)))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(non_snake_case)]

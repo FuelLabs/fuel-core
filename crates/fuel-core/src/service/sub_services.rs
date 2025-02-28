@@ -22,7 +22,18 @@ use crate::{
     service::{
         adapters::{
             chain_state_info_provider,
-            consensus_module::poa::InDirectoryPredefinedBlocks,
+            consensus_module::poa::{
+                pre_confirmation_signature::{
+                    broadcast::P2PBroadcast,
+                    key_generator::DelegateKeyGenerator,
+                    parent_signature::FuelParentSignature,
+                    signing_key::DummyKey,
+                    trigger::TimeBasedTrigger,
+                    tx_receiver::MPSCTxReceiver,
+                    Preconfirmations,
+                },
+                InDirectoryPredefinedBlocks,
+            },
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
@@ -70,6 +81,12 @@ pub type PoAService = fuel_core_poa::Service<
     SignMode,
     InDirectoryPredefinedBlocks,
     SystemTime,
+    MPSCTxReceiver<Preconfirmations>,
+    P2PBroadcast,
+    FuelParentSignature<DummyKey>,
+    DelegateKeyGenerator,
+    DummyKey,
+    TimeBasedTrigger<SystemTime>,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -87,6 +104,7 @@ pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 // TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
 pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
 
+#[allow(unreachable_code)]
 pub fn init_sub_services(
     config: &Config,
     database: CombinedDatabase,
@@ -296,6 +314,7 @@ pub fn init_sub_services(
 
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
+    let pre_confirmation_service:  = todo!();
     let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
             &last_block_header,
@@ -307,6 +326,7 @@ pub fn init_sub_services(
             signer,
             predefined_blocks,
             SystemTime,
+            pre_confirmation_service,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));

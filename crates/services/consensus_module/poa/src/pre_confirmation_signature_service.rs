@@ -1,5 +1,6 @@
 use error::Result;
 use fuel_core_services::{
+    RunnableService,
     RunnableTask,
     StateWatcher,
     TaskNextAction,
@@ -41,6 +42,39 @@ pub struct PreConfirmationSignatureTask<
     key_generator: KeyGenerator,
     current_delegate_key: DelegateKey,
     key_rotation_trigger: KeyRotationTrigger,
+}
+
+#[async_trait::async_trait]
+impl<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger> RunnableService
+    for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+where
+    TxRcv: TxReceiver,
+    Brdcst: Broadcast<
+        DelegateKey = DelegateKey,
+        ParentSignature = Parent::SignedData,
+        PreConfirmations: From<TxRcv::Txs>,
+    >,
+    Parent: ParentSignature<DelegateKey>,
+    Gen: KeyGenerator<Key = DelegateKey>,
+    DelegateKey: SigningKey,
+    Trigger: KeyRotationTrigger,
+{
+    const NAME: &'static str = "PreConfirmationSignatureTask";
+    type SharedData = ();
+    type Task = Self;
+    type TaskParams = ();
+
+    fn shared_data(&self) -> Self::SharedData {
+        todo!()
+    }
+
+    async fn into_task(
+        self,
+        _state_watcher: &StateWatcher,
+        _params: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
+        todo!()
+    }
 }
 
 impl<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
