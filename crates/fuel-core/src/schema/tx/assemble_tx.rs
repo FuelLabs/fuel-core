@@ -162,16 +162,12 @@ where
             return Err(anyhow::anyhow!("The fee address index is out of bounds"));
         }
 
-        let mut duplicate_checker =
-            HashSet::with_capacity(arguments.required_balances.len());
-        for required_balance in &arguments.required_balances {
-            let asset_id = required_balance.asset_id;
-            let owner = required_balance.account.owner();
-            if !duplicate_checker.insert((asset_id, owner)) {
-                return Err(anyhow::anyhow!(
-                    "The same asset and account pair is used multiple times in required balances"
-                ));
-            }
+        if has_duplicates(&arguments.required_balances, |balance| {
+            (balance.asset_id, balance.account.owner())
+        }) {
+            return Err(anyhow::anyhow!(
+                "required balances contain duplicate (asset, account) pair"
+            ));
         }
 
         let mut signature_witness_indexes = HashMap::<Address, u16>::new();
@@ -282,7 +278,7 @@ where
         let original_max_fee = tx.max_fee_limit();
         let original_witness_limit = tx.witness_limit();
 
-        let _self = Self {
+        Ok(Self {
             tx,
             arguments,
             signature_witness_indexes,
@@ -294,9 +290,7 @@ where
             original_max_fee,
             original_witness_limit,
             fee_payer_account,
-        };
-
-        Ok(_self)
+        })
     }
 
     pub async fn assemble(mut self) -> anyhow::Result<Tx> {
@@ -818,6 +812,22 @@ where
 
         Ok(self)
     }
+}
+
+fn has_duplicates<T, F, K>(items: &[T], extractor: F) -> bool
+where
+    F: Fn(&T) -> K,
+    K: std::hash::Hash + std::cmp::Eq,
+{
+    let mut duplicates = HashSet::with_capacity(items.len());
+    for item in items {
+        let key = extractor(item);
+        if !duplicates.insert(key) {
+            return true
+        }
+    }
+
+    false
 }
 
 fn set_max_fee<Tx>(
