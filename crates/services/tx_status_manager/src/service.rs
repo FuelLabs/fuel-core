@@ -5,12 +5,15 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_types::services::{
-    p2p::{
-        GossipData,
-        TransactionStatusGossipData,
+use fuel_core_types::{
+    fuel_tx::TxId,
+    services::{
+        p2p::{
+            GossipData,
+            TransactionStatusGossipData,
+        },
+        txpool::TransactionStatus,
     },
-    txpool::TransactionStatus,
 };
 use futures::StreamExt;
 
@@ -26,10 +29,10 @@ pub struct Task {
 }
 
 impl Task {
-    fn new_tx_status_from_p2p(&mut self, tx_status: TransactionStatus) {
+    fn new_tx_status_from_p2p(&mut self, (tx_id, tx_status): (TxId, TransactionStatus)) {
         // TODO[RC]: Capacity checks?
-        self.shared_state
-            .add_status(todo!() /* &tx_status.tx_id */, tx_status);
+        // TODO[RC]: Purge old statuses?
+        self.shared_state.add_status(&tx_id, tx_status);
     }
 }
 
@@ -67,8 +70,8 @@ impl RunnableTask for Task {
 
             tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
                 if let Some(GossipData { data, message_id, peer_id }) = tx_status_from_p2p {
-                    if let Some(tx) = data {
-                        self.new_tx_status_from_p2p(tx);
+                    if let Some(tx_status) = data {
+                        self.new_tx_status_from_p2p(tx_status);
                     }
                     TaskNextAction::Continue
                 } else {

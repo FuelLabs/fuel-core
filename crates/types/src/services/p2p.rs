@@ -1,5 +1,6 @@
 //! Contains types related to P2P data
 
+use fuel_vm_private::prelude::TxId;
 #[cfg(feature = "serde")]
 use serde::{
     Deserialize,
@@ -73,7 +74,7 @@ pub struct GossipData<T> {
 }
 
 /// Transaction statuses gossiped by peers
-pub type TransactionStatusGossipData = GossipData<TransactionStatus>;
+pub type TransactionStatusGossipData = GossipData<(TxId, TransactionStatus)>;
 
 /// Transactions gossiped by peers for inclusion into a block
 pub type TransactionGossipData = GossipData<Transaction>;
