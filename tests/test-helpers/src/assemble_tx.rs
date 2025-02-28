@@ -70,41 +70,6 @@ pub trait AssembleAndRunTx {
     ) -> impl Future<Output = io::Result<Transaction>> + Send;
 }
 
-#[derive(Clone)]
-pub enum SigningAccount {
-    Wallet(SecretKey),
-    Predicate {
-        predicate: Vec<u8>,
-        predicate_data: Vec<u8>,
-    },
-}
-
-impl SigningAccount {
-    pub fn owner(&self) -> Address {
-        match self {
-            SigningAccount::Wallet(secret_key) => Input::owner(&secret_key.public_key()),
-            SigningAccount::Predicate { predicate, .. } => {
-                Input::predicate_owner(predicate)
-            }
-        }
-    }
-
-    pub fn into_account(self) -> Account {
-        let wallet_owner = self.owner();
-        match self {
-            SigningAccount::Wallet(_) => Account::Address(wallet_owner),
-            SigningAccount::Predicate {
-                predicate,
-                predicate_data,
-            } => Account::Predicate(Predicate {
-                address: wallet_owner,
-                predicate: predicate.clone(),
-                predicate_data: predicate_data.clone(),
-            }),
-        }
-    }
-}
-
 impl AssembleAndRunTx for FuelClient {
     async fn transfer(
         &self,
@@ -204,16 +169,14 @@ impl AssembleAndRunTx for FuelClient {
         let base_asset_id = *params.base_asset_id();
         let wallet_owner = wallet.owner();
 
-        let mut base_balance_index = None;
-
-        for (i, balance) in required_balances.iter().enumerate() {
-            if balance.asset_id == base_asset_id
-                && balance.account.owner() == wallet_owner
-            {
-                base_balance_index = Some(i);
-                break;
-            }
-        }
+        let mut base_balance_index = required_balances
+            .iter()
+            .enumerate()
+            .find(|(_, balance)| {
+                balance.asset_id == base_asset_id
+                    && balance.account.owner() == wallet_owner
+            })
+            .map(|(i, _)| i);
 
         if base_balance_index.is_none() {
             let required_balance = match &wallet {
@@ -288,5 +251,40 @@ impl AssembleAndRunTx for FuelClient {
         }
 
         Ok(tx.transaction)
+    }
+}
+
+#[derive(Clone)]
+pub enum SigningAccount {
+    Wallet(SecretKey),
+    Predicate {
+        predicate: Vec<u8>,
+        predicate_data: Vec<u8>,
+    },
+}
+
+impl SigningAccount {
+    pub fn owner(&self) -> Address {
+        match self {
+            SigningAccount::Wallet(secret_key) => Input::owner(&secret_key.public_key()),
+            SigningAccount::Predicate { predicate, .. } => {
+                Input::predicate_owner(predicate)
+            }
+        }
+    }
+
+    pub fn into_account(self) -> Account {
+        let wallet_owner = self.owner();
+        match self {
+            SigningAccount::Wallet(_) => Account::Address(wallet_owner),
+            SigningAccount::Predicate {
+                predicate,
+                predicate_data,
+            } => Account::Predicate(Predicate {
+                address: wallet_owner,
+                predicate: predicate.clone(),
+                predicate_data: predicate_data.clone(),
+            }),
+        }
     }
 }
