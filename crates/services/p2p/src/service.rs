@@ -69,6 +69,7 @@ use fuel_core_types::{
         NetworkableTransactionPool,
         PeerId as FuelPeerId,
         TransactionGossipData,
+        TransactionStatusGossipData,
         Transactions,
     },
 };
@@ -1052,6 +1053,8 @@ pub struct SharedState {
     new_tx_subscription_broadcast: broadcast::Sender<FuelPeerId>,
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
+    /// Sender of p2p transaction statuses used for subscribing.
+    tx_status_broadcast: broadcast::Sender<TransactionStatusGossipData>,
     /// Sender of reserved peers connection updates.
     reserved_peers_broadcast: broadcast::Sender<usize>,
     /// Used for communicating with the `Task`.
@@ -1281,6 +1284,12 @@ impl SharedState {
         self.tx_broadcast.subscribe()
     }
 
+    pub fn subscribe_tx_status(
+        &self,
+    ) -> broadcast::Receiver<TransactionStatusGossipData> {
+        self.tx_status_broadcast.subscribe()
+    }
+
     pub fn subscribe_block_height(
         &self,
     ) -> broadcast::Receiver<BlockHeightHeartbeatData> {
@@ -1323,6 +1332,7 @@ pub fn build_shared_state(
 ) -> (SharedState, Receiver<TaskRequest>) {
     let (request_sender, request_receiver) = mpsc::channel(CHANNEL_SIZE);
     let (tx_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
+    let (tx_status_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
     let (new_tx_subscription_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
     let (block_height_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
 
@@ -1339,6 +1349,7 @@ pub fn build_shared_state(
             request_sender,
             new_tx_subscription_broadcast,
             tx_broadcast,
+            tx_status_broadcast,
             reserved_peers_broadcast,
             block_height_broadcast,
             max_txs_per_request: config.max_txs_per_request,

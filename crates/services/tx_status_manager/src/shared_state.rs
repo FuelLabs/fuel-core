@@ -2,8 +2,14 @@ use std::collections::HashMap;
 
 use fuel_core_types::{
     fuel_tx::TxId,
-    services::txpool::TransactionStatus,
+    services::{
+        p2p::TransactionStatusGossipData,
+        txpool::TransactionStatus,
+    },
 };
+use tokio::sync::broadcast;
+
+const CHANNEL_SIZE: usize = 1024 * 10;
 
 #[derive(Clone)]
 pub struct SharedState {

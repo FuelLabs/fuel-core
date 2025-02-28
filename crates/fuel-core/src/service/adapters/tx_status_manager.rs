@@ -39,11 +39,22 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
             StreamExt,
         };
 
-        todo!()
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_tx_status())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+        }
+    }
+}
 
-        // Box::pin(
-        // BroadcastStream::new(self.service.subscribe_tx())
-        // .filter_map(|result| result.ok()),
-        // )
+#[cfg(not(feature = "p2p"))]
+impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
+    type GossipedStatuses = TransactionStatusGossipData;
+
+    fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
+        Box::pin(fuel_core_services::stream::pending())
     }
 }
