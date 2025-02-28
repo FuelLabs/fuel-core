@@ -20,7 +20,7 @@ use super::{
 };
 
 impl TxStatusManager for TxStatusManagerAdapter {
-    fn add_status(&mut self, tx_id: &TxId, tx_status: &TransactionStatus) {
+    fn add_status(&mut self, tx_id: &TxId, tx_status: TransactionStatus) {
         self.service.add_status(tx_id, tx_status)
     }
 

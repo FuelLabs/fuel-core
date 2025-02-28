@@ -5,15 +5,32 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_types::services::p2p::TransactionStatusGossipData;
+use fuel_core_types::services::{
+    p2p::{
+        GossipData,
+        TransactionStatusGossipData,
+    },
+    txpool::TransactionStatus,
+};
+use futures::StreamExt;
 
 use crate::{
     ports::P2PSubscriptions,
+    subscriptions::Subscriptions,
     SharedState,
 };
 
 pub struct Task {
     shared_state: SharedState,
+    subscriptions: Subscriptions,
+}
+
+impl Task {
+    fn new_tx_status_from_p2p(&mut self, tx_status: TransactionStatus) {
+        // TODO[RC]: Capacity checks?
+        self.shared_state
+            .add_status(todo!() /* &tx_status.tx_id */, tx_status);
+    }
 }
 
 #[async_trait::async_trait]
@@ -45,11 +62,21 @@ impl RunnableTask for Task {
             biased;
 
             _ = watcher.while_started() => {
-                return TaskNextAction::Stop
+                TaskNextAction::Stop
             }
-        }
 
-        TaskNextAction::Continue
+            tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
+                if let Some(GossipData { data, message_id, peer_id }) = tx_status_from_p2p {
+                    if let Some(tx) = data {
+                        self.new_tx_status_from_p2p(tx);
+                    }
+                    TaskNextAction::Continue
+                } else {
+                    TaskNextAction::Stop
+                }
+            }
+
+        }
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -63,7 +90,12 @@ where
 {
     let tx_status_from_p2p_stream = p2p.gossiped_tx_statuses();
 
+    let subscriptions = Subscriptions {
+        new_tx_status: tx_status_from_p2p_stream,
+    };
+
     ServiceRunner::new(Task {
         shared_state: SharedState::new(),
+        subscriptions,
     })
 }

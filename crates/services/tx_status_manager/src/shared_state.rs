@@ -17,8 +17,8 @@ impl SharedState {
         }
     }
 
-    pub fn add_status(&mut self, tx_id: &TxId, tx_status: &TransactionStatus) {
-        self.statuses.insert(tx_id.clone(), tx_status.clone());
+    pub fn add_status(&mut self, tx_id: &TxId, tx_status: TransactionStatus) {
+        self.statuses.insert(tx_id.clone(), tx_status);
     }
 
     pub fn status(&self, tx_id: &TxId) -> Option<&TransactionStatus> {
