@@ -7,10 +7,13 @@ use fuel_core_poa::{
         },
         parent_signature::ParentSignature,
         trigger::KeyRotationTrigger,
+        tx_receiver::TxReceiver,
     },
 };
 use fuel_core_types::{
     fuel_crypto,
+    fuel_tx::TxId,
+    services::p2p::PreconfirmationStatus,
     signer::SignMode,
     tai64::Tai64,
 };
@@ -18,6 +21,9 @@ use std::time::Duration;
 
 #[cfg(test)]
 mod trigger;
+
+#[cfg(test)]
+mod tx_receiver;
 
 pub struct TimeBasedTrigger<Time> {
     time: Time,
@@ -111,5 +117,22 @@ where
             PoaError::ParentSignature(format!("Failed to sign message: {}", e))
         })?;
         Ok(signature.into())
+    }
+}
+
+pub struct MPSCTxReceiver<T> {
+    receiver: tokio::sync::mpsc::Receiver<T>,
+}
+
+impl TxReceiver for MPSCTxReceiver<Vec<(TxId, PreconfirmationStatus)>> {
+    type Txs = Vec<(TxId, PreconfirmationStatus)>;
+
+    async fn receive(&mut self) -> PoAResult<Self::Txs> {
+        self.receiver
+            .recv()
+            .await
+            .ok_or(PoaError::TxReceiver(format!(
+                "Failed to receive transaction, channel closed"
+            )))
     }
 }
