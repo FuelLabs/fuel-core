@@ -445,7 +445,7 @@ async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
     let target_address = SigningAccount::Wallet(target_wallet).owner();
 
     let second_tx = client
-        .transfer(
+        .assemble_transfer(
             SigningAccount::Wallet(source_wallet),
             vec![(target_address, base_asset_id, 2)],
         )
@@ -455,7 +455,7 @@ async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
     // We want `third_tx` have a different TxId than `second_tx`.
     // Both transactions use the same UtxoId
     let third_tx = client
-        .transfer(
+        .assemble_transfer(
             SigningAccount::Wallet(source_wallet),
             vec![(target_address, base_asset_id, 1)],
         )

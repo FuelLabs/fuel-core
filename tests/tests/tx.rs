@@ -351,7 +351,7 @@ async fn submit() {
     ];
 
     let tx = client
-        .script(script, vec![], default_signing_wallet())
+        .assemble_script(script, vec![], default_signing_wallet())
         .await
         .unwrap();
 
@@ -380,7 +380,7 @@ async fn submit_and_await_status() {
         op::ret(RegId::ONE),
     ];
     let tx = client
-        .script(script, vec![], default_signing_wallet())
+        .assemble_script(script, vec![], default_signing_wallet())
         .await
         .unwrap();
 
@@ -411,7 +411,7 @@ async fn dry_run_transaction_should_use_latest_block_time() {
     let script = vec![op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
 
     let tx = client
-        .script(script, vec![], default_signing_wallet())
+        .assemble_script(script, vec![], default_signing_wallet())
         .await
         .unwrap();
 

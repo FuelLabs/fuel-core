@@ -94,7 +94,7 @@ impl TestContext {
 
         let status = self
             .client
-            .assemble_and_run(&tx.into(), unwrap_account(account))
+            .assemble_and_run_tx(&tx.into(), unwrap_account(account))
             .await?;
 
         Ok((status, blob_id))

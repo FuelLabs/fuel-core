@@ -30,33 +30,7 @@ use std::{
 };
 
 pub trait AssembleAndRunTx {
-    fn transfer(
-        &self,
-        wallet: SigningAccount,
-        recipients: Vec<(Address, AssetId, u64)>,
-    ) -> impl Future<Output = io::Result<Transaction>> + Send;
-
-    fn run_transfer(
-        &self,
-        wallet: SigningAccount,
-        recipients: Vec<(Address, AssetId, u64)>,
-    ) -> impl Future<Output = io::Result<TransactionStatus>> + Send;
-
-    fn script(
-        &self,
-        script: Vec<Instruction>,
-        script_data: Vec<u8>,
-        wallet: SigningAccount,
-    ) -> impl Future<Output = io::Result<Transaction>> + Send;
-
-    fn run_script(
-        &self,
-        script: Vec<Instruction>,
-        script_data: Vec<u8>,
-        wallet: SigningAccount,
-    ) -> impl Future<Output = io::Result<TransactionStatus>> + Send;
-
-    fn assemble_and_run(
+    fn assemble_and_run_tx(
         &self,
         tx_to_assemble: &Transaction,
         wallet: SigningAccount,
@@ -68,85 +42,36 @@ pub trait AssembleAndRunTx {
         wallet: SigningAccount,
         required_balances: Vec<RequiredBalance>,
     ) -> impl Future<Output = io::Result<Transaction>> + Send;
+
+    fn run_transfer(
+        &self,
+        wallet: SigningAccount,
+        recipients: Vec<(Address, AssetId, u64)>,
+    ) -> impl Future<Output = io::Result<TransactionStatus>> + Send;
+
+    fn assemble_transfer(
+        &self,
+        wallet: SigningAccount,
+        recipients: Vec<(Address, AssetId, u64)>,
+    ) -> impl Future<Output = io::Result<Transaction>> + Send;
+
+    fn run_script(
+        &self,
+        script: Vec<Instruction>,
+        script_data: Vec<u8>,
+        wallet: SigningAccount,
+    ) -> impl Future<Output = io::Result<TransactionStatus>> + Send;
+
+    fn assemble_script(
+        &self,
+        script: Vec<Instruction>,
+        script_data: Vec<u8>,
+        wallet: SigningAccount,
+    ) -> impl Future<Output = io::Result<Transaction>> + Send;
 }
 
 impl AssembleAndRunTx for FuelClient {
-    async fn transfer(
-        &self,
-        wallet: SigningAccount,
-        recipients: Vec<(Address, AssetId, u64)>,
-    ) -> io::Result<Transaction> {
-        let wallet_owner = wallet.owner();
-
-        let mut tx_to_assemble = TransactionBuilder::script(vec![], vec![]);
-
-        let mut total_balances = HashMap::new();
-
-        for (recipient, asset_id, amount) in recipients {
-            tx_to_assemble.add_output(Output::Coin {
-                to: recipient,
-                asset_id,
-                amount,
-            });
-
-            total_balances
-                .entry(asset_id)
-                .and_modify(|balance| *balance += amount)
-                .or_insert(amount);
-        }
-
-        let required_balances = total_balances
-            .into_iter()
-            .map(|(asset_id, amount)| RequiredBalance {
-                asset_id,
-                amount,
-                account: wallet.clone().into_account(),
-                change_policy: ChangePolicy::Change(wallet_owner),
-            })
-            .collect();
-
-        let tx = tx_to_assemble.finalize_as_transaction();
-
-        self.assemble_transaction(&tx, wallet, required_balances)
-            .await
-    }
-
-    async fn run_transfer(
-        &self,
-        wallet: SigningAccount,
-        recipients: Vec<(Address, AssetId, u64)>,
-    ) -> io::Result<TransactionStatus> {
-        let tx = self.transfer(wallet, recipients).await?;
-
-        self.submit_and_await_commit(&tx).await
-    }
-
-    async fn script(
-        &self,
-        script: Vec<Instruction>,
-        script_data: Vec<u8>,
-        wallet: SigningAccount,
-    ) -> io::Result<Transaction> {
-        let tx_to_assemble =
-            TransactionBuilder::script(script.into_iter().collect(), script_data)
-                .finalize_as_transaction();
-
-        self.assemble_transaction(&tx_to_assemble, wallet, vec![])
-            .await
-    }
-
-    async fn run_script(
-        &self,
-        script: Vec<Instruction>,
-        script_data: Vec<u8>,
-        wallet: SigningAccount,
-    ) -> io::Result<TransactionStatus> {
-        let tx = self.script(script, script_data, wallet).await?;
-
-        self.submit_and_await_commit(&tx).await
-    }
-
-    async fn assemble_and_run(
+    async fn assemble_and_run_tx(
         &self,
         tx_to_assemble: &Transaction,
         wallet: SigningAccount,
@@ -251,6 +176,81 @@ impl AssembleAndRunTx for FuelClient {
         }
 
         Ok(tx.transaction)
+    }
+
+    async fn run_transfer(
+        &self,
+        wallet: SigningAccount,
+        recipients: Vec<(Address, AssetId, u64)>,
+    ) -> io::Result<TransactionStatus> {
+        let tx = self.assemble_transfer(wallet, recipients).await?;
+
+        self.submit_and_await_commit(&tx).await
+    }
+
+    async fn assemble_transfer(
+        &self,
+        wallet: SigningAccount,
+        recipients: Vec<(Address, AssetId, u64)>,
+    ) -> io::Result<Transaction> {
+        let wallet_owner = wallet.owner();
+
+        let mut tx_to_assemble = TransactionBuilder::script(vec![], vec![]);
+
+        let mut total_balances = HashMap::new();
+
+        for (recipient, asset_id, amount) in recipients {
+            tx_to_assemble.add_output(Output::Coin {
+                to: recipient,
+                asset_id,
+                amount,
+            });
+
+            total_balances
+                .entry(asset_id)
+                .and_modify(|balance| *balance += amount)
+                .or_insert(amount);
+        }
+
+        let required_balances = total_balances
+            .into_iter()
+            .map(|(asset_id, amount)| RequiredBalance {
+                asset_id,
+                amount,
+                account: wallet.clone().into_account(),
+                change_policy: ChangePolicy::Change(wallet_owner),
+            })
+            .collect();
+
+        let tx = tx_to_assemble.finalize_as_transaction();
+
+        self.assemble_transaction(&tx, wallet, required_balances)
+            .await
+    }
+
+    async fn run_script(
+        &self,
+        script: Vec<Instruction>,
+        script_data: Vec<u8>,
+        wallet: SigningAccount,
+    ) -> io::Result<TransactionStatus> {
+        let tx = self.assemble_script(script, script_data, wallet).await?;
+
+        self.submit_and_await_commit(&tx).await
+    }
+
+    async fn assemble_script(
+        &self,
+        script: Vec<Instruction>,
+        script_data: Vec<u8>,
+        wallet: SigningAccount,
+    ) -> io::Result<Transaction> {
+        let tx_to_assemble =
+            TransactionBuilder::script(script.into_iter().collect(), script_data)
+                .finalize_as_transaction();
+
+        self.assemble_transaction(&tx_to_assemble, wallet, vec![])
+            .await
     }
 }
 

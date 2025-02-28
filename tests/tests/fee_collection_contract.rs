@@ -82,7 +82,7 @@ async fn setup(rng: &mut StdRng) -> TestContext {
 
     // Submit contract creation tx
     let tx_status = client
-        .assemble_and_run(&create_tx.into(), default_signing_wallet())
+        .assemble_and_run_tx(&create_tx.into(), default_signing_wallet())
         .await
         .unwrap();
     assert!(matches!(tx_status, TransactionStatus::Success { .. }));
@@ -118,7 +118,7 @@ async fn make_block_with_fee(ctx: &TestContext) {
 
     let tx_status = ctx
         .client
-        .assemble_and_run(&tx, default_signing_wallet())
+        .assemble_and_run_tx(&tx, default_signing_wallet())
         .await
         .unwrap();
     assert!(matches!(tx_status, TransactionStatus::Success { .. }));
@@ -169,7 +169,7 @@ async fn collect_fees(ctx: &TestContext) {
         .finalize_as_transaction();
 
     let tx_status = client
-        .assemble_and_run(&tx, default_signing_wallet())
+        .assemble_and_run_tx(&tx, default_signing_wallet())
         .await
         .unwrap();
     assert!(

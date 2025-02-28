@@ -127,7 +127,7 @@ impl Wallet {
         let asset_id = asset_id.unwrap_or(*self.consensus_params.base_asset_id());
         let tx = self
             .client
-            .transfer(
+            .assemble_transfer(
                 SigningAccount::Wallet(self.secret),
                 vec![(destination, asset_id, transfer_amount)],
             )
@@ -167,7 +167,7 @@ impl Wallet {
 
         let tx = self
             .client
-            .script(script, script_data, SigningAccount::Wallet(self.secret))
+            .assemble_script(script, script_data, SigningAccount::Wallet(self.secret))
             .await?;
 
         Ok(tx)

@@ -416,7 +416,7 @@ async fn can_get_message_proof() {
         // Deploy the contract.
         matches!(
             client
-                .assemble_and_run(&contract_deploy, default_signing_wallet())
+                .assemble_and_run_tx(&contract_deploy, default_signing_wallet())
                 .await,
             Ok(TransactionStatus::Success { .. })
         );
