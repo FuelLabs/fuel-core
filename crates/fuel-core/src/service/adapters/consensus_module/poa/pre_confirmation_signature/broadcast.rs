@@ -1,6 +1,6 @@
 use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
     parent_signature::FuelParentSignature,
-    DummyKey,
+    signing_key::DummyKey,
     Preconfirmations,
 };
 use fuel_core_poa::pre_confirmation_signature_service::{

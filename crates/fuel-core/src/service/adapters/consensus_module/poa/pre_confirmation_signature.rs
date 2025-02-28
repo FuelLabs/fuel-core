@@ -1,4 +1,3 @@
-use fuel_core_poa::pre_confirmation_signature_service::signing_key::SigningKey;
 use fuel_core_types::{
     fuel_tx::TxId,
     services::p2p::PreconfirmationStatus,
