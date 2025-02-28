@@ -14,8 +14,8 @@ use crate::pre_confirmation_signature_service::{
     tx_receiver::TxReceiver,
 };
 
-pub mod error;
 pub mod broadcast;
+pub mod error;
 pub mod key_generator;
 pub mod parent_signature;
 pub mod signing_key;
