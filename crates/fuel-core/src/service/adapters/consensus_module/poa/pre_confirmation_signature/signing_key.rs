@@ -1,7 +1,7 @@
 use fuel_core_poa::pre_confirmation_signature_service::signing_key::SigningKey;
 
 /// TODO: Decide what key to use for signing
-/// https://github.com/FuelLabs/fuel-core/issues/2782
+/// <https://github.com/FuelLabs/fuel-core/issues/2782>
 #[derive(Clone)]
 pub struct DummyKey;
 
