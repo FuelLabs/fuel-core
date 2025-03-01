@@ -89,6 +89,14 @@ pub struct ValidationResult {
     pub events: Vec<Event>,
 }
 
+/// Result of the trigger for new transactions during the execution.
+pub enum NewTxTrigger {
+    /// The trigger for new transactions has been activated.
+    Triggered,
+    /// The trigger for new transactions has not been activated.
+    Timeout,
+}
+
 impl<DatabaseTransaction> UncommittedValidationResult<DatabaseTransaction> {
     /// Convert the `UncommittedValidationResult` into the `UncommittedResult`.
     pub fn into_execution_result(

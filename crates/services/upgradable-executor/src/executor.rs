@@ -43,6 +43,7 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             ExecutionResult,
+            NewTxTrigger,
             Result as ExecutorResult,
             StorageReadReplayEvent,
             TransactionExecutionStatus,
@@ -51,7 +52,11 @@ use fuel_core_types::{
         Uncommitted,
     },
 };
-use std::sync::Arc;
+use futures::FutureExt;
+use std::{
+    future::Future,
+    sync::Arc,
+};
 
 #[cfg(feature = "wasm-executor")]
 use fuel_core_storage::{
@@ -324,7 +329,11 @@ where
         };
 
         let options = self.config.as_ref().into();
-        self.produce_inner(component, options, ProduceBlockMode::Produce)
+        self.produce_inner(component, options, ProduceBlockMode::Produce, || async {
+            NewTxTrigger::Timeout
+        })
+        .now_or_never()
+        .unwrap()
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
@@ -336,7 +345,11 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(block, options, ProduceBlockMode::DryRunLatest)
+        self.produce_inner(block, options, ProduceBlockMode::DryRunLatest, || async {
+            NewTxTrigger::Timeout
+        })
+        .now_or_never()
+        .unwrap()
     }
 }
 
@@ -349,15 +362,19 @@ where
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
-    pub fn produce_without_commit_with_source<TxSource>(
+    pub async fn produce_without_commit_with_source<TxSource, TriggerResult>(
         &self,
         components: Components<TxSource>,
+        trigger: impl Fn() -> TriggerResult,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
+        TriggerResult: Future<Output = NewTxTrigger> + Send,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(components, options, ProduceBlockMode::Produce)
+        // Reviewer note: Maybe trigger could be inside of the mode or the components.
+        self.produce_inner(components, options, ProduceBlockMode::Produce, trigger)
+            .await
     }
 
     /// Executes the block and returns the result of the execution without committing
@@ -404,7 +421,10 @@ where
                     Some(height) => ProduceBlockMode::DryRunAt { height },
                     None => ProduceBlockMode::DryRunLatest,
                 },
-            )?
+                || async { NewTxTrigger::Timeout },
+            )
+            .now_or_never()
+            .unwrap()?
             .into_result();
 
         // If one of the transactions fails, return an error.
@@ -542,21 +562,24 @@ where
     }
 
     #[cfg(feature = "wasm-executor")]
-    fn produce_inner<TxSource>(
+    async fn produce_inner<TxSource, TriggerResult>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
+        trigger: impl Fn() -> TriggerResult,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
+        TriggerResult: Future<Output = NewTxTrigger> + Send,
     {
         let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => {
-                    self.native_produce_inner(block, options, mode)
+                    self.native_produce_inner(block, options, mode, trigger)
+                        .await
                 }
                 ExecutionStrategy::Wasm { module } => {
                     let maybe_blocks_module = self.get_module(block_version).ok();
@@ -764,14 +787,16 @@ where
         }
     }
 
-    fn native_produce_inner<TxSource>(
+    async fn native_produce_inner<TxSource, TriggerResult>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
+        trigger: impl Fn() -> TriggerResult,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
+        TriggerResult: Future<Output = NewTxTrigger> + Send,
     {
         let relayer = self.relayer_view_provider.latest_view()?;
 
@@ -784,11 +809,13 @@ where
         if let Some(previous_block_height) = db_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, mode.is_dry_run())
+                .produce_without_commit(block, mode.is_dry_run(), trigger)
+                .await
         } else {
             let database = self.storage_view_provider.latest_view()?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, mode.is_dry_run())
+                .produce_without_commit(block, mode.is_dry_run(), trigger)
+                .await
         }
     }
 

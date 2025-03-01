@@ -165,7 +165,9 @@ where
 
         let result = self
             .executor
-            .produce_without_commit(component)
+            // TODO: Replace with the correct trigger
+            .produce_without_commit(component, || async { unimplemented!() })
+            .await
             .map_err(Into::<anyhow::Error>::into)
             .with_context(|| {
                 format!("Failed to produce block {height:?} due to execution failure")
@@ -239,7 +241,9 @@ where
             format!("Failed to produce block {height:?} due to execution failure");
         let result = self
             .executor
-            .produce_without_commit(component)
+            // TODO: Replace with the correct trigger
+            .produce_without_commit(component, || async { unimplemented!() })
+            .await
             .map_err(Into::<anyhow::Error>::into)
             .context(context_string)?;
 

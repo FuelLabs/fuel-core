@@ -130,6 +130,7 @@ use fuel_core_types::{
             Event as ExecutorEvent,
             ExecutionResult,
             ForcedTransactionFailure,
+            NewTxTrigger,
             Result as ExecutorResult,
             TransactionExecutionResult,
             TransactionExecutionStatus,
@@ -147,6 +148,7 @@ use tracing::{
     warn,
 };
 
+use core::future::Future;
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 
@@ -278,13 +280,15 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn produce_without_commit<TxSource>(
+    pub async fn produce_without_commit<TxSource, TriggerResult>(
         self,
         components: Components<TxSource>,
         dry_run: bool,
+        trigger: impl Fn() -> TriggerResult,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
+        TriggerResult: Future<Output = NewTxTrigger> + Send,
     {
         let consensus_params_version = components.consensus_parameters_version();
 
@@ -297,7 +301,9 @@ where
         let (partial_block, execution_data) = if dry_run {
             block_executor.dry_run_block(components, storage_tx)?
         } else {
-            block_executor.produce_block(components, storage_tx)?
+            block_executor
+                .produce_block(components, storage_tx, trigger)
+                .await?
         };
 
         let ExecutionData {
@@ -413,20 +419,29 @@ impl<R> BlockExecutor<R> {
     }
 }
 
+// trait PreconfirmationSender {
+//     // TODO: Add infos about the result of preconfirmation, I didn't found any type
+//     // with receipts etc. Should I reuse something or create mine ?
+//     fn send(&mut self, tx: TxId) -> ExecutorResult<()>;
+// }
+
 impl<R> BlockExecutor<R>
 where
     R: RelayerPort,
 {
     #[tracing::instrument(skip_all)]
     /// Produce the fuel block with specified components
-    fn produce_block<TxSource, D>(
+    async fn produce_block<TxSource, D, TriggerResult>(
         mut self,
         components: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
+        trigger: impl Fn() -> TriggerResult,
+        //_preconfirmation_sender: impl PreconfirmationSender,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
         D: KeyValueInspect<Column = Column>,
+        TriggerResult: Future<Output = NewTxTrigger> + Send,
     {
         let mut partial_block =
             PartialFuelBlock::new(components.header_to_produce, vec![]);
@@ -440,13 +455,22 @@ where
             &mut data,
             &mut memory,
         )?;
-        self.process_l2_txs(
-            &mut partial_block,
-            &components,
-            &mut block_storage_tx,
-            &mut data,
-            &mut memory,
-        )?;
+
+        loop {
+            self.process_l2_txs(
+                &mut partial_block,
+                &components,
+                &mut block_storage_tx,
+                &mut data,
+                &mut memory,
+            )?;
+            match trigger().await {
+                NewTxTrigger::Timeout => break,
+                NewTxTrigger::Triggered => {
+                    continue;
+                }
+            }
+        }
 
         self.produce_mint_tx(
             &mut partial_block,

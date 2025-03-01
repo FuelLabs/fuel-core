@@ -32,6 +32,7 @@ use fuel_core_types::{
         block_importer::SharedImportResult,
         block_producer::Components,
         executor::{
+            NewTxTrigger,
             Result as ExecutorResult,
             UncommittedResult,
         },
@@ -41,6 +42,7 @@ use fuel_core_types::{
 };
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
+use futures::FutureExt;
 
 use crate::{
     database::{
@@ -352,7 +354,11 @@ impl ExecutorAdapter {
         };
 
         self.executor
-            .produce_without_commit_with_source(new_components)
+            .produce_without_commit_with_source(new_components, || async {
+                NewTxTrigger::Timeout
+            })
+            .now_or_never()
+            .unwrap()
     }
 }
 
