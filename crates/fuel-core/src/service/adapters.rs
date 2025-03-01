@@ -51,6 +51,7 @@ use fuel_core_types::{
     signer::SignMode,
     tai64::Tai64,
 };
+use fuel_core_types::clamped_percentage::ClampedPercentage;
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
@@ -102,12 +103,13 @@ mod universal_gas_price_provider_tests {
 
     use super::*;
     use proptest::proptest;
+    use fuel_core_types::clamped_percentage::ClampedPercentage;
 
     fn _worst_case__correctly_calculates_value(
         gas_price: u64,
         starting_height: u32,
         block_horizon: u32,
-        percentage: u16,
+        percentage: ClampedPercentage,
     ) {
         // given
         let subject =
@@ -122,7 +124,7 @@ mod universal_gas_price_provider_tests {
 
         for _ in 0..block_horizon {
             let change_amount =
-                actual.saturating_mul(percentage as u64).saturating_div(100);
+                actual.saturating_mul(*percentage as u64).saturating_div(100);
             actual = actual.saturating_add(change_amount);
         }
 
@@ -137,6 +139,7 @@ mod universal_gas_price_provider_tests {
             block_horizon in 0..10_000u32,
             percentage: u16,
         ) {
+            let percentage = ClampedPercentage::new(percentage as u8);
             _worst_case__correctly_calculates_value(
                 gas_price,
                 starting_height,
@@ -154,6 +157,8 @@ mod universal_gas_price_provider_tests {
             block_horizon in 0..10_000u32,
             percentage: u16
         ) {
+            // Convert u16 to ClampedPercentage
+            let percentage = ClampedPercentage::new(percentage as u8);
             // given
             let subject = UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
 
@@ -170,7 +175,7 @@ mod universal_gas_price_provider_tests {
     fn _next_gas_price__correctly_calculates_value(
         gas_price: u64,
         starting_height: u32,
-        percentage: u16,
+        percentage: ClampedPercentage,
     ) {
         // given
         let subject =
@@ -181,7 +186,7 @@ mod universal_gas_price_provider_tests {
 
         // then
         let change_amount = gas_price
-            .saturating_mul(percentage as u64)
+            .saturating_mul(*percentage as u64)
             .saturating_div(100);
         let actual = gas_price.saturating_add(change_amount);
 
@@ -195,6 +200,7 @@ mod universal_gas_price_provider_tests {
             starting_height: u32,
             percentage: u16,
         ) {
+            let percentage = ClampedPercentage::new(percentage as u8);
             _next_gas_price__correctly_calculates_value(
                 gas_price,
                 starting_height,
@@ -212,7 +218,7 @@ pub struct UniversalGasPriceProvider<Height, GasPrice> {
     /// Shared state of latest gas price data
     latest_gas_price: LatestGasPrice<Height, GasPrice>,
     /// The max percentage the gas price can increase per block
-    percentage: u16,
+    percentage: ClampedPercentage,
 }
 
 impl<Height, GasPrice> Clone for UniversalGasPriceProvider<Height, GasPrice> {
@@ -226,7 +232,7 @@ impl<Height, GasPrice> Clone for UniversalGasPriceProvider<Height, GasPrice> {
 
 impl<Height, GasPrice> UniversalGasPriceProvider<Height, GasPrice> {
     #[cfg(test)]
-    pub fn new(height: Height, price: GasPrice, percentage: u16) -> Self {
+    pub fn new(height: Height, price: GasPrice, percentage: ClampedPercentage) -> Self {
         let latest_gas_price = LatestGasPrice::new(height, price);
         Self {
             latest_gas_price,
@@ -236,7 +242,7 @@ impl<Height, GasPrice> UniversalGasPriceProvider<Height, GasPrice> {
 
     pub fn new_from_inner(
         inner: LatestGasPrice<Height, GasPrice>,
-        percentage: u16,
+        percentage: ClampedPercentage,
     ) -> Self {
         Self {
             latest_gas_price: inner,
@@ -257,7 +263,7 @@ impl UniversalGasPriceProvider<u32, u64> {
         let percentage = self.percentage;
 
         let change = latest_price
-            .saturating_mul(percentage as u64)
+            .saturating_mul(*percentage as u64)
             .saturating_div(100);
 
         latest_price.saturating_add(change)
@@ -278,7 +284,7 @@ impl GasPriceEstimate for UniversalGasPriceProvider<u32, u64> {
         let worst = cumulative_percentage_change(
             best_gas_price,
             best_height,
-            percentage as u64,
+            *percentage as u64,
             height.into(),
         );
         Some(worst)
