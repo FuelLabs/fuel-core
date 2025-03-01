@@ -108,7 +108,6 @@ mod tests {
             BlockHeight,
             ChainId,
             ContractId,
-            Salt,
             Word,
         },
         fuel_vm::{
@@ -140,6 +139,7 @@ mod tests {
             relayer::Event,
         },
         tai64::Tai64,
+        test_helpers::create_contract,
     };
     use fuel_core_upgradable_executor::executor::Executor;
     use itertools::Itertools;
@@ -235,7 +235,8 @@ mod tests {
                 op::ret(RegId::ONE),
             ]
             .into_iter()
-            .collect::<Vec<u8>>(),
+            .collect::<Vec<u8>>()
+            .as_slice(),
             &mut rng,
         );
         let (script, data_offset) = script_with_data_offset!(
@@ -311,24 +312,6 @@ mod tests {
             .transaction()
             .to_owned()
             .into()
-    }
-
-    pub(crate) fn create_contract<R: Rng>(
-        contract_code: Vec<u8>,
-        rng: &mut R,
-    ) -> (Create, ContractId) {
-        let salt: Salt = rng.gen();
-        let contract = Contract::from(contract_code.clone());
-        let root = contract.root();
-        let state_root = Contract::default_state_root();
-        let contract_id = contract.id(&salt, &root, &state_root);
-
-        let tx =
-            TransactionBuilder::create(contract_code.into(), salt, Default::default())
-                .add_fee_input()
-                .add_output(Output::contract_created(contract_id, state_root))
-                .finalize();
-        (tx, contract_id)
     }
 
     // Happy path test case that a produced block will also validate
@@ -1651,7 +1634,7 @@ mod tests {
         // changes, the balance the root should be default - `[0; 32]`.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
-        let (create, contract_id) = create_contract(vec![], &mut rng);
+        let (create, contract_id) = create_contract(&[], &mut rng);
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
             .script_gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
@@ -1707,7 +1690,7 @@ mod tests {
         // it still should actualize them to use the balance and state roots before the execution.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
-        let (create, contract_id) = create_contract(vec![], &mut rng);
+        let (create, contract_id) = create_contract(&[], &mut rng);
         // The transaction with invalid script.
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
             .start_script(vec![op::add(RegId::PC, RegId::PC, RegId::PC)], vec![])
@@ -1776,7 +1759,8 @@ mod tests {
                 op::ret(1),
             ]
             .into_iter()
-            .collect::<Vec<u8>>(),
+            .collect::<Vec<u8>>()
+            .as_slice(),
             &mut rng,
         );
 
@@ -1880,7 +1864,8 @@ mod tests {
                 op::ret(1),
             ]
             .into_iter()
-            .collect::<Vec<u8>>(),
+            .collect::<Vec<u8>>()
+            .as_slice(),
             &mut rng,
         );
 
@@ -1996,7 +1981,7 @@ mod tests {
         // The foreign transfer of tokens should not affect the balance root of the transaction.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
-        let (create, contract_id) = create_contract(vec![], &mut rng);
+        let (create, contract_id) = create_contract(&[], &mut rng);
 
         let transfer_amount = 100 as Word;
         let asset_id = AssetId::from([2; 32]);
@@ -2127,7 +2112,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322);
         // create a contract in block 1
         // verify a block 2 with tx containing contract id from block 1, using the correct contract utxo_id from block 1.
-        let (tx, contract_id) = create_contract(vec![], &mut rng);
+        let (tx, contract_id) = create_contract(&[], &mut rng);
         let first_block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into()],
@@ -2187,7 +2172,7 @@ mod tests {
 
         // create a contract in block 1
         // verify a block 2 containing contract id from block 1, with wrong input contract utxo_id
-        let (tx, contract_id) = create_contract(vec![], &mut rng);
+        let (tx, contract_id) = create_contract(&[], &mut rng);
         let tx2: Transaction = TxBuilder::new(2322)
             .start_script(vec![op::addi(0x10, RegId::ZERO, 0), op::ret(1)], vec![])
             .contract_input(contract_id)
