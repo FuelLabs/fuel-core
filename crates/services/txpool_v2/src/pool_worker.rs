@@ -80,27 +80,31 @@ impl PoolWorkerInterface {
         let (thread_management_sender, thread_management_receiver) =
             mpsc::channel(SIZE_THREAD_MANAGEMENT_CHANNEL);
 
-        let handle = std::thread::spawn(move || {
-            let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            else {
-                tracing::error!("Failed to build tokio runtime for pool worker");
-                return;
-            };
-            let mut worker = PoolWorker {
-                thread_management_receiver,
-                request_remove_receiver,
-                request_read_receiver,
-                extract_block_transactions_receiver,
-                request_insert_receiver,
-                notification_sender,
-                pending_pool: PendingPool::new(tx_pool.config.pending_pool_tx_ttl),
-                pool: tx_pool,
-                view_provider,
-            };
+        let handle = std::thread::spawn({
+            let tx_insert_from_pending_sender = request_insert_sender.clone();
+            move || {
+                let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                else {
+                    tracing::error!("Failed to build tokio runtime for pool worker");
+                    return;
+                };
+                let mut worker = PoolWorker {
+                    tx_insert_from_pending_sender,
+                    thread_management_receiver,
+                    request_remove_receiver,
+                    request_read_receiver,
+                    extract_block_transactions_receiver,
+                    request_insert_receiver,
+                    notification_sender,
+                    pending_pool: PendingPool::new(tx_pool.config.pending_pool_tx_ttl),
+                    pool: tx_pool,
+                    view_provider,
+                };
 
-            tokio_runtime.block_on(async { while !worker.run().await {} });
+                tokio_runtime.block_on(async { while !worker.run().await {} });
+            }
         });
         Self {
             thread_management_sender,
@@ -235,6 +239,7 @@ pub(super) enum PoolNotification {
 }
 
 pub(super) struct PoolWorker<View> {
+    tx_insert_from_pending_sender: Sender<PoolInsertRequest>,
     thread_management_receiver: Receiver<ThreadManagementRequest>,
     request_remove_receiver: Receiver<PoolRemoveRequest>,
     request_read_receiver: Receiver<PoolReadRequest>,
@@ -398,14 +403,22 @@ where
                 let updated_txs = self.pending_pool.new_known_tx(tx);
 
                 for (tx, source) in updated_txs.resolved_txs {
-                    self.insert(tx, source);
+                    if let Err(e) = self
+                        .tx_insert_from_pending_sender
+                        .try_send(PoolInsertRequest::Insert { tx, source })
+                    {
+                        tracing::error!(
+                            "Failed to send resolved transaction to pending pool: {}",
+                            e
+                        );
+                    }
                 }
-                for (tx, source, missing_inputs) in updated_txs.expired_txs {
-                    if let Some(missing_input) = missing_inputs.first() {
+                for expired_tx in updated_txs.expired_txs {
+                    if let Some(missing_input) = expired_tx.missing_inputs.first() {
                         if let Err(e) = self.notification_sender.try_send(
                             PoolNotification::ErrorInsertion {
-                                tx_id: tx.id(),
-                                source,
+                                tx_id: expired_tx.tx.id(),
+                                source: expired_tx.insertion_source,
                                 error: missing_input.into(),
                             },
                         ) {
@@ -483,13 +496,13 @@ where
         for (tx, source) in updated_txs.resolved_txs {
             self.insert(tx, source);
         }
-        for (tx, source, missing_inputs) in updated_txs.expired_txs {
-            if let Some(missing_input) = missing_inputs.first() {
+        for expired_tx in updated_txs.expired_txs {
+            if let Some(missing_input) = expired_tx.missing_inputs.first() {
                 if let Err(e) =
                     self.notification_sender
                         .try_send(PoolNotification::ErrorInsertion {
-                            tx_id: tx.id(),
-                            source,
+                            tx_id: expired_tx.tx.id(),
+                            source: expired_tx.insertion_source,
                             error: missing_input.into(),
                         })
                 {
