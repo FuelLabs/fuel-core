@@ -256,6 +256,8 @@ pub enum DbType {
 
 #[derive(Clone, Debug)]
 pub struct GasPriceConfig {
+    /// Whether the gas price estimation service is enabled
+    pub enabled: bool,
     pub starting_exec_gas_price: u64,
     pub exec_gas_price_change_percent: u16,
     pub min_exec_gas_price: u64,
@@ -277,33 +279,27 @@ pub struct GasPriceConfig {
 }
 
 impl GasPriceConfig {
-    #[cfg(feature = "test-helpers")]
     pub fn local_node() -> GasPriceConfig {
-        let starting_gas_price = 0;
-        let gas_price_change_percent = 0;
-        let min_gas_price = 0;
-        let gas_price_threshold_percent = 50;
-        let gas_price_metrics = false;
-
         GasPriceConfig {
-            starting_exec_gas_price: starting_gas_price,
-            exec_gas_price_change_percent: gas_price_change_percent,
-            min_exec_gas_price: min_gas_price,
-            exec_gas_price_threshold_percent: gas_price_threshold_percent,
-            da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
+            enabled: true,
+            starting_exec_gas_price: 0,
+            exec_gas_price_change_percent: 10,
+            min_exec_gas_price: 0,
+            exec_gas_price_threshold_percent: 80,
+            da_committer_url: None,
+            da_poll_interval: None,
+            da_gas_price_factor: NonZeroU64::new(1).unwrap(),
             starting_recorded_height: None,
             min_da_gas_price: 0,
-            max_da_gas_price: 1,
-            max_da_gas_price_change_percent: 0,
+            max_da_gas_price: u64::MAX,
+            max_da_gas_price_change_percent: 10,
             da_gas_price_p_component: 0,
             da_gas_price_d_component: 0,
-            gas_price_metrics,
-            activity_normal_range_size: 0,
-            activity_capped_range_size: 0,
-            activity_decrease_range_size: 0,
-            da_committer_url: None,
-            block_activity_threshold: 0,
-            da_poll_interval: Some(Duration::from_secs(1)),
+            gas_price_metrics: false,
+            activity_normal_range_size: 100,
+            activity_capped_range_size: 100,
+            activity_decrease_range_size: 100,
+            block_activity_threshold: 80,
         }
     }
 }
