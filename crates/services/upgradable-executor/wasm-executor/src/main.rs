@@ -24,7 +24,10 @@ use fuel_core_types::{
     blockchain::block::Block,
     services::{
         block_producer::Components,
-        executor::Error as ExecutorError,
+        executor::{
+            Error as ExecutorError,
+            NewTxTrigger,
+        },
     },
 };
 use fuel_core_wasm_executor::{
@@ -36,6 +39,7 @@ use fuel_core_wasm_executor::{
         ReturnType,
     },
 };
+use futures::FutureExt;
 
 mod ext;
 mod relayer;
@@ -100,7 +104,10 @@ fn execute_dry_run(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
 ) -> ReturnType {
-    let result = instance.produce_without_commit(block, true);
+    let result = instance
+        .produce_without_commit(block, true, || async { NewTxTrigger::Timeout })
+        .now_or_never()
+        .unwrap();
     ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
 }
 
@@ -108,7 +115,10 @@ fn execute_production(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
 ) -> ReturnType {
-    let result = instance.produce_without_commit(block, false);
+    let result = instance
+        .produce_without_commit(block, false, || async { NewTxTrigger::Timeout })
+        .now_or_never()
+        .unwrap();
     ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
 }
 
