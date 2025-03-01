@@ -25,7 +25,10 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::signer::SignMode;
+use fuel_core_types::{
+    clamped_percentage::ClampedPercentage,
+    signer::SignMode,
+};
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
@@ -247,9 +250,10 @@ pub fn init_sub_services(
         database.on_chain().clone(),
     )?;
     let (gas_price_algo, latest_gas_price) = gas_price_service_v1.shared.clone();
+    let clamped_percentage = ClampedPercentage::new(DEFAULT_GAS_PRICE_CHANGE_PERCENT as u8);
     let universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
         latest_gas_price,
-        DEFAULT_GAS_PRICE_CHANGE_PERCENT,
+        clamped_percentage,
     );
 
     let producer_gas_price_provider = FuelGasPriceProvider::new(
