@@ -19,6 +19,12 @@ pub struct MPSCTxReceiver<T> {
     receiver: tokio::sync::mpsc::Receiver<T>,
 }
 
+impl Default for MPSCTxReceiver<Vec<(TxId, PreconfirmationStatus)>> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> MPSCTxReceiver<T> {
     pub fn new() -> Self {
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
@@ -84,7 +90,7 @@ mod tests {
         ];
 
         let mut receiver = MPSCTxReceiver::new();
-        let mut sender = receiver.get_sender().unwrap();
+        let mut sender = receiver.get_sender();
 
         // when
         sender.send(txs.clone()).await.unwrap();

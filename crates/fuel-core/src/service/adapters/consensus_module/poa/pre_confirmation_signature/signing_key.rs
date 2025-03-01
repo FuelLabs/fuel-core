@@ -1,4 +1,5 @@
 use fuel_core_poa::pre_confirmation_signature_service::signing_key::SigningKey;
+use fuel_core_types::fuel_crypto;
 
 /// TODO: Decide what key to use for signing
 /// https://github.com/FuelLabs/fuel-core/issues/2782
@@ -19,6 +20,12 @@ impl SigningKey for DummyKey {
     ) -> fuel_core_poa::pre_confirmation_signature_service::error::Result<
         Self::Signature<T>,
     > {
+        todo!()
+    }
+}
+
+impl From<DummyKey> for fuel_crypto::Message {
+    fn from(_value: DummyKey) -> Self {
         todo!()
     }
 }

@@ -6,9 +6,9 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     parent_signature::ParentSignature,
 };
 use fuel_core_types::{
-    fuel_crypto,
     signer::SignMode,
 };
+use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::signing_key::DummyKey;
 
 pub struct FuelParentSigner<T> {
     mode: SignMode,
@@ -35,14 +35,10 @@ impl<T> From<fuel_core_types::fuel_vm::Signature> for FuelParentSignature<T> {
     }
 }
 
-impl<T> ParentSignature<T> for FuelParentSigner<T>
-where
-    T: Send + Sync,
-    T: Into<fuel_crypto::Message>,
-{
-    type SignedData = FuelParentSignature<T>;
+impl ParentSignature<DummyKey> for FuelParentSigner<DummyKey> {
+    type SignedData = FuelParentSignature<DummyKey>;
 
-    async fn sign(&self, data: T) -> PoAResult<Self::SignedData> {
+    async fn sign(&self, data: DummyKey) -> PoAResult<Self::SignedData> {
         let message = data.into();
         let signature = self.mode.sign_message(message).await.map_err(|e| {
             PoaError::ParentSignature(format!("Failed to sign message: {}", e))
