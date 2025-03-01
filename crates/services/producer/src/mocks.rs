@@ -38,6 +38,7 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             ExecutionResult,
+            NewTxTrigger,
             Result as ExecutorResult,
             TransactionExecutionStatus,
             UncommittedResult,
@@ -47,6 +48,7 @@ use fuel_core_types::{
 use std::{
     borrow::Cow,
     collections::HashMap,
+    future::Future,
     ops::Deref,
     sync::{
         Arc,
@@ -126,10 +128,14 @@ fn arc_pool_tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block 
 }
 
 impl BlockProducer<Vec<Transaction>> for MockExecutor {
-    fn produce_without_commit(
+    async fn produce_without_commit<TriggerResult>(
         &self,
         component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        _trigger: impl Fn() -> TriggerResult + Send,
+    ) -> ExecutorResult<UncommittedResult<Changes>>
+    where
+        TriggerResult: Future<Output = NewTxTrigger> + Send,
+    {
         let block = arc_pool_tx_comp_to_block(&component);
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
@@ -152,10 +158,14 @@ impl BlockProducer<Vec<Transaction>> for MockExecutor {
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
 impl BlockProducer<Vec<Transaction>> for FailingMockExecutor {
-    fn produce_without_commit(
+    async fn produce_without_commit<TriggerResult>(
         &self,
         component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        _trigger: impl Fn() -> TriggerResult + Send,
+    ) -> ExecutorResult<UncommittedResult<Changes>>
+    where
+        TriggerResult: Future<Output = NewTxTrigger> + Send,
+    {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
@@ -181,10 +191,14 @@ pub struct MockExecutorWithCapture {
 }
 
 impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture {
-    fn produce_without_commit(
+    async fn produce_without_commit<TriggerResult>(
         &self,
         component: Components<Vec<Transaction>>,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        _trigger: impl Fn() -> TriggerResult + Send,
+    ) -> ExecutorResult<UncommittedResult<Changes>>
+    where
+        TriggerResult: Future<Output = NewTxTrigger> + Send,
+    {
         let block = arc_pool_tx_comp_to_block(&component);
         *self.captured.lock().unwrap() = Some(component);
         Ok(UncommittedResult::new(

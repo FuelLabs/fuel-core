@@ -43,7 +43,10 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            NewTxTrigger, StorageReadReplayEvent, TransactionExecutionStatus, UncommittedResult
+            NewTxTrigger,
+            StorageReadReplayEvent,
+            TransactionExecutionStatus,
+            UncommittedResult,
         },
     },
     tai64::Tai64,
