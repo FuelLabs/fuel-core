@@ -31,7 +31,7 @@ impl TxReceiver for FakeTxReceiver {
         let txs = self.recv.recv().await;
         match txs {
             Some(txs) => Ok(txs),
-            None => Err(Error::TxReceiverError("No txs received".into())),
+            None => Err(Error::TxReceiver("No txs received".into())),
         }
     }
 }
@@ -43,7 +43,7 @@ struct FakeBroadcast {
 
 impl Broadcast for FakeBroadcast {
     type PreConfirmations = Vec<(Transaction, Status)>;
-    type ParentSignature<T> = FakeSignedData<T>;
+    type ParentSignature = FakeSignedData<FakeSigningKey>;
     type DelegateKey = FakeSigningKey;
 
     async fn broadcast_txs(
@@ -51,28 +51,29 @@ impl Broadcast for FakeBroadcast {
         txs: Signed<Self::DelegateKey, Self::PreConfirmations>,
     ) -> Result<()> {
         self.tx_sender.send(txs).await.map_err(|error| {
-            Error::BroadcastError(format!("Could not send {:?} over channel", error))
+            Error::Broadcast(format!("Could not send {:?} over channel", error))
         })?;
         Ok(())
     }
 
     async fn broadcast_delegate_key(
         &mut self,
-        delegate_key: Self::ParentSignature<Self::DelegateKey>,
+        delegate_key: Self::ParentSignature,
     ) -> Result<()> {
         self.delegation_key_sender
             .send(delegate_key)
             .await
             .map_err(|error| {
-                Error::BroadcastError(format!("Could not send {:?} over channel", error))
+                Error::Broadcast(format!("Could not send {:?} over channel", error))
             })?;
         Ok(())
     }
 }
 
 #[derive(Debug, Clone)]
-struct FakeParentSignature {
+struct FakeParentSignature<T> {
     dummy_signature: String,
+    _phantom: std::marker::PhantomData<T>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -81,12 +82,9 @@ struct FakeSignedData<T> {
     dummy_signature: String,
 }
 
-impl ParentSignature for FakeParentSignature {
-    type SignedData<T>
-        = FakeSignedData<T>
-    where
-        T: Send;
-    async fn sign<T: Send>(&self, data: T) -> Result<Self::SignedData<T>> {
+impl<T: Send + Sync> ParentSignature<T> for FakeParentSignature<T> {
+    type SignedData = FakeSignedData<T>;
+    async fn sign(&self, data: T) -> Result<Self::SignedData> {
         Ok(FakeSignedData {
             data,
             dummy_signature: self.dummy_signature.clone(),
@@ -144,7 +142,7 @@ struct FakeTrigger {
 }
 
 impl KeyRotationTrigger for FakeTrigger {
-    async fn next_rotation(&self) -> Result<()> {
+    async fn next_rotation(&mut self) -> Result<()> {
         self.inner.notified().await;
         Ok(())
     }
@@ -171,10 +169,18 @@ struct TestImplHandles {
 
 struct TaskBuilder {
     current_delegate_key: Option<String>,
-    parent_signature: Option<FakeParentSignature>,
+    parent_signature: Option<FakeParentSignature<FakeSigningKey>>,
     key_generator: Option<FakeKeyGenerator>,
 }
 
+type TestTask = PreConfirmationSignatureTask<
+    FakeTxReceiver,
+    FakeBroadcast,
+    FakeParentSignature<FakeSigningKey>,
+    FakeKeyGenerator,
+    FakeSigningKey,
+    FakeTrigger,
+>;
 impl TaskBuilder {
     pub fn new() -> Self {
         Self {
@@ -184,19 +190,7 @@ impl TaskBuilder {
         }
     }
 
-    pub fn build_with_handles(
-        self,
-    ) -> (
-        PreConfirmationSignatureTask<
-            FakeTxReceiver,
-            FakeBroadcast,
-            FakeParentSignature,
-            FakeKeyGenerator,
-            FakeSigningKey,
-            FakeTrigger,
-        >,
-        TestImplHandles,
-    ) {
+    pub fn build_with_handles(self) -> (TestTask, TestImplHandles) {
         let (key_rotation_trigger, trigger_handle) = FakeTrigger::new();
         let current_delegate_key = self.get_current_delegate_key();
         let key_generator = self.get_key_generator();
@@ -237,9 +231,10 @@ impl TaskBuilder {
         })
     }
 
-    fn get_parent_signature(&self) -> FakeParentSignature {
+    fn get_parent_signature(&self) -> FakeParentSignature<FakeSigningKey> {
         self.parent_signature.clone().unwrap_or({
             FakeParentSignature {
+                _phantom: std::marker::PhantomData,
                 dummy_signature: "dummy signature".into(),
             }
         })
@@ -294,6 +289,7 @@ impl TaskBuilder {
         dummy_signature: T,
     ) -> Self {
         let parent_signature = FakeParentSignature {
+            _phantom: std::marker::PhantomData,
             dummy_signature: dummy_signature.into(),
         };
         self.parent_signature = Some(parent_signature);

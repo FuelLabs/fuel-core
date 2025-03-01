@@ -14,14 +14,13 @@ use crate::pre_confirmation_signature_service::{
     tx_receiver::TxReceiver,
 };
 
-pub mod error;
-pub mod trigger;
-pub mod tx_receiver;
-
 pub mod broadcast;
+pub mod error;
 pub mod key_generator;
 pub mod parent_signature;
 pub mod signing_key;
+pub mod trigger;
+pub mod tx_receiver;
 
 pub type Signed<K, T> = <K as SigningKey>::Signature<T>;
 
@@ -50,10 +49,10 @@ where
     TxRcv: TxReceiver,
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
-        ParentSignature<DelegateKey> = Parent::SignedData<DelegateKey>,
+        ParentSignature = Parent::SignedData,
         PreConfirmations: From<TxRcv::Txs>,
     >,
-    Parent: ParentSignature,
+    Parent: ParentSignature<DelegateKey>,
     Gen: KeyGenerator<Key = DelegateKey>,
     DelegateKey: SigningKey,
     Trigger: KeyRotationTrigger,
@@ -86,10 +85,10 @@ where
     TxRcv: TxReceiver,
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
-        ParentSignature<DelegateKey> = Parent::SignedData<DelegateKey>,
+        ParentSignature = Parent::SignedData,
         PreConfirmations: From<TxRcv::Txs>,
     >,
-    Parent: ParentSignature,
+    Parent: ParentSignature<DelegateKey>,
     Gen: KeyGenerator<Key = DelegateKey>,
     DelegateKey: SigningKey,
     Trigger: KeyRotationTrigger,

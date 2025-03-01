@@ -47,6 +47,8 @@ use tokio_stream::{
     StreamExt,
 };
 
+pub mod pre_confirmation_signature;
+
 impl PoAAdapter {
     pub fn new(shared_state: Option<SharedState>) -> Self {
         Self { shared_state }
