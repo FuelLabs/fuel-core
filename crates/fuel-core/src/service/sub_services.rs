@@ -22,7 +22,21 @@ use crate::{
     service::{
         adapters::{
             chain_state_info_provider,
-            consensus_module::poa::InDirectoryPredefinedBlocks,
+            consensus_module::poa::{
+                pre_confirmation_signature::{
+                    broadcast::P2PBroadcast,
+                    key_generator::DelegateKeyGenerator,
+                    parent_signature::{
+                        FuelParentSignature,
+                        FuelParentSigner,
+                    },
+                    signing_key::DummyKey,
+                    trigger::TimeBasedTrigger,
+                    tx_receiver::MPSCTxReceiver,
+                    Preconfirmations,
+                },
+                InDirectoryPredefinedBlocks,
+            },
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
@@ -52,7 +66,11 @@ use fuel_core_gas_price_service::v1::{
     metadata::V1AlgorithmConfig,
     uninitialized_task::new_gas_price_service_v1,
 };
-use fuel_core_poa::Trigger;
+use fuel_core_poa::{
+    pre_confirmation_signature_service::PreConfirmationSignatureTask,
+    Trigger,
+};
+use fuel_core_services::ServiceRunner;
 use fuel_core_storage::{
     self,
     transactional::AtomicView,
@@ -70,6 +88,12 @@ pub type PoAService = fuel_core_poa::Service<
     SignMode,
     InDirectoryPredefinedBlocks,
     SystemTime,
+    MPSCTxReceiver<Preconfirmations>,
+    P2PBroadcast,
+    FuelParentSignature<DummyKey>,
+    DelegateKeyGenerator,
+    DummyKey,
+    TimeBasedTrigger<SystemTime>,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -87,6 +111,9 @@ pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 // TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
 pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
 
+#[allow(unreachable_code)]
+#[allow(unused_variables)]
+#[allow(clippy::diverging_sub_expression)]
 pub fn init_sub_services(
     config: &Config,
     database: CombinedDatabase,
@@ -246,6 +273,7 @@ pub fn init_sub_services(
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
     #[cfg(feature = "p2p")]
+    #[allow(unused_mut)]
     let mut network = config.p2p.clone().zip(p2p_externals).map(
         |(p2p_config, (shared_state, request_receiver))| {
             fuel_core_p2p::service::new_service(
@@ -276,6 +304,7 @@ pub fn init_sub_services(
     let poa_config: fuel_core_poa::Config = config.into();
     let mut production_enabled = !matches!(poa_config.trigger, Trigger::Never);
 
+    #[allow(unused_assignments)]
     if !production_enabled && config.debug {
         production_enabled = true;
         tracing::info!("Enabled manual block production because of `debug` flag");
@@ -296,6 +325,19 @@ pub fn init_sub_services(
 
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
+
+    #[allow(clippy::type_complexity)]
+    let pre_confirmation_service: ServiceRunner<
+        PreConfirmationSignatureTask<
+            MPSCTxReceiver<Preconfirmations>,
+            P2PBroadcast,
+            FuelParentSigner<DummyKey>,
+            DelegateKeyGenerator,
+            DummyKey,
+            TimeBasedTrigger<SystemTime>,
+        >,
+    > = todo!();
+
     let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
             &last_block_header,
@@ -307,6 +349,7 @@ pub fn init_sub_services(
             signer,
             predefined_blocks,
             SystemTime,
+            pre_confirmation_service,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
