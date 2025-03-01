@@ -43,9 +43,7 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            StorageReadReplayEvent,
-            TransactionExecutionStatus,
-            UncommittedResult,
+            NewTxTrigger, StorageReadReplayEvent, TransactionExecutionStatus, UncommittedResult
         },
     },
     tai64::Tai64,
@@ -166,7 +164,7 @@ where
         let result = self
             .executor
             // TODO: Replace with the correct trigger
-            .produce_without_commit(component, || async { unimplemented!() })
+            .produce_without_commit(component, || async { NewTxTrigger::Timeout })
             .await
             .map_err(Into::<anyhow::Error>::into)
             .with_context(|| {
@@ -242,7 +240,7 @@ where
         let result = self
             .executor
             // TODO: Replace with the correct trigger
-            .produce_without_commit(component, || async { unimplemented!() })
+            .produce_without_commit(component, || async { NewTxTrigger::Timeout })
             .await
             .map_err(Into::<anyhow::Error>::into)
             .context(context_string)?;
