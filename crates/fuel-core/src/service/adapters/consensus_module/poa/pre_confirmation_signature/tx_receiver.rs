@@ -19,6 +19,14 @@ pub struct MPSCTxReceiver<T> {
     receiver: tokio::sync::mpsc::Receiver<T>,
 }
 
+impl<T> MPSCTxReceiver<T> {
+    pub fn new() -> Self {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        MPSCTxReceiver { sender, receiver }
+    }
+}
+
+#[derive(Clone)]
 pub struct MPSCTxSender<T> {
     sender: tokio::sync::mpsc::Sender<T>,
 }
@@ -33,10 +41,10 @@ impl TxReceiver for MPSCTxReceiver<Vec<(TxId, PreconfirmationStatus)>> {
         ))
     }
 
-    fn get_sender(&self) -> PoAResult<Self::Sender> {
-        Ok(MPSCTxSender {
+    fn get_sender(&self) -> Self::Sender {
+        MPSCTxSender {
             sender: self.sender.clone(),
-        })
+        }
     }
 }
 
@@ -60,7 +68,6 @@ mod tests {
     #[tokio::test]
     async fn receive__gets_what_is_sent_through_channel() {
         // given
-        let (sender, receiver) = tokio::sync::mpsc::channel(1);
         let txs = vec![
             (
                 TxId::default(),
@@ -76,7 +83,8 @@ mod tests {
             ),
         ];
 
-        let mut receiver = MPSCTxReceiver { receiver };
+        let mut receiver = MPSCTxReceiver::new();
+        let mut sender = receiver.get_sender().unwrap();
 
         // when
         sender.send(txs.clone()).await.unwrap();

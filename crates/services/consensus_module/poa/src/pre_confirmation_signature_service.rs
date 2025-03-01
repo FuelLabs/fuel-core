@@ -49,6 +49,8 @@ impl<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger> RunnableService
     for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver,
+    <TxRcv as TxReceiver>::Txs: Sync,
+    <TxRcv as TxReceiver>::Sender: Clone,
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
         ParentSignature = Parent::SignedData,
@@ -60,12 +62,12 @@ where
     Trigger: KeyRotationTrigger,
 {
     const NAME: &'static str = "PreConfirmationSignatureTask";
-    type SharedData = ();
+    type SharedData = TxRcv::Sender;
     type Task = Self;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        todo!()
+        self.tx_receiver.get_sender()
     }
 
     async fn into_task(

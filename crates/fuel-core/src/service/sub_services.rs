@@ -314,7 +314,7 @@ pub fn init_sub_services(
 
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
-    let pre_confirmation_service:  = todo!();
+    let pre_confirmation_service = todo!();
     let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
             &last_block_header,

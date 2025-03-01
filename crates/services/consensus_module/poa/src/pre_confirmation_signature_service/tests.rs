@@ -28,6 +28,7 @@ pub struct FakeTxReceiver {
     recv: tokio::sync::mpsc::Receiver<Vec<(Transaction, Status)>>,
 }
 
+#[derive(Clone)]
 pub struct FakeTxSender {
     send: tokio::sync::mpsc::Sender<Vec<(Transaction, Status)>>,
 }
@@ -44,9 +45,9 @@ impl TxReceiver for FakeTxReceiver {
         }
     }
 
-    fn get_sender(&self) -> Result<Self::Sender> {
+    fn get_sender(&self) -> Self::Sender {
         let sender = self.sender.clone();
-        Ok(FakeTxSender { send: sender })
+        FakeTxSender { send: sender }
     }
 }
 
