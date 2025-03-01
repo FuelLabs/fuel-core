@@ -88,6 +88,15 @@ mod manually_produce_tests;
 mod test_time;
 mod trigger_tests;
 
+use crate::pre_confirmation_signature_service::tests::{
+    FakeBroadcast,
+    FakeKeyGenerator,
+    FakeParentSignature,
+    FakeSigningKey,
+    FakeTrigger,
+    FakeTxReceiver,
+    PreconfirmationTaskBuilder,
+};
 use test_time::TestTime;
 
 struct TestContextBuilder {
@@ -180,6 +189,11 @@ impl TestContextBuilder {
 
         let watch = time.watch();
 
+        let (pre_confirmation_signature_service, _) =
+            PreconfirmationTaskBuilder::new().build_with_handles();
+
+        let service_runner = ServiceRunner::new(pre_confirmation_signature_service);
+
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
             config.clone(),
@@ -190,13 +204,14 @@ impl TestContextBuilder {
             FakeBlockSigner { succeeds: true }.into(),
             predefined_blocks,
             watch,
+            service_runner,
         );
         service.start_and_await().await.unwrap();
         TestContext { service, time }
     }
 }
 
-struct FakeBlockSigner {
+pub struct FakeBlockSigner {
     succeeds: bool,
 }
 
@@ -220,15 +235,23 @@ impl BlockSigner for FakeBlockSigner {
     }
 }
 
+pub type TestPoAService = Service<
+    MockTransactionPool,
+    MockBlockProducer,
+    MockBlockImporter,
+    FakeBlockSigner,
+    InMemoryPredefinedBlocks,
+    test_time::Watch,
+    FakeTxReceiver,
+    FakeBroadcast,
+    FakeParentSignature<FakeSigningKey>,
+    FakeKeyGenerator,
+    FakeSigningKey,
+    FakeTrigger,
+>;
+
 struct TestContext {
-    service: Service<
-        MockTransactionPool,
-        MockBlockProducer,
-        MockBlockImporter,
-        FakeBlockSigner,
-        InMemoryPredefinedBlocks,
-        test_time::Watch,
-    >,
+    service: TestPoAService,
     time: TestTime,
 }
 
@@ -367,6 +390,11 @@ async fn remove_skipped_transactions() {
 
     let time = TestTime::at_unix_epoch();
 
+    let (pre_confirmation_signature_service, _) =
+        PreconfirmationTaskBuilder::new().build_with_handles();
+
+    let service_runner = ServiceRunner::new(pre_confirmation_signature_service);
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -377,6 +405,7 @@ async fn remove_skipped_transactions() {
         FakeBlockSigner { succeeds: true }.into(),
         predefined_blocks,
         time.watch(),
+        service_runner,
     );
 
     assert!(task.produce_next_block().await.is_ok());
@@ -494,6 +523,11 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+
+    let (pre_confirmation_signature_service, _) =
+        PreconfirmationTaskBuilder::new().build_with_handles();
+
+    let service_runner = ServiceRunner::new(pre_confirmation_signature_service);
     let task = MainTask::new(
         &last_block,
         config,
@@ -504,6 +538,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         FakeBlockSigner { succeeds: true }.into(),
         InMemoryPredefinedBlocks::new(blocks_map),
         time.watch(),
+        service_runner,
     );
 
     // when
@@ -558,6 +593,11 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+
+    let (pre_confirmation_signature_service, _) =
+        PreconfirmationTaskBuilder::new().build_with_handles();
+
+    let service_runner = ServiceRunner::new(pre_confirmation_signature_service);
     let task = MainTask::new(
         &last_block,
         config,
@@ -568,6 +608,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         FakeBlockSigner { succeeds: true }.into(),
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
         time.watch(),
+        service_runner,
     );
 
     // when

@@ -4,7 +4,10 @@ use fuel_core_poa::pre_confirmation_signature_service::{
         Error as PoaError,
         Result as PoAResult,
     },
-    tx_receiver::TxReceiver,
+    tx_receiver::{
+        TxReceiver,
+        TxSender,
+    },
 };
 use fuel_core_types::{
     fuel_tx::TxId,
@@ -12,18 +15,56 @@ use fuel_core_types::{
 };
 
 pub struct MPSCTxReceiver<T> {
+    sender: tokio::sync::mpsc::Sender<T>,
     receiver: tokio::sync::mpsc::Receiver<T>,
+}
+
+impl Default for MPSCTxReceiver<Vec<(TxId, PreconfirmationStatus)>> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> MPSCTxReceiver<T> {
+    pub fn new() -> Self {
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        MPSCTxReceiver { sender, receiver }
+    }
+}
+
+#[derive(Clone)]
+pub struct MPSCTxSender<T> {
+    sender: tokio::sync::mpsc::Sender<T>,
 }
 
 impl TxReceiver for MPSCTxReceiver<Vec<(TxId, PreconfirmationStatus)>> {
     type Txs = Preconfirmations;
+    type Sender = MPSCTxSender<Vec<(TxId, PreconfirmationStatus)>>;
 
     async fn receive(&mut self) -> PoAResult<Self::Txs> {
         self.receiver.recv().await.ok_or(PoaError::TxReceiver(
             "Failed to receive transaction, channel closed".to_string(),
         ))
     }
+
+    fn get_sender(&self) -> Self::Sender {
+        MPSCTxSender {
+            sender: self.sender.clone(),
+        }
+    }
 }
+
+impl TxSender for MPSCTxSender<Vec<(TxId, PreconfirmationStatus)>> {
+    type Txs = Preconfirmations;
+
+    async fn send(&mut self, txs: Self::Txs) -> PoAResult<()> {
+        self.sender
+            .send(txs)
+            .await
+            .map_err(|e| PoaError::TxReceiver(format!("{}", e)))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(non_snake_case)]
@@ -33,7 +74,6 @@ mod tests {
     #[tokio::test]
     async fn receive__gets_what_is_sent_through_channel() {
         // given
-        let (sender, receiver) = tokio::sync::mpsc::channel(1);
         let txs = vec![
             (
                 TxId::default(),
@@ -49,7 +89,8 @@ mod tests {
             ),
         ];
 
-        let mut receiver = MPSCTxReceiver { receiver };
+        let mut receiver = MPSCTxReceiver::new();
+        let mut sender = receiver.get_sender();
 
         // when
         sender.send(txs.clone()).await.unwrap();
