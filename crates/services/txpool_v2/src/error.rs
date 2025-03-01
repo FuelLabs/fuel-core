@@ -11,7 +11,10 @@ use fuel_core_types::{
     fuel_vm::checked_transaction::CheckError,
 };
 
-use crate::ports::WasmValidityError;
+use crate::{
+    pending_pool::MissingInput,
+    ports::WasmValidityError,
+};
 
 #[derive(Clone, Debug, derive_more::Display)]
 pub enum Error {
@@ -91,6 +94,35 @@ pub enum DependencyError {
     #[display(fmt = "The dependent transaction creates a diamond problem, \
     causing cycles in the dependency graph.")]
     DependentTransactionIsADiamondDeath,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum InsertionErrorType {
+    Error(Error),
+    MissingInputs(Vec<MissingInput>),
+}
+
+impl From<Error> for InsertionErrorType {
+    fn from(e: Error) -> Self {
+        InsertionErrorType::Error(e)
+    }
+}
+
+impl From<InputValidationErrorType> for InsertionErrorType {
+    fn from(e: InputValidationErrorType) -> Self {
+        match e {
+            InputValidationErrorType::Inconsistency(e) => InsertionErrorType::Error(e),
+            InputValidationErrorType::MissingInputs(e) => {
+                InsertionErrorType::MissingInputs(e)
+            }
+        }
+    }
+}
+
+pub(crate) enum InputValidationErrorType {
+    Inconsistency(Error),
+    // Don't add a variant with this type in `InputValidationError` to not break public API
+    MissingInputs(Vec<MissingInput>),
 }
 
 #[derive(Clone, Debug, derive_more::Display)]
