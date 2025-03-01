@@ -1,17 +1,5 @@
-use crate::{
-    database::{
-        database_description::relayer::Relayer,
-        Database,
-    },
-    fuel_core_graphql_api::ports::GasPriceEstimate,
-    service::{
-        sub_services::{
-            BlockProducerService,
-            TxPoolSharedState,
-        },
-        vm_pool::MemoryPool,
-    },
-};
+use std::sync::Arc;
+
 use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
@@ -53,7 +41,21 @@ use fuel_core_types::{
 };
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
-use std::sync::Arc;
+
+use crate::{
+    database::{
+        database_description::relayer::Relayer,
+        Database,
+    },
+    fuel_core_graphql_api::ports::GasPriceEstimate,
+    service::{
+        sub_services::{
+            BlockProducerService,
+            TxPoolSharedState,
+        },
+        vm_pool::MemoryPool,
+    },
+};
 
 pub mod block_importer;
 pub mod chain_state_info_provider;
@@ -100,8 +102,9 @@ impl StaticGasPrice {
 mod universal_gas_price_provider_tests {
     #![allow(non_snake_case)]
 
-    use super::*;
     use proptest::proptest;
+
+    use super::*;
 
     fn _worst_case__correctly_calculates_value(
         gas_price: u64,
