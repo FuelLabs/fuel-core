@@ -94,63 +94,9 @@ where
                 burned_amount: *val,
             },
         )?,
-        // TODO[RC]: We can get rid of this boilerplate by updating `enum Receipt`
-        // to have a method that returns the name of the receipt or decorate with with
-        // `strum_macros::AsRefStr` and use `receipt.as_ref()`. But this requires
-        // a PR to `fuel_vm` first.
-        Receipt::Call { .. } => {
+        receipt => {
             return Err(IndexationError::UnexpectedReceipt {
-                receipt: "Call".to_string(),
-            })
-        }
-        Receipt::Return { .. } => {
-            return Err(IndexationError::UnexpectedReceipt {
-                receipt: "Return".to_string(),
-            })
-        }
-        Receipt::ReturnData { .. } => {
-            return Err(IndexationError::UnexpectedReceipt {
-                receipt: "ReturnData".to_string(),
-            })
-        }
-        Receipt::Panic { .. } => {
-            return Err(IndexationError::UnexpectedReceipt {
-                receipt: "Panic".to_string(),
-            })
-        }
-        Receipt::Revert { .. } => {
-            return Err(IndexationError::UnexpectedReceipt {
-                receipt: "Revert".to_string(),
-            })
-        }
-        Receipt::Log { .. } => {
-            return Err(IndexationError::UnexpectedReceipt {
-                receipt: "Log".to_string(),
-            })
-        }
-        Receipt::LogData { .. } => {
-            return Err(IndexationError::UnexpectedReceipt {
-                receipt: "LogData".to_string(),
-            })
-        }
-        Receipt::Transfer { .. } => {
-            return Err(IndexationError::UnexpectedReceipt {
-                receipt: "Transfer".to_string(),
-            })
-        }
-        Receipt::TransferOut { .. } => {
-            return Err(IndexationError::UnexpectedReceipt {
-                receipt: "TransferOut".to_string(),
-            })
-        }
-        Receipt::ScriptResult { .. } => {
-            return Err(IndexationError::UnexpectedReceipt {
-                receipt: "ScriptResult".to_string(),
-            })
-        }
-        Receipt::MessageOut { .. } => {
-            return Err(IndexationError::UnexpectedReceipt {
-                receipt: "MessageOut".to_string(),
+                receipt: receipt.to_string(),
             })
         }
     };
