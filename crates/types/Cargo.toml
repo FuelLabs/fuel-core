@@ -43,7 +43,7 @@ postcard = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 
 [features]
-default = ["std"]
+default = ["std", "serde"]
 alloc = ["fuel-vm-private/alloc", "educe"]
 serde = [
   "dep:serde",
