@@ -274,6 +274,7 @@ impl PendingPool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(non_snake_case)]
     use std::sync::Arc;
 
     use fuel_core_types::{
@@ -393,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_one_tx_one_dependent_input_utxo() {
+    fn new_known_tx__returns_expected_tx_when_one_dependent_input_provided() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
@@ -430,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_one_tx_one_dependent_input_contract() {
+    fn new_known_tx__returns_expected_tx_when_one_dependent_input_contract_provided() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
@@ -483,7 +484,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_two_tx_one_dependent_input() {
+    fn new_known_tx__returns_expected_two_txs_when_common_dependent_input_provided() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
@@ -528,7 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_one_tx_two_dependent_inputs() {
+    fn new_known_tx__returns_expected_two_txs_when_two_dependent_input_provided() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
@@ -576,7 +577,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_two_txs_expired() {
+    fn new_known_tx__returns_expired_txs_when_ttl_reached() {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         // Given
