@@ -63,7 +63,10 @@ use crate::{
         BlackList,
         Config,
     },
-    error::Error,
+    error::{
+        Error,
+        InsertionErrorType,
+    },
     new_service,
     pool::{
         Pool,
@@ -245,7 +248,15 @@ impl TestPoolUniverse {
             let tx =
                 verification.perform_all_verifications(tx, Default::default(), true)?;
             let tx = Arc::new(tx);
-            Ok((tx.clone(), pool.write().insert(tx, &self.mock_db)?))
+            Ok((
+                tx.clone(),
+                pool.write()
+                    .insert(tx, &self.mock_db)
+                    .map_err(|e| match e {
+                        InsertionErrorType::Error(e) => e,
+                        InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
+                    })?,
+            ))
         } else {
             panic!("Pool needs to be built first");
         }
@@ -273,7 +284,12 @@ impl TestPoolUniverse {
             };
             let tx =
                 verification.perform_all_verifications(tx, Default::default(), true)?;
-            pool.write().insert(Arc::new(tx), &self.mock_db)
+            pool.write()
+                .insert(Arc::new(tx), &self.mock_db)
+                .map_err(|e| match e {
+                    InsertionErrorType::Error(e) => e,
+                    InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
+                })
         } else {
             panic!("Pool needs to be built first");
         }
@@ -303,7 +319,12 @@ impl TestPoolUniverse {
             };
             let tx =
                 verification.perform_all_verifications(tx, Default::default(), true)?;
-            pool.write().insert(Arc::new(tx), &self.mock_db)
+            pool.write()
+                .insert(Arc::new(tx), &self.mock_db)
+                .map_err(|e| match e {
+                    InsertionErrorType::Error(e) => e,
+                    InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
+                })
         } else {
             panic!("Pool needs to be built first");
         }

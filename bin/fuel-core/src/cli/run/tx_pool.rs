@@ -83,6 +83,16 @@ pub struct TxPoolArgs {
     /// Maximum number of pending read requests in the service.
     #[clap(long = "tx-max-pending-read-requests", default_value = "10000", env)]
     pub tx_max_pending_read_requests: usize,
+
+    /// The max time to live of the transaction inside of the `PendingPool`.
+    /// The `PendingPool` is a pool of transactions that are waiting for the `TxPool` to accept them
+    /// because one of their inputs is not yet available.
+    #[clap(long = "tx-pending-pool-ttl", default_value = "3s", env)]
+    pub tx_pending_pool_ttl: humantime::Duration,
+
+    /// The max percentage of the `TxPool` that can be used by the `PendingPool`.
+    #[clap(long = "tx-pending-pool-size-percentage", default_value = "50", env)]
+    pub tx_pending_pool_size_percentage: u16,
 }
 
 #[cfg(test)]
