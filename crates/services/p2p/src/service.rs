@@ -63,12 +63,12 @@ use fuel_core_types::{
             PeerReport,
         },
         BlockHeightHeartbeatData,
-        ConfirmationsGossipData,
         GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
         NetworkableTransactionPool,
         PeerId as FuelPeerId,
+        PreconfirmationsGossipData,
         TransactionGossipData,
         TransactionStatusGossipData,
         Transactions,
@@ -381,7 +381,7 @@ pub trait Broadcast: Send {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: ConfirmationsGossipData,
+        confirmations: PreconfirmationsGossipData,
     ) -> anyhow::Result<()>;
 
     fn new_tx_subscription_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
@@ -412,9 +412,9 @@ impl Broadcast for SharedState {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: ConfirmationsGossipData,
+        confirmations: PreconfirmationsGossipData,
     ) -> anyhow::Result<()> {
-        self.confirmations_broadcast.send(confirmations)?;
+        self.preconfirmations_broadcast.send(confirmations)?;
         Ok(())
     }
 
@@ -1093,7 +1093,7 @@ pub struct SharedState {
     /// TODO[RC]: We need either `tx_status_broadcast` or `confirmations_broadcast`.
     tx_status_broadcast: broadcast::Sender<TransactionStatusGossipData>,
     /// Sender of p2p tx confirmations used for subscribing.
-    confirmations_broadcast: broadcast::Sender<ConfirmationsGossipData>,
+    preconfirmations_broadcast: broadcast::Sender<PreconfirmationsGossipData>,
     /// Sender of reserved peers connection updates.
     reserved_peers_broadcast: broadcast::Sender<usize>,
     /// Used for communicating with the `Task`.
@@ -1331,8 +1331,8 @@ impl SharedState {
 
     pub fn subscribe_confirmations(
         &self,
-    ) -> broadcast::Receiver<ConfirmationsGossipData> {
-        self.confirmations_broadcast.subscribe()
+    ) -> broadcast::Receiver<PreconfirmationsGossipData> {
+        self.preconfirmations_broadcast.subscribe()
     }
 
     pub fn subscribe_block_height(
@@ -1396,7 +1396,7 @@ pub fn build_shared_state(
             new_tx_subscription_broadcast,
             tx_broadcast,
             tx_status_broadcast,
-            confirmations_broadcast,
+            preconfirmations_broadcast: confirmations_broadcast,
             reserved_peers_broadcast,
             block_height_broadcast,
             max_txs_per_request: config.max_txs_per_request,

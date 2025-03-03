@@ -85,7 +85,7 @@ pub type TransactionStatusGossipData = GossipData<(TxId, TransactionStatus)>;
 pub type TransactionGossipData = GossipData<Transaction>;
 
 /// Transactions that have been confirmed by block producer
-pub type ConfirmationsGossipData = GossipData<PreConfirmationMessage>;
+pub type PreconfirmationsGossipData = GossipData<PreconfirmationMessage>;
 
 /// A value and an associated signature
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,7 +160,7 @@ pub type SignedPreconfirmationByDelegate = Sealed<Preconfirmations>;
 /// The possible messages sent by the parties pre-confirming transactinos
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreConfirmationMessage {
+pub enum PreconfirmationMessage {
     /// Notification of key delegation
     Delegate(SignedByBlockProducerDelegation),
     /// Notification of pre-confirmations
@@ -168,7 +168,7 @@ pub enum PreConfirmationMessage {
 }
 
 #[cfg(feature = "test-helpers")]
-impl PreConfirmationMessage {
+impl PreconfirmationMessage {
     /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
     pub fn default_test_confirmation() -> Self {
         Self::Preconfirmations(SignedPreconfirmationByDelegate {

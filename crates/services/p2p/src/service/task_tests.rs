@@ -15,7 +15,7 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::consensus::Genesis,
     fuel_types::BlockHeight,
-    services::p2p::PreConfirmationMessage,
+    services::p2p::PreconfirmationMessage,
 };
 use futures::FutureExt;
 use libp2p::gossipsub::TopicHash;
@@ -208,7 +208,7 @@ impl P2pDb for FakeDB {
 
 struct FakeBroadcast {
     pub peer_reports: mpsc::Sender<(FuelPeerId, AppScore, String)>,
-    pub confirmation_gossip_broadcast: mpsc::Sender<ConfirmationsGossipData>,
+    pub confirmation_gossip_broadcast: mpsc::Sender<PreconfirmationsGossipData>,
 }
 
 impl Broadcast for FakeBroadcast {
@@ -236,7 +236,7 @@ impl Broadcast for FakeBroadcast {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: ConfirmationsGossipData,
+        confirmations: PreconfirmationsGossipData,
     ) -> anyhow::Result<()> {
         self.confirmation_gossip_broadcast.try_send(confirmations)?;
         Ok(())
@@ -506,7 +506,7 @@ fn arb_tx_confirmation_gossip_message() -> FuelP2PEvent {
     let peer_id = PeerId::random();
     let message_id = vec![1, 2, 3, 4, 5].into();
     let topic_hash = TopicHash::from_raw(TX_PRECONFIRMATIONS_GOSSIP_TOPIC);
-    let confirmations = PreConfirmationMessage::default_test_confirmation();
+    let confirmations = PreconfirmationMessage::default_test_confirmation();
     let message = GossipsubMessage::TxPreConfirmations(confirmations);
     FuelP2PEvent::GossipsubMessage {
         peer_id,

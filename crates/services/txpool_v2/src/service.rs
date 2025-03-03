@@ -525,6 +525,7 @@ where
         let current_height_reader = self.current_height_reader.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
+        let my_status_thing = self.my_status_thing.clone();
 
         let insert_transaction_thread_pool_op = move || {
             let current_height = current_height_reader.read();
@@ -577,6 +578,18 @@ where
                     // reason: err.to_string(),
                     // },
                     // );
+
+                    shared_state
+                        .tx_status_manager
+                        .lock()
+                        .unwrap()
+                        .upsert_status(
+                            &tx_id,
+                            TransactionStatus::SqueezedOut {
+                                reason: err.to_string(),
+                            },
+                        );
+
                     shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
                     return
                 }

@@ -60,6 +60,7 @@ impl TxStatusChange {
     }
 
     // TODO[RC]: Also cover other statuses from other components, for example, "Failed".
+    // This basically forwards whatever status was received from other component (worker service).
     pub fn send_complete(
         &self,
         id: Bytes32,

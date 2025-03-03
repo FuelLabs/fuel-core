@@ -24,6 +24,7 @@ impl SharedState {
     }
 
     pub fn upsert_status(&mut self, tx_id: &TxId, tx_status: TransactionStatus) {
+        // TODO[RC]: Take care about locking here
         self.statuses.insert(tx_id.clone(), tx_status);
     }
 
