@@ -529,7 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn new_known_tx__returns_expected_two_txs_when_two_dependent_input_provided() {
+    fn new_known_tx__returns_expected_one_tx_when_two_dependent_input_provided() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
