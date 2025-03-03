@@ -133,7 +133,7 @@ enum FinalTxStatus {
     Failed,
     /// Transaction was eligible for execution and inclusion in the block but
     /// it failed during the execution.
-    FailureDuringBlockProduction,
+    FailedDuringBlockProduction,
 }
 
 /// Strategy to generate an Option<TransactionStatus>
@@ -244,7 +244,7 @@ fn next_state(state: TransactionStatus) -> Flow {
         }
         TransactionStatus::Failure { .. } => Flow::Break(FinalTxStatus::Failed),
         TransactionStatus::FailureDuringBlockProduction { .. } => {
-            Flow::Break(FinalTxStatus::FailureDuringBlockProduction)
+            Flow::Break(FinalTxStatus::FailedDuringBlockProduction)
         }
         TransactionStatus::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
         TransactionStatus::SqueezedOutDuringBlockProduction { .. } => {
@@ -328,7 +328,7 @@ impl From<crate::schema::tx::types::TransactionStatus> for TxStatus {
                         TxStatus::Final(FinalTxStatus::Failed)
                     }
                     crate::schema::tx::types::TransactionStatus::FailureDuringBlockProduction(_) => {
-                        TxStatus::Final(FinalTxStatus::FailureDuringBlockProduction)
+                        TxStatus::Final(FinalTxStatus::FailedDuringBlockProduction)
                     }
         }
     }
