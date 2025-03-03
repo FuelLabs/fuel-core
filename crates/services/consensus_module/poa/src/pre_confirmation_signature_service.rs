@@ -49,7 +49,6 @@ impl<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger> RunnableService
     for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver,
-    <TxRcv as TxReceiver>::Txs: Sync,
     <TxRcv as TxReceiver>::Sender: Clone,
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
