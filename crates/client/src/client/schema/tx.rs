@@ -454,7 +454,13 @@ pub struct ChangePolicy {
     #[cynic(skip_serializing_if = "Option::is_none")]
     pub change: Option<Address>,
     #[cynic(skip_serializing_if = "Option::is_none")]
-    pub destroy: Option<bool>,
+    pub destroy: Option<Destroy>,
+}
+
+#[derive(cynic::Enum, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum Destroy {
+    Destroy,
 }
 
 #[derive(cynic::InputObject, Clone, Debug)]

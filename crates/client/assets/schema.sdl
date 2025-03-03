@@ -147,7 +147,7 @@ input ChangePolicy @oneOf {
 	"""
 	Destroys the remaining assets by the transaction for provided address.
 	"""
-	destroy: Boolean
+	destroy: Destroy
 }
 
 type Coin {
@@ -318,6 +318,10 @@ type DaCompressedBlock {
 }
 
 union DependentCost = LightOperation | HeavyOperation
+
+enum Destroy {
+	DESTROY
+}
 
 type DryRunFailureStatus {
 	programState: ProgramState

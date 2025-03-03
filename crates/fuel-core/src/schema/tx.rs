@@ -695,13 +695,18 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
 pub mod schema_types {
     use super::*;
 
+    #[derive(async_graphql::Enum, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    pub enum Destroy {
+        Destroy,
+    }
+
     #[derive(async_graphql::OneofObject)]
     pub enum ChangePolicy {
         /// Adds `Output::Change` to the transaction if it is not already present.
         /// Sending remaining assets to the provided address.
         Change(Address),
         /// Destroys the remaining assets by the transaction for provided address.
-        Destroy(bool),
+        Destroy(Destroy),
     }
 
     #[derive(async_graphql::OneofObject)]

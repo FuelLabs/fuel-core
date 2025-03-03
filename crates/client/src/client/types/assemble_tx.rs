@@ -10,6 +10,7 @@ use fuel_core_types::{
 
 use crate::client::schema::{
     self,
+    tx::Destroy,
     ConversionError,
 };
 
@@ -119,7 +120,7 @@ impl From<ChangePolicy> for schema::tx::ChangePolicy {
     fn from(value: ChangePolicy) -> Self {
         let (change, destroy) = match value {
             ChangePolicy::Change(address) => (Some(address.into()), None),
-            ChangePolicy::Destroy => (None, Some(true)),
+            ChangePolicy::Destroy => (None, Some(Destroy::Destroy)),
         };
 
         Self { change, destroy }
