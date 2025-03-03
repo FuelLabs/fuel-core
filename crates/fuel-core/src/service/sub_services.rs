@@ -93,7 +93,7 @@ pub type PoAService = fuel_core_poa::Service<
     FuelParentSignature<DummyKey>,
     DelegateKeyGenerator,
     DummyKey,
-    TimeBasedTrigger<SystemTime>,
+    TimeBasedTrigger,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -334,7 +334,7 @@ pub fn init_sub_services(
             FuelParentSigner<DummyKey>,
             DelegateKeyGenerator,
             DummyKey,
-            TimeBasedTrigger<SystemTime>,
+            TimeBasedTrigger,
         >,
     > = todo!();
 
