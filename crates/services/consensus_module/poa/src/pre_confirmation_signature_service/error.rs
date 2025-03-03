@@ -8,9 +8,17 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 pub enum Error {
     /// Error occurred when broadcasting data
     #[error("Broadcast error: {0}")]
-    BroadcastError(String),
+    Broadcast(String),
 
     /// Error occurred when receiving transactions
     #[error("Transaction receiver error: {0}")]
-    TxReceiverError(String),
+    TxReceiver(String),
+
+    /// Error occurred inside of trigger
+    #[error("Trigger error: {0}")]
+    Trigger(String),
+
+    /// Error occurred with parent signature
+    #[error("Parent signature error: {0}")]
+    ParentSignature(String),
 }
