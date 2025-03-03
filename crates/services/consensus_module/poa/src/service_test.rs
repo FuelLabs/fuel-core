@@ -19,7 +19,6 @@ use crate::{
     Service,
     Trigger,
 };
-use async_trait::async_trait;
 use fuel_core_chain_config::default_consensus_dev_key;
 use fuel_core_services::{
     Service as StorageTrait,
@@ -51,6 +50,7 @@ use fuel_core_types::{
     services::executor::{
         Error as ExecutorError,
         ExecutionResult,
+        NewTxWaiter,
         UncommittedResult,
     },
     signer::SignMode,
@@ -435,13 +435,13 @@ impl FakeBlockProducer {
     }
 }
 
-#[async_trait]
 impl BlockProducer for FakeBlockProducer {
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         _source: TransactionsSource,
+        _new_tx_waiter: impl NewTxWaiter,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         self.block_sender
             .send(FakeProducedBlock::New(height, block_time))

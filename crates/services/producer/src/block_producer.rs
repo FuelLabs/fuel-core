@@ -43,8 +43,9 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            NewTxTrigger,
+            NewTxWaiter,
             StorageReadReplayEvent,
+            TimeoutOnlyTxWaiter,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -166,8 +167,7 @@ where
 
         let result = self
             .executor
-            // TODO: Replace with the correct trigger
-            .produce_without_commit(component, || async { NewTxTrigger::Timeout })
+            .produce_without_commit(component, TimeoutOnlyTxWaiter)
             .await
             .map_err(Into::<anyhow::Error>::into)
             .with_context(|| {
@@ -192,6 +192,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         tx_source: impl FnOnce(u64, BlockHeight) -> F,
+        new_tx_waiter: impl NewTxWaiter,
     ) -> anyhow::Result<UncommittedResult<Changes>>
     where
         Executor: ports::BlockProducer<TxSource> + 'static,
@@ -243,7 +244,7 @@ where
         let result = self
             .executor
             // TODO: Replace with the correct trigger
-            .produce_without_commit(component, || async { NewTxTrigger::Timeout })
+            .produce_without_commit(component, new_tx_waiter)
             .await
             .map_err(Into::<anyhow::Error>::into)
             .context(context_string)?;
@@ -280,11 +281,13 @@ where
         &self,
         height: BlockHeight,
         block_time: Tai64,
+        new_tx_waiter: impl NewTxWaiter,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         self.produce_and_execute::<TxSource, _>(
             height,
             block_time,
             |gas_price, height| self.txpool.get_source(gas_price, height),
+            new_tx_waiter,
         )
         .await
     }
@@ -306,8 +309,13 @@ where
         block_time: Tai64,
         transactions: Vec<Transaction>,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
-        self.produce_and_execute(height, block_time, |_, _| async { Ok(transactions) })
-            .await
+        self.produce_and_execute(
+            height,
+            block_time,
+            |_, _| async { Ok(transactions) },
+            TimeoutOnlyTxWaiter,
+        )
+        .await
     }
 }
 

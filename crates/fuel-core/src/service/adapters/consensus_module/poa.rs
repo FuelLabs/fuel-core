@@ -33,7 +33,10 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImporterResult,
         },
-        executor::UncommittedResult,
+        executor::{
+            NewTxWaiter,
+            UncommittedResult,
+        },
     },
     tai64::Tai64,
 };
@@ -89,18 +92,18 @@ impl TransactionPool for TxPoolAdapter {
     }
 }
 
-#[async_trait::async_trait]
 impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
+        new_tx_waiter: impl NewTxWaiter,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         match source {
             TransactionsSource::TxPool => {
                 self.block_producer
-                    .produce_and_execute_block_txpool(height, block_time)
+                    .produce_and_execute_block_txpool(height, block_time, new_tx_waiter)
                     .await
             }
             TransactionsSource::SpecificTransactions(txs) => {

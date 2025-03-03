@@ -67,7 +67,9 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             ExecutionResult,
+            NewTxWaiter,
             UncommittedResult as UncommittedExecutionResult,
+            WaitNewTransactionsResult,
         },
         Uncommitted,
     },
@@ -341,6 +343,35 @@ where
     }
 }
 
+pub struct NewTxWaiterImpl {
+    receiver: tokio::sync::watch::Receiver<()>,
+    timeout: Instant,
+}
+
+impl NewTxWaiterImpl {
+    fn new(receiver: tokio::sync::watch::Receiver<()>, timeout: Instant) -> Self {
+        Self { receiver, timeout }
+    }
+}
+
+impl NewTxWaiter for NewTxWaiterImpl {
+    async fn wait_for_new_transactions(&self) -> WaitNewTransactionsResult {
+        // TODO: use correct interval
+        let mut receiver = self.receiver.clone();
+        match tokio::time::timeout_at(self.timeout, async move {
+            match receiver.changed().await {
+                Ok(()) => WaitNewTransactionsResult::NewTransaction,
+                Err(_) => WaitNewTransactionsResult::Timeout,
+            }
+        })
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => WaitNewTransactionsResult::Timeout,
+        }
+    }
+}
+
 impl<T, B, I, S, PB, C, TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
     MainTask<T, B, I, S, PB, C, TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
@@ -370,8 +401,13 @@ where
         block_time: Tai64,
         source: TransactionsSource,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
+        // TODO: Use neew calculated interval
+        let new_tx_waiter = NewTxWaiterImpl::new(
+            self.new_txs_watcher.clone(),
+            self.last_block_created + Duration::from_secs(1),
+        );
         self.block_producer
-            .produce_and_execute_block(height, block_time, source)
+            .produce_and_execute_block(height, block_time, source, new_tx_waiter)
             .await
     }
 
@@ -432,7 +468,6 @@ where
         if self.last_timestamp > block_time {
             return Err(anyhow!("The block timestamp should monotonically increase"))
         }
-
         // Ask the block producer to create the block
         let (
             ExecutionResult {
@@ -443,7 +478,9 @@ where
             },
             changes,
         ) = self
-            .signal_produce_block(height, block_time, source)
+            .signal_produce_block(
+                height, block_time, source, // self.new_txs_watcher
+            )
             .await?
             .into();
 

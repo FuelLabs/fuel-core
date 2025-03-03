@@ -22,7 +22,7 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            NewTxTrigger,
+            NewTxWaiter,
             Result as ExecutorResult,
             StorageReadReplayEvent,
             TransactionExecutionStatus,
@@ -96,13 +96,11 @@ pub trait Relayer: Send + Sync {
 pub trait BlockProducer<TxSource>: Send + Sync {
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
-    fn produce_without_commit<TriggerResult>(
+    fn produce_without_commit(
         &self,
         component: Components<TxSource>,
-        trigger: impl Fn() -> TriggerResult + Send,
-    ) -> impl Future<Output = ExecutorResult<UncommittedResult<Changes>>> + Send
-    where
-        TriggerResult: Future<Output = NewTxTrigger> + Send;
+        new_tx_waiter: impl NewTxWaiter,
+    ) -> impl Future<Output = ExecutorResult<UncommittedResult<Changes>>>;
 }
 
 pub trait DryRunner: Send + Sync {

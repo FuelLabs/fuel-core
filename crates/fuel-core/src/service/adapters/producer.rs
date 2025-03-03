@@ -62,7 +62,7 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            NewTxTrigger,
+            NewTxWaiter,
             Result as ExecutorResult,
             StorageReadReplayEvent,
             TransactionExecutionStatus,
@@ -72,7 +72,6 @@ use fuel_core_types::{
 };
 use std::{
     borrow::Cow,
-    future::Future,
     sync::Arc,
 };
 
@@ -97,29 +96,23 @@ impl TxPool for TxPoolAdapter {
 }
 
 impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAdapter {
-    async fn produce_without_commit<TriggerResult>(
+    async fn produce_without_commit(
         &self,
         component: Components<TransactionsSource>,
-        trigger: impl Fn() -> TriggerResult + Send,
-    ) -> ExecutorResult<UncommittedResult<Changes>>
-    where
-        TriggerResult: Future<Output = NewTxTrigger> + Send,
-    {
+        new_tx_waiter: impl NewTxWaiter,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
         self.executor
-            .produce_without_commit_with_source(component, trigger)
+            .produce_without_commit_with_source(component, new_tx_waiter)
             .await
     }
 }
 
 impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdapter {
-    async fn produce_without_commit<TriggerResult>(
+    async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _trigger: impl Fn() -> TriggerResult + Send,
-    ) -> ExecutorResult<UncommittedResult<Changes>>
-    where
-        TriggerResult: Future<Output = NewTxTrigger> + Send,
-    {
+        _new_tx_waiter: impl NewTxWaiter,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
         self.produce_without_commit_from_vector(component)
     }
 }

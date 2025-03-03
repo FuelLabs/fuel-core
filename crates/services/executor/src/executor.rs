@@ -130,7 +130,7 @@ use fuel_core_types::{
             Event as ExecutorEvent,
             ExecutionResult,
             ForcedTransactionFailure,
-            NewTxTrigger,
+            NewTxWaiter,
             Result as ExecutorResult,
             TransactionExecutionResult,
             TransactionExecutionStatus,
@@ -138,6 +138,7 @@ use fuel_core_types::{
             UncommittedResult,
             UncommittedValidationResult,
             ValidationResult,
+            WaitNewTransactionsResult,
         },
         relayer::Event,
     },
@@ -148,7 +149,6 @@ use tracing::{
     warn,
 };
 
-use core::future::Future;
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 
@@ -280,15 +280,14 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    pub async fn produce_without_commit<TxSource, TriggerResult>(
+    pub async fn produce_without_commit<TxSource>(
         self,
         components: Components<TxSource>,
         dry_run: bool,
-        trigger: impl Fn() -> TriggerResult,
+        new_tx_waiter: impl NewTxWaiter,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
-        TriggerResult: Future<Output = NewTxTrigger> + Send,
     {
         let consensus_params_version = components.consensus_parameters_version();
 
@@ -302,7 +301,7 @@ where
             block_executor.dry_run_block(components, storage_tx)?
         } else {
             block_executor
-                .produce_block(components, storage_tx, trigger)
+                .produce_block(components, storage_tx, new_tx_waiter)
                 .await?
         };
 
@@ -431,17 +430,16 @@ where
 {
     #[tracing::instrument(skip_all)]
     /// Produce the fuel block with specified components
-    async fn produce_block<TxSource, D, TriggerResult>(
+    async fn produce_block<TxSource, D>(
         mut self,
         components: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
-        trigger: impl Fn() -> TriggerResult,
+        new_tx_waiter: impl NewTxWaiter,
         //_preconfirmation_sender: impl PreconfirmationSender,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
         D: KeyValueInspect<Column = Column>,
-        TriggerResult: Future<Output = NewTxTrigger> + Send,
     {
         let mut partial_block =
             PartialFuelBlock::new(components.header_to_produce, vec![]);
@@ -464,9 +462,9 @@ where
                 &mut data,
                 &mut memory,
             )?;
-            match trigger().await {
-                NewTxTrigger::Timeout => break,
-                NewTxTrigger::Triggered => {
+            match new_tx_waiter.wait_for_new_transactions().await {
+                WaitNewTransactionsResult::Timeout => break,
+                WaitNewTransactionsResult::NewTransaction => {
                     continue;
                 }
             }

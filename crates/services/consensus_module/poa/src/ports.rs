@@ -20,11 +20,17 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImportResult,
         },
-        executor::UncommittedResult as UncommittedExecutionResult,
+        executor::{
+            NewTxWaiter,
+            UncommittedResult as UncommittedExecutionResult,
+        },
     },
     tai64::Tai64,
 };
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    future::Future,
+};
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
@@ -41,20 +47,21 @@ pub enum TransactionsSource {
     SpecificTransactions(Vec<Transaction>),
 }
 
-#[cfg_attr(test, mockall::automock)]
-#[async_trait::async_trait]
+// TODO: Can't be `#[cfg_attr(test, mockall::automock)]` because of `impl NewTxWaiter`. What to do?
+//#[cfg_attr(test, mockall::automock)]
 pub trait BlockProducer: Send + Sync {
-    async fn produce_and_execute_block(
+    fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
+        new_tx_waiter: impl NewTxWaiter,
+    ) -> impl Future<Output = anyhow::Result<UncommittedExecutionResult<Changes>>> + Send;
 
-    async fn produce_predefined_block(
+    fn produce_predefined_block(
         &self,
         block: &Block,
-    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
+    ) -> impl Future<Output = anyhow::Result<UncommittedExecutionResult<Changes>>> + Send;
 }
 
 #[cfg_attr(test, mockall::automock)]

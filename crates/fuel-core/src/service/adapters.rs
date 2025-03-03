@@ -32,8 +32,8 @@ use fuel_core_types::{
         block_importer::SharedImportResult,
         block_producer::Components,
         executor::{
-            NewTxTrigger,
             Result as ExecutorResult,
+            TimeoutOnlyTxWaiter,
             UncommittedResult,
         },
     },
@@ -354,9 +354,7 @@ impl ExecutorAdapter {
         };
 
         self.executor
-            .produce_without_commit_with_source(new_components, || async {
-                NewTxTrigger::Timeout
-            })
+            .produce_without_commit_with_source(new_components, TimeoutOnlyTxWaiter)
             .now_or_never()
             .unwrap()
     }
