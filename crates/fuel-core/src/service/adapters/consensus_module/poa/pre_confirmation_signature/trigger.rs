@@ -57,7 +57,7 @@ mod tests {
         let mut trigger = TimeBasedTrigger::new(rotation_interval_duration);
 
         tokio::time::advance(Duration::from_secs(1)).await;
-        let _first_rotation = trigger.next_rotation().await.unwrap();
+        trigger.next_rotation().await.unwrap();
 
         // when
         let mut fut = tokio_test::task::spawn(trigger.next_rotation());
