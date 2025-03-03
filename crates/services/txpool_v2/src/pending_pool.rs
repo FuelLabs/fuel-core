@@ -41,12 +41,18 @@ use crate::{
 pub(crate) struct PendingPool {
     ttl: Duration,
     pending_txs_by_inputs: HashMap<MissingInput, HashSet<TxId>>,
-    pending_inputs_by_tx:
-        HashMap<TxId, ((ArcPoolTx, InsertionSource), Vec<MissingInput>)>,
+    pending_inputs_by_tx: HashMap<TxId, PendingTx>,
     ttl_check: VecDeque<(SystemTime, TxId)>,
     pub(crate) current_bytes: usize,
     pub(crate) current_txs: usize,
     pub(crate) current_gas: u64,
+}
+
+#[derive(Debug)]
+pub(crate) struct PendingTx {
+    pub tx: ArcPoolTx,
+    pub insertion_source: InsertionSource,
+    pub missing_inputs: Vec<MissingInput>,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Copy, Clone)]
@@ -84,7 +90,7 @@ impl From<&MissingInput> for Error {
 #[derive(Debug)]
 pub(crate) struct UpdatePendingTxs {
     pub resolved_txs: Vec<(ArcPoolTx, InsertionSource)>,
-    pub expired_txs: Vec<(ArcPoolTx, InsertionSource, Vec<MissingInput>)>,
+    pub expired_txs: Vec<PendingTx>,
 }
 
 impl PendingPool {
@@ -118,8 +124,14 @@ impl PendingPool {
                 .or_default()
                 .insert(tx_id);
         }
-        self.pending_inputs_by_tx
-            .insert(tx_id, ((transaction, insertion_source), missing_inputs));
+        self.pending_inputs_by_tx.insert(
+            tx_id,
+            PendingTx {
+                tx: transaction,
+                insertion_source,
+                missing_inputs,
+            },
+        );
         self.ttl_check.push_front((
             SystemTime::now()
                 .checked_add(self.ttl)
@@ -148,42 +160,54 @@ impl PendingPool {
             for tx_id in entry.remove() {
                 if let Entry::Occupied(mut entry) = self.pending_inputs_by_tx.entry(tx_id)
                 {
-                    let (_, missing_inputs) = entry.get_mut();
-                    missing_inputs.retain(|input| *input != missing_input);
-                    if missing_inputs.is_empty() {
-                        let tx_data = entry.remove().0;
-                        self.decrease_pool_size(&tx_data.0);
-                        resolved_txs.push(tx_data);
+                    let pending_tx = entry.get_mut();
+                    pending_tx
+                        .missing_inputs
+                        .retain(|input| *input != missing_input);
+                    if pending_tx.missing_inputs.is_empty() {
+                        let PendingTx {
+                            tx,
+                            insertion_source,
+                            missing_inputs: _,
+                        } = entry.remove();
+                        self.decrease_pool_size(&tx);
+                        resolved_txs.push((tx, insertion_source));
                     }
                 }
             }
         }
     }
 
-    fn expire_transactions(
-        &mut self,
-        expired_txs: &mut Vec<(ArcPoolTx, InsertionSource, Vec<MissingInput>)>,
-    ) {
+    fn expire_transactions(&mut self, expired_txs: &mut Vec<PendingTx>) {
         let now = SystemTime::now();
         while let Some((ttl, tx_id)) = self.ttl_check.back().copied() {
             if ttl > now {
                 break;
             }
-            if let Some(((tx, source), missing_inputs)) =
-                self.pending_inputs_by_tx.remove(&tx_id)
+            if let Some(PendingTx {
+                tx,
+                insertion_source,
+                missing_inputs,
+            }) = self.pending_inputs_by_tx.remove(&tx_id)
             {
                 self.decrease_pool_size(&tx);
                 for input in &missing_inputs {
                     // Remove tx_id from the list of unresolved transactions for this input
                     // If the list becomes empty, remove the entry
-                    if let Some(tx_ids) = self.pending_txs_by_inputs.get_mut(input) {
-                        tx_ids.remove(&tx_id);
-                        if tx_ids.is_empty() {
-                            self.pending_txs_by_inputs.remove(input);
+                    if let Entry::Occupied(mut tx_ids) =
+                        self.pending_txs_by_inputs.entry(*input)
+                    {
+                        tx_ids.get_mut().remove(&tx_id);
+                        if tx_ids.get().is_empty() {
+                            tx_ids.remove();
                         }
                     }
                 }
-                expired_txs.push((tx, source, missing_inputs));
+                expired_txs.push(PendingTx {
+                    tx,
+                    insertion_source,
+                    missing_inputs,
+                });
             }
             self.ttl_check.pop_back();
         }
@@ -250,6 +274,7 @@ impl PendingPool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(non_snake_case)]
     use std::sync::Arc;
 
     use fuel_core_types::{
@@ -369,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_one_tx_one_dependent_input_utxo() {
+    fn new_known_tx__returns_expected_tx_when_one_dependent_input_provided() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
@@ -406,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_one_tx_one_dependent_input_contract() {
+    fn new_known_tx__returns_expected_tx_when_one_dependent_input_contract_provided() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
@@ -459,7 +484,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_two_tx_one_dependent_input() {
+    fn new_known_tx__returns_expected_two_txs_when_common_dependent_input_provided() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
@@ -504,7 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_one_tx_two_dependent_inputs() {
+    fn new_known_tx__returns_expected_two_txs_when_two_dependent_input_provided() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
@@ -552,7 +577,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pending_pool_two_txs_expired() {
+    fn new_known_tx__returns_expired_txs_when_ttl_reached() {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         // Given
