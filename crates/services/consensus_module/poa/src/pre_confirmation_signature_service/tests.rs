@@ -16,7 +16,7 @@ use tokio::sync::Notify;
 use fuel_core_types::fuel_types::BlockHeight;
 
 #[allow(dead_code)]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub enum Status {
     Success { height: BlockHeight },
     Fail { height: BlockHeight },
@@ -151,9 +151,9 @@ impl SigningKey for FakeSigningKey {
     type Signature<T>
         = FakeSignedData<T>
     where
-        T: Send + Clone;
+        T: Send + Clone + Serialize;
 
-    fn sign<T: Send + Clone>(&self, data: T) -> Result<Self::Signature<T>> {
+    fn sign<T: Send + Clone + Serialize>(&self, data: T) -> Result<Self::Signature<T>> {
         Ok(FakeSignedData {
             data,
             dummy_signature: self.inner.clone(),

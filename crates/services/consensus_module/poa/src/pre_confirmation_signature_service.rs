@@ -5,6 +5,7 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
+use serde::Serialize;
 
 use crate::pre_confirmation_signature_service::{
     broadcast::Broadcast,
@@ -53,7 +54,7 @@ where
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
         ParentSignature = Parent::SignedData,
-        PreConfirmations: From<TxRcv::Txs>,
+        PreConfirmations: From<TxRcv::Txs> + Serialize,
     >,
     Parent: ParentSignature<DelegateKey>,
     Gen: KeyGenerator<Key = DelegateKey>,
@@ -85,7 +86,7 @@ where
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
         ParentSignature = Parent::SignedData,
-        PreConfirmations: From<TxRcv::Txs>,
+        PreConfirmations: From<TxRcv::Txs> + Serialize,
     >,
     Parent: ParentSignature<DelegateKey>,
     Gen: KeyGenerator<Key = DelegateKey>,
@@ -121,7 +122,7 @@ where
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
         ParentSignature = Parent::SignedData,
-        PreConfirmations: From<TxRcv::Txs>,
+        PreConfirmations: From<TxRcv::Txs> + Serialize,
     >,
     Parent: ParentSignature<DelegateKey>,
     Gen: KeyGenerator<Key = DelegateKey>,

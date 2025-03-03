@@ -1,5 +1,6 @@
 use fuel_core_poa::pre_confirmation_signature_service::signing_key::SigningKey;
 use fuel_core_types::fuel_crypto;
+use serde::Serialize;
 
 /// TODO: Decide what key to use for signing
 /// <https://github.com/FuelLabs/fuel-core/issues/2782>
@@ -12,9 +13,9 @@ pub struct DummyKeySignature<T> {
 }
 
 impl SigningKey for DummyKey {
-    type Signature<T: Send + Clone> = DummyKeySignature<T>;
+    type Signature<T: Send + Clone + Serialize> = DummyKeySignature<T>;
 
-    fn sign<T: Send + Clone>(
+    fn sign<T: Send + Clone + Serialize>(
         &self,
         _data: T,
     ) -> fuel_core_poa::pre_confirmation_signature_service::error::Result<

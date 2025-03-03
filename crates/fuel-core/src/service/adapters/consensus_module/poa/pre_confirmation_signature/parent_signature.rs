@@ -1,3 +1,6 @@
+use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
+    key_generator::Ed25519Key,
+};
 use fuel_core_poa::pre_confirmation_signature_service::{
     error::{
         Error as PoaError,
@@ -5,10 +8,8 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     },
     parent_signature::ParentSignature,
 };
-use fuel_core_types::{
-    signer::SignMode,
-};
-use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::signing_key::DummyKey;
+use fuel_core_types::fuel_crypto;
+use fuel_core_types::signer::SignMode;
 
 pub struct FuelParentSigner<T> {
     mode: SignMode,
@@ -35,14 +36,20 @@ impl<T> From<fuel_core_types::fuel_vm::Signature> for FuelParentSignature<T> {
     }
 }
 
-impl ParentSignature<DummyKey> for FuelParentSigner<DummyKey> {
-    type SignedData = FuelParentSignature<DummyKey>;
+impl ParentSignature<Ed25519Key> for FuelParentSigner<Ed25519Key> {
+    type SignedData = FuelParentSignature<Ed25519Key>;
 
-    async fn sign(&self, data: DummyKey) -> PoAResult<Self::SignedData> {
+    async fn sign(&self, data: Ed25519Key) -> PoAResult<Self::SignedData> {
         let message = data.into();
         let signature = self.mode.sign_message(message).await.map_err(|e| {
             PoaError::ParentSignature(format!("Failed to sign message: {}", e))
         })?;
         Ok(signature.into())
+    }
+}
+
+impl From<Ed25519Key> for fuel_crypto::Message {
+    fn from(_value: Ed25519Key) -> Self {
+        todo!()
     }
 }
