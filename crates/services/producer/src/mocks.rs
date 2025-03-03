@@ -130,7 +130,7 @@ impl BlockProducer<Vec<Transaction>> for MockExecutor {
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _new_tx_waiter: impl NewTxWaiter,
+        _: impl NewTxWaiter,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         let block = arc_pool_tx_comp_to_block(&component);
         // simulate executor inserting a block
@@ -157,7 +157,7 @@ impl BlockProducer<Vec<Transaction>> for FailingMockExecutor {
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _new_tx_waiter: impl NewTxWaiter,
+        _: impl NewTxWaiter,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
@@ -187,7 +187,7 @@ impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture {
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _new_tx_waiter: impl NewTxWaiter,
+        _: impl NewTxWaiter,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         let block = arc_pool_tx_comp_to_block(&component);
         *self.captured.lock().unwrap() = Some(component);

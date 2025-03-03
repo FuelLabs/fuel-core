@@ -334,7 +334,9 @@ where
             TimeoutOnlyTxWaiter,
         )
         .now_or_never()
-        .unwrap()
+        .ok_or_else(|| {
+            anyhow::anyhow!("Impossible to resolve the executor's future immediately")
+        })?
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
@@ -353,7 +355,9 @@ where
             TimeoutOnlyTxWaiter,
         )
         .now_or_never()
-        .unwrap()
+        .ok_or_else(|| {
+            anyhow::anyhow!("Impossible to resolve the executor's future immediately")
+        })?
     }
 }
 
@@ -431,7 +435,9 @@ where
                 TimeoutOnlyTxWaiter,
             )
             .now_or_never()
-            .unwrap()?
+            .ok_or_else(|| {
+                anyhow::anyhow!("Impossible to resolve the executor's future immediately")
+            })?
             .into_result();
 
         // If one of the transactions fails, return an error.

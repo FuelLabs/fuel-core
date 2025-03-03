@@ -27,10 +27,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::{
-    collections::HashMap,
-    future::Future,
-};
+use std::collections::HashMap;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
@@ -47,21 +44,21 @@ pub enum TransactionsSource {
     SpecificTransactions(Vec<Transaction>),
 }
 
-// TODO: Can't be `#[cfg_attr(test, mockall::automock)]` because of `impl NewTxWaiter`. What to do?
-//#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(test, mockall::automock)]
+#[async_trait::async_trait]
 pub trait BlockProducer: Send + Sync {
-    fn produce_and_execute_block(
+    async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
         new_tx_waiter: impl NewTxWaiter,
-    ) -> impl Future<Output = anyhow::Result<UncommittedExecutionResult<Changes>>> + Send;
+    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
 
-    fn produce_predefined_block(
+    async fn produce_predefined_block(
         &self,
         block: &Block,
-    ) -> impl Future<Output = anyhow::Result<UncommittedExecutionResult<Changes>>> + Send;
+    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
 }
 
 #[cfg_attr(test, mockall::automock)]

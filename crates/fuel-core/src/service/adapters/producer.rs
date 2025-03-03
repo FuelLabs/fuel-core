@@ -111,7 +111,7 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _new_tx_waiter: impl NewTxWaiter,
+        _: impl NewTxWaiter,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         self.produce_without_commit_from_vector(component)
     }

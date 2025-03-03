@@ -356,7 +356,12 @@ impl ExecutorAdapter {
         self.executor
             .produce_without_commit_with_source(new_components, TimeoutOnlyTxWaiter)
             .now_or_never()
-            .unwrap()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Impossible to resolve \
+                    `produce_without_commit_with_source` future immediately"
+                )
+            })?
     }
 }
 
