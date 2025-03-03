@@ -6,6 +6,7 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
     services::{
+        block_importer::SharedImportResult,
         p2p::GossipsubMessageInfo,
         txpool::ArcPoolTx,
     },
@@ -117,9 +118,9 @@ impl PoolWorkerInterface {
         }
     }
 
-    pub fn remove_executed_transactions(&self, tx_ids: Vec<TxId>) -> anyhow::Result<()> {
+    pub fn process_block(&self, block_result: SharedImportResult) -> anyhow::Result<()> {
         self.request_remove_sender
-            .try_send(PoolRemoveRequest::ExecutedTransactions { tx_ids })
+            .try_send(PoolRemoveRequest::ProcessBlock { block_result })
             .map_err(|e| anyhow::anyhow!("Failed to send remove request: {}", e))
     }
 
@@ -184,8 +185,8 @@ pub(super) enum PoolExtractBlockTransactions {
 }
 
 pub(super) enum PoolRemoveRequest {
-    ExecutedTransactions {
-        tx_ids: Vec<TxId>,
+    ProcessBlock {
+        block_result: SharedImportResult,
     },
     CoinDependents {
         dependents_ids: Vec<(TxId, Error)>,
@@ -283,8 +284,8 @@ where
                 }
                 for remove in remove_buffer {
                     match remove {
-                        PoolRemoveRequest::ExecutedTransactions { tx_ids } => {
-                            self.remove_executed_transactions(tx_ids);
+                        PoolRemoveRequest::ProcessBlock { block_result } => {
+                            self.process_block(block);
                         }
                         PoolRemoveRequest::CoinDependents { dependents_ids } => {
                             self.remove_coin_dependents(dependents_ids);
@@ -490,9 +491,9 @@ where
         }
     }
 
-    fn remove_executed_transactions(&mut self, tx_ids: Vec<TxId>) {
-        let removed_transactions = self.pool.remove_transactions(tx_ids);
-        let updated_txs = self.pending_pool.new_known_txs(removed_transactions);
+    fn remove_executed_transactions(&mut self, block_result: SharedImportResult) {
+        let removed_transactions = self.pool.remove_transactions(block_result.tx_status.iter().map(|tx_status| tx_status.id));
+        let updated_txs = self.pending_pool.new_known_txs(block_result.sealed_block.entity.transactions().iter().zip(block_result.tx_status.iter().map(|tx_status| tx_status.id)));
         for (tx, source) in updated_txs.resolved_txs {
             self.insert(tx, source);
         }

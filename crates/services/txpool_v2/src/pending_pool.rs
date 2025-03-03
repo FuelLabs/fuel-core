@@ -13,10 +13,7 @@ use std::{
 
 use fuel_core_types::{
     fuel_tx::{
-        ContractId,
-        Output,
-        TxId,
-        UtxoId,
+        ContractId, Output, Transaction, TxId, UtxoId
     },
     services::txpool::ArcPoolTx,
 };
@@ -232,32 +229,32 @@ impl PendingPool {
     }
 
     // We expect it to be called a lot (every new block).
-    pub fn new_known_txs(&mut self, new_known_txs: Vec<ArcPoolTx>) -> UpdatePendingTxs {
+    pub fn new_known_txs<'a>(&mut self, new_known_txs: impl Iterator<Item = (&'a Transaction, TxId)>) -> UpdatePendingTxs {
         let mut updated_txs = UpdatePendingTxs {
             resolved_txs: Vec::new(),
             expired_txs: Vec::new(),
         };
         // Resolve transactions
-        for tx in new_known_txs {
-            self.new_known_tx_inner(tx, &mut updated_txs);
+        for (tx, tx_id) in new_known_txs {
+            self.new_known_tx_inner(tx.outputs().iter(), &mut updated_txs);
         }
 
         self.expire_transactions(&mut updated_txs.expired_txs);
         updated_txs
     }
 
-    fn new_known_tx_inner(
+    fn new_known_tx_inner<'a>(
         &mut self,
-        new_known_tx: ArcPoolTx,
+        new_known_outputs: impl Iterator<Item = &'a Output>,
+        new_known_tx_id: TxId,
         update_pending_txs: &mut UpdatePendingTxs,
     ) {
-        let tx_id = new_known_tx.id();
-        for (index, output) in new_known_tx.outputs().iter().enumerate() {
+        for (index, output) in new_known_outputs.enumerate() {
             // SAFETY: We deal with CheckedTransaction there which should already check this
             let index = u16::try_from(index).expect(
                 "The number of outputs in a transaction should be less than `u16::max`",
             );
-            let utxo_id = UtxoId::new(tx_id, index);
+            let utxo_id = UtxoId::new(new_known_tx_id, index);
             self.new_known_input_from_output(
                 utxo_id,
                 output,
