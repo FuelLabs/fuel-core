@@ -147,6 +147,7 @@ pub struct MainTask<
     KeyRotationTrigger,
 > where
     TxReceiver: tx_receiver::TxReceiver + 'static,
+    <TxReceiver as tx_receiver::TxReceiver>::Txs: Serialize,
     <TxReceiver as tx_receiver::TxReceiver>::Sender: Clone,
     Broadcast: broadcast::Broadcast<
             DelegateKey = DelegateKey,
@@ -219,6 +220,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     TxReceiver: tx_receiver::TxReceiver,
+    <TxReceiver as tx_receiver::TxReceiver>::Txs: Serialize,
     <TxReceiver as tx_receiver::TxReceiver>::Sender: Clone,
     Broadcast: broadcast::Broadcast<
         DelegateKey = DelegateKey,
@@ -349,6 +351,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     TxRcv: tx_receiver::TxReceiver + 'static,
+    <TxRcv as tx_receiver::TxReceiver>::Txs: Serialize,
     <TxRcv as tx_receiver::TxReceiver>::Sender: Clone,
     Brdcst: broadcast::Broadcast<
             DelegateKey = DelegateKey,
@@ -643,6 +646,7 @@ impl<T, B, I, S, PB, C, TxRcv, Brdcst, Parent, Gen, DelegateKey, RotationTrigger
 where
     Self: RunnableTask,
     TxRcv: tx_receiver::TxReceiver + 'static,
+    <TxRcv as tx_receiver::TxReceiver>::Txs: Serialize,
     <TxRcv as tx_receiver::TxReceiver>::Sender: Clone,
     Brdcst: broadcast::Broadcast<
             DelegateKey = DelegateKey,
@@ -722,6 +726,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     TxRcv: tx_receiver::TxReceiver + 'static,
+    <TxRcv as tx_receiver::TxReceiver>::Txs: Serialize,
     <TxRcv as tx_receiver::TxReceiver>::Sender: Clone,
     Brdcst: broadcast::Broadcast<
             DelegateKey = DelegateKey,
@@ -819,6 +824,7 @@ where
     P: P2pPort,
     C: GetTime,
     TxRcv: tx_receiver::TxReceiver + 'static,
+    <TxRcv as tx_receiver::TxReceiver>::Txs: Serialize,
     <TxRcv as tx_receiver::TxReceiver>::Sender: Clone,
     Brdcst: broadcast::Broadcast<
             DelegateKey = DelegateKey,

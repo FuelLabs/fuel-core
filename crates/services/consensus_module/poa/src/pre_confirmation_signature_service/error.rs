@@ -21,4 +21,8 @@ pub enum Error {
     /// Error occurred with parent signature
     #[error("Parent signature error: {0}")]
     ParentSignature(String),
+
+    /// Error occurred with signature
+    #[error("Signature error")]
+    Signature(String),
 }

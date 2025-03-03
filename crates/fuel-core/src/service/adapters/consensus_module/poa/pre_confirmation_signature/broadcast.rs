@@ -1,6 +1,6 @@
 use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
+    key_generator::Ed25519Key,
     parent_signature::FuelParentSignature,
-    signing_key::DummyKey,
     Preconfirmations,
 };
 use fuel_core_poa::pre_confirmation_signature_service::{
@@ -14,8 +14,8 @@ pub struct P2PBroadcast;
 
 impl Broadcast for P2PBroadcast {
     type PreConfirmations = Preconfirmations;
-    type ParentSignature = FuelParentSignature<DummyKey>;
-    type DelegateKey = DummyKey;
+    type ParentSignature = FuelParentSignature<Ed25519Key>;
+    type DelegateKey = Ed25519Key;
 
     async fn broadcast_txs(
         &mut self,

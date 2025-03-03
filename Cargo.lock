@@ -3359,6 +3359,8 @@ dependencies = [
  "clap",
  "cosmrs",
  "derive_more 0.99.19",
+ "ed25519",
+ "ed25519-dalek",
  "enum-iterator",
  "fuel-core",
  "fuel-core-chain-config",

@@ -25,7 +25,10 @@ use crate::{
             consensus_module::poa::{
                 pre_confirmation_signature::{
                     broadcast::P2PBroadcast,
-                    key_generator::DelegateKeyGenerator,
+                    key_generator::{
+                        Ed25519Key,
+                        Ed25519KeyGenerator,
+                    },
                     parent_signature::{
                         FuelParentSignature,
                         FuelParentSigner,
@@ -91,7 +94,7 @@ pub type PoAService = fuel_core_poa::Service<
     MPSCTxReceiver<Preconfirmations>,
     P2PBroadcast,
     FuelParentSignature<DummyKey>,
-    DelegateKeyGenerator,
+    Ed25519KeyGenerator,
     DummyKey,
     TimeBasedTrigger<SystemTime>,
 >;
@@ -331,9 +334,9 @@ pub fn init_sub_services(
         PreConfirmationSignatureTask<
             MPSCTxReceiver<Preconfirmations>,
             P2PBroadcast,
-            FuelParentSigner<DummyKey>,
-            DelegateKeyGenerator,
-            DummyKey,
+            FuelParentSigner<Ed25519Key>,
+            Ed25519KeyGenerator,
+            Ed25519Key,
             TimeBasedTrigger<SystemTime>,
         >,
     > = todo!();
