@@ -10,10 +10,15 @@ use fuel_core_types::{
     services::{
         p2p::{
             GossipData,
-            TransactionStatusGossipData,
+            Preconfirmation,
+            PreconfirmationMessage,
+            Preconfirmations,
+            PreconfirmationsGossipData,
+            Sealed,
         },
         txpool::TransactionStatus,
     },
+    tai64::Tai64,
 };
 use futures::StreamExt;
 
@@ -29,8 +34,26 @@ pub struct Task {
 }
 
 impl Task {
-    fn new_tx_status_from_p2p(&mut self, (tx_id, tx_status): (TxId, TransactionStatus)) {
-        self.manager.upsert_status(&tx_id, tx_status);
+    fn new_preconfirmations_from_p2p(
+        &mut self,
+        preconfirmations: Sealed<Preconfirmations>,
+    ) {
+        let Sealed {
+            signature,
+            entity: preconfirmations,
+        } = preconfirmations;
+
+        // TODO[RC]: Add test for timestamp verification
+        let current_time = Tai64::now();
+        if current_time > preconfirmations.expiration() {
+            return;
+        }
+
+        preconfirmations
+            .iter()
+            .for_each(|Preconfirmation { tx_id, status }| {
+                self.manager.upsert_status(&tx_id, status);
+            });
     }
 }
 
@@ -60,24 +83,31 @@ impl RunnableTask for Task {
         watcher: &mut fuel_core_services::StateWatcher,
     ) -> TaskNextAction {
         tokio::select! {
-            biased;
+                    biased;
 
-            _ = watcher.while_started() => {
-                TaskNextAction::Stop
-            }
-
-            tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
-                if let Some(GossipData { data, message_id, peer_id }) = tx_status_from_p2p {
-                    if let Some(tx_status) = data {
-                        self.new_tx_status_from_p2p(tx_status);
+                    _ = watcher.while_started() => {
+                        TaskNextAction::Stop
                     }
-                    TaskNextAction::Continue
-                } else {
-                    TaskNextAction::Stop
-                }
-            }
 
-        }
+                    tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
+                        if let Some(GossipData { data, message_id, peer_id }) = tx_status_from_p2p {
+                            if let Some(tx_status) = data {
+                                match tx_status {
+                                    PreconfirmationMessage::Preconfirmations(sealed)=>
+                                    {
+                                        self.new_preconfirmations_from_p2p(sealed);
+                                    },
+                                    PreconfirmationMessage::Delegate(sealed) => todo!(),
+                                                                    }
+        //                        self.new_tx_status_from_p2p(tx_status);
+                            }
+                            TaskNextAction::Continue
+                        } else {
+                            TaskNextAction::Stop
+                        }
+                    }
+
+                }
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -87,7 +117,7 @@ impl RunnableTask for Task {
 
 pub fn new_service<P2P>(p2p: P2P) -> ServiceRunner<Task>
 where
-    P2P: P2PSubscriptions<GossipedStatuses = TransactionStatusGossipData>,
+    P2P: P2PSubscriptions<GossipedStatuses = PreconfirmationsGossipData>,
 {
     let tx_status_from_p2p_stream = p2p.gossiped_tx_statuses();
 

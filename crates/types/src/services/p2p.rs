@@ -6,12 +6,9 @@ use serde::{
     Serialize,
 };
 
+use super::txpool::ArcPoolTx;
 #[cfg(feature = "serde")]
 use super::txpool::PoolTransaction;
-use super::txpool::{
-    ArcPoolTx,
-    TransactionStatus,
-};
 use crate::{
     fuel_crypto::{
         PublicKey,
@@ -78,9 +75,6 @@ pub struct GossipData<T> {
     pub message_id: Vec<u8>,
 }
 
-/// Transaction statuses gossiped by peers
-pub type TransactionStatusGossipData = GossipData<(TxId, TransactionStatus)>;
-
 /// Transactions gossiped by peers for inclusion into a block
 pub type TransactionGossipData = GossipData<Transaction>;
 
@@ -115,9 +109,9 @@ pub struct DelegatePreConfirmationKey {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Preconfirmation {
     /// The ID of the transaction that is being pre-confirmed
-    tx_id: TxId,
+    pub tx_id: TxId,
     /// The status of the transaction that is being pre-confirmed
-    status: PreconfirmationStatus,
+    pub status: PreconfirmationStatus,
 }
 
 /// Status of a transaction that has been pre-confirmed by block producer
@@ -149,6 +143,18 @@ pub struct Preconfirmations {
     expiration: Tai64,
     /// The transactions which have been pre-confirmed
     preconfirmations: Vec<Preconfirmation>,
+}
+
+impl Preconfirmations {
+    /// Get the expiration time of the key used to sign
+    pub fn expiration(&self) -> Tai64 {
+        self.expiration
+    }
+
+    /// Get the transactions which have been pre-confirmed
+    pub fn iter(&self) -> impl Iterator<Item = &Preconfirmation> {
+        self.preconfirmations.iter()
+    }
 }
 
 /// A signed key delegation

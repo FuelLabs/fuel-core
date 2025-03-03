@@ -19,7 +19,7 @@ async fn shared_state__broadcast__tx_confirmations() {
         peer_id: FuelPeerId::from(PeerId::random().to_bytes().to_vec()),
         message_id: vec![1, 2, 3, 4],
     };
-    let mut confirmations_receiver = broadcast.subscribe_confirmations();
+    let mut confirmations_receiver = broadcast.subscribe_preconfirmations();
 
     // when
     broadcast
