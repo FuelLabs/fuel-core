@@ -227,7 +227,10 @@ where
         let mut base_asset_reserved: Option<u64> = None;
         let base_asset_id = *arguments.consensus_parameters.base_asset_id();
 
-        let fee_payer_account = arguments.required_balances[arguments.fee_index as usize]
+        let fee_payer_account = arguments
+            .required_balances
+            .get(arguments.fee_index as usize)
+            .ok_or_else(|| anyhow::anyhow!("fee index out of bounds"))?
             .account
             .clone();
 
