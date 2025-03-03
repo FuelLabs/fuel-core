@@ -622,11 +622,32 @@ where
             script.set_max_fee_limit(0);
         }
 
+        let (mut script, status, gas_used_by_tx) = self
+            .populate_missing_contract_inputs(script, has_spendable_input, max_tx_gas)
+            .await?;
+
+        let new_script_limit = status.result.total_gas().saturating_sub(gas_used_by_tx);
+        *script.script_gas_limit_mut() = new_script_limit;
+
+        let Some(script_ref) = self.tx.as_script_mut() else {
+            unreachable!("The transaction is a script, checked above; qed");
+        };
+        *script_ref = script;
+
+        Ok(())
+    }
+
+    async fn populate_missing_contract_inputs(
+        &mut self,
+        mut script: Script,
+        has_spendable_input: bool,
+        max_tx_gas: u64,
+    ) -> Result<(Script, TransactionExecutionStatus, u64), anyhow::Error> {
+        let mut status: TransactionExecutionStatus;
+        let mut gas_used_by_tx: u64;
+
         let gas_costs = self.arguments.consensus_parameters.gas_costs();
         let fee_params = self.arguments.consensus_parameters.fee_params();
-
-        let mut status;
-        let mut gas_used_by_tx;
 
         loop {
             if !has_spendable_input {
@@ -654,7 +675,7 @@ where
                 script.inputs_mut().pop();
             }
 
-            let mut contract_not_in_inputs = None;
+            let mut contracts_not_in_inputs = Vec::new();
 
             match &status.result {
                 TransactionExecutionResult::Success { .. } => break,
@@ -667,16 +688,21 @@ where
                         } = receipt
                         {
                             if reason.reason() == &PanicReason::ContractNotInInputs {
-                                contract_not_in_inputs = *contract_id;
-                                break;
+                                let contract_id = contract_id.ok_or_else(|| {
+                                    anyhow::anyhow!("missing contract id")
+                                })?;
+                                contracts_not_in_inputs.push(contract_id);
                             }
                         }
                     }
                 }
             }
 
-            // TODO: Use https://github.com/FuelLabs/fuel-vm/pull/915
-            if let Some(contract_id) = contract_not_in_inputs {
+            if contracts_not_in_inputs.is_empty() {
+                break;
+            }
+
+            for contract_id in contracts_not_in_inputs {
                 let inptus = script.inputs_mut();
 
                 let contract_idx = u16::try_from(inptus.len()).unwrap_or(u16::MAX);
@@ -707,17 +733,10 @@ where
                         "Run out of slots for the contract outputs"
                     ));
                 }
-            } else {
-                break;
             }
         }
 
-        let new_script_limit = status.result.total_gas().saturating_sub(gas_used_by_tx);
-        *script.script_gas_limit_mut() = new_script_limit;
-
-        *script_ref = script;
-
-        Ok(())
+        Ok((script, status, gas_used_by_tx))
     }
 
     async fn cover_fee(mut self) -> anyhow::Result<Self> {
