@@ -17,31 +17,12 @@ pub struct TimeBasedTrigger<Time> {
 
 impl<Time: GetTime> TimeBasedTrigger<Time> {
     pub fn new(time: Time, rotation_interval: Duration) -> Self {
-        // let now = time.now();
-        // let _next_rotation = now.0.saturating_add(rotation_interval.as_secs());
-        // let next_rotation = Tai64(_next_rotation);
         Self {
             time,
-            // next_rotation,
-            // rotation_interval,
             interval: tokio::time::interval(rotation_interval),
         }
     }
-
-    // fn get_next_rotation(&self) -> PoAResult<Tai64> {
-    //     Ok(self.next_rotation)
-    // }
-
-    // fn set_next_rotation(&mut self, next_rotation: Tai64) -> PoAResult<()> {
-    //     self.next_rotation = next_rotation;
-    //     Ok(())
-    // }
 }
-
-// fn duration_between(t1: Tai64, t2: Tai64) -> Duration {
-//     let diff = t2.0.saturating_sub(t1.0);
-//     Duration::from_secs(diff)
-// }
 
 impl<Time: GetTime + Send> KeyRotationTrigger for TimeBasedTrigger<Time> {
     async fn next_rotation(&mut self) -> PoAResult<()> {
