@@ -38,6 +38,7 @@ use fuel_core::{
         ColumnsPolicy,
         DatabaseConfig,
     },
+    tx_status_manager::config::Config as TxStatusManagerConfig,
     txpool::config::{
         BlackList,
         Config as TxPoolConfig,
@@ -683,6 +684,11 @@ impl Command {
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
             memory_pool_size,
+            // TODO[RC]: max_txs_ttl could derived from TxPool, but "max_tx_update_subscriptions" should be moved to TxStatusManager args (non breaking change, since we're not going to change the arg name)
+            tx_status_manager: TxStatusManagerConfig {
+                max_tx_update_subscriptions: tx_number_active_subscriptions,
+                max_txs_ttl: tx_pool_ttl.into(),
+            },
         };
         Ok(config)
     }

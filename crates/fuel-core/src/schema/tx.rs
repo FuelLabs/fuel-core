@@ -8,6 +8,7 @@ use crate::{
             BlockProducer,
             ChainInfoProvider,
             TxPool,
+            TxStatusManager,
         },
         query_costs,
         Config as GraphQLConfig,
@@ -49,7 +50,7 @@ use fuel_core_storage::{
     Error as StorageError,
     Result as StorageResult,
 };
-use fuel_core_txpool::TxStatusMessage;
+use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
     fuel_tx::{
         Bytes32,
@@ -66,6 +67,7 @@ use fuel_core_types::{
         EstimatePredicates,
     },
     services::txpool,
+    tai64::Tai64,
 };
 use futures::{
     Stream,
@@ -423,11 +425,14 @@ impl TxStatusSubscription {
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
     {
-        let txpool = ctx.data_unchecked::<TxPool>();
-        let rx = txpool.tx_update_subscribe(id.into())?;
+        let tx_status_manager = ctx.data_unchecked::<TxStatusManager>();
+        let rx = tx_status_manager.tx_update_subscribe(id.into())?;
         let query = ctx.read_view()?;
 
-        let status_change_state = StatusChangeState { txpool, query };
+        let status_change_state = StatusChangeState {
+            tx_status_manager,
+            query,
+        };
         Ok(
             transaction_status_change(status_change_state, rx, id.into())
                 .await
@@ -475,12 +480,13 @@ async fn submit_and_await_status<'a>(
 > {
     use tokio_stream::StreamExt;
     let txpool = ctx.data_unchecked::<TxPool>();
+    let tx_status_manager = ctx.data_unchecked::<TxStatusManager>();
     let params = ctx
         .data_unchecked::<ChainInfoProvider>()
         .current_consensus_params();
     let tx = FuelTx::from_bytes(&tx.0)?;
     let tx_id = tx.id(&params.chain_id());
-    let subscription = txpool.tx_update_subscribe(tx_id)?;
+    let subscription = tx_status_manager.tx_update_subscribe(tx_id)?;
 
     txpool.insert(tx).await?;
 
@@ -499,7 +505,8 @@ async fn submit_and_await_status<'a>(
 
 struct StatusChangeState<'a> {
     query: Cow<'a, ReadView>,
-    txpool: &'a TxPool,
+    //    txpool: &'a TxPool,
+    tx_status_manager: &'a TxStatusManager,
 }
 
 impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
@@ -509,12 +516,19 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     ) -> StorageResult<Option<txpool::TransactionStatus>> {
         match self.query.tx_status(&id) {
             Ok(status) => Ok(Some(status)),
-            Err(StorageError::NotFound(_, _)) => Ok(self
-                .txpool
-                .submission_time(id)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?
-                .map(|time| txpool::TransactionStatus::Submitted { time })),
+            Err(StorageError::NotFound(_, _)) => {
+                // TODO[RC]: Somehow get the submission time from txpool
+                let submission_time = Tai64::UNIX_EPOCH;
+                Ok(Some(txpool::TransactionStatus::Submitted {
+                    time: submission_time,
+                }))
+            }
+            // Err(StorageError::NotFound(_, _)) => Ok(self
+            //     .txpool
+            //     .submission_time(id)
+            //     .await
+            //     .map_err(|e| anyhow::anyhow!(e))?
+            //     .map(|time| txpool::TransactionStatus::Submitted { time })),
             Err(err) => Err(err),
         }
     }

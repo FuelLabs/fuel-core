@@ -22,11 +22,6 @@ use super::{
 impl TxStatusManager for TxStatusManagerAdapter {
     fn upsert_status(&self, tx_id: &TxId, tx_status: TransactionStatus) {
         self.manager.upsert_status(tx_id, tx_status);
-
-        // TODO[RC]: Broadcast status change similarly to how TxPool does it
-        // self.shared_state
-        // .tx_status_sender
-        // .send_submitted(tx_id, Tai64::from_unix(duration));
     }
 }
 

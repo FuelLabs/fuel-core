@@ -36,10 +36,8 @@ use crate::{
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::{
-    TxPoolStats,
-    TxStatusMessage,
-};
+use fuel_core_tx_status_manager::TxStatusMessage;
+use fuel_core_txpool::TxPoolStats;
 use fuel_core_types::{
     blockchain::header::{
         ConsensusParametersVersion,
@@ -76,6 +74,13 @@ impl TxStatusManagerPort for TxStatusManagerAdapter {
     fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {
         self.manager.status(tx_id)
     }
+
+    fn tx_update_subscribe(
+        &self,
+        tx_id: TxId,
+    ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
+        self.manager.tx_update_subscribe(tx_id)
+    }
 }
 
 #[async_trait]
@@ -110,13 +115,6 @@ impl TxPoolPort for TxPoolAdapter {
             .insert(tx)
             .await
             .map_err(|e| anyhow::anyhow!(e))
-    }
-
-    fn tx_update_subscribe(
-        &self,
-        id: TxId,
-    ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
-        self.service.tx_update_subscribe(id)
     }
 
     fn latest_pool_stats(&self) -> TxPoolStats {

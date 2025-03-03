@@ -33,6 +33,7 @@ use fuel_core_storage::transactional::Changes;
 use fuel_core_tx_status_manager::{
     Task,
     TxStatusManager,
+    TxStatusStream,
 };
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 #[cfg(feature = "p2p")]
@@ -45,7 +46,11 @@ use fuel_core_types::{
             Consensus,
         },
     },
-    fuel_tx::Transaction,
+    fuel_tx::{
+        Bytes32,
+        Transaction,
+        TxId,
+    },
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
@@ -61,6 +66,7 @@ use fuel_core_types::{
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 
 pub mod block_importer;
 pub mod chain_state_info_provider;
@@ -432,6 +438,16 @@ pub struct TxStatusManagerAdapter {
 impl TxStatusManagerAdapter {
     pub fn new(manager: TxStatusManager) -> Self {
         Self { manager }
+    }
+
+    /// Subscribe to new transaction notifications.
+    pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
+        self.manager.new_tx_notification_subscribe()
+    }
+
+    /// Subscribe to status updates for a transaction.
+    pub fn tx_update_subscribe(&self, tx_id: Bytes32) -> anyhow::Result<TxStatusStream> {
+        self.manager.tx_update_subscribe(tx_id)
     }
 }
 

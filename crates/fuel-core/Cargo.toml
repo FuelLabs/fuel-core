@@ -110,6 +110,7 @@ test-helpers = [
   "fuel-core-chain-config/test-helpers",
   "fuel-core-compression/test-helpers",
   "fuel-core-txpool/test-helpers",
+  "fuel-core-tx-status-manager/test-helpers",
   "fuel-core-services/test-helpers",
   "fuel-core-shared-sequencer?/test-helpers",
   "fuel-core-importer/test-helpers",

@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use adapters::TxStatusManagerAdapter;
 pub use config::{
     Config,
     DbType,
@@ -37,6 +38,7 @@ use fuel_core_storage::{
     IsNotFound,
     StorageAsMut,
 };
+use fuel_core_tx_status_manager::TxStatusManager;
 use fuel_core_types::blockchain::consensus::Consensus;
 
 use crate::{
@@ -70,6 +72,8 @@ pub struct SharedState {
     pub poa_adapter: PoAAdapter,
     /// The transaction pool shared state.
     pub txpool_shared_state: TxPoolSharedState,
+    /// The Tx Status Manager
+    pub tx_status_manager: TxStatusManagerAdapter,
     /// The P2P network shared state.
     #[cfg(feature = "p2p")]
     pub network: Option<fuel_core_p2p::service::SharedState>,

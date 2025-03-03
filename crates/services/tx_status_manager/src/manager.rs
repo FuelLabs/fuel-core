@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use std::{
     collections::HashMap,
     sync::{
@@ -7,19 +8,37 @@ use std::{
 };
 
 use fuel_core_types::{
-    fuel_tx::TxId,
+    fuel_tx::{
+        Bytes32,
+        TxId,
+    },
     services::txpool::TransactionStatus,
+};
+use tokio::sync::broadcast;
+
+use crate::{
+    tx_status_stream::{
+        TxStatusMessage,
+        TxStatusStream,
+        TxUpdate,
+    },
+    update_sender::{
+        MpscChannel,
+        TxStatusChange,
+    },
 };
 
 #[derive(Clone)]
 pub struct TxStatusManager {
     statuses: Arc<Mutex<HashMap<TxId, TransactionStatus>>>,
+    tx_status_change: TxStatusChange,
 }
 
 impl TxStatusManager {
-    pub fn new() -> Self {
+    pub fn new(tx_status_change: TxStatusChange) -> Self {
         Self {
             statuses: Arc::new(Mutex::new(HashMap::new())),
+            tx_status_change,
         }
     }
 
@@ -31,7 +50,12 @@ impl TxStatusManager {
         self.statuses
             .lock()
             .expect("mutex poisoned")
-            .insert(tx_id.clone(), tx_status);
+            .insert(tx_id.clone(), tx_status.clone());
+
+        // TODO[RC]: If "submitted" then also send the "new_transaction_notification"
+        self.tx_status_change
+            .update_sender
+            .send(TxUpdate::new(*tx_id, TxStatusMessage::Status(tx_status)));
     }
 
     pub fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {
@@ -40,5 +64,18 @@ impl TxStatusManager {
             .expect("mutex poisoned")
             .get(tx_id)
             .map(|s| s.clone())
+    }
+
+    /// Subscribe to new transaction notifications.
+    pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
+        self.tx_status_change.new_tx_notification_sender.subscribe()
+    }
+
+    /// Subscribe to status updates for a transaction.
+    pub fn tx_update_subscribe(&self, tx_id: Bytes32) -> anyhow::Result<TxStatusStream> {
+        self.tx_status_change
+            .update_sender
+            .try_subscribe::<MpscChannel>(tx_id)
+            .ok_or(anyhow!("Maximum number of subscriptions reached"))
     }
 }

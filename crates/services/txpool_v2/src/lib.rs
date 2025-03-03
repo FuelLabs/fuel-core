@@ -52,8 +52,6 @@ mod selection_algorithms;
 mod service;
 mod shared_state;
 mod storage;
-mod tx_status_stream;
-mod update_sender;
 
 pub type GasPrice = Word;
 
@@ -70,4 +68,3 @@ pub use service::{
     Service,
 };
 pub use shared_state::SharedState;
-pub use tx_status_stream::TxStatusMessage;

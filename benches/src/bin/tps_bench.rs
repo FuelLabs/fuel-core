@@ -218,27 +218,28 @@ fn main() {
             // start the producer node
             let TestContext { srv, client, .. } = test_builder.finalize().await;
 
+            // TODO[RC]: Uncomment and fix
             // insert all transactions
-            let mut subscriber = srv
-                .shared
-                .txpool_shared_state
-                .new_tx_notification_subscribe();
-            let mut nb_left = args.number_of_transactions;
-            let start_insertion = std::time::Instant::now();
-            srv.shared
-                .txpool_shared_state
-                .try_insert(transactions.clone())
-                .unwrap();
-            while nb_left > 0 {
-                let _ = subscriber.recv().await.unwrap();
-                nb_left -= 1;
-            }
-            tracing::warn!(
-                "Inserted {} transactions in {:?} ms.",
-                args.number_of_transactions,
-                start_insertion.elapsed().as_millis()
-            );
-            client.produce_blocks(1, None).await.unwrap();
+            // let mut subscriber = srv
+            //     .shared
+            //     .txpool_shared_state
+            //     .new_tx_notification_subscribe();
+            // let mut nb_left = args.number_of_transactions;
+            // let start_insertion = std::time::Instant::now();
+            // srv.shared
+            //     .txpool_shared_state
+            //     .try_insert(transactions.clone())
+            //     .unwrap();
+            // while nb_left > 0 {
+            //     let _ = subscriber.recv().await.unwrap();
+            //     nb_left -= 1;
+            // }
+            // tracing::warn!(
+            //     "Inserted {} transactions in {:?} ms.",
+            //     args.number_of_transactions,
+            //     start_insertion.elapsed().as_millis()
+            // );
+            // client.produce_blocks(1, None).await.unwrap();
             let block = srv
                 .shared
                 .database

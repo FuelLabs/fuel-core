@@ -62,7 +62,6 @@ use fuel_core_txpool::{
         },
         Storage,
     },
-    update_sender::TxStatusChange,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -422,9 +421,6 @@ where
                         time: Tai64::from_unix(duration),
                     },
                 );
-                self.shared_state
-                    .tx_status_sender
-                    .send_submitted(tx_id, Tai64::from_unix(duration));
 
                 if expiration < u32::MAX.into() {
                     let block_height_expiration = self
@@ -454,29 +450,20 @@ where
                         }
                     }
                 }
-
-                // TODO[RC]: Do not use `send_squeezed_out` anymore
                 self.tx_status_manager.upsert_status(
                     &tx_id,
                     TransactionStatus::SqueezedOut {
                         reason: error.to_string(),
                     },
                 );
-                self.shared_state
-                    .tx_status_sender
-                    .send_squeezed_out(tx_id, error);
             }
             PoolNotification::Removed { tx_id, error } => {
-                // TODO[RC]: Do not use `send_squeezed_out` anymore
                 self.tx_status_manager.upsert_status(
                     &tx_id,
                     TransactionStatus::SqueezedOut {
                         reason: error.to_string(),
                     },
                 );
-                self.shared_state
-                    .tx_status_sender
-                    .send_squeezed_out(tx_id, error);
             }
         }
     }
@@ -560,14 +547,12 @@ where
                         }
                     }
 
-                    // TODO[RC]: This call should replace "send_squeezed_out" (also apply to other places where we update tx status manager)
                     tx_status_manager.upsert_status(
                         &tx_id,
                         TransactionStatus::SqueezedOut {
                             reason: err.to_string(),
                         },
                     );
-                    shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
                     return
                 }
             };
@@ -794,14 +779,6 @@ where
 
     let (pool_stats_sender, pool_stats_receiver) =
         tokio::sync::watch::channel(TxPoolStats::default());
-    let tx_status_sender = TxStatusChange::new(
-        config.max_tx_update_subscriptions,
-        // The connection should be closed automatically after the `SqueezedOut` event.
-        // But because of slow/malicious consumers, the subscriber can still be occupied.
-        // We allow the subscriber to receive the event produced by TxPool's TTL.
-        // But we still want to drop subscribers after `2 * TxPool_TTL`.
-        config.max_txs_ttl.saturating_mul(2),
-    );
     let (new_txs_notifier, _) = watch::channel(());
 
     let subscriptions = Subscriptions {
@@ -867,7 +844,6 @@ where
         request_remove_sender: pool_worker.request_remove_sender.clone(),
         request_read_sender: pool_worker.request_read_sender.clone(),
         write_pool_requests_sender,
-        tx_status_sender,
         select_transactions_requests_sender: pool_worker
             .extract_block_transactions_sender
             .clone(),

@@ -39,14 +39,6 @@ use crate::{
         TxInfo,
         WritePoolRequest,
     },
-    tx_status_stream::{
-        TxStatusMessage,
-        TxStatusStream,
-    },
-    update_sender::{
-        MpscChannel,
-        TxStatusChange,
-    },
     Constraints,
 };
 
@@ -57,7 +49,6 @@ pub struct SharedState {
     pub(crate) select_transactions_requests_sender:
         mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
     pub(crate) request_read_sender: mpsc::Sender<PoolReadRequest>,
-    pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
     pub(crate) latest_stats: tokio::sync::watch::Receiver<TxPoolStats>,
 }
@@ -164,19 +155,6 @@ impl SharedState {
         self.new_txs_notifier.subscribe()
     }
 
-    /// Subscribe to new transaction notifications.
-    pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
-        self.tx_status_sender.new_tx_notification_sender.subscribe()
-    }
-
-    /// Subscribe to status updates for a transaction.
-    pub fn tx_update_subscribe(&self, tx_id: Bytes32) -> anyhow::Result<TxStatusStream> {
-        self.tx_status_sender
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx_id)
-            .ok_or(anyhow!("Maximum number of subscriptions reached"))
-    }
-
     /// Notify the txpool that a transaction was executed and committed to a block.
     pub fn notify_complete_tx(
         &self,
@@ -190,11 +168,11 @@ impl SharedState {
         //     .unwrap()
         //     .upsert_status(&id, status.clone());
 
-        self.tx_status_sender.send_complete(
-            id,
-            block_height,
-            TxStatusMessage::Status(status),
-        )
+        // self.tx_status_sender.send_complete(
+        //     id,
+        //     block_height,
+        //     TxStatusMessage::Status(status),
+        // )
     }
 
     /// Notify the txpool that some transactions were skipped during block production.
@@ -211,9 +189,12 @@ impl SharedState {
                 //         reason: error.to_string(),
                 //     },
                 // );
-                self.tx_status_sender
-                    .send_squeezed_out(tx_id, error.clone());
-                (tx_id, error)
+
+                // self.tx_status_sender
+                //     .send_squeezed_out(tx_id, error.clone());
+                // (tx_id, error)
+
+                todo!()
             })
             .collect();
 

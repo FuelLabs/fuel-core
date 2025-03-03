@@ -233,7 +233,10 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
     );
 
-    let tx_status_manager = fuel_core_tx_status_manager::new_service(p2p_adapter.clone());
+    let tx_status_manager = fuel_core_tx_status_manager::new_service(
+        p2p_adapter.clone(),
+        config.tx_status_manager.clone(),
+    );
     let tx_status_manager_adapter =
         TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
 
@@ -369,7 +372,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.off_chain().clone(),
         Box::new(tx_pool_adapter),
-        Box::new(tx_status_manager_adapter),
+        Box::new(tx_status_manager_adapter.clone()),
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),
@@ -391,6 +394,7 @@ pub fn init_sub_services(
         block_importer: importer_adapter,
         executor,
         config: config.clone(),
+        tx_status_manager: tx_status_manager_adapter,
     };
 
     #[allow(unused_mut)]

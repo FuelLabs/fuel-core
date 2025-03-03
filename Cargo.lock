@@ -4050,6 +4050,7 @@ version = "0.41.7"
 dependencies = [
  "anyhow",
  "async-trait",
+ "derive_more 0.99.19",
  "enum-iterator",
  "fuel-core-metrics",
  "fuel-core-services",
@@ -4057,6 +4058,7 @@ dependencies = [
  "fuel-core-types 0.41.7",
  "fuel-gas-price-algorithm",
  "futures",
+ "mockall",
  "mockito",
  "num_enum",
  "parking_lot",
@@ -4094,7 +4096,6 @@ dependencies = [
  "rand",
  "test-strategy",
  "tokio",
- "tokio-stream",
  "tracing",
 ]
 

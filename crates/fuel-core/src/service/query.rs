@@ -1,4 +1,5 @@
 //! Queries we can run directly on `FuelService`.
+use crate::graphql_api::ports::TxStatusManagerPort;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     fuel_tx::{
@@ -80,17 +81,20 @@ impl FuelService {
         &self,
         id: Bytes32,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>> + '_> {
-        let txpool = &self.shared.txpool_shared_state;
+        let tx_status_manager = &self.shared.tx_status_manager;
         let db = self.shared.database.off_chain().latest_view()?;
-        let rx = txpool.tx_update_subscribe(id)?;
-        let state = StatusChangeState { db, txpool };
+        let rx = tx_status_manager.tx_update_subscribe(id)?;
+        let state = StatusChangeState {
+            db,
+            tx_status_manager,
+        };
         Ok(transaction_status_change(state, rx, id).await)
     }
 }
 
 struct StatusChangeState<'a> {
     db: OffChainIterableKeyValueView,
-    txpool: &'a TxPoolSharedState,
+    tx_status_manager: &'a TxStatusManagerAdapter,
 }
 
 impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
@@ -98,15 +102,14 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
         match self.db.get_tx_status(&id)? {
             Some(status) => Ok(Some(status)),
             None => {
-                let result = self
-                    .txpool
-                    .find_one(id)
-                    .await
-                    .map_err(|e| anyhow::anyhow!(e))?;
-                let status = result
-                    .map(|status| status.try_into())
-                    .transpose()
-                    .map_err(|e: SystemTimeError| anyhow::anyhow!(e))?;
+                // TODO[RC]: Should be async?
+                let status = self.tx_status_manager.status(&id);
+                //.await
+                //           .map_err(|e| anyhow::anyhow!(e))?;
+                // let status = result
+                // .map(|status| status.try_into())
+                // .transpose()
+                // .map_err(|e: SystemTimeError| anyhow::anyhow!(e))?;
                 Ok(status)
             }
         }
