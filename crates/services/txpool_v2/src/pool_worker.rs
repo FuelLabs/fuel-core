@@ -418,9 +418,7 @@ where
             Err(InsertionErrorType::MissingInputs(missing_inputs)) => {
                 if missing_inputs.is_empty() {
                     debug_assert!(false, "Missing inputs should not be empty");
-                    return;
-                }
-                if !self.has_enough_space_in_pools(&tx) {
+                } else if !self.has_enough_space_in_pools(&tx) {
                     // SAFETY: missing_inputs is not empty, checked just above
                     let error = missing_inputs
                         .first()
@@ -438,10 +436,10 @@ where
                             e
                         );
                     }
-                    return;
+                } else {
+                    self.pending_pool
+                        .insert_transaction(tx, source, missing_inputs);
                 }
-                self.pending_pool
-                    .insert_transaction(tx, source, missing_inputs);
             }
             Err(InsertionErrorType::Error(error)) => {
                 if let Err(e) =
