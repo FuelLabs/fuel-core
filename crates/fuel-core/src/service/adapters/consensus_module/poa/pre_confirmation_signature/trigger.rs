@@ -47,7 +47,13 @@ impl<Time: GetTime + Send> KeyRotationTrigger for TimeBasedTrigger<Time> {
         // if that future resolves, update the next rotation time
         let next_rotation = self.get_next_rotation()?;
         let time_to_wait = duration_between(self.time.now(), next_rotation);
-        tokio::time::sleep(time_to_wait).await;
+        tracing::debug!(
+            "next rotation is {:?} and time to wait is {:?}",
+            next_rotation,
+            time_to_wait.as_secs()
+        );
+        tokio::time::interval(time_to_wait).tick().await;
+
         tracing::debug!(
             "next rotation triggered after waiting {:?}",
             time_to_wait.as_secs()
@@ -120,8 +126,13 @@ mod tests {
 
         let advance_time = rotation_interval + 1;
         let advance_time_duration = Duration::from_secs(advance_time);
-        tokio::time::advance(advance_time_duration).await;
-        trigger.next_rotation().await.unwrap();
+        // first rotation
+        {
+            let mut fut = tokio_test::task::spawn(trigger.next_rotation());
+            tokio_test::assert_pending!(fut.poll());
+            tokio::time::advance(advance_time_duration).await;
+            tokio_test::assert_ready!(fut.poll()).expect("should trigger");
+        }
 
         // when
         let mut fut = tokio_test::task::spawn(trigger.next_rotation());
