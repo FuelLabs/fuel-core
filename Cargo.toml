@@ -103,7 +103,7 @@ fuel-core-global-merkle-root-storage = { version = "0.41.7", path = "./crates/pr
 fuel-core-global-merkle-root-service = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/service" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.59.2", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.60.0", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"

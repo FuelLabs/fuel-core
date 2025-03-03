@@ -536,7 +536,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             vm.prepare_call(ra, rb, rc, rd)
                 .map_err(anyhow::Error::msg)?;
             for instruction in post_call {
-                vm.instruction(instruction).unwrap();
+                vm.instruction::<_, false>(instruction).unwrap();
             }
         }
 
@@ -548,7 +548,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
                 vm.prepare_call(ra, rb, rc, rd).unwrap();
             }
             _ => {
-                vm.instruction(instruction).unwrap();
+                vm.instruction::<_, false>(instruction).unwrap();
             }
         }
         let storage_diff = vm.storage_diff();

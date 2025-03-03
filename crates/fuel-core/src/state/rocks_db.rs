@@ -911,39 +911,39 @@ where
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<Option<usize>> {
+    ) -> StorageResult<bool> {
         self.metrics.read_meter.inc();
         let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
         column_metrics.map(|metric| metric.inc());
 
-        let r = self
+        let Some(value) = self
             .db
             .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?
-            .map(|value| {
-                let bytes_len = value.len();
-                let start = offset;
-                let buf_len = buf.len();
-                let end = offset.saturating_add(buf_len);
+        else {
+            return Ok(false);
+        };
 
-                if end > bytes_len {
-                    return Err(StorageError::Other(anyhow::anyhow!(
-                        "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}` and column `{column:?}`",
-                        key
-                    )));
-                }
+        let bytes_len = value.len();
+        let start = offset;
+        let buf_len = buf.len();
+        let end = offset.saturating_add(buf_len);
 
-                let starting_from_offset = &value[start..end];
-                buf[..].copy_from_slice(starting_from_offset);
-                Ok(buf_len)
-            })
-            .transpose()?;
-
-        if let Some(r) = &r {
-            self.metrics.bytes_read.inc_by(*r as u64);
+        if end > bytes_len {
+            return Err(StorageError::Other(anyhow::anyhow!(
+                "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}` and column `{column:?}`",
+                key
+            )));
         }
 
-        Ok(r)
+        let starting_from_offset = &value[start..end];
+        buf[..].copy_from_slice(starting_from_offset);
+
+        self.metrics
+            .bytes_read
+            .inc_by(starting_from_offset.len() as u64);
+
+        Ok(true)
     }
 }
 
