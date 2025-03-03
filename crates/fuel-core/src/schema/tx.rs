@@ -104,7 +104,6 @@ impl TxQuery {
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
-        // TODO[RC]: Here we read tx from pool and if missing then from storage.
         if let Some(transaction) = txpool.transaction(id).await? {
             Ok(Some(Transaction(transaction, id)))
         } else {
@@ -429,10 +428,9 @@ impl TxStatusSubscription {
         let rx = tx_status_manager.tx_update_subscribe(id.into())?;
         let query = ctx.read_view()?;
 
-        let status_change_state = StatusChangeState {
-            tx_status_manager,
-            query,
-        };
+        let txpool = ctx.data_unchecked::<TxPool>();
+
+        let status_change_state = StatusChangeState { txpool, query };
         Ok(
             transaction_status_change(status_change_state, rx, id.into())
                 .await
@@ -505,8 +503,7 @@ async fn submit_and_await_status<'a>(
 
 struct StatusChangeState<'a> {
     query: Cow<'a, ReadView>,
-    //    txpool: &'a TxPool,
-    tx_status_manager: &'a TxStatusManager,
+    txpool: &'a TxPool,
 }
 
 impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
@@ -516,19 +513,12 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     ) -> StorageResult<Option<txpool::TransactionStatus>> {
         match self.query.tx_status(&id) {
             Ok(status) => Ok(Some(status)),
-            Err(StorageError::NotFound(_, _)) => {
-                // TODO[RC]: Somehow get the submission time from txpool
-                let submission_time = Tai64::UNIX_EPOCH;
-                Ok(Some(txpool::TransactionStatus::Submitted {
-                    time: submission_time,
-                }))
-            }
-            // Err(StorageError::NotFound(_, _)) => Ok(self
-            //     .txpool
-            //     .submission_time(id)
-            //     .await
-            //     .map_err(|e| anyhow::anyhow!(e))?
-            //     .map(|time| txpool::TransactionStatus::Submitted { time })),
+            Err(StorageError::NotFound(_, _)) => Ok(self
+                .txpool
+                .submission_time(id)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?
+                .map(|time| txpool::TransactionStatus::Submitted { time })),
             Err(err) => Err(err),
         }
     }
