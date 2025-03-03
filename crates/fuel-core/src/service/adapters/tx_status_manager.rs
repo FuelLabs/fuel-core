@@ -28,10 +28,6 @@ impl TxStatusManager for TxStatusManagerAdapter {
         // .tx_status_sender
         // .send_submitted(tx_id, Tai64::from_unix(duration));
     }
-
-    fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {
-        self.manager.status(tx_id)
-    }
 }
 
 #[cfg(feature = "p2p")]

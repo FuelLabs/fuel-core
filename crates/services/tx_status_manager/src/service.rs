@@ -30,18 +30,7 @@ pub struct Task {
 
 impl Task {
     fn new_tx_status_from_p2p(&mut self, (tx_id, tx_status): (TxId, TransactionStatus)) {
-        // TODO[RC]: Capacity checks?
-        // TODO[RC]: Purge old statuses?
-        // TODO[RC]: Remember to remove the status from the manager upon putting the status into storage.
         self.manager.upsert_status(&tx_id, tx_status);
-    }
-
-    pub fn upsert_status(&self, tx_id: &TxId, tx_status: TransactionStatus) {
-        self.manager.upsert_status(tx_id, tx_status)
-    }
-
-    pub fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {
-        self.manager.status(tx_id)
     }
 }
 

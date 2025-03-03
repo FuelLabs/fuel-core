@@ -24,6 +24,10 @@ impl TxStatusManager {
     }
 
     pub fn upsert_status(&self, tx_id: &TxId, tx_status: TransactionStatus) {
+        // TODO[RC]: Capacity checks?
+        // TODO[RC]: Purge old statuses?
+        // TODO[RC]: Remember to remove the status from the manager upon putting the status into storage.
+
         self.statuses
             .lock()
             .expect("mutex poisoned")

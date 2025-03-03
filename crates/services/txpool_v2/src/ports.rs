@@ -39,7 +39,6 @@ pub use fuel_core_storage::transactional::AtomicView;
 
 pub trait TxStatusManager: Send + Sync + 'static {
     fn upsert_status(&self, tx_id: &TxId, tx_status: TransactionStatus);
-    fn status(&self, tx_id: &TxId) -> Option<TransactionStatus>;
 }
 
 pub trait BlockImporter {
