@@ -1,30 +1,23 @@
-use fuel_core_poa::{
-    ports::GetTime,
-    pre_confirmation_signature_service::{
-        error::Result as PoAResult,
-        trigger::KeyRotationTrigger,
-    },
+use fuel_core_poa::pre_confirmation_signature_service::{
+    error::Result as PoAResult,
+    trigger::KeyRotationTrigger,
 };
 use std::time::Duration;
 
 #[allow(dead_code)]
-pub struct TimeBasedTrigger<Time> {
-    time: Time,
-    // next_rotation: Tai64,
-    // rotation_interval: Duration,
+pub struct TimeBasedTrigger {
     interval: tokio::time::Interval,
 }
 
-impl<Time: GetTime> TimeBasedTrigger<Time> {
-    pub fn new(time: Time, rotation_interval: Duration) -> Self {
+impl TimeBasedTrigger {
+    pub fn new(rotation_interval: Duration) -> Self {
         Self {
-            time,
             interval: tokio::time::interval(rotation_interval),
         }
     }
 }
 
-impl<Time: GetTime + Send> KeyRotationTrigger for TimeBasedTrigger<Time> {
+impl KeyRotationTrigger for TimeBasedTrigger {
     async fn next_rotation(&mut self) -> PoAResult<()> {
         self.interval.tick().await;
         Ok(())
@@ -34,29 +27,6 @@ impl<Time: GetTime + Send> KeyRotationTrigger for TimeBasedTrigger<Time> {
 mod tests {
     #![allow(non_snake_case)]
     use super::*;
-    use fuel_core_types::tai64::Tai64;
-
-    use tokio::time::Instant;
-
-    #[derive(Clone)]
-    struct TokioTime {
-        start: Instant,
-    }
-
-    impl TokioTime {
-        pub fn new() -> Self {
-            let start = Instant::now();
-            Self { start }
-        }
-    }
-
-    impl GetTime for TokioTime {
-        fn now(&self) -> Tai64 {
-            let now = Instant::now();
-            let elapsed = now.duration_since(self.start);
-            Tai64(elapsed.as_secs())
-        }
-    }
 
     #[tokio::test]
     async fn next_rotation__triggers_at_expected_time() {
@@ -64,9 +34,8 @@ mod tests {
         // given
         let rotation_interval = 10;
         let rotation_interval_duration = Duration::from_secs(rotation_interval);
-        let fake_time = TokioTime::new();
 
-        let mut trigger = TimeBasedTrigger::new(fake_time, rotation_interval_duration);
+        let mut trigger = TimeBasedTrigger::new(rotation_interval_duration);
 
         // when
         let mut fut = tokio_test::task::spawn(trigger.next_rotation());
@@ -84,9 +53,8 @@ mod tests {
         // given
         let rotation_interval = 10;
         let rotation_interval_duration = Duration::from_secs(rotation_interval);
-        let fake_time = TokioTime::new();
 
-        let mut trigger = TimeBasedTrigger::new(fake_time, rotation_interval_duration);
+        let mut trigger = TimeBasedTrigger::new(rotation_interval_duration);
 
         tokio::time::advance(Duration::from_secs(1)).await;
         let _first_rotation = trigger.next_rotation().await.unwrap();
