@@ -18,13 +18,13 @@ use fuel_core_types::{
 use futures::StreamExt;
 
 use crate::{
+    manager::TxStatusManager,
     ports::P2PSubscriptions,
     subscriptions::Subscriptions,
-    SharedState,
 };
 
 pub struct Task {
-    shared_state: SharedState,
+    manager: TxStatusManager,
     subscriptions: Subscriptions,
 }
 
@@ -33,19 +33,27 @@ impl Task {
         // TODO[RC]: Capacity checks?
         // TODO[RC]: Purge old statuses?
         // TODO[RC]: Remember to remove the status from the manager upon putting the status into storage.
-        self.shared_state.upsert_status(&tx_id, tx_status);
+        self.manager.upsert_status(&tx_id, tx_status);
+    }
+
+    pub fn upsert_status(&self, tx_id: &TxId, tx_status: TransactionStatus) {
+        self.manager.upsert_status(tx_id, tx_status)
+    }
+
+    pub fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {
+        self.manager.status(tx_id)
     }
 }
 
 #[async_trait::async_trait]
 impl RunnableService for Task {
     const NAME: &'static str = "TxStatusManagerTask";
-    type SharedData = SharedState;
+    type SharedData = TxStatusManager;
     type Task = Self;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        self.shared_state.clone()
+        self.manager.clone()
     }
 
     async fn into_task(
@@ -99,7 +107,7 @@ where
     };
 
     ServiceRunner::new(Task {
-        shared_state: SharedState::new(),
         subscriptions,
+        manager: TxStatusManager::new(),
     })
 }

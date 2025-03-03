@@ -25,9 +25,15 @@ use fuel_core_importer::ImporterResult;
 // #[cfg(feature = "parallel-executor")]
 // use fuel_core_parallel_executor::executor::Executor;
 use fuel_core_poa::ports::BlockSigner;
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::{
+    stream::BoxStream,
+    ServiceRunner,
+};
 use fuel_core_storage::transactional::Changes;
-use fuel_core_tx_status_manager::TxStatusManager;
+use fuel_core_tx_status_manager::{
+    Task,
+    TxStatusManager,
+};
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
@@ -55,8 +61,6 @@ use fuel_core_types::{
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
 use std::sync::Arc;
-
-use super::sub_services::TxStatusManagerSharedState;
 
 pub mod block_importer;
 pub mod chain_state_info_provider;
@@ -422,12 +426,12 @@ impl BlockImporterAdapter {
 
 #[derive(Clone)]
 pub struct TxStatusManagerAdapter {
-    service: TxStatusManagerSharedState,
+    manager: TxStatusManager,
 }
 
 impl TxStatusManagerAdapter {
-    pub fn new(service: TxStatusManagerSharedState) -> Self {
-        Self { service }
+    pub fn new(manager: TxStatusManager) -> Self {
+        Self { manager }
     }
 }
 

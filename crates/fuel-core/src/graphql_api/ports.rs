@@ -253,7 +253,7 @@ pub trait TxPoolPort: Send + Sync {
 }
 
 pub trait TxStatusManagerPort: Send + Sync {
-    fn status(&self, tx_id: &TxId) -> Option<&TransactionStatus>;
+    fn status(&self, tx_id: &TxId) -> Option<TransactionStatus>;
 }
 
 #[async_trait]

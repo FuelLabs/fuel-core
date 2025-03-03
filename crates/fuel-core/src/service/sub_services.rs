@@ -84,7 +84,6 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     ChainStateInfoProvider,
 >;
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
-pub type TxStatusManagerSharedState = fuel_core_tx_status_manager::SharedState;
 
 // TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
 pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;

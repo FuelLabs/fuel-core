@@ -73,8 +73,8 @@ mod off_chain;
 mod on_chain;
 
 impl TxStatusManagerPort for TxStatusManagerAdapter {
-    fn status(&self, tx_id: &TxId) -> Option<&TransactionStatus> {
-        self.service.status(tx_id)
+    fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {
+        self.manager.status(tx_id)
     }
 }
 

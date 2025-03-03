@@ -51,10 +51,7 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct SharedState<TxStatusManager>
-where
-    TxStatusManager: TxStatusManagerTrait,
-{
+pub struct SharedState {
     pub(crate) request_remove_sender: mpsc::Sender<PoolRemoveRequest>,
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
@@ -63,13 +60,9 @@ where
     pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
     pub(crate) latest_stats: tokio::sync::watch::Receiver<TxPoolStats>,
-    pub(crate) tx_status_manager: Arc<Mutex<TxStatusManager>>,
 }
 
-impl<TxStatusManager> SharedState<TxStatusManager>
-where
-    TxStatusManager: TxStatusManagerTrait + Clone,
-{
+impl SharedState {
     pub fn try_insert(&self, transactions: Vec<Transaction>) -> Result<(), Error> {
         let transactions = transactions.into_iter().map(Arc::new).collect();
         self.write_pool_requests_sender
@@ -192,10 +185,10 @@ where
         status: TransactionStatus,
     ) {
         // TODO[RC]: Do not use `send_complete` anymore
-        self.tx_status_manager
-            .lock()
-            .unwrap()
-            .upsert_status(&id, status.clone());
+        // self.tx_status_manager
+        //     .lock()
+        //     .unwrap()
+        //     .upsert_status(&id, status.clone());
 
         self.tx_status_sender.send_complete(
             id,
@@ -212,12 +205,12 @@ where
             .map(|(tx_id, reason)| {
                 let error = Error::SkippedTransaction(reason);
                 // TODO[RC]: Do not use `send_squeezed_out` anymore
-                self.tx_status_manager.lock().unwrap().upsert_status(
-                    &tx_id,
-                    TransactionStatus::SqueezedOut {
-                        reason: error.to_string(),
-                    },
-                );
+                // self.tx_status_manager.lock().unwrap().upsert_status(
+                //     &tx_id,
+                //     TransactionStatus::SqueezedOut {
+                //         reason: error.to_string(),
+                //     },
+                // );
                 self.tx_status_sender
                     .send_squeezed_out(tx_id, error.clone());
                 (tx_id, error)

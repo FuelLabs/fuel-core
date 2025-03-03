@@ -190,10 +190,11 @@ where
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
     pool_worker: PoolWorkerInterface,
+    tx_status_manager: Arc<TxStatusManager>,
     current_height_writer: SeqLockWriter<BlockHeight>,
     current_height_reader: SeqLockReader<BlockHeight>,
     tx_sync_history: Shared<HashSet<PeerId>>,
-    shared_state: SharedState<TxStatusManager>,
+    shared_state: SharedState,
     metrics: bool,
 }
 
@@ -206,7 +207,7 @@ where
 {
     const NAME: &'static str = "TxPool";
 
-    type SharedData = SharedState<TxStatusManager>;
+    type SharedData = SharedState;
 
     type Task = Task<View, P2P, TxStatusManager>;
 
@@ -415,16 +416,12 @@ where
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
 
                 // TODO[RC]: Do not use `send_submitted` anymore
-                self.shared_state
-                    .tx_status_manager
-                    .lock()
-                    .expect("poisoned")
-                    .upsert_status(
-                        &tx_id,
-                        TransactionStatus::Submitted {
-                            time: Tai64::from_unix(duration),
-                        },
-                    );
+                self.tx_status_manager.upsert_status(
+                    &tx_id,
+                    TransactionStatus::Submitted {
+                        time: Tai64::from_unix(duration),
+                    },
+                );
                 self.shared_state
                     .tx_status_sender
                     .send_submitted(tx_id, Tai64::from_unix(duration));
@@ -459,32 +456,24 @@ where
                 }
 
                 // TODO[RC]: Do not use `send_squeezed_out` anymore
-                self.shared_state
-                    .tx_status_manager
-                    .lock()
-                    .expect("poisoned")
-                    .upsert_status(
-                        &tx_id,
-                        TransactionStatus::SqueezedOut {
-                            reason: error.to_string(),
-                        },
-                    );
+                self.tx_status_manager.upsert_status(
+                    &tx_id,
+                    TransactionStatus::SqueezedOut {
+                        reason: error.to_string(),
+                    },
+                );
                 self.shared_state
                     .tx_status_sender
                     .send_squeezed_out(tx_id, error);
             }
             PoolNotification::Removed { tx_id, error } => {
                 // TODO[RC]: Do not use `send_squeezed_out` anymore
-                self.shared_state
-                    .tx_status_manager
-                    .lock()
-                    .expect("poisoned")
-                    .upsert_status(
-                        &tx_id,
-                        TransactionStatus::SqueezedOut {
-                            reason: error.to_string(),
-                        },
-                    );
+                self.tx_status_manager.upsert_status(
+                    &tx_id,
+                    TransactionStatus::SqueezedOut {
+                        reason: error.to_string(),
+                    },
+                );
                 self.shared_state
                     .tx_status_sender
                     .send_squeezed_out(tx_id, error);
@@ -525,7 +514,7 @@ where
         let current_height_reader = self.current_height_reader.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
-        let my_status_thing = self.my_status_thing.clone();
+        let tx_status_manager = self.tx_status_manager.clone();
 
         let insert_transaction_thread_pool_op = move || {
             let current_height = current_height_reader.read();
@@ -571,25 +560,13 @@ where
                         }
                     }
 
-                    // TODO[RC]: Do not use `send_squeezed_out` anymore
-                    // self.tx_status_manager.upsert_status(
-                    // &tx_id,
-                    // TransactionStatus::SqueezedOut {
-                    // reason: err.to_string(),
-                    // },
-                    // );
-
-                    shared_state
-                        .tx_status_manager
-                        .lock()
-                        .unwrap()
-                        .upsert_status(
-                            &tx_id,
-                            TransactionStatus::SqueezedOut {
-                                reason: err.to_string(),
-                            },
-                        );
-
+                    // TODO[RC]: This call should replace "send_squeezed_out" (also apply to other places where we update tx status manager)
+                    tx_status_manager.upsert_status(
+                        &tx_id,
+                        TransactionStatus::SqueezedOut {
+                            reason: err.to_string(),
+                        },
+                    );
                     shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
                     return
                 }
@@ -886,8 +863,6 @@ where
     let pool_worker =
         PoolWorkerInterface::new(txpool, storage_provider, &service_channel_limits);
 
-    let tx_status_manager = Arc::new(Mutex::new(tx_status_manager));
-
     let shared_state = SharedState {
         request_remove_sender: pool_worker.request_remove_sender.clone(),
         request_read_sender: pool_worker.request_read_sender.clone(),
@@ -898,7 +873,6 @@ where
             .clone(),
         new_txs_notifier,
         latest_stats: pool_stats_receiver,
-        tx_status_manager,
     };
 
     Service::new(Task {
@@ -916,5 +890,6 @@ where
         shared_state,
         metrics,
         tx_sync_history: Default::default(),
+        tx_status_manager: Arc::new(tx_status_manager),
     })
 }

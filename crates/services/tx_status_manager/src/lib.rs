@@ -6,8 +6,10 @@ mod shared_state;
 mod subscriptions;
 
 pub use manager::TxStatusManager;
-pub use service::new_service;
-pub use shared_state::SharedState;
+pub use service::{
+    new_service,
+    Task,
+};
 
 //#[cfg(test)]
 // mod tests;
