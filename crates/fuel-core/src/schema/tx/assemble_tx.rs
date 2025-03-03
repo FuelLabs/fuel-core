@@ -355,7 +355,10 @@ where
                 .coins(owner, asset_id, amount, remaining_input_slots)
                 .await?;
 
-            for coin in selected_coins {
+            for coin in selected_coins
+                .into_iter()
+                .take(remaining_input_slots as usize)
+            {
                 self.add_input_and_witness_and_change(&required_balance.account, coin);
             }
         }
@@ -531,6 +534,12 @@ where
 
         if !self.has_predicates {
             return Ok(self)
+        }
+
+        if self.estimated_predicates_count > 10 {
+            return Err(anyhow::anyhow!(
+                "The transaction estimation requires running of predicate more than 10 times"
+            ));
         }
 
         let memory = self.arguments.shared_memory_pool.get_memory().await;
@@ -803,7 +812,7 @@ where
                 ));
             }
 
-            for coin in coins {
+            for coin in coins.into_iter().take(remaining_input_slots as usize) {
                 total_base_asset = total_base_asset.checked_add(coin.amount()).ok_or(
                     anyhow::anyhow!(
                         "The total base asset amount \
