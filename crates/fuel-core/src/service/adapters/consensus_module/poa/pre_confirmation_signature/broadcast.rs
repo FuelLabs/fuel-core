@@ -9,7 +9,7 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     Signed,
 };
 
-/// TODO: https://github.com/FuelLabs/fuel-core/issues/2783
+/// TODO: Implement `Broadcast` properly: <https://github.com/FuelLabs/fuel-core/issues/2783>
 pub struct P2PBroadcast;
 
 impl Broadcast for P2PBroadcast {
