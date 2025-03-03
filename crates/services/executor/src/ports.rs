@@ -1,21 +1,35 @@
 use fuel_core_types::{
     blockchain::{
         header::ConsensusParametersVersion,
-        primitives::DaBlockHeight, transaction::TransactionExt,
+        primitives::DaBlockHeight,
+        transaction::TransactionExt,
     },
     fuel_tx::{
-        self, field::Expiration, ConsensusParameters, Input, Output, Transaction, TxId, UniqueIdentifier
+        self,
+        field::Expiration,
+        ConsensusParameters,
+        Input,
+        Output,
+        Transaction,
+        TxId,
+        UniqueIdentifier,
     },
     fuel_types::{
         BlockHeight,
         ChainId,
     },
     fuel_vm::checked_transaction::CheckedTransaction,
-    services::{relayer::Event, executor::Result as ExecutorResult},
+    services::{
+        executor::Result as ExecutorResult,
+        relayer::Event,
+    },
 };
 
 #[cfg(feature = "alloc")]
-use alloc::{vec::Vec, borrow::Cow};
+use alloc::{
+    borrow::Cow,
+    vec::Vec,
+};
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]
@@ -125,7 +139,6 @@ impl TransactionExt for MaybeCheckedTransaction {
         }
     }
 }
-
 
 pub trait TransactionsSource {
     /// Returns the next batch of transactions to satisfy the `gas_limit` and `block_transaction_size_limit`.

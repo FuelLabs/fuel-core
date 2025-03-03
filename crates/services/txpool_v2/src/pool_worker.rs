@@ -285,7 +285,7 @@ where
                 for remove in remove_buffer {
                     match remove {
                         PoolRemoveRequest::ProcessBlock { block_result } => {
-                            self.process_block(block);
+                            self.process_block(block_result);
                         }
                         PoolRemoveRequest::CoinDependents { dependents_ids } => {
                             self.remove_coin_dependents(dependents_ids);
@@ -401,9 +401,9 @@ where
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
                 }
-                let updated_txs = self.pending_pool.new_known_tx(tx);
+                let resolved_txs = self.pending_pool.new_known_tx(tx);
 
-                for (tx, source) in updated_txs.resolved_txs {
+                for (tx, source) in resolved_txs {
                     if let Err(e) = self
                         .tx_insert_from_pending_sender
                         .try_send(PoolInsertRequest::Insert { tx, source })
@@ -412,22 +412,6 @@ where
                             "Failed to send resolved transaction to pending pool: {}",
                             e
                         );
-                    }
-                }
-                for expired_tx in updated_txs.expired_txs {
-                    if let Some(missing_input) = expired_tx.missing_inputs.first() {
-                        if let Err(e) = self.notification_sender.try_send(
-                            PoolNotification::ErrorInsertion {
-                                tx_id: expired_tx.tx.id(),
-                                source: expired_tx.insertion_source,
-                                error: missing_input.into(),
-                            },
-                        ) {
-                            tracing::error!(
-                                "Failed to send error insertion notification: {}",
-                                e
-                            );
-                        }
                     }
                 }
             }
@@ -472,12 +456,8 @@ where
                 }
             }
         }
-        // Allow in tests to use a ttl of 0 for pending pool and directly
-        // trigger the removal of expired transactions
-        #[cfg(any(feature = "test-helpers", test))]
-        {
-            self.remove_executed_transactions(vec![]);
-        }
+        self.pending_pool
+            .expire_transactions(self.notification_sender.clone());
     }
 
     fn extract_block_transactions(
@@ -491,26 +471,24 @@ where
         }
     }
 
-    fn remove_executed_transactions(&mut self, block_result: SharedImportResult) {
-        let removed_transactions = self.pool.remove_transactions(block_result.tx_status.iter().map(|tx_status| tx_status.id));
-        let updated_txs = self.pending_pool.new_known_txs(block_result.sealed_block.entity.transactions().iter().zip(block_result.tx_status.iter().map(|tx_status| tx_status.id)));
-        for (tx, source) in updated_txs.resolved_txs {
+    fn process_block(&mut self, block_result: SharedImportResult) {
+        self.pool.remove_transactions(
+            block_result.tx_status.iter().map(|tx_status| tx_status.id),
+        );
+        let resolved_txs = self.pending_pool.new_known_txs(
+            block_result
+                .sealed_block
+                .entity
+                .transactions()
+                .iter()
+                .zip(block_result.tx_status.iter().map(|tx_status| tx_status.id)),
+        );
+        for (tx, source) in resolved_txs {
             self.insert(tx, source);
         }
-        for expired_tx in updated_txs.expired_txs {
-            if let Some(missing_input) = expired_tx.missing_inputs.first() {
-                if let Err(e) =
-                    self.notification_sender
-                        .try_send(PoolNotification::ErrorInsertion {
-                            tx_id: expired_tx.tx.id(),
-                            source: expired_tx.insertion_source,
-                            error: missing_input.into(),
-                        })
-                {
-                    tracing::error!("Failed to send error insertion notification: {}", e);
-                }
-            }
-        }
+
+        self.pending_pool
+            .expire_transactions(self.notification_sender.clone());
     }
 
     fn remove_coin_dependents(&mut self, parent_txs: Vec<(TxId, Error)>) {

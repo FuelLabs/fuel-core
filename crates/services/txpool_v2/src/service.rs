@@ -295,7 +295,7 @@ where
     fn import_block(&mut self, result: SharedImportResult) -> TaskNextAction {
         let new_height = *result.sealed_block.entity.header().height();
 
-        if let Err(err) = self.pool_worker.process_block(result.clone()) {
+        if let Err(err) = self.pool_worker.process_block(Arc::clone(&result)) {
             tracing::error!("{err}");
             return TaskNextAction::Stop
         }
