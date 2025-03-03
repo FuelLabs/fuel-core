@@ -96,7 +96,7 @@ pub type PoAService = fuel_core_poa::Service<
     FuelParentSignature<DummyKey>,
     Ed25519KeyGenerator,
     DummyKey,
-    TimeBasedTrigger<SystemTime>,
+    TimeBasedTrigger,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -334,10 +334,10 @@ pub fn init_sub_services(
         PreConfirmationSignatureTask<
             MPSCTxReceiver<Preconfirmations>,
             P2PBroadcast,
-            FuelParentSigner<Ed25519Key>,
-            Ed25519KeyGenerator,
-            Ed25519Key,
-            TimeBasedTrigger<SystemTime>,
+            FuelParentSigner<DummyKey>,
+            DelegateKeyGenerator,
+            DummyKey,
+            TimeBasedTrigger,
         >,
     > = todo!();
 
