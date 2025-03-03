@@ -25,11 +25,14 @@ use fuel_core_types::{
     },
 };
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::{
     borrow::Cow,
     vec::Vec,
 };
+
+#[cfg(feature = "std")]
+use std::borrow::Cow;
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]

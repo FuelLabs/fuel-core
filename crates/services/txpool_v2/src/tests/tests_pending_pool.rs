@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[tokio::test]
-async fn test_tx_keep_missing_input() {
+async fn test_tx__keep_missing_input_and_resolved_when_input_submitted() {
     let mut universe = TestPoolUniverse::default();
     universe.config.utxo_validation = true;
     let timeout = tokio::time::Duration::from_secs(1);
@@ -58,7 +58,7 @@ async fn test_tx_keep_missing_input() {
 }
 
 #[tokio::test]
-async fn test_tx_kept_expired() {
+async fn test_tx__return_error_expired() {
     let mut universe = TestPoolUniverse::default();
     universe.config.utxo_validation = true;
     let timeout = tokio::time::Duration::from_millis(100);
@@ -92,6 +92,8 @@ async fn test_tx_kept_expired() {
 
     // Then
     let status = subscriber_status.next().await.unwrap();
+    // The error returned is the error that the transaction was squeezed out for.
+    // We don't need the user to know that pending pool exists
     assert_eq!(status, TxStatusMessage::Status(TransactionStatus::SqueezedOut { reason:
         "Transaction input validation failed: UTXO (id: cf6532b2371b3efb71ff8ca4ec32cf046fb1be64e620d21a0a98c0298f8196140000) does not exist".to_string(),
     }));
@@ -100,7 +102,7 @@ async fn test_tx_kept_expired() {
 }
 
 #[tokio::test]
-async fn test_directly_removed_not_enough_space() {
+async fn test_tx__directly_removed_not_enough_space() {
     let mut universe = TestPoolUniverse::default();
     universe.config.utxo_validation = true;
     universe.config.max_pending_pool_size_percentage = 1;
@@ -124,6 +126,8 @@ async fn test_directly_removed_not_enough_space() {
     let status = subscriber_status.next().await.unwrap();
 
     // Then
+    // The error returned is the error that the transaction was squeezed out for.
+    // We don't need the user to know that pending pool exists
     assert_eq!(status, TxStatusMessage::Status(TransactionStatus::SqueezedOut { reason:
         "Transaction input validation failed: UTXO (id: cf6532b2371b3efb71ff8ca4ec32cf046fb1be64e620d21a0a98c0298f8196140000) does not exist".to_string(),
     }));
