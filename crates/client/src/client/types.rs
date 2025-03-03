@@ -118,7 +118,7 @@ pub enum TransactionStatus {
     },
     SuccessDuringBlockProduction {
         tx_pointer: TxPointer,
-        transaction_id: Option<TxId>,
+        transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
     },
     SqueezedOut {
@@ -138,7 +138,7 @@ pub enum TransactionStatus {
     },
     FailureDuringBlockProduction {
         tx_pointer: TxPointer,
-        transaction_id: Option<TxId>,
+        transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
         reason: String,
     },
@@ -167,7 +167,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
             SchemaTxStatus::SuccessDuringBlockProductionStatus(s) => {
                 TransactionStatus::SuccessDuringBlockProduction {
                     tx_pointer: s.tx_pointer.into(),
-                    transaction_id: s.transaction_id.map(Into::into),
+                    transaction_id: s.transaction_id.into(),
                     receipts: if let Some(receipts) = s.receipts {
                         Some(
                             receipts
@@ -196,7 +196,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
             SchemaTxStatus::FailureDuringBlockProductionStatus(s) => {
                 TransactionStatus::FailureDuringBlockProduction {
                     tx_pointer: s.tx_pointer.into(),
-                    transaction_id: s.transaction_id.map(Into::into),
+                    transaction_id: s.transaction_id.into(),
                     receipts: if let Some(receipts) = s.receipts {
                         Some(
                             receipts
@@ -239,7 +239,7 @@ pub enum StatusWithTransaction {
     },
     SuccessDuringBlockProduction {
         tx_pointer: TxPointer,
-        transaction_id: Option<TxId>,
+        transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
     },
     SqueezedOut {
@@ -260,7 +260,7 @@ pub enum StatusWithTransaction {
     },
     FailureDuringBlockProduction {
         tx_pointer: TxPointer,
-        transaction_id: Option<TxId>,
+        transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
         reason: String,
     },
@@ -291,7 +291,7 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
             SchemaStatusWithTx::SuccessDuringBlockProductionStatus(s) => {
                 StatusWithTransaction::SuccessDuringBlockProduction {
                     tx_pointer: s.tx_pointer.into(),
-                    transaction_id: s.transaction_id.map(Into::into),
+                    transaction_id: s.transaction_id.into(),
                     receipts: if let Some(receipts) = s.receipts {
                         Some(
                             receipts
@@ -323,7 +323,7 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
             SchemaStatusWithTx::FailureDuringBlockProductionStatus(s) => {
                 StatusWithTransaction::FailureDuringBlockProduction {
                     tx_pointer: s.tx_pointer.into(),
-                    transaction_id: s.transaction_id.map(Into::into),
+                    transaction_id: s.transaction_id.into(),
                     receipts: if let Some(receipts) = s.receipts {
                         Some(
                             receipts

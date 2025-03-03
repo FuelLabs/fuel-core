@@ -450,7 +450,7 @@ pub enum TransactionStatus {
         /// Transaction pointer
         tx_pointer: TxPointer,
         /// Transaction ID
-        tx_id: Option<TxId>,
+        tx_id: TxId,
         /// Receipts
         receipts: Option<Vec<Receipt>>,
     },
@@ -486,7 +486,7 @@ pub enum TransactionStatus {
         /// Transaction pointer
         tx_pointer: TxPointer,
         /// Transaction ID
-        tx_id: Option<TxId>,
+        tx_id: TxId,
         /// Receipts
         receipts: Option<Vec<Receipt>>,
         /// The reason why the transaction has failed

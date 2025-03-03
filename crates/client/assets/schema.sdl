@@ -338,7 +338,7 @@ input ExcludeInput {
 type FailureDuringBlockProductionStatus {
 	reason: String!
 	txPointer: TxPointer!
-	transactionId: TransactionId
+	transactionId: TransactionId!
 	transaction: Transaction
 	receipts: [Receipt!]
 }
@@ -1220,7 +1220,7 @@ type Subscription {
 
 type SuccessDuringBlockProductionStatus {
 	txPointer: TxPointer!
-	transactionId: TransactionId
+	transactionId: TransactionId!
 	transaction: Transaction
 	receipts: [Receipt!]
 }

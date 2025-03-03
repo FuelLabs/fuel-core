@@ -250,7 +250,7 @@ pub struct SuccessStatusWithTransaction {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessDuringBlockProductionStatus {
     pub tx_pointer: TxPointer,
-    pub transaction_id: Option<TransactionId>,
+    pub transaction_id: TransactionId,
     pub receipts: Option<Vec<Receipt>>,
 }
 
@@ -283,7 +283,7 @@ pub struct FailureStatusWithTransaction {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureDuringBlockProductionStatus {
     pub tx_pointer: TxPointer,
-    pub transaction_id: Option<TransactionId>,
+    pub transaction_id: TransactionId,
     pub receipts: Option<Vec<Receipt>>,
     pub reason: String,
 }

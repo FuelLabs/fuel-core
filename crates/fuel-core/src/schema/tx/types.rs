@@ -218,7 +218,7 @@ impl SuccessStatus {
 #[derive(Debug)]
 pub struct SuccessDuringBlockProductionStatus {
     pub tx_pointer: TxPointer,
-    pub tx_id: Option<TxId>,
+    pub tx_id: TxId,
     pub receipts: Option<Vec<fuel_tx::Receipt>>,
 }
 
@@ -228,20 +228,18 @@ impl SuccessDuringBlockProductionStatus {
         self.tx_pointer
     }
 
-    async fn transaction_id(&self) -> Option<TransactionId> {
-        self.tx_id.map(Into::into)
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
     }
 
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn transaction(
         &self,
         ctx: &Context<'_>,
-    ) -> Option<async_graphql::Result<Transaction>> {
-        self.tx_id.map(|tx_id| {
-            let query = ctx.read_view()?;
-            let transaction = query.transaction(&tx_id)?;
-            Ok(Transaction::from_tx(tx_id, transaction))
-        })
+    ) -> async_graphql::Result<Option<Transaction>> {
+        let query = ctx.read_view()?;
+        let transaction = query.transaction(&self.tx_id)?;
+        Ok(Some(Transaction::from_tx(self.tx_id, transaction)))
     }
 
     async fn receipts(&self) -> Option<async_graphql::Result<Vec<Receipt>>> {
@@ -314,7 +312,7 @@ impl FailureStatus {
 #[derive(Debug)]
 pub struct FailureDuringBlockProductionStatus {
     pub tx_pointer: TxPointer,
-    pub tx_id: Option<TxId>,
+    pub tx_id: TxId,
     pub receipts: Option<Vec<fuel_tx::Receipt>>,
     pub reason: String,
 }
@@ -329,20 +327,18 @@ impl FailureDuringBlockProductionStatus {
         self.tx_pointer
     }
 
-    async fn transaction_id(&self) -> Option<TransactionId> {
-        self.tx_id.map(Into::into)
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
     }
 
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn transaction(
         &self,
         ctx: &Context<'_>,
-    ) -> Option<async_graphql::Result<Transaction>> {
-        self.tx_id.map(|tx_id| {
-            let query = ctx.read_view()?;
-            let transaction = query.transaction(&tx_id)?;
-            Ok(Transaction::from_tx(tx_id, transaction))
-        })
+    ) -> async_graphql::Result<Option<Transaction>> {
+        let query = ctx.read_view()?;
+        let transaction = query.transaction(&self.tx_id)?;
+        Ok(Some(Transaction::from_tx(self.tx_id, transaction)))
     }
 
     async fn receipts(&self) -> Option<async_graphql::Result<Vec<Receipt>>> {

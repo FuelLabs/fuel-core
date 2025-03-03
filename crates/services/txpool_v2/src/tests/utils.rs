@@ -51,7 +51,7 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
         }),
         Just(TransactionStatus::SuccessDuringBlockProduction {
             tx_pointer: Default::default(),
-            tx_id: None,
+            tx_id: Bytes32::zeroed(),
             receipts: None,
         }),
         Just(TransactionStatus::Failure {
@@ -65,7 +65,7 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
         }),
         Just(TransactionStatus::FailureDuringBlockProduction {
             tx_pointer: Default::default(),
-            tx_id: None,
+            tx_id: Bytes32::zeroed(),
             receipts: None,
             reason: "failure during block production".to_string(),
         }),

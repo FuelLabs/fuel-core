@@ -66,7 +66,7 @@ fn success() -> TransactionStatus {
 fn success_during_block_production() -> TransactionStatus {
     TransactionStatus::SuccessDuringBlockProduction {
         tx_pointer: Default::default(),
-        tx_id: None,
+        tx_id: Bytes32::zeroed(),
         receipts: None,
     }
 }
@@ -86,7 +86,7 @@ fn failure() -> TransactionStatus {
 fn failure_during_block_production() -> TransactionStatus {
     TransactionStatus::FailureDuringBlockProduction {
         tx_pointer: Default::default(),
-        tx_id: None,
+        tx_id: Bytes32::zeroed(),
         receipts: None,
         reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
