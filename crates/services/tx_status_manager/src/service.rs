@@ -52,7 +52,7 @@ impl Task {
         preconfirmations
             .iter()
             .for_each(|Preconfirmation { tx_id, status }| {
-                self.manager.upsert_status(&tx_id, status);
+                self.manager.upsert_status(&tx_id, status.clone());
             });
     }
 }
@@ -83,31 +83,31 @@ impl RunnableTask for Task {
         watcher: &mut fuel_core_services::StateWatcher,
     ) -> TaskNextAction {
         tokio::select! {
-                    biased;
+            biased;
 
-                    _ = watcher.while_started() => {
-                        TaskNextAction::Stop
+            _ = watcher.while_started() => {
+                TaskNextAction::Stop
+            }
+
+            tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
+                if let Some(GossipData { data, message_id, peer_id }) = tx_status_from_p2p {
+                    if let Some(tx_status) = data {
+                        match tx_status {
+                            PreconfirmationMessage::Preconfirmations(sealed)=>
+                            {
+                                self.new_preconfirmations_from_p2p(sealed);
+                            },
+                            PreconfirmationMessage::Delegate(_) => {
+                                // We're not interested in delegate messages
+                            },}
                     }
-
-                    tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
-                        if let Some(GossipData { data, message_id, peer_id }) = tx_status_from_p2p {
-                            if let Some(tx_status) = data {
-                                match tx_status {
-                                    PreconfirmationMessage::Preconfirmations(sealed)=>
-                                    {
-                                        self.new_preconfirmations_from_p2p(sealed);
-                                    },
-                                    PreconfirmationMessage::Delegate(sealed) => todo!(),
-                                                                    }
-        //                        self.new_tx_status_from_p2p(tx_status);
-                            }
-                            TaskNextAction::Continue
-                        } else {
-                            TaskNextAction::Stop
-                        }
-                    }
-
+                    TaskNextAction::Continue
+                } else {
+                    TaskNextAction::Stop
                 }
+            }
+
+        }
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {

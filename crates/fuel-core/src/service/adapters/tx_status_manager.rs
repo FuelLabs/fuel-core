@@ -7,7 +7,7 @@ use fuel_core_types::{
         TxId,
     },
     services::{
-        p2p::TransactionStatusGossipData,
+        p2p::PreconfirmationsGossipData,
         txpool::TransactionStatus,
     },
 };
@@ -32,7 +32,7 @@ impl TxStatusManager for TxStatusManagerAdapter {
 
 #[cfg(feature = "p2p")]
 impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
-    type GossipedStatuses = TransactionStatusGossipData;
+    type GossipedStatuses = PreconfirmationsGossipData;
 
     fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
         use tokio_stream::{
@@ -42,7 +42,7 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
 
         if let Some(service) = &self.service {
             Box::pin(
-                BroadcastStream::new(service.subscribe_tx_status())
+                BroadcastStream::new(service.subscribe_preconfirmations())
                     .filter_map(|result| result.ok()),
             )
         } else {
