@@ -298,7 +298,6 @@ where
 
     pub async fn assemble(mut self) -> anyhow::Result<Tx> {
         self.add_inputs_and_witnesses_and_changes().await?;
-        self.cover_tip().await?;
         self.fill_with_variable_outputs();
 
         self = self.estimate_predicates().await?;
@@ -452,26 +451,6 @@ where
                 }
             }
         }
-    }
-
-    async fn cover_tip(&mut self) -> anyhow::Result<()> {
-        let remaining_input_slots = self.remaining_input_slots()?;
-        let base_asset_id = *self.arguments.consensus_parameters.base_asset_id();
-
-        let account = self.fee_payer_account.clone();
-        let owner = account.owner();
-        let amount = self.tx.tip();
-
-        let selected_coins = self
-            .arguments
-            .coins(owner, base_asset_id, amount, remaining_input_slots)
-            .await?;
-
-        for coin in selected_coins {
-            self.add_input_and_witness_and_change(&account, coin);
-        }
-
-        Ok(())
     }
 
     fn is_runnable_script(&self) -> bool {
@@ -773,7 +752,6 @@ where
         }
 
         loop {
-            let remaining_input_slots = self.remaining_input_slots()?;
             let max_gas = self.tx.max_gas(&gas_costs, &fee_params);
             let max_gas_with_reserve = max_gas.saturating_add(self.arguments.reserve_gas);
 
@@ -791,6 +769,8 @@ where
             if need_to_cover <= total_base_asset {
                 break;
             }
+
+            let remaining_input_slots = self.remaining_input_slots()?;
 
             let how_much_to_add = need_to_cover.saturating_sub(total_base_asset);
             let coins = self
