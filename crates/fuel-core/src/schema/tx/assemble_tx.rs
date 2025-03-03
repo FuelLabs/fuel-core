@@ -151,6 +151,7 @@ pub struct AssembleTx<'a, Tx> {
     original_max_fee: u64,
     original_witness_limit: u64,
     fee_payer_account: Account,
+    estimated_predicates_count: usize,
 }
 
 impl<'a, Tx> AssembleTx<'a, Tx>
@@ -293,14 +294,26 @@ where
             original_max_fee,
             original_witness_limit,
             fee_payer_account,
+            estimated_predicates_count: 0,
         })
     }
 
     pub async fn assemble(mut self) -> anyhow::Result<Tx> {
         self.add_inputs_and_witnesses_and_changes().await?;
+
+        if let Some(script) = self.tx.as_script_mut() {
+            *script.script_gas_limit_mut() = 0;
+        }
+
+        self = self.cover_fee().await?;
+
         self.fill_with_variable_outputs();
 
-        self = self.estimate_predicates().await?;
+        // The `cover_fee` already can estimate predicates inside,
+        // we don't need to duplicate the work, if it was already done.
+        if self.estimated_predicates_count == 0 {
+            self = self.estimate_predicates().await?;
+        }
 
         self.estimate_script_if_possible().await?;
 
@@ -544,6 +557,9 @@ where
 
         self.tx = estimated_tx;
 
+        self.estimated_predicates_count =
+            self.estimated_predicates_count.saturating_add(1);
+
         Ok(self)
     }
 
@@ -567,8 +583,6 @@ where
             Default::default(),
         );
         let mut script = core::mem::replace(script_ref, dummy_script);
-
-        *script.script_gas_limit_mut() = 0;
 
         let dry_run_gas_price = 0;
         set_max_fee(
