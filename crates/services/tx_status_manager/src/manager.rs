@@ -43,19 +43,28 @@ impl TxStatusManager {
     }
 
     pub fn upsert_status(&self, tx_id: &TxId, tx_status: TransactionStatus) {
-        // TODO[RC]: Capacity checks?
+        // TODO[RC]: Capacity checks? - Protected by TxPool capacity checks, except for the squeezed state. Maybe introduce some limit.
         // TODO[RC]: Purge old statuses?
         // TODO[RC]: Remember to remove the status from the manager upon putting the status into storage.
 
-        self.statuses
-            .lock()
-            .expect("mutex poisoned")
-            .insert(tx_id.clone(), tx_status.clone());
+        // TODO[RC]:
+        let squeezed_out = true;
 
-        // TODO[RC]: If "submitted" then also send the "new_transaction_notification"
-        self.tx_status_change
-            .update_sender
-            .send(TxUpdate::new(*tx_id, TxStatusMessage::Status(tx_status)));
+        if squeezed_out {
+            // TODO[RC]: If "submitted" then also send the "new_transaction_notification"
+            self.tx_status_change
+                .update_sender
+                .send(TxUpdate::new(*tx_id, TxStatusMessage::Status(tx_status)));
+        } else {
+            self.tx_status_change.update_sender.send(TxUpdate::new(
+                *tx_id,
+                TxStatusMessage::Status(tx_status.clone()),
+            ));
+            self.statuses
+                .lock()
+                .expect("mutex poisoned")
+                .insert(tx_id.clone(), tx_status);
+        }
     }
 
     pub fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {

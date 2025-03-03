@@ -45,17 +45,18 @@ impl Task {
             entity: preconfirmations,
         } = preconfirmations;
 
-        // TODO[RC]: Add test for timestamp verification
-        let current_time = Tai64::now();
-        if current_time > preconfirmations.expiration() {
-            return;
-        }
+        // let expiration = preconfirmations.expiration();
+        // let public_key = get_pub_key_by_expiration(expiration);
 
+        // if signature_verified() {
         preconfirmations
             .iter()
             .for_each(|Preconfirmation { tx_id, status }| {
                 self.manager.upsert_status(&tx_id, status.clone());
             });
+        //} else {
+        // TODO[RC]: Log the error
+        //}
     }
 }
 
@@ -99,8 +100,8 @@ impl RunnableTask for Task {
                             {
                                 self.new_preconfirmations_from_p2p(sealed);
                             },
-                            PreconfirmationMessage::Delegate(_) => {
-                                // We're not interested in delegate messages
+                            PreconfirmationMessage::Delegate(sealed) => {
+                                // TODO[RC]: Store the public key along with the "expiration"
                             },}
                     }
                     TaskNextAction::Continue

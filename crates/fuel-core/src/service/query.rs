@@ -104,12 +104,6 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
             None => {
                 // TODO[RC]: Should be async?
                 let status = self.tx_status_manager.status(&id);
-                //.await
-                //           .map_err(|e| anyhow::anyhow!(e))?;
-                // let status = result
-                // .map(|status| status.try_into())
-                // .transpose()
-                // .map_err(|e: SystemTimeError| anyhow::anyhow!(e))?;
                 Ok(status)
             }
         }

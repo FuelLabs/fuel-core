@@ -1047,7 +1047,7 @@ pub(crate) async fn get_tx_status(
         }
         None => {
             let submitted_time = txpool
-                .submission_time(id)
+                .submission_time(id) // TODO[RC]: Use tx status manager
                 .await
                 .map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
             match submitted_time {
