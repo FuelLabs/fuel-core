@@ -335,7 +335,9 @@ where
         )
         .now_or_never()
         .ok_or_else(|| {
-            anyhow::anyhow!("Impossible to resolve the executor's future immediately")
+            ExecutorError::Other(
+                "Impossible to resolve the executor's future immediately".to_string(),
+            )
         })?
     }
 
@@ -356,7 +358,9 @@ where
         )
         .now_or_never()
         .ok_or_else(|| {
-            anyhow::anyhow!("Impossible to resolve the executor's future immediately")
+            ExecutorError::Other(
+                "Impossible to resolve the executor's future immediately".to_string(),
+            )
         })?
     }
 }
@@ -436,8 +440,10 @@ where
             )
             .now_or_never()
             .ok_or_else(|| {
-                anyhow::anyhow!("Impossible to resolve the executor's future immediately")
-            })?
+                ExecutorError::Other(
+                    "Impossible to resolve the executor's future immediately".to_string(),
+                )
+            })??
             .into_result();
 
         // If one of the transactions fails, return an error.
@@ -820,12 +826,12 @@ where
         if let Some(previous_block_height) = db_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, mode.is_dry_run(), new_tx_waiter)
+                .produce_without_commit(block, mode.is_dry_run(), new_tx_waiter, ())
                 .await
         } else {
             let database = self.storage_view_provider.latest_view()?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, mode.is_dry_run(), new_tx_waiter)
+                .produce_without_commit(block, mode.is_dry_run(), new_tx_waiter, ())
                 .await
         }
     }

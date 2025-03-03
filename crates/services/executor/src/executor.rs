@@ -132,6 +132,7 @@ use fuel_core_types::{
             ForcedTransactionFailure,
             NewTxWaiter,
             Result as ExecutorResult,
+            TimeoutOnlyTxWaiter,
             TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
@@ -280,19 +281,24 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    pub async fn produce_without_commit<TxSource>(
+    pub async fn produce_without_commit<TxSource, P>(
         self,
         components: Components<TxSource>,
         dry_run: bool,
         new_tx_waiter: impl NewTxWaiter,
+        preconfirmation_sender: P,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
+        // TODO: P: PreconfirmationSender,
     {
         let consensus_params_version = components.consensus_parameters_version();
 
-        let (block_executor, storage_tx) =
-            self.into_executor(consensus_params_version)?;
+        let (block_executor, storage_tx) = self.into_executor(
+            consensus_params_version,
+            new_tx_waiter,
+            preconfirmation_sender,
+        )?;
 
         #[cfg(feature = "fault-proving")]
         let chain_id = block_executor.consensus_params.chain_id();
@@ -300,9 +306,7 @@ where
         let (partial_block, execution_data) = if dry_run {
             block_executor.dry_run_block(components, storage_tx)?
         } else {
-            block_executor
-                .produce_block(components, storage_tx, new_tx_waiter)
-                .await?
+            block_executor.produce_block(components, storage_tx).await?
         };
 
         let ExecutionData {
@@ -350,7 +354,7 @@ where
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
         let consensus_params_version = block.header().consensus_parameters_version();
         let (block_executor, storage_tx) =
-            self.into_executor(consensus_params_version)?;
+            self.into_executor(consensus_params_version, TimeoutOnlyTxWaiter, ())?;
 
         let ExecutionData {
             coinbase,
@@ -374,10 +378,16 @@ where
         Ok(UncommittedValidationResult::new(result, changes))
     }
 
-    fn into_executor(
+    fn into_executor<N, P>(
         self,
         consensus_params_version: ConsensusParametersVersion,
-    ) -> ExecutorResult<(BlockExecutor<R>, StorageTransaction<D>)> {
+        new_tx_waiter: N,
+        preconfirmation_sender: P,
+    ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>)>
+    where
+        N: NewTxWaiter,
+        // TODO: P: PreconfirmationSender,
+    {
         let storage_tx = self
             .database
             .into_transaction()
@@ -389,7 +399,13 @@ where
                 consensus_params_version,
             ))?
             .into_owned();
-        let executor = BlockExecutor::new(self.relayer, self.options, consensus_params)?;
+        let executor = BlockExecutor::new(
+            self.relayer,
+            self.options,
+            consensus_params,
+            new_tx_waiter,
+            preconfirmation_sender,
+        )?;
         Ok((executor, storage_tx))
     }
 }
@@ -398,22 +414,31 @@ type BlockStorageTransaction<T> = StorageTransaction<T>;
 type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransaction<T>>;
 
 #[derive(Clone, Debug)]
-pub struct BlockExecutor<R> {
+pub struct BlockExecutor<R, TxWaiter, PreconfirmationSender> {
     relayer: R,
     consensus_params: ConsensusParameters,
     options: ExecutionOptions,
+    new_tx_waiter: TxWaiter,
+    #[allow(dead_code)]
+    preconfirmation_sender: PreconfirmationSender,
 }
 
-impl<R> BlockExecutor<R> {
+impl<R, TxWaiter, PreconfirmationSender>
+    BlockExecutor<R, TxWaiter, PreconfirmationSender>
+{
     pub fn new(
         relayer: R,
         options: ExecutionOptions,
         consensus_params: ConsensusParameters,
+        new_tx_waiter: TxWaiter,
+        preconfirmation_sender: PreconfirmationSender,
     ) -> ExecutorResult<Self> {
         Ok(Self {
             relayer,
             consensus_params,
             options,
+            new_tx_waiter,
+            preconfirmation_sender,
         })
     }
 }
@@ -424,9 +449,11 @@ impl<R> BlockExecutor<R> {
 //     fn send(&mut self, tx: TxId) -> ExecutorResult<()>;
 // }
 
-impl<R> BlockExecutor<R>
+impl<R, N, P> BlockExecutor<R, N, P>
 where
     R: RelayerPort,
+    N: NewTxWaiter,
+    // TODO: P: PreconfirmationSender,
 {
     #[tracing::instrument(skip_all)]
     /// Produce the fuel block with specified components
@@ -434,8 +461,6 @@ where
         mut self,
         components: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
-        new_tx_waiter: impl NewTxWaiter,
-        //_preconfirmation_sender: impl PreconfirmationSender,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
@@ -462,7 +487,7 @@ where
                 &mut data,
                 &mut memory,
             )?;
-            match new_tx_waiter.wait_for_new_transactions().await {
+            match self.new_tx_waiter.wait_for_new_transactions().await {
                 WaitNewTransactionsResult::Timeout => break,
                 WaitNewTransactionsResult::NewTransaction => {
                     continue;
@@ -666,9 +691,32 @@ where
                     *coinbase_contract_id,
                     memory,
                 ) {
-                    Ok(_) => {}
+                    Ok(_) => {
+                        // SAFETY: Transaction succeed so we know that `tx_status` has been populated
+                        let _latest_executed_tx = data.tx_status.last().unwrap();
+                        // TODO:
+                        // let preconfirmation_status = match latest_executed_tx.result {
+                        //     TransactionExecutionResult::Success { receipts, .. } => {
+                        //         PreconfirmationStatus::SuccessByBlockProducer {
+                        //             receipts,
+                        //             ..
+                        //         }
+                        //     }
+                        //     TransactionExecutionResult::Failed { receipts } => {
+                        //         PreconfirmationStatus::FailedByBlockProducer {
+                        //             receipts,
+                        //             ..
+                        //         }
+                        //     }
+                        // }
+                        // self.preconfirmation_sender.send(latest_executed_tx.id)?;
+                    }
                     Err(err) => {
                         data.skipped_transactions.push((tx_id, err));
+                        // TODO:
+                        // self.preconfirmation_sender.send(PreconfimationStatus::SkippedByBlockProducer {
+                        //     ..
+                        // })
                     }
                 }
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);

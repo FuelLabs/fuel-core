@@ -105,7 +105,7 @@ fn execute_dry_run(
     block: Components<WasmTxSource>,
 ) -> ReturnType {
     let result = instance
-        .produce_without_commit(block, true, TimeoutOnlyTxWaiter)
+        .produce_without_commit(block, true, TimeoutOnlyTxWaiter, ())
         .now_or_never()
         .unwrap();
     ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
@@ -116,7 +116,7 @@ fn execute_production(
     block: Components<WasmTxSource>,
 ) -> ReturnType {
     let result = instance
-        .produce_without_commit(block, false, TimeoutOnlyTxWaiter)
+        .produce_without_commit(block, false, TimeoutOnlyTxWaiter, ())
         .now_or_never()
         .unwrap();
     ReturnType::ExecutionV1(convert_to_v1_execution_result(result))

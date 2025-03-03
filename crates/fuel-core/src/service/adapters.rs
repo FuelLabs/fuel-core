@@ -32,6 +32,7 @@ use fuel_core_types::{
         block_importer::SharedImportResult,
         block_producer::Components,
         executor::{
+            Error as ExecutorError,
             Result as ExecutorResult,
             TimeoutOnlyTxWaiter,
             UncommittedResult,
@@ -357,9 +358,10 @@ impl ExecutorAdapter {
             .produce_without_commit_with_source(new_components, TimeoutOnlyTxWaiter)
             .now_or_never()
             .ok_or_else(|| {
-                anyhow::anyhow!(
+                ExecutorError::Other(
                     "Impossible to resolve \
                     `produce_without_commit_with_source` future immediately"
+                        .to_string(),
                 )
             })?
     }

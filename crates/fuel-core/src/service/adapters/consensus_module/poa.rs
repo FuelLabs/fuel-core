@@ -92,6 +92,7 @@ impl TransactionPool for TxPoolAdapter {
     }
 }
 
+#[async_trait::async_trait]
 impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
     async fn produce_and_execute_block(
         &self,
