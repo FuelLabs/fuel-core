@@ -125,6 +125,7 @@ pub enum TransactionStatus {
         reason: String,
     },
     PreconfirmationSqueezedOut {
+        transaction_id: TxId,
         reason: String,
     },
     Failure {
@@ -214,7 +215,10 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 TransactionStatus::SqueezedOut { reason: s.reason }
             }
             SchemaTxStatus::PreconfirmationSqueezedOutStatus(s) => {
-                TransactionStatus::PreconfirmationSqueezedOut { reason: s.reason }
+                TransactionStatus::PreconfirmationSqueezedOut {
+                    reason: s.reason,
+                    transaction_id: s.transaction_id.into(),
+                }
             }
             SchemaTxStatus::Unknown => {
                 return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
@@ -240,6 +244,7 @@ pub enum StatusWithTransaction {
     PreconfirmationSuccess {
         tx_pointer: TxPointer,
         transaction_id: TxId,
+        transaction: Option<Transaction>,
         receipts: Option<Vec<Receipt>>,
     },
     SqueezedOut {
@@ -261,6 +266,7 @@ pub enum StatusWithTransaction {
     PreconfirmationFailure {
         tx_pointer: TxPointer,
         transaction_id: TxId,
+        transaction: Option<Transaction>,
         receipts: Option<Vec<Receipt>>,
         reason: String,
     },
@@ -292,6 +298,7 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                 StatusWithTransaction::PreconfirmationSuccess {
                     tx_pointer: s.tx_pointer.into(),
                     transaction_id: s.transaction_id.into(),
+                    transaction: s.transaction.map(TryInto::try_into).transpose()?,
                     receipts: if let Some(receipts) = s.receipts {
                         Some(
                             receipts
@@ -324,6 +331,7 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                 StatusWithTransaction::PreconfirmationFailure {
                     tx_pointer: s.tx_pointer.into(),
                     transaction_id: s.transaction_id.into(),
+                    transaction: s.transaction.map(TryInto::try_into).transpose()?,
                     receipts: if let Some(receipts) = s.receipts {
                         Some(
                             receipts

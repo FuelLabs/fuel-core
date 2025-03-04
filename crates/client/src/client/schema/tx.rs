@@ -208,11 +208,11 @@ pub enum TransactionStatus {
 pub enum StatusWithTransaction {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatusWithTransaction),
-    PreconfirmationSuccessStatus(PreconfirmationSuccessStatus),
+    PreconfirmationSuccessStatus(PreconfirmationSuccessStatusWithTransaction),
     SqueezedOutStatus(SqueezedOutStatus),
     PreconfirmationSqueezedOutStatus(PreconfirmationSqueezedOutStatus),
     FailureStatus(FailureStatusWithTransaction),
-    PreconfirmationFailureStatus(PreconfirmationFailureStatus),
+    PreconfirmationFailureStatus(PreconfirmationFailureStatusWithTransaction),
     #[cynic(fallback)]
     Unknown,
 }
@@ -255,6 +255,18 @@ pub struct PreconfirmationSuccessStatus {
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "PreconfirmationSuccessStatus"
+)]
+pub struct PreconfirmationSuccessStatusWithTransaction {
+    pub tx_pointer: TxPointer,
+    pub transaction_id: TransactionId,
+    pub transaction: Option<OpaqueTransaction>,
+    pub receipts: Option<Vec<Receipt>>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub block_height: U32,
@@ -289,6 +301,19 @@ pub struct PreconfirmationFailureStatus {
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "PreconfirmationFailureStatus"
+)]
+pub struct PreconfirmationFailureStatusWithTransaction {
+    pub tx_pointer: TxPointer,
+    pub transaction_id: TransactionId,
+    pub transaction: Option<OpaqueTransaction>,
+    pub receipts: Option<Vec<Receipt>>,
+    pub reason: String,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SqueezedOutStatus {
     pub reason: String,
@@ -297,6 +322,7 @@ pub struct SqueezedOutStatus {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct PreconfirmationSqueezedOutStatus {
+    pub transaction_id: TransactionId,
     pub reason: String,
 }
 

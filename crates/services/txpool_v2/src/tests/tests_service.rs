@@ -469,14 +469,10 @@ async fn simple_insert_removal_subscription() {
     service.start_and_await().await.unwrap();
 
     let mut new_tx_notification = service.shared.new_tx_notification_subscribe();
-    let mut tx1_subscribe_updates = service
-        .shared
-        .tx_update_subscribe(tx1.cached_id().unwrap())
-        .unwrap();
-    let mut tx2_subscribe_updates = service
-        .shared
-        .tx_update_subscribe(tx2.cached_id().unwrap())
-        .unwrap();
+    let tx1_id = tx1.cached_id().unwrap();
+    let mut tx1_subscribe_updates = service.shared.tx_update_subscribe(tx1_id).unwrap();
+    let tx2_id = tx2.cached_id().unwrap();
+    let mut tx2_subscribe_updates = service.shared.tx_update_subscribe(tx2_id).unwrap();
 
     service
         .shared
@@ -518,7 +514,9 @@ async fn simple_insert_removal_subscription() {
     assert_eq!(
         update,
         TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            reason: "Transaction is removed: Transaction expired because it exceeded the configured time to live `tx-pool-ttl`."
+            tx_id: tx1_id,
+            reason: "Transaction is removed: Transaction expired \
+                    because it exceeded the configured time to live `tx-pool-ttl`."
                 .to_string()
         }),
         "Second message in tx1 stream should be squeezed out"
@@ -528,7 +526,9 @@ async fn simple_insert_removal_subscription() {
     assert_eq!(
         update,
         TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            reason: "Transaction is removed: Transaction expired because it exceeded the configured time to live `tx-pool-ttl`."
+            tx_id: tx2_id,
+            reason: "Transaction is removed: Transaction expired \
+                    because it exceeded the configured time to live `tx-pool-ttl`."
                 .to_string()
         }),
         "Second message in tx2 stream should be squeezed out"

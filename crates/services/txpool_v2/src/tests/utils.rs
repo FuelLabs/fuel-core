@@ -70,9 +70,11 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
             reason: "failure during block production".to_string(),
         }),
         Just(TransactionStatus::SqueezedOut {
+            tx_id: Default::default(),
             reason: Default::default(),
         }),
         Just(TransactionStatus::PreconfirmationSqueezedOut {
+            tx_id: Default::default(),
             reason: "squeezed out".to_string(),
         }),
     ]

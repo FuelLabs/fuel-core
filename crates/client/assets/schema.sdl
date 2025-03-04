@@ -874,6 +874,7 @@ type PreconfirmationFailureStatus {
 }
 
 type PreconfirmationSqueezedOutStatus {
+	transactionId: TransactionId!
 	reason: String!
 }
 
@@ -1179,6 +1180,7 @@ input SpendQueryElementInput {
 }
 
 type SqueezedOutStatus {
+	transactionId: TransactionId!
 	reason: String!
 }
 

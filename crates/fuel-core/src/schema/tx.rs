@@ -46,6 +46,7 @@ use async_graphql::{
 use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,
+    IsNotFound,
     Result as StorageResult,
 };
 use fuel_core_txpool::TxStatusMessage;
@@ -515,6 +516,32 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
                 .map_err(|e| anyhow::anyhow!(e))?
                 .map(|time| txpool::TransactionStatus::Submitted { timestamp: time })),
             Err(err) => Err(err),
+        }
+    }
+}
+
+pub trait ContextExt {
+    fn try_find_tx(
+        &self,
+        id: Bytes32,
+    ) -> impl std::future::Future<Output = StorageResult<Option<FuelTx>>> + Send;
+}
+
+impl<'a> ContextExt for Context<'a> {
+    async fn try_find_tx(&self, id: Bytes32) -> StorageResult<Option<FuelTx>> {
+        let query = self.read_view()?;
+        let txpool = self.data_unchecked::<TxPool>();
+
+        if let Some(tx) = txpool.transaction(id).await? {
+            Ok(Some(tx))
+        } else {
+            let result = query.transaction(&id);
+
+            if result.is_not_found() {
+                Ok(None)
+            } else {
+                result.map(Some)
+            }
         }
     }
 }

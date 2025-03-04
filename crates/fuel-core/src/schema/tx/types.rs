@@ -2,6 +2,7 @@ use super::{
     input::Input,
     output::Output,
     receipt::Receipt,
+    ContextExt,
 };
 use crate::{
     fuel_core_graphql_api::{
@@ -237,17 +238,18 @@ impl PreconfirmationSuccessStatus {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let tx_pool = ctx.data_unchecked::<TxPool>();
-        Ok(tx_pool
-            .transaction(self.tx_id)
+        Ok(ctx
+            .try_find_tx(self.tx_id)
             .await?
             .map(|tx| Transaction::from_tx(self.tx_id, tx)))
     }
 
-    async fn receipts(&self) -> Option<async_graphql::Result<Vec<Receipt>>> {
-        self.receipts
+    async fn receipts(&self) -> async_graphql::Result<Option<Vec<Receipt>>> {
+        let receipts = self
+            .receipts
             .as_ref()
-            .map(|receipts| Ok(receipts.iter().map(Into::into).collect()))
+            .map(|receipts| receipts.iter().map(Into::into).collect());
+        Ok(receipts)
     }
 }
 
@@ -338,39 +340,52 @@ impl PreconfirmationFailureStatus {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let tx_pool = ctx.data_unchecked::<TxPool>();
-        Ok(tx_pool
-            .transaction(self.tx_id)
+        Ok(ctx
+            .try_find_tx(self.tx_id)
             .await?
             .map(|tx| Transaction::from_tx(self.tx_id, tx)))
     }
 
-    async fn receipts(&self) -> Option<async_graphql::Result<Vec<Receipt>>> {
-        self.receipts
+    async fn receipts(&self) -> async_graphql::Result<Option<Vec<Receipt>>> {
+        let receipts = self
+            .receipts
             .as_ref()
-            .map(|receipts| Ok(receipts.iter().map(Into::into).collect()))
+            .map(|receipts| receipts.iter().map(Into::into).collect());
+        Ok(receipts)
     }
 }
 
 #[derive(Debug)]
 pub struct SqueezedOutStatus {
+    pub tx_id: TxId,
     pub reason: String,
 }
 
 #[Object]
 impl SqueezedOutStatus {
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
     async fn reason(&self) -> String {
         self.reason.clone()
     }
 }
 
 #[derive(Debug)]
-pub struct PreconfirmationSqueezedOutStatus(pub String);
+pub struct PreconfirmationSqueezedOutStatus {
+    pub tx_id: TxId,
+    pub reason: String,
+}
 
 #[Object]
 impl PreconfirmationSqueezedOutStatus {
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
     async fn reason(&self) -> String {
-        self.0.clone()
+        self.reason.clone()
     }
 }
 
@@ -396,8 +411,8 @@ impl TransactionStatus {
                 total_gas,
                 total_fee,
             }),
-            TxStatus::SqueezedOut { reason } => {
-                TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
+            TxStatus::SqueezedOut { reason, tx_id } => {
+                TransactionStatus::SqueezedOut(SqueezedOutStatus { reason, tx_id })
             }
             TxStatus::Failure {
                 block_height,
@@ -427,9 +442,9 @@ impl TransactionStatus {
                     receipts,
                 })
             }
-            TxStatus::PreconfirmationSqueezedOut { reason } => {
+            TxStatus::PreconfirmationSqueezedOut { reason, tx_id } => {
                 TransactionStatus::PreconfirmationSqueezedOut(
-                    PreconfirmationSqueezedOutStatus(reason),
+                    PreconfirmationSqueezedOutStatus { reason, tx_id },
                 )
             }
             TxStatus::PreconfirmationFailure {
@@ -471,8 +486,8 @@ impl From<TransactionStatus> for TxStatus {
                 total_gas,
                 total_fee,
             },
-            TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
-                TxStatus::SqueezedOut { reason }
+            TransactionStatus::SqueezedOut(SqueezedOutStatus { reason, tx_id }) => {
+                TxStatus::SqueezedOut { reason, tx_id }
             }
             TransactionStatus::Failure(FailureStatus {
                 block_height,
@@ -501,8 +516,8 @@ impl From<TransactionStatus> for TxStatus {
                 receipts,
             },
             TransactionStatus::PreconfirmationSqueezedOut(
-                PreconfirmationSqueezedOutStatus(reason),
-            ) => TxStatus::PreconfirmationSqueezedOut { reason },
+                PreconfirmationSqueezedOutStatus { tx_id, reason },
+            ) => TxStatus::PreconfirmationSqueezedOut { tx_id, reason },
             TransactionStatus::PreconfirmationFailure(PreconfirmationFailureStatus {
                 tx_pointer,
                 tx_id,

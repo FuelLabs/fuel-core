@@ -399,8 +399,13 @@ impl From<TransactionExecutionStatus> for TransactionStatus {
                 total_gas,
                 total_fee,
             },
+            // TODO: Removed this variant as part of the
+            //  https://github.com/FuelLabs/fuel-core/issues/2794
             TransactionExecutionStatus::SqueezedOut { reason } => {
-                TransactionStatus::SqueezedOut { reason }
+                TransactionStatus::SqueezedOut {
+                    reason,
+                    tx_id: Default::default(),
+                }
             }
             TransactionExecutionStatus::Failed {
                 block_height,
@@ -457,11 +462,15 @@ pub enum TransactionStatus {
     },
     /// Transaction was squeezed out of the TxPool
     SqueezedOut {
+        /// Transaction ID
+        tx_id: TxId,
         /// The reason why the transaction was squeezed out
         reason: String,
     },
     /// Transaction was squeezed out
     PreconfirmationSqueezedOut {
+        /// Transaction ID
+        tx_id: TxId,
         /// The reason why the transaction was squeezed out
         reason: String,
     },

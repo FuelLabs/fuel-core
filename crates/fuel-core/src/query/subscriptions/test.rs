@@ -94,12 +94,14 @@ fn failure_during_block_production() -> TransactionStatus {
 
 fn squeezed() -> TransactionStatus {
     TransactionStatus::SqueezedOut {
+        tx_id: Bytes32::zeroed(),
         reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }
 
 fn squeezed_during_block_production() -> TransactionStatus {
     TransactionStatus::PreconfirmationSqueezedOut {
+        tx_id: Bytes32::zeroed(),
         reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }

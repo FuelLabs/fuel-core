@@ -84,6 +84,7 @@ impl TxStatusChange {
             id,
             TxStatusMessage::Status(TransactionStatus::SqueezedOut {
                 reason: reason.to_string(),
+                tx_id: id,
             }),
         ));
     }
