@@ -3,7 +3,7 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
     fuel_types::Bytes32,
-    services::txpool::TransactionStatus as TxPoolTxStatus,
+    services::txpool::TransactionStatus,
 };
 use futures::{
     stream::BoxStream,
@@ -17,7 +17,10 @@ mod test;
 #[cfg_attr(test, mockall::automock)]
 pub(crate) trait TxnStatusChangeState {
     /// Return the transaction status from the tx pool and database.
-    async fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>>;
+    async fn get_tx_status(
+        &self,
+        id: Bytes32,
+    ) -> StorageResult<Option<TransactionStatus>>;
 }
 
 #[tracing::instrument(skip(state, stream), fields(transaction_id = %transaction_id))]
@@ -31,7 +34,7 @@ where
 {
     // Check the database first to see if the transaction already
     // has a status.
-    let check_db_first = state
+    let maybe_db_status = state
         .get_tx_status(transaction_id)
         .await
         .transpose()
@@ -43,7 +46,7 @@ where
 
     // Chain the initial database check with the stream.
     // Note the option will make an empty stream if it is None.
-    futures::stream::iter(check_db_first)
+    futures::stream::iter(maybe_db_status)
         .chain(stream)
         // Keep taking the stream until the oneshot channel is closed.
         .take_until(closed)
@@ -52,7 +55,7 @@ where
             // `Submitted`.
             if !matches!(
                 status,
-                TxStatusMessage::Status(TxPoolTxStatus::Submitted { .. })
+                TxStatusMessage::Status(TransactionStatus::Submitted { .. })
             ) {
                 if let Some(close) = close.take() {
                     let _ = close.send(());

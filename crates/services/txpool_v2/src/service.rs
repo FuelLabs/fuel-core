@@ -157,7 +157,7 @@ impl TryFrom<TxInfo> for TransactionStatus {
             .as_secs() as i64;
 
         Ok(TransactionStatus::Submitted {
-            time: Tai64::from_unix(unit_time),
+            timestamp: Tai64::from_unix(unit_time),
         })
     }
 }

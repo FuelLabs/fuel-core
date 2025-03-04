@@ -507,13 +507,13 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
         id: Bytes32,
     ) -> StorageResult<Option<txpool::TransactionStatus>> {
         match self.query.tx_status(&id) {
-            Ok(status) => Ok(Some(status)),
+            Ok(status) => Ok(Some(status.into())),
             Err(StorageError::NotFound(_, _)) => Ok(self
                 .txpool
                 .submission_time(id)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?
-                .map(|time| txpool::TransactionStatus::Submitted { time })),
+                .map(|time| txpool::TransactionStatus::Submitted { timestamp: time })),
             Err(err) => Err(err),
         }
     }
