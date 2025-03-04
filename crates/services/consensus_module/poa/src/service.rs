@@ -243,19 +243,6 @@ where
     }
 }
 
-#[allow(dead_code)]
-pub struct NewTxWaiterImpl {
-    receiver: tokio::sync::watch::Receiver<()>,
-    timeout: Instant,
-}
-
-#[allow(dead_code)]
-impl NewTxWaiterImpl {
-    fn new(receiver: tokio::sync::watch::Receiver<()>, timeout: Instant) -> Self {
-        Self { receiver, timeout }
-    }
-}
-
 impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,
