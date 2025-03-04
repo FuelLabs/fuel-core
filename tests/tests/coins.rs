@@ -162,7 +162,7 @@ mod coin {
             .await
             .unwrap();
         assert_eq!(coins_per_asset.len(), 2);
-        assert!(coins_per_asset[0].len() >= 1);
+        assert!(coins_per_asset[0].is_empty());
         assert!(coins_per_asset[0].amount() >= 1);
         assert_eq!(coins_per_asset[1].len(), 1);
     }
@@ -601,7 +601,7 @@ mod all_coins {
             .await
             .unwrap();
         assert_eq!(coins_per_asset.len(), 2);
-        assert!(coins_per_asset[0].len() >= 1);
+        assert!(coins_per_asset[0].is_empty());
         assert!(coins_per_asset[0].amount() >= 1);
         assert_eq!(coins_per_asset[1].len(), 1);
     }
