@@ -237,9 +237,11 @@ impl PreconfirmationSuccessStatus {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let query = ctx.read_view()?;
-        let transaction = query.transaction(&self.tx_id)?;
-        Ok(Some(Transaction::from_tx(self.tx_id, transaction)))
+        let tx_pool = ctx.data_unchecked::<TxPool>();
+        Ok(tx_pool
+            .transaction(self.tx_id)
+            .await?
+            .map(|tx| Transaction::from_tx(self.tx_id, tx)))
     }
 
     async fn receipts(&self) -> Option<async_graphql::Result<Vec<Receipt>>> {
@@ -336,9 +338,11 @@ impl PreconfirmationFailureStatus {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let query = ctx.read_view()?;
-        let transaction = query.transaction(&self.tx_id)?;
-        Ok(Some(Transaction::from_tx(self.tx_id, transaction)))
+        let tx_pool = ctx.data_unchecked::<TxPool>();
+        Ok(tx_pool
+            .transaction(self.tx_id)
+            .await?
+            .map(|tx| Transaction::from_tx(self.tx_id, tx)))
     }
 
     async fn receipts(&self) -> Option<async_graphql::Result<Vec<Receipt>>> {
