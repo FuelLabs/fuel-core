@@ -626,12 +626,19 @@ where
             script.set_max_fee_limit(0);
         }
 
-        let (mut script, status, gas_used_by_tx) = self
+        let (mut script, status) = self
             .populate_missing_contract_inputs(script, has_spendable_input, max_tx_gas)
             .await?;
 
-        let new_script_limit = status.result.total_gas().saturating_sub(gas_used_by_tx);
-        *script.script_gas_limit_mut() = new_script_limit;
+        let mut total_gas_used = 0u64;
+
+        for receipt in status.result.receipts() {
+            if let Receipt::ScriptResult { gas_used, .. } = receipt {
+                total_gas_used = total_gas_used.saturating_add(*gas_used);
+            }
+        }
+
+        *script.script_gas_limit_mut() = total_gas_used;
 
         let Some(script_ref) = self.tx.as_script_mut() else {
             unreachable!("The transaction is a script, checked above; qed");
@@ -646,9 +653,8 @@ where
         mut script: Script,
         has_spendable_input: bool,
         max_tx_gas: u64,
-    ) -> Result<(Script, TransactionExecutionStatus, u64), anyhow::Error> {
+    ) -> Result<(Script, TransactionExecutionStatus), anyhow::Error> {
         let mut status: TransactionExecutionStatus;
-        let mut gas_used_by_tx: u64;
 
         let gas_costs = self.arguments.consensus_parameters.gas_costs();
         let fee_params = self.arguments.consensus_parameters.fee_params();
@@ -661,7 +667,7 @@ where
             // We want to calculate `max_gas` for the script, but without script limit
             *script.script_gas_limit_mut() = 0;
 
-            gas_used_by_tx = script.max_gas(gas_costs, fee_params);
+            let gas_used_by_tx = script.max_gas(gas_costs, fee_params);
 
             let max_gas_limit = max_tx_gas.saturating_sub(gas_used_by_tx);
 
@@ -743,7 +749,7 @@ where
             }
         }
 
-        Ok((script, status, gas_used_by_tx))
+        Ok((script, status))
     }
 
     async fn cover_fee(mut self) -> anyhow::Result<Self> {

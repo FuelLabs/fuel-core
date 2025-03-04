@@ -3,6 +3,7 @@ use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
     fuel_asm::op,
     fuel_tx::TransactionBuilder,
+    services::executor::TransactionExecutionResult,
 };
 use test_helpers::{
     assemble_tx::AssembleAndRunTx,
@@ -22,10 +23,16 @@ async fn run_transaction() {
         .finalize_as_transaction();
 
     // When
-    let result = client
+    let tx = client
         .assemble_transaction(&tx, default_signing_wallet(), vec![])
-        .await;
+        .await
+        .unwrap();
+    let status = client.dry_run(&vec![tx]).await.unwrap();
 
     // Then
-    let _ = result.expect("Failed to assemble transaction");
+    let status = status.into_iter().next().unwrap();
+    assert!(matches!(
+        status.result,
+        TransactionExecutionResult::Success { .. }
+    ));
 }
