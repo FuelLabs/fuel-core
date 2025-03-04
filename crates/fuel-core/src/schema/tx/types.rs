@@ -1025,11 +1025,11 @@ impl StorageReadReplayEvent {
     }
 }
 
-#[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
+#[tracing::instrument(level = "debug", skip(query, tx_status_manager), ret, err)]
 pub(crate) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
     query: &ReadView,
-    txpool: &TxPool,
+    tx_status_manager: &TxStatusManager,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     match query
         .tx_status(&id)
@@ -1040,10 +1040,7 @@ pub(crate) async fn get_tx_status(
             Ok(Some(status))
         }
         None => {
-            let submitted_time = txpool
-                .submission_time(id) // TODO[RC]: Use tx status manager
-                .await
-                .map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
+            let submitted_time = tx_status_manager.submission_time(id);
             match submitted_time {
                 Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
                     SubmittedStatus(submitted_time),
@@ -1060,7 +1057,6 @@ pub(crate) async fn get_tx_status_from_manager(
     query: &ReadView,
     tx_status_manager: &TxStatusManager,
 ) -> Result<Option<TransactionStatus>, StorageError> {
-    // TODO[RC]: Tries to read from storage first, then from tx status manager
     match query
         .tx_status(&id)
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
@@ -1071,25 +1067,13 @@ pub(crate) async fn get_tx_status_from_manager(
             Ok(Some(status))
         }
         None => {
-            let x = tx_status_manager.status(&id);
-            match x {
-                Some(status) => {
-                    dbg!("[RC]: got from manager");
-                    let status = TransactionStatus::new(id, status.clone());
-                    Ok(Some(status))
-                }
-                None => Ok(None),
+            let submitted_time = tx_status_manager.submission_time(id);
+            match submitted_time {
+                Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
+                    SubmittedStatus(submitted_time),
+                ))),
+                _ => Ok(None),
             }
-            // let submitted_time = txpool
-            // .submission_time(id)
-            // .await
-            // .map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
-            // match submitted_time {
-            // Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
-            // SubmittedStatus(submitted_time),
-            // ))),
-            // _ => Ok(None),
-            // }
         }
     }
 }

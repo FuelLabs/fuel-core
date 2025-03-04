@@ -238,8 +238,6 @@ pub trait DatabaseChain {
 pub trait TxPoolPort: Send + Sync {
     async fn transaction(&self, id: TxId) -> anyhow::Result<Option<Transaction>>;
 
-    async fn submission_time(&self, id: TxId) -> anyhow::Result<Option<Tai64>>;
-
     async fn insert(&self, txs: Transaction) -> anyhow::Result<()>;
 
     fn latest_pool_stats(&self) -> TxPoolStats;
@@ -247,6 +245,7 @@ pub trait TxPoolPort: Send + Sync {
 
 pub trait TxStatusManagerPort: Send + Sync {
     fn status(&self, tx_id: &TxId) -> Option<TransactionStatus>;
+    fn submission_time(&self, id: TxId) -> Option<Tai64>;
     fn tx_update_subscribe(
         &self,
         tx_id: TxId,

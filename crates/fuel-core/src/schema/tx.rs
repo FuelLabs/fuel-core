@@ -428,9 +428,10 @@ impl TxStatusSubscription {
         let rx = tx_status_manager.tx_update_subscribe(id.into())?;
         let query = ctx.read_view()?;
 
-        let txpool = ctx.data_unchecked::<TxPool>();
-
-        let status_change_state = StatusChangeState { txpool, query };
+        let status_change_state = StatusChangeState {
+            tx_status_manager,
+            query,
+        };
         Ok(
             transaction_status_change(status_change_state, rx, id.into())
                 .await
@@ -503,7 +504,7 @@ async fn submit_and_await_status<'a>(
 
 struct StatusChangeState<'a> {
     query: Cow<'a, ReadView>,
-    txpool: &'a TxPool,
+    tx_status_manager: &'a TxStatusManager,
 }
 
 impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
@@ -514,10 +515,8 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
         match self.query.tx_status(&id) {
             Ok(status) => Ok(Some(status)),
             Err(StorageError::NotFound(_, _)) => Ok(self
-                .txpool
+                .tx_status_manager
                 .submission_time(id)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?
                 .map(|time| txpool::TransactionStatus::Submitted { time })),
             Err(err) => Err(err),
         }

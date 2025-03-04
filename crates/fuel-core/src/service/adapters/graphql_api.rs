@@ -81,6 +81,14 @@ impl TxStatusManagerPort for TxStatusManagerAdapter {
     ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
         self.manager.tx_update_subscribe(tx_id)
     }
+
+    fn submission_time(&self, id: TxId) -> Option<Tai64> {
+        if let Some(TransactionStatus::Submitted { time, .. }) = self.status(&id) {
+            Some(time)
+        } else {
+            None
+        }
+    }
 }
 
 #[async_trait]
@@ -92,22 +100,6 @@ impl TxPoolPort for TxPoolAdapter {
             .await
             .map_err(|e| anyhow::anyhow!(e))?
             .map(|info| info.tx().clone().deref().into()))
-    }
-
-    async fn submission_time(&self, id: TxId) -> anyhow::Result<Option<Tai64>> {
-        Ok(self
-            .service
-            .find_one(id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?
-            .map(|info| {
-                Tai64::from_unix(
-                    info.creation_instant()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .expect("Time can't be lower than 0")
-                        .as_secs() as i64,
-                )
-            }))
     }
 
     async fn insert(&self, tx: Transaction) -> anyhow::Result<()> {
