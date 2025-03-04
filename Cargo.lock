@@ -3694,6 +3694,7 @@ dependencies = [
  "axum 0.5.17",
  "clap",
  "derive_more 0.99.19",
+ "fuel-core",
  "fuel-core-database",
  "fuel-core-global-merkle-root-api",
  "fuel-core-global-merkle-root-service",
