@@ -102,4 +102,28 @@ mod tests {
         tokio::time::advance(advance_time).await;
         tokio_test::assert_ready!(fut.poll()).expect("should trigger");
     }
+
+    #[tokio::test]
+    async fn next_rotation__returns_expected_expiration_date() {
+        tokio::time::pause();
+        // given
+        let rotation_interval = 10;
+        let rotation_interval_duration = Duration::from_secs(rotation_interval);
+
+        let now = Tai64::UNIX_EPOCH;
+        let time = FakeTime::new(now);
+        let expiration = Duration::from_secs(rotation_interval * 2);
+        let mut trigger =
+            TimeBasedTrigger::new(time, rotation_interval_duration, expiration);
+
+        // when
+        let fut = tokio_test::task::spawn(trigger.next_rotation());
+
+        // then
+        let advance_time = Duration::from_secs(rotation_interval + 1);
+        tokio::time::advance(advance_time).await;
+        let result = fut.await.expect("should trigger");
+
+        assert_eq!(result, now + expiration.as_secs());
+    }
 }
