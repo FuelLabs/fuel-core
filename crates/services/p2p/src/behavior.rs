@@ -1,12 +1,16 @@
 use crate::{
     codecs::{
         postcard::PostcardCodec,
-        NetworkCodec,
+        request_response::RequestResponseMessageHandler,
+        RequestResponseProtocols,
     },
     config::Config,
+    connection_limits,
+    connection_limits::ConnectionLimits,
     discovery,
     gossipsub::config::build_gossipsub_behaviour,
     heartbeat,
+    limited_behaviour::LimitedBehaviour,
     peer_report,
     request_response::messages::{
         RequestMessage,
@@ -16,10 +20,6 @@ use crate::{
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
     allow_block_list,
-    connection_limits::{
-        self,
-        ConnectionLimits,
-    },
     gossipsub::{
         self,
         MessageAcceptance,
@@ -38,10 +38,10 @@ use libp2p::{
     Multiaddr,
     PeerId,
 };
+use std::collections::HashSet;
 
 const MAX_PENDING_INCOMING_CONNECTIONS: u32 = 100;
 const MAX_PENDING_OUTGOING_CONNECTIONS: u32 = 100;
-const MAX_ESTABLISHED_CONNECTIONS: u32 = 1000;
 
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
@@ -51,33 +51,35 @@ pub struct FuelBehaviour {
     /// The Behaviour to manage connections to blocked peers.
     blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
 
-    /// Message propagation for p2p
-    gossipsub: gossipsub::Behaviour,
-
-    /// Handles regular heartbeats from peers
-    heartbeat: heartbeat::Behaviour,
-
-    /// The Behaviour to identify peers.
-    identify: identify::Behaviour,
-
-    /// Identifies and periodically requests `BlockHeight` from connected nodes
-    peer_report: peer_report::Behaviour,
+    /// The Behaviour to manage connection limits.
+    connection_limits: connection_limits::Behaviour,
 
     /// Node discovery
     discovery: discovery::Behaviour,
 
-    /// RequestResponse protocol
-    request_response: request_response::Behaviour<PostcardCodec>,
+    /// Message propagation for p2p
+    gossipsub: LimitedBehaviour<gossipsub::Behaviour>,
 
-    /// The Behaviour to manage connection limits.
-    connection_limits: connection_limits::Behaviour,
+    /// Handles regular heartbeats from peers
+    heartbeat: LimitedBehaviour<heartbeat::Behaviour>,
+
+    /// The Behaviour to identify peers.
+    identify: LimitedBehaviour<identify::Behaviour>,
+
+    /// Identifies and periodically requests `BlockHeight` from connected nodes
+    peer_report: LimitedBehaviour<peer_report::Behaviour>,
+
+    /// RequestResponse protocol
+    request_response: LimitedBehaviour<
+        request_response::Behaviour<RequestResponseMessageHandler<PostcardCodec>>,
+    >,
 }
 
 impl FuelBehaviour {
     pub(crate) fn new(
         p2p_config: &Config,
-        codec: PostcardCodec,
-    ) -> anyhow::Result<Self, anyhow::Error> {
+        request_response_codec: RequestResponseMessageHandler<PostcardCodec>,
+    ) -> anyhow::Result<Self> {
         let local_public_key = p2p_config.keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -106,6 +108,11 @@ impl FuelBehaviour {
         let gossipsub = build_gossipsub_behaviour(p2p_config);
 
         let peer_report = peer_report::Behaviour::new(&p2p_config.reserved_nodes);
+        let reserved_peer_ids: HashSet<_> = peer_report
+            .reserved_nodes_multiaddr()
+            .keys()
+            .cloned()
+            .collect();
 
         let identify = {
             let identify_config = identify::Config::new(
@@ -127,11 +134,19 @@ impl FuelBehaviour {
         let connection_limits = connection_limits::Behaviour::new(
             ConnectionLimits::default()
                 .with_max_pending_incoming(Some(MAX_PENDING_INCOMING_CONNECTIONS))
-                .with_max_pending_outgoing(Some(MAX_PENDING_OUTGOING_CONNECTIONS))
-                .with_max_established(Some(MAX_ESTABLISHED_CONNECTIONS)),
+                .with_max_pending_outgoing(Some(
+                    p2p_config
+                        .max_outgoing_connections
+                        .min(MAX_PENDING_OUTGOING_CONNECTIONS),
+                ))
+                .with_max_established_outgoing(Some(p2p_config.max_outgoing_connections))
+                .with_max_established_per_peer(p2p_config.max_connections_per_peer)
+                .with_max_established(Some(p2p_config.max_discovery_peers_connected)),
+            reserved_peer_ids,
         );
+        let connections = connection_limits.connections();
 
-        let req_res_protocol = codec
+        let req_res_protocol = request_response_codec
             .get_req_res_protocols()
             .map(|protocol| (protocol, ProtocolSupport::Full));
 
@@ -140,12 +155,21 @@ impl FuelBehaviour {
             .with_max_concurrent_streams(p2p_config.max_concurrent_streams);
 
         let request_response = request_response::Behaviour::with_codec(
-            codec.clone(),
+            request_response_codec.clone(),
             req_res_protocol,
             req_res_config,
         );
 
         let discovery = discovery_config.finish()?;
+        let limit = p2p_config.max_functional_peers_connected as usize;
+
+        let gossipsub = LimitedBehaviour::new(limit, connections.clone(), gossipsub);
+        let peer_report = LimitedBehaviour::new(limit, connections.clone(), peer_report);
+        let identify = LimitedBehaviour::new(limit, connections.clone(), identify);
+        let heartbeat = LimitedBehaviour::new(limit, connections.clone(), heartbeat);
+        let request_response =
+            LimitedBehaviour::new(limit, connections.clone(), request_response);
+
         Ok(Self {
             discovery,
             gossipsub,

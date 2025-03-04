@@ -1,6 +1,6 @@
 use crate::{
     graphql_api::{
-        api_service::ConsensusProvider,
+        api_service::ChainInfoProvider,
         query_costs,
         IntoApiResult,
     },
@@ -36,7 +36,7 @@ impl UpgradeQuery {
         version: ConsensusParametersVersion,
     ) -> async_graphql::Result<ConsensusParameters> {
         let params = ctx
-            .data_unchecked::<ConsensusProvider>()
+            .data_unchecked::<ChainInfoProvider>()
             .consensus_params_at_version(&version)?;
 
         Ok(ConsensusParameters(params))

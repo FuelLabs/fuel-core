@@ -29,6 +29,7 @@ fuel-core-storage = { path = "./../crates/storage", features = ["smt"] }
 fuel-core-sync = { path = "./../crates/services/sync", features = [
   "benchmarking",
 ] }
+fuel-core-trace = { path = "./../crates/trace" }
 fuel-core-types = { path = "./../crates/types", features = ["test-helpers"] }
 futures = { workspace = true }
 hex = "0.4.3"
@@ -50,6 +51,7 @@ strum_macros = { workspace = true }
 test-helpers = { path = "../tests/test-helpers" }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
 
 [[bench]]
 harness = false

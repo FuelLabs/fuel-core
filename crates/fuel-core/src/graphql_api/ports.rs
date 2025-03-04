@@ -32,7 +32,10 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        header::ConsensusParametersVersion,
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
         primitives::{
             BlockId,
             DaBlockHeight,
@@ -410,6 +413,7 @@ pub mod worker {
         + StorageMutate<DaCompressionTemporalRegistryTimestamps, Error = StorageError>
         + StorageMutate<DaCompressionTemporalRegistryEvictorCache, Error = StorageError>
         + StorageMutate<AssetsInfo, Error = StorageError>
+        + MaybeTemporalRegistryV2Bounds
     {
         fn record_tx_id_owner(
             &mut self,
@@ -436,6 +440,75 @@ pub mod worker {
         fn commit(self) -> StorageResult<()>;
     }
 
+    #[cfg(feature = "fault-proving")]
+    pub mod v2_off_chain_database_tx {
+        use super::*;
+        use v2::{
+            address::DaCompressionTemporalRegistryAddressV2,
+            asset_id::DaCompressionTemporalRegistryAssetIdV2,
+            contract_id::DaCompressionTemporalRegistryContractIdV2,
+            evictor_cache::DaCompressionTemporalRegistryEvictorCacheV2,
+            predicate_code::DaCompressionTemporalRegistryPredicateCodeV2,
+            registry_index::DaCompressionTemporalRegistryIndexV2,
+            script_code::DaCompressionTemporalRegistryScriptCodeV2,
+            timestamps::DaCompressionTemporalRegistryTimestampsV2,
+        };
+
+        pub trait TemporalRegistryV2Bounds: StorageMutate<DaCompressionTemporalRegistryAddressV2, Error = StorageError>
+            + StorageMutate<DaCompressionTemporalRegistryAssetIdV2, Error = StorageError>
+            + StorageMutate<DaCompressionTemporalRegistryContractIdV2, Error = StorageError>
+            + StorageMutate<DaCompressionTemporalRegistryScriptCodeV2, Error = StorageError>
+            + StorageMutate<
+                DaCompressionTemporalRegistryPredicateCodeV2,
+                Error = StorageError,
+            > + StorageMutate<DaCompressionTemporalRegistryIndexV2, Error = StorageError>
+            + StorageMutate<DaCompressionTemporalRegistryTimestampsV2, Error = StorageError>
+            + StorageMutate<
+                DaCompressionTemporalRegistryEvictorCacheV2,
+                Error = StorageError,
+            >
+        {
+        }
+
+        impl<T> TemporalRegistryV2Bounds for T where
+            T: StorageMutate<
+                    DaCompressionTemporalRegistryAddressV2,
+                    Error = StorageError,
+                > + StorageMutate<
+                    DaCompressionTemporalRegistryAssetIdV2,
+                    Error = StorageError,
+                > + StorageMutate<
+                    DaCompressionTemporalRegistryContractIdV2,
+                    Error = StorageError,
+                > + StorageMutate<
+                    DaCompressionTemporalRegistryScriptCodeV2,
+                    Error = StorageError,
+                > + StorageMutate<
+                    DaCompressionTemporalRegistryPredicateCodeV2,
+                    Error = StorageError,
+                > + StorageMutate<DaCompressionTemporalRegistryIndexV2, Error = StorageError>
+                + StorageMutate<
+                    DaCompressionTemporalRegistryTimestampsV2,
+                    Error = StorageError,
+                > + StorageMutate<
+                    DaCompressionTemporalRegistryEvictorCacheV2,
+                    Error = StorageError,
+                >
+        {
+        }
+    }
+
+    #[cfg(not(feature = "fault-proving"))]
+    pub mod not_fault_proving {
+        pub trait MaybeTemporalRegistryV2Bounds {}
+        impl<T> MaybeTemporalRegistryV2Bounds for T {}
+    }
+
+    #[cfg(not(feature = "fault-proving"))]
+    pub use not_fault_proving::MaybeTemporalRegistryV2Bounds;
+    #[cfg(feature = "fault-proving")]
+    pub use v2_off_chain_database_tx::TemporalRegistryV2Bounds as MaybeTemporalRegistryV2Bounds;
+
     pub trait BlockImporter: Send + Sync {
         /// Returns a stream of imported block.
         fn block_events(&self) -> BoxStream<SharedImportResult>;
@@ -458,12 +531,19 @@ pub mod worker {
     }
 }
 
-pub trait ConsensusProvider: Send + Sync {
-    /// Returns latest consensus parameters.
-    fn latest_consensus_params(&self) -> Arc<ConsensusParameters>;
+pub trait ChainStateProvider: Send + Sync {
+    /// Returns current consensus parameters.
+    fn current_consensus_params(&self) -> Arc<ConsensusParameters>;
 
+    /// Returns current consensus parameters version.
+    fn current_consensus_parameters_version(&self) -> ConsensusParametersVersion;
+
+    /// Returns consensus parameters at a specific version.
     fn consensus_params_at_version(
         &self,
         version: &ConsensusParametersVersion,
     ) -> anyhow::Result<Arc<ConsensusParameters>>;
+
+    /// Returns the current state transition bytecode version.
+    fn current_stf_version(&self) -> StateTransitionBytecodeVersion;
 }

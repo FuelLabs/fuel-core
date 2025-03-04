@@ -311,7 +311,7 @@ impl StorageRead<BlobData> for ReadView {
         key: &BlobId,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<Option<usize>, Self::Error> {
+    ) -> Result<bool, Self::Error> {
         StorageRead::<BlobData>::read(self.on_chain.as_ref(), key, offset, buf)
     }
 

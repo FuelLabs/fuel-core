@@ -12,10 +12,7 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-async-graphql = { version = "7.0.11", features = [
-  "graphiql",
-  "tracing",
-], default-features = false }
+async-graphql = { workspace = true }
 async-graphql-value = "7.0.11"
 async-trait = { workspace = true }
 axum = { workspace = true }
@@ -92,6 +89,8 @@ mockall = { workspace = true }
 proptest = { workspace = true }
 test-case = { workspace = true }
 test-strategy = { workspace = true }
+tokio-test = "0.4.4"
+tracing-subscriber = { workspace = true }
 
 [features]
 default = ["rocksdb"]
@@ -127,5 +126,7 @@ fault-proving = [
   "fuel-core-storage/fault-proving",
   "fuel-core-chain-config/fault-proving",
   "fuel-core-database/fault-proving",
-  "fuel-core-sync/fault-proving",
+  "fuel-core-sync?/fault-proving",
+  "fuel-core-importer/fault-proving",
+  "fuel-core-poa/fault-proving",
 ]

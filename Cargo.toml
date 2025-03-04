@@ -10,11 +10,13 @@ members = [
   "crates/client",
   "crates/compression",
   "crates/database",
-  "crates/fraud_proofs/global_merkle_root/storage",
   "crates/fuel-core",
   "crates/fuel-gas-price-algorithm",
   "crates/keygen",
   "crates/metrics",
+  "crates/proof_system/global_merkle_root/api",
+  "crates/proof_system/global_merkle_root/service",
+  "crates/proof_system/global_merkle_root/storage",
   "crates/services",
   "crates/services/consensus_module",
   "crates/services/consensus_module/bft",
@@ -46,8 +48,8 @@ codegen-units = 1
 lto = "fat"
 # The difference in performance for "fat" and "thin" is small,
 # but "thin" LTO is much faster to compile.
-# If you play with benchamrks or flamegraph, it is better to use "thin"
-# To speedup iterations between compialtion.
+# If you play with benchmarks or flamegraphs, it is better to use "thin"
+# To speedup iterations between compilation.
 #lto = "thin"
 panic = "unwind"
 
@@ -96,16 +98,29 @@ fuel-core-wasm-executor = { version = "0.41.7", path = "./crates/services/upgrad
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 fuel-gas-price-algorithm = { version = "0.41.7", path = "crates/fuel-gas-price-algorithm" }
 
+# Proof system
+fuel-core-global-merkle-root-storage = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/storage" }
+fuel-core-global-merkle-root-service = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/service" }
+
 # Fuel dependencies
-fuel-vm-private = { version = "0.59.2", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.60.0", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"
+async-graphql = { version = "7.0.11", features = [
+  "graphiql",
+  "tracing",
+], default-features = false }
 async-trait = "0.1"
 aws-sdk-kms = "1.37"
 cynic = { version = "3.1.0", features = ["http-reqwest"] }
 clap = "4.4"
-derivative = { version = "2" }
+educe = { version = "0.6", default-features = false, features = [
+  "Eq",
+  "PartialEq",
+  "Hash",
+  "Debug",
+] }
 derive_more = { version = "0.99" }
 enum_dispatch = "0.3.13"
 enum-iterator = "1.2"

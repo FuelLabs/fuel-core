@@ -1,3 +1,4 @@
+use educe::Educe;
 use fuel_core_storage::MerkleRoot;
 use fuel_core_types::{
     blockchain::header::StateTransitionBytecodeVersion,
@@ -28,8 +29,8 @@ use crate::SnapshotMetadata;
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const BYTECODE_NAME: &str = "state_transition_bytecode.wasm";
 
-#[derive(Clone, derivative::Derivative, Deserialize, Serialize, Eq, PartialEq)]
-#[derivative(Debug)]
+#[derive(Clone, Educe, Deserialize, Serialize, Eq, PartialEq)]
+#[educe(Debug)]
 pub struct ChainConfig {
     pub chain_name: String,
     pub consensus_parameters: ConsensusParameters,
@@ -39,7 +40,7 @@ pub struct ChainConfig {
     /// Note: The state transition bytecode is stored in a separate file
     /// under the `BYTECODE_NAME` name in serialization form.
     #[serde(skip)]
-    #[derivative(Debug(format_with = "fmt_truncated_hex::<16>"))]
+    #[educe(Debug(method(fmt_truncated_hex::<16>)))]
     pub state_transition_bytecode: Vec<u8>,
     pub consensus: ConsensusConfig,
 }

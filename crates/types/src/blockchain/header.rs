@@ -24,6 +24,7 @@ use crate::{
         MessageId,
     },
 };
+use educe::Educe;
 use tai64::Tai64;
 pub use v1::BlockHeaderV1;
 use v1::GeneratedApplicationFieldsV1;
@@ -33,8 +34,8 @@ pub use v2::BlockHeaderV2;
 use v2::GeneratedApplicationFieldsV2;
 
 /// Version-able block header type
-#[derive(Clone, Debug, derivative::Derivative)]
-#[derivative(PartialEq, Eq)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BlockHeader {
     /// V1 BlockHeader
@@ -278,6 +279,19 @@ impl BlockHeader {
             #[cfg(feature = "fault-proving")]
             BlockHeader::V2(header) => {
                 header.set_consensus_parameters_version(version);
+            }
+        }
+    }
+
+    /// Set the stf version
+    pub fn set_stf_version(&mut self, version: StateTransitionBytecodeVersion) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_stf_version(version);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_stf_version(version);
             }
         }
     }

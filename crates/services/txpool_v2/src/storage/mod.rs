@@ -6,7 +6,10 @@ use std::{
 };
 
 use crate::{
-    error::Error,
+    error::{
+        Error,
+        InputValidationErrorType,
+    },
     ports::TxPoolPersistentStorage,
 };
 use fuel_core_types::services::txpool::{
@@ -39,9 +42,6 @@ pub type RemovedTransactions = Vec<StorageData>;
 pub trait CheckedTransaction<StorageIndex> {
     /// Returns the underlying transaction.
     fn tx(&self) -> &ArcPoolTx;
-
-    /// Unwraps the transaction.
-    fn into_tx(self) -> ArcPoolTx;
 
     /// Returns the list of all dependencies of the transaction.
     fn all_dependencies(&self) -> &HashSet<StorageIndex>;
@@ -87,12 +87,13 @@ pub trait Storage {
     fn has_dependencies(&self, index: &Self::StorageIndex) -> bool;
 
     /// Validate inputs of a transaction.
+    /// If error is that some inputs are missing, the function should return the list of missing inputs.
     fn validate_inputs(
         &self,
         transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
         utxo_validation: bool,
-    ) -> Result<(), Error>;
+    ) -> Result<(), InputValidationErrorType>;
 
     /// Remove a transaction along with its dependents subtree.
     fn remove_transaction_and_dependents_subtree(

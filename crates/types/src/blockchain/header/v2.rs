@@ -18,6 +18,8 @@ use crate::{
     fuel_types::ChainId,
 };
 
+use educe::Educe;
+
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
@@ -40,8 +42,8 @@ pub(crate) fn generate_tx_id_commitment(
 /// has been executed.
 /// differences from V1:
 /// - adds the tx_id_commitment field
-#[derive(Clone, Debug, derivative::Derivative)]
-#[derivative(PartialEq, Eq)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct BlockHeaderV2 {
@@ -52,7 +54,7 @@ pub struct BlockHeaderV2 {
     /// The header metadata calculated during creation.
     /// The field is private to enforce the use of the [`PartialBlockHeader::generate`] method.
     #[cfg_attr(feature = "serde", serde(skip))]
-    #[derivative(PartialEq = "ignore")]
+    #[educe(PartialEq(ignore))]
     pub(crate) metadata: Option<BlockHeaderMetadata>,
 }
 
@@ -166,6 +168,14 @@ impl BlockHeaderV2 {
         version: super::ConsensusParametersVersion,
     ) {
         self.application_mut().consensus_parameters_version = version;
+        self.recalculate_metadata();
+    }
+
+    pub(crate) fn set_stf_version(
+        &mut self,
+        version: super::StateTransitionBytecodeVersion,
+    ) {
+        self.application_mut().state_transition_bytecode_version = version;
         self.recalculate_metadata();
     }
 

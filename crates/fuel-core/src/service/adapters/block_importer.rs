@@ -1,5 +1,8 @@
 use crate::{
-    database::Database,
+    database::{
+        commit_changes_with_height_update,
+        Database,
+    },
     service::adapters::{
         BlockImporterAdapter,
         ExecutorAdapter,
@@ -27,7 +30,10 @@ use fuel_core_storage::{
         },
         FuelBlocks,
     },
-    transactional::Changes,
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
     MerkleRoot,
     Result as StorageResult,
     StorageAsRef,
@@ -52,6 +58,7 @@ use fuel_core_types::{
         UncommittedValidationResult,
     },
 };
+use itertools::Itertools;
 use std::sync::Arc;
 
 impl BlockImporterAdapter {
@@ -62,11 +69,7 @@ impl BlockImporterAdapter {
         executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
-        let metrics = config.metrics;
         let importer = Importer::new(chain_id, config, database, executor, verifier);
-        if metrics {
-            importer.init_metrics();
-        }
         Self {
             block_importer: Arc::new(importer),
         }
@@ -103,6 +106,13 @@ impl ImporterDatabase for Database {
             .storage_as_ref::<FuelBlockMerkleMetadata>()
             .get(&DenseMetadataKey::Latest)?
             .map(|cow| *cow.root()))
+    }
+
+    fn commit_changes(&mut self, changes: StorageChanges) -> StorageResult<()> {
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
+                .try_collect()
+        })
     }
 }
 

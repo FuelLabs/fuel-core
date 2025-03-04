@@ -59,8 +59,14 @@ use tokio::sync::broadcast::Receiver;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
-    config::Config,
-    error::Error,
+    config::{
+        BlackList,
+        Config,
+    },
+    error::{
+        Error,
+        InsertionErrorType,
+    },
     new_service,
     pool::{
         Pool,
@@ -86,7 +92,7 @@ use crate::{
 };
 
 use super::mocks::{
-    MockConsensusParametersProvider,
+    MockChainStateInfoProvider,
     MockImporter,
     MockP2P,
     MockTxPoolGasPrice,
@@ -162,7 +168,7 @@ impl TestPoolUniverse {
         &self,
         p2p: Option<MockP2P>,
         importer: Option<MockImporter>,
-    ) -> Service<MockDb> {
+    ) -> Service<MockDb, MockP2P> {
         let gas_price = 0;
         let mut p2p = p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
         // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
@@ -176,9 +182,8 @@ impl TestPoolUniverse {
 
         let importer = importer.unwrap_or_else(|| MockImporter::with_blocks(vec![]));
         let gas_price_provider = MockTxPoolGasPrice::new(gas_price);
-        let mut consensus_parameters_provider =
-            MockConsensusParametersProvider::default();
-        consensus_parameters_provider
+        let mut chain_state_info_provider = MockChainStateInfoProvider::default();
+        chain_state_info_provider
             .expect_latest_consensus_parameters()
             .returning(|| (0, Arc::new(Default::default())));
 
@@ -188,7 +193,7 @@ impl TestPoolUniverse {
             p2p,
             importer,
             MockDBProvider(self.mock_db.clone()),
-            consensus_parameters_provider,
+            chain_state_info_provider,
             Default::default(),
             gas_price_provider,
             MockWasmChecker { result: Ok(()) },
@@ -225,9 +230,9 @@ impl TestPoolUniverse {
         tx: Transaction,
     ) -> Result<(ArcPoolTx, Vec<ArcPoolTx>), Error> {
         if let Some(pool) = &self.pool {
-            let mut mock_consensus_params_provider =
-                MockConsensusParametersProvider::default();
-            mock_consensus_params_provider
+            let mut mock_chain_state_info_provider =
+                MockChainStateInfoProvider::default();
+            mock_chain_state_info_provider
                 .expect_latest_consensus_parameters()
                 .returning(|| (0, Arc::new(ConsensusParameters::standard())));
             let verification = Verification {
@@ -235,18 +240,23 @@ impl TestPoolUniverse {
                     self.mock_db.clone(),
                 )),
                 gas_price_provider: Arc::new(MockTxPoolGasPrice::new(0)),
-                consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
+                chain_state_info_provider: Arc::new(mock_chain_state_info_provider),
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
+                blacklist: BlackList::default(),
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                &pool.clone(),
-                Default::default(),
-                true,
-            )?;
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
             let tx = Arc::new(tx);
-            Ok((tx.clone(), pool.write().insert(tx, &self.mock_db)?))
+            Ok((
+                tx.clone(),
+                pool.write()
+                    .insert(tx, &self.mock_db)
+                    .map_err(|e| match e {
+                        InsertionErrorType::Error(e) => e,
+                        InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
+                    })?,
+            ))
         } else {
             panic!("Pool needs to be built first");
         }
@@ -258,9 +268,8 @@ impl TestPoolUniverse {
         gas_price: GasPrice,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         if let Some(pool) = &self.pool {
-            let mut mock_consensus_params_provider =
-                MockConsensusParametersProvider::default();
-            mock_consensus_params_provider
+            let mut mock_chain_state_info = MockChainStateInfoProvider::default();
+            mock_chain_state_info
                 .expect_latest_consensus_parameters()
                 .returning(|| (0, Arc::new(ConsensusParameters::standard())));
             let verification = Verification {
@@ -268,17 +277,19 @@ impl TestPoolUniverse {
                     self.mock_db.clone(),
                 )),
                 gas_price_provider: Arc::new(MockTxPoolGasPrice::new(gas_price)),
-                consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
+                chain_state_info_provider: Arc::new(mock_chain_state_info),
                 wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
                 memory_pool: MemoryPool::new(),
+                blacklist: BlackList::default(),
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                &pool.clone(),
-                Default::default(),
-                true,
-            )?;
-            pool.write().insert(Arc::new(tx), &self.mock_db)
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
+            pool.write()
+                .insert(Arc::new(tx), &self.mock_db)
+                .map_err(|e| match e {
+                    InsertionErrorType::Error(e) => e,
+                    InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
+                })
         } else {
             panic!("Pool needs to be built first");
         }
@@ -291,9 +302,9 @@ impl TestPoolUniverse {
         wasm_checker: MockWasmChecker,
     ) -> Result<Vec<ArcPoolTx>, Error> {
         if let Some(pool) = &self.pool {
-            let mut mock_consensus_params_provider =
-                MockConsensusParametersProvider::default();
-            mock_consensus_params_provider
+            let mut mock_chain_state_info_provider =
+                MockChainStateInfoProvider::default();
+            mock_chain_state_info_provider
                 .expect_latest_consensus_parameters()
                 .returning(move || (0, Arc::new(consensus_params.clone())));
             let verification = Verification {
@@ -301,17 +312,19 @@ impl TestPoolUniverse {
                     self.mock_db.clone(),
                 )),
                 gas_price_provider: Arc::new(MockTxPoolGasPrice::new(0)),
-                consensus_parameters_provider: Arc::new(mock_consensus_params_provider),
+                chain_state_info_provider: Arc::new(mock_chain_state_info_provider),
                 wasm_checker: Arc::new(wasm_checker),
                 memory_pool: MemoryPool::new(),
+                blacklist: BlackList::default(),
             };
-            let tx = verification.perform_all_verifications(
-                tx,
-                &pool.clone(),
-                Default::default(),
-                true,
-            )?;
-            pool.write().insert(Arc::new(tx), &self.mock_db)
+            let tx =
+                verification.perform_all_verifications(tx, Default::default(), true)?;
+            pool.write()
+                .insert(Arc::new(tx), &self.mock_db)
+                .map_err(|e| match e {
+                    InsertionErrorType::Error(e) => e,
+                    InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
+                })
         } else {
             panic!("Pool needs to be built first");
         }
