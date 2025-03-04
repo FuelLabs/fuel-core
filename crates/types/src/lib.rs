@@ -31,11 +31,11 @@ pub use secrecy;
 pub use tai64;
 
 pub mod blockchain;
+/// A module that provides functionality for working with clamped percentages.
+pub mod clamped_percentage;
 pub mod entities;
 pub mod services;
 pub mod signer;
-/// A module that provides functionality for working with clamped percentages.
-pub mod clamped_percentage;
 
 /// Re-export of some fuel-vm types
 pub mod fuel_vm {

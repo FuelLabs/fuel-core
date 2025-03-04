@@ -265,11 +265,11 @@ pub fn init_sub_services(
         database.on_chain().clone(),
     )?;
     let (gas_price_algo, latest_gas_price) = gas_price_service_v1.shared.clone();
-    let clamped_percentage = ClampedPercentage::new(DEFAULT_GAS_PRICE_CHANGE_PERCENT as u8);
-    let universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
-        latest_gas_price,
-        clamped_percentage,
-    );
+    #[allow(clippy::cast_possible_truncation)]
+    let clamped_percentage =
+        ClampedPercentage::new(DEFAULT_GAS_PRICE_CHANGE_PERCENT as u8);
+    let universal_gas_price_provider =
+        UniversalGasPriceProvider::new_from_inner(latest_gas_price, clamped_percentage);
 
     let producer_gas_price_provider = FuelGasPriceProvider::new(
         gas_price_algo.clone(),

@@ -120,8 +120,8 @@ impl StaticGasPrice {
 mod universal_gas_price_provider_tests {
     #![allow(non_snake_case)]
 
-    use proptest::proptest;
     use fuel_core_types::clamped_percentage::ClampedPercentage;
+    use proptest::proptest;
 
     use super::*;
 
@@ -143,8 +143,9 @@ mod universal_gas_price_provider_tests {
         let mut actual = gas_price;
 
         for _ in 0..block_horizon {
-            let change_amount =
-                actual.saturating_mul(*percentage as u64).saturating_div(100);
+            let change_amount = actual
+                .saturating_mul(*percentage as u64)
+                .saturating_div(100);
             actual = actual.saturating_add(change_amount);
         }
 
@@ -159,6 +160,7 @@ mod universal_gas_price_provider_tests {
             block_horizon in 0..10_000u32,
             percentage: u16,
         ) {
+            #[allow(clippy::cast_possible_truncation)]
             let percentage = ClampedPercentage::new(percentage as u8);
             _worst_case__correctly_calculates_value(
                 gas_price,
@@ -178,6 +180,7 @@ mod universal_gas_price_provider_tests {
             percentage: u16
         ) {
             // Convert u16 to ClampedPercentage
+            #[allow(clippy::cast_possible_truncation)]
             let percentage = ClampedPercentage::new(percentage as u8);
             // given
             let subject = UniversalGasPriceProvider::new(starting_height, gas_price, percentage);
@@ -220,6 +223,7 @@ mod universal_gas_price_provider_tests {
             starting_height: u32,
             percentage: u16,
         ) {
+            #[allow(clippy::cast_possible_truncation)]
             let percentage = ClampedPercentage::new(percentage as u8);
             _next_gas_price__correctly_calculates_value(
                 gas_price,
