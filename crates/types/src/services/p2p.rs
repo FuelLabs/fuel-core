@@ -6,9 +6,16 @@ use serde::{
     Serialize,
 };
 
-use super::txpool::ArcPoolTx;
 #[cfg(feature = "serde")]
 use super::txpool::PoolTransaction;
+use super::{
+    preconfirmation::{
+        Preconfirmation,
+        PreconfirmationStatus,
+        Preconfirmations,
+    },
+    txpool::ArcPoolTx,
+};
 use crate::{
     fuel_crypto::{
         PublicKey,
@@ -101,48 +108,6 @@ pub struct DelegatePreConfirmationKey<P = PublicKey> {
     /// to use to verify the pre-confirmations--serves the second purpose of being a nonce of
     /// each key
     pub expiration: Tai64,
-}
-
-/// A pre-confirmation is a message that is sent by the block producer to give the _final_
-/// status of a transaction
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Preconfirmation {
-    /// The ID of the transaction that is being pre-confirmed
-    pub tx_id: TxId,
-    /// The status of the transaction that is being pre-confirmed
-    pub status: PreconfirmationStatus,
-}
-
-/// Status of a transaction that has been pre-confirmed by block producer
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum PreconfirmationStatus {
-    /// Transaction was squeezed out by the tx pool
-    SqueezedOutByBlockProducer {
-        /// Reason the transaction was squeezed out
-        reason: String,
-    },
-    /// Transaction has been confirmed and will be included in block_height
-    SuccessByBlockProducer {
-        /// The block height at which the transaction will be included
-        block_height: BlockHeight,
-    },
-    /// Transaction will not be included in a block, rejected at `block_height`
-    FailureByBlockProducer {
-        /// The block height at which the transaction will be rejected
-        block_height: BlockHeight,
-    },
-}
-
-/// A collection of pre-confirmations that have been signed by a delegate
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Preconfirmations {
-    /// The expiration time of the key used to sign
-    expiration: Tai64,
-    /// The transactions which have been pre-confirmed
-    preconfirmations: Vec<Preconfirmation>,
 }
 
 /// A signed key delegation

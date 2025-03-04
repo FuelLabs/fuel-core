@@ -24,6 +24,7 @@ use fuel_core_types::{
             Result as ExecutorResult,
             WaitNewTransactionsResult,
         },
+        preconfirmation::PreconfirmationStatus,
         relayer::Event,
     },
 };
@@ -179,4 +180,20 @@ pub trait NewTxWaiterPort: Send {
     fn wait_for_new_transactions(
         &self,
     ) -> impl Future<Output = WaitNewTransactionsResult> + Send;
+}
+
+/// Sending preconfirmation of transactions executed to other services.
+pub trait PreconfirmationSenderPort {
+    /// Try to send a batch of pre-confirmations. Will succeed only if
+    /// it can be directly sent. Otherwise it will return the batch.
+    fn try_send(
+        &self,
+        preconfirmations: Vec<PreconfirmationStatus>,
+    ) -> Vec<PreconfirmationStatus>;
+
+    /// Send a batch of pre-confirmations, awaiting for the send to be successful.
+    fn send(
+        &self,
+        preconfirmations: Vec<PreconfirmationStatus>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }

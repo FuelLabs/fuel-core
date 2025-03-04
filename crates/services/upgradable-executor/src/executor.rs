@@ -11,9 +11,11 @@ use fuel_core_executor::{
         ExecutionOptions,
         OnceTransactionsSource,
         TimeoutOnlyTxWaiter,
+        TransparentPreconfirmationSender,
     },
     ports::{
         NewTxWaiterPort,
+        PreconfirmationSenderPort,
         RelayerPort,
         TransactionsSource,
     },
@@ -332,6 +334,7 @@ where
             options,
             ProduceBlockMode::Produce,
             TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
         )
         .now_or_never()
         .ok_or_else(|| {
@@ -355,6 +358,7 @@ where
             options,
             ProduceBlockMode::DryRunLatest,
             TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
         )
         .now_or_never()
         .ok_or_else(|| {
@@ -374,14 +378,14 @@ where
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
-    pub async fn produce_without_commit_with_source<TxSource, NewTxWaiter>(
+    pub async fn produce_without_commit_with_source<TxSource>(
         &self,
         components: Components<TxSource>,
-        new_tx_waiter: NewTxWaiter,
+        new_tx_waiter: impl NewTxWaiterPort,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
-        NewTxWaiter: NewTxWaiterPort,
     {
         let options = self.config.as_ref().into();
         self.produce_inner(
@@ -389,6 +393,7 @@ where
             options,
             ProduceBlockMode::Produce,
             new_tx_waiter,
+            preconfirmation_sender,
         )
         .await
     }
@@ -438,6 +443,7 @@ where
                     None => ProduceBlockMode::DryRunLatest,
                 },
                 TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
             )
             .now_or_never()
             .ok_or_else(|| {
@@ -588,6 +594,7 @@ where
         options: ExecutionOptions,
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -597,8 +604,14 @@ where
         if block_version == native_executor_version {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => {
-                    self.native_produce_inner(block, options, mode, new_tx_waiter)
-                        .await
+                    self.native_produce_inner(
+                        block,
+                        options,
+                        mode,
+                        new_tx_waiter,
+                        preconfirmation_sender,
+                    )
+                    .await
                 }
                 ExecutionStrategy::Wasm { module } => {
                     let maybe_blocks_module = self.get_module(block_version).ok();
@@ -812,6 +825,7 @@ where
         options: ExecutionOptions,
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -827,12 +841,22 @@ where
         if let Some(previous_block_height) = db_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, mode.is_dry_run(), new_tx_waiter, ())
+                .produce_without_commit(
+                    block,
+                    mode.is_dry_run(),
+                    new_tx_waiter,
+                    preconfirmation_sender,
+                )
                 .await
         } else {
             let database = self.storage_view_provider.latest_view()?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, mode.is_dry_run(), new_tx_waiter, ())
+                .produce_without_commit(
+                    block,
+                    mode.is_dry_run(),
+                    new_tx_waiter,
+                    preconfirmation_sender,
+                )
                 .await
         }
     }

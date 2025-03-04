@@ -8,16 +8,21 @@ use crate::{
 use fuel_core_executor::ports::{
     MaybeCheckedTransaction,
     NewTxWaiterPort,
+    PreconfirmationSenderPort,
 };
 use fuel_core_txpool::Constraints;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     services::{
         executor::WaitNewTransactionsResult,
+        preconfirmation::PreconfirmationStatus,
         relayer::Event,
     },
 };
 use std::sync::Arc;
+use tokio::sync::mpsc::error::TrySendError;
+
+use super::PreconfirmationSender;
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     fn next(
@@ -88,6 +93,26 @@ impl NewTxWaiterPort for NewTxWaiter {
         {
             Ok(result) => result,
             Err(_) => WaitNewTransactionsResult::Timeout,
+        }
+    }
+}
+
+impl PreconfirmationSenderPort for PreconfirmationSender {
+    async fn send(
+        &self,
+        preconfirmations: Vec<PreconfirmationStatus>,
+    ) -> anyhow::Result<()> {
+        self.sender.send(preconfirmations).await.map_err(Into::into)
+    }
+
+    fn try_send(
+        &self,
+        preconfirmations: Vec<PreconfirmationStatus>,
+    ) -> Vec<PreconfirmationStatus> {
+        match self.sender.try_send(preconfirmations) {
+            Ok(()) => vec![],
+            Err(TrySendError::Closed(_)) => vec![],
+            Err(TrySendError::Full(preconfirmations)) => preconfirmations,
         }
     }
 }

@@ -273,6 +273,7 @@ where
         source: TransactionsSource,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
         // TODO: do it correctly
+        #[allow(clippy::arithmetic_side_effects)]
         let deadline = self.last_block_created + Duration::from_secs(1);
         self.block_producer
             .produce_and_execute_block(height, block_time, source, deadline)

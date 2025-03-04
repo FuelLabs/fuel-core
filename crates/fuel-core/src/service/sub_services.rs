@@ -112,6 +112,9 @@ pub fn init_sub_services(
     let chain_name = chain_config.chain_name.clone();
     let on_chain_view = database.on_chain().latest_view()?;
     let (new_txs_updater, new_txs_watcher) = tokio::sync::watch::channel(());
+    // TODO: Size
+    let (preconfirmation_sender, _preconfirmation_receiver) =
+        tokio::sync::mpsc::channel(10000);
 
     let genesis_block = on_chain_view
         .genesis_block()?
@@ -142,6 +145,7 @@ pub fn init_sub_services(
         database.relayer().clone(),
         upgradable_executor_config,
         new_txs_watcher,
+        preconfirmation_sender,
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());

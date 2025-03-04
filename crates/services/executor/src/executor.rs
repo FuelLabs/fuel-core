@@ -2,6 +2,7 @@ use crate::{
     ports::{
         MaybeCheckedTransaction,
         NewTxWaiterPort,
+        PreconfirmationSenderPort,
         RelayerPort,
         TransactionsSource,
     },
@@ -141,7 +142,7 @@ use fuel_core_types::{
             ValidationResult,
             WaitNewTransactionsResult,
         },
-        p2p::PreconfirmationStatus,
+        preconfirmation::PreconfirmationStatus,
         relayer::Event,
     },
 };
@@ -222,6 +223,18 @@ impl NewTxWaiterPort for TimeoutOnlyTxWaiter {
     }
 }
 
+pub struct TransparentPreconfirmationSender;
+
+impl PreconfirmationSenderPort for TransparentPreconfirmationSender {
+    fn try_send(&self, _: Vec<PreconfirmationStatus>) -> Vec<PreconfirmationStatus> {
+        vec![]
+    }
+
+    async fn send(&self, _: Vec<PreconfirmationStatus>) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
 /// Data that is generated after executing all transactions.
 #[derive(Default)]
 pub struct ExecutionData {
@@ -289,16 +302,15 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    pub async fn produce_without_commit<TxSource, P>(
+    pub async fn produce_without_commit<TxSource>(
         self,
         components: Components<TxSource>,
         dry_run: bool,
         new_tx_waiter: impl NewTxWaiterPort,
-        preconfirmation_sender: P,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
-        // TODO: P: PreconfirmationSender,
     {
         let consensus_params_version = components.consensus_parameters_version();
 
@@ -361,8 +373,11 @@ where
         block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
         let consensus_params_version = block.header().consensus_parameters_version();
-        let (block_executor, storage_tx) =
-            self.into_executor(consensus_params_version, TimeoutOnlyTxWaiter, ())?;
+        let (block_executor, storage_tx) = self.into_executor(
+            consensus_params_version,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        )?;
 
         let ExecutionData {
             coinbase,
@@ -427,7 +442,6 @@ pub struct BlockExecutor<R, TxWaiter, PreconfirmationSender> {
     consensus_params: ConsensusParameters,
     options: ExecutionOptions,
     new_tx_waiter: TxWaiter,
-    #[allow(dead_code)]
     preconfirmation_sender: PreconfirmationSender,
 }
 
@@ -451,17 +465,11 @@ impl<R, TxWaiter, PreconfirmationSender>
     }
 }
 
-// trait PreconfirmationSender {
-//     // TODO: Add infos about the result of preconfirmation, I didn't found any type
-//     // with receipts etc. Should I reuse something or create mine ?
-//     fn send(&mut self, tx: TxId) -> ExecutorResult<()>;
-// }
-
 impl<R, N, P> BlockExecutor<R, N, P>
 where
     R: RelayerPort,
     N: NewTxWaiterPort,
-    // TODO: P: PreconfirmationSender,
+    P: PreconfirmationSenderPort,
 {
     #[tracing::instrument(skip_all)]
     /// Produce the fuel block with specified components
@@ -721,13 +729,13 @@ where
                         status.push(preconfirmation_status);
                     }
                     Err(err) => {
-                        data.skipped_transactions.push((tx_id, err));
+                        data.skipped_transactions.push((tx_id, err.clone()));
                         status.push(PreconfirmationStatus::SqueezedOutByBlockProducer {
                             reason: err.to_string(),
                         })
                     }
                 }
-                self.preconfirmation_sender.try_send(&mut status);
+                status = self.preconfirmation_sender.try_send(status);
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
                 remaining_block_transaction_size_limit =
                     block_transaction_size_limit.saturating_sub(data.used_size);
@@ -745,7 +753,9 @@ where
                 .peekable();
         }
         if !status.is_empty() {
-            self.preconfirmation_sender.send(status).await;
+            if let Err(e) = self.preconfirmation_sender.send(status).await {
+                tracing::warn!("Failed to send preconfirmation status: {:?}", e);
+            }
         }
 
         Ok(())

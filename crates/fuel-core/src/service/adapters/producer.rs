@@ -105,7 +105,11 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAd
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         let new_tx_waiter = NewTxWaiter::new(self.new_txs_watcher.clone(), deadline);
         self.executor
-            .produce_without_commit_with_source(component, new_tx_waiter)
+            .produce_without_commit_with_source(
+                component,
+                new_tx_waiter,
+                self.preconfirmation_sender.clone(),
+            )
             .await
     }
 }

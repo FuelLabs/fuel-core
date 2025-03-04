@@ -7,6 +7,7 @@ use fuel_core_consensus_module::{
 use fuel_core_executor::executor::{
     OnceTransactionsSource,
     TimeoutOnlyTxWaiter,
+    TransparentPreconfirmationSender,
 };
 use fuel_core_gas_price_service::{
     common::cumulative_percentage_change,
@@ -39,7 +40,7 @@ use fuel_core_types::{
             Result as ExecutorResult,
             UncommittedResult,
         },
-        p2p::PreconfirmationStatus,
+        preconfirmation::PreconfirmationStatus,
     },
     signer::SignMode,
     tai64::Tai64,
@@ -337,10 +338,21 @@ impl NewTxWaiter {
 }
 
 #[derive(Clone)]
+pub struct PreconfirmationSender {
+    pub sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+}
+
+impl PreconfirmationSender {
+    pub fn new(sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>) -> Self {
+        Self { sender }
+    }
+}
+
+#[derive(Clone)]
 pub struct ExecutorAdapter {
     pub(crate) executor: Arc<Executor<Database, Database<Relayer>>>,
     pub new_txs_watcher: tokio::sync::watch::Receiver<()>,
-    pub preconfirmation_sender: tokio::sync::mpsc::Sender<PreconfirmationStatus>,
+    pub preconfirmation_sender: PreconfirmationSender,
 }
 
 impl ExecutorAdapter {
@@ -352,9 +364,10 @@ impl ExecutorAdapter {
         // #[cfg(not(feature = "parallel-executor"))]
         config: fuel_core_upgradable_executor::config::Config,
         new_txs_watcher: tokio::sync::watch::Receiver<()>,
-        pre_confirmation_sender: tokio::sync::mpsc::Sender<PreconfirmationStatus>,
+        preconfirmation_sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);
+        let preconfirmation_sender = PreconfirmationSender::new(preconfirmation_sender);
         Self {
             executor: Arc::new(executor),
             new_txs_watcher,
@@ -376,7 +389,11 @@ impl ExecutorAdapter {
         };
 
         self.executor
-            .produce_without_commit_with_source(new_components, TimeoutOnlyTxWaiter)
+            .produce_without_commit_with_source(
+                new_components,
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
             .now_or_never()
             .ok_or_else(|| {
                 ExecutorError::Other(

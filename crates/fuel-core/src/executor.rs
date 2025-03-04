@@ -6,7 +6,11 @@ mod tests {
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
-        executor::OnceTransactionsSource,
+        executor::{
+            OnceTransactionsSource,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        },
         ports::{
             MaybeCheckedTransaction,
             RelayerPort,
@@ -142,6 +146,7 @@ mod tests {
         tai64::Tai64,
     };
     use fuel_core_upgradable_executor::executor::Executor;
+    use futures::FutureExt;
     use itertools::Itertools;
     use rand::{
         prelude::StdRng,
@@ -467,15 +472,21 @@ mod tests {
                 },
                 changes,
             ) = producer
-                .produce_without_commit_with_source(Components {
-                    header_to_produce: header,
-                    transactions_source: OnceTransactionsSource::new(vec![
-                        script.into(),
-                        invalid_duplicate_tx,
-                    ]),
-                    gas_price: price,
-                    coinbase_recipient: recipient,
-                })
+                .produce_without_commit_with_source(
+                    Components {
+                        header_to_produce: header,
+                        transactions_source: OnceTransactionsSource::new(vec![
+                            script.into(),
+                            invalid_duplicate_tx,
+                        ]),
+                        gas_price: price,
+                        coinbase_recipient: recipient,
+                    },
+                    TimeoutOnlyTxWaiter,
+                    TransparentPreconfirmationSender,
+                )
+                .now_or_never()
+                .unwrap()
                 .unwrap()
                 .into();
             producer
@@ -550,12 +561,20 @@ mod tests {
                 },
                 changes,
             ) = producer
-                .produce_without_commit_with_source(Components {
-                    header_to_produce: header,
-                    transactions_source: OnceTransactionsSource::new(vec![script.into()]),
-                    gas_price: price,
-                    coinbase_recipient: recipient,
-                })
+                .produce_without_commit_with_source(
+                    Components {
+                        header_to_produce: header,
+                        transactions_source: OnceTransactionsSource::new(vec![
+                            script.into()
+                        ]),
+                        gas_price: price,
+                        coinbase_recipient: recipient,
+                    },
+                    TimeoutOnlyTxWaiter,
+                    TransparentPreconfirmationSender,
+                )
+                .now_or_never()
+                .unwrap()
                 .unwrap()
                 .into();
             producer
@@ -692,12 +711,20 @@ mod tests {
                 skipped_transactions,
                 ..
             } = producer
-                .produce_without_commit_with_source(Components {
-                    header_to_produce: PartialBlockHeader::default(),
-                    transactions_source: OnceTransactionsSource::new(vec![script.into()]),
-                    gas_price: price,
-                    coinbase_recipient: recipient,
-                })
+                .produce_without_commit_with_source(
+                    Components {
+                        header_to_produce: PartialBlockHeader::default(),
+                        transactions_source: OnceTransactionsSource::new(vec![
+                            script.into()
+                        ]),
+                        gas_price: price,
+                        coinbase_recipient: recipient,
+                    },
+                    TimeoutOnlyTxWaiter,
+                    TransparentPreconfirmationSender,
+                )
+                .now_or_never()
+                .unwrap()
                 .unwrap()
                 .into_result();
             assert!(skipped_transactions.is_empty());
@@ -1970,12 +1997,18 @@ mod tests {
         let ExecutionResult {
             block, tx_status, ..
         } = executor
-            .produce_without_commit_with_source(Components {
-                header_to_produce: block.header,
-                transactions_source: OnceTransactionsSource::new(block.transactions),
-                gas_price: 0,
-                coinbase_recipient: Default::default(),
-            })
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: block.header,
+                    transactions_source: OnceTransactionsSource::new(block.transactions),
+                    gas_price: 0,
+                    coinbase_recipient: Default::default(),
+                },
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
+            .now_or_never()
+            .unwrap()
             .unwrap()
             .into_result();
         assert!(matches!(
@@ -2951,12 +2984,18 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .produce_without_commit_with_source(Components {
-                header_to_produce: PartialBlockHeader::default(),
-                transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
-                coinbase_recipient: Default::default(),
-                gas_price: 1,
-            })
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: PartialBlockHeader::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    coinbase_recipient: Default::default(),
+                    gas_price: 1,
+                },
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
+            .now_or_never()
+            .unwrap()
             .unwrap()
             .into_result();
         assert!(skipped_transactions.is_empty());
@@ -3027,21 +3066,27 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .produce_without_commit_with_source(Components {
-                header_to_produce: PartialBlockHeader {
-                    application: ApplicationHeader {
-                        consensus_parameters_version:
-                            expensive_consensus_parameters_version,
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: PartialBlockHeader {
+                        application: ApplicationHeader {
+                            consensus_parameters_version:
+                                expensive_consensus_parameters_version,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
-                    ..Default::default()
+                    transactions_source: OnceTransactionsSource::new_maybe_checked(vec![
+                        cheaply_checked_tx,
+                    ]),
+                    coinbase_recipient: Default::default(),
+                    gas_price: 1,
                 },
-                transactions_source: OnceTransactionsSource::new_maybe_checked(vec![
-                    cheaply_checked_tx,
-                ]),
-                coinbase_recipient: Default::default(),
-                gas_price: 1,
-            })
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
+            .now_or_never()
+            .unwrap()
             .unwrap()
             .into_result();
 
