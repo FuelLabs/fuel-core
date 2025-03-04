@@ -15,7 +15,10 @@ use fuel_core_types::{
             Empty,
         },
     },
-    fuel_tx::CompressedTransaction,
+    fuel_tx::{
+        Bytes32,
+        CompressedTransaction,
+    },
     fuel_types::BlockHeight,
 };
 
@@ -29,12 +32,17 @@ pub struct CompressedBlockHeader {
     pub application: ApplicationHeader<Empty>,
     /// The consensus header.
     pub consensus: ConsensusHeader<Empty>,
-    // The block id.
+    /// The block id.
     pub block_id: BlockId,
+    /// The registry root after execution of this particular block.
+    pub registry_root: Bytes32,
 }
 
-impl From<&BlockHeader> for CompressedBlockHeader {
-    fn from(header: &BlockHeader) -> Self {
+impl CompressedBlockHeader {
+    fn from_header_and_registry_root(
+        header: &BlockHeader,
+        registry_root: Bytes32,
+    ) -> Self {
         let ConsensusHeader {
             prev_root,
             height,
@@ -56,6 +64,7 @@ impl From<&BlockHeader> for CompressedBlockHeader {
                 generated: Empty {},
             },
             block_id: header.id(),
+            registry_root,
         }
     }
 }
@@ -112,9 +121,13 @@ impl CompressedBlockPayloadV1 {
         header: &BlockHeader,
         registrations: RegistrationsPerTable,
         transactions: Vec<CompressedTransaction>,
+        registry_root: Bytes32,
     ) -> Self {
         Self {
-            header: CompressedBlockHeader::from(header),
+            header: CompressedBlockHeader::from_header_and_registry_root(
+                header,
+                registry_root,
+            ),
             registrations,
             transactions,
         }

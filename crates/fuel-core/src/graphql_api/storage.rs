@@ -249,4 +249,53 @@ where
         self.commit()?;
         Ok(())
     }
+
+    #[cfg(feature = "fault-proving")]
+    fn registry_root(&self) -> StorageResult<Bytes32> {
+        use fuel_core_storage::tables::merkle::DenseMetadataKey;
+
+        use crate::graphql_api::storage::da_compression::v2::{
+            address::TemporalRegistryAddressMerkleMetadata as AddressMerkle,
+            asset_id::TemporalRegistryAssetIdMerkleMetadata as AssetIdMerkle,
+            contract_id::TemporalRegistryContractIdMerkleMetadata as ContractIdMerkle,
+            evictor_cache::TemporalRegistryEvictorCacheMerkleMetadata as EvictorCacheMerkle,
+            predicate_code::TemporalRegistryPredicateCodeMerkleMetadata as PredicateCodeMerkle,
+            registry_index::TemporalRegistryIndexMerkleMetadata as RegistryIndexMerkle,
+            script_code::TemporalRegistryScriptCodeMerkleMetadata as ScriptCodeMerkle,
+            timestamps::TemporalRegistryTimestampsMerkleMetadata as TimestampsMerkle,
+        };
+
+        macro_rules! get_merkle_root {
+            ($self:ident, $metadata:ty) => {
+                $self
+                    .storage::<$metadata>()
+                    .get(&DenseMetadataKey::Latest)?
+                    .map(|cow| *cow.root())
+                    // the only time it will be empty is on initialization
+                    .unwrap_or_default()
+            };
+        }
+
+        let address_root = get_merkle_root!(self, AddressMerkle);
+        let asset_id_root = get_merkle_root!(self, AssetIdMerkle);
+        let contract_id_root = get_merkle_root!(self, ContractIdMerkle);
+        let script_code_root = get_merkle_root!(self, ScriptCodeMerkle);
+        let predicate_code_root = get_merkle_root!(self, PredicateCodeMerkle);
+        let registry_index_root = get_merkle_root!(self, RegistryIndexMerkle);
+        let timestamp_root = get_merkle_root!(self, TimestampsMerkle);
+        let evictor_cache_root = get_merkle_root!(self, EvictorCacheMerkle);
+
+        let mut hasher = fuel_core_types::fuel_crypto::Hasher::default();
+
+        hasher.input(address_root.as_ref());
+        hasher.input(asset_id_root.as_ref());
+        hasher.input(contract_id_root.as_ref());
+        hasher.input(script_code_root.as_ref());
+        hasher.input(predicate_code_root.as_ref());
+        hasher.input(registry_index_root.as_ref());
+        hasher.input(timestamp_root.as_ref());
+        hasher.input(evictor_cache_root.as_ref());
+
+        Ok(hasher.finalize())
+    }
 }
