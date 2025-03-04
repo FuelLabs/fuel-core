@@ -14,9 +14,9 @@ use fuel_core_client::client::{
     types::TransactionStatus as ClientTransactionStatus,
     FuelClient,
 };
-use fuel_core_executor::ports::TransactionExt;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
+    blockchain::transaction::TransactionExt,
     fuel_tx::{
         AssetId,
         Input,
