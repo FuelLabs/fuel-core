@@ -407,9 +407,6 @@ where
         new_tx_waiter: N,
         preconfirmation_sender: P,
     ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>)>
-    where
-        N: NewTxWaiterPort,
-        // TODO: P: PreconfirmationSender,
     {
         let storage_tx = self
             .database
