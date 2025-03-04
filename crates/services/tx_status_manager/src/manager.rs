@@ -76,7 +76,7 @@ impl TxStatusManager {
             .lock()
             .expect("mutex poisoned")
             .get(tx_id)
-            .map(|s| s.clone())
+            .cloned()
     }
 
     /// Subscribe to new transaction notifications.
