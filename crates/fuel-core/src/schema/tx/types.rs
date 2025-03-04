@@ -1026,7 +1026,6 @@ pub(crate) async fn get_tx_status(
         .into_api_result::<txpool::TransactionStatus, StorageError>()?;
     match api_result {
         Some(status) => {
-            dbg!("[RC]: got from storage");
             let status = TransactionStatus::new(id, status);
             Ok(Some(status))
         }
