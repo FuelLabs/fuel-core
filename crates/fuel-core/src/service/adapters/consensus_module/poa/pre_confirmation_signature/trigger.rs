@@ -1,32 +1,59 @@
-use fuel_core_poa::pre_confirmation_signature_service::{
-    error::Result as PoAResult,
-    trigger::KeyRotationTrigger,
+use fuel_core_poa::{
+    ports::GetTime,
+    pre_confirmation_signature_service::{
+        error::Result as PoAResult,
+        trigger::KeyRotationTrigger,
+    },
 };
+use fuel_core_types::tai64::Tai64;
 use std::time::Duration;
 
 #[allow(dead_code)]
-pub struct TimeBasedTrigger {
+pub struct TimeBasedTrigger<T> {
+    time: T,
     interval: tokio::time::Interval,
+    expiration: Duration,
 }
 
-impl TimeBasedTrigger {
-    pub fn new(rotation_interval: Duration) -> Self {
+impl<T> TimeBasedTrigger<T> {
+    pub fn new(time: T, rotation_interval: Duration, expiration: Duration) -> Self {
         Self {
+            time,
             interval: tokio::time::interval(rotation_interval),
+            expiration,
         }
     }
 }
 
-impl KeyRotationTrigger for TimeBasedTrigger {
-    async fn next_rotation(&mut self) -> PoAResult<()> {
-        self.interval.tick().await;
-        Ok(())
+impl<T: GetTime> KeyRotationTrigger for TimeBasedTrigger<T> {
+    async fn next_rotation(&mut self) -> PoAResult<Tai64> {
+        let _ = self.interval.tick().await;
+        let expiration = self.time.now() + self.expiration.as_secs();
+        Ok(expiration)
     }
 }
+
 #[cfg(test)]
 mod tests {
     #![allow(non_snake_case)]
+
     use super::*;
+
+    struct FakeTime {
+        now: Tai64,
+    }
+
+    impl FakeTime {
+        fn new(now: Tai64) -> Self {
+            Self { now }
+        }
+    }
+
+    impl GetTime for FakeTime {
+        fn now(&self) -> Tai64 {
+            self.now
+        }
+    }
 
     #[tokio::test]
     async fn next_rotation__triggers_at_expected_time() {
@@ -35,7 +62,10 @@ mod tests {
         let rotation_interval = 10;
         let rotation_interval_duration = Duration::from_secs(rotation_interval);
 
-        let mut trigger = TimeBasedTrigger::new(rotation_interval_duration);
+        let time = FakeTime::new(Tai64::now());
+        let expiration = Duration::from_secs(rotation_interval * 2);
+        let mut trigger =
+            TimeBasedTrigger::new(time, rotation_interval_duration, expiration);
 
         // when
         let mut fut = tokio_test::task::spawn(trigger.next_rotation());
@@ -54,7 +84,11 @@ mod tests {
         let rotation_interval = 10;
         let rotation_interval_duration = Duration::from_secs(rotation_interval);
 
-        let mut trigger = TimeBasedTrigger::new(rotation_interval_duration);
+        let time = FakeTime::new(Tai64::now());
+        let expiration = Duration::from_secs(rotation_interval * 2);
+
+        let mut trigger =
+            TimeBasedTrigger::new(time, rotation_interval_duration, expiration);
 
         tokio::time::advance(Duration::from_secs(1)).await;
         trigger.next_rotation().await.unwrap();

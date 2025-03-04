@@ -5,10 +5,16 @@ use fuel_core_poa::pre_confirmation_signature_service::{
         Error as PoAError,
         Result as PoAResult,
     },
-    key_generator::KeyGenerator,
+    key_generator::{
+        ExpiringKey,
+        KeyGenerator,
+    },
     signing_key::SigningKey,
 };
-use fuel_core_types::fuel_crypto::SecretKey;
+use fuel_core_types::{
+    fuel_crypto::SecretKey,
+    tai64::Tai64,
+};
 use rand::{
     prelude::StdRng,
     SeedableRng,
@@ -21,13 +27,14 @@ pub struct Ed25519KeyGenerator;
 impl KeyGenerator for Ed25519KeyGenerator {
     type Key = Ed25519Key;
 
-    async fn generate(&mut self) -> PoAResult<Self::Key> {
+    async fn generate(&mut self, expiration: Tai64) -> PoAResult<ExpiringKey<Self::Key>> {
         let mut rng = StdRng::from_entropy();
         let secret = SecretKey::random(&mut rng);
-
-        Ok(Ed25519Key {
+        let key = Ed25519Key {
             signer: DalekSigningKey::from_bytes(secret.deref()),
-        })
+        };
+        let expiring_key = ExpiringKey::new(key, expiration);
+        Ok(expiring_key)
     }
 }
 

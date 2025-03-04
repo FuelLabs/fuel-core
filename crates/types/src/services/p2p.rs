@@ -140,9 +140,9 @@ pub enum PreconfirmationStatus {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Preconfirmations {
     /// The expiration time of the key used to sign
-    expiration: Tai64,
+    pub expiration: Tai64,
     /// The transactions which have been pre-confirmed
-    preconfirmations: Vec<Preconfirmation>,
+    pub preconfirmations: Vec<Preconfirmation>,
 }
 
 /// A signed key delegation

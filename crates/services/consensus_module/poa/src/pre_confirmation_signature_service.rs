@@ -14,7 +14,10 @@ use serde::Serialize;
 
 use crate::pre_confirmation_signature_service::{
     broadcast::Broadcast,
-    key_generator::KeyGenerator,
+    key_generator::{
+        ExpiringKey,
+        KeyGenerator,
+    },
     parent_signature::ParentSignature,
     signing_key::SigningKey,
     trigger::KeyRotationTrigger,
@@ -47,7 +50,7 @@ pub struct PreConfirmationSignatureTask<
     broadcast: Broadcast,
     parent_signature: ParentSignature,
     key_generator: KeyGenerator,
-    current_delegate_key: DelegateKey,
+    current_delegate_key: ExpiringKey<DelegateKey>,
     key_rotation_trigger: KeyRotationTrigger,
 }
 
@@ -108,16 +111,18 @@ where
                 tracing::debug!("Received transactions");
                 let pre_confirmations = res?;
                 let signature = self.current_delegate_key.sign(&pre_confirmations)?;
-                self.broadcast.broadcast_preconfirmations(pre_confirmations, signature).await?;
+                let expiration = self.current_delegate_key.expiration();
+                self.broadcast.broadcast_preconfirmations(pre_confirmations, signature, expiration).await?;
             }
-            _ = self.key_rotation_trigger.next_rotation() => {
+            res = self.key_rotation_trigger.next_rotation() => {
                 tracing::debug!("Key rotation triggered");
-                let new_delegate_key = self.key_generator.generate().await?;
+                let expiration = res?;
+                let new_delegate_key = self.key_generator.generate(expiration).await?;
                 let public_key = new_delegate_key.public_key();
 
                 let message = DelegatePreConfirmationKey {
                     public_key,
-                    expiration: Tai64::now(),
+                    expiration,
                 };
 
                 let signed_key = self.parent_signature.sign(&message).await?;

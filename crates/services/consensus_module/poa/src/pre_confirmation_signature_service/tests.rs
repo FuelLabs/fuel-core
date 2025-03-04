@@ -16,11 +16,7 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
-use std::{
-    sync::Arc,
-    time::Duration,
-};
-use tokio::sync::Notify;
+use std::time::Duration;
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -47,9 +43,11 @@ impl TxReceiver for FakeTxReceiver {
 }
 
 pub struct FakeBroadcast {
-    delegation_key_sender:
-        tokio::sync::mpsc::Sender<FakeSignedData<DelegatePreConfirmationKey<Bytes32>>>,
-    tx_sender: tokio::sync::mpsc::Sender<FakeSignedData<Vec<(Transaction, Status)>>>,
+    delegation_key_sender: tokio::sync::mpsc::Sender<
+        FakeParentSignedData<DelegatePreConfirmationKey<Bytes32>>,
+    >,
+    tx_sender:
+        tokio::sync::mpsc::Sender<FakeDelegateSignedData<Vec<(Transaction, Status)>>>,
 }
 
 impl Broadcast for FakeBroadcast {
@@ -61,10 +59,12 @@ impl Broadcast for FakeBroadcast {
         &mut self,
         message: Self::Preconfirmations,
         signature: Signature<Self>,
+        expiration: Tai64,
     ) -> Result<()> {
-        let txs = FakeSignedData {
+        let txs = FakeDelegateSignedData {
             data: message,
             dummy_signature: signature,
+            key_expiration: expiration,
         };
         self.tx_sender.send(txs).await.map_err(|error| {
             Error::Broadcast(format!("Could not send {:?} over channel", error))
@@ -77,7 +77,7 @@ impl Broadcast for FakeBroadcast {
         data: DelegatePreConfirmationKey<PublicKey<Self>>,
         signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> Result<()> {
-        let delegate_key = FakeSignedData {
+        let delegate_key = FakeParentSignedData {
             data,
             dummy_signature: signature,
         };
@@ -98,7 +98,14 @@ pub struct FakeParentSignature {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct FakeSignedData<T> {
+pub struct FakeDelegateSignedData<T> {
+    data: T,
+    dummy_signature: String,
+    key_expiration: Tai64,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct FakeParentSignedData<T> {
     data: T,
     dummy_signature: String,
 }
@@ -127,8 +134,9 @@ impl FakeKeyGenerator {
 
 impl KeyGenerator for FakeKeyGenerator {
     type Key = FakeSigningKey;
-    async fn generate(&mut self) -> Result<Self::Key> {
-        Ok(self.key.clone())
+    async fn generate(&mut self, expiration: Tai64) -> Result<ExpiringKey<Self::Key>> {
+        let key = ExpiringKey::new(self.key.clone(), expiration);
+        Ok(key)
     }
 }
 
@@ -162,38 +170,41 @@ impl SigningKey for FakeSigningKey {
 }
 
 pub struct FakeTrigger {
-    pub inner: Arc<Notify>,
+    pub inner: tokio::sync::mpsc::Receiver<Tai64>,
 }
 
 impl KeyRotationTrigger for FakeTrigger {
-    async fn next_rotation(&mut self) -> Result<()> {
-        self.inner.notified().await;
-        Ok(())
+    async fn next_rotation(&mut self) -> Result<Tai64> {
+        let expiration = self.inner.recv().await.unwrap();
+        Ok(expiration)
     }
 }
 
 impl FakeTrigger {
-    pub fn new() -> (Self, Arc<Notify>) {
-        let notify = Notify::new();
-        let inner = Arc::new(notify);
-        let handle = inner.clone();
-        let trigger = Self { inner };
-        (trigger, handle)
+    pub fn new() -> (Self, tokio::sync::mpsc::Sender<Tai64>) {
+        // let notify = Notify::new();
+        // let inner = Arc::new(notify);
+        // let handle = inner.clone();
+        let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        let trigger = Self { inner: receiver };
+        (trigger, sender)
     }
 }
 
 pub struct TestImplHandles {
-    pub trigger_handle: Arc<Notify>,
-    pub broadcast_delegation_key_handle:
-        tokio::sync::mpsc::Receiver<FakeSignedData<DelegatePreConfirmationKey<Bytes32>>>,
+    pub trigger_handle: tokio::sync::mpsc::Sender<Tai64>,
+    pub broadcast_delegation_key_handle: tokio::sync::mpsc::Receiver<
+        FakeParentSignedData<DelegatePreConfirmationKey<Bytes32>>,
+    >,
     pub broadcast_tx_handle:
-        tokio::sync::mpsc::Receiver<FakeSignedData<Vec<(Transaction, Status)>>>,
+        tokio::sync::mpsc::Receiver<FakeDelegateSignedData<Vec<(Transaction, Status)>>>,
     pub tx_sender_handle: tokio::sync::mpsc::Sender<Vec<(Transaction, Status)>>,
 }
 
 #[derive(Default)]
 pub struct TaskBuilder {
     current_delegate_key: Option<String>,
+    current_delegate_key_expiration: Option<Tai64>,
     parent_signature: Option<FakeParentSignature>,
     key_generator: Option<FakeKeyGenerator>,
 }
@@ -214,6 +225,9 @@ impl TaskBuilder {
     pub fn build_with_handles(self) -> (TestTask, TestImplHandles) {
         let (key_rotation_trigger, trigger_handle) = FakeTrigger::new();
         let current_delegate_key = self.get_current_delegate_key();
+        let current_delegate_key_expiration = self.get_current_delegate_key_expiration();
+        let current_delegate_key =
+            ExpiringKey::new(current_delegate_key, current_delegate_key_expiration);
         let key_generator = self.get_key_generator();
         let parent_signature = self.get_parent_signature();
         let (broadcast, broadcast_delegation_key_handle, broadcast_tx_handle) =
@@ -244,6 +258,11 @@ impl TaskBuilder {
         FakeSigningKey::from(raw)
     }
 
+    fn get_current_delegate_key_expiration(&self) -> Tai64 {
+        self.current_delegate_key_expiration
+            .unwrap_or(Tai64::UNIX_EPOCH)
+    }
+
     fn get_key_generator(&self) -> FakeKeyGenerator {
         self.key_generator.clone().unwrap_or_else(|| {
             self.key_generator.clone().unwrap_or(FakeKeyGenerator {
@@ -265,8 +284,10 @@ impl TaskBuilder {
         &self,
     ) -> (
         FakeBroadcast,
-        tokio::sync::mpsc::Receiver<FakeSignedData<DelegatePreConfirmationKey<Bytes32>>>,
-        tokio::sync::mpsc::Receiver<FakeSignedData<Vec<(Transaction, Status)>>>,
+        tokio::sync::mpsc::Receiver<
+            FakeParentSignedData<DelegatePreConfirmationKey<Bytes32>>,
+        >,
+        tokio::sync::mpsc::Receiver<FakeDelegateSignedData<Vec<(Transaction, Status)>>>,
     ) {
         let (delegation_key_sender, delegation_key_receiver) =
             tokio::sync::mpsc::channel(10);
@@ -292,8 +313,10 @@ impl TaskBuilder {
     pub fn with_current_delegate_key<T: Into<String>>(
         mut self,
         current_delegate_key: T,
+        expiration: Tai64,
     ) -> Self {
         self.current_delegate_key = Some(current_delegate_key.into());
+        self.current_delegate_key_expiration = Some(expiration);
         self
     }
 
@@ -329,12 +352,13 @@ async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_sig
     // when
     let mut state_watcher = StateWatcher::started();
     tokio::task::spawn(async move { task.run(&mut state_watcher).await });
-    handles.trigger_handle.notify_one();
+    let expiration_time = Tai64::from_unix(1_234_567);
+    handles.trigger_handle.send(expiration_time).await.unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // then
     let mut actual = handles.broadcast_delegation_key_handle.try_recv().unwrap();
-    let expected = FakeSignedData {
+    let expected = FakeParentSignedData {
         data: DelegatePreConfirmationKey {
             public_key: Bytes32::zeroed(),
             expiration: Tai64::UNIX_EPOCH,
@@ -360,11 +384,12 @@ async fn run__key_rotation_updates_current_key() {
         let _ = task.run(&mut state_watcher).await;
         task.current_delegate_key
     });
-    handles.trigger_handle.notify_one();
+    let expiration_time = Tai64::from_unix(1_234_567);
+    handles.trigger_handle.send(expiration_time).await.unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // then
-    let actual = fut_current_key.await.unwrap();
+    let actual = fut_current_key.await.unwrap().key;
     let expected = FakeSigningKey::from(generated_key);
     assert_eq!(expected, actual);
 }
@@ -374,7 +399,7 @@ async fn run__received_tx_will_be_broadcast_with_current_delegate_key_signature(
     // given
     let current_delegate_key = "foobar delegate key";
     let (mut task, mut handles) = TaskBuilder::new()
-        .with_current_delegate_key(current_delegate_key)
+        .with_current_delegate_key(current_delegate_key, Tai64::UNIX_EPOCH)
         .build_with_handles();
     let mut state_watcher = StateWatcher::started();
 
@@ -407,9 +432,10 @@ async fn run__received_tx_will_be_broadcast_with_current_delegate_key_signature(
     // then
     let actual = handles.broadcast_tx_handle.try_recv().unwrap();
     let dummy_signature = current_delegate_key.to_string();
-    let expected = FakeSignedData {
+    let expected = FakeDelegateSignedData {
         data: txs,
         dummy_signature,
+        key_expiration: Tai64::UNIX_EPOCH,
     };
     assert_eq!(expected, actual);
 }
