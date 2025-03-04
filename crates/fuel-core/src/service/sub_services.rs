@@ -29,14 +29,9 @@ use crate::{
                         Ed25519Key,
                         Ed25519KeyGenerator,
                     },
-                    parent_signature::{
-                        FuelParentSignature,
-                        FuelParentSigner,
-                    },
-                    signing_key::DummyKey,
+                    parent_signature::FuelParentSigner,
                     trigger::TimeBasedTrigger,
-                    tx_receiver::MPSCTxReceiver,
-                    Preconfirmations,
+                    tx_receiver::PreconfirmationsReceiver,
                 },
                 InDirectoryPredefinedBlocks,
             },
@@ -91,12 +86,6 @@ pub type PoAService = fuel_core_poa::Service<
     SignMode,
     InDirectoryPredefinedBlocks,
     SystemTime,
-    MPSCTxReceiver<Preconfirmations>,
-    P2PBroadcast,
-    FuelParentSignature<DummyKey>,
-    Ed25519KeyGenerator,
-    DummyKey,
-    TimeBasedTrigger,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -114,9 +103,6 @@ pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 // TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
 pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-#[allow(clippy::diverging_sub_expression)]
 pub fn init_sub_services(
     config: &Config,
     database: CombinedDatabase,
@@ -153,13 +139,7 @@ pub fn init_sub_services(
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
-        // #[cfg(not(feature = "parallel-executor"))]
         upgradable_executor_config,
-        // #[cfg(feature = "parallel-executor")]
-        // fuel_core_parallel_executor::config::Config {
-        //     number_of_cores: config.executor_number_of_cores,
-        //     executor_config: upgradable_executor_config,
-        // },
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());
@@ -330,16 +310,16 @@ pub fn init_sub_services(
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
 
     #[allow(clippy::type_complexity)]
-    let pre_confirmation_service: ServiceRunner<
+    let _pre_confirmation_service: ServiceRunner<
         PreConfirmationSignatureTask<
-            MPSCTxReceiver<Preconfirmations>,
+            PreconfirmationsReceiver,
             P2PBroadcast,
-            FuelParentSigner<DummyKey>,
-            DelegateKeyGenerator,
-            DummyKey,
+            FuelParentSigner,
+            Ed25519KeyGenerator,
+            Ed25519Key,
             TimeBasedTrigger,
         >,
-    > = todo!();
+    >;
 
     let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
@@ -352,7 +332,6 @@ pub fn init_sub_services(
             signer,
             predefined_blocks,
             SystemTime,
-            pre_confirmation_service,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
