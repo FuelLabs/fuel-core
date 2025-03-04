@@ -11,6 +11,8 @@ pub mod gas_price;
 pub mod off_chain;
 pub mod on_chain;
 pub mod relayer;
+//#[cfg(feature = "fault-proving")] // TODO: Feature gate
+// pub mod state_root; // TODO: Remove - don't need this here
 
 pub trait DatabaseHeight: PartialEq + Default + Debug + Copy + Send + Sync {
     fn as_u64(&self) -> u64;

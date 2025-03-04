@@ -3704,6 +3704,7 @@ dependencies = [
  "fuel-core-types 0.41.7",
  "hex",
  "hyper 0.14.32",
+ "itertools 0.12.1",
  "reqwest 0.12.12",
  "tokio",
  "tracing",
