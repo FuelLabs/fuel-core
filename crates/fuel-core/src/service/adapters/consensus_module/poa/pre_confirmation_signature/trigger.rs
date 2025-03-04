@@ -28,7 +28,8 @@ impl<T> TimeBasedTrigger<T> {
 impl<T: GetTime> KeyRotationTrigger for TimeBasedTrigger<T> {
     async fn next_rotation(&mut self) -> PoAResult<Tai64> {
         let _ = self.interval.tick().await;
-        let expiration = self.time.now() + self.expiration.as_secs();
+        let expiration_raw = self.time.now().0.saturating_add(self.expiration.as_secs());
+        let expiration = Tai64(expiration_raw);
         Ok(expiration)
     }
 }

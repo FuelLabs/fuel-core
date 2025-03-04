@@ -125,13 +125,13 @@ mod tests {
 
     fn inner_matches_expected_values(
         inner: &Arc<PreConfirmationMessage>,
-        preconfirmations: &Vec<Preconfirmation>,
+        preconfirmations: &[Preconfirmation],
         signature: &Signature,
         expiration: &Tai64,
     ) -> bool {
         let entity = Preconfirmations {
             expiration: *expiration,
-            preconfirmations: preconfirmations.clone(),
+            preconfirmations: preconfirmations.to_vec(),
         };
         match &**inner {
             PreConfirmationMessage::Preconfirmations(signed_preconfirmation) => {
