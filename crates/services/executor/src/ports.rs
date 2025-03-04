@@ -36,12 +36,8 @@ use alloc::{
 };
 
 #[cfg(feature = "std")]
-use std::{
-    borrow::Cow,
-    future::Future,
-};
+use std::borrow::Cow;
 
-#[cfg(not(feature = "std"))]
 use core::future::Future;
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
