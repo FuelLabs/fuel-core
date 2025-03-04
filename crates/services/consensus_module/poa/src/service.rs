@@ -594,7 +594,7 @@ where
                     Ok(time) => time,
                     Err(err) => return TaskNextAction::ErrorContinue(err),
                 };
-                let deadline = next_block_time.clone();
+                let deadline = next_block_time;
                 Box::pin({
                     async move {
                         sleep_until(next_block_time).await;
