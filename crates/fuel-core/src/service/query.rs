@@ -102,7 +102,6 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
         match self.db.get_tx_status(&id)? {
             Some(status) => Ok(Some(status)),
             None => {
-                // TODO[RC]: Should be async?
                 let status = self.tx_status_manager.status(&id);
                 Ok(status)
             }
