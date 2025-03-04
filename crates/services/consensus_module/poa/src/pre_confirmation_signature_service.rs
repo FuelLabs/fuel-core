@@ -27,6 +27,9 @@ pub type Signed<K, T> = <K as SigningKey>::Signature<T>;
 #[cfg(test)]
 pub mod tests;
 
+// TODO(#2739): Remove when integrated
+// link: https://github.com/FuelLabs/fuel-core/issues/2739
+#[allow(dead_code)]
 pub struct PreConfirmationSignatureTask<
     TxReceiver,
     Broadcast,
