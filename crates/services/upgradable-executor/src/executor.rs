@@ -629,11 +629,13 @@ where
     }
 
     #[cfg(not(feature = "wasm-executor"))]
-    fn produce_inner<TxSource>(
+    async fn produce_inner<TxSource>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
+        new_tx_waiter: impl NewTxWaiterPort,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -641,7 +643,14 @@ where
         let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
-            self.native_produce_inner(block, options, mode)
+            self.native_produce_inner(
+                block,
+                options,
+                mode,
+                new_tx_waiter,
+                preconfirmation_sender,
+            )
+            .await
         } else {
             Err(ExecutorError::Other(format!(
                 "Not supported version `{block_version}`. Expected version is `{}`",

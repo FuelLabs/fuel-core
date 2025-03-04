@@ -9,11 +9,7 @@ use serde::{
 #[cfg(feature = "serde")]
 use super::txpool::PoolTransaction;
 use super::{
-    preconfirmation::{
-        Preconfirmation,
-        PreconfirmationStatus,
-        Preconfirmations,
-    },
+    preconfirmation::Preconfirmations,
     txpool::ArcPoolTx,
 };
 use crate::{
@@ -21,10 +17,7 @@ use crate::{
         PublicKey,
         Signature,
     },
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
 use std::{
@@ -130,6 +123,13 @@ pub enum PreConfirmationMessage<P = PublicKey, S = Signature> {
 impl PreConfirmationMessage {
     /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
     pub fn default_test_confirmation() -> Self {
+        use crate::{
+            fuel_tx::TxId,
+            services::preconfirmation::{
+                Preconfirmation,
+                PreconfirmationStatus,
+            },
+        };
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
             entity: Preconfirmations {
                 expiration: Tai64::UNIX_EPOCH,
