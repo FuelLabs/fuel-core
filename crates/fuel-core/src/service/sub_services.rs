@@ -112,9 +112,8 @@ pub fn init_sub_services(
     let chain_name = chain_config.chain_name.clone();
     let on_chain_view = database.on_chain().latest_view()?;
     let (new_txs_updater, new_txs_watcher) = tokio::sync::watch::channel(());
-    // TODO: Size
     let (preconfirmation_sender, _preconfirmation_receiver) =
-        tokio::sync::mpsc::channel(10000);
+        tokio::sync::mpsc::channel(1024);
 
     let genesis_block = on_chain_view
         .genesis_block()?
