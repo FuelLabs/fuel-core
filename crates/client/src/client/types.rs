@@ -249,7 +249,6 @@ impl TryFrom<OpaqueTransactionWithStatus> for TransactionResponse {
     type Error = ConversionError;
 
     fn try_from(value: OpaqueTransactionWithStatus) -> Result<Self, Self::Error> {
-        // panic!("converting opaque to response");
         let bytes = value.raw_payload.0 .0;
         let tx: TransactionType = Transaction::from_bytes(bytes.as_slice())
             .map(Into::into)

@@ -406,7 +406,6 @@ impl FuelClient {
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
         let required_fuel_block_height = self.required_block_height();
-        dbg!(&q.operation_name);
         let fuel_operation = FuelOperation::new(q, required_fuel_block_height);
         let response = self
             .client
@@ -962,9 +961,6 @@ impl FuelClient {
         let query = schema::tx::TransactionQuery::build(TxIdArgs { id: (*id).into() });
 
         let transaction = self.query(query).await?.transaction;
-        let x = transaction.clone();
-
-        dbg!(x.unwrap().status);
 
         Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }

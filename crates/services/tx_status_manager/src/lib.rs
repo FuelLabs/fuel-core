@@ -1,4 +1,4 @@
-//! This crate ...
+//! This crate provides a service for managing transaction statuses.
 pub mod config;
 mod error;
 mod manager;

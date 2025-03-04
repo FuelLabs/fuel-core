@@ -71,7 +71,9 @@ impl TxStatusManager {
                     .expect("mutex poisoned")
                     .insert(tx_update.tx_id, tx_status.clone());
             }
-            TxStatusMessage::FailedStatus => todo!(),
+            TxStatusMessage::FailedStatus => {
+                // TODO[RC]: Handle failed status
+            }
         }
 
         self.tx_status_change.update_sender.send(&tx_update);
