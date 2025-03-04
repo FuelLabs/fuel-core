@@ -4,9 +4,7 @@ use crate::{
         GasPriceProvider as GasPriceProviderConstraint,
     },
     ports::{
-        self,
-        BlockProducerDatabase,
-        RelayerBlockInfo,
+        self, BlockProducerDatabase, RelayerBlockInfo
     },
     Config,
 };
@@ -43,9 +41,7 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            NewTxWaiter,
             StorageReadReplayEvent,
-            TimeoutOnlyTxWaiter,
             TransactionExecutionStatus,
             UncommittedResult,
         },
@@ -113,12 +109,13 @@ where
     ViewProvider::LatestView: BlockProducerDatabase,
     ChainStateProvider: ChainStateInfoProvider,
 {
-    pub async fn produce_and_execute_predefined(
+    pub async fn produce_and_execute_predefined<N>(
         &self,
         predefined_block: &Block,
+        new_tx_waiter: N,
     ) -> anyhow::Result<UncommittedResult<Changes>>
     where
-        Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
+        Executor: ports::BlockProducer<Vec<Transaction>, N> + 'static,
     {
         let _production_guard = self.lock.try_lock().map_err(|_| {
             anyhow!("Failed to acquire the production lock, block production is already in progress")
@@ -167,7 +164,7 @@ where
 
         let result = self
             .executor
-            .produce_without_commit(component, TimeoutOnlyTxWaiter)
+            .produce_without_commit(component, new_tx_waiter)
             .await
             .map_err(Into::<anyhow::Error>::into)
             .with_context(|| {
@@ -187,15 +184,15 @@ where
     ChainStateProvider: ChainStateInfoProvider,
 {
     /// Produces and execute block for the specified height.
-    async fn produce_and_execute<TxSource, F>(
+    async fn produce_and_execute<TxSource, F, N>(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         tx_source: impl FnOnce(u64, BlockHeight) -> F,
-        new_tx_waiter: impl NewTxWaiter,
+        new_tx_waiter: N,
     ) -> anyhow::Result<UncommittedResult<Changes>>
     where
-        Executor: ports::BlockProducer<TxSource> + 'static,
+        Executor: ports::BlockProducer<TxSource, N> + 'static,
         F: Future<Output = anyhow::Result<TxSource>>,
     {
         //  - get previous block info (hash, root, etc)
@@ -243,7 +240,6 @@ where
             format!("Failed to produce block {height:?} due to execution failure");
         let result = self
             .executor
-            // TODO: Replace with the correct trigger
             .produce_without_commit(component, new_tx_waiter)
             .await
             .map_err(Into::<anyhow::Error>::into)
@@ -272,18 +268,21 @@ where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
     TxPool: ports::TxPool<TxSource = TxSource> + 'static,
-    Executor: ports::BlockProducer<TxSource> + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
     ChainStateProvider: ChainStateInfoProvider,
 {
     /// Produces and execute block for the specified height with transactions from the `TxPool`.
-    pub async fn produce_and_execute_block_txpool(
+    pub async fn produce_and_execute_block_txpool<NewTxWaiter>(
         &self,
         height: BlockHeight,
         block_time: Tai64,
-        new_tx_waiter: impl NewTxWaiter,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
-        self.produce_and_execute::<TxSource, _>(
+        new_tx_waiter: NewTxWaiter,
+    ) -> anyhow::Result<UncommittedResult<Changes>>
+    where
+        Executor: ports::BlockProducer<TxSource, NewTxWaiter> + 'static,
+
+         {
+        self.produce_and_execute::<TxSource, _, NewTxWaiter>(
             height,
             block_time,
             |gas_price, height| self.txpool.get_source(gas_price, height),
@@ -298,7 +297,7 @@ impl<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
 where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,
-    Executor: ports::BlockProducer<Vec<Transaction>> + 'static,
+    Executor: ports::BlockProducer<Vec<Transaction>, ()> + 'static,
     GasPriceProvider: GasPriceProviderConstraint,
     ChainStateProvider: ChainStateInfoProvider,
 {
@@ -313,7 +312,7 @@ where
             height,
             block_time,
             |_, _| async { Ok(transactions) },
-            TimeoutOnlyTxWaiter,
+            (),
         )
         .await
     }

@@ -20,10 +20,7 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImportResult,
         },
-        executor::{
-            NewTxWaiter,
-            UncommittedResult as UncommittedExecutionResult,
-        },
+        executor::UncommittedResult as UncommittedExecutionResult,
     },
     tai64::Tai64,
 };
@@ -47,12 +44,12 @@ pub enum TransactionsSource {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait BlockProducer: Send + Sync {
-    async fn produce_and_execute_block(
+    async fn produce_and_execute_block<N>(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-        new_tx_waiter: impl NewTxWaiter,
+        new_tx_waiter: N,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
 
     async fn produce_predefined_block(

@@ -1,7 +1,5 @@
 //! Types related to executor service.
 
-use core::future::Future;
-
 use crate::{
     blockchain::{
         block::Block,
@@ -91,30 +89,12 @@ pub struct ValidationResult {
     pub events: Vec<Event>,
 }
 
-/// Send to the block executor to know if there is new transactions available
-/// to include in the block or if we are good to end the block execution.
-pub trait NewTxWaiter: Send {
-    /// Wait for new transactions to be available or timeout.
-    fn wait_for_new_transactions(
-        &self,
-    ) -> impl Future<Output = WaitNewTransactionsResult> + Send;
-}
-
 /// The result of waiting for new transactions.
 pub enum WaitNewTransactionsResult {
     /// We received a new transaction and we can continue the block execution.
     NewTransaction,
     /// We didn't receive any new transaction and we can end the block execution.
     Timeout,
-}
-
-/// A NewTxWaiter that always returns Timeout. (useful to not wait for new transactions)
-pub struct TimeoutOnlyTxWaiter;
-
-impl NewTxWaiter for TimeoutOnlyTxWaiter {
-    async fn wait_for_new_transactions(&self) -> WaitNewTransactionsResult {
-        WaitNewTransactionsResult::Timeout
-    }
 }
 
 impl<DatabaseTransaction> UncommittedValidationResult<DatabaseTransaction> {

@@ -1,11 +1,6 @@
-use crate::ports::{
-    BlockProducer,
-    BlockProducerDatabase,
-    DryRunner,
-    Relayer,
-    RelayerBlockInfo,
-    TxPool,
-};
+use crate::{block_producer::TimeoutOnlyTxWaiter, ports::{
+    BlockProducer, BlockProducerDatabase, DryRunner, Relayer, RelayerBlockInfo, TxPool
+}};
 use fuel_core_storage::{
     not_found,
     transactional::{
@@ -38,7 +33,6 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             ExecutionResult,
-            NewTxWaiter,
             Result as ExecutorResult,
             TransactionExecutionStatus,
             UncommittedResult,
@@ -126,11 +120,11 @@ fn arc_pool_tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block 
     .unwrap()
 }
 
-impl BlockProducer<Vec<Transaction>> for MockExecutor {
+impl BlockProducer<Vec<Transaction>, TimeoutOnlyTxWaiter> for MockExecutor {
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _: impl NewTxWaiter,
+        _: TimeoutOnlyTxWaiter,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         let block = arc_pool_tx_comp_to_block(&component);
         // simulate executor inserting a block
@@ -153,11 +147,11 @@ impl BlockProducer<Vec<Transaction>> for MockExecutor {
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-impl BlockProducer<Vec<Transaction>> for FailingMockExecutor {
+impl BlockProducer<Vec<Transaction>, TimeoutOnlyTxWaiter> for FailingMockExecutor {
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _: impl NewTxWaiter,
+        _: TimeoutOnlyTxWaiter,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
@@ -183,11 +177,11 @@ pub struct MockExecutorWithCapture {
     pub captured: Arc<Mutex<Option<Components<Vec<Transaction>>>>>,
 }
 
-impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture {
+impl BlockProducer<Vec<Transaction>, TimeoutOnlyTxWaiter> for MockExecutorWithCapture {
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _: impl NewTxWaiter,
+        _: TimeoutOnlyTxWaiter,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         let block = arc_pool_tx_comp_to_block(&component);
         *self.captured.lock().unwrap() = Some(component);

@@ -9,11 +9,10 @@ use fuel_core_executor::{
     executor::{
         ExecutionInstance,
         ExecutionOptions,
-        OnceTransactionsSource,
+        OnceTransactionsSource, TimeoutOnlyTxWaiter,
     },
     ports::{
-        RelayerPort,
-        TransactionsSource,
+        NewTxWaiterPort, RelayerPort, TransactionsSource
     },
 };
 use fuel_core_storage::{
@@ -43,10 +42,8 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             ExecutionResult,
-            NewTxWaiter,
             Result as ExecutorResult,
             StorageReadReplayEvent,
-            TimeoutOnlyTxWaiter,
             TransactionExecutionStatus,
             ValidationResult,
         },
@@ -374,13 +371,14 @@ where
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
-    pub async fn produce_without_commit_with_source<TxSource>(
+    pub async fn produce_without_commit_with_source<TxSource, NewTxWaiter>(
         &self,
         components: Components<TxSource>,
-        new_tx_waiter: impl NewTxWaiter,
+        new_tx_waiter: NewTxWaiter,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
+        NewTxWaiter: NewTxWaiterPort,
     {
         let options = self.config.as_ref().into();
         self.produce_inner(
@@ -586,7 +584,7 @@ where
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
-        new_tx_waiter: impl NewTxWaiter,
+        new_tx_waiter: impl NewTxWaiterPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -810,7 +808,7 @@ where
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
-        new_tx_waiter: impl NewTxWaiter,
+        new_tx_waiter: impl NewTxWaiterPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,

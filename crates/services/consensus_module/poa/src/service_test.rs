@@ -4,15 +4,7 @@
 use crate::{
     new_service,
     ports::{
-        BlockProducer,
-        BlockSigner,
-        GetTime,
-        InMemoryPredefinedBlocks,
-        MockBlockImporter,
-        MockBlockProducer,
-        MockP2pPort,
-        MockTransactionPool,
-        TransactionsSource,
+        BlockProducer, BlockSigner, GetTime, InMemoryPredefinedBlocks, MockBlockImporter, MockBlockProducer, MockP2pPort, MockTransactionPool, NewTxWaiter, TransactionsSource
     },
     service::MainTask,
     Config,
@@ -50,7 +42,6 @@ use fuel_core_types::{
     services::executor::{
         Error as ExecutorError,
         ExecutionResult,
-        NewTxWaiter,
         UncommittedResult,
     },
     signer::SignMode,
@@ -144,7 +135,7 @@ impl TestContextBuilder {
             let mut producer = MockBlockProducer::default();
             producer
                 .expect_produce_and_execute_block()
-                .returning(|_, _, _| {
+                .returning(|_, _, _, _| {
                     Ok(UncommittedResult::new(
                         ExecutionResult {
                             block: Default::default(),
@@ -298,7 +289,7 @@ async fn remove_skipped_transactions() {
     block_producer
         .expect_produce_and_execute_block()
         .times(1)
-        .returning(move |_, _, _| {
+        .returning(move |_, _, _, _| {
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block: Default::default(),
@@ -414,7 +405,7 @@ impl BlockProducer for FakeBlockProducer {
         height: BlockHeight,
         block_time: Tai64,
         _: TransactionsSource,
-        _: impl NewTxWaiter,
+        _: NewTxWaiter,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         self.block_sender
             .send(FakeProducedBlock::New(height, block_time))

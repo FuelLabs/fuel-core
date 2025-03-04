@@ -8,6 +8,7 @@ use crate::{
             MaybeRelayerAdapter,
             StaticGasPrice,
             TransactionsSource,
+            NewTxWaiter,
             TxPoolAdapter,
         },
         sub_services::BlockProducerService,
@@ -19,8 +20,7 @@ use fuel_core_producer::{
         GasPriceProvider,
     },
     ports::{
-        RelayerBlockInfo,
-        TxPool,
+        RelayerBlockInfo, TxPool
     },
 };
 use fuel_core_storage::{
@@ -62,7 +62,6 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            NewTxWaiter,
             Result as ExecutorResult,
             StorageReadReplayEvent,
             TransactionExecutionStatus,
@@ -95,11 +94,11 @@ impl TxPool for TxPoolAdapter {
     }
 }
 
-impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAdapter {
+impl fuel_core_producer::ports::BlockProducer<TransactionsSource, NewTxWaiter> for ExecutorAdapter {
     async fn produce_without_commit(
         &self,
         component: Components<TransactionsSource>,
-        new_tx_waiter: impl NewTxWaiter,
+        new_tx_waiter: NewTxWaiter,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         self.executor
             .produce_without_commit_with_source(component, new_tx_waiter)
@@ -107,11 +106,11 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAd
     }
 }
 
-impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdapter {
+impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>, NewTxWaiter> for ExecutorAdapter {
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _: impl NewTxWaiter,
+        _: NewTxWaiter,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         self.produce_without_commit_from_vector(component)
     }

@@ -4,7 +4,7 @@ use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
 };
-use fuel_core_executor::executor::OnceTransactionsSource;
+use fuel_core_executor::executor::{OnceTransactionsSource, TimeoutOnlyTxWaiter};
 use fuel_core_gas_price_service::{
     common::cumulative_percentage_change,
     v1::service::LatestGasPrice,
@@ -34,7 +34,6 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             Result as ExecutorResult,
-            TimeoutOnlyTxWaiter,
             UncommittedResult,
         },
     },
@@ -44,6 +43,7 @@ use fuel_core_types::{
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
 use futures::FutureExt;
+use tokio::time::Instant;
 
 use crate::{
     database::{
@@ -319,6 +319,11 @@ impl TransactionsSource {
             minimum_gas_price,
         }
     }
+}
+
+pub struct NewTxWaiter {
+    pub receiver: tokio::sync::watch::Receiver<()>,
+    pub timeout: Instant,
 }
 
 #[derive(Clone)]

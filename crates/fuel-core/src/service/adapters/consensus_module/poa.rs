@@ -6,16 +6,13 @@ use crate::{
         P2PAdapter,
         PoAAdapter,
         TxPoolAdapter,
+        TimeoutOnlyTxWaiter
     },
 };
 use anyhow::anyhow;
 use fuel_core_poa::{
     ports::{
-        BlockImporter,
-        P2pPort,
-        PredefinedBlocks,
-        TransactionPool,
-        TransactionsSource,
+        BlockImporter, P2pPort, PredefinedBlocks, TransactionPool, TransactionsSource
     },
     service::{
         Mode,
@@ -33,10 +30,7 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImporterResult,
         },
-        executor::{
-            NewTxWaiter,
-            UncommittedResult,
-        },
+        executor::UncommittedResult,
     },
     tai64::Tai64,
 };
@@ -94,12 +88,12 @@ impl TransactionPool for TxPoolAdapter {
 
 #[async_trait::async_trait]
 impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
-    async fn produce_and_execute_block(
+    async fn produce_and_execute_block<N>(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-        new_tx_waiter: impl NewTxWaiter,
+        new_tx_waiter: N,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         match source {
             TransactionsSource::TxPool => {
@@ -120,7 +114,7 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
         block: &Block,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         self.block_producer
-            .produce_and_execute_predefined(block)
+            .produce_and_execute_predefined(block, TimeoutOnlyTxWaiter)
             .await
     }
 }

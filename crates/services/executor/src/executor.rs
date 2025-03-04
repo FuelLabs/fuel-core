@@ -1,8 +1,6 @@
 use crate::{
     ports::{
-        MaybeCheckedTransaction,
-        RelayerPort,
-        TransactionsSource,
+        MaybeCheckedTransaction, NewTxWaiterPort, RelayerPort, TransactionsSource
     },
     refs::ContractRef,
 };
@@ -131,9 +129,7 @@ use fuel_core_types::{
             Event as ExecutorEvent,
             ExecutionResult,
             ForcedTransactionFailure,
-            NewTxWaiter,
             Result as ExecutorResult,
-            TimeoutOnlyTxWaiter,
             TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
@@ -214,6 +210,16 @@ impl TransactionsSource for OnceTransactionsSource {
     }
 }
 
+pub struct TimeoutOnlyTxWaiter;
+
+impl NewTxWaiterPort for TimeoutOnlyTxWaiter {
+    async fn wait_for_new_transactions(
+            &self,
+        ) -> WaitNewTransactionsResult {
+            WaitNewTransactionsResult::Timeout
+    }
+}
+
 /// Data that is generated after executing all transactions.
 #[derive(Default)]
 pub struct ExecutionData {
@@ -285,7 +291,7 @@ where
         self,
         components: Components<TxSource>,
         dry_run: bool,
-        new_tx_waiter: impl NewTxWaiter,
+        new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: P,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
@@ -385,7 +391,7 @@ where
         preconfirmation_sender: P,
     ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>)>
     where
-        N: NewTxWaiter,
+        N: NewTxWaiterPort,
         // TODO: P: PreconfirmationSender,
     {
         let storage_tx = self
@@ -452,7 +458,7 @@ impl<R, TxWaiter, PreconfirmationSender>
 impl<R, N, P> BlockExecutor<R, N, P>
 where
     R: RelayerPort,
-    N: NewTxWaiter,
+    N: NewTxWaiterPort,
     // TODO: P: PreconfirmationSender,
 {
     #[tracing::instrument(skip_all)]
