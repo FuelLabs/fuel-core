@@ -50,7 +50,7 @@ query TransactionQuery($id: TransactionId!) {
         totalGas
         totalFee
       }
-      ... on SuccessDuringBlockProductionStatus {
+      ... on PreconfirmationSuccessStatus {
         txPointer
         transactionId
         receipts {
@@ -87,7 +87,7 @@ query TransactionQuery($id: TransactionId!) {
       ... on SqueezedOutStatus {
         reason
       }
-      ... on SqueezedOutDuringBlockProductionStatus {
+      ... on PreconfirmationSqueezedOutStatus {
         reason
       }
       ... on FailureStatus {
@@ -131,7 +131,7 @@ query TransactionQuery($id: TransactionId!) {
         totalGas
         totalFee
       }
-      ... on FailureDuringBlockProductionStatus {
+      ... on PreconfirmationFailureStatus {
         txPointer
         transactionId
         receipts {
