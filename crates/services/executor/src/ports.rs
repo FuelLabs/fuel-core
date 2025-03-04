@@ -2,16 +2,14 @@ use fuel_core_types::{
     blockchain::{
         header::ConsensusParametersVersion,
         primitives::DaBlockHeight,
+        transaction::TransactionExt,
     },
     fuel_tx::{
         self,
-        field::{
-            Expiration,
-            Inputs,
-        },
-        Chargeable,
+        field::Expiration,
         ConsensusParameters,
         Input,
+        Output,
         Transaction,
         TxId,
         UniqueIdentifier,
@@ -22,19 +20,19 @@ use fuel_core_types::{
     },
     fuel_vm::checked_transaction::CheckedTransaction,
     services::{
-        executor::{
-            Error as ExecutorError,
-            Result as ExecutorResult,
-        },
+        executor::Result as ExecutorResult,
         relayer::Event,
     },
 };
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::{
-    string::ToString,
+    borrow::Cow,
     vec::Vec,
 };
+
+#[cfg(feature = "std")]
+use std::borrow::Cow;
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]
@@ -120,75 +118,18 @@ impl MaybeCheckedTransaction {
     }
 }
 
-pub trait TransactionExt {
-    fn inputs(&self) -> ExecutorResult<&Vec<Input>>;
-
-    fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64>;
-}
-
-impl TransactionExt for Transaction {
-    fn inputs(&self) -> ExecutorResult<&Vec<Input>> {
-        match self {
-            Transaction::Script(tx) => Ok(tx.inputs()),
-            Transaction::Create(tx) => Ok(tx.inputs()),
-            Transaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have inputs".to_string(),
-            )),
-            Transaction::Upgrade(tx) => Ok(tx.inputs()),
-            Transaction::Upload(tx) => Ok(tx.inputs()),
-            Transaction::Blob(tx) => Ok(tx.inputs()),
-        }
-    }
-
-    fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64> {
-        let fee_params = consensus_params.fee_params();
-        let gas_costs = consensus_params.gas_costs();
-        match self {
-            Transaction::Script(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
-            Transaction::Create(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
-            Transaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have max_gas".to_string(),
-            )),
-            Transaction::Upgrade(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
-            Transaction::Upload(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
-            Transaction::Blob(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
-        }
-    }
-}
-
-impl TransactionExt for CheckedTransaction {
-    fn inputs(&self) -> ExecutorResult<&Vec<Input>> {
-        match self {
-            CheckedTransaction::Script(tx) => Ok(tx.transaction().inputs()),
-            CheckedTransaction::Create(tx) => Ok(tx.transaction().inputs()),
-            CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have max_gas".to_string(),
-            )),
-            CheckedTransaction::Upgrade(tx) => Ok(tx.transaction().inputs()),
-            CheckedTransaction::Upload(tx) => Ok(tx.transaction().inputs()),
-            CheckedTransaction::Blob(tx) => Ok(tx.transaction().inputs()),
-        }
-    }
-
-    fn max_gas(&self, _: &ConsensusParameters) -> ExecutorResult<u64> {
-        match self {
-            CheckedTransaction::Script(tx) => Ok(tx.metadata().max_gas),
-            CheckedTransaction::Create(tx) => Ok(tx.metadata().max_gas),
-            CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have max_gas".to_string(),
-            )),
-            CheckedTransaction::Upgrade(tx) => Ok(tx.metadata().max_gas),
-            CheckedTransaction::Upload(tx) => Ok(tx.metadata().max_gas),
-            CheckedTransaction::Blob(tx) => Ok(tx.metadata().max_gas),
-        }
-    }
-}
-
 impl TransactionExt for MaybeCheckedTransaction {
     fn inputs(&self) -> ExecutorResult<&Vec<Input>> {
         match self {
             MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.inputs(),
             MaybeCheckedTransaction::Transaction(tx) => tx.inputs(),
+        }
+    }
+
+    fn outputs(&self) -> Cow<[Output]> {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.outputs(),
+            MaybeCheckedTransaction::Transaction(tx) => tx.outputs(),
         }
     }
 
