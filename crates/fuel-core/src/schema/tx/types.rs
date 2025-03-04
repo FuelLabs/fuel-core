@@ -1031,12 +1031,6 @@ pub(crate) async fn get_tx_status(
     query: &ReadView,
     txpool: &TxPool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
-    // TODO[RC]: Tries to read from storage first, then from txpool, but only ever returns Submitted
-    // So these cases are possible:
-    // 1. Tx is in storage - return status from storage
-    // 2. Tx is not in storage, does txpool know about it?
-    //     - yes - return "Submitted"
-    //     - no - return None
     match query
         .tx_status(&id)
         .into_api_result::<txpool::TransactionStatus, StorageError>()?
