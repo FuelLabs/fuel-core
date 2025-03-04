@@ -5,20 +5,12 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_types::{
-    fuel_tx::TxId,
-    services::{
-        p2p::{
-            GossipData,
-            Preconfirmation,
-            PreconfirmationMessage,
-            Preconfirmations,
-            PreconfirmationsGossipData,
-            Sealed,
-        },
-        txpool::TransactionStatus,
-    },
-    tai64::Tai64,
+use fuel_core_types::services::p2p::{
+    GossipData,
+    Preconfirmation,
+    PreconfirmationMessage,
+    PreconfirmationsGossipData,
+    Sealed,
 };
 use futures::StreamExt;
 
@@ -42,12 +34,12 @@ impl Task {
         preconfirmations: PreconfirmationMessage,
     ) {
         match preconfirmations {
-            PreconfirmationMessage::Delegate(sealed) => {
+            PreconfirmationMessage::Delegate(_sealed) => {
                 // TODO[RC]: Handle the delegate message,
             }
             PreconfirmationMessage::Preconfirmations(sealed) => {
                 let Sealed {
-                    signature,
+                    signature: _,
                     entity: preconfirmations,
                 } = sealed;
                 // TODO[RC]: Add signature verification

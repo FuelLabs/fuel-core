@@ -67,7 +67,6 @@ use fuel_core_types::{
         EstimatePredicates,
     },
     services::txpool,
-    tai64::Tai64,
 };
 use futures::{
     Stream,

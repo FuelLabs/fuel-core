@@ -38,7 +38,6 @@ use fuel_core_storage::{
     IsNotFound,
     StorageAsMut,
 };
-use fuel_core_tx_status_manager::TxStatusManager;
 use fuel_core_types::blockchain::consensus::Consensus;
 
 use crate::{

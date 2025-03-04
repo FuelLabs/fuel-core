@@ -30,7 +30,6 @@ use fuel_core_types::{
             NetworkData,
             PeerId,
         },
-        txpool::TransactionStatus,
     },
 };
 

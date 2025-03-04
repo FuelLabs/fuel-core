@@ -1,10 +1,7 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::{
-        block::Block,
-        header::ConsensusParametersVersion,
-    },
+    blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -30,7 +27,6 @@ use crate::{
         checked_transaction::Checked,
         ProgramState,
     },
-    services::executor::TransactionExecutionResult,
 };
 use fuel_vm_private::{
     checked_transaction::CheckedTransaction,

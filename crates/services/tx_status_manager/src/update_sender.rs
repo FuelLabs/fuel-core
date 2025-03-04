@@ -4,14 +4,9 @@ use std::{
     time::Duration,
 };
 
-use fuel_core_types::{
-    fuel_tx::{
-        Bytes32,
-        TxId,
-    },
-    fuel_types::BlockHeight,
-    services::txpool::TransactionStatus,
-    tai64::Tai64,
+use fuel_core_types::fuel_tx::{
+    Bytes32,
+    TxId,
 };
 use parking_lot::Mutex;
 use tokio::{
@@ -28,14 +23,11 @@ use tokio::{
 };
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::{
-    error::Error,
-    tx_status_stream::{
-        TxStatusMessage,
-        TxStatusStream,
-        TxUpdate,
-        TxUpdateStream,
-    },
+use crate::tx_status_stream::{
+    TxStatusMessage,
+    TxStatusStream,
+    TxUpdate,
+    TxUpdateStream,
 };
 
 /// Subscriber channel buffer size.

@@ -2,18 +2,9 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_tx_status_manager::TxUpdate;
 use fuel_core_txpool::ports::TxStatusManager;
 use fuel_core_types::{
-    fuel_asm::RegId,
-    fuel_tx::{
-        TransactionBuilder,
-        TxId,
-    },
-    services::{
-        p2p::PreconfirmationsGossipData,
-        txpool::TransactionStatus,
-    },
+    self,
+    services::p2p::PreconfirmationsGossipData,
 };
-
-use crate::service::FuelService;
 
 use super::{
     P2PAdapter,

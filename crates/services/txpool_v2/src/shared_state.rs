@@ -1,23 +1,14 @@
-use std::sync::{
-    Arc,
-    Mutex,
-};
+use std::sync::Arc;
 
-use anyhow::anyhow;
 use fuel_core_types::{
     fuel_tx::{
         Bytes32,
         Transaction,
         TxId,
     },
-    fuel_types::BlockHeight,
-    services::txpool::{
-        ArcPoolTx,
-        TransactionStatus,
-    },
+    services::txpool::ArcPoolTx,
 };
 use tokio::sync::{
-    broadcast,
     mpsc,
     oneshot::{
         self,
@@ -34,7 +25,6 @@ use crate::{
         PoolReadRequest,
         PoolRemoveRequest,
     },
-    ports::TxStatusManager as TxStatusManagerTrait,
     service::{
         TxInfo,
         WritePoolRequest,

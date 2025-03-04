@@ -97,10 +97,7 @@ use std::{
         HashSet,
         VecDeque,
     },
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::Arc,
     time::{
         SystemTime,
         SystemTimeError,
@@ -504,7 +501,6 @@ where
         let p2p = self.p2p.clone();
         let verification = self.verification.clone();
         let pool_insert_request_sender = self.pool_worker.request_insert_sender.clone();
-        let shared_state = self.shared_state.clone();
         let current_height_reader = self.current_height_reader.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;

@@ -25,13 +25,9 @@ use fuel_core_importer::ImporterResult;
 // #[cfg(feature = "parallel-executor")]
 // use fuel_core_parallel_executor::executor::Executor;
 use fuel_core_poa::ports::BlockSigner;
-use fuel_core_services::{
-    stream::BoxStream,
-    ServiceRunner,
-};
+use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_tx_status_manager::{
-    Task,
     TxStatusManager,
     TxStatusStream,
 };

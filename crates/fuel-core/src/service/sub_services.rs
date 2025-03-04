@@ -58,7 +58,6 @@ use fuel_core_storage::{
     self,
     transactional::AtomicView,
 };
-use fuel_core_txpool::ports::TxStatusManager;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use fuel_core_types::signer::SignMode;

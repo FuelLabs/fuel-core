@@ -5,10 +5,7 @@ use super::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        api_service::{
-            ChainInfoProvider,
-            TxPool,
-        },
+        api_service::ChainInfoProvider,
         database::ReadView,
         query_costs,
         IntoApiResult,
