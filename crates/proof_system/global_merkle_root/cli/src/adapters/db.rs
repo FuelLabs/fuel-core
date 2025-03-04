@@ -1,16 +1,31 @@
+use fuel_core::database::database_description::DatabaseDescription;
 use fuel_core_global_merkle_root_api::ports::GetStateRoot;
+use fuel_core_global_merkle_root_storage::column::Column;
+use fuel_core_types::fuel_types::BlockHeight;
 
-/// The state root service database
+#[derive(Clone, Copy, Debug)]
 pub struct StateRootDatabase;
 
-/// The state root service database description
-pub struct StateRootDatabaseDescription;
+impl DatabaseDescription for StateRootDatabase {
+    type Column = Column;
+    type Height = BlockHeight;
 
-// impl DatabaseDescription for StateRootDatabaseDescription {}
+    fn version() -> u32 {
+        0
+    }
 
-// impl DatabaseDescription for StateRootDatabaseDescription {
-//
-//    };
+    fn name() -> String {
+        String::from("state_root")
+    }
+
+    fn metadata_column() -> Self::Column {
+        Column::MerkleMetadataColumn
+    }
+
+    fn prefix(_column: &Self::Column) -> Option<usize> {
+        None
+    }
+}
 
 impl GetStateRoot for StateRootDatabase {
     fn state_root_at(
