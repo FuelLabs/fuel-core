@@ -119,15 +119,15 @@ where
     l2_block_source: L2,
     /// The algorithm updater
     algorithm_updater: AlgorithmUpdaterV1,
-    /// the da source adapter handle
+    /// The DA source adapter handle
     da_source_adapter_handle: ServiceRunner<DaSourceService<DA>>,
-    /// The da source channel
+    /// The DA source channel
     da_source_channel: Receiver<DaBlockCosts>,
     /// Buffer of block costs from the DA chain
     da_block_costs_buffer: Vec<DaBlockCosts>,
     /// Storage transaction provider for metadata and unrecorded blocks
     storage_tx_provider: AtomicStorage,
-    /// communicates to the Da source service what the latest L2 block was
+    /// Communicates to the DA source service what the latest L2 block was
     latest_l2_block: Arc<AtomicU32>,
     /// Initial Recorded Height
     initial_recorded_height: Option<BlockHeight>,

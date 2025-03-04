@@ -519,6 +519,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         let interpreter_params = InterpreterParams::new(gas_price, &params);
         let memory = memory.unwrap_or_else(MemoryInstance::new);
 
+        let original_db = db.clone();
         let mut txtor = Transactor::new(memory, db, interpreter_params);
 
         txtor.transact(tx);
@@ -535,7 +536,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             vm.prepare_call(ra, rb, rc, rd)
                 .map_err(anyhow::Error::msg)?;
             for instruction in post_call {
-                vm.instruction(instruction).unwrap();
+                vm.instruction::<_, false>(instruction).unwrap();
             }
         }
 
@@ -547,7 +548,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
                 vm.prepare_call(ra, rb, rc, rd).unwrap();
             }
             _ => {
-                vm.instruction(instruction).unwrap();
+                vm.instruction::<_, false>(instruction).unwrap();
             }
         }
         let storage_diff = vm.storage_diff();
@@ -556,6 +557,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         diff += storage_diff;
         let diff: diff::Diff<diff::InitialVmState> = diff.into();
         vm.reset_vm_state(&diff);
+        *vm.as_mut() = original_db;
         assert_eq!(vm_before_first_instruction, vm);
 
         Ok(Self {

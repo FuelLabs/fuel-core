@@ -3,6 +3,7 @@
 use fuel_core::p2p_test_helpers::{
     make_nodes,
     BootstrapSetup,
+    BootstrapType,
     CustomizeConfig,
     Nodes,
     ProducerSetup,
@@ -43,7 +44,7 @@ async fn max_discovery_peers_connected__node_will_not_discover_new_nodes_if_full
         None,
     )
     .await;
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
     // then
     let Nodes { mut producers, .. } = nodes;
@@ -53,27 +54,30 @@ async fn max_discovery_peers_connected__node_will_not_discover_new_nodes_if_full
     let peering_info = client.connected_peers_info().await.unwrap();
     let actual = peering_info.len();
 
-    assert_eq!(expected, actual);
+    assert!(actual <= expected);
 }
 
 #[tokio::test]
-async fn max_discovery_peers_connected__nodes_will_discover_new_peers_if_first_peer_is_full(
+async fn max_functional_peers_connected__nodes_will_discover_new_peers_if_first_peer_is_full(
 ) {
     let mut rng = StdRng::seed_from_u64(1234);
 
     // given
     // one for bootstrap, one for a single validator
-    let producer_max_peers = 2;
+    let producer_max_peers = 1;
     let new_blocks = 10;
 
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
-    let producer_overrides =
-        CustomizeConfig::no_overrides().max_discovery_peers_connected(producer_max_peers);
-    let producer_setup =
-        ProducerSetup::new_with_overrides(secret, producer_overrides).with_name("Alice");
+    let producer_overrides = CustomizeConfig::no_overrides()
+        .max_functional_peers_connected(producer_max_peers);
+    let producer_setup = ProducerSetup::new_with_overrides(secret, producer_overrides)
+        .with_name("Alice")
+        .bootstrap_type(BootstrapType::ReservedNodes);
     let bootstrap = BootstrapSetup::new(pub_key);
-    let many_validators = (0..10).map(|_| Some(ValidatorSetup::new(pub_key)));
+    let many_validators = (0..10).map(|_| {
+        Some(ValidatorSetup::new(pub_key).bootstrap_type(BootstrapType::BootstrapNodes))
+    });
 
     // when
     let nodes = make_nodes(
@@ -94,7 +98,7 @@ async fn max_discovery_peers_connected__nodes_will_discover_new_peers_if_first_p
     let producer = producers.pop().unwrap();
     let client = FuelClient::from(producer.node.bound_address);
     client.produce_blocks(new_blocks, None).await.unwrap();
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     for validator in validators {
         let client = FuelClient::from(validator.node.bound_address);

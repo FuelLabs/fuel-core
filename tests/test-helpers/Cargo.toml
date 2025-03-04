@@ -34,5 +34,6 @@ futures = { workspace = true }
 itertools = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 tempfile = { workspace = true }

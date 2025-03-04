@@ -3,7 +3,7 @@ use crate::{
     service::{
         adapters::{
             BlockProducerAdapter,
-            ConsensusParametersProvider,
+            ChainStateInfoProvider,
             ExecutorAdapter,
             MaybeRelayerAdapter,
             StaticGasPrice,
@@ -15,7 +15,7 @@ use crate::{
 };
 use fuel_core_producer::{
     block_producer::gas_price::{
-        ConsensusParametersProvider as ConsensusParametersProviderTrait,
+        ChainStateInfoProvider as ChainStateInfoProviderTrait,
         GasPriceProvider,
     },
     ports::{
@@ -90,13 +90,7 @@ impl TxPool for TxPoolAdapter {
         gas_price: u64,
         _: BlockHeight,
     ) -> anyhow::Result<Self::TxSource> {
-        let tx_pool = self
-            .service
-            .borrow_txpool()
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?;
-
-        Ok(TransactionsSource::new(gas_price, tx_pool))
+        Ok(TransactionsSource::new(gas_price, self.service.clone()))
     }
 }
 
@@ -287,7 +281,7 @@ impl GasPriceProvider for StaticGasPrice {
     }
 }
 
-impl ConsensusParametersProviderTrait for ConsensusParametersProvider {
+impl ChainStateInfoProviderTrait for ChainStateInfoProvider {
     fn consensus_params_at_version(
         &self,
         version: &ConsensusParametersVersion,

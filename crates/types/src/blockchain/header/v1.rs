@@ -1,3 +1,5 @@
+use educe::Educe;
+
 use crate::{
     blockchain::{
         header::{
@@ -17,8 +19,8 @@ use crate::{
 
 /// A fuel block header that has all the fields generated because it
 /// has been executed.
-#[derive(Clone, Debug, derivative::Derivative)]
-#[derivative(PartialEq, Eq)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct BlockHeaderV1 {
@@ -29,7 +31,7 @@ pub struct BlockHeaderV1 {
     /// The header metadata calculated during creation.
     /// The field is pub(crate) to enforce the use of the [`PartialBlockHeader::generate`] method.
     #[cfg_attr(feature = "serde", serde(skip))]
-    #[derivative(PartialEq = "ignore")]
+    #[educe(PartialEq(ignore))]
     pub(crate) metadata: Option<BlockHeaderMetadata>,
 }
 
@@ -143,6 +145,14 @@ impl BlockHeaderV1 {
         version: super::ConsensusParametersVersion,
     ) {
         self.application_mut().consensus_parameters_version = version;
+        self.recalculate_metadata();
+    }
+
+    pub(crate) fn set_stf_version(
+        &mut self,
+        version: super::StateTransitionBytecodeVersion,
+    ) {
+        self.application_mut().state_transition_bytecode_version = version;
         self.recalculate_metadata();
     }
 

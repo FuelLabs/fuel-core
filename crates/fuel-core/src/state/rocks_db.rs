@@ -27,7 +27,11 @@ use fuel_core_storage::{
         Value,
         WriteOperation,
     },
-    transactional::Changes,
+    transactional::{
+        Changes,
+        ReferenceBytesKey,
+        StorageChanges,
+    },
     Error as StorageError,
     Result as StorageResult,
 };
@@ -50,7 +54,10 @@ use rocksdb::{
 };
 use std::{
     cmp,
-    collections::BTreeMap,
+    collections::{
+        BTreeMap,
+        HashSet,
+    },
     fmt,
     fmt::Formatter,
     iter,
@@ -142,6 +149,7 @@ impl<Description> Drop for RocksDb<Description> {
         // Drop the snapshot before the db.
         // Dropping the snapshot after the db will cause a sigsegv.
         self.snapshot = None;
+        self.db.cancel_all_background_work(true);
     }
 }
 
@@ -903,39 +911,39 @@ where
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<Option<usize>> {
+    ) -> StorageResult<bool> {
         self.metrics.read_meter.inc();
         let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
         column_metrics.map(|metric| metric.inc());
 
-        let r = self
+        let Some(value) = self
             .db
             .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?
-            .map(|value| {
-                let bytes_len = value.len();
-                let start = offset;
-                let buf_len = buf.len();
-                let end = offset.saturating_add(buf_len);
+        else {
+            return Ok(false);
+        };
 
-                if end > bytes_len {
-                    return Err(StorageError::Other(anyhow::anyhow!(
-                        "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}` and column `{column:?}`",
-                        key
-                    )));
-                }
+        let bytes_len = value.len();
+        let start = offset;
+        let buf_len = buf.len();
+        let end = offset.saturating_add(buf_len);
 
-                let starting_from_offset = &value[start..end];
-                buf[..].copy_from_slice(starting_from_offset);
-                Ok(buf_len)
-            })
-            .transpose()?;
-
-        if let Some(r) = &r {
-            self.metrics.bytes_read.inc_by(*r as u64);
+        if end > bytes_len {
+            return Err(StorageError::Other(anyhow::anyhow!(
+                "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}` and column `{column:?}`",
+                key
+            )));
         }
 
-        Ok(r)
+        let starting_from_offset = &value[start..end];
+        buf[..].copy_from_slice(starting_from_offset);
+
+        self.metrics
+            .bytes_read
+            .inc_by(starting_from_offset.len() as u64);
+
+        Ok(true)
     }
 }
 
@@ -968,24 +976,18 @@ impl<Description> RocksDb<Description>
 where
     Description: DatabaseDescription,
 {
-    pub fn commit_changes(&self, changes: &Changes) -> StorageResult<()> {
+    pub fn commit_changes<'a>(&self, changes: &'a StorageChanges) -> StorageResult<()> {
         let instant = std::time::Instant::now();
         let mut batch = WriteBatch::default();
+        let mut conflict_finder = HashSet::<(&'a u32, &'a ReferenceBytesKey)>::new();
 
-        for (column, ops) in changes {
-            let cf = self.cf_u32(*column);
-            let column_metrics = self.metrics.columns_write_statistic.get(column);
-            for (key, op) in ops {
-                self.metrics.write_meter.inc();
-                column_metrics.map(|metric| metric.inc());
-                match op {
-                    WriteOperation::Insert(value) => {
-                        self.metrics.bytes_written.inc_by(value.len() as u64);
-                        batch.put_cf(&cf, key, value.as_ref());
-                    }
-                    WriteOperation::Remove => {
-                        batch.delete_cf(&cf, key);
-                    }
+        match changes {
+            StorageChanges::Changes(changes) => {
+                self._populate_batch(&mut batch, &mut conflict_finder, changes)?;
+            }
+            StorageChanges::ChangesList(changes_list) => {
+                for changes in changes_list {
+                    self._populate_batch(&mut batch, &mut conflict_finder, changes)?;
                 }
             }
         }
@@ -999,6 +1001,40 @@ where
                 .expect("The commit shouldn't take longer than `u64`"),
         );
 
+        Ok(())
+    }
+
+    fn _populate_batch<'a>(
+        &self,
+        batch: &mut WriteBatch,
+        conflict_finder: &mut HashSet<(&'a u32, &'a ReferenceBytesKey)>,
+        changes: &'a Changes,
+    ) -> DatabaseResult<()> {
+        for (column, ops) in changes {
+            let cf = self.cf_u32(*column);
+            let column_metrics = self.metrics.columns_write_statistic.get(column);
+            for (key, op) in ops {
+                self.metrics.write_meter.inc();
+                column_metrics.map(|metric| metric.inc());
+
+                if !conflict_finder.insert((column, key)) {
+                    return Err(DatabaseError::ConflictingChanges {
+                        column: *column,
+                        key: key.clone(),
+                    });
+                }
+
+                match op {
+                    WriteOperation::Insert(value) => {
+                        self.metrics.bytes_written.inc_by(value.len() as u64);
+                        batch.put_cf(&cf, key, value.as_ref());
+                    }
+                    WriteOperation::Remove => {
+                        batch.delete_cf(&cf, key);
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -1035,7 +1071,7 @@ pub mod test_helpers {
             let mut transaction = self.read_transaction();
             let len = transaction.write(key, column, buf)?;
             let changes = transaction.into_changes();
-            self.commit_changes(&changes)?;
+            self.commit_changes(&StorageChanges::Changes(changes))?;
 
             Ok(len)
         }
@@ -1044,7 +1080,7 @@ pub mod test_helpers {
             let mut transaction = self.read_transaction();
             transaction.delete(key, column)?;
             let changes = transaction.into_changes();
-            self.commit_changes(&changes)?;
+            self.commit_changes(&StorageChanges::Changes(changes))?;
             Ok(())
         }
     }
@@ -1166,7 +1202,8 @@ mod tests {
             )]),
         )];
 
-        db.commit_changes(&HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(&StorageChanges::Changes(HashMap::from_iter(ops)))
+            .unwrap();
         assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
@@ -1182,7 +1219,8 @@ mod tests {
             Column::Metadata.id(),
             BTreeMap::from_iter(vec![(key.clone().into(), WriteOperation::Remove)]),
         )];
-        db.commit_changes(&HashMap::from_iter(ops)).unwrap();
+        db.commit_changes(&StorageChanges::Changes(HashMap::from_iter(ops)))
+            .unwrap();
 
         assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }

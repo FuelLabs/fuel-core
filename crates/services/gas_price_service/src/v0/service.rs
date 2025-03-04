@@ -276,7 +276,7 @@ mod tests {
         let initial_price = read_algo.next_gas_price();
 
         // when
-        service.run(&mut watcher).await;
+        let _ = service.run(&mut watcher).await;
         l2_block_sender.send(l2_block).await.unwrap();
         service.shutdown().await.unwrap();
 
