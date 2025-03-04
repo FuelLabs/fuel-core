@@ -57,6 +57,7 @@ pub struct Config {
     /// When `true`:
     /// - Enables dry run in the past.
     /// - Enables storage read replay for historical blocks.
+    /// - Enables querying historical contract state and balances.
     pub historical_execution: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
