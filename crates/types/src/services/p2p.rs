@@ -79,7 +79,7 @@ pub struct GossipData<T> {
 pub type TransactionGossipData = GossipData<Transaction>;
 
 /// Transactions that have been confirmed by block producer
-pub type ConfirmationsGossipData = GossipData<PreConfirmationMessage>;
+pub type PreConfirmationsGossipData = GossipData<PreConfirmationMessage>;
 
 /// A value and an associated signature
 #[derive(Debug, Clone, PartialEq, Eq)]

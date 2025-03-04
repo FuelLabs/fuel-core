@@ -63,12 +63,13 @@ use fuel_core_types::{
             PeerReport,
         },
         BlockHeightHeartbeatData,
-        ConfirmationsGossipData,
         GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
         NetworkableTransactionPool,
         PeerId as FuelPeerId,
+        PreConfirmationMessage,
+        PreConfirmationsGossipData,
         TransactionGossipData,
         Transactions,
     },
@@ -127,6 +128,8 @@ pub enum TaskError {
 pub enum TaskRequest {
     // Broadcast requests to p2p network
     BroadcastTransaction(Arc<Transaction>),
+    // Broadcast Preconfirmations to p2p network
+    BroadcastPreConfirmations(Arc<PreConfirmationMessage>),
     // Request to get information about all connected peers
     GetAllPeerInfo {
         channel: oneshot::Sender<Vec<(PeerId, PeerInfo)>>,
@@ -190,6 +193,9 @@ impl Debug for TaskRequest {
         match self {
             TaskRequest::BroadcastTransaction(_) => {
                 write!(f, "TaskRequest::BroadcastTransaction")
+            }
+            TaskRequest::BroadcastPreConfirmations(_) => {
+                write!(f, "TaskRequest::BroadcastPreConfirmations")
             }
             TaskRequest::GetSealedHeaders { .. } => {
                 write!(f, "TaskRequest::GetSealedHeaders")
@@ -380,7 +386,7 @@ pub trait Broadcast: Send {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: ConfirmationsGossipData,
+        confirmations: PreConfirmationsGossipData,
     ) -> anyhow::Result<()>;
 
     fn new_tx_subscription_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
@@ -411,9 +417,9 @@ impl Broadcast for SharedState {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: ConfirmationsGossipData,
+        confirmations: PreConfirmationsGossipData,
     ) -> anyhow::Result<()> {
-        self.confirmations_broadcast.send(confirmations)?;
+        self.pre_confirmations_broadcast.send(confirmations)?;
         Ok(())
     }
 
@@ -948,6 +954,13 @@ where
                             tracing::error!("Got an error during transaction {} broadcasting {}", tx_id, e);
                         }
                     }
+                    Some(TaskRequest::BroadcastPreConfirmations(pre_confirmation_message)) => {
+                        let broadcast = GossipsubBroadcastRequest::TxPreConfirmations(pre_confirmation_message);
+                        let result = self.p2p_service.publish_message(broadcast);
+                        if let Err(e) = result {
+                            tracing::error!("Got an error during pre-confirmation message broadcasting {}", e);
+                        }
+                    }
                     Some(TaskRequest::GetSealedHeaders { block_height_range, channel}) => {
                         // Note: this range has already been checked for
                         // validity in `SharedState::get_sealed_block_headers`.
@@ -1088,8 +1101,8 @@ pub struct SharedState {
     new_tx_subscription_broadcast: broadcast::Sender<FuelPeerId>,
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
-    /// Sender of p2p tx confirmations used for subscribing.
-    confirmations_broadcast: broadcast::Sender<ConfirmationsGossipData>,
+    /// Sender of p2p transaction preconfirmations used for subscribing.
+    pre_confirmations_broadcast: broadcast::Sender<PreConfirmationsGossipData>,
     /// Sender of reserved peers connection updates.
     reserved_peers_broadcast: broadcast::Sender<usize>,
     /// Used for communicating with the `Task`.
@@ -1301,6 +1314,15 @@ impl SharedState {
         Ok(())
     }
 
+    pub fn broadcast_preconfirmations(
+        &self,
+        preconfirmations: Arc<PreConfirmationMessage>,
+    ) -> anyhow::Result<()> {
+        self.request_sender
+            .try_send(TaskRequest::BroadcastPreConfirmations(preconfirmations))?;
+        Ok(())
+    }
+
     pub async fn get_all_peers(&self) -> anyhow::Result<Vec<(PeerId, PeerInfo)>> {
         let (sender, receiver) = oneshot::channel();
 
@@ -1321,8 +1343,8 @@ impl SharedState {
 
     pub fn subscribe_confirmations(
         &self,
-    ) -> broadcast::Receiver<ConfirmationsGossipData> {
-        self.confirmations_broadcast.subscribe()
+    ) -> broadcast::Receiver<PreConfirmationsGossipData> {
+        self.pre_confirmations_broadcast.subscribe()
     }
 
     pub fn subscribe_block_height(
@@ -1384,7 +1406,7 @@ pub fn build_shared_state(
             request_sender,
             new_tx_subscription_broadcast,
             tx_broadcast,
-            confirmations_broadcast,
+            pre_confirmations_broadcast: confirmations_broadcast,
             reserved_peers_broadcast,
             block_height_broadcast,
             max_txs_per_request: config.max_txs_per_request,
