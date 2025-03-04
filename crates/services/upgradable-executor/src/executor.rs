@@ -9,10 +9,13 @@ use fuel_core_executor::{
     executor::{
         ExecutionInstance,
         ExecutionOptions,
-        OnceTransactionsSource, TimeoutOnlyTxWaiter,
+        OnceTransactionsSource,
+        TimeoutOnlyTxWaiter,
     },
     ports::{
-        NewTxWaiterPort, RelayerPort, TransactionsSource
+        NewTxWaiterPort,
+        RelayerPort,
+        TransactionsSource,
     },
 };
 use fuel_core_storage::{

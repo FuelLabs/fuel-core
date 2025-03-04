@@ -20,7 +20,10 @@ use fuel_core_types::{
     },
     fuel_vm::checked_transaction::CheckedTransaction,
     services::{
-        executor::{Result as ExecutorResult, WaitNewTransactionsResult},
+        executor::{
+            Result as ExecutorResult,
+            WaitNewTransactionsResult,
+        },
         relayer::Event,
     },
 };
@@ -32,7 +35,10 @@ use alloc::{
 };
 
 #[cfg(feature = "std")]
-use std::{borrow::Cow, future::Future};
+use std::{
+    borrow::Cow,
+    future::Future,
+};
 
 #[cfg(not(feature = "std"))]
 use core::future::Future;

@@ -4,7 +4,15 @@
 use crate::{
     new_service,
     ports::{
-        BlockProducer, BlockSigner, GetTime, InMemoryPredefinedBlocks, MockBlockImporter, MockBlockProducer, MockP2pPort, MockTransactionPool, NewTxWaiter, TransactionsSource
+        BlockProducer,
+        BlockSigner,
+        GetTime,
+        InMemoryPredefinedBlocks,
+        MockBlockImporter,
+        MockBlockProducer,
+        MockP2pPort,
+        MockTransactionPool,
+        TransactionsSource,
     },
     service::MainTask,
     Config,
@@ -72,7 +80,10 @@ use tokio::{
         broadcast,
         watch,
     },
-    time,
+    time::{
+        self,
+        Instant,
+    },
 };
 
 mod manually_produce_tests;
@@ -405,7 +416,7 @@ impl BlockProducer for FakeBlockProducer {
         height: BlockHeight,
         block_time: Tai64,
         _: TransactionsSource,
-        _: NewTxWaiter,
+        _: Instant,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         self.block_sender
             .send(FakeProducedBlock::New(height, block_time))

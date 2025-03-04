@@ -25,6 +25,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::collections::HashMap;
+use tokio::time::Instant;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
@@ -44,12 +45,12 @@ pub enum TransactionsSource {
 #[cfg_attr(test, mockall::automock)]
 #[async_trait::async_trait]
 pub trait BlockProducer: Send + Sync {
-    async fn produce_and_execute_block<N>(
+    async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-        new_tx_waiter: N,
+        deadline: Instant,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
 
     async fn produce_predefined_block(

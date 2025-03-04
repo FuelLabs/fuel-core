@@ -1,12 +1,21 @@
 use crate::{
     database::RelayerIterableKeyValueView,
-    service::adapters::{TransactionsSource, NewTxWaiter},
+    service::adapters::{
+        NewTxWaiter,
+        TransactionsSource,
+    },
 };
-use fuel_core_executor::ports::{MaybeCheckedTransaction, NewTxWaiterPort};
+use fuel_core_executor::ports::{
+    MaybeCheckedTransaction,
+    NewTxWaiterPort,
+};
 use fuel_core_txpool::Constraints;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    services::{executor::WaitNewTransactionsResult, relayer::Event},
+    services::{
+        executor::WaitNewTransactionsResult,
+        relayer::Event,
+    },
 };
 use std::sync::Arc;
 
@@ -67,10 +76,7 @@ impl fuel_core_executor::ports::RelayerPort for RelayerIterableKeyValueView {
 }
 
 impl NewTxWaiterPort for NewTxWaiter {
-    async fn wait_for_new_transactions(
-            &self,
-        ) -> WaitNewTransactionsResult {
-        // TODO: use correct interval
+    async fn wait_for_new_transactions(&self) -> WaitNewTransactionsResult {
         let mut receiver = self.receiver.clone();
         match tokio::time::timeout_at(self.timeout, async move {
             match receiver.changed().await {

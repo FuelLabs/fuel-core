@@ -16,7 +16,14 @@ use tokio::{
 
 use crate::{
     ports::{
-        BlockImporter, BlockProducer, BlockSigner, GetTime, P2pPort, PredefinedBlocks, TransactionPool, TransactionsSource
+        BlockImporter,
+        BlockProducer,
+        BlockSigner,
+        GetTime,
+        P2pPort,
+        PredefinedBlocks,
+        TransactionPool,
+        TransactionsSource,
     },
     sync::{
         SyncState,
@@ -265,13 +272,10 @@ where
         block_time: Tai64,
         source: TransactionsSource,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
-        // TODO: Use new calculated interval
-        let new_tx_waiter = NewTxWaiterImpl {
-            receiver: self.new_txs_watcher.clone(),
-            timeout: self.last_block_created + Duration::from_secs(1),
-        };
+        // TODO: do it correctly
+        let deadline = self.last_block_created + Duration::from_secs(1);
         self.block_producer
-            .produce_and_execute_block(height, block_time, source, new_tx_waiter)
+            .produce_and_execute_block(height, block_time, source, deadline)
             .await
     }
 
