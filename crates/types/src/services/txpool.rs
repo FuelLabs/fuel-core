@@ -1,10 +1,7 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::{
-        block::Block,
-        header::ConsensusParametersVersion,
-    },
+    blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -30,7 +27,6 @@ use crate::{
         checked_transaction::Checked,
         ProgramState,
     },
-    services::executor::TransactionExecutionResult,
 };
 use fuel_vm_private::{
     checked_transaction::CheckedTransaction,
@@ -331,6 +327,7 @@ impl From<&PoolTransaction> for CheckedTransaction {
 }
 
 /// The status of the transaction during its life from the tx pool until the block.
+// TODO[RC]: This type to be moved into TxStatusManager, but only after the GraphQL API changes are merged
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransactionStatus {
@@ -374,41 +371,4 @@ pub enum TransactionStatus {
         /// The total fee paid by the transaction.
         total_fee: u64,
     },
-}
-
-/// Converts the transaction execution result to the transaction status.
-pub fn from_executor_to_status(
-    block: &Block,
-    result: TransactionExecutionResult,
-) -> TransactionStatus {
-    let time = block.header().time();
-    let block_height = *block.header().height();
-    match result {
-        TransactionExecutionResult::Success {
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        } => TransactionStatus::Success {
-            block_height,
-            time,
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        },
-        TransactionExecutionResult::Failed {
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        } => TransactionStatus::Failed {
-            block_height,
-            time,
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        },
-    }
 }

@@ -1,6 +1,6 @@
 use fuel_core_types::{
     fuel_tx::TxId,
-    services::p2p::PreconfirmationStatus,
+    services::txpool::TransactionStatus,
 };
 
 pub mod broadcast;
@@ -10,4 +10,4 @@ pub mod signing_key;
 pub mod trigger;
 pub mod tx_receiver;
 
-pub type Preconfirmations = Vec<(TxId, PreconfirmationStatus)>;
+pub type Preconfirmations = Vec<(TxId, TransactionStatus)>;

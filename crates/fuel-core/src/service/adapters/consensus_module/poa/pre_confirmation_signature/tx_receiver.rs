@@ -8,14 +8,14 @@ use fuel_core_poa::pre_confirmation_signature_service::{
 };
 use fuel_core_types::{
     fuel_tx::TxId,
-    services::p2p::PreconfirmationStatus,
+    services::txpool::TransactionStatus,
 };
 
 pub struct MPSCTxReceiver<T> {
     receiver: tokio::sync::mpsc::Receiver<T>,
 }
 
-impl TxReceiver for MPSCTxReceiver<Vec<(TxId, PreconfirmationStatus)>> {
+impl TxReceiver for MPSCTxReceiver<Vec<(TxId, TransactionStatus)>> {
     type Txs = Preconfirmations;
 
     async fn receive(&mut self) -> PoAResult<Self::Txs> {

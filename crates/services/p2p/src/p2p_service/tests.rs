@@ -51,7 +51,7 @@ use fuel_core_types::{
     services::p2p::{
         GossipsubMessageAcceptance,
         NetworkableTransactionPool,
-        PreConfirmationMessage,
+        PreconfirmationMessage,
         Transactions,
     },
 };
@@ -621,7 +621,7 @@ async fn gossipsub_broadcast_tx_with_accept__tx_confirmations() {
             Duration::from_secs(20),
             gossipsub_broadcast(
                 GossipsubBroadcastRequest::TxPreConfirmations(Arc::new(
-                    PreConfirmationMessage::default_test_confirmation(),
+                    PreconfirmationMessage::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Accept,
                 None,
@@ -659,7 +659,7 @@ async fn gossipsub_broadcast_tx_with_reject__tx_confirmations() {
             Duration::from_secs(5),
             gossipsub_broadcast(
                 GossipsubBroadcastRequest::TxPreConfirmations(Arc::new(
-                    PreConfirmationMessage::default_test_confirmation(),
+                    PreconfirmationMessage::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Reject,
                 None,

@@ -37,6 +37,7 @@ fuel-core-services = { workspace = true }
 fuel-core-shared-sequencer = { workspace = true, optional = true }
 fuel-core-storage = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
+fuel-core-tx-status-manager = { workspace = true }
 fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 fuel-core-upgradable-executor = { workspace = true }
@@ -111,6 +112,7 @@ test-helpers = [
   "fuel-core-chain-config/test-helpers",
   "fuel-core-compression/test-helpers",
   "fuel-core-txpool/test-helpers",
+  "fuel-core-tx-status-manager/test-helpers",
   "fuel-core-services/test-helpers",
   "fuel-core-shared-sequencer?/test-helpers",
   "fuel-core-importer/test-helpers",

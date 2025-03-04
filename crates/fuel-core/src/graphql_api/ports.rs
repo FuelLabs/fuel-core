@@ -24,10 +24,8 @@ use fuel_core_storage::{
     StorageInspect,
     StorageRead,
 };
-use fuel_core_txpool::{
-    TxPoolStats,
-    TxStatusMessage,
-};
+use fuel_core_tx_status_manager::TxStatusMessage;
+use fuel_core_txpool::TxPoolStats;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
@@ -240,16 +238,18 @@ pub trait DatabaseChain {
 pub trait TxPoolPort: Send + Sync {
     async fn transaction(&self, id: TxId) -> anyhow::Result<Option<Transaction>>;
 
-    async fn submission_time(&self, id: TxId) -> anyhow::Result<Option<Tai64>>;
-
     async fn insert(&self, txs: Transaction) -> anyhow::Result<()>;
 
+    fn latest_pool_stats(&self) -> TxPoolStats;
+}
+
+pub trait TxStatusManagerPort: Send + Sync {
+    fn status(&self, tx_id: &TxId) -> Option<TransactionStatus>;
+    fn submission_time(&self, id: TxId) -> Option<Tai64>;
     fn tx_update_subscribe(
         &self,
         tx_id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>>;
-
-    fn latest_pool_stats(&self) -> TxPoolStats;
 }
 
 #[async_trait]
@@ -520,7 +520,7 @@ pub mod worker {
         ) -> anyhow::Result<SharedImportResult>;
     }
 
-    pub trait TxPool: Send + Sync {
+    pub trait TxStatusManager: Send + Sync {
         /// Sends the complete status of the transaction.
         fn send_complete(
             &self,
