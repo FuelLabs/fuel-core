@@ -14,7 +14,7 @@ use fuel_core_types::{
         TxPointer,
     },
     fuel_types::Address,
-    services::txpool::TransactionStatusStorage,
+    services::txpool::TransactionExecutionStatus,
 };
 use futures::{
     Stream,
@@ -27,10 +27,10 @@ impl ReadView {
         let status = self.tx_status(tx_id)?;
 
         let receipts = match status {
-            TransactionStatusStorage::Success { receipts, .. }
-            | TransactionStatusStorage::Failed { receipts, .. } => Some(receipts),
-            TransactionStatusStorage::Submitted { .. }
-            | TransactionStatusStorage::SqueezedOut { .. } => None,
+            TransactionExecutionStatus::Success { receipts, .. }
+            | TransactionExecutionStatus::Failed { receipts, .. } => Some(receipts),
+            TransactionExecutionStatus::Submitted { .. }
+            | TransactionExecutionStatus::SqueezedOut { .. } => None,
         };
 
         receipts.ok_or(not_found!(Transactions))

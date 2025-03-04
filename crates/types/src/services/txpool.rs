@@ -332,9 +332,10 @@ impl From<&PoolTransaction> for CheckedTransaction {
 }
 
 /// The status of the transaction during its life from the tx pool until the block.
+// TODO: This type needs to be updated: https://github.com/FuelLabs/fuel-core/issues/2794
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TransactionStatusStorage {
+pub enum TransactionExecutionStatus {
     /// Transaction was submitted into the txpool
     Submitted {
         /// Timestamp of submission into the txpool
@@ -377,13 +378,13 @@ pub enum TransactionStatusStorage {
     },
 }
 
-impl From<TransactionStatusStorage> for TransactionStatus {
-    fn from(value: TransactionStatusStorage) -> Self {
+impl From<TransactionExecutionStatus> for TransactionStatus {
+    fn from(value: TransactionExecutionStatus) -> Self {
         match value {
-            TransactionStatusStorage::Submitted { time } => {
+            TransactionExecutionStatus::Submitted { time } => {
                 TransactionStatus::Submitted { timestamp: time }
             }
-            TransactionStatusStorage::Success {
+            TransactionExecutionStatus::Success {
                 block_height,
                 time,
                 result,
@@ -398,10 +399,10 @@ impl From<TransactionStatusStorage> for TransactionStatus {
                 total_gas,
                 total_fee,
             },
-            TransactionStatusStorage::SqueezedOut { reason } => {
+            TransactionExecutionStatus::SqueezedOut { reason } => {
                 TransactionStatus::SqueezedOut { reason }
             }
-            TransactionStatusStorage::Failed {
+            TransactionExecutionStatus::Failed {
                 block_height,
                 time,
                 result,
@@ -498,7 +499,7 @@ pub enum TransactionStatus {
 pub fn from_executor_to_status(
     block: &Block,
     result: TransactionExecutionResult,
-) -> TransactionStatusStorage {
+) -> TransactionExecutionStatus {
     let timestamp = block.header().time();
     let block_height = *block.header().height();
     match result {
@@ -507,7 +508,7 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-        } => TransactionStatusStorage::Success {
+        } => TransactionExecutionStatus::Success {
             block_height,
             time: timestamp,
             result,
@@ -520,7 +521,7 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-        } => TransactionStatusStorage::Failed {
+        } => TransactionExecutionStatus::Failed {
             block_height,
             time: timestamp,
             result,
