@@ -67,7 +67,7 @@ pub struct TransactionStatuses;
 impl Mappable for TransactionStatuses {
     type Key = Bytes32;
     type OwnedKey = Self::Key;
-    type Value = TransactionStatusStorage; // TODO[RC]: TransactionStatusStorage should ultimately only contain `Success` and `Failed` variants. We don't need to persist any other states.
+    type Value = TransactionStatusStorage; // TODO: This type needs to be updated: https://github.com/FuelLabs/fuel-core/issues/2794
     type OwnedValue = Self::Value;
 }
 
