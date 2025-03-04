@@ -40,6 +40,18 @@ impl<E> From<Result<TransactionStatus, E>> for TxStatusMessage {
     }
 }
 
+impl From<TransactionStatus> for TxStatusMessage {
+    fn from(status: TransactionStatus) -> Self {
+        TxStatusMessage::Status(status)
+    }
+}
+
+impl From<&TransactionStatus> for TxStatusMessage {
+    fn from(status: &TransactionStatus) -> Self {
+        TxStatusMessage::Status(status.clone())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum State {
     Empty,

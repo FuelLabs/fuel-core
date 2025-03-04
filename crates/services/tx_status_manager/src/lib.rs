@@ -7,6 +7,7 @@ mod service;
 mod subscriptions;
 mod tx_status_stream;
 mod update_sender;
+pub mod utils;
 
 pub use manager::TxStatusManager;
 pub use service::{
@@ -16,7 +17,9 @@ pub use service::{
 pub use tx_status_stream::{
     TxStatusMessage,
     TxStatusStream,
+    TxUpdate,
 };
+pub use utils::from_executor_to_status;
 
 //#[cfg(test)]
 // mod tests;

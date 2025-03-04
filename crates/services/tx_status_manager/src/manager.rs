@@ -42,36 +42,38 @@ impl TxStatusManager {
         }
     }
 
-    pub fn upsert_status(&self, tx_id: &TxId, tx_status: TransactionStatus) {
-        tracing::debug!(%tx_id, ?tx_status, "new tx status");
+    pub fn status_update(&self, tx_update: TxUpdate) {
+        tracing::debug!(?tx_update, "new tx update");
 
-        match tx_status {
-            TransactionStatus::Submitted { .. } => {
-                if let Err(err) = self
-                    .tx_status_change
-                    .new_tx_notification_sender
-                    .send(*tx_id)
-                {
-                    tracing::error!(%err, "failed to send new tx notification");
-                }
+        match tx_update.message {
+            TxStatusMessage::Status(ref tx_status) => {
+                match tx_status {
+                    TransactionStatus::Submitted { .. } => {
+                        if let Err(err) = self
+                            .tx_status_change
+                            .new_tx_notification_sender
+                            .send(tx_update.tx_id)
+                        {
+                            tracing::error!(%err, "new_tx_notification_sender failed");
+                        }
+                    }
+                    TransactionStatus::Success { .. }
+                    | TransactionStatus::SqueezedOut { .. }
+                    | TransactionStatus::Failed { .. } => (),
+                };
+
+                // TODO[RC]: Capacity checks? - Protected by TxPool capacity checks, except for the squeezed state. Maybe introduce some limit.
+                // TODO[RC]: Purge old statuses? - Remove the status from the manager upon putting the status into storage.
+                // TODO[RC]: Shall we store squeezed out variants as well?
+                self.statuses
+                    .lock()
+                    .expect("mutex poisoned")
+                    .insert(tx_update.tx_id, tx_status.clone());
             }
-            TransactionStatus::Success { .. }
-            | TransactionStatus::SqueezedOut { .. }
-            | TransactionStatus::Failed { .. } => (),
-        };
+            TxStatusMessage::FailedStatus => todo!(),
+        }
 
-        self.tx_status_change.update_sender.send(TxUpdate::new(
-            *tx_id,
-            TxStatusMessage::Status(tx_status.clone()),
-        ));
-
-        // TODO[RC]: Capacity checks? - Protected by TxPool capacity checks, except for the squeezed state. Maybe introduce some limit.
-        // TODO[RC]: Purge old statuses? - Remove the status from the manager upon putting the status into storage.
-        // TODO[RC]: Shall we store squeezed out variants as well?
-        self.statuses
-            .lock()
-            .expect("mutex poisoned")
-            .insert(tx_id.clone(), tx_status);
+        self.tx_status_change.update_sender.send(&tx_update);
     }
 
     pub fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {

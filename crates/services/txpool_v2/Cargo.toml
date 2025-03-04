@@ -17,6 +17,7 @@ derive_more = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true, features = ["sync-processor"] }
 fuel-core-storage = { workspace = true, features = ["std"] }
+fuel-core-tx-status-manager = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = { workspace = true }
 num-rational = { workspace = true }

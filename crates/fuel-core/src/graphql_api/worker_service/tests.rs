@@ -77,7 +77,8 @@ fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
     let tx_pool = MockTxPool;
     let chain_id = Default::default();
     Task {
-        tx_pool,
+        // TODO[RC]: Fix stuff like this
+        tx_status_manager: tx_pool,
         block_importer,
         database,
         chain_id,

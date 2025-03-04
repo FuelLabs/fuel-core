@@ -36,7 +36,10 @@ use crate::{
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_tx_status_manager::TxStatusMessage;
+use fuel_core_tx_status_manager::{
+    TxStatusMessage,
+    TxUpdate,
+};
 use fuel_core_txpool::TxPoolStats;
 use fuel_core_types::{
     blockchain::header::{
@@ -185,14 +188,16 @@ impl P2pPort for P2PAdapter {
     }
 }
 
-impl worker::TxPool for TxPoolAdapter {
+impl worker::TxStatusManager for TxStatusManagerAdapter {
     fn send_complete(
         &self,
         id: Bytes32,
         block_height: &BlockHeight,
         status: TransactionStatus,
     ) {
-        self.service.notify_complete_tx(id, block_height, status)
+        tracing::info!("Transaction {id} successfully included in block {block_height}");
+        let tx_update = TxUpdate::new(id, status.into());
+        self.manager.status_update(tx_update);
     }
 }
 

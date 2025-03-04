@@ -339,7 +339,7 @@ pub fn init_sub_services(
     let graphql_block_importer =
         GraphQLBlockImporter::new(importer_adapter.clone(), import_result_provider);
     let graphql_worker_context = worker_service::Context {
-        tx_pool: tx_pool_adapter.clone(),
+        tx_status_manager: tx_status_manager_adapter.clone(),
         block_importer: graphql_block_importer,
         on_chain_database: database.on_chain().clone(),
         off_chain_database: database.off_chain().clone(),

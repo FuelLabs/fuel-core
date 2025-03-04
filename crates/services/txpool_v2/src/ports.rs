@@ -5,6 +5,7 @@ use fuel_core_storage::{
     PredicateStorageRequirements,
     Result as StorageResult,
 };
+use fuel_core_tx_status_manager::TxUpdate;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     entities::{
@@ -38,7 +39,7 @@ use crate::GasPrice;
 pub use fuel_core_storage::transactional::AtomicView;
 
 pub trait TxStatusManager: Send + Sync + 'static {
-    fn upsert_status(&self, tx_id: &TxId, tx_status: TransactionStatus);
+    fn status_update(&self, tx_update: TxUpdate);
 }
 
 pub trait BlockImporter {

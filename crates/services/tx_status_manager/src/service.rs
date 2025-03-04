@@ -27,6 +27,7 @@ use crate::{
     manager::TxStatusManager,
     ports::P2PSubscriptions,
     subscriptions::Subscriptions,
+    tx_status_stream::TxUpdate,
     update_sender::TxStatusChange,
 };
 
@@ -38,25 +39,26 @@ pub struct Task {
 impl Task {
     fn new_preconfirmations_from_p2p(
         &mut self,
-        preconfirmations: Sealed<Preconfirmations>,
+        preconfirmations: PreconfirmationMessage,
     ) {
-        let Sealed {
-            signature,
-            entity: preconfirmations,
-        } = preconfirmations;
-
-        // let expiration = preconfirmations.expiration();
-        // let public_key = get_pub_key_by_expiration(expiration);
-
-        // if signature_verified() {
-        preconfirmations
-            .iter()
-            .for_each(|Preconfirmation { tx_id, status }| {
-                self.manager.upsert_status(&tx_id, status.clone());
-            });
-        //} else {
-        // TODO[RC]: Log the error
-        //}
+        match preconfirmations {
+            PreconfirmationMessage::Delegate(sealed) => {
+                // TODO[RC]: Handle the delegate message,
+            }
+            PreconfirmationMessage::Preconfirmations(sealed) => {
+                let Sealed {
+                    signature,
+                    entity: preconfirmations,
+                } = sealed;
+                // TODO[RC]: Add signature verification
+                preconfirmations
+                    .iter()
+                    .for_each(|Preconfirmation { tx_id, status }| {
+                        self.manager
+                            .status_update(TxUpdate::new(*tx_id, status.into()));
+                    });
+            }
+        }
     }
 }
 
@@ -94,15 +96,8 @@ impl RunnableTask for Task {
 
             tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
                 if let Some(GossipData { data, .. }) = tx_status_from_p2p {
-                    if let Some(tx_status) = data {
-                        match tx_status {
-                            PreconfirmationMessage::Preconfirmations(sealed)=>
-                            {
-                                self.new_preconfirmations_from_p2p(sealed);
-                            },
-                            PreconfirmationMessage::Delegate(sealed) => {
-                                // TODO[RC]: Properly handle the signature verification
-                            },}
+                    if let Some(msg) = data {
+                        self.new_preconfirmations_from_p2p(msg);
                     }
                     TaskNextAction::Continue
                 } else {

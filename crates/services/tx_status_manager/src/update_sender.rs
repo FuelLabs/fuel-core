@@ -58,18 +58,6 @@ impl TxStatusChange {
             update_sender,
         }
     }
-
-    // TODO[RC]: Also cover other statuses from other components, for example, "Failed".
-    // This basically forwards whatever status was received from other component (worker service).
-    pub fn send_complete(
-        &self,
-        id: Bytes32,
-        block_height: &BlockHeight,
-        message: TxStatusMessage,
-    ) {
-        tracing::info!("Transaction {id} successfully included in block {block_height}");
-        self.update_sender.send(TxUpdate::new(id, message));
-    }
 }
 
 /// UpdateSender is responsible for managing subscribers
@@ -274,7 +262,7 @@ impl UpdateSender {
     }
 
     /// Send updates to all subscribed senders.
-    pub fn send(&self, update: TxUpdate) {
+    pub fn send(&self, update: &TxUpdate) {
         // Lock the senders Mutex.
         let mut senders = self.senders.lock();
 

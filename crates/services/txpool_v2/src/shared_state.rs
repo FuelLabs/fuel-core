@@ -156,26 +156,6 @@ impl SharedState {
         self.new_txs_notifier.subscribe()
     }
 
-    /// Notify the txpool that a transaction was executed and committed to a block.
-    pub fn notify_complete_tx(
-        &self,
-        id: Bytes32,
-        block_height: &BlockHeight,
-        status: TransactionStatus,
-    ) {
-        // TODO[RC]: Do not use `send_complete` anymore
-        // self.tx_status_manager
-        //     .lock()
-        //     .unwrap()
-        //     .upsert_status(&id, status.clone());
-
-        // self.tx_status_sender.send_complete(
-        //     id,
-        //     block_height,
-        //     TxStatusMessage::Status(status),
-        // )
-    }
-
     /// Notify the txpool that some transactions were skipped during block production.
     /// This is used to update the status of the skipped transactions internally and in subscriptions
     pub fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {

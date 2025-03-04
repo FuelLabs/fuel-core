@@ -520,7 +520,7 @@ pub mod worker {
         ) -> anyhow::Result<SharedImportResult>;
     }
 
-    pub trait TxPool: Send + Sync {
+    pub trait TxStatusManager: Send + Sync {
         /// Sends the complete status of the transaction.
         fn send_complete(
             &self,
