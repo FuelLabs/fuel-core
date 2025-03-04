@@ -335,7 +335,7 @@ where
             changes,
         ) = self
             .signal_produce_block(
-                height, block_time, source, // self.new_txs_watcher
+                height, block_time, source,
             )
             .await?
             .into();
