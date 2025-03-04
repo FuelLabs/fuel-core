@@ -5,7 +5,9 @@ use crate::{
 use fuel_core_storage::tables::Messages;
 
 impl MerkleizedTableColumn for Messages {
-    fn table_column() -> TableColumn {
+    type TableColumn = TableColumn;
+
+    fn table_column() -> Self::TableColumn {
         TableColumn::Messages
     }
 }

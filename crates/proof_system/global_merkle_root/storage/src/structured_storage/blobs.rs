@@ -5,7 +5,9 @@ use crate::{
 use fuel_core_storage::tables::BlobData;
 
 impl MerkleizedTableColumn for BlobData {
-    fn table_column() -> TableColumn {
+    type TableColumn = TableColumn;
+
+    fn table_column() -> Self::TableColumn {
         TableColumn::Blobs
     }
 }

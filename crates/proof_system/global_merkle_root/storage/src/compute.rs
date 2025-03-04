@@ -44,7 +44,7 @@ pub trait ComputeStateRoot {
     /// Compute the merkle root of the specific table
     fn merkle_root<Table>(&self) -> Result<MerkleRoot, StorageError>
     where
-        Table: Mappable + MerkleizedTableColumn,
+        Table: Mappable + MerkleizedTableColumn<TableColumn = crate::column::TableColumn>,
         Table: TableWithBlueprint,
         Table::Blueprint: BlueprintInspect<Table, DummyStorage<Column>>;
 }
@@ -77,7 +77,7 @@ where
 
     fn merkle_root<Table>(&self) -> Result<MerkleRoot, StorageError>
     where
-        Table: Mappable + MerkleizedTableColumn,
+        Table: Mappable + MerkleizedTableColumn<TableColumn = crate::column::TableColumn>,
         Table: TableWithBlueprint,
         Table::Blueprint: BlueprintInspect<Table, DummyStorage<Column>>,
     {

@@ -9,19 +9,25 @@ use fuel_core_storage::tables::{
 };
 
 impl MerkleizedTableColumn for ConsensusParametersVersions {
-    fn table_column() -> TableColumn {
+    type TableColumn = TableColumn;
+
+    fn table_column() -> Self::TableColumn {
         TableColumn::ConsensusParametersVersions
     }
 }
 
 impl MerkleizedTableColumn for StateTransitionBytecodeVersions {
-    fn table_column() -> TableColumn {
+    type TableColumn = TableColumn;
+
+    fn table_column() -> Self::TableColumn {
         TableColumn::StateTransitionBytecodeVersions
     }
 }
 
 impl MerkleizedTableColumn for UploadedBytecodes {
-    fn table_column() -> TableColumn {
+    type TableColumn = TableColumn;
+
+    fn table_column() -> Self::TableColumn {
         TableColumn::UploadedBytecodes
     }
 }

@@ -50,8 +50,11 @@ pub struct Merkleized<Table>(core::marker::PhantomData<Table>);
 /// Implementation of this trait for the table, inherits
 /// the Merkle implementation for the [`Merkleized`] table.
 pub trait MerkleizedTableColumn {
+    /// Specifies return type of the table column
+    type TableColumn;
+
     /// Get the table column
-    fn table_column() -> TableColumn;
+    fn table_column() -> Self::TableColumn;
 }
 
 impl<Table> Mappable for Merkleized<Table>
@@ -76,7 +79,7 @@ type ValueCodec<Table> = <<Table as TableWithBlueprint>::Blueprint as BlueprintI
 
 impl<Table> TableWithBlueprint for Merkleized<Table>
 where
-    Table: Mappable + MerkleizedTableColumn,
+    Table: Mappable + MerkleizedTableColumn<TableColumn = TableColumn>,
     Table: TableWithBlueprint,
     Table::Blueprint: BlueprintInspect<Table, DummyStorage<Column>>,
 {
