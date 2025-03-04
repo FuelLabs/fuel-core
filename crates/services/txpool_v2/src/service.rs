@@ -294,17 +294,13 @@ where
 {
     fn import_block(&mut self, result: SharedImportResult) -> TaskNextAction {
         let new_height = *result.sealed_block.entity.header().height();
-        let executed_transactions = result.tx_status.iter().map(|s| s.id).collect();
-        // We don't want block importer wait for us to process the result.
-        drop(result);
 
-        if let Err(err) = self
-            .pool_worker
-            .remove_executed_transactions(executed_transactions)
-        {
+        if let Err(err) = self.pool_worker.process_block(Arc::clone(&result)) {
             tracing::error!("{err}");
             return TaskNextAction::Stop
         }
+        // We don't want block importer wait for us to process the result.
+        drop(result);
 
         {
             self.current_height_writer.write(|data| {
