@@ -4,11 +4,7 @@ use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
 };
-use fuel_core_executor::executor::{
-    OnceTransactionsSource,
-    TimeoutOnlyTxWaiter,
-    TransparentPreconfirmationSender,
-};
+use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_gas_price_service::{
     common::cumulative_percentage_change,
     v1::service::LatestGasPrice,
@@ -36,7 +32,6 @@ use fuel_core_types::{
         block_importer::SharedImportResult,
         block_producer::Components,
         executor::{
-            Error as ExecutorError,
             Result as ExecutorResult,
             UncommittedResult,
         },
@@ -47,7 +42,6 @@ use fuel_core_types::{
 };
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
-use futures::FutureExt;
 use tokio::time::Instant;
 
 use crate::{
@@ -389,19 +383,7 @@ impl ExecutorAdapter {
         };
 
         self.executor
-            .produce_without_commit_with_source(
-                new_components,
-                TimeoutOnlyTxWaiter,
-                TransparentPreconfirmationSender,
-            )
-            .now_or_never()
-            .ok_or_else(|| {
-                ExecutorError::Other(
-                    "Impossible to resolve \
-                    `produce_without_commit_with_source` future immediately"
-                        .to_string(),
-                )
-            })?
+            .produce_without_commit_with_source_direct_resolve(new_components)
     }
 }
 

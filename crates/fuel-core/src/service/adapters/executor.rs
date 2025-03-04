@@ -5,16 +5,18 @@ use crate::{
         TransactionsSource,
     },
 };
-use fuel_core_executor::ports::{
-    MaybeCheckedTransaction,
-    NewTxWaiterPort,
-    PreconfirmationSenderPort,
+use fuel_core_executor::{
+    executor::WaitNewTransactionsResult,
+    ports::{
+        MaybeCheckedTransaction,
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
+    },
 };
 use fuel_core_txpool::Constraints;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     services::{
-        executor::WaitNewTransactionsResult,
         preconfirmation::PreconfirmationStatus,
         relayer::Event,
     },

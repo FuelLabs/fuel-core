@@ -334,9 +334,7 @@ where
             },
             changes,
         ) = self
-            .signal_produce_block(
-                height, block_time, source,
-            )
+            .signal_produce_block(height, block_time, source)
             .await?
             .into();
 

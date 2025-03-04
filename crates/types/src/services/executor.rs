@@ -89,14 +89,6 @@ pub struct ValidationResult {
     pub events: Vec<Event>,
 }
 
-/// The result of waiting for new transactions.
-pub enum WaitNewTransactionsResult {
-    /// We received a new transaction and we can continue the block execution.
-    NewTransaction,
-    /// We didn't receive any new transaction and we can end the block execution.
-    Timeout,
-}
-
 impl<DatabaseTransaction> UncommittedValidationResult<DatabaseTransaction> {
     /// Convert the `UncommittedValidationResult` into the `UncommittedResult`.
     pub fn into_execution_result(

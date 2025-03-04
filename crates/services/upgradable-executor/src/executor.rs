@@ -329,19 +329,13 @@ where
         };
 
         let options = self.config.as_ref().into();
-        self.produce_inner(
+        self.produce_inner_sync(
             component,
             options,
             ProduceBlockMode::Produce,
             TimeoutOnlyTxWaiter,
             TransparentPreconfirmationSender,
         )
-        .now_or_never()
-        .ok_or_else(|| {
-            ExecutorError::Other(
-                "Impossible to resolve the executor's future immediately".to_string(),
-            )
-        })?
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
@@ -353,19 +347,13 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(
+        self.produce_inner_sync(
             block,
             options,
             ProduceBlockMode::DryRunLatest,
             TimeoutOnlyTxWaiter,
             TransparentPreconfirmationSender,
         )
-        .now_or_never()
-        .ok_or_else(|| {
-            ExecutorError::Other(
-                "Impossible to resolve the executor's future immediately".to_string(),
-            )
-        })?
     }
 }
 
@@ -377,6 +365,23 @@ where
     R: AtomicView,
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
+    pub fn produce_without_commit_with_source_direct_resolve<TxSource>(
+        &self,
+        block: Components<TxSource>,
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        let options = self.config.as_ref().into();
+        self.produce_inner_sync(
+            block,
+            options,
+            ProduceBlockMode::Produce,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        )
+    }
+
     /// Produces the block and returns the result of the execution without committing the changes.
     pub async fn produce_without_commit_with_source<TxSource>(
         &self,
@@ -435,7 +440,7 @@ where
             tx_status,
             ..
         } = self
-            .produce_inner(
+            .produce_inner_sync(
                 component,
                 options,
                 match at_height {
@@ -444,13 +449,7 @@ where
                 },
                 TimeoutOnlyTxWaiter,
                 TransparentPreconfirmationSender,
-            )
-            .now_or_never()
-            .ok_or_else(|| {
-                ExecutorError::Other(
-                    "Impossible to resolve the executor's future immediately".to_string(),
-                )
-            })??
+            )?
             .into_result();
 
         // If one of the transactions fails, return an error.
@@ -585,6 +584,26 @@ where
         }
         let mut g = storage_rec.lock();
         Ok(core::mem::take(&mut g))
+    }
+
+    fn produce_inner_sync<TxSource>(
+        &self,
+        block: Components<TxSource>,
+        options: ExecutionOptions,
+        mode: ProduceBlockMode,
+        new_tx_waiter: impl NewTxWaiterPort,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
+    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    where
+        TxSource: TransactionsSource + Send + Sync + 'static,
+    {
+        self.produce_inner(block, options, mode, new_tx_waiter, preconfirmation_sender)
+            .now_or_never()
+            .ok_or_else(|| {
+                ExecutorError::Other(
+                    "Impossible to resolve the executor's future immediately".to_string(),
+                )
+            })?
     }
 
     #[cfg(feature = "wasm-executor")]

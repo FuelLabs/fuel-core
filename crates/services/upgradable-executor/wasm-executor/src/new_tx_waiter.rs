@@ -1,5 +1,7 @@
-use fuel_core_executor::ports::NewTxWaiterPort;
-use fuel_core_types::services::executor::WaitNewTransactionsResult;
+use fuel_core_executor::{
+    executor::WaitNewTransactionsResult,
+    ports::NewTxWaiterPort,
+};
 
 pub struct NewTxWaiter;
 

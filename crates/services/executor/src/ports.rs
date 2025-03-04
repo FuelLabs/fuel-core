@@ -20,14 +20,13 @@ use fuel_core_types::{
     },
     fuel_vm::checked_transaction::CheckedTransaction,
     services::{
-        executor::{
-            Result as ExecutorResult,
-            WaitNewTransactionsResult,
-        },
+        executor::Result as ExecutorResult,
         preconfirmation::PreconfirmationStatus,
         relayer::Event,
     },
 };
+
+use crate::executor::WaitNewTransactionsResult;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::{

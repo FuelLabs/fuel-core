@@ -140,7 +140,6 @@ use fuel_core_types::{
             UncommittedResult,
             UncommittedValidationResult,
             ValidationResult,
-            WaitNewTransactionsResult,
         },
         preconfirmation::PreconfirmationStatus,
         relayer::Event,
@@ -213,6 +212,14 @@ impl TransactionsSource for OnceTransactionsSource {
         let transactions_limit = (transactions_limit as usize).min(transactions.len());
         transactions.drain(..transactions_limit).collect()
     }
+}
+
+/// The result of waiting for new transactions.
+pub enum WaitNewTransactionsResult {
+    /// We received a new transaction and we can continue the block execution.
+    NewTransaction,
+    /// We didn't receive any new transaction and we can end the block execution.
+    Timeout,
 }
 
 pub struct TimeoutOnlyTxWaiter;
@@ -406,8 +413,7 @@ where
         consensus_params_version: ConsensusParametersVersion,
         new_tx_waiter: N,
         preconfirmation_sender: P,
-    ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>)>
-    {
+    ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>)> {
         let storage_tx = self
             .database
             .into_transaction()
@@ -709,8 +715,9 @@ where
                 ) {
                     Ok(_) => {
                         // SAFETY: Transaction succeed so we know that `tx_status` has been populated
-                        let latest_executed_tx = data.tx_status.last().unwrap();
-                        // TODO:
+                        let latest_executed_tx = data.tx_status.last().expect(
+                            "Shouldn't happens as we just added a transaction; qed",
+                        );
                         let preconfirmation_status = match latest_executed_tx.result {
                             TransactionExecutionResult::Success { .. } => {
                                 PreconfirmationStatus::SuccessByBlockProducer {
@@ -728,7 +735,7 @@ where
                     Err(err) => {
                         status.push(PreconfirmationStatus::SqueezedOutByBlockProducer {
                             reason: err.to_string(),
-                        })
+                        });
                         data.skipped_transactions.push((tx_id, err));
                     }
                 }
