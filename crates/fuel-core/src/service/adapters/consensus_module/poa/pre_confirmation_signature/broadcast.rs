@@ -70,3 +70,75 @@ impl Broadcast for P2PAdapter {
         todo!()
     }
 }
+
+#[allow(non_snake_case)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::service::adapters::{
+        P2PAdapter,
+        PeerReportConfig,
+    };
+    use fuel_core_p2p::service::{
+        build_shared_state,
+        TaskRequest,
+    };
+    use fuel_core_types::services::p2p::PreconfirmationStatus;
+
+    #[tokio::test]
+    async fn broadcast_preconfirmations__sends_expected_request_over_sender() {
+        // given
+        let config = fuel_core_p2p::config::Config::default("lolz");
+        let (shared_state, mut receiver) = build_shared_state(config);
+        let peer_report_config = PeerReportConfig::default();
+        let service = Some(shared_state);
+        let mut adapter = P2PAdapter::new(service, peer_report_config);
+        let preconfirmations = vec![Preconfirmation {
+            tx_id: Default::default(),
+            status: PreconfirmationStatus::FailureByBlockProducer {
+                block_height: Default::default(),
+            },
+        }];
+        let signature = ed25519::Signature::from_bytes(&[5u8; 64]);
+        let expiration = Tai64::UNIX_EPOCH;
+
+        // when
+        adapter
+            .broadcast_preconfirmations(preconfirmations.clone(), signature, expiration)
+            .await
+            .unwrap();
+
+        // then
+        let actual = receiver.recv().await.unwrap();
+        assert!(matches!(
+            actual,
+            TaskRequest::BroadcastPreConfirmations(inner)
+            if inner_matches_expected_values(
+                &inner,
+                &preconfirmations,
+                &Signature::from_bytes(signature.to_bytes()),
+                &expiration,
+            )
+        ));
+    }
+
+    fn inner_matches_expected_values(
+        inner: &Arc<PreConfirmationMessage>,
+        preconfirmations: &Vec<Preconfirmation>,
+        signature: &Signature,
+        expiration: &Tai64,
+    ) -> bool {
+        let entity = Preconfirmations {
+            expiration: *expiration,
+            preconfirmations: preconfirmations.clone(),
+        };
+        match &**inner {
+            PreConfirmationMessage::Preconfirmations(signed_preconfirmation) => {
+                signed_preconfirmation.entity == entity
+                    && signed_preconfirmation.signature == *signature
+            }
+            _ => false,
+        }
+    }
+}

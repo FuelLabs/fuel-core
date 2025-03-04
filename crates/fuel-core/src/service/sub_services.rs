@@ -17,7 +17,8 @@ use fuel_core_gas_price_service::v1::{
 #[cfg(feature = "p2p")]
 use fuel_core_poa::pre_confirmation_signature_service::PreConfirmationSignatureTask;
 use fuel_core_poa::Trigger;
-
+#[cfg(feature = "p2p")]
+use fuel_core_services::ServiceRunner;
 use fuel_core_storage::{
     self,
     transactional::AtomicView,
