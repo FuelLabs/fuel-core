@@ -116,7 +116,7 @@ pub enum TransactionStatus {
         total_gas: u64,
         total_fee: u64,
     },
-    SuccessDuringBlockProduction {
+    PreconfirmationSuccess {
         tx_pointer: TxPointer,
         transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
@@ -124,7 +124,7 @@ pub enum TransactionStatus {
     SqueezedOut {
         reason: String,
     },
-    SqueezedOutDuringBlockProduction {
+    PreconfirmationSqueezedOut {
         reason: String,
     },
     Failure {
@@ -136,7 +136,7 @@ pub enum TransactionStatus {
         total_gas: u64,
         total_fee: u64,
     },
-    FailureDuringBlockProduction {
+    PreconfirmationFailure {
         tx_pointer: TxPointer,
         transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
@@ -164,8 +164,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
             },
-            SchemaTxStatus::SuccessDuringBlockProductionStatus(s) => {
-                TransactionStatus::SuccessDuringBlockProduction {
+            SchemaTxStatus::PreconfirmationSuccessStatus(s) => {
+                TransactionStatus::PreconfirmationSuccess {
                     tx_pointer: s.tx_pointer.into(),
                     transaction_id: s.transaction_id.into(),
                     receipts: if let Some(receipts) = s.receipts {
@@ -193,8 +193,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
             },
-            SchemaTxStatus::FailureDuringBlockProductionStatus(s) => {
-                TransactionStatus::FailureDuringBlockProduction {
+            SchemaTxStatus::PreconfirmationFailureStatus(s) => {
+                TransactionStatus::PreconfirmationFailure {
                     tx_pointer: s.tx_pointer.into(),
                     transaction_id: s.transaction_id.into(),
                     receipts: if let Some(receipts) = s.receipts {
@@ -213,8 +213,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
             SchemaTxStatus::SqueezedOutStatus(s) => {
                 TransactionStatus::SqueezedOut { reason: s.reason }
             }
-            SchemaTxStatus::SqueezedOutDuringBlockProductionStatus(s) => {
-                TransactionStatus::SqueezedOutDuringBlockProduction { reason: s.reason }
+            SchemaTxStatus::PreconfirmationSqueezedOutStatus(s) => {
+                TransactionStatus::PreconfirmationSqueezedOut { reason: s.reason }
             }
             SchemaTxStatus::Unknown => {
                 return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
@@ -237,7 +237,7 @@ pub enum StatusWithTransaction {
         total_gas: u64,
         total_fee: u64,
     },
-    SuccessDuringBlockProduction {
+    PreconfirmationSuccess {
         tx_pointer: TxPointer,
         transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
@@ -245,7 +245,7 @@ pub enum StatusWithTransaction {
     SqueezedOut {
         reason: String,
     },
-    SqueezedOutDuringBlockProduction {
+    PreconfirmationSqueezedOut {
         reason: String,
     },
     Failure {
@@ -258,7 +258,7 @@ pub enum StatusWithTransaction {
         total_gas: u64,
         total_fee: u64,
     },
-    FailureDuringBlockProduction {
+    PreconfirmationFailure {
         tx_pointer: TxPointer,
         transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
@@ -288,8 +288,8 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                 total_fee: s.total_fee.0,
             },
 
-            SchemaStatusWithTx::SuccessDuringBlockProductionStatus(s) => {
-                StatusWithTransaction::SuccessDuringBlockProduction {
+            SchemaStatusWithTx::PreconfirmationSuccessStatus(s) => {
+                StatusWithTransaction::PreconfirmationSuccess {
                     tx_pointer: s.tx_pointer.into(),
                     transaction_id: s.transaction_id.into(),
                     receipts: if let Some(receipts) = s.receipts {
@@ -320,8 +320,8 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                 total_fee: s.total_fee.0,
             },
 
-            SchemaStatusWithTx::FailureDuringBlockProductionStatus(s) => {
-                StatusWithTransaction::FailureDuringBlockProduction {
+            SchemaStatusWithTx::PreconfirmationFailureStatus(s) => {
+                StatusWithTransaction::PreconfirmationFailure {
                     tx_pointer: s.tx_pointer.into(),
                     transaction_id: s.transaction_id.into(),
                     receipts: if let Some(receipts) = s.receipts {
@@ -341,10 +341,8 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
             SchemaStatusWithTx::SqueezedOutStatus(s) => {
                 StatusWithTransaction::SqueezedOut { reason: s.reason }
             }
-            SchemaStatusWithTx::SqueezedOutDuringBlockProductionStatus(s) => {
-                StatusWithTransaction::SqueezedOutDuringBlockProduction {
-                    reason: s.reason,
-                }
+            SchemaStatusWithTx::PreconfirmationSqueezedOutStatus(s) => {
+                StatusWithTransaction::PreconfirmationSqueezedOut { reason: s.reason }
             }
             SchemaStatusWithTx::Unknown => {
                 return Err(Self::Error::UnknownVariant("SchemaTxStatus"))

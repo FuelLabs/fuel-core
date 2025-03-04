@@ -190,11 +190,11 @@ impl TryFrom<ProgramState> for fuel_vm::ProgramState {
 pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatus),
-    SuccessDuringBlockProductionStatus(SuccessDuringBlockProductionStatus),
+    PreconfirmationSuccessStatus(PreconfirmationSuccessStatus),
     SqueezedOutStatus(SqueezedOutStatus),
-    SqueezedOutDuringBlockProductionStatus(SqueezedOutDuringBlockProductionStatus),
+    PreconfirmationSqueezedOutStatus(PreconfirmationSqueezedOutStatus),
     FailureStatus(FailureStatus),
-    FailureDuringBlockProductionStatus(FailureDuringBlockProductionStatus),
+    PreconfirmationFailureStatus(PreconfirmationFailureStatus),
     #[cynic(fallback)]
     Unknown,
 }
@@ -208,11 +208,11 @@ pub enum TransactionStatus {
 pub enum StatusWithTransaction {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatusWithTransaction),
-    SuccessDuringBlockProductionStatus(SuccessDuringBlockProductionStatus),
+    PreconfirmationSuccessStatus(PreconfirmationSuccessStatus),
     SqueezedOutStatus(SqueezedOutStatus),
-    SqueezedOutDuringBlockProductionStatus(SqueezedOutDuringBlockProductionStatus),
+    PreconfirmationSqueezedOutStatus(PreconfirmationSqueezedOutStatus),
     FailureStatus(FailureStatusWithTransaction),
-    FailureDuringBlockProductionStatus(FailureDuringBlockProductionStatus),
+    PreconfirmationFailureStatus(PreconfirmationFailureStatus),
     #[cynic(fallback)]
     Unknown,
 }
@@ -248,7 +248,7 @@ pub struct SuccessStatusWithTransaction {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct SuccessDuringBlockProductionStatus {
+pub struct PreconfirmationSuccessStatus {
     pub tx_pointer: TxPointer,
     pub transaction_id: TransactionId,
     pub receipts: Option<Vec<Receipt>>,
@@ -281,7 +281,7 @@ pub struct FailureStatusWithTransaction {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct FailureDuringBlockProductionStatus {
+pub struct PreconfirmationFailureStatus {
     pub tx_pointer: TxPointer,
     pub transaction_id: TransactionId,
     pub receipts: Option<Vec<Receipt>>,
@@ -296,7 +296,7 @@ pub struct SqueezedOutStatus {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct SqueezedOutDuringBlockProductionStatus {
+pub struct PreconfirmationSqueezedOutStatus {
     pub reason: String,
 }
 

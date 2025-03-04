@@ -335,14 +335,6 @@ input ExcludeInput {
 	messages: [Nonce!]!
 }
 
-type FailureDuringBlockProductionStatus {
-	reason: String!
-	txPointer: TxPointer!
-	transactionId: TransactionId!
-	transaction: Transaction
-	receipts: [Receipt!]
-}
-
 type FailureStatus {
 	transactionId: TransactionId!
 	blockHeight: U32!
@@ -873,6 +865,25 @@ type Policies {
 	maxFee: U64
 }
 
+type PreconfirmationFailureStatus {
+	reason: String!
+	txPointer: TxPointer!
+	transactionId: TransactionId!
+	transaction: Transaction
+	receipts: [Receipt!]
+}
+
+type PreconfirmationSqueezedOutStatus {
+	reason: String!
+}
+
+type PreconfirmationSuccessStatus {
+	txPointer: TxPointer!
+	transactionId: TransactionId!
+	transaction: Transaction
+	receipts: [Receipt!]
+}
+
 type PredicateParameters {
 	version: PredicateParametersVersion!
 	maxPredicateLength: U64!
@@ -1155,10 +1166,6 @@ input SpendQueryElementInput {
 	max: U32
 }
 
-type SqueezedOutDuringBlockProductionStatus {
-	reason: String!
-}
-
 type SqueezedOutStatus {
 	reason: String!
 }
@@ -1216,13 +1223,6 @@ type Subscription {
 	SubmittedStatus` as an intermediate state.
 	"""
 	submitAndAwaitStatus(tx: HexString!): TransactionStatus!
-}
-
-type SuccessDuringBlockProductionStatus {
-	txPointer: TxPointer!
-	transactionId: TransactionId!
-	transaction: Transaction
-	receipts: [Receipt!]
 }
 
 type SuccessStatus {
@@ -1311,7 +1311,7 @@ type TransactionEdge {
 
 scalar TransactionId
 
-union TransactionStatus = SubmittedStatus | SuccessStatus | SuccessDuringBlockProductionStatus | SqueezedOutStatus | SqueezedOutDuringBlockProductionStatus | FailureStatus | FailureDuringBlockProductionStatus
+union TransactionStatus = SubmittedStatus | SuccessStatus | PreconfirmationSuccessStatus | SqueezedOutStatus | PreconfirmationSqueezedOutStatus | FailureStatus | PreconfirmationFailureStatus
 
 type TxParameters {
 	version: TxParametersVersion!

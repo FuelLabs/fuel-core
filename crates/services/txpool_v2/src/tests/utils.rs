@@ -49,7 +49,7 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
             total_gas: 0,
             total_fee: 0,
         }),
-        Just(TransactionStatus::SuccessDuringBlockProduction {
+        Just(TransactionStatus::PreconfirmationSuccess {
             tx_pointer: Default::default(),
             tx_id: Bytes32::zeroed(),
             receipts: None,
@@ -63,7 +63,7 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
             total_fee: 0,
             reason: "failure".to_string(),
         }),
-        Just(TransactionStatus::FailureDuringBlockProduction {
+        Just(TransactionStatus::PreconfirmationFailure {
             tx_pointer: Default::default(),
             tx_id: Bytes32::zeroed(),
             receipts: None,
@@ -72,7 +72,7 @@ pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus>
         Just(TransactionStatus::SqueezedOut {
             reason: Default::default(),
         }),
-        Just(TransactionStatus::SqueezedOutDuringBlockProduction {
+        Just(TransactionStatus::PreconfirmationSqueezedOut {
             reason: "squeezed out".to_string(),
         }),
     ]

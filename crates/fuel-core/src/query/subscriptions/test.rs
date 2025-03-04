@@ -64,7 +64,7 @@ fn success() -> TransactionStatus {
 }
 
 fn success_during_block_production() -> TransactionStatus {
-    TransactionStatus::SuccessDuringBlockProduction {
+    TransactionStatus::PreconfirmationSuccess {
         tx_pointer: Default::default(),
         tx_id: Bytes32::zeroed(),
         receipts: None,
@@ -84,7 +84,7 @@ fn failure() -> TransactionStatus {
 }
 
 fn failure_during_block_production() -> TransactionStatus {
-    TransactionStatus::FailureDuringBlockProduction {
+    TransactionStatus::PreconfirmationFailure {
         tx_pointer: Default::default(),
         tx_id: Bytes32::zeroed(),
         receipts: None,
@@ -99,7 +99,7 @@ fn squeezed() -> TransactionStatus {
 }
 
 fn squeezed_during_block_production() -> TransactionStatus {
-    TransactionStatus::SqueezedOutDuringBlockProduction {
+    TransactionStatus::PreconfirmationSqueezedOut {
         reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }
@@ -122,18 +122,18 @@ enum FinalTxStatus {
     /// The transaction was successfully included in a block.
     Success,
     /// The transaction has been executed, but the full block has not been produced yet.
-    SuccessDuringBlockProduction,
+    PreconfirmationSuccess,
     /// The transaction was squeezed out of the txpool (or block)
     /// because it was not valid to include in the block.
     Squeezed,
     /// Transaction was eligible for execution and inclusion in the block but
     /// it was squeezed out by block producer.
-    SqueezedOutDuringBlockProduction,
+    PreconfirmationSqueezedOut,
     /// The transaction failed to execute and was included in a block.
     Failed,
     /// Transaction was eligible for execution and inclusion in the block but
     /// it failed during the execution.
-    FailedDuringBlockProduction,
+    PreconfirmationFailure,
 }
 
 /// Strategy to generate an Option<TransactionStatus>
@@ -239,16 +239,16 @@ fn next_state(state: TransactionStatus) -> Flow {
     match state {
         TransactionStatus::Submitted { .. } => Flow::Continue(Submitted),
         TransactionStatus::Success { .. } => Flow::Break(FinalTxStatus::Success),
-        TransactionStatus::SuccessDuringBlockProduction { .. } => {
-            Flow::Break(FinalTxStatus::SuccessDuringBlockProduction)
+        TransactionStatus::PreconfirmationSuccess { .. } => {
+            Flow::Break(FinalTxStatus::PreconfirmationSuccess)
         }
         TransactionStatus::Failure { .. } => Flow::Break(FinalTxStatus::Failed),
-        TransactionStatus::FailureDuringBlockProduction { .. } => {
-            Flow::Break(FinalTxStatus::FailedDuringBlockProduction)
+        TransactionStatus::PreconfirmationFailure { .. } => {
+            Flow::Break(FinalTxStatus::PreconfirmationFailure)
         }
         TransactionStatus::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
-        TransactionStatus::SqueezedOutDuringBlockProduction { .. } => {
-            Flow::Break(FinalTxStatus::SqueezedOutDuringBlockProduction)
+        TransactionStatus::PreconfirmationSqueezedOut { .. } => {
+            Flow::Break(FinalTxStatus::PreconfirmationSqueezedOut)
         }
     }
 }
@@ -310,26 +310,26 @@ impl From<crate::schema::tx::types::TransactionStatus> for TxStatus {
     fn from(status: crate::schema::tx::types::TransactionStatus) -> Self {
         match status {
             crate::schema::tx::types::TransactionStatus::Submitted(_) => {
-                        TxStatus::Submitted
-                    }
+                TxStatus::Submitted
+            }
             crate::schema::tx::types::TransactionStatus::Success(_) => {
-                        TxStatus::Final(FinalTxStatus::Success)
-                    }
-                    crate::schema::tx::types::TransactionStatus::SuccessDuringBlockProduction(_) => {
-                        TxStatus::Final(FinalTxStatus::SuccessDuringBlockProduction)
-                    }
+                TxStatus::Final(FinalTxStatus::Success)
+            }
+            crate::schema::tx::types::TransactionStatus::PreconfirmationSuccess(_) => {
+                TxStatus::Final(FinalTxStatus::PreconfirmationSuccess)
+            }
             crate::schema::tx::types::TransactionStatus::SqueezedOut(_) => {
-                        TxStatus::Final(FinalTxStatus::Squeezed)
-                    }
-                    crate::schema::tx::types::TransactionStatus::SqueezedOutDuringBlockProduction(_) => {
-                        TxStatus::Final(FinalTxStatus::SqueezedOutDuringBlockProduction)
-                    }
+                TxStatus::Final(FinalTxStatus::Squeezed)
+            }
+            crate::schema::tx::types::TransactionStatus::PreconfirmationSqueezedOut(
+                _,
+            ) => TxStatus::Final(FinalTxStatus::PreconfirmationSqueezedOut),
             crate::schema::tx::types::TransactionStatus::Failure(_) => {
-                        TxStatus::Final(FinalTxStatus::Failed)
-                    }
-                    crate::schema::tx::types::TransactionStatus::FailureDuringBlockProduction(_) => {
-                        TxStatus::Final(FinalTxStatus::FailedDuringBlockProduction)
-                    }
+                TxStatus::Final(FinalTxStatus::Failed)
+            }
+            crate::schema::tx::types::TransactionStatus::PreconfirmationFailure(_) => {
+                TxStatus::Final(FinalTxStatus::PreconfirmationFailure)
+            }
         }
     }
 }

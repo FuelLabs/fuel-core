@@ -142,11 +142,11 @@ impl From<VmProgramState> for ProgramState {
 pub enum TransactionStatus {
     Submitted(SubmittedStatus),
     Success(SuccessStatus),
-    SuccessDuringBlockProduction(SuccessDuringBlockProductionStatus),
+    PreconfirmationSuccess(PreconfirmationSuccessStatus),
     SqueezedOut(SqueezedOutStatus),
-    SqueezedOutDuringBlockProduction(SqueezedOutDuringBlockProductionStatus),
+    PreconfirmationSqueezedOut(PreconfirmationSqueezedOutStatus),
     Failure(FailureStatus),
-    FailureDuringBlockProduction(FailureDuringBlockProductionStatus),
+    PreconfirmationFailure(PreconfirmationFailureStatus),
 }
 
 #[derive(Debug)]
@@ -216,14 +216,14 @@ impl SuccessStatus {
 }
 
 #[derive(Debug)]
-pub struct SuccessDuringBlockProductionStatus {
+pub struct PreconfirmationSuccessStatus {
     pub tx_pointer: TxPointer,
     pub tx_id: TxId,
     pub receipts: Option<Vec<fuel_tx::Receipt>>,
 }
 
 #[Object]
-impl SuccessDuringBlockProductionStatus {
+impl PreconfirmationSuccessStatus {
     async fn tx_pointer(&self) -> TxPointer {
         self.tx_pointer
     }
@@ -310,7 +310,7 @@ impl FailureStatus {
 }
 
 #[derive(Debug)]
-pub struct FailureDuringBlockProductionStatus {
+pub struct PreconfirmationFailureStatus {
     pub tx_pointer: TxPointer,
     pub tx_id: TxId,
     pub receipts: Option<Vec<fuel_tx::Receipt>>,
@@ -318,7 +318,7 @@ pub struct FailureDuringBlockProductionStatus {
 }
 
 #[Object]
-impl FailureDuringBlockProductionStatus {
+impl PreconfirmationFailureStatus {
     async fn reason(&self) -> String {
         self.reason.clone()
     }
@@ -361,10 +361,10 @@ impl SqueezedOutStatus {
 }
 
 #[derive(Debug)]
-pub struct SqueezedOutDuringBlockProductionStatus(pub String);
+pub struct PreconfirmationSqueezedOutStatus(pub String);
 
 #[Object]
-impl SqueezedOutDuringBlockProductionStatus {
+impl PreconfirmationSqueezedOutStatus {
     async fn reason(&self) -> String {
         self.0.clone()
     }
@@ -412,35 +412,35 @@ impl TransactionStatus {
                 total_gas,
                 total_fee,
             }),
-            TxStatus::SuccessDuringBlockProduction {
+            TxStatus::PreconfirmationSuccess {
                 tx_pointer,
                 tx_id,
                 receipts,
-            } => TransactionStatus::SuccessDuringBlockProduction(
-                SuccessDuringBlockProductionStatus {
+            } => {
+                TransactionStatus::PreconfirmationSuccess(PreconfirmationSuccessStatus {
                     tx_pointer: tx_pointer.into(),
                     tx_id,
                     receipts,
-                },
-            ),
-            TxStatus::SqueezedOutDuringBlockProduction { reason } => {
-                TransactionStatus::SqueezedOutDuringBlockProduction(
-                    SqueezedOutDuringBlockProductionStatus(reason),
+                })
+            }
+            TxStatus::PreconfirmationSqueezedOut { reason } => {
+                TransactionStatus::PreconfirmationSqueezedOut(
+                    PreconfirmationSqueezedOutStatus(reason),
                 )
             }
-            TxStatus::FailureDuringBlockProduction {
+            TxStatus::PreconfirmationFailure {
                 tx_pointer,
                 tx_id,
                 receipts,
                 reason,
-            } => TransactionStatus::FailureDuringBlockProduction(
-                FailureDuringBlockProductionStatus {
+            } => {
+                TransactionStatus::PreconfirmationFailure(PreconfirmationFailureStatus {
                     tx_pointer: tx_pointer.into(),
                     tx_id,
                     receipts,
                     reason,
-                },
-            ),
+                })
+            }
         }
     }
 }
@@ -487,28 +487,24 @@ impl From<TransactionStatus> for TxStatus {
                 total_gas,
                 total_fee,
             },
-            TransactionStatus::SuccessDuringBlockProduction(
-                SuccessDuringBlockProductionStatus {
-                    tx_pointer,
-                    tx_id,
-                    receipts,
-                },
-            ) => TxStatus::SuccessDuringBlockProduction {
+            TransactionStatus::PreconfirmationSuccess(PreconfirmationSuccessStatus {
+                tx_pointer,
+                tx_id,
+                receipts,
+            }) => TxStatus::PreconfirmationSuccess {
                 tx_pointer: tx_pointer.into(),
                 tx_id,
                 receipts,
             },
-            TransactionStatus::SqueezedOutDuringBlockProduction(
-                SqueezedOutDuringBlockProductionStatus(reason),
-            ) => TxStatus::SqueezedOutDuringBlockProduction { reason },
-            TransactionStatus::FailureDuringBlockProduction(
-                FailureDuringBlockProductionStatus {
-                    tx_pointer,
-                    tx_id,
-                    receipts,
-                    reason,
-                },
-            ) => TxStatus::FailureDuringBlockProduction {
+            TransactionStatus::PreconfirmationSqueezedOut(
+                PreconfirmationSqueezedOutStatus(reason),
+            ) => TxStatus::PreconfirmationSqueezedOut { reason },
+            TransactionStatus::PreconfirmationFailure(PreconfirmationFailureStatus {
+                tx_pointer,
+                tx_id,
+                receipts,
+                reason,
+            }) => TxStatus::PreconfirmationFailure {
                 tx_pointer: tx_pointer.into(),
                 tx_id,
                 receipts,

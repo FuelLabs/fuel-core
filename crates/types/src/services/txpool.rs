@@ -446,7 +446,7 @@ pub enum TransactionStatus {
         total_fee: u64,
     },
     /// Transaction was successfully executed by block producer
-    SuccessDuringBlockProduction {
+    PreconfirmationSuccess {
         /// Transaction pointer
         tx_pointer: TxPointer,
         /// Transaction ID
@@ -460,7 +460,7 @@ pub enum TransactionStatus {
         reason: String,
     },
     /// Transaction was squeezed out
-    SqueezedOutDuringBlockProduction {
+    PreconfirmationSqueezedOut {
         /// The reason why the transaction was squeezed out
         reason: String,
     },
@@ -482,7 +482,7 @@ pub enum TransactionStatus {
         total_fee: u64,
     },
     /// Transaction was not included in a block
-    FailureDuringBlockProduction {
+    PreconfirmationFailure {
         /// Transaction pointer
         tx_pointer: TxPointer,
         /// Transaction ID
