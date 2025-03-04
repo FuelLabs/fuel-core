@@ -17,7 +17,6 @@ pub use service::{
 pub use tx_status_stream::{
     TxStatusMessage,
     TxStatusStream,
-    TxUpdate,
 };
 pub use utils::from_executor_to_status;
 

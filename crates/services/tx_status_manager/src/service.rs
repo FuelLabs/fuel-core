@@ -19,7 +19,6 @@ use crate::{
     manager::TxStatusManager,
     ports::P2PSubscriptions,
     subscriptions::Subscriptions,
-    tx_status_stream::TxUpdate,
     update_sender::TxStatusChange,
 };
 
@@ -46,8 +45,7 @@ impl Task {
                 preconfirmations
                     .iter()
                     .for_each(|Preconfirmation { tx_id, status }| {
-                        self.manager
-                            .status_update(TxUpdate::new(*tx_id, status.into()));
+                        self.manager.status_update(*tx_id, status.clone());
                     });
             }
         }

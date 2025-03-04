@@ -19,7 +19,6 @@ use tokio::sync::broadcast;
 use crate::{
     error::Error,
     tx_status_stream::{
-        TxStatusMessage,
         TxStatusStream,
         TxUpdate,
     },
@@ -43,40 +42,33 @@ impl TxStatusManager {
         }
     }
 
-    pub fn status_update(&self, tx_update: TxUpdate) {
-        tracing::debug!(?tx_update, "new tx update");
+    pub fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
+        tracing::debug!(%tx_id, ?tx_status, "new tx status");
 
-        match tx_update.message {
-            TxStatusMessage::Status(ref tx_status) => {
-                match tx_status {
-                    TransactionStatus::Submitted { .. } => {
-                        if let Err(err) = self
-                            .tx_status_change
-                            .new_tx_notification_sender
-                            .send(tx_update.tx_id)
-                        {
-                            tracing::error!(%err, "new_tx_notification_sender failed");
-                        }
-                    }
-                    TransactionStatus::Success { .. }
-                    | TransactionStatus::SqueezedOut { .. }
-                    | TransactionStatus::Failed { .. } => (),
-                };
+        // TODO[RC]: Capacity checks? - Protected by TxPool capacity checks, except for the squeezed state. Maybe introduce some limit.
+        // TODO[RC]: Purge old statuses? - Remove the status from the manager upon putting the status into storage.
+        // TODO[RC]: Shall we store squeezed out variants as well?
+        self.statuses
+            .lock()
+            .expect("mutex poisoned")
+            .insert(tx_id, tx_status.clone());
 
-                // TODO[RC]: Capacity checks? - Protected by TxPool capacity checks, except for the squeezed state. Maybe introduce some limit.
-                // TODO[RC]: Purge old statuses? - Remove the status from the manager upon putting the status into storage.
-                // TODO[RC]: Shall we store squeezed out variants as well?
-                self.statuses
-                    .lock()
-                    .expect("mutex poisoned")
-                    .insert(tx_update.tx_id, tx_status.clone());
+        match tx_status {
+            TransactionStatus::Submitted { .. } => {
+                if let Err(err) =
+                    self.tx_status_change.new_tx_notification_sender.send(tx_id)
+                {
+                    tracing::error!(%err, "new_tx_notification_sender failed");
+                }
             }
-            TxStatusMessage::FailedStatus => {
-                // TODO[RC]: Handle failed status
-            }
-        }
+            TransactionStatus::Success { .. }
+            | TransactionStatus::SqueezedOut { .. }
+            | TransactionStatus::Failed { .. } => (),
+        };
 
-        self.tx_status_change.update_sender.send(&tx_update);
+        self.tx_status_change
+            .update_sender
+            .send(&TxUpdate::new(tx_id, tx_status.into()));
     }
 
     pub fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {
@@ -103,14 +95,12 @@ impl TxStatusManager {
     pub fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
         tx_ids_and_reason.into_iter().for_each(|(tx_id, reason)| {
             let error = Error::SkippedTransaction(reason);
-            let tx_update = TxUpdate::new(
+            self.status_update(
                 tx_id,
                 TransactionStatus::SqueezedOut {
                     reason: error.to_string(),
-                }
-                .into(),
+                },
             );
-            self.status_update(tx_update);
         });
     }
 }

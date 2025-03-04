@@ -4085,7 +4085,6 @@ dependencies = [
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-trace",
- "fuel-core-tx-status-manager",
  "fuel-core-txpool",
  "fuel-core-types 0.41.7",
  "futures",

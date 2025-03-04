@@ -9,7 +9,6 @@ use crate::{
     },
 };
 use fuel_core_services::TaskNextAction;
-use fuel_core_tx_status_manager::TxUpdate;
 
 use crate::pool_worker::{
     ExtendedInsertionSource,
@@ -411,15 +410,12 @@ where
                 }
 
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
-
-                let tx_update = TxUpdate::new(
+                self.tx_status_manager.status_update(
                     tx_id,
                     TransactionStatus::Submitted {
                         time: Tai64::from_unix(duration),
-                    }
-                    .into(),
+                    },
                 );
-                self.tx_status_manager.status_update(tx_update);
 
                 if expiration < u32::MAX.into() {
                     let block_height_expiration = self
@@ -450,24 +446,20 @@ where
                     }
                 }
 
-                let tx_update = TxUpdate::new(
+                self.tx_status_manager.status_update(
                     tx_id,
                     TransactionStatus::SqueezedOut {
                         reason: error.to_string(),
-                    }
-                    .into(),
+                    },
                 );
-                self.tx_status_manager.status_update(tx_update);
             }
             PoolNotification::Removed { tx_id, error } => {
-                let tx_update = TxUpdate::new(
+                self.tx_status_manager.status_update(
                     tx_id,
                     TransactionStatus::SqueezedOut {
                         reason: error.to_string(),
-                    }
-                    .into(),
+                    },
                 );
-                self.tx_status_manager.status_update(tx_update);
             }
         }
     }
@@ -550,14 +542,12 @@ where
                         }
                     }
 
-                    let tx_update = TxUpdate::new(
+                    tx_status_manager.status_update(
                         tx_id,
                         TransactionStatus::SqueezedOut {
                             reason: err.to_string(),
-                        }
-                        .into(),
+                        },
                     );
-                    tx_status_manager.status_update(tx_update);
                     return
                 }
             };

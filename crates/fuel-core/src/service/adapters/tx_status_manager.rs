@@ -1,9 +1,12 @@
 use fuel_core_services::stream::BoxStream;
-use fuel_core_tx_status_manager::TxUpdate;
 use fuel_core_txpool::ports::TxStatusManager;
 use fuel_core_types::{
     self,
-    services::p2p::PreconfirmationsGossipData,
+    fuel_tx::TxId,
+    services::{
+        p2p::PreconfirmationsGossipData,
+        txpool::TransactionStatus,
+    },
 };
 
 use super::{
@@ -12,8 +15,8 @@ use super::{
 };
 
 impl TxStatusManager for TxStatusManagerAdapter {
-    fn status_update(&self, tx_update: TxUpdate) {
-        self.manager.status_update(tx_update);
+    fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
+        self.manager.status_update(tx_id, tx_status);
     }
 }
 
