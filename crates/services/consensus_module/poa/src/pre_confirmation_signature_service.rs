@@ -104,8 +104,8 @@ where
             res = self.tx_receiver.receive() => {
                 tracing::debug!("Received transactions");
                 let pre_confirmations = res?;
-                let sinature = self.current_delegate_key.sign(&pre_confirmations)?;
-                self.broadcast.broadcast_preconfirmations(pre_confirmations, sinature).await?;
+                let signature = self.current_delegate_key.sign(&pre_confirmations)?;
+                self.broadcast.broadcast_preconfirmations(pre_confirmations, signature).await?;
             }
             _ = self.key_rotation_trigger.next_rotation() => {
                 tracing::debug!("Key rotation triggered");
