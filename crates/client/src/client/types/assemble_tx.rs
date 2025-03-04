@@ -54,6 +54,7 @@ pub enum ChangePolicy {
 pub struct AssembleTransactionResult {
     pub transaction: Transaction,
     pub status: TransactionExecutionResult,
+    pub gas_price: u64,
 }
 
 impl TryFrom<schema::tx::AssembleTransactionResult> for AssembleTransactionResult {
@@ -69,6 +70,7 @@ impl TryFrom<schema::tx::AssembleTransactionResult> for AssembleTransactionResul
         Ok(Self {
             transaction,
             status,
+            gas_price: value.gas_price.into(),
         })
     }
 }

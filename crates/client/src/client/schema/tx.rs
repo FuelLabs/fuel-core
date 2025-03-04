@@ -507,6 +507,7 @@ pub struct AssembleTx {
 pub struct AssembleTransactionResult {
     pub transaction: OpaqueTransaction,
     pub status: DryRunTransactionStatus,
+    pub gas_price: U64,
 }
 
 #[derive(cynic::QueryVariables)]

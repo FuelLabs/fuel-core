@@ -409,6 +409,7 @@ impl TxQuery {
             tx_id: status.id,
             tx: assembled_tx,
             status: status.result,
+            gas_price,
         };
 
         Ok(result)
