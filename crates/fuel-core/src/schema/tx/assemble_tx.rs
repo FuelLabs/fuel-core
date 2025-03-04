@@ -307,6 +307,8 @@ where
 
         self = self.cover_fee().await?;
 
+        self.adjust_witness_limit();
+
         self.fill_with_variable_outputs();
 
         // The `cover_fee` already can estimate predicates inside,
@@ -656,7 +658,10 @@ where
                 script.inputs_mut().push(fake_input());
             }
 
-            gas_used_by_tx = script.min_gas(gas_costs, fee_params);
+            // We want to calculate `max_gas` for the script, but without script limit
+            *script.script_gas_limit_mut() = 0;
+
+            gas_used_by_tx = script.max_gas(gas_costs, fee_params);
 
             let max_gas_limit = max_tx_gas.saturating_sub(gas_used_by_tx);
 

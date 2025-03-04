@@ -3,6 +3,8 @@
 #![deny(warnings)]
 
 #[cfg(not(feature = "only-p2p"))]
+mod assemble_tx;
+#[cfg(not(feature = "only-p2p"))]
 mod assets;
 #[cfg(not(feature = "only-p2p"))]
 mod balances;
