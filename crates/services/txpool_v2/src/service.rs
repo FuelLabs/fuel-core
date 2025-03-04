@@ -414,7 +414,6 @@ where
 
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
 
-                // TODO[RC]: Do not use `send_submitted` anymore
                 self.tx_status_manager.upsert_status(
                     &tx_id,
                     TransactionStatus::Submitted {

@@ -70,25 +70,6 @@ impl TxStatusChange {
         tracing::info!("Transaction {id} successfully included in block {block_height}");
         self.update_sender.send(TxUpdate::new(id, message));
     }
-
-    pub fn send_submitted(&self, id: Bytes32, time: Tai64) {
-        tracing::info!("Transaction {id} successfully submitted to the tx pool");
-        let _ = self.new_tx_notification_sender.send(id);
-        self.update_sender.send(TxUpdate::new(
-            id,
-            TxStatusMessage::Status(TransactionStatus::Submitted { time }),
-        ));
-    }
-
-    pub fn send_squeezed_out(&self, id: Bytes32, reason: Error) {
-        tracing::info!("Transaction {id} squeezed out because {reason}");
-        self.update_sender.send(TxUpdate::new(
-            id,
-            TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-                reason: reason.to_string(),
-            }),
-        ));
-    }
 }
 
 /// UpdateSender is responsible for managing subscribers
