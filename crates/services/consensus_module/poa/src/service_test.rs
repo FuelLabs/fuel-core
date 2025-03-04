@@ -382,7 +382,7 @@ async fn remove_skipped_transactions() {
         time.watch(),
     );
 
-    assert!(task.produce_next_block().await.is_ok());
+    assert!(task.produce_next_block(Instant::now()).await.is_ok());
 }
 
 fn test_signing_key() -> Secret<SecretKeyWrapper> {

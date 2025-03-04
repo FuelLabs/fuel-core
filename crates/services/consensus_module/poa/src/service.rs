@@ -258,20 +258,22 @@ where
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
+        deadline: Instant,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
-        // TODO: do it correctly
-        #[allow(clippy::arithmetic_side_effects)]
-        let deadline = self.last_block_created + Duration::from_secs(1);
         self.block_producer
             .produce_and_execute_block(height, block_time, source, deadline)
             .await
     }
 
-    pub(crate) async fn produce_next_block(&mut self) -> anyhow::Result<()> {
+    pub(crate) async fn produce_next_block(
+        &mut self,
+        deadline: Instant,
+    ) -> anyhow::Result<()> {
         self.produce_block(
             self.next_height(),
             self.next_time(RequestType::Trigger)?,
             TransactionsSource::TxPool,
+            deadline,
         )
         .await
     }
@@ -292,6 +294,7 @@ where
                         self.next_height(),
                         block_time,
                         TransactionsSource::TxPool,
+                        Instant::now(),
                     )
                     .await?;
                     block_time = self.next_time(RequestType::Manual)?;
@@ -302,6 +305,7 @@ where
                     self.next_height(),
                     block_time,
                     TransactionsSource::SpecificTransactions(txs),
+                    Instant::now(),
                 )
                 .await?;
             }
@@ -314,6 +318,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
+        deadline: Instant,
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
         // verify signing key is set
@@ -334,7 +339,7 @@ where
             },
             changes,
         ) = self
-            .signal_produce_block(height, block_time, source)
+            .signal_produce_block(height, block_time, source, deadline)
             .await?
             .into();
 
@@ -499,8 +504,11 @@ where
         }
     }
 
-    async fn handle_normal_block_production(&mut self) -> TaskNextAction {
-        match self.produce_next_block().await {
+    async fn handle_normal_block_production(
+        &mut self,
+        deadline: Instant,
+    ) -> TaskNextAction {
+        match self.produce_next_block(deadline).await {
             Ok(()) => TaskNextAction::Continue,
             Err(err) => {
                 // Wait some time in case of error to avoid spamming retry block production
@@ -571,10 +579,11 @@ where
             return action;
         }
 
-        let next_block_production: BoxFuture<()> = match self.trigger {
-            Trigger::Never => Box::pin(core::future::pending()),
+        let next_block_production: BoxFuture<Instant> = match self.trigger {
+            Trigger::Never => Box::pin(core::future::pending::<Instant>()),
             Trigger::Instant => Box::pin(async {
                 let _ = self.new_txs_watcher.changed().await;
+                Instant::now()
             }),
             Trigger::Interval { block_time } => {
                 let next_block_time = match self
@@ -585,7 +594,13 @@ where
                     Ok(time) => time,
                     Err(err) => return TaskNextAction::ErrorContinue(err),
                 };
-                Box::pin(sleep_until(next_block_time))
+                let deadline = next_block_time.clone();
+                Box::pin({
+                    async move {
+                        sleep_until(next_block_time).await;
+                        deadline
+                    }
+                })
             }
         };
 
@@ -597,8 +612,8 @@ where
             request = self.request_receiver.recv() => {
                 self.handle_requested_production(request).await
             }
-            _ = next_block_production => {
-                self.handle_normal_block_production().await
+            deadline = next_block_production => {
+                self.handle_normal_block_production(deadline).await
             }
         }
     }
