@@ -11,6 +11,9 @@ use fuel_core_types::{
     services::p2p::PreconfirmationStatus,
 };
 
+// TODO(#2739): Remove when integrated
+// link: https://github.com/FuelLabs/fuel-core/issues/2739
+#[allow(dead_code)]
 pub struct MPSCTxReceiver<T> {
     receiver: tokio::sync::mpsc::Receiver<T>,
 }
