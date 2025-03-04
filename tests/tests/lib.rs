@@ -59,6 +59,8 @@ mod snapshot;
 #[cfg(not(feature = "only-p2p"))]
 mod state_rewind;
 #[cfg(not(feature = "only-p2p"))]
+mod storage;
+#[cfg(not(feature = "only-p2p"))]
 mod storage_read_replay;
 #[cfg(not(feature = "only-p2p"))]
 mod trigger_integration;
