@@ -256,7 +256,6 @@ pub fn init_sub_services(
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
     #[cfg(feature = "p2p")]
-    #[allow(unused_mut)]
     let mut network = config.p2p.clone().zip(p2p_externals).map(
         |(p2p_config, (shared_state, request_receiver))| {
             fuel_core_p2p::service::new_service(
@@ -287,7 +286,6 @@ pub fn init_sub_services(
     let poa_config: fuel_core_poa::Config = config.into();
     let mut production_enabled = !matches!(poa_config.trigger, Trigger::Never);
 
-    #[allow(unused_assignments)]
     if !production_enabled && config.debug {
         production_enabled = true;
         tracing::info!("Enabled manual block production because of `debug` flag");
@@ -309,7 +307,6 @@ pub fn init_sub_services(
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
 
-    #[allow(clippy::type_complexity)]
     let _pre_confirmation_service: ServiceRunner<
         PreConfirmationSignatureTask<
             PreconfirmationsReceiver,

@@ -8,7 +8,13 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     key_generator::KeyGenerator,
     signing_key::SigningKey,
 };
+use fuel_core_types::fuel_crypto::SecretKey;
+use rand::{
+    prelude::StdRng,
+    SeedableRng,
+};
 use serde::Serialize;
+use std::ops::Deref;
 
 pub struct Ed25519KeyGenerator;
 
@@ -16,7 +22,12 @@ impl KeyGenerator for Ed25519KeyGenerator {
     type Key = Ed25519Key;
 
     async fn generate(&mut self) -> PoAResult<Self::Key> {
-        todo!()
+        let mut rng = StdRng::from_entropy();
+        let secret = SecretKey::random(&mut rng);
+
+        Ok(Ed25519Key {
+            signer: DalekSigningKey::from_bytes(secret.deref()),
+        })
     }
 }
 
