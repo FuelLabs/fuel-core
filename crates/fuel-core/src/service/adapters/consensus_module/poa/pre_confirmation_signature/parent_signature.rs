@@ -6,43 +6,29 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     parent_signature::ParentSignature,
 };
 use fuel_core_types::{
+    fuel_crypto,
+    fuel_vm::Signature,
     signer::SignMode,
 };
-use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::signing_key::DummyKey;
+use serde::Serialize;
 
-pub struct FuelParentSigner<T> {
+pub struct FuelParentSigner {
     mode: SignMode,
-    _phantom: std::marker::PhantomData<T>,
 }
 
-pub struct FuelParentSignature<T> {
-    signature: fuel_core_types::fuel_vm::Signature,
-    _phantom: std::marker::PhantomData<T>,
-}
+impl ParentSignature for FuelParentSigner {
+    type Signature = Signature;
 
-impl<T> FuelParentSignature<T> {
-    pub fn signature(&self) -> fuel_core_types::fuel_vm::Signature {
-        self.signature
-    }
-}
-
-impl<T> From<fuel_core_types::fuel_vm::Signature> for FuelParentSignature<T> {
-    fn from(signature: fuel_core_types::fuel_vm::Signature) -> Self {
-        Self {
-            signature,
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl ParentSignature<DummyKey> for FuelParentSigner<DummyKey> {
-    type SignedData = FuelParentSignature<DummyKey>;
-
-    async fn sign(&self, data: DummyKey) -> PoAResult<Self::SignedData> {
-        let message = data.into();
+    async fn sign<T>(&self, data: &T) -> PoAResult<Self::Signature>
+    where
+        T: Serialize + Send + Sync,
+    {
+        let bytes = postcard::to_allocvec(data)
+            .map_err(|e| PoaError::ParentSignature(format!("{e:?}")))?;
+        let message = fuel_crypto::Message::new(bytes);
         let signature = self.mode.sign_message(message).await.map_err(|e| {
             PoaError::ParentSignature(format!("Failed to sign message: {}", e))
         })?;
-        Ok(signature.into())
+        Ok(signature)
     }
 }

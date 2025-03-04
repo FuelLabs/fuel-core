@@ -25,15 +25,6 @@ use crate::{
         TransactionPool,
         TransactionsSource,
     },
-    pre_confirmation_signature_service::{
-        broadcast,
-        key_generator,
-        parent_signature,
-        signing_key,
-        trigger,
-        tx_receiver,
-        PreConfirmationSignatureTask,
-    },
     sync::{
         SyncState,
         SyncTask,
@@ -77,10 +68,7 @@ use fuel_core_types::{
 };
 use serde::Serialize;
 
-pub type Service<T, B, I, S, PB, C, TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger> =
-    ServiceRunner<
-        MainTask<T, B, I, S, PB, C, TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>,
-    >;
+pub type Service<T, B, I, S, PB, C> = ServiceRunner<MainTask<T, B, I, S, PB, C>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -134,32 +122,7 @@ pub(crate) enum RequestType {
     Manual,
     Trigger,
 }
-pub struct MainTask<
-    T,
-    B,
-    I,
-    S,
-    PB,
-    C,
-    TxReceiver,
-    Broadcast,
-    ParentSignature,
-    KeyGenerator,
-    DelegateKey,
-    KeyRotationTrigger,
-> where
-    TxReceiver: tx_receiver::TxReceiver + 'static,
-    <TxReceiver as tx_receiver::TxReceiver>::Sender: Clone,
-    Broadcast: broadcast::Broadcast<
-            DelegateKey = DelegateKey,
-            ParentSignature = ParentSignature::SignedData,
-            PreConfirmations = <TxReceiver as tx_receiver::TxReceiver>::Txs,
-        > + 'static,
-    ParentSignature: parent_signature::ParentSignature<DelegateKey> + 'static,
-    KeyGenerator: key_generator::KeyGenerator<Key = DelegateKey> + 'static,
-    DelegateKey: signing_key::SigningKey + 'static,
-    KeyRotationTrigger: trigger::KeyRotationTrigger + 'static,
-{
+pub struct MainTask<T, B, I, S, PB, C> {
     signer: Arc<S>,
     block_producer: B,
     block_importer: I,
@@ -175,62 +138,14 @@ pub struct MainTask<
     clock: C,
     /// Deadline clock, used by the triggers
     sync_task_handle: ServiceRunner<SyncTask>,
-    _pre_confirmation_signature_task: ServiceRunner<
-        PreConfirmationSignatureTask<
-            TxReceiver,
-            Broadcast,
-            ParentSignature,
-            KeyGenerator,
-            DelegateKey,
-            KeyRotationTrigger,
-        >,
-    >,
 }
 
-impl<
-        T,
-        B,
-        I,
-        S,
-        PB,
-        C,
-        TxReceiver,
-        Broadcast,
-        ParentSignature,
-        KeyGenerator,
-        DelegateKey,
-        KeyRotationTrigger,
-    >
-    MainTask<
-        T,
-        B,
-        I,
-        S,
-        PB,
-        C,
-        TxReceiver,
-        Broadcast,
-        ParentSignature,
-        KeyGenerator,
-        DelegateKey,
-        KeyRotationTrigger,
-    >
+impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,
     I: BlockImporter,
     PB: PredefinedBlocks,
     C: GetTime,
-    TxReceiver: tx_receiver::TxReceiver,
-    <TxReceiver as tx_receiver::TxReceiver>::Sender: Clone,
-    Broadcast: broadcast::Broadcast<
-        DelegateKey = DelegateKey,
-        ParentSignature = ParentSignature::SignedData,
-        PreConfirmations = <TxReceiver as tx_receiver::TxReceiver>::Txs,
-    >,
-    ParentSignature: parent_signature::ParentSignature<DelegateKey>,
-    KeyGenerator: key_generator::KeyGenerator<Key = DelegateKey>,
-    DelegateKey: signing_key::SigningKey,
-    KeyRotationTrigger: trigger::KeyRotationTrigger,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort>(
@@ -243,16 +158,6 @@ where
         signer: Arc<S>,
         predefined_blocks: PB,
         clock: C,
-        pre_confirmation_signature_task: ServiceRunner<
-            PreConfirmationSignatureTask<
-                TxReceiver,
-                Broadcast,
-                ParentSignature,
-                KeyGenerator,
-                DelegateKey,
-                KeyRotationTrigger,
-            >,
-        >,
     ) -> Self {
         let new_txs_watcher = txpool.new_txs_watcher();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -294,7 +199,6 @@ where
             trigger,
             sync_task_handle,
             clock,
-            _pre_confirmation_signature_task: pre_confirmation_signature_task,
         }
     }
 
@@ -370,8 +274,7 @@ impl NewTxWaiter for NewTxWaiterImpl {
     }
 }
 
-impl<T, B, I, S, PB, C, TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
-    MainTask<T, B, I, S, PB, C, TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,
     B: BlockProducer,
@@ -379,17 +282,6 @@ where
     S: BlockSigner,
     PB: PredefinedBlocks,
     C: GetTime,
-    TxRcv: tx_receiver::TxReceiver + 'static,
-    <TxRcv as tx_receiver::TxReceiver>::Sender: Clone,
-    Brdcst: broadcast::Broadcast<
-            DelegateKey = DelegateKey,
-            ParentSignature = Parent::SignedData,
-            PreConfirmations = <TxRcv as tx_receiver::TxReceiver>::Txs,
-        > + 'static,
-    Parent: parent_signature::ParentSignature<DelegateKey> + 'static,
-    Gen: key_generator::KeyGenerator<Key = DelegateKey> + 'static,
-    DelegateKey: signing_key::SigningKey + 'static,
-    Trigger: trigger::KeyRotationTrigger + 'static,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -661,53 +553,14 @@ struct PredefinedBlockWithSkippedTransactions {
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, S, PB, C, TxRcv, Brdcst, Parent, Gen, DelegateKey, RotationTrigger>
-    RunnableService
-    for MainTask<
-        T,
-        B,
-        I,
-        S,
-        PB,
-        C,
-        TxRcv,
-        Brdcst,
-        Parent,
-        Gen,
-        DelegateKey,
-        RotationTrigger,
-    >
+impl<T, B, I, S, PB, C> RunnableService for MainTask<T, B, I, S, PB, C>
 where
     Self: RunnableTask,
-    TxRcv: tx_receiver::TxReceiver + 'static,
-    <TxRcv as tx_receiver::TxReceiver>::Sender: Clone,
-    Brdcst: broadcast::Broadcast<
-            DelegateKey = DelegateKey,
-            ParentSignature = Parent::SignedData,
-            PreConfirmations = <TxRcv as tx_receiver::TxReceiver>::Txs,
-        > + 'static,
-    Parent: parent_signature::ParentSignature<DelegateKey> + 'static,
-    Gen: key_generator::KeyGenerator<Key = DelegateKey> + 'static,
-    DelegateKey: signing_key::SigningKey + 'static,
-    RotationTrigger: trigger::KeyRotationTrigger + 'static,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<
-        T,
-        B,
-        I,
-        S,
-        PB,
-        C,
-        TxRcv,
-        Brdcst,
-        Parent,
-        Gen,
-        DelegateKey,
-        RotationTrigger,
-    >;
+    type Task = MainTask<T, B, I, S, PB, C>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -735,22 +588,7 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C, TxRcv, Brdcst, Parent, Gen, DelegateKey, RotationTrigger>
-    RunnableTask
-    for MainTask<
-        T,
-        B,
-        I,
-        S,
-        PB,
-        C,
-        TxRcv,
-        Brdcst,
-        Parent,
-        Gen,
-        DelegateKey,
-        RotationTrigger,
-    >
+impl<T, B, I, S, PB, C> RunnableTask for MainTask<T, B, I, S, PB, C>
 where
     T: TransactionPool,
     B: BlockProducer,
@@ -758,17 +596,6 @@ where
     S: BlockSigner,
     PB: PredefinedBlocks,
     C: GetTime,
-    TxRcv: tx_receiver::TxReceiver + 'static,
-    <TxRcv as tx_receiver::TxReceiver>::Sender: Clone,
-    Brdcst: broadcast::Broadcast<
-            DelegateKey = DelegateKey,
-            ParentSignature = Parent::SignedData,
-            PreConfirmations = <TxRcv as tx_receiver::TxReceiver>::Txs,
-        > + 'static,
-    Parent: parent_signature::ParentSignature<DelegateKey> + 'static,
-    Gen: key_generator::KeyGenerator<Key = DelegateKey> + 'static,
-    DelegateKey: signing_key::SigningKey + 'static,
-    RotationTrigger: trigger::KeyRotationTrigger + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         if let Some(action) = self.ensure_synced(watcher).await {
@@ -819,21 +646,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn new_service<
-    T,
-    B,
-    I,
-    P,
-    S,
-    PB,
-    C,
-    TxRcv,
-    Brdcst,
-    Parent,
-    Gen,
-    DelegateKey,
-    Trigger,
->(
+pub fn new_service<T, B, I, P, S, PB, C>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
@@ -843,10 +656,7 @@ pub fn new_service<
     block_signer: Arc<S>,
     predefined_blocks: PB,
     clock: C,
-    pre_confirmation_signature_task: ServiceRunner<
-        PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>,
-    >,
-) -> Service<T, B, I, S, PB, C, TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+) -> Service<T, B, I, S, PB, C>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
@@ -855,17 +665,6 @@ where
     PB: PredefinedBlocks + 'static,
     P: P2pPort,
     C: GetTime,
-    TxRcv: tx_receiver::TxReceiver + 'static,
-    <TxRcv as tx_receiver::TxReceiver>::Sender: Clone,
-    Brdcst: broadcast::Broadcast<
-            DelegateKey = DelegateKey,
-            ParentSignature = Parent::SignedData,
-            PreConfirmations = <TxRcv as tx_receiver::TxReceiver>::Txs,
-        > + 'static,
-    Parent: parent_signature::ParentSignature<DelegateKey> + 'static,
-    Gen: key_generator::KeyGenerator<Key = DelegateKey> + 'static,
-    DelegateKey: signing_key::SigningKey + 'static,
-    Trigger: trigger::KeyRotationTrigger + 'static,
 {
     Service::new(MainTask::new(
         last_block,
@@ -877,7 +676,6 @@ where
         block_signer,
         predefined_blocks,
         clock,
-        pre_confirmation_signature_task,
     ))
 }
 
