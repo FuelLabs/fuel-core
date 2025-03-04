@@ -44,6 +44,7 @@ pub mod primitives;
 pub mod tx;
 
 pub mod relayed_tx;
+pub mod storage;
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]

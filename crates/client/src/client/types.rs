@@ -424,3 +424,8 @@ impl TryFrom<TransactionType> for Transaction {
         }
     }
 }
+
+pub struct StorageSlot {
+    pub key: primitives::Bytes32,
+    pub value: primitives::Bytes,
+}

@@ -4,7 +4,9 @@ use crate::{
         database::arc_wrapper::ArcWrapper,
         ports::{
             OffChainDatabase,
+            OffChainDatabaseAt,
             OnChainDatabase,
+            OnChainDatabaseAt,
         },
     },
 };
@@ -17,7 +19,7 @@ use fuel_core_storage::{
     },
     not_found,
     tables::Transactions,
-    transactional::AtomicView,
+    transactional::HistoricalView,
     Error as StorageError,
     IsNotFound,
     Mappable,
@@ -81,6 +83,11 @@ pub type OnChainView = Arc<dyn OnChainDatabase>;
 /// The off-chain view of the database used by the [`ReadView`] to fetch off-chain data.
 pub type OffChainView = Arc<dyn OffChainDatabase>;
 
+/// The on-chain view of the database used by the [`ReadViewAt`] to fetch on-chain data.
+pub type OnChainViewAt = Arc<dyn OnChainDatabaseAt>;
+/// The off-chain view of the database used by the [`ReadViewAt`] to fetch off-chain data.
+pub type OffChainViewAt = Arc<dyn OffChainDatabaseAt>;
+
 /// The container of the on-chain and off-chain database view provides.
 /// It is used only by `ViewExtension` to create a [`ReadView`].
 pub struct ReadDatabase {
@@ -89,9 +96,21 @@ pub struct ReadDatabase {
     /// The height of the genesis block.
     genesis_height: BlockHeight,
     /// The on-chain database view provider.
-    on_chain: Box<dyn AtomicView<LatestView = OnChainView>>,
+    on_chain: Box<
+        dyn HistoricalView<
+            LatestView = OnChainView,
+            Height = BlockHeight,
+            ViewAtHeight = OnChainViewAt,
+        >,
+    >,
     /// The off-chain database view provider.
-    off_chain: Box<dyn AtomicView<LatestView = OffChainView>>,
+    off_chain: Box<
+        dyn HistoricalView<
+            LatestView = OffChainView,
+            Height = BlockHeight,
+            ViewAtHeight = OffChainViewAt,
+        >,
+    >,
     /// The flag indicating which indexation is enabled.
     indexation_flags: IndexationFlags,
 }
@@ -128,10 +147,13 @@ impl ReadDatabase {
         off_chain: OffChain,
     ) -> Result<Self, StorageError>
     where
-        OnChain: AtomicView + 'static,
-        OffChain: AtomicView + worker::OffChainDatabase + 'static,
+        OnChain: HistoricalView<Height = BlockHeight> + 'static,
+        OffChain:
+            HistoricalView<Height = BlockHeight> + worker::OffChainDatabase + 'static,
         OnChain::LatestView: OnChainDatabase,
         OffChain::LatestView: OffChainDatabase,
+        OnChain::ViewAtHeight: OnChainDatabaseAt,
+        OffChain::ViewAtHeight: OffChainDatabaseAt,
     {
         let mut indexation_flags = IndexationFlags::new();
         for kind in IndexationKind::iter() {
@@ -172,6 +194,18 @@ impl ReadDatabase {
             genesis_height: self.genesis_height,
             on_chain: self.on_chain.latest_view()?,
             off_chain: self.off_chain.latest_view()?,
+            indexation_flags: self.indexation_flags.clone(),
+        })
+    }
+
+    /// Creates a consistent view of the database at specific block height.
+    pub fn view_at(&self, block_height: BlockHeight) -> StorageResult<ReadViewAt> {
+        Ok(ReadViewAt {
+            batch_size: self.batch_size,
+            genesis_height: self.genesis_height,
+            view_block_height: block_height,
+            on_chain: self.on_chain.view_at(&block_height)?,
+            off_chain: self.off_chain.view_at(&block_height)?,
             indexation_flags: self.indexation_flags.clone(),
         })
     }
@@ -361,6 +395,22 @@ impl ReadView {
         .yield_each(self.batch_size)
     }
 
+    pub fn contract_storage_slots(
+        &self,
+        contract: ContractId,
+    ) -> impl Stream<Item = StorageResult<(Bytes32, Vec<u8>)>> + '_ {
+        futures::stream::iter(self.on_chain.contract_storage_slots(contract))
+            .yield_each(self.batch_size)
+    }
+
+    pub fn contract_storage_balances(
+        &self,
+        contract: ContractId,
+    ) -> impl Stream<Item = StorageResult<ContractBalance>> + '_ {
+        futures::stream::iter(self.on_chain.contract_storage_balances(contract))
+            .yield_each(self.batch_size)
+    }
+
     pub fn da_height(&self) -> StorageResult<DaBlockHeight> {
         self.on_chain.da_height()
     }
@@ -437,6 +487,40 @@ impl ReadView {
 
     pub fn message_is_spent(&self, nonce: &Nonce) -> StorageResult<bool> {
         self.off_chain.message_is_spent(nonce)
+    }
+}
+
+#[derive(Clone)]
+#[allow(dead_code)]
+pub struct ReadViewAt {
+    pub(crate) batch_size: usize,
+    pub(crate) genesis_height: BlockHeight,
+    pub(crate) view_block_height: BlockHeight,
+    pub(crate) on_chain: OnChainViewAt,
+    pub(crate) off_chain: OffChainViewAt,
+    pub(crate) indexation_flags: IndexationFlags,
+}
+
+impl ReadViewAt {
+    pub fn contract_slot_values(
+        &self,
+        contract_id: ContractId,
+        storage_slots: Vec<Bytes32>,
+    ) -> impl Stream<Item = StorageResult<(Bytes32, Vec<u8>)>> + '_ {
+        futures::stream::iter(
+            self.on_chain
+                .contract_slot_values(contract_id, storage_slots),
+        )
+        .yield_each(self.batch_size)
+    }
+
+    pub fn contract_balance_values(
+        &self,
+        contract_id: ContractId,
+        assets: Vec<AssetId>,
+    ) -> impl Stream<Item = StorageResult<ContractBalance>> + '_ {
+        futures::stream::iter(self.on_chain.contract_balance_values(contract_id, assets))
+            .yield_each(self.batch_size)
     }
 }
 

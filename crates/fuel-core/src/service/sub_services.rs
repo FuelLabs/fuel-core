@@ -22,7 +22,19 @@ use crate::{
     service::{
         adapters::{
             chain_state_info_provider,
-            consensus_module::poa::InDirectoryPredefinedBlocks,
+            consensus_module::poa::{
+                pre_confirmation_signature::{
+                    broadcast::P2PBroadcast,
+                    key_generator::{
+                        Ed25519Key,
+                        Ed25519KeyGenerator,
+                    },
+                    parent_signature::FuelParentSigner,
+                    trigger::TimeBasedTrigger,
+                    tx_receiver::PreconfirmationsReceiver,
+                },
+                InDirectoryPredefinedBlocks,
+            },
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
@@ -52,7 +64,11 @@ use fuel_core_gas_price_service::v1::{
     metadata::V1AlgorithmConfig,
     uninitialized_task::new_gas_price_service_v1,
 };
-use fuel_core_poa::Trigger;
+use fuel_core_poa::{
+    pre_confirmation_signature_service::PreConfirmationSignatureTask,
+    Trigger,
+};
+use fuel_core_services::ServiceRunner;
 use fuel_core_storage::{
     self,
     transactional::AtomicView,
@@ -123,13 +139,7 @@ pub fn init_sub_services(
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
-        // #[cfg(not(feature = "parallel-executor"))]
         upgradable_executor_config,
-        // #[cfg(feature = "parallel-executor")]
-        // fuel_core_parallel_executor::config::Config {
-        //     number_of_cores: config.executor_number_of_cores,
-        //     executor_config: upgradable_executor_config,
-        // },
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());
@@ -296,6 +306,18 @@ pub fn init_sub_services(
 
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
+
+    let _pre_confirmation_service: ServiceRunner<
+        PreConfirmationSignatureTask<
+            PreconfirmationsReceiver,
+            P2PBroadcast,
+            FuelParentSigner,
+            Ed25519KeyGenerator,
+            Ed25519Key,
+            TimeBasedTrigger,
+        >,
+    >;
+
     let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
             &last_block_header,
