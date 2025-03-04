@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 use super::*;
+use serde::Serialize;
 
 /// Abstraction of the delegate signing key that can be used to sign data and produce a signature.
 pub trait SigningKey: Send {
