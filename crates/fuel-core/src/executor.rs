@@ -3201,7 +3201,13 @@ mod tests {
         // When
         let producer = create_executor(Database::default(), config);
         let (result, _) = producer
-            .produce_without_commit_with_source(components)
+            .produce_without_commit_with_source(
+                components,
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
+            .now_or_never()
+            .unwrap()
             .unwrap()
             .into();
 
