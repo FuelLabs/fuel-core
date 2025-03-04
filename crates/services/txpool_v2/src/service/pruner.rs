@@ -11,6 +11,7 @@ use std::{
 };
 
 pub(super) struct TransactionPruner {
+    // TODO[RC]: Should pruner use the submission times from TxStatusManager?
     pub time_txs_submitted: VecDeque<(SystemTime, TxId)>,
     pub height_expiration_txs: BTreeMap<BlockHeight, Vec<TxId>>,
     pub ttl_timer: tokio::time::Interval,
