@@ -20,6 +20,9 @@ impl Default for PreconfirmationsReceiver {
     }
 }
 
+// TODO(#2739): Remove when integrated
+// link: https://github.com/FuelLabs/fuel-core/issues/2739
+#[allow(dead_code)]
 impl PreconfirmationsReceiver {
     pub fn new(receiver: mpsc::Receiver<Vec<Preconfirmation>>) -> Self {
         let capacity = receiver.capacity();
