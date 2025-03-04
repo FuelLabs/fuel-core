@@ -17,6 +17,7 @@ use fuel_core_types::{
 use tokio::sync::broadcast;
 
 use crate::{
+    error::Error,
     tx_status_stream::{
         TxStatusMessage,
         TxStatusStream,
@@ -95,5 +96,19 @@ impl TxStatusManager {
             .update_sender
             .try_subscribe::<MpscChannel>(tx_id)
             .ok_or(anyhow!("Maximum number of subscriptions reached"))
+    }
+
+    pub fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
+        tx_ids_and_reason.into_iter().for_each(|(tx_id, reason)| {
+            let error = Error::SkippedTransaction(reason);
+            let tx_update = TxUpdate::new(
+                tx_id,
+                TransactionStatus::SqueezedOut {
+                    reason: error.to_string(),
+                }
+                .into(),
+            );
+            self.status_update(tx_update);
+        });
     }
 }

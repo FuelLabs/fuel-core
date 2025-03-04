@@ -163,19 +163,7 @@ impl SharedState {
             .into_iter()
             .map(|(tx_id, reason)| {
                 let error = Error::SkippedTransaction(reason);
-                // TODO[RC]: Do not use `send_squeezed_out` anymore
-                // self.tx_status_manager.lock().unwrap().upsert_status(
-                //     &tx_id,
-                //     TransactionStatus::SqueezedOut {
-                //         reason: error.to_string(),
-                //     },
-                // );
-
-                // self.tx_status_sender
-                //     .send_squeezed_out(tx_id, error.clone());
-                // (tx_id, error)
-
-                todo!()
+                (tx_id, error)
             })
             .collect();
 

@@ -33,6 +33,11 @@ pub trait TransactionPool: Send + Sync {
     fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
 }
 
+#[cfg_attr(test, mockall::automock)]
+pub trait TxStatusManagerTrait: Send + Sync {
+    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
+}
+
 /// The source of transactions for the block.
 pub enum TransactionsSource {
     /// The source of transactions for the block is the `TxPool`.

@@ -72,6 +72,7 @@ pub type PoAService = fuel_core_poa::Service<
     SignMode,
     InDirectoryPredefinedBlocks,
     SystemTime,
+    TxStatusManagerAdapter,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -310,6 +311,7 @@ pub fn init_sub_services(
             &last_block_header,
             poa_config,
             tx_pool_adapter.clone(),
+            tx_status_manager_adapter.clone(),
             producer_adapter.clone(),
             importer_adapter.clone(),
             p2p_adapter.clone(),
