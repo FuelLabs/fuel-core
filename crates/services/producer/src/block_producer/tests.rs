@@ -93,7 +93,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let err = producer
-            .produce_and_execute_block_txpool(0u32.into(), Tai64::now())
+            .produce_and_execute_block_txpool(0u32.into(), Tai64::now(), ())
             .await
             .expect_err("expected failure");
 
@@ -112,7 +112,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let result = producer
-            .produce_and_execute_block_txpool(1u32.into(), Tai64::now())
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), ())
             .await;
 
         assert!(result.is_ok());
@@ -162,6 +162,7 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
+                (),
             )
             .await;
 
@@ -213,6 +214,7 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
+                (),
             )
             .await
             .expect("Should produce next block successfully")
@@ -271,6 +273,7 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
+                (),
             )
             .await
             .expect("Should produce next block successfully")
@@ -291,7 +294,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let err = producer
-            .produce_and_execute_block_txpool(100u32.into(), Tai64::now())
+            .produce_and_execute_block_txpool(100u32.into(), Tai64::now(), ())
             .await
             .expect_err("expected failure");
 
@@ -317,6 +320,7 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
+                (),
             )
             .await;
 
@@ -344,6 +348,7 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
+                (),
             )
             .await
             .expect_err("expected failure");
@@ -393,7 +398,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let res = producer
-            .produce_and_execute_block_txpool(next_height, Tai64::now())
+            .produce_and_execute_block_txpool(next_height, Tai64::now(), ())
             .await
             .unwrap();
 
@@ -433,7 +438,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let res = producer
-            .produce_and_execute_block_txpool(next_height, Tai64::now())
+            .produce_and_execute_block_txpool(next_height, Tai64::now(), ())
             .await
             .unwrap();
 
@@ -477,7 +482,7 @@ mod produce_and_execute_block_txpool {
 
             // when
             let res = producer
-                .produce_and_execute_block_txpool(next_height, Tai64::now())
+                .produce_and_execute_block_txpool(next_height, Tai64::now(), ())
                 .await
                 .unwrap();
 
@@ -516,7 +521,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let err = producer
-            .produce_and_execute_block_txpool(next_height, Tai64::now())
+            .produce_and_execute_block_txpool(next_height, Tai64::now(), ())
             .await
             .unwrap_err();
 
@@ -533,7 +538,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let err = producer
-            .produce_and_execute_block_txpool(1u32.into(), Tai64::now())
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), ())
             .await
             .expect_err("expected failure");
 
@@ -559,7 +564,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let _ = producer
-            .produce_and_execute_block_txpool(1u32.into(), Tai64::now())
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), ())
             .await
             .unwrap();
 
@@ -582,7 +587,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let result = producer
-            .produce_and_execute_block_txpool(1u32.into(), Tai64::now())
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), ())
             .await;
 
         // then
@@ -659,7 +664,7 @@ mod dry_run {
 
         // Given
         let block = producer
-            .produce_and_execute_block_txpool(SAME_HEIGHT.into(), Tai64::now())
+            .produce_and_execute_block_txpool(SAME_HEIGHT.into(), Tai64::now(), ())
             .await
             .unwrap();
         producer.view_provider.blocks.lock().unwrap().insert(
@@ -754,7 +759,7 @@ proptest! {
         let ctx = ctx_for_block(&block, executor.clone());
 
         //when
-        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block, ())).unwrap();
 
         // then
         let expected_gas_price = *block
@@ -774,7 +779,7 @@ proptest! {
         let ctx = ctx_for_block(&block, executor.clone());
 
         //when
-        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block, ())).unwrap();
 
         // then
         let expected_time = block.header().consensus().time;
@@ -793,7 +798,7 @@ proptest! {
         let ctx = ctx_for_block(&block, executor.clone());
 
         //when
-        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block, ())).unwrap();
 
         // then
         let expected_coinbase = block.transactions().last().and_then(|tx| tx.as_mint()).unwrap().input_contract().contract_id;
@@ -812,7 +817,7 @@ proptest! {
         let ctx = ctx_for_block(&block, executor.clone());
 
         //when
-        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block, ())).unwrap();
 
         // then
         let expected_da_height = block.header().da_height();
@@ -830,7 +835,7 @@ proptest! {
         let ctx = ctx_for_block(&block, executor.clone());
 
         //when
-        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block)).unwrap();
+        let _ =  rt.block_on(ctx.producer().produce_and_execute_predefined(&block, ())).unwrap();
 
         // then
         let captured = executor.captured.lock().unwrap();

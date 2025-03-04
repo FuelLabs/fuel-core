@@ -19,6 +19,7 @@ fuel-core-types = { workspace = true, features = ["std"] }
 fuel-core-wasm-executor = { workspace = true, features = [
   "std",
 ], optional = true }
+futures = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }

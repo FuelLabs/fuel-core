@@ -1,14 +1,28 @@
 use crate::{
     database::RelayerIterableKeyValueView,
-    service::adapters::TransactionsSource,
+    service::adapters::{
+        NewTxWaiter,
+        TransactionsSource,
+    },
 };
-use fuel_core_executor::ports::MaybeCheckedTransaction;
+use fuel_core_executor::ports::{
+    MaybeCheckedTransaction,
+    NewTxWaiterPort,
+    PreconfirmationSenderPort,
+};
 use fuel_core_txpool::Constraints;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    services::relayer::Event,
+    services::{
+        executor::WaitNewTransactionsResult,
+        preconfirmation::PreconfirmationStatus,
+        relayer::Event,
+    },
 };
 use std::sync::Arc;
+use tokio::sync::mpsc::error::TrySendError;
+
+use super::PreconfirmationSender;
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     fn next(
@@ -62,6 +76,43 @@ impl fuel_core_executor::ports::RelayerPort for RelayerIterableKeyValueView {
         {
             let _ = da_height;
             Ok(vec![])
+        }
+    }
+}
+
+impl NewTxWaiterPort for NewTxWaiter {
+    async fn wait_for_new_transactions(&self) -> WaitNewTransactionsResult {
+        let mut receiver = self.receiver.clone();
+        match tokio::time::timeout_at(self.timeout, async move {
+            match receiver.changed().await {
+                Ok(()) => WaitNewTransactionsResult::NewTransaction,
+                Err(_) => WaitNewTransactionsResult::Timeout,
+            }
+        })
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => WaitNewTransactionsResult::Timeout,
+        }
+    }
+}
+
+impl PreconfirmationSenderPort for PreconfirmationSender {
+    async fn send(
+        &self,
+        preconfirmations: Vec<PreconfirmationStatus>,
+    ) -> anyhow::Result<()> {
+        self.sender.send(preconfirmations).await.map_err(Into::into)
+    }
+
+    fn try_send(
+        &self,
+        preconfirmations: Vec<PreconfirmationStatus>,
+    ) -> Vec<PreconfirmationStatus> {
+        match self.sender.try_send(preconfirmations) {
+            Ok(()) => vec![],
+            Err(TrySendError::Closed(_)) => vec![],
+            Err(TrySendError::Full(preconfirmations)) => preconfirmations,
         }
     }
 }

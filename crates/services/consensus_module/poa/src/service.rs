@@ -259,8 +259,11 @@ where
         block_time: Tai64,
         source: TransactionsSource,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
+        // TODO: do it correctly
+        #[allow(clippy::arithmetic_side_effects)]
+        let deadline = self.last_block_created + Duration::from_secs(1);
         self.block_producer
-            .produce_and_execute_block(height, block_time, source)
+            .produce_and_execute_block(height, block_time, source, deadline)
             .await
     }
 
@@ -321,7 +324,6 @@ where
         if self.last_timestamp > block_time {
             return Err(anyhow!("The block timestamp should monotonically increase"))
         }
-
         // Ask the block producer to create the block
         let (
             ExecutionResult {
@@ -332,7 +334,9 @@ where
             },
             changes,
         ) = self
-            .signal_produce_block(height, block_time, source)
+            .signal_produce_block(
+                height, block_time, source,
+            )
             .await?
             .into();
 

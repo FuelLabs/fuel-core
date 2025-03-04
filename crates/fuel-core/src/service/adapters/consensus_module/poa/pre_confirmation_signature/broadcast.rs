@@ -11,9 +11,9 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     error::Result as PoAResult,
     parent_signature::ParentSignature,
 };
-use fuel_core_types::services::p2p::{
-    DelegatePreConfirmationKey,
-    Preconfirmation,
+use fuel_core_types::services::{
+    p2p::DelegatePreConfirmationKey,
+    preconfirmation::Preconfirmation,
 };
 
 /// TODO: Implement `Broadcast` properly: <https://github.com/FuelLabs/fuel-core/issues/2783>

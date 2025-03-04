@@ -10,8 +10,12 @@ use fuel_core_executor::{
         ExecutionInstance,
         ExecutionOptions,
         OnceTransactionsSource,
+        TimeoutOnlyTxWaiter,
+        TransparentPreconfirmationSender,
     },
     ports::{
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
         RelayerPort,
         TransactionsSource,
     },
@@ -51,6 +55,7 @@ use fuel_core_types::{
         Uncommitted,
     },
 };
+use futures::FutureExt;
 use std::sync::Arc;
 
 #[cfg(feature = "wasm-executor")]
@@ -324,7 +329,19 @@ where
         };
 
         let options = self.config.as_ref().into();
-        self.produce_inner(component, options, ProduceBlockMode::Produce)
+        self.produce_inner(
+            component,
+            options,
+            ProduceBlockMode::Produce,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        )
+        .now_or_never()
+        .ok_or_else(|| {
+            ExecutorError::Other(
+                "Impossible to resolve the executor's future immediately".to_string(),
+            )
+        })?
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
@@ -336,7 +353,19 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(block, options, ProduceBlockMode::DryRunLatest)
+        self.produce_inner(
+            block,
+            options,
+            ProduceBlockMode::DryRunLatest,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        )
+        .now_or_never()
+        .ok_or_else(|| {
+            ExecutorError::Other(
+                "Impossible to resolve the executor's future immediately".to_string(),
+            )
+        })?
     }
 }
 
@@ -349,15 +378,24 @@ where
     R::LatestView: RelayerPort + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
-    pub fn produce_without_commit_with_source<TxSource>(
+    pub async fn produce_without_commit_with_source<TxSource>(
         &self,
         components: Components<TxSource>,
+        new_tx_waiter: impl NewTxWaiterPort,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(components, options, ProduceBlockMode::Produce)
+        self.produce_inner(
+            components,
+            options,
+            ProduceBlockMode::Produce,
+            new_tx_waiter,
+            preconfirmation_sender,
+        )
+        .await
     }
 
     /// Executes the block and returns the result of the execution without committing
@@ -404,7 +442,15 @@ where
                     Some(height) => ProduceBlockMode::DryRunAt { height },
                     None => ProduceBlockMode::DryRunLatest,
                 },
-            )?
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
+            .now_or_never()
+            .ok_or_else(|| {
+                ExecutorError::Other(
+                    "Impossible to resolve the executor's future immediately".to_string(),
+                )
+            })??
             .into_result();
 
         // If one of the transactions fails, return an error.
@@ -542,11 +588,13 @@ where
     }
 
     #[cfg(feature = "wasm-executor")]
-    fn produce_inner<TxSource>(
+    async fn produce_inner<TxSource>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
+        new_tx_waiter: impl NewTxWaiterPort,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -556,7 +604,14 @@ where
         if block_version == native_executor_version {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => {
-                    self.native_produce_inner(block, options, mode)
+                    self.native_produce_inner(
+                        block,
+                        options,
+                        mode,
+                        new_tx_waiter,
+                        preconfirmation_sender,
+                    )
+                    .await
                 }
                 ExecutionStrategy::Wasm { module } => {
                     let maybe_blocks_module = self.get_module(block_version).ok();
@@ -574,11 +629,13 @@ where
     }
 
     #[cfg(not(feature = "wasm-executor"))]
-    fn produce_inner<TxSource>(
+    async fn produce_inner<TxSource>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
+        new_tx_waiter: impl NewTxWaiterPort,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -586,7 +643,14 @@ where
         let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
         if block_version == native_executor_version {
-            self.native_produce_inner(block, options, mode)
+            self.native_produce_inner(
+                block,
+                options,
+                mode,
+                new_tx_waiter,
+                preconfirmation_sender,
+            )
+            .await
         } else {
             Err(ExecutorError::Other(format!(
                 "Not supported version `{block_version}`. Expected version is `{}`",
@@ -764,11 +828,13 @@ where
         }
     }
 
-    fn native_produce_inner<TxSource>(
+    async fn native_produce_inner<TxSource>(
         &self,
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
+        new_tx_waiter: impl NewTxWaiterPort,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -784,11 +850,23 @@ where
         if let Some(previous_block_height) = db_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, mode.is_dry_run())
+                .produce_without_commit(
+                    block,
+                    mode.is_dry_run(),
+                    new_tx_waiter,
+                    preconfirmation_sender,
+                )
+                .await
         } else {
             let database = self.storage_view_provider.latest_view()?;
             ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(block, mode.is_dry_run())
+                .produce_without_commit(
+                    block,
+                    mode.is_dry_run(),
+                    new_tx_waiter,
+                    preconfirmation_sender,
+                )
+                .await
         }
     }
 

@@ -1,6 +1,8 @@
 use crate::{
     ports::{
         MaybeCheckedTransaction,
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
         RelayerPort,
         TransactionsSource,
     },
@@ -138,7 +140,9 @@ use fuel_core_types::{
             UncommittedResult,
             UncommittedValidationResult,
             ValidationResult,
+            WaitNewTransactionsResult,
         },
+        preconfirmation::PreconfirmationStatus,
         relayer::Event,
     },
 };
@@ -211,6 +215,26 @@ impl TransactionsSource for OnceTransactionsSource {
     }
 }
 
+pub struct TimeoutOnlyTxWaiter;
+
+impl NewTxWaiterPort for TimeoutOnlyTxWaiter {
+    async fn wait_for_new_transactions(&self) -> WaitNewTransactionsResult {
+        WaitNewTransactionsResult::Timeout
+    }
+}
+
+pub struct TransparentPreconfirmationSender;
+
+impl PreconfirmationSenderPort for TransparentPreconfirmationSender {
+    fn try_send(&self, _: Vec<PreconfirmationStatus>) -> Vec<PreconfirmationStatus> {
+        vec![]
+    }
+
+    async fn send(&self, _: Vec<PreconfirmationStatus>) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
 /// Data that is generated after executing all transactions.
 #[derive(Default)]
 pub struct ExecutionData {
@@ -278,26 +302,31 @@ where
     }
 
     #[tracing::instrument(skip_all)]
-    pub fn produce_without_commit<TxSource>(
+    pub async fn produce_without_commit<TxSource>(
         self,
         components: Components<TxSource>,
         dry_run: bool,
+        new_tx_waiter: impl NewTxWaiterPort,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
         TxSource: TransactionsSource,
     {
         let consensus_params_version = components.consensus_parameters_version();
 
-        let (block_executor, storage_tx) =
-            self.into_executor(consensus_params_version)?;
+        let (block_executor, storage_tx) = self.into_executor(
+            consensus_params_version,
+            new_tx_waiter,
+            preconfirmation_sender,
+        )?;
 
         #[cfg(feature = "fault-proving")]
         let chain_id = block_executor.consensus_params.chain_id();
 
         let (partial_block, execution_data) = if dry_run {
-            block_executor.dry_run_block(components, storage_tx)?
+            block_executor.dry_run_block(components, storage_tx).await?
         } else {
-            block_executor.produce_block(components, storage_tx)?
+            block_executor.produce_block(components, storage_tx).await?
         };
 
         let ExecutionData {
@@ -344,8 +373,11 @@ where
         block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
         let consensus_params_version = block.header().consensus_parameters_version();
-        let (block_executor, storage_tx) =
-            self.into_executor(consensus_params_version)?;
+        let (block_executor, storage_tx) = self.into_executor(
+            consensus_params_version,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        )?;
 
         let ExecutionData {
             coinbase,
@@ -369,10 +401,13 @@ where
         Ok(UncommittedValidationResult::new(result, changes))
     }
 
-    fn into_executor(
+    fn into_executor<N, P>(
         self,
         consensus_params_version: ConsensusParametersVersion,
-    ) -> ExecutorResult<(BlockExecutor<R>, StorageTransaction<D>)> {
+        new_tx_waiter: N,
+        preconfirmation_sender: P,
+    ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>)>
+    {
         let storage_tx = self
             .database
             .into_transaction()
@@ -384,7 +419,13 @@ where
                 consensus_params_version,
             ))?
             .into_owned();
-        let executor = BlockExecutor::new(self.relayer, self.options, consensus_params)?;
+        let executor = BlockExecutor::new(
+            self.relayer,
+            self.options,
+            consensus_params,
+            new_tx_waiter,
+            preconfirmation_sender,
+        )?;
         Ok((executor, storage_tx))
     }
 }
@@ -393,33 +434,43 @@ type BlockStorageTransaction<T> = StorageTransaction<T>;
 type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransaction<T>>;
 
 #[derive(Clone, Debug)]
-pub struct BlockExecutor<R> {
+pub struct BlockExecutor<R, TxWaiter, PreconfirmationSender> {
     relayer: R,
     consensus_params: ConsensusParameters,
     options: ExecutionOptions,
+    new_tx_waiter: TxWaiter,
+    preconfirmation_sender: PreconfirmationSender,
 }
 
-impl<R> BlockExecutor<R> {
+impl<R, TxWaiter, PreconfirmationSender>
+    BlockExecutor<R, TxWaiter, PreconfirmationSender>
+{
     pub fn new(
         relayer: R,
         options: ExecutionOptions,
         consensus_params: ConsensusParameters,
+        new_tx_waiter: TxWaiter,
+        preconfirmation_sender: PreconfirmationSender,
     ) -> ExecutorResult<Self> {
         Ok(Self {
             relayer,
             consensus_params,
             options,
+            new_tx_waiter,
+            preconfirmation_sender,
         })
     }
 }
 
-impl<R> BlockExecutor<R>
+impl<R, N, P> BlockExecutor<R, N, P>
 where
     R: RelayerPort,
+    N: NewTxWaiterPort,
+    P: PreconfirmationSenderPort,
 {
     #[tracing::instrument(skip_all)]
     /// Produce the fuel block with specified components
-    fn produce_block<TxSource, D>(
+    async fn produce_block<TxSource, D>(
         mut self,
         components: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
@@ -440,13 +491,23 @@ where
             &mut data,
             &mut memory,
         )?;
-        self.process_l2_txs(
-            &mut partial_block,
-            &components,
-            &mut block_storage_tx,
-            &mut data,
-            &mut memory,
-        )?;
+
+        loop {
+            self.process_l2_txs(
+                &mut partial_block,
+                &components,
+                &mut block_storage_tx,
+                &mut data,
+                &mut memory,
+            )
+            .await?;
+            match self.new_tx_waiter.wait_for_new_transactions().await {
+                WaitNewTransactionsResult::Timeout => break,
+                WaitNewTransactionsResult::NewTransaction => {
+                    continue;
+                }
+            }
+        }
 
         self.produce_mint_tx(
             &mut partial_block,
@@ -518,7 +579,7 @@ where
     }
 
     /// Execute dry-run of block with specified components
-    fn dry_run_block<TxSource, D>(
+    async fn dry_run_block<TxSource, D>(
         mut self,
         components: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
@@ -537,7 +598,8 @@ where
             &mut block_storage_tx,
             &mut data,
             &mut MemoryInstance::new(),
-        )?;
+        )
+        .await?;
 
         data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))
@@ -576,7 +638,7 @@ where
         Ok(())
     }
 
-    fn process_l2_txs<T, TxSource>(
+    async fn process_l2_txs<T, TxSource>(
         &mut self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
@@ -620,6 +682,7 @@ where
             .into_iter()
             .take(remaining_tx_count as usize)
             .peekable();
+        let mut status = vec![];
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
@@ -644,11 +707,32 @@ where
                     *coinbase_contract_id,
                     memory,
                 ) {
-                    Ok(_) => {}
+                    Ok(_) => {
+                        // SAFETY: Transaction succeed so we know that `tx_status` has been populated
+                        let latest_executed_tx = data.tx_status.last().unwrap();
+                        // TODO:
+                        let preconfirmation_status = match latest_executed_tx.result {
+                            TransactionExecutionResult::Success { .. } => {
+                                PreconfirmationStatus::SuccessByBlockProducer {
+                                    block_height: *block.header.height(),
+                                }
+                            }
+                            TransactionExecutionResult::Failed { .. } => {
+                                PreconfirmationStatus::FailureByBlockProducer {
+                                    block_height: *block.header.height(),
+                                }
+                            }
+                        };
+                        status.push(preconfirmation_status);
+                    }
                     Err(err) => {
+                        status.push(PreconfirmationStatus::SqueezedOutByBlockProducer {
+                            reason: err.to_string(),
+                        })
                         data.skipped_transactions.push((tx_id, err));
                     }
                 }
+                status = self.preconfirmation_sender.try_send(status);
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
                 remaining_block_transaction_size_limit =
                     block_transaction_size_limit.saturating_sub(data.used_size);
@@ -664,6 +748,11 @@ where
                 .into_iter()
                 .take(remaining_tx_count as usize)
                 .peekable();
+        }
+        if !status.is_empty() {
+            if let Err(e) = self.preconfirmation_sender.send(status).await {
+                tracing::warn!("Failed to send preconfirmation status: {:?}", e);
+            }
         }
 
         Ok(())

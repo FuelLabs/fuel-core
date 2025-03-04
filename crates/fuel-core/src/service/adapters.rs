@@ -4,7 +4,11 @@ use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
 };
-use fuel_core_executor::executor::OnceTransactionsSource;
+use fuel_core_executor::executor::{
+    OnceTransactionsSource,
+    TimeoutOnlyTxWaiter,
+    TransparentPreconfirmationSender,
+};
 use fuel_core_gas_price_service::{
     common::cumulative_percentage_change,
     v1::service::LatestGasPrice,
@@ -32,15 +36,19 @@ use fuel_core_types::{
         block_importer::SharedImportResult,
         block_producer::Components,
         executor::{
+            Error as ExecutorError,
             Result as ExecutorResult,
             UncommittedResult,
         },
+        preconfirmation::PreconfirmationStatus,
     },
     signer::SignMode,
     tai64::Tai64,
 };
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
+use futures::FutureExt;
+use tokio::time::Instant;
 
 use crate::{
     database::{
@@ -318,9 +326,33 @@ impl TransactionsSource {
     }
 }
 
+pub struct NewTxWaiter {
+    pub receiver: tokio::sync::watch::Receiver<()>,
+    pub timeout: Instant,
+}
+
+impl NewTxWaiter {
+    pub fn new(receiver: tokio::sync::watch::Receiver<()>, timeout: Instant) -> Self {
+        Self { receiver, timeout }
+    }
+}
+
+#[derive(Clone)]
+pub struct PreconfirmationSender {
+    pub sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+}
+
+impl PreconfirmationSender {
+    pub fn new(sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>) -> Self {
+        Self { sender }
+    }
+}
+
 #[derive(Clone)]
 pub struct ExecutorAdapter {
     pub(crate) executor: Arc<Executor<Database, Database<Relayer>>>,
+    pub new_txs_watcher: tokio::sync::watch::Receiver<()>,
+    pub preconfirmation_sender: PreconfirmationSender,
 }
 
 impl ExecutorAdapter {
@@ -331,10 +363,15 @@ impl ExecutorAdapter {
         // config: fuel_core_parallel_executor::config::Config,
         // #[cfg(not(feature = "parallel-executor"))]
         config: fuel_core_upgradable_executor::config::Config,
+        new_txs_watcher: tokio::sync::watch::Receiver<()>,
+        preconfirmation_sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);
+        let preconfirmation_sender = PreconfirmationSender::new(preconfirmation_sender);
         Self {
             executor: Arc::new(executor),
+            new_txs_watcher,
+            preconfirmation_sender,
         }
     }
 
@@ -352,7 +389,19 @@ impl ExecutorAdapter {
         };
 
         self.executor
-            .produce_without_commit_with_source(new_components)
+            .produce_without_commit_with_source(
+                new_components,
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
+            .now_or_never()
+            .ok_or_else(|| {
+                ExecutorError::Other(
+                    "Impossible to resolve \
+                    `produce_without_commit_with_source` future immediately"
+                        .to_string(),
+                )
+            })?
     }
 }
 
