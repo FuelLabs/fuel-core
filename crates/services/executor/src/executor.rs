@@ -242,6 +242,21 @@ impl PreconfirmationSenderPort for TransparentPreconfirmationSender {
     }
 }
 
+fn convert_tx_execution_result_to_preconfirmation(
+    tx_exec_result: &TransactionExecutionResult,
+    block_height: BlockHeight,
+    _tx_index: u16,
+) -> PreconfirmationStatus {
+    match tx_exec_result {
+        TransactionExecutionResult::Success { .. } => {
+            PreconfirmationStatus::SuccessByBlockProducer { block_height }
+        }
+        TransactionExecutionResult::Failed { .. } => {
+            PreconfirmationStatus::FailureByBlockProducer { block_height }
+        }
+    }
+}
+
 /// Data that is generated after executing all transactions.
 #[derive(Default)]
 pub struct ExecutionData {
@@ -718,18 +733,12 @@ where
                         let latest_executed_tx = data.tx_status.last().expect(
                             "Shouldn't happens as we just added a transaction; qed",
                         );
-                        let preconfirmation_status = match latest_executed_tx.result {
-                            TransactionExecutionResult::Success { .. } => {
-                                PreconfirmationStatus::SuccessByBlockProducer {
-                                    block_height: *block.header.height(),
-                                }
-                            }
-                            TransactionExecutionResult::Failed { .. } => {
-                                PreconfirmationStatus::FailureByBlockProducer {
-                                    block_height: *block.header.height(),
-                                }
-                            }
-                        };
+                        let preconfirmation_status =
+                            convert_tx_execution_result_to_preconfirmation(
+                                &latest_executed_tx.result,
+                                *block.header.height(),
+                                data.tx_count,
+                            );
                         status.push(preconfirmation_status);
                     }
                     Err(err) => {
