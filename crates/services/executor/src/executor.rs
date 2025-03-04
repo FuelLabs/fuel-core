@@ -726,10 +726,10 @@ where
                         status.push(preconfirmation_status);
                     }
                     Err(err) => {
-                        data.skipped_transactions.push((tx_id, err.clone()));
                         status.push(PreconfirmationStatus::SqueezedOutByBlockProducer {
                             reason: err.to_string(),
                         })
+                        data.skipped_transactions.push((tx_id, err));
                     }
                 }
                 status = self.preconfirmation_sender.try_send(status);
