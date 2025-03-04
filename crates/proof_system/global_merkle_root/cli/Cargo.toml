@@ -17,6 +17,7 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true }
 derive_more = { workspace = true }
+fuel-core = { workspace = true }
 fuel-core-global-merkle-root-storage = { workspace = true }
 fuel-core-global-merkle-root-service = { workspace = true }
 fuel-core-global-merkle-root-api = { workspace = true }
