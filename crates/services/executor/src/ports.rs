@@ -20,7 +20,10 @@ use fuel_core_types::{
     },
     fuel_vm::checked_transaction::CheckedTransaction,
     services::{
-        executor::Result as ExecutorResult,
+        executor::{
+            Result as ExecutorResult,
+            WaitNewTransactionsResult,
+        },
         relayer::Event,
     },
 };
@@ -32,7 +35,13 @@ use alloc::{
 };
 
 #[cfg(feature = "std")]
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    future::Future,
+};
+
+#[cfg(not(feature = "std"))]
+use core::future::Future;
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]
@@ -161,4 +170,13 @@ pub trait RelayerPort {
 
     /// Get events from the relayer at a given da height.
     fn get_events(&self, da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>>;
+}
+
+/// Send to the block executor to know if there is new transactions available
+/// to include in the block or if we are good to end the block execution.
+pub trait NewTxWaiterPort: Send {
+    /// Wait for new transactions to be available or timeout.
+    fn wait_for_new_transactions(
+        &self,
+    ) -> impl Future<Output = WaitNewTransactionsResult> + Send;
 }

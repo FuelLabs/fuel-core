@@ -22,7 +22,6 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            NewTxWaiter,
             Result as ExecutorResult,
             StorageReadReplayEvent,
             TransactionExecutionStatus,
@@ -94,12 +93,13 @@ pub trait Relayer: Send + Sync {
 }
 
 pub trait BlockProducer<TxSource>: Send + Sync {
+    type Deadline;
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
     fn produce_without_commit(
         &self,
         component: Components<TxSource>,
-        new_tx_waiter: impl NewTxWaiter,
+        deadline: Self::Deadline,
     ) -> impl Future<Output = ExecutorResult<UncommittedResult<Changes>>>;
 }
 

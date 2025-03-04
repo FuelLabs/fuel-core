@@ -85,10 +85,7 @@ impl GasPriceProvider for MockProducerGasPrice {
 // Tests for the `produce_and_execute_block_txpool` method.
 mod produce_and_execute_block_txpool {
     use super::*;
-    use fuel_core_types::{
-        blockchain::primitives::DaBlockHeight,
-        services::executor::TimeoutOnlyTxWaiter,
-    };
+    use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
     #[tokio::test]
     async fn cant_produce_at_genesis_height() {
@@ -96,11 +93,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let err = producer
-            .produce_and_execute_block_txpool(
-                0u32.into(),
-                Tai64::now(),
-                TimeoutOnlyTxWaiter,
-            )
+            .produce_and_execute_block_txpool(0u32.into(), Tai64::now(), ())
             .await
             .expect_err("expected failure");
 
@@ -119,11 +112,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let result = producer
-            .produce_and_execute_block_txpool(
-                1u32.into(),
-                Tai64::now(),
-                TimeoutOnlyTxWaiter,
-            )
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), ())
             .await;
 
         assert!(result.is_ok());
@@ -173,7 +162,7 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
-                TimeoutOnlyTxWaiter,
+                MockTxWaiter,
             )
             .await;
 
@@ -225,7 +214,7 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
-                TimeoutOnlyTxWaiter,
+                MockTxWaiter,
             )
             .await
             .expect("Should produce next block successfully")
@@ -284,7 +273,7 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
-                TimeoutOnlyTxWaiter,
+                MockTxWaiter,
             )
             .await
             .expect("Should produce next block successfully")
@@ -305,11 +294,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let err = producer
-            .produce_and_execute_block_txpool(
-                100u32.into(),
-                Tai64::now(),
-                TimeoutOnlyTxWaiter,
-            )
+            .produce_and_execute_block_txpool(100u32.into(), Tai64::now(), MockTxWaiter)
             .await
             .expect_err("expected failure");
 
@@ -335,7 +320,7 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
-                TimeoutOnlyTxWaiter,
+                MockTxWaiter,
             )
             .await;
 
@@ -363,7 +348,7 @@ mod produce_and_execute_block_txpool {
                     .succ()
                     .expect("The block height should be valid"),
                 Tai64::now(),
-                TimeoutOnlyTxWaiter,
+                MockTxWaiter,
             )
             .await
             .expect_err("expected failure");
@@ -413,11 +398,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let res = producer
-            .produce_and_execute_block_txpool(
-                next_height,
-                Tai64::now(),
-                TimeoutOnlyTxWaiter,
-            )
+            .produce_and_execute_block_txpool(next_height, Tai64::now(), MockTxWaiter)
             .await
             .unwrap();
 
@@ -457,11 +438,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let res = producer
-            .produce_and_execute_block_txpool(
-                next_height,
-                Tai64::now(),
-                TimeoutOnlyTxWaiter,
-            )
+            .produce_and_execute_block_txpool(next_height, Tai64::now(), MockTxWaiter)
             .await
             .unwrap();
 
@@ -505,11 +482,7 @@ mod produce_and_execute_block_txpool {
 
             // when
             let res = producer
-                .produce_and_execute_block_txpool(
-                    next_height,
-                    Tai64::now(),
-                    TimeoutOnlyTxWaiter,
-                )
+                .produce_and_execute_block_txpool(next_height, Tai64::now(), MockTxWaiter)
                 .await
                 .unwrap();
 
@@ -548,11 +521,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let err = producer
-            .produce_and_execute_block_txpool(
-                next_height,
-                Tai64::now(),
-                TimeoutOnlyTxWaiter,
-            )
+            .produce_and_execute_block_txpool(next_height, Tai64::now(), MockTxWaiter)
             .await
             .unwrap_err();
 
@@ -569,11 +538,7 @@ mod produce_and_execute_block_txpool {
         let producer = ctx.producer();
 
         let err = producer
-            .produce_and_execute_block_txpool(
-                1u32.into(),
-                Tai64::now(),
-                TimeoutOnlyTxWaiter,
-            )
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), MockTxWaiter)
             .await
             .expect_err("expected failure");
 
@@ -599,11 +564,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let _ = producer
-            .produce_and_execute_block_txpool(
-                1u32.into(),
-                Tai64::now(),
-                TimeoutOnlyTxWaiter,
-            )
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), MockTxWaiter)
             .await
             .unwrap();
 
@@ -626,11 +587,7 @@ mod produce_and_execute_block_txpool {
 
         // when
         let result = producer
-            .produce_and_execute_block_txpool(
-                1u32.into(),
-                Tai64::now(),
-                TimeoutOnlyTxWaiter,
-            )
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), MockTxWaiter)
             .await;
 
         // then
@@ -640,8 +597,6 @@ mod produce_and_execute_block_txpool {
 
 // Tests for the `dry_run` method.
 mod dry_run {
-    use fuel_core_types::services::executor::TimeoutOnlyTxWaiter;
-
     use super::*;
 
     #[tokio::test]
@@ -712,7 +667,7 @@ mod dry_run {
             .produce_and_execute_block_txpool(
                 SAME_HEIGHT.into(),
                 Tai64::now(),
-                TimeoutOnlyTxWaiter,
+                MockTxWaiter,
             )
             .await
             .unwrap();

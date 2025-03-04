@@ -20,14 +20,12 @@ use fuel_core_types::{
             BlockImportInfo,
             UncommittedResult as UncommittedImportResult,
         },
-        executor::{
-            NewTxWaiter,
-            UncommittedResult as UncommittedExecutionResult,
-        },
+        executor::UncommittedResult as UncommittedExecutionResult,
     },
     tai64::Tai64,
 };
 use std::collections::HashMap;
+use tokio::time::Instant;
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TransactionPool: Send + Sync {
@@ -52,7 +50,7 @@ pub trait BlockProducer: Send + Sync {
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
-        new_tx_waiter: impl NewTxWaiter,
+        deadline: Instant,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
 
     async fn produce_predefined_block(

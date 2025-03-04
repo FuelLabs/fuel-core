@@ -1,6 +1,7 @@
 use crate::{
     ports::{
         MaybeCheckedTransaction,
+        NewTxWaiterPort,
         RelayerPort,
         TransactionsSource,
     },
@@ -131,9 +132,7 @@ use fuel_core_types::{
             Event as ExecutorEvent,
             ExecutionResult,
             ForcedTransactionFailure,
-            NewTxWaiter,
             Result as ExecutorResult,
-            TimeoutOnlyTxWaiter,
             TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
@@ -142,6 +141,7 @@ use fuel_core_types::{
             ValidationResult,
             WaitNewTransactionsResult,
         },
+        p2p::PreconfirmationStatus,
         relayer::Event,
     },
 };
@@ -211,6 +211,14 @@ impl TransactionsSource for OnceTransactionsSource {
         // Avoid panicking if we request more transactions than there are in the vector
         let transactions_limit = (transactions_limit as usize).min(transactions.len());
         transactions.drain(..transactions_limit).collect()
+    }
+}
+
+pub struct TimeoutOnlyTxWaiter;
+
+impl NewTxWaiterPort for TimeoutOnlyTxWaiter {
+    async fn wait_for_new_transactions(&self) -> WaitNewTransactionsResult {
+        WaitNewTransactionsResult::Timeout
     }
 }
 
@@ -285,7 +293,7 @@ where
         self,
         components: Components<TxSource>,
         dry_run: bool,
-        new_tx_waiter: impl NewTxWaiter,
+        new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: P,
     ) -> ExecutorResult<UncommittedResult<Changes>>
     where
@@ -304,7 +312,7 @@ where
         let chain_id = block_executor.consensus_params.chain_id();
 
         let (partial_block, execution_data) = if dry_run {
-            block_executor.dry_run_block(components, storage_tx)?
+            block_executor.dry_run_block(components, storage_tx).await?
         } else {
             block_executor.produce_block(components, storage_tx).await?
         };
@@ -385,7 +393,7 @@ where
         preconfirmation_sender: P,
     ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>)>
     where
-        N: NewTxWaiter,
+        N: NewTxWaiterPort,
         // TODO: P: PreconfirmationSender,
     {
         let storage_tx = self
@@ -452,7 +460,7 @@ impl<R, TxWaiter, PreconfirmationSender>
 impl<R, N, P> BlockExecutor<R, N, P>
 where
     R: RelayerPort,
-    N: NewTxWaiter,
+    N: NewTxWaiterPort,
     // TODO: P: PreconfirmationSender,
 {
     #[tracing::instrument(skip_all)]
@@ -486,7 +494,8 @@ where
                 &mut block_storage_tx,
                 &mut data,
                 &mut memory,
-            )?;
+            )
+            .await?;
             match self.new_tx_waiter.wait_for_new_transactions().await {
                 WaitNewTransactionsResult::Timeout => break,
                 WaitNewTransactionsResult::NewTransaction => {
@@ -565,7 +574,7 @@ where
     }
 
     /// Execute dry-run of block with specified components
-    fn dry_run_block<TxSource, D>(
+    async fn dry_run_block<TxSource, D>(
         mut self,
         components: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
@@ -584,7 +593,8 @@ where
             &mut block_storage_tx,
             &mut data,
             &mut MemoryInstance::new(),
-        )?;
+        )
+        .await?;
 
         data.changes = block_storage_tx.into_changes();
         Ok((partial_block, data))
@@ -623,7 +633,7 @@ where
         Ok(())
     }
 
-    fn process_l2_txs<T, TxSource>(
+    async fn process_l2_txs<T, TxSource>(
         &mut self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
@@ -667,6 +677,7 @@ where
             .into_iter()
             .take(remaining_tx_count as usize)
             .peekable();
+        let mut status = vec![];
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
@@ -693,32 +704,30 @@ where
                 ) {
                     Ok(_) => {
                         // SAFETY: Transaction succeed so we know that `tx_status` has been populated
-                        let _latest_executed_tx = data.tx_status.last().unwrap();
+                        let latest_executed_tx = data.tx_status.last().unwrap();
                         // TODO:
-                        // let preconfirmation_status = match latest_executed_tx.result {
-                        //     TransactionExecutionResult::Success { receipts, .. } => {
-                        //         PreconfirmationStatus::SuccessByBlockProducer {
-                        //             receipts,
-                        //             ..
-                        //         }
-                        //     }
-                        //     TransactionExecutionResult::Failed { receipts } => {
-                        //         PreconfirmationStatus::FailedByBlockProducer {
-                        //             receipts,
-                        //             ..
-                        //         }
-                        //     }
-                        // }
-                        // self.preconfirmation_sender.send(latest_executed_tx.id)?;
+                        let preconfirmation_status = match latest_executed_tx.result {
+                            TransactionExecutionResult::Success { .. } => {
+                                PreconfirmationStatus::SuccessByBlockProducer {
+                                    block_height: *block.header.height(),
+                                }
+                            }
+                            TransactionExecutionResult::Failed { .. } => {
+                                PreconfirmationStatus::FailureByBlockProducer {
+                                    block_height: *block.header.height(),
+                                }
+                            }
+                        };
+                        status.push(preconfirmation_status);
                     }
                     Err(err) => {
                         data.skipped_transactions.push((tx_id, err));
-                        // TODO:
-                        // self.preconfirmation_sender.send(PreconfimationStatus::SkippedByBlockProducer {
-                        //     ..
-                        // })
+                        status.push(PreconfirmationStatus::SqueezedOutByBlockProducer {
+                            reason: err.to_string(),
+                        })
                     }
                 }
+                self.preconfirmation_sender.try_send(&mut status);
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
                 remaining_block_transaction_size_limit =
                     block_transaction_size_limit.saturating_sub(data.used_size);
@@ -734,6 +743,9 @@ where
                 .into_iter()
                 .take(remaining_tx_count as usize)
                 .peekable();
+        }
+        if !status.is_empty() {
+            self.preconfirmation_sender.send(status).await;
         }
 
         Ok(())

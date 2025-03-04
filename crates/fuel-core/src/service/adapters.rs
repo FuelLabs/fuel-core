@@ -4,7 +4,10 @@ use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
 };
-use fuel_core_executor::executor::OnceTransactionsSource;
+use fuel_core_executor::executor::{
+    OnceTransactionsSource,
+    TimeoutOnlyTxWaiter,
+};
 use fuel_core_gas_price_service::{
     common::cumulative_percentage_change,
     v1::service::LatestGasPrice,
@@ -34,9 +37,9 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             Result as ExecutorResult,
-            TimeoutOnlyTxWaiter,
             UncommittedResult,
         },
+        p2p::PreconfirmationStatus,
     },
     signer::SignMode,
     tai64::Tai64,
@@ -44,6 +47,7 @@ use fuel_core_types::{
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
 use futures::FutureExt;
+use tokio::time::Instant;
 
 use crate::{
     database::{
@@ -321,9 +325,22 @@ impl TransactionsSource {
     }
 }
 
+pub struct NewTxWaiter {
+    pub receiver: tokio::sync::watch::Receiver<()>,
+    pub timeout: Instant,
+}
+
+impl NewTxWaiter {
+    pub fn new(receiver: tokio::sync::watch::Receiver<()>, timeout: Instant) -> Self {
+        Self { receiver, timeout }
+    }
+}
+
 #[derive(Clone)]
 pub struct ExecutorAdapter {
     pub(crate) executor: Arc<Executor<Database, Database<Relayer>>>,
+    pub new_txs_watcher: tokio::sync::watch::Receiver<()>,
+    pub preconfirmation_sender: tokio::sync::mpsc::Sender<PreconfirmationStatus>,
 }
 
 impl ExecutorAdapter {
@@ -334,10 +351,14 @@ impl ExecutorAdapter {
         // config: fuel_core_parallel_executor::config::Config,
         // #[cfg(not(feature = "parallel-executor"))]
         config: fuel_core_upgradable_executor::config::Config,
+        new_txs_watcher: tokio::sync::watch::Receiver<()>,
+        pre_confirmation_sender: tokio::sync::mpsc::Sender<PreconfirmationStatus>,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);
         Self {
             executor: Arc::new(executor),
+            new_txs_watcher,
+            preconfirmation_sender,
         }
     }
 

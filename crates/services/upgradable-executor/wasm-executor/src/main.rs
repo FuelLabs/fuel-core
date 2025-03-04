@@ -24,10 +24,7 @@ use fuel_core_types::{
     blockchain::block::Block,
     services::{
         block_producer::Components,
-        executor::{
-            Error as ExecutorError,
-            TimeoutOnlyTxWaiter,
-        },
+        executor::Error as ExecutorError,
     },
 };
 use fuel_core_wasm_executor::{
@@ -40,8 +37,10 @@ use fuel_core_wasm_executor::{
     },
 };
 use futures::FutureExt;
+use new_tx_waiter::NewTxWaiter;
 
 mod ext;
+mod new_tx_waiter;
 mod relayer;
 mod storage;
 mod tx_source;
@@ -105,7 +104,7 @@ fn execute_dry_run(
     block: Components<WasmTxSource>,
 ) -> ReturnType {
     let result = instance
-        .produce_without_commit(block, true, TimeoutOnlyTxWaiter, ())
+        .produce_without_commit(block, true, NewTxWaiter, ())
         .now_or_never()
         .unwrap();
     ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
@@ -116,7 +115,7 @@ fn execute_production(
     block: Components<WasmTxSource>,
 ) -> ReturnType {
     let result = instance
-        .produce_without_commit(block, false, TimeoutOnlyTxWaiter, ())
+        .produce_without_commit(block, false, NewTxWaiter, ())
         .now_or_never()
         .unwrap();
     ReturnType::ExecutionV1(convert_to_v1_execution_result(result))

@@ -719,6 +719,7 @@ pub fn new_service<
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
     wasm_checker: WasmChecker,
+    new_txs_notifier: watch::Sender<()>,
 ) -> Service<PSView, P2P>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
@@ -752,7 +753,6 @@ where
         // But we still want to drop subscribers after `2 * TxPool_TTL`.
         config.max_txs_ttl.saturating_mul(2),
     );
-    let (new_txs_notifier, _) = watch::channel(());
 
     let subscriptions = Subscriptions {
         new_tx_source: new_peers_subscribed_stream,

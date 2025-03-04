@@ -38,7 +38,6 @@ use fuel_core_types::{
         executor::{
             Error as ExecutorError,
             ExecutionResult,
-            NewTxWaiter,
             Result as ExecutorResult,
             TransactionExecutionStatus,
             UncommittedResult,
@@ -127,10 +126,12 @@ fn arc_pool_tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block 
 }
 
 impl BlockProducer<Vec<Transaction>> for MockExecutor {
+    type Deadline = ();
+
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _: impl NewTxWaiter,
+        _: (),
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         let block = arc_pool_tx_comp_to_block(&component);
         // simulate executor inserting a block
@@ -154,10 +155,11 @@ impl BlockProducer<Vec<Transaction>> for MockExecutor {
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
 impl BlockProducer<Vec<Transaction>> for FailingMockExecutor {
+    type Deadline = ();
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _: impl NewTxWaiter,
+        _: (),
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
@@ -184,10 +186,11 @@ pub struct MockExecutorWithCapture {
 }
 
 impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture {
+    type Deadline = ();
     async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
-        _: impl NewTxWaiter,
+        _: (),
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         let block = arc_pool_tx_comp_to_block(&component);
         *self.captured.lock().unwrap() = Some(component);
