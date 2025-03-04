@@ -41,6 +41,7 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
         primitives::DaBlockHeight,
+        transaction::TransactionExt,
     },
     entities::{
         coins::coin::{
@@ -153,7 +154,6 @@ use std::borrow::Cow;
 #[cfg(not(feature = "std"))]
 use alloc::borrow::Cow;
 
-use crate::ports::TransactionExt;
 #[cfg(feature = "alloc")]
 use alloc::{
     format,
