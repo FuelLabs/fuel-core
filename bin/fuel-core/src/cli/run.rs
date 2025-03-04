@@ -534,7 +534,6 @@ impl Command {
             tx_max_total_bytes,
             tx_max_total_gas,
             tx_max_chain_count,
-            tx_number_active_subscriptions,
             tx_blacklist_addresses,
             tx_blacklist_coins,
             tx_blacklist_messages,
