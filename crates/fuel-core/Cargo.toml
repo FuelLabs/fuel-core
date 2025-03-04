@@ -89,6 +89,8 @@ mockall = { workspace = true }
 proptest = { workspace = true }
 test-case = { workspace = true }
 test-strategy = { workspace = true }
+tokio-test = "0.4.4"
+tracing-subscriber = { workspace = true }
 
 [features]
 default = ["rocksdb"]

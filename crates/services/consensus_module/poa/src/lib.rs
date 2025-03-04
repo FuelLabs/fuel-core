@@ -15,6 +15,8 @@ pub mod ports;
 pub mod service;
 pub mod verifier;
 
+pub mod pre_confirmation_signature_service;
+
 pub use config::{
     Config,
     Trigger,

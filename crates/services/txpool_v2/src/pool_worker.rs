@@ -6,6 +6,7 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
     services::{
+        block_importer::SharedImportResult,
         p2p::GossipsubMessageInfo,
         txpool::ArcPoolTx,
     },
@@ -28,8 +29,10 @@ use crate::{
     config::ServiceChannelLimits,
     error::{
         Error,
+        InsertionErrorType,
         RemovedReason,
     },
+    pending_pool::PendingPool,
     ports::TxPoolPersistentStorage,
     service::{
         TxInfo,
@@ -78,26 +81,31 @@ impl PoolWorkerInterface {
         let (thread_management_sender, thread_management_receiver) =
             mpsc::channel(SIZE_THREAD_MANAGEMENT_CHANNEL);
 
-        let handle = std::thread::spawn(move || {
-            let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            else {
-                tracing::error!("Failed to build tokio runtime for pool worker");
-                return;
-            };
-            let mut worker = PoolWorker {
-                thread_management_receiver,
-                request_remove_receiver,
-                request_read_receiver,
-                extract_block_transactions_receiver,
-                request_insert_receiver,
-                notification_sender,
-                pool: tx_pool,
-                view_provider,
-            };
+        let handle = std::thread::spawn({
+            let tx_insert_from_pending_sender = request_insert_sender.clone();
+            move || {
+                let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                else {
+                    tracing::error!("Failed to build tokio runtime for pool worker");
+                    return;
+                };
+                let mut worker = PoolWorker {
+                    tx_insert_from_pending_sender,
+                    thread_management_receiver,
+                    request_remove_receiver,
+                    request_read_receiver,
+                    extract_block_transactions_receiver,
+                    request_insert_receiver,
+                    notification_sender,
+                    pending_pool: PendingPool::new(tx_pool.config.pending_pool_tx_ttl),
+                    pool: tx_pool,
+                    view_provider,
+                };
 
-            tokio_runtime.block_on(async { while !worker.run().await {} });
+                tokio_runtime.block_on(async { while !worker.run().await {} });
+            }
         });
         Self {
             thread_management_sender,
@@ -110,9 +118,9 @@ impl PoolWorkerInterface {
         }
     }
 
-    pub fn remove_executed_transactions(&self, tx_ids: Vec<TxId>) -> anyhow::Result<()> {
+    pub fn process_block(&self, block_result: SharedImportResult) -> anyhow::Result<()> {
         self.request_remove_sender
-            .try_send(PoolRemoveRequest::ExecutedTransactions { tx_ids })
+            .try_send(PoolRemoveRequest::ProcessBlock { block_result })
             .map_err(|e| anyhow::anyhow!("Failed to send remove request: {}", e))
     }
 
@@ -152,6 +160,7 @@ enum ThreadManagementRequest {
 }
 
 #[allow(clippy::upper_case_acronyms)]
+#[derive(Debug)]
 pub(super) enum InsertionSource {
     P2P {
         from_peer_info: GossipsubMessageInfo,
@@ -176,8 +185,8 @@ pub(super) enum PoolExtractBlockTransactions {
 }
 
 pub(super) enum PoolRemoveRequest {
-    ExecutedTransactions {
-        tx_ids: Vec<TxId>,
+    ProcessBlock {
+        block_result: SharedImportResult,
     },
     CoinDependents {
         dependents_ids: Vec<(TxId, Error)>,
@@ -231,12 +240,14 @@ pub(super) enum PoolNotification {
 }
 
 pub(super) struct PoolWorker<View> {
+    tx_insert_from_pending_sender: Sender<PoolInsertRequest>,
     thread_management_receiver: Receiver<ThreadManagementRequest>,
     request_remove_receiver: Receiver<PoolRemoveRequest>,
     request_read_receiver: Receiver<PoolReadRequest>,
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
     request_insert_receiver: Receiver<PoolInsertRequest>,
     pool: TxPool,
+    pending_pool: PendingPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
     notification_sender: Sender<PoolNotification>,
 }
@@ -273,8 +284,8 @@ where
                 }
                 for remove in remove_buffer {
                     match remove {
-                        PoolRemoveRequest::ExecutedTransactions { tx_ids } => {
-                            self.remove(tx_ids);
+                        PoolRemoveRequest::ProcessBlock { block_result } => {
+                            self.process_block(block_result);
                         }
                         PoolRemoveRequest::CoinDependents { dependents_ids } => {
                             self.remove_coin_dependents(dependents_ids);
@@ -327,10 +338,23 @@ where
         let tx_id = tx.id();
         let expiration = tx.expiration();
         let result = self.view_provider.latest_view();
-        let res = match result {
-            Ok(view) => self.pool.insert(tx, &view),
-            Err(err) => Err(Error::Database(format!("{:?}", err))),
+        let view = match result {
+            Ok(view) => view,
+            Err(err) => {
+                if let Err(e) =
+                    self.notification_sender
+                        .try_send(PoolNotification::ErrorInsertion {
+                            tx_id,
+                            source,
+                            error: Error::Database(format!("{:?}", err)),
+                        })
+                {
+                    tracing::error!("Failed to send error insertion notification: {}", e);
+                }
+                return;
+            }
         };
+        let res = self.pool.insert(tx.clone(), &view);
 
         match res {
             Ok(removed_txs) => {
@@ -377,8 +401,47 @@ where
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
                 }
+                let resolved_txs = self.pending_pool.new_known_tx(tx);
+
+                for (tx, source) in resolved_txs {
+                    if let Err(e) = self
+                        .tx_insert_from_pending_sender
+                        .try_send(PoolInsertRequest::Insert { tx, source })
+                    {
+                        tracing::error!(
+                            "Failed to send resolved transaction to pending pool: {}",
+                            e
+                        );
+                    }
+                }
             }
-            Err(error) => {
+            Err(InsertionErrorType::MissingInputs(missing_inputs)) => {
+                if missing_inputs.is_empty() {
+                    debug_assert!(false, "Missing inputs should not be empty");
+                } else if !self.has_enough_space_in_pools(&tx) {
+                    // SAFETY: missing_inputs is not empty, checked just above
+                    let error = missing_inputs
+                        .first()
+                        .expect("Missing inputs is not empty; qed")
+                        .into();
+                    if let Err(e) = self.notification_sender.try_send(
+                        PoolNotification::ErrorInsertion {
+                            tx_id,
+                            source,
+                            error,
+                        },
+                    ) {
+                        tracing::error!(
+                            "Failed to send error insertion notification: {}",
+                            e
+                        );
+                    }
+                } else {
+                    self.pending_pool
+                        .insert_transaction(tx, source, missing_inputs);
+                }
+            }
+            Err(InsertionErrorType::Error(error)) => {
                 if let Err(e) =
                     self.notification_sender
                         .try_send(PoolNotification::ErrorInsertion {
@@ -391,6 +454,8 @@ where
                 }
             }
         }
+        self.pending_pool
+            .expire_transactions(self.notification_sender.clone());
     }
 
     fn extract_block_transactions(
@@ -404,8 +469,24 @@ where
         }
     }
 
-    fn remove(&mut self, tx_ids: Vec<TxId>) {
-        self.pool.remove_transaction(tx_ids);
+    fn process_block(&mut self, block_result: SharedImportResult) {
+        self.pool.remove_transactions(
+            block_result.tx_status.iter().map(|tx_status| tx_status.id),
+        );
+        let resolved_txs = self.pending_pool.new_known_txs(
+            block_result
+                .sealed_block
+                .entity
+                .transactions()
+                .iter()
+                .zip(block_result.tx_status.iter().map(|tx_status| tx_status.id)),
+        );
+        for (tx, source) in resolved_txs {
+            self.insert(tx, source);
+        }
+
+        self.pending_pool
+            .expire_transactions(self.notification_sender.clone());
     }
 
     fn remove_coin_dependents(&mut self, parent_txs: Vec<(TxId, Error)>) {
@@ -480,5 +561,54 @@ where
         if response_channel.send(non_existing_txs).is_err() {
             tracing::error!("Failed to send non existing txs");
         }
+    }
+
+    fn has_enough_space_in_pools(&self, tx: &ArcPoolTx) -> bool {
+        let tx_gas = tx.max_gas();
+        let bytes_size = tx.metered_bytes_size();
+
+        // Check maximum limits pool in general
+        let gas_used = self.pool.current_gas.saturating_add(tx_gas);
+        let bytes_used = self.pool.current_bytes_size.saturating_add(bytes_size);
+        let txs_used = self.pool.tx_id_to_storage_id.len().saturating_add(1);
+        if gas_used > self.pool.config.pool_limits.max_gas
+            || bytes_used > self.pool.config.pool_limits.max_bytes_size
+            || txs_used > self.pool.config.pool_limits.max_txs
+        {
+            return false;
+        }
+
+        // Check the percentage used by the pending pool
+        let gas_used = self.pending_pool.current_gas.saturating_add(tx_gas);
+        let bytes_used = self.pending_pool.current_bytes.saturating_add(bytes_size);
+        let txs_used = self.pending_pool.current_txs.saturating_add(1);
+
+        let max_gas = self
+            .pool
+            .config
+            .pool_limits
+            .max_gas
+            .saturating_mul(self.pool.config.max_pending_pool_size_percentage as u64)
+            .saturating_div(100);
+        let max_bytes = self
+            .pool
+            .config
+            .pool_limits
+            .max_bytes_size
+            .saturating_mul(self.pool.config.max_pending_pool_size_percentage as usize)
+            .saturating_div(100);
+        let max_txs = self
+            .pool
+            .config
+            .pool_limits
+            .max_txs
+            .saturating_mul(self.pool.config.max_pending_pool_size_percentage as usize)
+            .saturating_div(100);
+
+        if gas_used > max_gas || bytes_used > max_bytes || txs_used > max_txs {
+            return false;
+        }
+
+        true
     }
 }
