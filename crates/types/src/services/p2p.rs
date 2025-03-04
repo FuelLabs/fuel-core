@@ -84,23 +84,23 @@ pub type ConfirmationsGossipData = GossipData<PreConfirmationMessage>;
 /// A value and an associated signature
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Sealed<Entity> {
+pub struct Sealed<Entity, S = Signature> {
     /// The actual value
     pub entity: Entity,
     /// Seal
-    pub signature: Signature,
+    pub signature: S,
 }
 
 /// A key that will be used to sign a pre-confirmations
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DelegatePreConfirmationKey {
+pub struct DelegatePreConfirmationKey<P = PublicKey> {
     /// The public key of the person who is allowed to create pre-confirmations.
-    public_key: PublicKey,
+    pub public_key: P,
     /// The time at which the key will expire. Used to indicate to the recipient which key
     /// to use to verify the pre-confirmations--serves the second purpose of being a nonce of
     /// each key
-    expiration: Tai64,
+    pub expiration: Tai64,
 }
 
 /// A pre-confirmation is a message that is sent by the block producer to give the _final_
@@ -109,9 +109,9 @@ pub struct DelegatePreConfirmationKey {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Preconfirmation {
     /// The ID of the transaction that is being pre-confirmed
-    tx_id: TxId,
+    pub tx_id: TxId,
     /// The status of the transaction that is being pre-confirmed
-    status: PreconfirmationStatus,
+    pub status: PreconfirmationStatus,
 }
 
 /// Status of a transaction that has been pre-confirmed by block producer
@@ -146,19 +146,19 @@ pub struct Preconfirmations {
 }
 
 /// A signed key delegation
-pub type SignedByBlockProducerDelegation = Sealed<DelegatePreConfirmationKey>;
+pub type SignedByBlockProducerDelegation<P> = Sealed<DelegatePreConfirmationKey<P>>;
 
 /// A signed pre-confirmation
-pub type SignedPreconfirmationByDelegate = Sealed<Preconfirmations>;
+pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 
 /// The possible messages sent by the parties pre-confirming transactinos
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreConfirmationMessage {
+pub enum PreConfirmationMessage<P = PublicKey, S = Signature> {
     /// Notification of key delegation
-    Delegate(SignedByBlockProducerDelegation),
+    Delegate(SignedByBlockProducerDelegation<P>),
     /// Notification of pre-confirmations
-    Preconfirmations(SignedPreconfirmationByDelegate),
+    Preconfirmations(SignedPreconfirmationByDelegate<S>),
 }
 
 #[cfg(feature = "test-helpers")]

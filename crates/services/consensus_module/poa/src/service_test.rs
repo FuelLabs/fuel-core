@@ -87,7 +87,6 @@ use tokio::{
 mod manually_produce_tests;
 mod test_time;
 mod trigger_tests;
-
 use test_time::TestTime;
 
 struct TestContextBuilder {
@@ -196,7 +195,7 @@ impl TestContextBuilder {
     }
 }
 
-struct FakeBlockSigner {
+pub struct FakeBlockSigner {
     succeeds: bool,
 }
 
@@ -220,15 +219,17 @@ impl BlockSigner for FakeBlockSigner {
     }
 }
 
+pub type TestPoAService = Service<
+    MockTransactionPool,
+    MockBlockProducer,
+    MockBlockImporter,
+    FakeBlockSigner,
+    InMemoryPredefinedBlocks,
+    test_time::Watch,
+>;
+
 struct TestContext {
-    service: Service<
-        MockTransactionPool,
-        MockBlockProducer,
-        MockBlockImporter,
-        FakeBlockSigner,
-        InMemoryPredefinedBlocks,
-        test_time::Watch,
-    >,
+    service: TestPoAService,
     time: TestTime,
 }
 
@@ -494,6 +495,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+
     let task = MainTask::new(
         &last_block,
         config,
@@ -558,6 +560,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+
     let task = MainTask::new(
         &last_block,
         config,

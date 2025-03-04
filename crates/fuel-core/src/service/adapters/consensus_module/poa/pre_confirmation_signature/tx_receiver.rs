@@ -1,4 +1,3 @@
-use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::Preconfirmations;
 use fuel_core_poa::pre_confirmation_signature_service::{
     error::{
         Error as PoaError,
@@ -6,53 +5,80 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     },
     tx_receiver::TxReceiver,
 };
-use fuel_core_types::{
-    fuel_tx::TxId,
-    services::p2p::PreconfirmationStatus,
-};
+use fuel_core_types::services::p2p::Preconfirmation;
+use tokio::sync::mpsc;
+
+pub struct PreconfirmationsReceiver {
+    capacity: usize,
+    receiver: mpsc::Receiver<Vec<Preconfirmation>>,
+}
+
+impl Default for PreconfirmationsReceiver {
+    fn default() -> Self {
+        let (_, receiver) = mpsc::channel(1);
+        Self::new(receiver)
+    }
+}
 
 // TODO(#2739): Remove when integrated
 // link: https://github.com/FuelLabs/fuel-core/issues/2739
 #[allow(dead_code)]
-pub struct MPSCTxReceiver<T> {
-    receiver: tokio::sync::mpsc::Receiver<T>,
-}
-
-impl TxReceiver for MPSCTxReceiver<Vec<(TxId, PreconfirmationStatus)>> {
-    type Txs = Preconfirmations;
-
-    async fn receive(&mut self) -> PoAResult<Self::Txs> {
-        self.receiver.recv().await.ok_or(PoaError::TxReceiver(
-            "Failed to receive transaction, channel closed".to_string(),
-        ))
+impl PreconfirmationsReceiver {
+    pub fn new(receiver: mpsc::Receiver<Vec<Preconfirmation>>) -> Self {
+        let capacity = receiver.capacity();
+        PreconfirmationsReceiver { capacity, receiver }
     }
 }
+
+impl TxReceiver for PreconfirmationsReceiver {
+    type Txs = Vec<Preconfirmation>;
+
+    async fn receive(&mut self) -> PoAResult<Self::Txs> {
+        let mut buffer = Vec::new();
+        let received = self.receiver.recv_many(&mut buffer, self.capacity).await;
+
+        if received == 0 {
+            return Err(PoaError::TxReceiver(
+                "Failed to receive transaction, channel closed".to_string(),
+            ));
+        }
+
+        Ok(buffer.into_iter().flatten().collect::<Vec<_>>())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(non_snake_case)]
+
     use super::*;
-    use fuel_core_types::fuel_types::BlockHeight;
+    use fuel_core_types::{
+        fuel_tx::TxId,
+        fuel_types::BlockHeight,
+        services::p2p::PreconfirmationStatus,
+    };
 
     #[tokio::test]
     async fn receive__gets_what_is_sent_through_channel() {
         // given
-        let (sender, receiver) = tokio::sync::mpsc::channel(1);
         let txs = vec![
-            (
-                TxId::default(),
-                PreconfirmationStatus::SuccessByBlockProducer {
+            Preconfirmation {
+                tx_id: TxId::default(),
+                status: PreconfirmationStatus::SuccessByBlockProducer {
                     block_height: BlockHeight::from(123),
                 },
-            ),
-            (
-                TxId::default(),
-                PreconfirmationStatus::SqueezedOutByBlockProducer {
+            },
+            Preconfirmation {
+                tx_id: TxId::default(),
+                status: PreconfirmationStatus::SqueezedOutByBlockProducer {
                     reason: "test".to_string(),
                 },
-            ),
+            },
         ];
 
-        let mut receiver = MPSCTxReceiver { receiver };
+        let (sender, receiver) = mpsc::channel(1);
+
+        let mut receiver = PreconfirmationsReceiver::new(receiver);
 
         // when
         sender.send(txs.clone()).await.unwrap();

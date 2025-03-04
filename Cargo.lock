@@ -2607,6 +2607,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
  "pkcs8",
+ "serde",
  "signature",
 ]
 
@@ -3359,6 +3360,8 @@ dependencies = [
  "clap",
  "cosmrs",
  "derive_more 0.99.19",
+ "ed25519",
+ "ed25519-dalek",
  "enum-iterator",
  "fuel-core",
  "fuel-core-chain-config",
