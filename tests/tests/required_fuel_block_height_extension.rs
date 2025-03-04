@@ -117,16 +117,24 @@ async fn current_fuel_block_height_header_is_present_on_successful_committed_tra
 async fn submitting_transaction_with_future_required_height_return_error() {
     // setup config
     let state_config = StateConfig::default();
-    let config = Config::local_node_with_state_config(state_config);
+    let mut config = Config::local_node_with_state_config(state_config);
+
+    let required_block_height = 100u32;
+    // We want to verify that `required_block_height` block height requirements will be met before
+    // transaction is actually inserted into the transaction pool.
+    // Since `utxo_validation == true`, `bad_tx` should fail with error that UTXO doesn't exist.
+    // So if we receive an error not related to required block height(error about missing UTXO),
+    // it means that transaction was inserted before we met the requirement.
+    let bad_tx = fuel_tx::Transaction::default_test_tx();
+    config.utxo_validation = true;
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
     let mut client: FuelClient = FuelClient::from(srv.bound_address);
 
     // When
-    client.with_required_fuel_block_height(Some(100u32.into()));
-    let tx = fuel_tx::Transaction::default_test_tx();
-    let result = client.submit_and_await_commit(&tx).await;
+    client.with_required_fuel_block_height(Some(required_block_height.into()));
+    let result = client.submit_and_await_commit(&bad_tx).await;
 
     // Then
     let error = result.unwrap_err();

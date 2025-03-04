@@ -1,11 +1,13 @@
 use crate::{
     fuel_core_graphql_api::{
+        extensions::unify_response,
         ports::{
             BlockProducerPort,
             ChainStateProvider as ChainStateProviderTrait,
             ConsensusModulePort,
             GasPriceEstimate,
             OffChainDatabase,
+            OffChainDatabaseAt,
             OnChainDatabase,
             P2pPort,
             TxPoolPort,
@@ -68,7 +70,7 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_storage::transactional::AtomicView;
+use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::Stream;
 use hyper::rt::Executor;
@@ -95,7 +97,10 @@ pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 pub use super::database::ReadDatabase;
 use super::{
     block_height_subscription,
-    ports::worker,
+    ports::{
+        worker,
+        OnChainDatabaseAt,
+    },
 };
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
@@ -239,10 +244,12 @@ pub fn new_service<OnChain, OffChain>(
     block_height_subscriber: block_height_subscription::Subscriber,
 ) -> anyhow::Result<Service>
 where
-    OnChain: AtomicView + 'static,
-    OffChain: AtomicView + worker::OffChainDatabase + 'static,
+    OnChain: HistoricalView<Height = BlockHeight> + 'static,
+    OffChain: HistoricalView<Height = BlockHeight> + worker::OffChainDatabase + 'static,
     OnChain::LatestView: OnChainDatabase,
     OffChain::LatestView: OffChainDatabase,
+    OnChain::ViewAtHeight: OnChainDatabaseAt,
+    OffChain::ViewAtHeight: OffChainDatabaseAt,
 {
     let balances_indexation_enabled = off_database.balances_indexation_enabled()?;
 
@@ -277,6 +284,9 @@ where
         .limit_depth(config.config.max_queries_depth)
         .limit_recursive_depth(config.config.max_queries_recursive_depth)
         .limit_directives(config.config.max_queries_directives)
+        // The ordering for extensions meters, the `ChainStateInfoExtension` should be the
+        // first, because it adds additional information to the final response.
+        .extension(ChainStateInfoExtension::new(block_height_subscriber.clone()))
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
         ))
@@ -297,9 +307,8 @@ where
         .extension(RequiredFuelBlockHeightExtension::new(
             required_fuel_block_height_tolerance,
             required_fuel_block_height_timeout,
-            block_height_subscriber.clone(),
+            block_height_subscriber,
         ))
-        .extension(ChainStateInfoExtension::new(block_height_subscriber))
         .finish();
 
     let graphql_endpoint = "/v1/graphql";
@@ -376,16 +385,20 @@ async fn graphql_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Json<Response> {
-    schema.execute(req.0).await.into()
+    let response = schema.execute(req.0).await;
+    let response = unify_response(response);
+
+    response.into()
 }
 
 async fn graphql_subscription_handler(
     schema: Extension<CoreSchema>,
     req: Json<Request>,
 ) -> Sse<impl Stream<Item = anyhow::Result<Event, serde_json::Error>>> {
-    let stream = schema
-        .execute_stream(req.0)
-        .map(|r| Event::default().json_data(r));
+    let stream = schema.execute_stream(req.0).map(|response| {
+        let response = unify_response(response);
+        Event::default().json_data(response)
+    });
     Sse::new(stream)
         .keep_alive(axum::response::sse::KeepAlive::new().text("keep-alive-text"))
 }

@@ -45,6 +45,7 @@ hex = { workspace = true }
 hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
+mockall = { workspace = true, optional = true }
 num_cpus = { version = "1.16.0", optional = true }
 parking_lot = { workspace = true }
 paste = { workspace = true }
@@ -85,7 +86,6 @@ fuel-core-types = { path = "./../types", features = ["test-helpers"] }
 fuel-core-upgradable-executor = { workspace = true, features = [
   "test-helpers",
 ] }
-mockall = { workspace = true }
 proptest = { workspace = true }
 test-case = { workspace = true }
 test-strategy = { workspace = true }
@@ -114,6 +114,7 @@ test-helpers = [
   "fuel-core-services/test-helpers",
   "fuel-core-shared-sequencer?/test-helpers",
   "fuel-core-importer/test-helpers",
+  "dep:mockall",
 ]
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
