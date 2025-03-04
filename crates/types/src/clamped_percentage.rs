@@ -7,7 +7,7 @@ pub struct ClampedPercentage {
 }
 
 impl ClampedPercentage {
-     /// Creates a new `ClampedPercentage` by clamping the given value to the range [0, 100].
+    /// Creates a new `ClampedPercentage` by clamping the given value to the range [0, 100].
     pub fn new(maybe_value: u8) -> Self {
         Self {
             value: maybe_value.min(100),

@@ -16,7 +16,6 @@ where
     A: Send + Sync,
 {
     let algorithm = SharedGasPriceAlgo::new_with_algorithm(algorithm);
-    // let clamped_percentage = ClampedPercentage::new(percentage as u8);
     let latest_gas_price = UniversalGasPriceProvider::new(height, price, percentage);
     FuelGasPriceProvider::new(algorithm, latest_gas_price)
 }

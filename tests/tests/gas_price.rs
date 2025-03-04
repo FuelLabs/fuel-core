@@ -91,7 +91,7 @@ fn infinite_loop_tx<R: Rng + rand::CryptoRng>(
     rng: &mut R,
     asset_id: Option<AssetId>,
 ) -> Transaction {
-    let script = vec![op::jmp(RegId::ZERO)];
+    let script = [op::jmp(RegId::ZERO)];
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
     let mut builder = TransactionBuilder::script(script_bytes, vec![]);
     let asset_id = asset_id.unwrap_or_else(|| *builder.get_params().base_asset_id());
@@ -157,7 +157,7 @@ fn arb_small_tx<R: Rng + rand::CryptoRng>(
 }
 
 #[tokio::test]
-async fn latest_gas_price__if_no_mint_tx_in_previous_block_gas_price_is_zero() {
+async fn latest_gas_price_if_no_mint_tx_in_previous_block_gas_price_is_zero() {
     // given
     let node_config = Config::local_node();
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
@@ -173,7 +173,7 @@ async fn latest_gas_price__if_no_mint_tx_in_previous_block_gas_price_is_zero() {
 }
 
 #[tokio::test]
-async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
+async fn latest_gas_price_for_single_block_should_be_starting_gas_price() {
     // given
     let mut config = Config::local_node();
     let starting_gas_price = 982;
@@ -197,7 +197,7 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
 }
 
 #[tokio::test]
-async fn produce_block__raises_gas_price() {
+async fn produce_block_raises_gas_price() {
     // given
     let block_gas_limit = 3_000_000;
     let chain_config = ChainConfig {
@@ -249,7 +249,7 @@ async fn produce_block__raises_gas_price() {
 }
 
 #[tokio::test]
-async fn produce_block__lowers_gas_price() {
+async fn produce_block_lowers_gas_price() {
     // given
     let block_gas_limit = 3_000_000;
     let chain_config = ChainConfig {
@@ -301,7 +301,7 @@ async fn produce_block__lowers_gas_price() {
 }
 
 #[tokio::test]
-async fn produce_block__dont_raises_gas_price_with_default_parameters() {
+async fn produce_block_dont_raises_gas_price_with_default_parameters() {
     // given
     let args = vec![
         "--debug",
@@ -345,7 +345,7 @@ async fn produce_block__dont_raises_gas_price_with_default_parameters() {
 }
 
 #[tokio::test]
-async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
+async fn estimate_gas_price_is_greater_than_actual_price_at_desired_height() {
     // given
     let mut node_config = Config::local_node();
     let starting_gas_price = 1000;
@@ -383,7 +383,7 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn latest_gas_price__if_node_restarts_gets_latest_value() {
+async fn latest_gas_price_if_node_restarts_gets_latest_value() {
     // given
     let args = vec![
         "--debug",
@@ -428,7 +428,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
 }
 
 #[tokio::test]
-async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
+async fn dry_run_opt_zero_gas_price_equal_to_none_gas_price() {
     // given
     let tx = TransactionBuilder::script(
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
@@ -486,7 +486,7 @@ async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn startup__can_override_gas_price_values_by_changing_config() {
+async fn startup_can_override_gas_price_values_by_changing_config() {
     // given
     let args = vec![
         "--debug",
@@ -646,7 +646,7 @@ fn produce_block__l1_committed_block_affects_gas_price() {
 }
 
 #[test]
-fn run__if_metadata_is_behind_l2_then_will_catch_up() {
+fn run_if_metadata_is_behind_l2_then_will_catch_up() {
     // given
     // produce 100 blocks
     let args = vec![
@@ -740,7 +740,7 @@ fn node_config_with_da_committer_url(url: url::Url) -> Config {
 }
 
 #[test]
-fn produce_block__algorithm_recovers_from_divergent_profit() {
+fn produce_block_algorithm_recovers_from_divergent_profit() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given
@@ -776,9 +776,9 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
     let half_of_blocks = block_delay as u32 / 2;
     let count = half_of_blocks;
     let block_bytes = 1000;
-    let total_size_bytes = block_bytes * count as u32;
+    let total_size_bytes = block_bytes * count;
     let gas = 16 * total_size_bytes as u128;
-    let cost_gwei = gas * 1; // blob gas price 1 gwei
+    let cost_gwei = gas; // blob gas price 1 gwei
     let cost = cost_gwei * 1_000_000_000; // Wei
     mock.add_response(RawDaBlockCosts {
         id: 1,
@@ -830,7 +830,7 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
             gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
             if profit > 0 && !success {
                 success = true;
-                success_iteration = i as i32;
+                success_iteration = i;
             }
         }
     });
@@ -858,7 +858,7 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
 }
 
 #[test]
-fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
+fn produce_block_costs_from_da_are_properly_recorded_in_metadata() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given
@@ -932,8 +932,8 @@ fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
 }
 
 #[tokio::test]
-async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
-    let mut rng = StdRng::seed_from_u64(1234 as u64);
+async fn sentry_gas_price_estimate_uses_gas_price_from_produced_block() {
+    let mut rng = StdRng::seed_from_u64(1234_u64);
 
     // given
     let unexpected_high_min_gas_limit = u64::MAX;
@@ -1005,7 +1005,7 @@ async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
 }
 
 #[tokio::test]
-async fn cli__starting_recorded_height_is_set_in_db() {
+async fn cli_starting_recorded_height_is_set_in_db() {
     // given
     let starting_recorded_height: u32 = 1234;
     let as_str = &starting_recorded_height.to_string();

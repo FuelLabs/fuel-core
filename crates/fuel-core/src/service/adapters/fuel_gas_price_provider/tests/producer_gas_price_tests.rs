@@ -11,7 +11,8 @@ fn production_gas_price__if_requested_block_height_is_latest_return_gas_price() 
     // given
     let price = 33;
     let algo = StaticAlgorithm::new(price);
-    let gas_price_provider = build_provider(algo.clone(), 0, price, ClampedPercentage::new(10));
+    let gas_price_provider =
+        build_provider(algo.clone(), 0, price, ClampedPercentage::new(10));
 
     // when
     let expected_price = algo.next_gas_price();
