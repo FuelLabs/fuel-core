@@ -1,12 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::arithmetic_side_effects)]
 
-use rand::{
-    rngs::StdRng,
-    Rng,
-    SeedableRng,
-};
-
 use fuel_core::service::{
     Config,
     FuelService,
@@ -21,7 +15,6 @@ use fuel_core_types::{
         GTFArgs,
         RegId,
     },
-    fuel_crypto::SecretKey,
     fuel_tx::{
         Cacheable,
         Contract,
@@ -40,6 +33,15 @@ use fuel_core_types::{
         ContractId,
         Salt,
     },
+};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
+use test_helpers::{
+    assemble_tx::AssembleAndRunTx,
+    default_signing_wallet,
 };
 
 struct TestContext {
@@ -80,7 +82,7 @@ async fn setup(rng: &mut StdRng) -> TestContext {
 
     // Submit contract creation tx
     let tx_status = client
-        .submit_and_await_commit(&create_tx.into())
+        .assemble_and_run_tx(&create_tx.into(), default_signing_wallet())
         .await
         .unwrap();
     assert!(matches!(tx_status, TransactionStatus::Success { .. }));
@@ -101,7 +103,7 @@ async fn setup(rng: &mut StdRng) -> TestContext {
 
 /// This makes a block with a single transaction that has a fee,
 /// so that the coinbase fee is collected into the contract
-async fn make_block_with_fee(rng: &mut StdRng, ctx: &TestContext) {
+async fn make_block_with_fee(ctx: &TestContext) {
     let old_balance = ctx
         .client
         .contract_balance(&ctx.contract_id, None)
@@ -111,18 +113,14 @@ async fn make_block_with_fee(rng: &mut StdRng, ctx: &TestContext) {
     // Run a script that does nothing, but will cause fee collection
     let tx =
         TransactionBuilder::script([op::ret(RegId::ONE)].into_iter().collect(), vec![])
-            .max_fee_limit(AMOUNT)
             .tip(TIP)
-            .add_unsigned_coin_input(
-                SecretKey::random(rng),
-                rng.gen(),
-                AMOUNT,
-                Default::default(),
-                Default::default(),
-            )
-            .script_gas_limit(1_000_000)
             .finalize_as_transaction();
-    let tx_status = ctx.client.submit_and_await_commit(&tx).await.unwrap();
+
+    let tx_status = ctx
+        .client
+        .assemble_and_run_tx(&tx, default_signing_wallet())
+        .await
+        .unwrap();
     assert!(matches!(tx_status, TransactionStatus::Success { .. }));
 
     // Now the coinbase fee should be reflected in the contract balance
@@ -142,7 +140,7 @@ async fn collect_fees(ctx: &TestContext) {
     } = ctx;
 
     let asset_id = AssetId::BASE;
-    let output_index = 1u64;
+    let output_index = 2u64;
     let call_struct_register = 0x10;
     // Now call the fee collection contract to withdraw the fees
     let script = vec![
@@ -157,33 +155,23 @@ async fn collect_fees(ctx: &TestContext) {
         op::ret(RegId::ONE),
     ];
 
-    let tx = TransactionBuilder::script(
-            script.into_iter().collect(),asset_id.to_bytes().into_iter()
-                .chain(output_index.to_bytes().into_iter())
-                .chain(contract_id
-                    .to_bytes().into_iter())
-                .chain(0u64.to_bytes().into_iter())
-                .chain(0u64.to_bytes().into_iter())
-                .collect(),
-        )
-            .add_fee_input() // No coinbase fee for this block
-            .script_gas_limit(1_000_000)
-            .add_input(Input::contract(
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                *contract_id,
-            ))
-            .add_output(Output::contract(1, Default::default(), Default::default()))
-            .add_output(Output::variable(
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            ))
-            .finalize_as_transaction();
+    let script_data = asset_id
+        .to_bytes()
+        .into_iter()
+        .chain(output_index.to_bytes().into_iter())
+        .chain(contract_id.to_bytes().into_iter())
+        .chain(0u64.to_bytes().into_iter())
+        .chain(0u64.to_bytes().into_iter())
+        .collect();
 
-    let tx_status = client.submit_and_await_commit(&tx).await.unwrap();
+    let tx = TransactionBuilder::script(script.into_iter().collect(), script_data)
+        .add_fee_input()
+        .finalize_as_transaction();
+
+    let tx_status = client
+        .assemble_and_run_tx(&tx, default_signing_wallet())
+        .await
+        .unwrap();
     assert!(
         matches!(tx_status, TransactionStatus::Success { .. }),
         "{tx_status:?}"
@@ -197,7 +185,7 @@ async fn happy_path() {
     let ctx = setup(rng).await;
 
     for _ in 0..10 {
-        make_block_with_fee(rng, &ctx).await;
+        make_block_with_fee(&ctx).await;
     }
 
     // When
@@ -269,7 +257,7 @@ async fn missing_variable_output() {
     let rng = &mut StdRng::seed_from_u64(0);
 
     let ctx = setup(rng).await;
-    make_block_with_fee(rng, &ctx).await;
+    make_block_with_fee(&ctx).await;
 
     let asset_id = AssetId::BASE;
     let output_index = 1u64;

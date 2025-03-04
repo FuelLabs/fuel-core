@@ -77,7 +77,7 @@ mod writer;
 
 // Fuel Network human-readable part for bech32 encoding
 pub const FUEL_BECH32_HRP: &str = "fuel";
-pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
+pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000_000;
 
 pub const TESTNET_WALLET_SECRETS: [&str; 5] = [
     "0xde97d8624a438121b86a1956544bd72ed68cd69f2c99555b08b1e8c51ffd511c",

@@ -40,6 +40,7 @@ use crate::{
     },
 };
 
+use fuel_core_types::fuel_types::AssetId;
 #[cfg(feature = "parallel-executor")]
 use std::num::NonZeroUsize;
 
@@ -220,6 +221,14 @@ impl Config {
         }
 
         self
+    }
+
+    pub fn base_asset_id(&self) -> AssetId {
+        *self
+            .snapshot_reader
+            .chain_config()
+            .consensus_parameters
+            .base_asset_id()
     }
 }
 
