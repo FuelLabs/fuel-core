@@ -634,7 +634,7 @@ type InputCoin {
 	amount: U64!
 	assetId: AssetId!
 	txPointer: TxPointer!
-	witnessIndex: Int!
+	witnessIndex: U16!
 	predicateGasUsed: U64!
 	predicate: HexString!
 	predicateData: HexString!
