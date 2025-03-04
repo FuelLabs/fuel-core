@@ -4,6 +4,7 @@ mod mocks;
 mod stability_test;
 mod tests_e2e;
 mod tests_p2p;
+mod tests_pending_pool;
 mod tests_permits;
 mod tests_pool;
 mod tests_sending;
