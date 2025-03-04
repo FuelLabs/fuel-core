@@ -101,7 +101,7 @@ impl RunnableTask for Task {
                                 self.new_preconfirmations_from_p2p(sealed);
                             },
                             PreconfirmationMessage::Delegate(sealed) => {
-                                // TODO[RC]: Store the public key along with the "expiration"
+                                // TODO[RC]: Properly handle the signature verification
                             },}
                     }
                     TaskNextAction::Continue
