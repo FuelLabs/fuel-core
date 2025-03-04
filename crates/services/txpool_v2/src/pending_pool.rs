@@ -12,21 +12,27 @@ use std::{
 };
 
 use fuel_core_types::{
+    blockchain::transaction::TransactionExt,
     fuel_tx::{
         ContractId,
         Output,
+        Transaction,
         TxId,
         UtxoId,
     },
     services::txpool::ArcPoolTx,
 };
+use tokio::sync::mpsc::Sender;
 
 use crate::{
     error::{
         Error,
         InputValidationError,
     },
-    pool_worker::InsertionSource,
+    pool_worker::{
+        InsertionSource,
+        PoolNotification,
+    },
 };
 
 // This is a simple temporary storage for transactions that doesn't have all of their input created yet.
@@ -85,12 +91,6 @@ impl From<&MissingInput> for Error {
             ),
         }
     }
-}
-
-#[derive(Debug)]
-pub(crate) struct UpdatePendingTxs {
-    pub resolved_txs: Vec<(ArcPoolTx, InsertionSource)>,
-    pub expired_txs: Vec<PendingTx>,
 }
 
 impl PendingPool {
@@ -178,7 +178,7 @@ impl PendingPool {
         }
     }
 
-    fn expire_transactions(&mut self, expired_txs: &mut Vec<PendingTx>) {
+    pub fn expire_transactions(&mut self, notification_sender: Sender<PoolNotification>) {
         let now = SystemTime::now();
         while let Some((ttl, tx_id)) = self.ttl_check.back().copied() {
             if ttl > now {
@@ -203,11 +203,20 @@ impl PendingPool {
                         }
                     }
                 }
-                expired_txs.push(PendingTx {
-                    tx,
-                    insertion_source,
-                    missing_inputs,
-                });
+                if let Some(missing_input) = missing_inputs.first() {
+                    if let Err(e) =
+                        notification_sender.try_send(PoolNotification::ErrorInsertion {
+                            tx_id: tx.id(),
+                            source: insertion_source,
+                            error: missing_input.into(),
+                        })
+                    {
+                        tracing::error!(
+                            "Failed to send error insertion notification: {}",
+                            e
+                        );
+                    }
+                }
             }
             self.ttl_check.pop_back();
         }
@@ -220,49 +229,45 @@ impl PendingPool {
     }
 
     // We expect it to be called a lot (every new tx in the pool).
-    pub fn new_known_tx(&mut self, new_known_tx: ArcPoolTx) -> UpdatePendingTxs {
-        let mut updated_txs = UpdatePendingTxs {
-            resolved_txs: Vec::new(),
-            expired_txs: Vec::new(),
-        };
-        self.new_known_tx_inner(new_known_tx, &mut updated_txs);
-
-        self.expire_transactions(&mut updated_txs.expired_txs);
-        updated_txs
+    pub fn new_known_tx(
+        &mut self,
+        new_known_tx: ArcPoolTx,
+    ) -> Vec<(ArcPoolTx, InsertionSource)> {
+        let mut res = Vec::new();
+        self.new_known_tx_inner(
+            new_known_tx.outputs().iter(),
+            new_known_tx.id(),
+            &mut res,
+        );
+        res
     }
 
     // We expect it to be called a lot (every new block).
-    pub fn new_known_txs(&mut self, new_known_txs: Vec<ArcPoolTx>) -> UpdatePendingTxs {
-        let mut updated_txs = UpdatePendingTxs {
-            resolved_txs: Vec::new(),
-            expired_txs: Vec::new(),
-        };
+    pub fn new_known_txs<'a>(
+        &mut self,
+        new_known_txs: impl Iterator<Item = (&'a Transaction, TxId)>,
+    ) -> Vec<(ArcPoolTx, InsertionSource)> {
+        let mut res = Vec::new();
         // Resolve transactions
-        for tx in new_known_txs {
-            self.new_known_tx_inner(tx, &mut updated_txs);
+        for (tx, tx_id) in new_known_txs {
+            self.new_known_tx_inner(tx.outputs().iter(), tx_id, &mut res);
         }
-
-        self.expire_transactions(&mut updated_txs.expired_txs);
-        updated_txs
+        res
     }
 
-    fn new_known_tx_inner(
+    fn new_known_tx_inner<'a>(
         &mut self,
-        new_known_tx: ArcPoolTx,
-        update_pending_txs: &mut UpdatePendingTxs,
+        new_known_outputs: impl Iterator<Item = &'a Output>,
+        new_known_tx_id: TxId,
+        resolved_txs: &mut Vec<(ArcPoolTx, InsertionSource)>,
     ) {
-        let tx_id = new_known_tx.id();
-        for (index, output) in new_known_tx.outputs().iter().enumerate() {
+        for (index, output) in new_known_outputs.enumerate() {
             // SAFETY: We deal with CheckedTransaction there which should already check this
             let index = u16::try_from(index).expect(
                 "The number of outputs in a transaction should be less than `u16::max`",
             );
-            let utxo_id = UtxoId::new(tx_id, index);
-            self.new_known_input_from_output(
-                utxo_id,
-                output,
-                &mut update_pending_txs.resolved_txs,
-            );
+            let utxo_id = UtxoId::new(new_known_tx_id, index);
+            self.new_known_input_from_output(utxo_id, output, resolved_txs);
         }
     }
 
@@ -309,6 +314,7 @@ mod tests {
             PoolTransaction,
         },
     };
+    use futures::FutureExt;
     use rand::{
         rngs::StdRng,
         SeedableRng,
@@ -316,11 +322,11 @@ mod tests {
 
     use super::*;
 
-    fn create_pool_tx(
+    fn create_tx(
         inputs: Vec<MissingInput>,
         outputs: Vec<Output>,
         rng: &mut StdRng,
-    ) -> ArcPoolTx {
+    ) -> Transaction {
         let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
         let owner = Input::predicate_owner(&predicate);
         let mut tx = TransactionBuilder::script(vec![], vec![]);
@@ -387,6 +393,16 @@ mod tests {
             &EmptyStorage,
         )
         .expect("Failed to estimate predicates");
+        tx.into()
+    }
+
+    fn create_pool_tx(
+        inputs: Vec<MissingInput>,
+        outputs: Vec<Output>,
+        rng: &mut StdRng,
+    ) -> ArcPoolTx {
+        let tx = create_tx(inputs, outputs, rng);
+        let tx = tx.as_script().unwrap().clone();
         let tx = tx
             .into_checked_basic(1u32.into(), &ConsensusParameters::default())
             .unwrap();
@@ -420,13 +436,11 @@ mod tests {
             },
             vec![MissingInput::Utxo(utxo)],
         );
-        let new_known_txs = vec![dependency_tx.clone()];
-        let updated_txs = pending_pool.new_known_txs(new_known_txs);
+        let resolved_txs = pending_pool.new_known_tx(dependency_tx.clone());
 
         // Then
-        assert_eq!(updated_txs.resolved_txs.len(), 1);
-        assert_eq!(updated_txs.resolved_txs[0].0.id(), dependent_tx.id());
-        assert!(updated_txs.expired_txs.is_empty());
+        assert_eq!(resolved_txs.len(), 1);
+        assert_eq!(resolved_txs[0].0.id(), dependent_tx.id());
         assert!(pending_pool.is_empty());
     }
 
@@ -473,13 +487,11 @@ mod tests {
             },
             vec![MissingInput::Contract(contract_id)],
         );
-        let new_known_txs = vec![dependency_tx.clone()];
-        let updated_txs = pending_pool.new_known_txs(new_known_txs);
+        let resolved_txs = pending_pool.new_known_tx(dependency_tx.clone());
 
         // Then
-        assert_eq!(updated_txs.resolved_txs.len(), 1);
-        assert_eq!(updated_txs.resolved_txs[0].0.id(), dependent_tx.id());
-        assert!(updated_txs.expired_txs.is_empty());
+        assert_eq!(resolved_txs.len(), 1);
+        assert_eq!(resolved_txs[0].0.id(), dependent_tx.id());
         assert!(pending_pool.is_empty());
     }
 
@@ -519,17 +531,15 @@ mod tests {
             },
             vec![MissingInput::Utxo(utxo)],
         );
-        let new_known_txs = vec![dependency_tx.clone()];
-        let updated_txs = pending_pool.new_known_txs(new_known_txs);
+        let resolved_txs = pending_pool.new_known_tx(dependency_tx.clone());
 
         // Then
-        assert_eq!(updated_txs.resolved_txs.len(), 2);
-        assert!(updated_txs.expired_txs.is_empty());
+        assert_eq!(resolved_txs.len(), 2);
         assert!(pending_pool.is_empty());
     }
 
     #[test]
-    fn new_known_tx__returns_expected_two_txs_when_two_dependent_input_provided() {
+    fn new_known_tx__returns_expected_one_tx_when_two_dependent_input_provided() {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let mut pending_pool = PendingPool::new(Duration::from_secs(1));
 
@@ -566,13 +576,11 @@ mod tests {
             },
             vec![MissingInput::Utxo(utxo_1), MissingInput::Utxo(utxo_2)],
         );
-        let new_known_txs = vec![dependency_tx.clone()];
-        let updated_txs = pending_pool.new_known_txs(new_known_txs);
+        let resolved_txs = pending_pool.new_known_tx(dependency_tx.clone());
 
         // Then
-        assert_eq!(updated_txs.resolved_txs.len(), 1);
-        assert_eq!(updated_txs.resolved_txs[0].0.id(), dependent_tx.id());
-        assert!(updated_txs.expired_txs.is_empty());
+        assert_eq!(resolved_txs.len(), 1);
+        assert_eq!(resolved_txs[0].0.id(), dependent_tx.id());
         assert!(pending_pool.is_empty());
     }
 
@@ -600,11 +608,15 @@ mod tests {
         );
 
         // When
-        let updated_txs = pending_pool.new_known_txs(vec![]);
+        let resolved_txs = pending_pool.new_known_txs(vec![].into_iter());
+        let (tx, mut rx) = tokio::sync::mpsc::channel(20);
+        pending_pool.expire_transactions(tx);
 
         // Then
-        assert_eq!(updated_txs.resolved_txs.len(), 0);
-        assert_eq!(updated_txs.expired_txs.len(), 2);
+        let mut buf = Vec::new();
+        assert_eq!(resolved_txs.len(), 0);
+        rx.recv_many(&mut buf, 2).now_or_never().unwrap();
+        assert_eq!(buf.len(), 2);
         assert!(pending_pool.is_empty());
     }
 }

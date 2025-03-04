@@ -1,9 +1,6 @@
 // Define arguments
 
-use fuel_core::{
-    service::config::Trigger,
-    upgradable_executor::native_executor::ports::TransactionExt,
-};
+use fuel_core::service::config::Trigger;
 use fuel_core_chain_config::{
     ChainConfig,
     CoinConfig,
@@ -11,6 +8,7 @@ use fuel_core_chain_config::{
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
+    blockchain::transaction::TransactionExt,
     fuel_asm::{
         op,
         GMArgs,

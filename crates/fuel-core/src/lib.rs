@@ -3,6 +3,9 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+#[cfg(test)]
+use tracing_subscriber as _;
+
 use crate::service::genesis::NotifyCancel;
 use tokio_util::sync::CancellationToken;
 
