@@ -12,6 +12,9 @@ extern crate alloc;
 /// Table definitions
 pub mod column;
 
+/// Mappable tables
+pub mod tables;
+
 /// Merkleization primitives
 pub mod merkle;
 
@@ -43,23 +46,21 @@ pub struct Dummy;
 use crate::merkle::Merkleized;
 
 /// Merkleized `ContractsRawCode` table.
-pub type ContractsRawCode = Merkleized<fuel_core_storage::tables::ContractsRawCode>;
+pub type ContractsRawCode = Merkleized<tables::ContractsRawCode>;
 /// Merkleized `ContractsLatestUtxo` table.
-pub type ContractsLatestUtxo = Merkleized<fuel_core_storage::tables::ContractsLatestUtxo>;
+pub type ContractsLatestUtxo = Merkleized<tables::ContractsLatestUtxo>;
 /// Merkleized `Coins` table.
-pub type Coins = Merkleized<fuel_core_storage::tables::Coins>;
+pub type Coins = Merkleized<tables::Coins>;
 /// Merkleized `Messages` table.
-pub type Messages = Merkleized<fuel_core_storage::tables::Messages>;
+pub type Messages = Merkleized<tables::Messages>;
 /// Merkleized `ProcessedTransactions` table.
-pub type ProcessedTransactions =
-    Merkleized<fuel_core_storage::tables::ProcessedTransactions>;
+pub type ProcessedTransactions = Merkleized<tables::ProcessedTransactions>;
 /// Merkleized `ConsensusParametersVersions` table.
-pub type ConsensusParametersVersions =
-    Merkleized<fuel_core_storage::tables::ConsensusParametersVersions>;
+pub type ConsensusParametersVersions = Merkleized<tables::ConsensusParametersVersions>;
 /// Merkleized `StateTransitionBytecodeVersions` table.
 pub type StateTransitionBytecodeVersions =
-    Merkleized<fuel_core_storage::tables::StateTransitionBytecodeVersions>;
+    Merkleized<tables::StateTransitionBytecodeVersions>;
 /// Merkleized `UploadedBytecodes` table.
-pub type UploadedBytecodes = Merkleized<fuel_core_storage::tables::UploadedBytecodes>;
+pub type UploadedBytecodes = Merkleized<tables::UploadedBytecodes>;
 /// Merkleized `Blobs` table.
-pub type Blobs = Merkleized<fuel_core_storage::tables::BlobData>;
+pub type Blobs = Merkleized<tables::BlobData>;
