@@ -36,10 +36,6 @@ pub struct TxPoolArgs {
     #[clap(long = "tx-max-depth", default_value = "32", env)]
     pub tx_max_chain_count: usize,
 
-    /// The maximum number of active subscriptions that supported by the `TxPool`.
-    #[clap(long = "tx-number-active-subscriptions", default_value = "4064", env)]
-    pub tx_number_active_subscriptions: usize,
-
     /// The list of banned addresses ignored by the `TxPool`.
     #[clap(long = "tx-blacklist-addresses", value_delimiter = ',', env)]
     pub tx_blacklist_addresses: Vec<Address>,

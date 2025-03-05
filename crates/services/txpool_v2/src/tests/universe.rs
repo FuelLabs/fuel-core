@@ -1,5 +1,8 @@
 use std::{
-    collections::HashSet,
+    collections::{
+        BTreeSet,
+        HashSet,
+    },
     sync::Arc,
 };
 
@@ -52,10 +55,25 @@ use fuel_core_types::{
         interpreter::MemoryInstance,
         predicate::EmptyStorage,
     },
-    services::txpool::ArcPoolTx,
+    services::txpool::{
+        ArcPoolTx,
+        TransactionStatus,
+    },
 };
-use parking_lot::RwLock;
-use tokio::sync::broadcast::Receiver;
+use mockall::predicate::always;
+use parking_lot::{
+    Mutex,
+    RwLock,
+};
+use std::time::Duration;
+use tokio::{
+    sync::{
+        broadcast::Receiver,
+        mpsc,
+        Barrier,
+    },
+    time::Instant,
+};
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
@@ -96,6 +114,7 @@ use super::mocks::{
     MockImporter,
     MockP2P,
     MockTxPoolGasPrice,
+    MockTxStatusManager,
     MockWasmChecker,
 };
 
@@ -110,17 +129,23 @@ pub struct TestPoolUniverse {
     rng: StdRng,
     pub config: Config,
     pool: Option<Shared<TxPool>>,
+    mock_tx_status_manager: MockTxStatusManager,
+    tx_status_manager_receiver: mpsc::Receiver<(TxId, TransactionStatus)>,
     stats_receiver: Option<tokio::sync::watch::Receiver<TxPoolStats>>,
 }
 
 impl Default for TestPoolUniverse {
     fn default() -> Self {
+        let (tx, rx) = mpsc::channel(100);
+
         Self {
             mock_db: MockDb::default(),
             rng: StdRng::seed_from_u64(0),
             config: Default::default(),
             pool: None,
             stats_receiver: None,
+            mock_tx_status_manager: MockTxStatusManager::new(tx),
+            tx_status_manager_receiver: rx,
         }
     }
 }
@@ -168,7 +193,7 @@ impl TestPoolUniverse {
         &self,
         p2p: Option<MockP2P>,
         importer: Option<MockImporter>,
-    ) -> Service<MockDb, MockP2P> {
+    ) -> Service<MockDb, MockP2P, MockTxStatusManager> {
         let gas_price = 0;
         let mut p2p = p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
         // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
@@ -197,6 +222,7 @@ impl TestPoolUniverse {
             Default::default(),
             gas_price_provider,
             MockWasmChecker { result: Ok(()) },
+            self.mock_tx_status_manager.clone(),
         )
     }
 
@@ -436,16 +462,46 @@ impl TestPoolUniverse {
         )
     }
 
-    pub async fn waiting_txs_insertion(
-        &self,
-        mut new_tx_notification_subscribe: Receiver<Bytes32>,
-        mut tx_ids: Vec<TxId>,
-    ) {
-        while !tx_ids.is_empty() {
-            let tx_id = new_tx_notification_subscribe.recv().await.unwrap();
-            let index = tx_ids.iter().position(|id| *id == tx_id).unwrap();
-            tx_ids.remove(index);
+    pub async fn waiting_txs_insertion(&mut self, tx_ids: Vec<TxId>) {
+        const TIMEOUT: Duration = Duration::from_secs(50);
+        const POLL_TIMEOUT: Duration = Duration::from_millis(5);
+
+        let mut values = Vec::with_capacity(tx_ids.len());
+        let start_time = std::time::Instant::now();
+
+        while values.len() < tx_ids.len() {
+            if start_time.elapsed() > TIMEOUT {
+                panic!("timeout");
+            }
+
+            match tokio::time::timeout(
+                POLL_TIMEOUT,
+                self.tx_status_manager_receiver.recv(),
+            )
+            .await
+            {
+                Ok(Some((tx_id, tx_status)))
+                    if matches!(tx_status, TransactionStatus::Submitted { .. }) =>
+                {
+                    values.push(tx_id);
+                }
+                Ok(Some(_)) => {
+                    // Ignore other statuses, we're only interested in Submitted since
+                    // we're waiting for "insertion".
+                }
+                Ok(None) => {
+                    panic!("channel closed prematurely");
+                }
+                Err(_) => {
+                    // Timeout
+                    continue;
+                }
+            }
         }
+
+        let expected: BTreeSet<_> = tx_ids.iter().collect();
+        let actual: BTreeSet<_> = values.iter().collect();
+        assert_eq!(expected, actual, "should receive correct ids");
     }
 }
 

@@ -217,10 +217,8 @@ fn main() {
             let TestContext { srv, client, .. } = test_builder.finalize().await;
 
             // insert all transactions
-            let mut subscriber = srv
-                .shared
-                .txpool_shared_state
-                .new_tx_notification_subscribe();
+            let mut subscriber =
+                srv.shared.tx_status_manager.new_tx_notification_subscribe();
             let mut nb_left = args.number_of_transactions;
             let start_insertion = std::time::Instant::now();
             srv.shared

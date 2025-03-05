@@ -24,6 +24,7 @@ use crate::{
         PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
+        TxStatusManagerTrait,
     },
     sync::{
         SyncState,
@@ -66,7 +67,8 @@ use fuel_core_types::{
 };
 use serde::Serialize;
 
-pub type Service<T, B, I, S, PB, C> = ServiceRunner<MainTask<T, B, I, S, PB, C>>;
+pub type Service<T, B, I, S, PB, C, TxStatusManager> =
+    ServiceRunner<MainTask<T, B, I, S, PB, C, TxStatusManager>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -120,11 +122,12 @@ pub(crate) enum RequestType {
     Manual,
     Trigger,
 }
-pub struct MainTask<T, B, I, S, PB, C> {
+pub struct MainTask<T, B, I, S, PB, C, TxStatusManager> {
     signer: Arc<S>,
     block_producer: B,
     block_importer: I,
     txpool: T,
+    tx_status_manager: TxStatusManager,
     new_txs_watcher: tokio::sync::watch::Receiver<()>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
@@ -138,8 +141,9 @@ pub struct MainTask<T, B, I, S, PB, C> {
     sync_task_handle: ServiceRunner<SyncTask>,
 }
 
-impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TxStatusManager> MainTask<T, B, I, S, PB, C, TxStatusManager>
 where
+    TxStatusManager: TxStatusManagerTrait,
     T: TransactionPool,
     I: BlockImporter,
     PB: PredefinedBlocks,
@@ -150,6 +154,7 @@ where
         last_block: &BlockHeader,
         config: Config,
         txpool: T,
+        tx_status_manager: TxStatusManager,
         block_producer: B,
         block_importer: I,
         p2p_port: P,
@@ -197,6 +202,7 @@ where
             trigger,
             sync_task_handle,
             clock,
+            tx_status_manager,
         }
     }
 
@@ -243,8 +249,9 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TxStatusManager> MainTask<T, B, I, S, PB, C, TxStatusManager>
 where
+    TxStatusManager: TxStatusManagerTrait,
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
@@ -346,7 +353,8 @@ where
             );
                 tx_ids_to_remove.push((tx_id, err.to_string()));
             }
-            self.txpool.notify_skipped_txs(tx_ids_to_remove);
+            self.txpool.notify_skipped_txs(tx_ids_to_remove.clone());
+            self.tx_status_manager.notify_skipped_txs(tx_ids_to_remove);
         }
 
         // Sign the block and seal it
@@ -516,14 +524,15 @@ struct PredefinedBlockWithSkippedTransactions {
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, S, PB, C> RunnableService for MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TxStatusManager> RunnableService
+    for MainTask<T, B, I, S, PB, C, TxStatusManager>
 where
     Self: RunnableTask,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I, S, PB, C>;
+    type Task = MainTask<T, B, I, S, PB, C, TxStatusManager>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -551,8 +560,10 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C> RunnableTask for MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TxStatusManager> RunnableTask
+    for MainTask<T, B, I, S, PB, C, TxStatusManager>
 where
+    TxStatusManager: TxStatusManagerTrait,
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
@@ -609,18 +620,20 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn new_service<T, B, I, P, S, PB, C>(
+pub fn new_service<T, B, I, P, S, PB, C, TxStatusManager>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
+    tx_status_manager: TxStatusManager,
     block_producer: B,
     block_importer: I,
     p2p_port: P,
     block_signer: Arc<S>,
     predefined_blocks: PB,
     clock: C,
-) -> Service<T, B, I, S, PB, C>
+) -> Service<T, B, I, S, PB, C, TxStatusManager>
 where
+    TxStatusManager: TxStatusManagerTrait + 'static,
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,
@@ -633,6 +646,7 @@ where
         last_block,
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         p2p_port,

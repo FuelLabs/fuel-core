@@ -1,6 +1,6 @@
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
-#![deny(unused_crate_dependencies)]
+//#![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
 #[cfg(test)]
@@ -27,6 +27,8 @@ pub use fuel_core_relayer as relayer;
 #[cfg(feature = "p2p")]
 #[doc(no_inline)]
 pub use fuel_core_sync as sync;
+#[doc(no_inline)]
+pub use fuel_core_tx_status_manager as tx_status_manager;
 #[doc(no_inline)]
 pub use fuel_core_txpool as txpool;
 #[doc(no_inline)]

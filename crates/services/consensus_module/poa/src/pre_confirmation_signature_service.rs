@@ -7,7 +7,7 @@ use fuel_core_services::{
     TaskNextAction,
 };
 use fuel_core_types::{
-    services::p2p::DelegatePreConfirmationKey,
+    services::p2p::DelegatePreconfirmationKey,
     tai64::Tai64,
 };
 use serde::Serialize;
@@ -35,7 +35,7 @@ pub mod tests;
 // TODO(#2739): Remove when integrated
 // link: https://github.com/FuelLabs/fuel-core/issues/2739
 #[allow(dead_code)]
-pub struct PreConfirmationSignatureTask<
+pub struct PreconfirmationSignatureTask<
     TxReceiver,
     Broadcast,
     ParentSignature,
@@ -53,7 +53,7 @@ pub struct PreConfirmationSignatureTask<
 
 #[async_trait::async_trait]
 impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableService
-    for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+    for PreconfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver<Txs = Preconfirmations>,
     Brdcst: Broadcast<
@@ -67,7 +67,7 @@ where
     Parent: ParentSignature,
     Preconfirmations: serde::Serialize + Send,
 {
-    const NAME: &'static str = "PreConfirmationSignatureTask";
+    const NAME: &'static str = "PreconfirmationSignatureTask";
     type SharedData = EmptyShared;
     type Task = Self;
     type TaskParams = ();
@@ -86,7 +86,7 @@ where
 }
 
 impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger>
-    PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+    PreconfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver<Txs = Preconfirmations>,
     Brdcst: Broadcast<
@@ -115,7 +115,7 @@ where
                 let new_delegate_key = self.key_generator.generate().await?;
                 let public_key = new_delegate_key.public_key();
 
-                let message = DelegatePreConfirmationKey {
+                let message = DelegatePreconfirmationKey {
                     public_key,
                     expiration: Tai64::now(),
                 };
@@ -130,7 +130,7 @@ where
 }
 
 impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableTask
-    for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+    for PreconfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver<Txs = Preconfirmations>,
     Brdcst: Broadcast<

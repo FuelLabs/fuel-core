@@ -4,14 +4,9 @@ use std::{
     time::Duration,
 };
 
-use fuel_core_types::{
-    fuel_tx::{
-        Bytes32,
-        TxId,
-    },
-    fuel_types::BlockHeight,
-    services::txpool::TransactionStatus,
-    tai64::Tai64,
+use fuel_core_types::fuel_tx::{
+    Bytes32,
+    TxId,
 };
 use parking_lot::Mutex;
 use tokio::{
@@ -28,14 +23,11 @@ use tokio::{
 };
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::{
-    error::Error,
-    tx_status_stream::{
-        TxStatusMessage,
-        TxStatusStream,
-        TxUpdate,
-        TxUpdateStream,
-    },
+use crate::tx_status_stream::{
+    TxStatusMessage,
+    TxStatusStream,
+    TxUpdate,
+    TxUpdateStream,
 };
 
 /// Subscriber channel buffer size.
@@ -57,36 +49,6 @@ impl TxStatusChange {
             new_tx_notification_sender,
             update_sender,
         }
-    }
-
-    pub fn send_complete(
-        &self,
-        id: Bytes32,
-        block_height: &BlockHeight,
-        message: TxStatusMessage,
-    ) {
-        tracing::info!("Transaction {id} successfully included in block {block_height}");
-        self.update_sender.send(TxUpdate::new(id, message));
-    }
-
-    pub fn send_submitted(&self, id: Bytes32, timestamp: Tai64) {
-        tracing::info!("Transaction {id} successfully submitted to the tx pool");
-        let _ = self.new_tx_notification_sender.send(id);
-        self.update_sender.send(TxUpdate::new(
-            id,
-            TxStatusMessage::Status(TransactionStatus::Submitted { timestamp }),
-        ));
-    }
-
-    pub fn send_squeezed_out(&self, id: Bytes32, reason: Error) {
-        tracing::info!("Transaction {id} squeezed out because {reason}");
-        self.update_sender.send(TxUpdate::new(
-            id,
-            TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-                reason: reason.to_string(),
-                tx_id: id,
-            }),
-        ));
     }
 }
 
@@ -292,7 +254,7 @@ impl UpdateSender {
     }
 
     /// Send updates to all subscribed senders.
-    pub fn send(&self, update: TxUpdate) {
+    pub fn send(&self, update: &TxUpdate) {
         // Lock the senders Mutex.
         let mut senders = self.senders.lock();
 

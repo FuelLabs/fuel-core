@@ -1,10 +1,7 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::{
-        block::Block,
-        header::ConsensusParametersVersion,
-    },
+    blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -31,7 +28,6 @@ use crate::{
         checked_transaction::Checked,
         ProgramState,
     },
-    services::executor::TransactionExecutionResult,
 };
 use fuel_vm_private::{
     checked_transaction::CheckedTransaction,
@@ -40,6 +36,8 @@ use fuel_vm_private::{
 };
 use std::sync::Arc;
 use tai64::Tai64;
+
+use super::executor::TransactionExecutionResult;
 
 /// Pool transaction wrapped in an Arc for thread-safe sharing
 pub type ArcPoolTx = Arc<PoolTransaction>;
@@ -502,41 +500,4 @@ pub enum TransactionStatus {
         /// The reason why the transaction has failed
         reason: String,
     },
-}
-
-/// Converts the transaction execution result to the transaction status.
-pub fn from_executor_to_status(
-    block: &Block,
-    result: TransactionExecutionResult,
-) -> TransactionExecutionStatus {
-    let timestamp = block.header().time();
-    let block_height = *block.header().height();
-    match result {
-        TransactionExecutionResult::Success {
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        } => TransactionExecutionStatus::Success {
-            block_height,
-            time: timestamp,
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        },
-        TransactionExecutionResult::Failed {
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        } => TransactionExecutionStatus::Failed {
-            block_height,
-            time: timestamp,
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        },
-    }
 }

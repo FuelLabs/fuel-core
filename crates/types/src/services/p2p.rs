@@ -6,9 +6,12 @@ use serde::{
     Serialize,
 };
 
-use super::txpool::ArcPoolTx;
 #[cfg(feature = "serde")]
 use super::txpool::PoolTransaction;
+use super::txpool::{
+    ArcPoolTx,
+    TransactionStatus,
+};
 use crate::{
     fuel_crypto::{
         PublicKey,
@@ -79,7 +82,7 @@ pub struct GossipData<T> {
 pub type TransactionGossipData = GossipData<Transaction>;
 
 /// Transactions that have been confirmed by block producer
-pub type ConfirmationsGossipData = GossipData<PreConfirmationMessage>;
+pub type PreconfirmationsGossipData = GossipData<PreconfirmationMessage>;
 
 /// A value and an associated signature
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,7 +97,7 @@ pub struct Sealed<Entity, S = Signature> {
 /// A key that will be used to sign a pre-confirmations
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DelegatePreConfirmationKey<P = PublicKey> {
+pub struct DelegatePreconfirmationKey<P = PublicKey> {
     /// The public key of the person who is allowed to create pre-confirmations.
     pub public_key: P,
     /// The time at which the key will expire. Used to indicate to the recipient which key
@@ -111,28 +114,7 @@ pub struct Preconfirmation {
     /// The ID of the transaction that is being pre-confirmed
     pub tx_id: TxId,
     /// The status of the transaction that is being pre-confirmed
-    pub status: PreconfirmationStatus,
-}
-
-/// Status of a transaction that has been pre-confirmed by block producer
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum PreconfirmationStatus {
-    /// Transaction was squeezed out by the tx pool
-    SqueezedOutByBlockProducer {
-        /// Reason the transaction was squeezed out
-        reason: String,
-    },
-    /// Transaction has been confirmed and will be included in block_height
-    SuccessByBlockProducer {
-        /// The block height at which the transaction will be included
-        block_height: BlockHeight,
-    },
-    /// Transaction will not be included in a block, rejected at `block_height`
-    FailureByBlockProducer {
-        /// The block height at which the transaction will be rejected
-        block_height: BlockHeight,
-    },
+    pub status: TransactionStatus,
 }
 
 /// A collection of pre-confirmations that have been signed by a delegate
@@ -145,16 +127,28 @@ pub struct Preconfirmations {
     preconfirmations: Vec<Preconfirmation>,
 }
 
+impl Preconfirmations {
+    /// Get the expiration time of the key used to sign
+    pub fn expiration(&self) -> Tai64 {
+        self.expiration
+    }
+
+    /// Get the transactions which have been pre-confirmed
+    pub fn iter(&self) -> impl Iterator<Item = &Preconfirmation> {
+        self.preconfirmations.iter()
+    }
+}
+
 /// A signed key delegation
-pub type SignedByBlockProducerDelegation<P> = Sealed<DelegatePreConfirmationKey<P>>;
+pub type SignedByBlockProducerDelegation<P> = Sealed<DelegatePreconfirmationKey<P>>;
 
 /// A signed pre-confirmation
 pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 
-/// The possible messages sent by the parties pre-confirming transactinos
+/// The possible messages sent by the parties pre-confirming transactions
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreConfirmationMessage<P = PublicKey, S = Signature> {
+pub enum PreconfirmationMessage<P = PublicKey, S = Signature> {
     /// Notification of key delegation
     Delegate(SignedByBlockProducerDelegation<P>),
     /// Notification of pre-confirmations
@@ -162,16 +156,16 @@ pub enum PreConfirmationMessage<P = PublicKey, S = Signature> {
 }
 
 #[cfg(feature = "test-helpers")]
-impl PreConfirmationMessage {
-    /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
-    pub fn default_test_confirmation() -> Self {
+impl PreconfirmationMessage {
+    /// Test helper for creating arbitrary, meaningless `TxPreconfirmations` data
+    pub fn default_test_preconfirmation() -> Self {
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
             entity: Preconfirmations {
                 expiration: Tai64::UNIX_EPOCH,
                 preconfirmations: vec![Preconfirmation {
                     tx_id: TxId::default(),
-                    status: PreconfirmationStatus::SuccessByBlockProducer {
-                        block_height: BlockHeight::new(0),
+                    status: TransactionStatus::Submitted {
+                        timestamp: Tai64::UNIX_EPOCH,
                     },
                 }],
             },
