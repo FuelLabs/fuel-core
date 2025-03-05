@@ -10,10 +10,7 @@ use super::txpool::ArcPoolTx;
 #[cfg(feature = "serde")]
 use super::txpool::PoolTransaction;
 use crate::{
-    fuel_crypto::{
-        PublicKey,
-        Signature,
-    },
+    fuel_crypto::Signature,
     fuel_tx::{
         Transaction,
         TxId,
@@ -94,7 +91,7 @@ pub struct Sealed<Entity, S = Signature> {
 /// A key that will be used to sign a pre-confirmations
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DelegatePreConfirmationKey<P = PublicKey> {
+pub struct DelegatePreConfirmationKey<P = [u8; 32]> {
     /// The public key of the person who is allowed to create pre-confirmations.
     pub public_key: P,
     /// The time at which the key will expire. Used to indicate to the recipient which key
@@ -154,7 +151,7 @@ pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 /// The possible messages sent by the parties pre-confirming transactinos
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreConfirmationMessage<P = PublicKey, S = Signature> {
+pub enum PreConfirmationMessage<P = [u8; 32], S = Signature> {
     /// Notification of key delegation
     Delegate(SignedByBlockProducerDelegation<P>),
     /// Notification of pre-confirmations

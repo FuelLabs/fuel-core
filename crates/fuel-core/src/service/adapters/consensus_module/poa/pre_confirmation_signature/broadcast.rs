@@ -6,10 +6,7 @@ use crate::service::adapters::{
     P2PAdapter,
 };
 use fuel_core_poa::pre_confirmation_signature_service::{
-    broadcast::{
-        Broadcast,
-        PublicKey,
-    },
+    broadcast::Broadcast,
     error::{
         Error as PreConfServiceError,
         Result as PreConfServiceResult,
@@ -28,7 +25,10 @@ use fuel_core_types::{
 };
 
 use fuel_core_poa::pre_confirmation_signature_service::signing_key::SigningKey;
-use fuel_core_types::fuel_crypto::Signature;
+use fuel_core_types::{
+    fuel_crypto::Signature,
+    services::p2p::SignedByBlockProducerDelegation,
+};
 use std::sync::Arc;
 
 impl Broadcast for P2PAdapter {
@@ -64,10 +64,27 @@ impl Broadcast for P2PAdapter {
 
     async fn broadcast_delegate_key(
         &mut self,
-        _: DelegatePreConfirmationKey<PublicKey<Self>>,
-        _: <Self::ParentKey as ParentSignature>::Signature,
+        delegate: DelegatePreConfirmationKey<
+            <Self::DelegateKey as SigningKey>::PublicKey,
+        >,
+        signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> PreConfServiceResult<()> {
-        todo!()
+        if let Some(p2p) = &self.service {
+            let public_key = delegate.public_key.to_bytes();
+            let entity = DelegatePreConfirmationKey {
+                public_key,
+                expiration: delegate.expiration,
+            };
+            let sealed = SignedByBlockProducerDelegation { entity, signature };
+            let delegate_key = Arc::new(PreConfirmationMessage::Delegate(sealed));
+            p2p.broadcast_preconfirmations(delegate_key)
+                .map_err(|e| PreConfServiceError::Broadcast(format!("{e:?}")))?;
+            Ok(())
+        } else {
+            Err(PreConfServiceError::Broadcast(
+                "P2P service not available".to_string(),
+            ))
+        }
     }
 }
 
@@ -75,6 +92,7 @@ impl Broadcast for P2PAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ed25519_dalek::VerifyingKey;
 
     use crate::service::adapters::{
         P2PAdapter,
@@ -114,7 +132,7 @@ mod tests {
         assert!(matches!(
             actual,
             TaskRequest::BroadcastPreConfirmations(inner)
-            if inner_matches_expected_values(
+            if pre_conf_matches_expected_values(
                 &inner,
                 &preconfirmations,
                 &Signature::from_bytes(signature.to_bytes()),
@@ -123,7 +141,7 @@ mod tests {
         ));
     }
 
-    fn inner_matches_expected_values(
+    fn pre_conf_matches_expected_values(
         inner: &Arc<PreConfirmationMessage>,
         preconfirmations: &[Preconfirmation],
         signature: &Signature,
@@ -137,6 +155,61 @@ mod tests {
             PreConfirmationMessage::Preconfirmations(signed_preconfirmation) => {
                 signed_preconfirmation.entity == entity
                     && signed_preconfirmation.signature == *signature
+            }
+            _ => false,
+        }
+    }
+
+    #[tokio::test]
+    async fn broadcast_delegate_key__sends_expected_request_over_sender() {
+        // given
+        let config = fuel_core_p2p::config::Config::default("lolz");
+        let (shared_state, mut receiver) = build_shared_state(config);
+        let peer_report_config = PeerReportConfig::default();
+        let service = Some(shared_state);
+        let mut adapter = P2PAdapter::new(service, peer_report_config);
+        let expiration = Tai64::UNIX_EPOCH;
+        let delegate = DelegatePreConfirmationKey {
+            public_key: Default::default(),
+            expiration,
+        };
+        let signature = Signature::from_bytes([5u8; 64]);
+
+        // when
+        adapter
+            .broadcast_delegate_key(delegate.clone(), signature.clone())
+            .await
+            .unwrap();
+
+        // then
+        let actual = receiver.recv().await.unwrap();
+        assert!(matches!(
+            actual,
+            TaskRequest::BroadcastPreConfirmations(inner)
+            if delegate_keys_matches_expected_values(
+                &inner,
+                delegate.public_key,
+                expiration,
+                &signature,
+            )
+        ));
+    }
+
+    fn delegate_keys_matches_expected_values(
+        inner: &Arc<PreConfirmationMessage>,
+        delegate_key: VerifyingKey,
+        expiration: Tai64,
+        signature: &Signature,
+    ) -> bool {
+        let bytes_32 = delegate_key.to_bytes();
+        let entity = DelegatePreConfirmationKey {
+            public_key: bytes_32,
+            expiration,
+        };
+        match &**inner {
+            PreConfirmationMessage::Delegate(signed_by_block_producer_delegation) => {
+                signed_by_block_producer_delegation.entity == entity
+                    && signed_by_block_producer_delegation.signature == *signature
             }
             _ => false,
         }
