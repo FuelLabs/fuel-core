@@ -10,7 +10,7 @@ use super::txpool::ArcPoolTx;
 #[cfg(feature = "serde")]
 use super::txpool::PoolTransaction;
 use crate::{
-    fuel_crypto::Signature,
+    fuel_crypto,
     fuel_tx::{
         Transaction,
         TxId,
@@ -34,6 +34,9 @@ pub mod peer_reputation;
 
 /// The type of the public key used for signing pre-confirmations
 pub type DelegatePublicKey = ed25519_dalek::VerifyingKey;
+
+/// The type of the signature used by the block producer to sign delegation.
+pub type ProtocolSignature = fuel_crypto::Signature;
 
 /// List of transactions
 #[derive(Debug, Clone, Default)]
@@ -79,12 +82,13 @@ pub struct GossipData<T> {
 pub type TransactionGossipData = GossipData<Transaction>;
 
 /// Transactions that have been confirmed by block producer
-pub type PreConfirmationsGossipData<P> = GossipData<PreConfirmationMessage<P>>;
+pub type PreConfirmationsGossipData<P> =
+    GossipData<PreConfirmationMessage<P, ProtocolSignature>>;
 
 /// A value and an associated signature
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Sealed<Entity, S = Signature> {
+pub struct Sealed<Entity, S> {
     /// The actual value
     pub entity: Entity,
     /// Seal
@@ -146,7 +150,7 @@ pub struct Preconfirmations {
 }
 
 /// A signed key delegation
-pub type SignedByBlockProducerDelegation<P> = Sealed<DelegatePreConfirmationKey<P>>;
+pub type SignedByBlockProducerDelegation<P, S> = Sealed<DelegatePreConfirmationKey<P>, S>;
 
 /// A signed pre-confirmation
 pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
@@ -154,15 +158,15 @@ pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 /// The possible messages sent by the parties pre-confirming transactinos
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreConfirmationMessage<P, S = Signature> {
+pub enum PreConfirmationMessage<P, S> {
     /// Notification of key delegation
-    Delegate(SignedByBlockProducerDelegation<P>),
+    Delegate(SignedByBlockProducerDelegation<P, S>),
     /// Notification of pre-confirmations
     Preconfirmations(SignedPreconfirmationByDelegate<S>),
 }
 
 #[cfg(feature = "test-helpers")]
-impl<P> PreConfirmationMessage<P> {
+impl<P> PreConfirmationMessage<P, ProtocolSignature> {
     /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
     pub fn default_test_confirmation() -> Self {
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
@@ -175,7 +179,7 @@ impl<P> PreConfirmationMessage<P> {
                     },
                 }],
             },
-            signature: Signature::default(),
+            signature: ProtocolSignature::default(),
         })
     }
 }

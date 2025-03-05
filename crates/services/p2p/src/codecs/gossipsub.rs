@@ -4,18 +4,15 @@ use super::{
     Encoder,
     GossipsubCodec,
 };
-use crate::gossipsub::messages::{
-    GossipTopicTag,
-    GossipsubBroadcastRequest,
-    GossipsubMessage,
-};
-use fuel_core_types::{
-    fuel_tx::Transaction,
-    services::p2p::{
-        DelegatePublicKey,
-        PreConfirmationMessage,
+use crate::{
+    gossipsub::messages::{
+        GossipTopicTag,
+        GossipsubBroadcastRequest,
+        GossipsubMessage,
     },
+    ports::P2PPreConfirmationMessage,
 };
+use fuel_core_types::fuel_tx::Transaction;
 use std::{
     io,
     ops::Deref,
@@ -30,8 +27,8 @@ impl<Codec> GossipsubCodec for GossipsubMessageHandler<Codec>
 where
     Codec: Encode<Transaction, Error = io::Error>
         + Decode<Transaction, Error = io::Error>
-        + Encode<PreConfirmationMessage<DelegatePublicKey>, Error = io::Error>
-        + Decode<PreConfirmationMessage<DelegatePublicKey>, Error = io::Error>,
+        + Encode<P2PPreConfirmationMessage, Error = io::Error>
+        + Decode<P2PPreConfirmationMessage, Error = io::Error>,
 {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;

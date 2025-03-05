@@ -20,6 +20,7 @@ use crate::{
     peer_manager::PeerInfo,
     ports::{
         BlockHeightImporter,
+        P2PPreConfirmationMessage,
         P2pDb,
         TxPool,
     },
@@ -69,7 +70,6 @@ use fuel_core_types::{
         GossipsubMessageInfo,
         NetworkableTransactionPool,
         PeerId as FuelPeerId,
-        PreConfirmationMessage,
         PreConfirmationsGossipData,
         TransactionGossipData,
         Transactions,
@@ -130,7 +130,7 @@ pub enum TaskRequest {
     // Broadcast requests to p2p network
     BroadcastTransaction(Arc<Transaction>),
     // Broadcast Preconfirmations to p2p network
-    BroadcastPreConfirmations(Arc<PreConfirmationMessage<DelegatePublicKey>>),
+    BroadcastPreConfirmations(Arc<P2PPreConfirmationMessage>),
     // Request to get information about all connected peers
     GetAllPeerInfo {
         channel: oneshot::Sender<Vec<(PeerId, PeerInfo)>>,
@@ -1318,7 +1318,7 @@ impl SharedState {
 
     pub fn broadcast_preconfirmations(
         &self,
-        preconfirmations: Arc<PreConfirmationMessage<DelegatePublicKey>>,
+        preconfirmations: Arc<P2PPreConfirmationMessage>,
     ) -> anyhow::Result<()> {
         self.request_sender
             .try_send(TaskRequest::BroadcastPreConfirmations(preconfirmations))?;

@@ -1,5 +1,3 @@
-use ed25519::signature::Signer;
-use ed25519_dalek::SigningKey as DalekSigningKey;
 use fuel_core_poa::pre_confirmation_signature_service::{
     error::{
         Error as PoAError,
@@ -12,6 +10,8 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     signing_key::SigningKey,
 };
 use fuel_core_types::{
+    ed25519::signature::Signer,
+    ed25519_dalek::SigningKey as DalekSigningKey,
     fuel_crypto::SecretKey,
     tai64::Tai64,
 };
@@ -44,8 +44,8 @@ pub struct Ed25519Key {
 }
 
 impl SigningKey for Ed25519Key {
-    type Signature = ed25519::Signature;
-    type PublicKey = ed25519_dalek::VerifyingKey;
+    type Signature = fuel_core_types::ed25519::Signature;
+    type PublicKey = fuel_core_types::ed25519_dalek::VerifyingKey;
 
     fn public_key(&self) -> Self::PublicKey {
         self.signer.verifying_key()

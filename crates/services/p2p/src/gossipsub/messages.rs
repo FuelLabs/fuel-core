@@ -1,15 +1,16 @@
-use std::sync::Arc;
-
-use fuel_core_types::fuel_tx::Transaction;
-
-use fuel_core_types::services::p2p::{
-    DelegatePublicKey,
-    PreConfirmationMessage,
+use fuel_core_types::{
+    fuel_tx::Transaction,
+    services::p2p::{
+        DelegatePublicKey,
+        PreConfirmationMessage,
+        ProtocolSignature,
+    },
 };
 use serde::{
     Deserialize,
     Serialize,
 };
+use std::sync::Arc;
 
 /// Used to inform `GossipsubCodec` to which GossipsubMessage decode to
 /// GossipTopicTag is decided by checking received TopicHash from the peer
@@ -25,12 +26,12 @@ pub enum GossipTopicTag {
 #[derive(Debug, Clone)]
 pub enum GossipsubBroadcastRequest {
     NewTx(Arc<Transaction>),
-    TxPreConfirmations(Arc<PreConfirmationMessage<DelegatePublicKey>>),
+    TxPreConfirmations(Arc<PreConfirmationMessage<DelegatePublicKey, ProtocolSignature>>),
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GossipsubMessage {
     NewTx(Transaction),
-    TxPreConfirmations(PreConfirmationMessage<DelegatePublicKey>),
+    TxPreConfirmations(PreConfirmationMessage<DelegatePublicKey, ProtocolSignature>),
 }

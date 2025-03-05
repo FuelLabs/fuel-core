@@ -25,9 +25,9 @@ use fuel_core_types::{
 };
 
 use fuel_core_poa::pre_confirmation_signature_service::signing_key::SigningKey;
-use fuel_core_types::{
-    fuel_crypto::Signature,
-    services::p2p::SignedByBlockProducerDelegation,
+use fuel_core_types::services::p2p::{
+    ProtocolSignature,
+    SignedByBlockProducerDelegation,
 };
 use std::sync::Arc;
 
@@ -48,7 +48,7 @@ impl Broadcast for P2PAdapter {
                 preconfirmations,
             };
             let signature_bytes = signature.to_bytes();
-            let signature = Signature::from_bytes(signature_bytes);
+            let signature = ProtocolSignature::from_bytes(signature_bytes);
             let preconfirmations = Arc::new(PreConfirmationMessage::Preconfirmations(
                 SignedPreconfirmationByDelegate { entity, signature },
             ));
@@ -90,19 +90,24 @@ impl Broadcast for P2PAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ed25519_dalek::VerifyingKey;
-
     use crate::service::adapters::{
         P2PAdapter,
         PeerReportConfig,
     };
-    use fuel_core_p2p::service::{
-        build_shared_state,
-        TaskRequest,
+    use fuel_core_p2p::{
+        ports::P2PPreConfirmationMessage,
+        service::{
+            build_shared_state,
+            TaskRequest,
+        },
     };
-    use fuel_core_types::services::p2p::{
-        DelegatePublicKey,
-        PreconfirmationStatus,
+    use fuel_core_types::{
+        ed25519,
+        ed25519_dalek::VerifyingKey,
+        services::p2p::{
+            PreconfirmationStatus,
+            ProtocolSignature,
+        },
     };
 
     #[tokio::test]
@@ -136,16 +141,16 @@ mod tests {
             if pre_conf_matches_expected_values(
                 &inner,
                 &preconfirmations,
-                &Signature::from_bytes(signature.to_bytes()),
+                &ProtocolSignature::from_bytes(signature.to_bytes()),
                 &expiration,
             )
         ));
     }
 
     fn pre_conf_matches_expected_values(
-        inner: &Arc<PreConfirmationMessage<DelegatePublicKey>>,
+        inner: &Arc<P2PPreConfirmationMessage>,
         preconfirmations: &[Preconfirmation],
-        signature: &Signature,
+        signature: &ProtocolSignature,
         expiration: &Tai64,
     ) -> bool {
         let entity = Preconfirmations {
@@ -174,7 +179,7 @@ mod tests {
             public_key: Default::default(),
             expiration,
         };
-        let signature = Signature::from_bytes([5u8; 64]);
+        let signature = ProtocolSignature::from_bytes([5u8; 64]);
 
         // when
         adapter
@@ -197,10 +202,10 @@ mod tests {
     }
 
     fn delegate_keys_matches_expected_values(
-        inner: &Arc<PreConfirmationMessage<DelegatePublicKey>>,
+        inner: &Arc<P2PPreConfirmationMessage>,
         delegate_key: VerifyingKey,
         expiration: Tai64,
-        signature: &Signature,
+        signature: &ProtocolSignature,
     ) -> bool {
         let entity = DelegatePreConfirmationKey {
             public_key: delegate_key,
