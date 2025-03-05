@@ -1260,6 +1260,35 @@ fn insert_tx_with_blob_already_insert_at_lower_tip() {
 }
 
 #[test]
+fn insert__tx_depends_on_extracted_tx() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    // Given
+    let (output_a, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output_a]), 1);
+    let input_a = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
+    let tx2 = universe.build_script_transaction(Some(vec![input_a.clone()]), None, 1);
+
+    // When
+    let tx1 = universe.verify_and_insert(tx1).unwrap().0;
+    let txs = universe
+        .get_pool()
+        .write()
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            maximum_txs: u16::MAX,
+            maximum_block_size: u32::MAX,
+        });
+    assert_eq!(txs.len(), 1);
+    assert_eq!(tx1.id(), txs[0].id());
+
+    // Then
+    assert!(universe.verify_and_insert(tx2).is_ok());
+}
+
+#[test]
 fn insert__tx_blob_already_in_db() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
