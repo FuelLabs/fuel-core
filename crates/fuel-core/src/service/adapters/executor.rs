@@ -116,7 +116,10 @@ impl PreconfirmationSenderPort for PreconfirmationSender {
     ) -> Vec<PreconfirmationStatus> {
         match self.sender.try_send(preconfirmations) {
             Ok(()) => vec![],
-            Err(TrySendError::Closed(_)) => vec![],
+            Err(TrySendError::Closed(preconfirmations)) => {
+                tracing::warn!("Preconfirmation sender is closed");
+                preconfirmations
+            }
             Err(TrySendError::Full(preconfirmations)) => preconfirmations,
         }
     }
