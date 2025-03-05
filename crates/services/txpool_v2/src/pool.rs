@@ -207,9 +207,9 @@ where
 
         // No dependencies directly in the graph and the sorted transactions
         if !has_dependencies {
-            self.new_executable_txs_notifier.send_replace(());
             self.selection_algorithm
                 .new_executable_transaction(storage_id, tx);
+            self.new_executable_txs_notifier.send_replace(());
         }
 
         let removed_transactions = removed_transactions
@@ -365,7 +365,6 @@ where
         }
     }
 
-    // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
     /// Extract transactions for a block.
     /// Returns a list of transactions that were selected for the block
     /// based on the constraints given in the configuration and the selection algorithm used.
@@ -420,6 +419,7 @@ where
     /// The dependents become executables.
     pub fn process_block(&mut self, tx_ids: impl Iterator<Item = TxId>) {
         self.extracted_outputs.clear();
+        let mut transactions_to_promote = vec![];
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents: Vec<S::StorageIndex> =
@@ -432,24 +432,37 @@ where
                     );
                     continue
                 };
-                for dependent in dependents {
-                    let Some(storage_data) = self.storage.get(&dependent) else {
-                        debug_assert!(
-                            false,
-                            "Dependent storage data not found for the transaction"
-                        );
-                        tracing::warn!(
-                            "Dependent storage data not found for \
-                            the transaction during `remove_transaction`."
-                        );
-                        continue
-                    };
-                    self.new_executable_txs_notifier.send_replace(());
-                    self.selection_algorithm
-                        .new_executable_transaction(dependent, storage_data);
-                }
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
+
+                for dependent in dependents {
+                    if !self.storage.has_dependencies(&dependent) {
+                        transactions_to_promote.push(dependent);
+                    }
+                }
             }
+        }
+
+        let mut new_executable_transaction = false;
+        for promote in transactions_to_promote {
+            let Some(storage_data) = self.storage.get(&promote) else {
+                debug_assert!(
+                    false,
+                    "Dependent storage data not found for the transaction"
+                );
+                tracing::warn!(
+                    "Dependent storage data not found for \
+                            the transaction during `remove_transaction`."
+                );
+                continue
+            };
+
+            self.selection_algorithm
+                .new_executable_transaction(promote, storage_data);
+            new_executable_transaction = true;
+        }
+
+        if new_executable_transaction {
+            self.new_executable_txs_notifier.send_replace(());
         }
 
         self.update_stats();
