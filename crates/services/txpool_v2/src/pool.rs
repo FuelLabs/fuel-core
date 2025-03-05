@@ -1,7 +1,10 @@
 mod collisions;
 
 use std::{
-    collections::HashMap,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     iter,
     time::{
         Instant,
@@ -14,7 +17,13 @@ use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_types::{
     fuel_tx::{
         field::BlobId,
+        Address,
+        AssetId,
+        ContractId,
+        Output,
         TxId,
+        UtxoId,
+        Word,
     },
     services::txpool::{
         ArcPoolTx,
@@ -47,14 +56,25 @@ use crate::{
     },
 };
 
-#[cfg(test)]
-use std::collections::HashSet;
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TxPoolStats {
     pub tx_count: u64,
     pub total_size: u64,
     pub total_gas: u64,
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Eq, Ord)]
+pub(crate) struct SavedCoinOutput {
+    pub utxo_id: UtxoId,
+    pub to: Address,
+    pub amount: Word,
+    pub asset_id: AssetId,
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Eq, Ord)]
+pub(crate) enum SavedOutput {
+    Coin(SavedCoinOutput),
+    Contract(ContractId),
 }
 
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
@@ -70,6 +90,8 @@ pub struct Pool<S, SI, CM, SA> {
     pub(crate) selection_algorithm: SA,
     /// Mapping from tx_id to storage_id.
     pub(crate) tx_id_to_storage_id: HashMap<TxId, SI>,
+    /// All sent outputs when transactions are extracted. Clear when processing a block.
+    pub(crate) extracted_outputs: HashSet<SavedOutput>,
     /// Current pool gas stored.
     pub(crate) current_gas: u64,
     /// Current pool size in bytes.
@@ -93,6 +115,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             selection_algorithm,
             config,
             tx_id_to_storage_id: HashMap::new(),
+            extracted_outputs: HashSet::new(),
             current_gas: 0,
             current_bytes_size: 0,
             pool_stats_sender,
@@ -228,6 +251,7 @@ where
         self.storage.validate_inputs(
             &tx,
             persistent_storage,
+            &self.extracted_outputs,
             self.config.utxo_validation,
         )?;
 
@@ -300,6 +324,43 @@ where
         }
     }
 
+    fn populate_saved_outputs_cache(&mut self, best_txs: &[StorageData]) {
+        self.extracted_outputs.clear();
+        for tx in best_txs {
+            for (idx, output) in tx.transaction.outputs().iter().enumerate() {
+                match output {
+                    Output::Coin {
+                        to,
+                        amount,
+                        asset_id,
+                    } => {
+                        self.extracted_outputs.insert(SavedOutput::Coin(
+                            SavedCoinOutput {
+                                utxo_id: UtxoId::new(
+                                    tx.transaction.id(),
+                                    u16::try_from(idx)
+                                        .expect("Outputs count is less than u16::MAX"),
+                                ),
+                                to: *to,
+                                amount: *amount,
+                                asset_id: *asset_id,
+                            },
+                        ));
+                    }
+                    Output::ContractCreated { contract_id, .. } => {
+                        self.extracted_outputs
+                            .insert(SavedOutput::Contract(*contract_id));
+                    }
+                    Output::Contract { .. }
+                    | Output::Change { .. }
+                    | Output::Variable { .. } => {
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+
     // TODO: Use block space also (https://github.com/FuelLabs/fuel-core/issues/2133)
     /// Extract transactions for a block.
     /// Returns a list of transactions that were selected for the block
@@ -313,6 +374,9 @@ where
         let best_txs = self
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
+
+        self.populate_saved_outputs_cache(&best_txs);
+
         if let Some(start) = maybe_start {
             Self::record_select_transaction_time(start)
         };
@@ -350,7 +414,8 @@ where
 
     /// Remove transaction but keep its dependents.
     /// The dependents become executables.
-    pub fn remove_transactions(&mut self, tx_ids: impl Iterator<Item = TxId>) {
+    pub fn process_block(&mut self, tx_ids: impl Iterator<Item = TxId>) {
+        self.extracted_outputs.clear();
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents: Vec<S::StorageIndex> =

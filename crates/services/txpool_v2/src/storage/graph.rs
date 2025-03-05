@@ -46,6 +46,10 @@ use crate::{
         InputValidationErrorType,
     },
     pending_pool::MissingInput,
+    pool::{
+        SavedCoinOutput,
+        SavedOutput,
+    },
     ports::TxPoolPersistentStorage,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
     storage::checked_collision::CheckedTransaction,
@@ -616,6 +620,7 @@ impl Storage for GraphStorage {
         &self,
         transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
+        saved_outputs: &HashSet<SavedOutput>,
         utxo_validation: bool,
     ) -> Result<(), InputValidationErrorType> {
         let mut missing_inputs = Vec::new();
@@ -623,8 +628,20 @@ impl Storage for GraphStorage {
             match input {
                 // If the utxo is created in the pool, need to check if we don't spend too much (utxo can still be unresolved)
                 // If the utxo_validation is active, we need to check if the utxo exists in the database and is valid
-                Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                Input::CoinSigned(CoinSigned {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
+                | Input::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                }) => {
                     if let Some(node_id) = self.coins_creators.get(utxo_id) {
                         let Some(node) = self.graph.node_weight(*node_id) else {
                             return Err(InputValidationErrorType::Inconsistency(
@@ -654,6 +671,16 @@ impl Storage for GraphStorage {
                                 }
                             }
                             Ok(None) => {
+                                if saved_outputs.contains(&SavedOutput::Coin(
+                                    SavedCoinOutput {
+                                        utxo_id: *utxo_id,
+                                        to: *owner,
+                                        amount: *amount,
+                                        asset_id: *asset_id,
+                                    },
+                                )) {
+                                    continue;
+                                }
                                 missing_inputs.push(MissingInput::Utxo(*utxo_id));
                                 continue;
                             }
@@ -704,6 +731,11 @@ impl Storage for GraphStorage {
                         match persistent_storage.contract_exist(contract_id) {
                             Ok(true) => {}
                             Ok(false) => {
+                                if saved_outputs
+                                    .contains(&SavedOutput::Contract(*contract_id))
+                                {
+                                    continue;
+                                }
                                 missing_inputs.push(MissingInput::Contract(*contract_id));
                                 continue;
                             }
