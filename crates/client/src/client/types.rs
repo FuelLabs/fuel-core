@@ -53,6 +53,8 @@ use fuel_core_types::{
     fuel_tx::{
         Receipt,
         Transaction,
+        TxId,
+        TxPointer,
     },
     fuel_types::{
         canonical::Deserialize,
@@ -114,7 +116,16 @@ pub enum TransactionStatus {
         total_gas: u64,
         total_fee: u64,
     },
+    PreconfirmationSuccess {
+        tx_pointer: TxPointer,
+        transaction_id: TxId,
+        receipts: Option<Vec<Receipt>>,
+    },
     SqueezedOut {
+        reason: String,
+    },
+    PreconfirmationSqueezedOut {
+        transaction_id: TxId,
         reason: String,
     },
     Failure {
@@ -125,6 +136,12 @@ pub enum TransactionStatus {
         receipts: Vec<Receipt>,
         total_gas: u64,
         total_fee: u64,
+    },
+    PreconfirmationFailure {
+        tx_pointer: TxPointer,
+        transaction_id: TxId,
+        receipts: Option<Vec<Receipt>>,
+        reason: String,
     },
 }
 
@@ -148,6 +165,22 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
             },
+            SchemaTxStatus::PreconfirmationSuccessStatus(s) => {
+                TransactionStatus::PreconfirmationSuccess {
+                    tx_pointer: s.tx_pointer.into(),
+                    transaction_id: s.transaction_id.into(),
+                    receipts: if let Some(receipts) = s.receipts {
+                        Some(
+                            receipts
+                                .into_iter()
+                                .map(TryInto::try_into)
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    } else {
+                        None
+                    },
+                }
+            }
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
                 block_height: s.block_height.into(),
                 time: s.time.0,
@@ -161,8 +194,31 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
             },
+            SchemaTxStatus::PreconfirmationFailureStatus(s) => {
+                TransactionStatus::PreconfirmationFailure {
+                    tx_pointer: s.tx_pointer.into(),
+                    transaction_id: s.transaction_id.into(),
+                    receipts: if let Some(receipts) = s.receipts {
+                        Some(
+                            receipts
+                                .into_iter()
+                                .map(TryInto::try_into)
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    } else {
+                        None
+                    },
+                    reason: s.reason,
+                }
+            }
             SchemaTxStatus::SqueezedOutStatus(s) => {
                 TransactionStatus::SqueezedOut { reason: s.reason }
+            }
+            SchemaTxStatus::PreconfirmationSqueezedOutStatus(s) => {
+                TransactionStatus::PreconfirmationSqueezedOut {
+                    reason: s.reason,
+                    transaction_id: s.transaction_id.into(),
+                }
             }
             SchemaTxStatus::Unknown => {
                 return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
@@ -185,7 +241,17 @@ pub enum StatusWithTransaction {
         total_gas: u64,
         total_fee: u64,
     },
+    PreconfirmationSuccess {
+        tx_pointer: TxPointer,
+        transaction_id: TxId,
+        transaction: Option<Transaction>,
+        receipts: Option<Vec<Receipt>>,
+    },
     SqueezedOut {
+        reason: String,
+    },
+    PreconfirmationSqueezedOut {
+        transaction_id: TxId,
         reason: String,
     },
     Failure {
@@ -197,6 +263,13 @@ pub enum StatusWithTransaction {
         receipts: Vec<Receipt>,
         total_gas: u64,
         total_fee: u64,
+    },
+    PreconfirmationFailure {
+        tx_pointer: TxPointer,
+        transaction_id: TxId,
+        transaction: Option<Transaction>,
+        receipts: Option<Vec<Receipt>>,
+        reason: String,
     },
 }
 
@@ -221,6 +294,25 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
             },
+
+            SchemaStatusWithTx::PreconfirmationSuccessStatus(s) => {
+                StatusWithTransaction::PreconfirmationSuccess {
+                    tx_pointer: s.tx_pointer.into(),
+                    transaction_id: s.transaction_id.into(),
+                    transaction: s.transaction.map(TryInto::try_into).transpose()?,
+                    receipts: if let Some(receipts) = s.receipts {
+                        Some(
+                            receipts
+                                .into_iter()
+                                .map(TryInto::try_into)
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    } else {
+                        None
+                    },
+                }
+            }
+
             SchemaStatusWithTx::FailureStatus(s) => StatusWithTransaction::Failure {
                 transaction: s.transaction.try_into()?,
                 block_height: s.block_height.into(),
@@ -235,8 +327,34 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
             },
+
+            SchemaStatusWithTx::PreconfirmationFailureStatus(s) => {
+                StatusWithTransaction::PreconfirmationFailure {
+                    tx_pointer: s.tx_pointer.into(),
+                    transaction_id: s.transaction_id.into(),
+                    transaction: s.transaction.map(TryInto::try_into).transpose()?,
+                    receipts: if let Some(receipts) = s.receipts {
+                        Some(
+                            receipts
+                                .into_iter()
+                                .map(TryInto::try_into)
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    } else {
+                        None
+                    },
+                    reason: s.reason,
+                }
+            }
+
             SchemaStatusWithTx::SqueezedOutStatus(s) => {
                 StatusWithTransaction::SqueezedOut { reason: s.reason }
+            }
+            SchemaStatusWithTx::PreconfirmationSqueezedOutStatus(s) => {
+                StatusWithTransaction::PreconfirmationSqueezedOut {
+                    reason: s.reason,
+                    transaction_id: s.transaction_id.into(),
+                }
             }
             SchemaStatusWithTx::Unknown => {
                 return Err(Self::Error::UnknownVariant("SchemaTxStatus"))

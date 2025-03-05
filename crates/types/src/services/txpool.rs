@@ -23,6 +23,7 @@ use crate::{
         Script,
         Transaction,
         TxId,
+        TxPointer,
         Upgrade,
         Upload,
     },
@@ -331,9 +332,10 @@ impl From<&PoolTransaction> for CheckedTransaction {
 }
 
 /// The status of the transaction during its life from the tx pool until the block.
+// TODO: This type needs to be updated: https://github.com/FuelLabs/fuel-core/issues/2794
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TransactionStatus {
+pub enum TransactionExecutionStatus {
     /// Transaction was submitted into the txpool
     Submitted {
         /// Timestamp of submission into the txpool
@@ -376,12 +378,138 @@ pub enum TransactionStatus {
     },
 }
 
+impl From<TransactionExecutionStatus> for TransactionStatus {
+    fn from(value: TransactionExecutionStatus) -> Self {
+        match value {
+            TransactionExecutionStatus::Submitted { time } => {
+                TransactionStatus::Submitted { timestamp: time }
+            }
+            TransactionExecutionStatus::Success {
+                block_height,
+                time,
+                result,
+                receipts,
+                total_gas,
+                total_fee,
+            } => TransactionStatus::Success {
+                block_height,
+                block_timestamp: time,
+                program_state: result,
+                receipts,
+                total_gas,
+                total_fee,
+            },
+            // TODO: Removed this variant as part of the
+            //  https://github.com/FuelLabs/fuel-core/issues/2794
+            TransactionExecutionStatus::SqueezedOut { reason } => {
+                TransactionStatus::SqueezedOut {
+                    reason,
+                    tx_id: Default::default(),
+                }
+            }
+            TransactionExecutionStatus::Failed {
+                block_height,
+                time,
+                result,
+                receipts,
+                total_gas,
+                total_fee,
+            } => TransactionStatus::Failure {
+                reason: TransactionExecutionResult::reason(&receipts, &result),
+                block_height,
+                block_timestamp: time,
+                program_state: result,
+                receipts,
+                total_gas,
+                total_fee,
+            },
+        }
+    }
+}
+
+/// The status of the transaction during its life from the TxPool until the inclusion in the block.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TransactionStatus {
+    /// Transaction was submitted into the TxPool
+    Submitted {
+        /// Timestamp of submission into the TxPool
+        timestamp: Tai64,
+    },
+    /// Transaction was successfully included in a block
+    Success {
+        /// Included in this block
+        block_height: BlockHeight,
+        /// Timestamp of the block
+        block_timestamp: Tai64,
+        /// Result of executing the transaction for scripts
+        program_state: Option<ProgramState>,
+        /// The receipts generated during execution of the transaction
+        receipts: Vec<Receipt>,
+        /// The total gas used by the transaction
+        total_gas: u64,
+        /// The total fee paid by the transaction
+        total_fee: u64,
+    },
+    /// Transaction was successfully executed by block producer
+    PreconfirmationSuccess {
+        /// Transaction pointer
+        tx_pointer: TxPointer,
+        /// Transaction ID
+        tx_id: TxId,
+        /// Receipts
+        receipts: Option<Vec<Receipt>>,
+    },
+    /// Transaction was squeezed out of the TxPool
+    SqueezedOut {
+        /// Transaction ID
+        tx_id: TxId,
+        /// The reason why the transaction was squeezed out
+        reason: String,
+    },
+    /// Transaction was squeezed out
+    PreconfirmationSqueezedOut {
+        /// Transaction ID
+        tx_id: TxId,
+        /// The reason why the transaction was squeezed out
+        reason: String,
+    },
+    /// Transaction was included in a block, but the execution has failed
+    Failure {
+        /// Included in this block
+        block_height: BlockHeight,
+        /// Timestamp of the block
+        block_timestamp: Tai64,
+        /// The reason why the transaction has failed
+        reason: String,
+        /// Result of executing the transaction for scripts
+        program_state: Option<ProgramState>,
+        /// The receipts generated during execution of the transaction
+        receipts: Vec<Receipt>,
+        /// The total gas used by the transaction
+        total_gas: u64,
+        /// The total fee paid by the transaction
+        total_fee: u64,
+    },
+    /// Transaction was not included in a block
+    PreconfirmationFailure {
+        /// Transaction pointer
+        tx_pointer: TxPointer,
+        /// Transaction ID
+        tx_id: TxId,
+        /// Receipts
+        receipts: Option<Vec<Receipt>>,
+        /// The reason why the transaction has failed
+        reason: String,
+    },
+}
+
 /// Converts the transaction execution result to the transaction status.
 pub fn from_executor_to_status(
     block: &Block,
     result: TransactionExecutionResult,
-) -> TransactionStatus {
-    let time = block.header().time();
+) -> TransactionExecutionStatus {
+    let timestamp = block.header().time();
     let block_height = *block.header().height();
     match result {
         TransactionExecutionResult::Success {
@@ -389,9 +517,9 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-        } => TransactionStatus::Success {
+        } => TransactionExecutionStatus::Success {
             block_height,
-            time,
+            time: timestamp,
             result,
             receipts,
             total_gas,
@@ -402,9 +530,9 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-        } => TransactionStatus::Failed {
+        } => TransactionExecutionStatus::Failed {
             block_height,
-            time,
+            time: timestamp,
             result,
             receipts,
             total_gas,

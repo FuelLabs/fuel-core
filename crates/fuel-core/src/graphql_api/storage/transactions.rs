@@ -23,7 +23,7 @@ use fuel_core_types::{
         Bytes32,
     },
     fuel_types::BlockHeight,
-    services::txpool::TransactionStatus,
+    services::txpool::TransactionExecutionStatus,
 };
 use std::{
     array::TryFromSliceError,
@@ -67,7 +67,7 @@ pub struct TransactionStatuses;
 impl Mappable for TransactionStatuses {
     type Key = Bytes32;
     type OwnedKey = Self::Key;
-    type Value = TransactionStatus;
+    type Value = TransactionExecutionStatus; // TODO: This type needs to be updated: https://github.com/FuelLabs/fuel-core/issues/2794
     type OwnedValue = Self::Value;
 }
 
@@ -238,7 +238,7 @@ mod test {
     fuel_core_storage::basic_storage_tests!(
         TransactionStatuses,
         <TransactionStatuses as Mappable>::Key::default(),
-        TransactionStatus::Submitted {
+        TransactionExecutionStatus::Submitted {
             time: fuel_core_types::tai64::Tai64::UNIX_EPOCH,
         }
     );
