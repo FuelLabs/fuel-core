@@ -87,7 +87,7 @@ pub struct Config {
     pub min_connected_reserved_peers: usize,
     /// Time to wait after receiving the latest block before considered to be Synced.
     pub time_until_synced: Duration,
-    /// The timout after which block production is considered failed.
+    /// The timeout after which block production is considered failed.
     pub production_timeout: Duration,
     /// The size of the memory pool in number of `MemoryInstance`s.
     pub memory_pool_size: usize,

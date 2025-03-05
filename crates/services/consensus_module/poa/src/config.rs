@@ -41,4 +41,7 @@ pub enum Trigger {
     Never,
     /// A new block is produced periodically. Used to simulate consensus block delay.
     Interval { block_time: Duration },
+    /// Opens the block production immediately and keeps it open for the specified period.
+    /// After period is over, the block is produced.
+    Open { period: Duration },
 }

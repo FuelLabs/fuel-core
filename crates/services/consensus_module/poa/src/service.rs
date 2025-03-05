@@ -62,6 +62,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use serde::Serialize;
+use tokio::time::sleep_until;
 
 pub type Service<T, B, I, S, PB, C> = ServiceRunner<MainTask<T, B, I, S, PB, C>>;
 
@@ -230,6 +231,7 @@ where
                 Trigger::Interval { block_time } => {
                     increase_time(self.last_timestamp, block_time)
                 }
+                Trigger::Open { period } => increase_time(self.last_timestamp, period),
             },
             RequestType::Trigger => {
                 let now = self.clock.now();
@@ -264,9 +266,16 @@ where
             .block_producer
             .produce_and_execute_block(height, block_time, source, deadline);
 
-        tokio::time::timeout(self.production_timeout, future)
+        let result = tokio::time::timeout(self.production_timeout, future)
             .await
-            .map_err(|_| anyhow::anyhow!("Block production timed out"))?
+            .map_err(|_| anyhow::anyhow!("Block production timed out"))??;
+
+        // In the case if the block production finished before the deadline
+        // we need to wait until the deadline is reached to guarantee
+        // the correct interval between blocks
+        sleep_until(deadline).await;
+
+        Ok(result)
     }
 
     pub(crate) async fn produce_next_block(
@@ -286,6 +295,14 @@ where
         &mut self,
         block_production: ManualProduction,
     ) -> anyhow::Result<()> {
+        // The caller of manual block production expects that it is resolved immediately
+        // while in the case of `Trigger::Open` we need to wait for the period to pass.
+        if matches!(self.trigger, Trigger::Open { .. }) {
+            return Err(anyhow!(
+                "Manual block production is not allowed with trigger `Open`"
+            ))
+        }
+
         let mut block_time = if let Some(time) = block_production.start_time {
             time
         } else {
@@ -553,7 +570,7 @@ where
 
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
-            Trigger::Interval { .. } => {
+            Trigger::Interval { .. } | Trigger::Open { .. } => {
                 return Ok(Self {
                     last_block_created: Instant::now(),
                     ..self
@@ -590,9 +607,23 @@ where
                 Instant::now()
             }),
             Trigger::Interval { block_time } => {
-                let deadline = match self
+                let next_block_time = match self
                     .last_block_created
                     .checked_add(block_time)
+                    .ok_or(anyhow!("Time exceeds system limits"))
+                {
+                    Ok(time) => time,
+                    Err(err) => return TaskNextAction::ErrorContinue(err),
+                };
+                Box::pin(async move {
+                    sleep_until(next_block_time).await;
+                    Instant::now()
+                })
+            }
+            Trigger::Open { period } => {
+                let deadline = match self
+                    .last_block_created
+                    .checked_add(period)
                     .ok_or(anyhow!("Time exceeds system limits"))
                 {
                     Ok(time) => time,
