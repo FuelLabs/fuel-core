@@ -6,9 +6,16 @@ mod tests {
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
-        executor::OnceTransactionsSource,
+        executor::{
+            OnceTransactionsSource,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+            WaitNewTransactionsResult,
+        },
         ports::{
             MaybeCheckedTransaction,
+            NewTxWaiterPort,
+            PreconfirmationSenderPort,
             RelayerPort,
         },
         refs::ContractRef,
@@ -137,6 +144,7 @@ mod tests {
                 TransactionExecutionResult,
                 TransactionValidityError,
             },
+            preconfirmation::PreconfirmationStatus,
             relayer::Event,
         },
         tai64::Tai64,
@@ -3051,6 +3059,142 @@ mod tests {
             skipped_transactions[0].1,
             ExecutorError::InvalidTransaction(_)
         ));
+    }
+
+    #[tokio::test]
+    async fn execute_block__new_transactions_trigger() {
+        // Given
+        struct MockNewTransactionsTrigger {
+            sender: tokio::sync::mpsc::Sender<()>,
+            counter: u8,
+        }
+
+        impl NewTxWaiterPort for MockNewTransactionsTrigger {
+            async fn wait_for_new_transactions(&mut self) -> WaitNewTransactionsResult {
+                self.sender.send(()).await.unwrap();
+                if self.counter == 0 {
+                    self.counter += 1;
+                    WaitNewTransactionsResult::NewTransaction
+                } else {
+                    self.counter += 1;
+                    WaitNewTransactionsResult::Timeout
+                }
+            }
+        }
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.gen();
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let config = Config {
+            utxo_validation_default: false,
+            ..Default::default()
+        };
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    gas_price: 0,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                MockNewTransactionsTrigger { sender, counter: 0 },
+                TransparentPreconfirmationSender,
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        receiver.recv().await.unwrap();
+        receiver.recv().await.unwrap();
+        assert_eq!(res.skipped_transactions.len(), 0);
+        assert_eq!(res.block.transactions().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn execute_block__send_preconfirmations() {
+        // Given
+        struct MockPreconfirmationsSender {
+            sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+        }
+
+        impl PreconfirmationSenderPort for MockPreconfirmationsSender {
+            fn try_send(
+                &self,
+                preconfirmations: Vec<PreconfirmationStatus>,
+            ) -> Vec<PreconfirmationStatus> {
+                preconfirmations
+            }
+
+            /// Send a batch of pre-confirmations, awaiting for the send to be successful.
+            async fn send(
+                &self,
+                preconfirmations: Vec<PreconfirmationStatus>,
+            ) -> anyhow::Result<()> {
+                self.sender.send(preconfirmations).await.unwrap();
+                Ok(())
+            }
+        }
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.gen();
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let config = Config {
+            utxo_validation_default: false,
+            ..Default::default()
+        };
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    gas_price: 0,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                TimeoutOnlyTxWaiter,
+                MockPreconfirmationsSender { sender },
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        let preconfirmations = receiver.recv().await.unwrap();
+        assert_eq!(preconfirmations.len(), 1);
+        assert_eq!(
+            preconfirmations[0],
+            PreconfirmationStatus::SuccessByBlockProducer {
+                block_height: 0u32.into()
+            }
+        );
+        assert_eq!(res.skipped_transactions.len(), 0);
+        assert_eq!(res.block.transactions().len(), 2);
     }
 
     #[test]
