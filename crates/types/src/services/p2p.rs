@@ -15,10 +15,7 @@ use crate::{
         Transaction,
         TxId,
     },
-    fuel_types::{
-        BlockHeight,
-        Bytes64,
-    },
+    fuel_types::BlockHeight,
 };
 use std::{
     collections::HashSet,
@@ -165,7 +162,7 @@ pub enum PreConfirmationMessage<DP, DS, S> {
 }
 
 #[cfg(feature = "test-helpers")]
-impl<DP, S> PreConfirmationMessage<DP, Bytes64, S> {
+impl<DP, S> PreConfirmationMessage<DP, crate::fuel_tx::Bytes64, S> {
     /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
     pub fn default_test_confirmation() -> Self {
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
@@ -178,7 +175,7 @@ impl<DP, S> PreConfirmationMessage<DP, Bytes64, S> {
                     },
                 }],
             },
-            signature: Bytes64::default(),
+            signature: crate::fuel_tx::Bytes64::default(),
         })
     }
 }
