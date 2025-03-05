@@ -36,5 +36,5 @@ pub trait KeyGenerator: Send {
     fn generate(
         &mut self,
         expiration: Tai64,
-    ) -> impl Future<Output = Result<ExpiringKey<Self::Key>>> + Send;
+    ) -> impl Future<Output = ExpiringKey<Self::Key>> + Send;
 }

@@ -1,11 +1,5 @@
-use fuel_core_types::{
-    fuel_tx::Transaction,
-    services::p2p::{
-        DelegatePublicKey,
-        PreConfirmationMessage,
-        ProtocolSignature,
-    },
-};
+use crate::ports::P2PPreConfirmationMessage;
+use fuel_core_types::fuel_tx::Transaction;
 use serde::{
     Deserialize,
     Serialize,
@@ -26,12 +20,12 @@ pub enum GossipTopicTag {
 #[derive(Debug, Clone)]
 pub enum GossipsubBroadcastRequest {
     NewTx(Arc<Transaction>),
-    TxPreConfirmations(Arc<PreConfirmationMessage<DelegatePublicKey, ProtocolSignature>>),
+    TxPreConfirmations(Arc<P2PPreConfirmationMessage>),
 }
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GossipsubMessage {
     NewTx(Transaction),
-    TxPreConfirmations(PreConfirmationMessage<DelegatePublicKey, ProtocolSignature>),
+    TxPreConfirmations(P2PPreConfirmationMessage),
 }

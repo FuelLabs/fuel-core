@@ -20,6 +20,7 @@ use crate::{
     peer_manager::PeerInfo,
     ports::{
         BlockHeightImporter,
+        P2PPreConfirmationGossipData,
         P2PPreConfirmationMessage,
         P2pDb,
         TxPool,
@@ -64,13 +65,11 @@ use fuel_core_types::{
             PeerReport,
         },
         BlockHeightHeartbeatData,
-        DelegatePublicKey,
         GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
         NetworkableTransactionPool,
         PeerId as FuelPeerId,
-        PreConfirmationsGossipData,
         TransactionGossipData,
         Transactions,
     },
@@ -387,7 +386,7 @@ pub trait Broadcast: Send {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: PreConfirmationsGossipData<DelegatePublicKey>,
+        confirmations: P2PPreConfirmationGossipData,
     ) -> anyhow::Result<()>;
 
     fn new_tx_subscription_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
@@ -418,7 +417,7 @@ impl Broadcast for SharedState {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: PreConfirmationsGossipData<DelegatePublicKey>,
+        confirmations: P2PPreConfirmationGossipData,
     ) -> anyhow::Result<()> {
         self.pre_confirmations_broadcast.send(confirmations)?;
         Ok(())
@@ -1103,8 +1102,7 @@ pub struct SharedState {
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
     /// Sender of p2p transaction preconfirmations used for subscribing.
-    pre_confirmations_broadcast:
-        broadcast::Sender<PreConfirmationsGossipData<DelegatePublicKey>>,
+    pre_confirmations_broadcast: broadcast::Sender<P2PPreConfirmationGossipData>,
     /// Sender of reserved peers connection updates.
     reserved_peers_broadcast: broadcast::Sender<usize>,
     /// Used for communicating with the `Task`.
@@ -1345,7 +1343,7 @@ impl SharedState {
 
     pub fn subscribe_confirmations(
         &self,
-    ) -> broadcast::Receiver<PreConfirmationsGossipData<DelegatePublicKey>> {
+    ) -> broadcast::Receiver<P2PPreConfirmationGossipData> {
         self.pre_confirmations_broadcast.subscribe()
     }
 

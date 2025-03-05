@@ -18,7 +18,6 @@ use fuel_core_types::{
 };
 use std::time::Duration;
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub enum Status {
     Success { height: BlockHeight },
@@ -134,9 +133,8 @@ impl FakeKeyGenerator {
 
 impl KeyGenerator for FakeKeyGenerator {
     type Key = FakeSigningKey;
-    async fn generate(&mut self, expiration: Tai64) -> Result<ExpiringKey<Self::Key>> {
-        let key = ExpiringKey::new(self.key.clone(), expiration);
-        Ok(key)
+    async fn generate(&mut self, expiration: Tai64) -> ExpiringKey<Self::Key> {
+        ExpiringKey::new(self.key.clone(), expiration)
     }
 }
 
@@ -207,6 +205,7 @@ pub struct TaskBuilder {
     current_delegate_key_expiration: Option<Tai64>,
     parent_signature: Option<FakeParentSignature>,
     key_generator: Option<FakeKeyGenerator>,
+    period: Option<Duration>,
 }
 
 type TestTask = PreConfirmationSignatureTask<
@@ -230,6 +229,12 @@ impl TaskBuilder {
             ExpiringKey::new(current_delegate_key, current_delegate_key_expiration);
         let key_generator = self.get_key_generator();
         let parent_signature = self.get_parent_signature();
+        let entity = DelegatePreConfirmationKey {
+            public_key: Bytes32::zeroed(),
+            expiration: Tai64::UNIX_EPOCH,
+        };
+        let signature = parent_signature.dummy_signature.clone();
+        let period = self.period.unwrap_or(Duration::from_secs(60 * 60));
         let (broadcast, broadcast_delegation_key_handle, broadcast_tx_handle) =
             self.get_broadcast();
         let (tx_receiver, tx_sender_handle) = self.get_tx_receiver();
@@ -239,7 +244,9 @@ impl TaskBuilder {
             parent_signature,
             key_generator,
             current_delegate_key,
+            sealed_delegate_message: Sealed { entity, signature },
             key_rotation_trigger,
+            echo_delegation_trigger: tokio::time::interval(period),
         };
         let handles = TestImplHandles {
             trigger_handle,
@@ -337,6 +344,11 @@ impl TaskBuilder {
         self.parent_signature = Some(parent_signature);
         self
     }
+
+    pub fn with_echo_duration(mut self, period: Duration) -> Self {
+        self.period = Some(period);
+        self
+    }
 }
 
 #[tokio::test]
@@ -354,20 +366,69 @@ async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_sig
     tokio::task::spawn(async move { task.run(&mut state_watcher).await });
     let expiration_time = Tai64::from_unix(1_234_567);
     handles.trigger_handle.send(expiration_time).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(100)).await;
 
     // then
-    let mut actual = handles.broadcast_delegation_key_handle.try_recv().unwrap();
+    let actual = handles
+        .broadcast_delegation_key_handle
+        .recv()
+        .await
+        .unwrap();
     let expected = FakeParentSignedData {
         data: DelegatePreConfirmationKey {
             public_key: Bytes32::zeroed(),
-            expiration: Tai64::UNIX_EPOCH,
+            expiration: expiration_time,
         },
         dummy_signature: dummy_signature.into(),
     };
-    actual.data.expiration = Tai64::UNIX_EPOCH;
 
     assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn run__will_rebroadcast_generated_key_with_correct_signature_after_1_second() {
+    // Given
+    let period = Duration::from_secs(1);
+    let generated_key = "some generated key";
+    let dummy_signature = "dummy signature";
+    let (mut task, mut handles) = TaskBuilder::new()
+        .with_generated_key(generated_key)
+        .with_dummy_parent_signature(dummy_signature)
+        .with_echo_duration(period)
+        .build_with_handles();
+
+    // When
+    let mut state_watcher = StateWatcher::started();
+    tokio::task::spawn(async move {
+        // Handle the key rotation
+        let _ = task.run(&mut state_watcher).await;
+        // Handle the echo delegation trigger
+        let _ = task.run(&mut state_watcher).await;
+    });
+    let expiration_time = Tai64::from_unix(1_234_567);
+    handles.trigger_handle.send(expiration_time).await.unwrap();
+
+    // Then
+    let actual_1 = handles
+        .broadcast_delegation_key_handle
+        .recv()
+        .await
+        .unwrap();
+    let actual_2 = handles
+        .broadcast_delegation_key_handle
+        .recv()
+        .await
+        .unwrap();
+
+    let expected = FakeParentSignedData {
+        data: DelegatePreConfirmationKey {
+            public_key: Bytes32::zeroed(),
+            expiration: expiration_time,
+        },
+        dummy_signature: dummy_signature.into(),
+    };
+
+    assert_eq!(actual_1, actual_2);
+    assert_eq!(expected, actual_1);
 }
 
 #[tokio::test]

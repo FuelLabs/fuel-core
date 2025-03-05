@@ -82,11 +82,10 @@ pub struct GossipData<T> {
 pub type TransactionGossipData = GossipData<Transaction>;
 
 /// Transactions that have been confirmed by block producer
-pub type PreConfirmationsGossipData<P> =
-    GossipData<PreConfirmationMessage<P, ProtocolSignature>>;
+pub type PreConfirmationsGossipData<P, S> = GossipData<PreConfirmationMessage<P, S>>;
 
 /// A value and an associated signature
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Sealed<Entity, S> {
     /// The actual value

@@ -24,7 +24,10 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 
-use fuel_core_poa::pre_confirmation_signature_service::signing_key::SigningKey;
+use fuel_core_poa::pre_confirmation_signature_service::{
+    broadcast::PublicKey,
+    signing_key::SigningKey,
+};
 use fuel_core_types::services::p2p::{
     ProtocolSignature,
     SignedByBlockProducerDelegation,
@@ -54,19 +57,14 @@ impl Broadcast for P2PAdapter {
             ));
             p2p.broadcast_preconfirmations(preconfirmations)
                 .map_err(|e| PreConfServiceError::Broadcast(format!("{e:?}")))?;
-            Ok(())
-        } else {
-            Err(PreConfServiceError::Broadcast(
-                "P2P service not available".to_string(),
-            ))
         }
+
+        Ok(())
     }
 
     async fn broadcast_delegate_key(
         &mut self,
-        delegate: DelegatePreConfirmationKey<
-            <Self::DelegateKey as SigningKey>::PublicKey,
-        >,
+        delegate: DelegatePreConfirmationKey<PublicKey<Self>>,
         signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> PreConfServiceResult<()> {
         if let Some(p2p) = &self.service {
@@ -77,12 +75,9 @@ impl Broadcast for P2PAdapter {
             let delegate_key = Arc::new(PreConfirmationMessage::Delegate(sealed));
             p2p.broadcast_preconfirmations(delegate_key)
                 .map_err(|e| PreConfServiceError::Broadcast(format!("{e:?}")))?;
-            Ok(())
-        } else {
-            Err(PreConfServiceError::Broadcast(
-                "P2P service not available".to_string(),
-            ))
         }
+
+        Ok(())
     }
 }
 

@@ -9,6 +9,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::{
         DelegatePublicKey,
+        GossipData,
         NetworkableTransactionPool,
         PreConfirmationMessage,
         ProtocolSignature,
@@ -54,3 +55,5 @@ pub trait TxPool: Send + Sync + Clone {
 
 pub type P2PPreConfirmationMessage =
     PreConfirmationMessage<DelegatePublicKey, ProtocolSignature>;
+
+pub type P2PPreConfirmationGossipData = GossipData<P2PPreConfirmationMessage>;
