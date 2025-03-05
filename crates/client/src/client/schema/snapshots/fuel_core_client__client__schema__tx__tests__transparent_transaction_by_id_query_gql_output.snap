@@ -173,6 +173,7 @@ query TransactionQuery($id: TransactionId!) {
         reason
       }
       ... on PreconfirmationSqueezedOutStatus {
+        transactionId
         reason
       }
       ... on FailureStatus {

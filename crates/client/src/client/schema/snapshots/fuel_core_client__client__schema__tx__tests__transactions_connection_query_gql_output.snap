@@ -91,6 +91,7 @@ query TransactionsQuery($after: String, $before: String, $first: Int, $last: Int
             reason
           }
           ... on PreconfirmationSqueezedOutStatus {
+            transactionId
             reason
           }
           ... on FailureStatus {
