@@ -48,7 +48,7 @@ impl TxReceiver for FakeTxReceiver {
 
 pub struct FakeBroadcast {
     delegation_key_sender:
-        tokio::sync::mpsc::Sender<FakeSignedData<DelegatePreConfirmationKey<Bytes32>>>,
+        tokio::sync::mpsc::Sender<FakeSignedData<DelegatePreconfirmationKey<Bytes32>>>,
     tx_sender: tokio::sync::mpsc::Sender<FakeSignedData<Vec<(Transaction, Status)>>>,
 }
 
@@ -74,7 +74,7 @@ impl Broadcast for FakeBroadcast {
 
     async fn broadcast_delegate_key(
         &mut self,
-        data: DelegatePreConfirmationKey<PublicKey<Self>>,
+        data: DelegatePreconfirmationKey<PublicKey<Self>>,
         signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> Result<()> {
         let delegate_key = FakeSignedData {
@@ -185,7 +185,7 @@ impl FakeTrigger {
 pub struct TestImplHandles {
     pub trigger_handle: Arc<Notify>,
     pub broadcast_delegation_key_handle:
-        tokio::sync::mpsc::Receiver<FakeSignedData<DelegatePreConfirmationKey<Bytes32>>>,
+        tokio::sync::mpsc::Receiver<FakeSignedData<DelegatePreconfirmationKey<Bytes32>>>,
     pub broadcast_tx_handle:
         tokio::sync::mpsc::Receiver<FakeSignedData<Vec<(Transaction, Status)>>>,
     pub tx_sender_handle: tokio::sync::mpsc::Sender<Vec<(Transaction, Status)>>,
@@ -198,7 +198,7 @@ pub struct TaskBuilder {
     key_generator: Option<FakeKeyGenerator>,
 }
 
-type TestTask = PreConfirmationSignatureTask<
+type TestTask = PreconfirmationSignatureTask<
     FakeTxReceiver,
     FakeBroadcast,
     FakeParentSignature,
@@ -219,7 +219,7 @@ impl TaskBuilder {
         let (broadcast, broadcast_delegation_key_handle, broadcast_tx_handle) =
             self.get_broadcast();
         let (tx_receiver, tx_sender_handle) = self.get_tx_receiver();
-        let task = PreConfirmationSignatureTask {
+        let task = PreconfirmationSignatureTask {
             tx_receiver,
             broadcast,
             parent_signature,
@@ -265,7 +265,7 @@ impl TaskBuilder {
         &self,
     ) -> (
         FakeBroadcast,
-        tokio::sync::mpsc::Receiver<FakeSignedData<DelegatePreConfirmationKey<Bytes32>>>,
+        tokio::sync::mpsc::Receiver<FakeSignedData<DelegatePreconfirmationKey<Bytes32>>>,
         tokio::sync::mpsc::Receiver<FakeSignedData<Vec<(Transaction, Status)>>>,
     ) {
         let (delegation_key_sender, delegation_key_receiver) =
@@ -335,7 +335,7 @@ async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_sig
     // then
     let mut actual = handles.broadcast_delegation_key_handle.try_recv().unwrap();
     let expected = FakeSignedData {
-        data: DelegatePreConfirmationKey {
+        data: DelegatePreconfirmationKey {
             public_key: Bytes32::zeroed(),
             expiration: Tai64::UNIX_EPOCH,
         },

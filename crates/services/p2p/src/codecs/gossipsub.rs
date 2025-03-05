@@ -5,7 +5,7 @@ use crate::gossipsub::messages::{
 };
 use fuel_core_types::{
     fuel_tx::Transaction,
-    services::p2p::PreConfirmationMessage,
+    services::p2p::PreconfirmationMessage,
 };
 use std::{
     io,
@@ -28,8 +28,8 @@ impl<Codec> GossipsubCodec for GossipsubMessageHandler<Codec>
 where
     Codec: Encode<Transaction, Error = io::Error>
         + Decode<Transaction, Error = io::Error>
-        + Encode<PreConfirmationMessage, Error = io::Error>
-        + Decode<PreConfirmationMessage, Error = io::Error>,
+        + Encode<PreconfirmationMessage, Error = io::Error>
+        + Decode<PreconfirmationMessage, Error = io::Error>,
 {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;
@@ -39,7 +39,7 @@ where
             GossipsubBroadcastRequest::NewTx(tx) => {
                 Ok(self.codec.encode(tx.deref())?.into_bytes())
             }
-            GossipsubBroadcastRequest::TxPreConfirmations(msg) => {
+            GossipsubBroadcastRequest::TxPreconfirmations(msg) => {
                 Ok(self.codec.encode(msg.deref())?.into_bytes())
             }
         }
@@ -54,8 +54,8 @@ where
             GossipTopicTag::NewTx => {
                 GossipsubMessage::NewTx(self.codec.decode(encoded_data)?)
             }
-            GossipTopicTag::TxPreConfirmations => {
-                GossipsubMessage::TxPreConfirmations(self.codec.decode(encoded_data)?)
+            GossipTopicTag::TxPreconfirmations => {
+                GossipsubMessage::TxPreconfirmations(self.codec.decode(encoded_data)?)
             }
         };
 

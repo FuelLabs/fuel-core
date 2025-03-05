@@ -12,7 +12,7 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     parent_signature::ParentSignature,
 };
 use fuel_core_types::services::p2p::{
-    DelegatePreConfirmationKey,
+    DelegatePreconfirmationKey,
     Preconfirmation,
 };
 
@@ -34,7 +34,7 @@ impl Broadcast for P2PBroadcast {
 
     async fn broadcast_delegate_key(
         &mut self,
-        _: DelegatePreConfirmationKey<PublicKey<Self>>,
+        _: DelegatePreconfirmationKey<PublicKey<Self>>,
         _: <Self::ParentKey as ParentSignature>::Signature,
     ) -> PoAResult<()> {
         todo!()

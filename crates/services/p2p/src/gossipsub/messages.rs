@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use fuel_core_types::fuel_tx::Transaction;
 
-use fuel_core_types::services::p2p::PreConfirmationMessage;
+use fuel_core_types::services::p2p::PreconfirmationMessage;
 use serde::{
     Deserialize,
     Serialize,
@@ -13,7 +13,7 @@ use serde::{
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum GossipTopicTag {
     NewTx,
-    TxPreConfirmations,
+    TxPreconfirmations,
 }
 
 /// Takes `Arc<T>` and wraps it in a matching GossipsubBroadcastRequest
@@ -22,11 +22,11 @@ pub enum GossipTopicTag {
 #[derive(Debug, Clone)]
 pub enum GossipsubBroadcastRequest {
     NewTx(Arc<Transaction>),
-    TxPreConfirmations(Arc<PreConfirmationMessage>),
+    TxPreconfirmations(Arc<PreconfirmationMessage>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GossipsubMessage {
     NewTx(Transaction),
-    TxPreConfirmations(PreConfirmationMessage),
+    TxPreconfirmations(PreconfirmationMessage),
 }

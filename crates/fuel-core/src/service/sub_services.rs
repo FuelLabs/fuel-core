@@ -66,7 +66,7 @@ use fuel_core_gas_price_service::v1::{
     uninitialized_task::new_gas_price_service_v1,
 };
 use fuel_core_poa::{
-    pre_confirmation_signature_service::PreConfirmationSignatureTask,
+    pre_confirmation_signature_service::PreconfirmationSignatureTask,
     Trigger,
 };
 use fuel_core_services::ServiceRunner;
@@ -317,7 +317,7 @@ pub fn init_sub_services(
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
 
     let _pre_confirmation_service: ServiceRunner<
-        PreConfirmationSignatureTask<
+        PreconfirmationSignatureTask<
             PreconfirmationsReceiver,
             P2PBroadcast,
             FuelParentSigner,

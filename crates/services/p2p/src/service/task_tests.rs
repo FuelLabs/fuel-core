@@ -208,7 +208,7 @@ impl P2pDb for FakeDB {
 
 struct FakeBroadcast {
     pub peer_reports: mpsc::Sender<(FuelPeerId, AppScore, String)>,
-    pub confirmation_gossip_broadcast: mpsc::Sender<PreconfirmationsGossipData>,
+    pub preconfirmation_gossip_broadcast: mpsc::Sender<PreconfirmationsGossipData>,
 }
 
 impl Broadcast for FakeBroadcast {
@@ -236,9 +236,10 @@ impl Broadcast for FakeBroadcast {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: PreconfirmationsGossipData,
+        preconfirmations: PreconfirmationsGossipData,
     ) -> anyhow::Result<()> {
-        self.confirmation_gossip_broadcast.try_send(confirmations)?;
+        self.preconfirmation_gossip_broadcast
+            .try_send(preconfirmations)?;
         Ok(())
     }
 
@@ -279,7 +280,7 @@ async fn peer_heartbeat_reputation_checks__slow_heartbeat_sends_reports() {
     let (report_sender, mut report_receiver) = mpsc::channel(100);
     let broadcast = FakeBroadcast {
         peer_reports: report_sender,
-        confirmation_gossip_broadcast: mpsc::channel(100).0,
+        preconfirmation_gossip_broadcast: mpsc::channel(100).0,
     };
 
     // Less than actual
@@ -373,7 +374,7 @@ async fn peer_heartbeat_reputation_checks__old_heartbeat_sends_reports() {
     let (report_sender, mut report_receiver) = mpsc::channel(100);
     let broadcast = FakeBroadcast {
         peer_reports: report_sender,
-        confirmation_gossip_broadcast: mpsc::channel(100).0,
+        preconfirmation_gossip_broadcast: mpsc::channel(100).0,
     };
 
     // Greater than actual
@@ -465,7 +466,7 @@ async fn should_process_all_imported_block_under_infinite_events_from_p2p() {
     let (request_sender, request_receiver) = mpsc::channel(100);
     let broadcast = FakeBroadcast {
         peer_reports: mpsc::channel(100).0,
-        confirmation_gossip_broadcast: mpsc::channel(100).0,
+        preconfirmation_gossip_broadcast: mpsc::channel(100).0,
     };
     let mut task = Task {
         chain_id: Default::default(),
@@ -502,12 +503,12 @@ async fn should_process_all_imported_block_under_infinite_events_from_p2p() {
     }
 }
 
-fn arb_tx_confirmation_gossip_message() -> FuelP2PEvent {
+fn arb_tx_preconfirmation_gossip_message() -> FuelP2PEvent {
     let peer_id = PeerId::random();
     let message_id = vec![1, 2, 3, 4, 5].into();
     let topic_hash = TopicHash::from_raw(TX_PRECONFIRMATIONS_GOSSIP_TOPIC);
-    let confirmations = PreconfirmationMessage::default_test_confirmation();
-    let message = GossipsubMessage::TxPreConfirmations(confirmations);
+    let preconfirmations = PreconfirmationMessage::default_test_preconfirmation();
+    let message = GossipsubMessage::TxPreconfirmations(preconfirmations);
     FuelP2PEvent::GossipsubMessage {
         peer_id,
         message_id,
@@ -517,19 +518,19 @@ fn arb_tx_confirmation_gossip_message() -> FuelP2PEvent {
 }
 
 #[tokio::test]
-async fn run__gossip_message_from_p2p_service_is_broadcasted__tx_confirmations() {
+async fn run__gossip_message_from_p2p_service_is_broadcasted__tx_preconfirmations() {
     // given
-    let gossip_message_event = arb_tx_confirmation_gossip_message();
+    let gossip_message_event = arb_tx_preconfirmation_gossip_message();
     let events = vec![gossip_message_event.clone()];
     let event_stream = futures::stream::iter(events);
     let p2p_service = FakeP2PService {
         peer_info: vec![],
         next_event_stream: Box::pin(event_stream),
     };
-    let (confirmations_sender, mut confirmations_receiver) = mpsc::channel(100);
+    let (preconfirmations_sender, mut preconfirmations_receiver) = mpsc::channel(100);
     let broadcast = FakeBroadcast {
         peer_reports: mpsc::channel(100).0,
-        confirmation_gossip_broadcast: confirmations_sender,
+        preconfirmation_gossip_broadcast: preconfirmations_sender,
     };
     let (request_sender, request_receiver) = mpsc::channel(100);
     let mut task = Task {
@@ -560,12 +561,12 @@ async fn run__gossip_message_from_p2p_service_is_broadcasted__tx_confirmations()
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // then
-    let actual = confirmations_receiver.try_recv().unwrap().data.unwrap();
+    let actual = preconfirmations_receiver.try_recv().unwrap().data.unwrap();
     let FuelP2PEvent::GossipsubMessage { message, .. } = gossip_message_event else {
         panic!("Expected GossipsubMessage event");
     };
-    let GossipsubMessage::TxPreConfirmations(expected) = message else {
-        panic!("Expected Confirmations message");
+    let GossipsubMessage::TxPreconfirmations(expected) = message else {
+        panic!("Expected Preconfirmations message");
     };
     assert_eq!(expected, actual);
 }

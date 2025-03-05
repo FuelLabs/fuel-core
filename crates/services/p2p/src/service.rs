@@ -380,7 +380,7 @@ pub trait Broadcast: Send {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: PreconfirmationsGossipData,
+        preconfirmations: PreconfirmationsGossipData,
     ) -> anyhow::Result<()>;
 
     fn new_tx_subscription_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
@@ -411,9 +411,9 @@ impl Broadcast for SharedState {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: PreconfirmationsGossipData,
+        preconfirmations: PreconfirmationsGossipData,
     ) -> anyhow::Result<()> {
-        self.preconfirmations_broadcast.send(confirmations)?;
+        self.preconfirmations_broadcast.send(preconfirmations)?;
         Ok(())
     }
 
@@ -477,8 +477,8 @@ impl<P, V, B: Broadcast, T> Task<P, V, B, T> {
                 let next_transaction = GossipData::new(transaction, peer_id, message_id);
                 let _ = self.broadcast.tx_broadcast(next_transaction);
             }
-            GossipsubMessage::TxPreConfirmations(confirmations) => {
-                let data = GossipData::new(confirmations, peer_id, message_id);
+            GossipsubMessage::TxPreconfirmations(preconfirmations) => {
+                let data = GossipData::new(preconfirmations, peer_id, message_id);
                 let _ = self.broadcast.pre_confirmation_broadcast(data);
             }
         }
@@ -1088,7 +1088,7 @@ pub struct SharedState {
     new_tx_subscription_broadcast: broadcast::Sender<FuelPeerId>,
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
-    /// Sender of p2p tx confirmations used for subscribing.
+    /// Sender of p2p tx preconfirmations used for subscribing.
     preconfirmations_broadcast: broadcast::Sender<PreconfirmationsGossipData>,
     /// Sender of reserved peers connection updates.
     reserved_peers_broadcast: broadcast::Sender<usize>,

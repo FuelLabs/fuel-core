@@ -82,7 +82,7 @@ pub struct GossipData<T> {
 pub type TransactionGossipData = GossipData<Transaction>;
 
 /// Transactions that have been confirmed by block producer
-pub type PreconfirmationsGossipData = GossipData<PreConfirmationMessage>;
+pub type PreconfirmationsGossipData = GossipData<PreconfirmationMessage>;
 
 /// A value and an associated signature
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,7 +97,7 @@ pub struct Sealed<Entity, S = Signature> {
 /// A key that will be used to sign a pre-confirmations
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DelegatePreConfirmationKey<P = PublicKey> {
+pub struct DelegatePreconfirmationKey<P = PublicKey> {
     /// The public key of the person who is allowed to create pre-confirmations.
     pub public_key: P,
     /// The time at which the key will expire. Used to indicate to the recipient which key
@@ -140,15 +140,15 @@ impl Preconfirmations {
 }
 
 /// A signed key delegation
-pub type SignedByBlockProducerDelegation<P> = Sealed<DelegatePreConfirmationKey<P>>;
+pub type SignedByBlockProducerDelegation<P> = Sealed<DelegatePreconfirmationKey<P>>;
 
 /// A signed pre-confirmation
 pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 
-/// The possible messages sent by the parties pre-confirming transactinos
+/// The possible messages sent by the parties pre-confirming transactions
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreConfirmationMessage<P = PublicKey, S = Signature> {
+pub enum PreconfirmationMessage<P = PublicKey, S = Signature> {
     /// Notification of key delegation
     Delegate(SignedByBlockProducerDelegation<P>),
     /// Notification of pre-confirmations
@@ -156,9 +156,9 @@ pub enum PreConfirmationMessage<P = PublicKey, S = Signature> {
 }
 
 #[cfg(feature = "test-helpers")]
-impl PreConfirmationMessage {
-    /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
-    pub fn default_test_confirmation() -> Self {
+impl PreconfirmationMessage {
+    /// Test helper for creating arbitrary, meaningless `TxPreconfirmations` data
+    pub fn default_test_preconfirmation() -> Self {
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
             entity: Preconfirmations {
                 expiration: Tai64::UNIX_EPOCH,

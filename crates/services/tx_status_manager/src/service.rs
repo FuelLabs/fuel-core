@@ -7,8 +7,8 @@ use fuel_core_services::{
 };
 use fuel_core_types::services::p2p::{
     GossipData,
-    PreConfirmationMessage,
     Preconfirmation,
+    PreconfirmationMessage,
     PreconfirmationsGossipData,
     Sealed,
 };
@@ -30,13 +30,13 @@ pub struct Task {
 impl Task {
     fn new_preconfirmations_from_p2p(
         &mut self,
-        preconfirmations: PreConfirmationMessage,
+        preconfirmations: PreconfirmationMessage,
     ) {
         match preconfirmations {
-            PreConfirmationMessage::Delegate(_sealed) => {
+            PreconfirmationMessage::Delegate(_sealed) => {
                 // TODO[RC]: Handle the delegate message,
             }
-            PreConfirmationMessage::Preconfirmations(sealed) => {
+            PreconfirmationMessage::Preconfirmations(sealed) => {
                 let Sealed {
                     signature: _,
                     entity: preconfirmations,
