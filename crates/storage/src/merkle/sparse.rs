@@ -1,11 +1,18 @@
-use alloc::borrow::Cow;
-use fuel_core_storage::{
+//! This module provides storage trait implementations for sparse merkleized columns.
+
+use crate::{
     blueprint::{
+        plain::Plain,
         sparse::{
             PrimaryKey,
             Sparse,
         },
         BlueprintInspect,
+    },
+    codec::{
+        postcard::Postcard,
+        primitive::Primitive,
+        raw::Raw,
     },
     kv_store::{
         KeyValueInspect,
@@ -17,16 +24,57 @@ use fuel_core_storage::{
         MerkleizedColumn,
     },
     structured_storage::TableWithBlueprint,
+    tables::merkle::SparseMerkleMetadata,
     Mappable,
     Result as StorageResult,
 };
+use alloc::borrow::Cow;
+use fuel_core_types::fuel_merkle::sparse;
 
-mod smt;
+/// The table of SMT data
+pub struct MerkleData<Table>(core::marker::PhantomData<Table>);
 
-/// The merkle metadata table containing the global root
-pub type MerkleMetadata = smt::MerkleMetadata;
-/// Template over merkle tree data tables
-pub type MerkleData<T> = smt::MerkleData<T>;
+impl<Table> Mappable for MerkleData<Table> {
+    type Key = [u8; 32];
+    type OwnedKey = Self::Key;
+    type Value = sparse::Primitive;
+    type OwnedValue = Self::Value;
+}
+
+impl<Table, TC> TableWithBlueprint for MerkleData<Table>
+where
+    Table: MerkleizedTableColumn<TableColumn = TC>,
+    TC: core::fmt::Debug + Copy + strum::EnumCount + AsU32,
+{
+    type Blueprint = Plain<Raw, Postcard>;
+    type Column = MerkleizedColumn<TC>;
+
+    fn column() -> Self::Column {
+        Self::Column::MerkleDataColumn(Table::table_column())
+    }
+}
+
+/// The metadata table for [`MerkleData`] table.
+pub struct MerkleMetadata<TC>(core::marker::PhantomData<TC>);
+
+impl<TC> Mappable for MerkleMetadata<TC> {
+    type Key = u32;
+    type OwnedKey = Self::Key;
+    type Value = SparseMerkleMetadata;
+    type OwnedValue = Self::Value;
+}
+
+impl<TC> TableWithBlueprint for MerkleMetadata<TC>
+where
+    TC: core::fmt::Debug + Copy + strum::EnumCount + AsU32,
+{
+    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Column = MerkleizedColumn<TC>;
+
+    fn column() -> Self::Column {
+        Self::Column::MerkleMetadataColumn
+    }
+}
 
 /// Marker type for key conversion logic
 pub struct KeyConverter<Table>(core::marker::PhantomData<Table>);
@@ -88,7 +136,7 @@ where
     type Blueprint = Sparse<
         KeyCodec<Table, TC>,
         ValueCodec<Table, TC>,
-        MerkleMetadata,
+        MerkleMetadata<TC>,
         MerkleData<Table>,
         KeyConverter<Table>,
     >;

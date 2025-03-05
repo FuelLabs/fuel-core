@@ -4,6 +4,7 @@ use fuel_core_storage::{
         KeyValueInspect,
         StorageColumn,
     },
+    merkle::column::MerkleizedColumn,
     structured_storage::TableWithBlueprint,
     tables::{
         BlobData,
@@ -28,7 +29,7 @@ use fuel_core_types::{
 };
 
 use crate::{
-    column::Column,
+    column::TableColumn,
     merkle::{
         DummyStorage,
         Merkleized,
@@ -44,14 +45,15 @@ pub trait ComputeStateRoot {
     /// Compute the merkle root of the specific table
     fn merkle_root<Table>(&self) -> Result<MerkleRoot, StorageError>
     where
-        Table: Mappable + MerkleizedTableColumn,
+        Table: Mappable + MerkleizedTableColumn<TableColumn = TableColumn>,
         Table: TableWithBlueprint,
-        Table::Blueprint: BlueprintInspect<Table, DummyStorage<Column>>;
+        Table::Blueprint:
+            BlueprintInspect<Table, DummyStorage<MerkleizedColumn<TableColumn>>>;
 }
 
 impl<Storage> ComputeStateRoot for StorageTransaction<Storage>
 where
-    Storage: KeyValueInspect<Column = Column>,
+    Storage: KeyValueInspect<Column = MerkleizedColumn<TableColumn>>,
 {
     fn state_root(&self) -> Result<Bytes32, StorageError> {
         let roots = [
@@ -77,9 +79,10 @@ where
 
     fn merkle_root<Table>(&self) -> Result<MerkleRoot, StorageError>
     where
-        Table: Mappable + MerkleizedTableColumn,
+        Table: Mappable + MerkleizedTableColumn<TableColumn = TableColumn>,
         Table: TableWithBlueprint,
-        Table::Blueprint: BlueprintInspect<Table, DummyStorage<Column>>,
+        Table::Blueprint:
+            BlueprintInspect<Table, DummyStorage<MerkleizedColumn<TableColumn>>>,
     {
         <Self as MerkleRootStorage<u32, Merkleized<Table>>>::root(
             self,

@@ -1,5 +1,5 @@
 use crate::{
-    column::Column,
+    column::TableColumn,
     error::{
         InvalidBlock,
         InvariantViolation,
@@ -21,6 +21,7 @@ use alloc::{
 };
 use fuel_core_storage::{
     kv_store::KeyValueInspect,
+    merkle::column::MerkleizedColumn,
     transactional::StorageTransaction,
     StorageAsMut,
     StorageAsRef,
@@ -100,7 +101,7 @@ pub trait UpdateMerkleizedTables {
 
 impl<Storage> UpdateMerkleizedTables for StorageTransaction<Storage>
 where
-    Storage: KeyValueInspect<Column = Column>,
+    Storage: KeyValueInspect<Column = MerkleizedColumn<TableColumn>>,
 {
     #[tracing::instrument(skip(self, block))]
     fn update_merkleized_tables(
@@ -134,7 +135,7 @@ struct UpdateMerkleizedTablesTransaction<'a, Storage> {
 
 impl<'a, Storage> UpdateMerkleizedTablesTransaction<'a, Storage>
 where
-    Storage: KeyValueInspect<Column = Column>,
+    Storage: KeyValueInspect<Column = MerkleizedColumn<TableColumn>>,
 {
     #[tracing::instrument(skip(self, block))]
     pub fn process_block(&mut self, block: &Block) -> crate::Result<()> {
@@ -585,6 +586,9 @@ mod tests {
         Rng,
         SeedableRng,
     };
+
+    /// type alias for the tests using `Column`
+    type Column = super::MerkleizedColumn<TableColumn>;
 
     #[test]
     /// When encountering a transaction with a coin output,

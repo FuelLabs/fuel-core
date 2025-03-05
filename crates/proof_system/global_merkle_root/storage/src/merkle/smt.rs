@@ -1,5 +1,5 @@
 use crate::{
-    column::Column,
+    column::TableColumn,
     merkle::MerkleizedTableColumn,
 };
 use fuel_core_storage::{
@@ -8,6 +8,10 @@ use fuel_core_storage::{
         postcard::Postcard,
         primitive::Primitive,
         raw::Raw,
+    },
+    merkle::column::{
+        AsU32,
+        MerkleizedColumn,
     },
     structured_storage::TableWithBlueprint,
     tables::merkle::SparseMerkleMetadata,
@@ -25,15 +29,16 @@ impl<Table> Mappable for MerkleData<Table> {
     type OwnedValue = Self::Value;
 }
 
-impl<Table> TableWithBlueprint for MerkleData<Table>
+impl<Table, TC> TableWithBlueprint for MerkleData<Table>
 where
-    Table: MerkleizedTableColumn,
+    Table: MerkleizedTableColumn<TableColumn = TC>,
+    TC: core::fmt::Debug + Copy + strum::EnumCount + AsU32,
 {
     type Blueprint = Plain<Raw, Postcard>;
-    type Column = Column;
+    type Column = MerkleizedColumn<TC>;
 
-    fn column() -> Column {
-        Column::MerkleDataColumn(Table::table_column())
+    fn column() -> Self::Column {
+        Self::Column::MerkleDataColumn(Table::table_column())
     }
 }
 
@@ -49,9 +54,9 @@ impl Mappable for MerkleMetadata {
 
 impl TableWithBlueprint for MerkleMetadata {
     type Blueprint = Plain<Primitive<4>, Postcard>;
-    type Column = Column;
+    type Column = MerkleizedColumn<TableColumn>;
 
-    fn column() -> Column {
-        Column::MerkleMetadataColumn
+    fn column() -> Self::Column {
+        Self::Column::MerkleMetadataColumn
     }
 }

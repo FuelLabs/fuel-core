@@ -38,6 +38,7 @@ pub mod codec;
 pub mod column;
 pub mod iter;
 pub mod kv_store;
+pub mod merkle;
 pub mod structured_storage;
 pub mod tables;
 #[cfg(feature = "test-helpers")]
