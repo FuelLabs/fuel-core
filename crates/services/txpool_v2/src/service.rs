@@ -411,9 +411,6 @@ where
                         .or_default();
                     block_height_expiration.push(tx_id);
                 }
-                self.shared_state
-                    .new_executable_txs_notifier
-                    .send_replace(());
             }
             PoolNotification::ErrorInsertion {
                 tx_id,

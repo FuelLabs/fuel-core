@@ -244,12 +244,7 @@ where
             if transactions_to_promote.is_empty() {
                 continue;
             }
-            if let Err(e) = self.new_executable_txs_notifier.send(()) {
-                tracing::warn!(
-                    "Failed to notify about new executable transactions: {:?}",
-                    e
-                );
-            }
+            self.new_executable_txs_notifier.send_replace(());
             for promote in transactions_to_promote {
                 let storage = storage.get(&promote).expect(
                     "We just get the dependent from the storage, it should exist.",

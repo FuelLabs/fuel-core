@@ -207,12 +207,7 @@ where
 
         // No dependencies directly in the graph and the sorted transactions
         if !has_dependencies {
-            if let Err(e) = self.new_executable_txs_notifier.send(()) {
-                tracing::warn!(
-                    "Failed to notify about new executable transactions: {:?}",
-                    e
-                );
-            }
+            self.new_executable_txs_notifier.send_replace(());
             self.selection_algorithm
                 .new_executable_transaction(storage_id, tx);
         }
@@ -449,12 +444,7 @@ where
                         );
                         continue
                     };
-                    if let Err(e) = self.new_executable_txs_notifier.send(()) {
-                        tracing::warn!(
-                            "Failed to notify about new executable transactions: {:?}",
-                            e
-                        );
-                    }
+                    self.new_executable_txs_notifier.send_replace(());
                     self.selection_algorithm
                         .new_executable_transaction(dependent, storage_data);
                 }
