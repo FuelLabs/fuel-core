@@ -8,10 +8,7 @@ use tokio::{
         mpsc,
         oneshot,
     },
-    time::{
-        sleep_until,
-        Instant,
-    },
+    time::Instant,
 };
 
 use crate::{
@@ -136,6 +133,7 @@ pub struct MainTask<T, B, I, S, PB, C> {
     clock: C,
     /// Deadline clock, used by the triggers
     sync_task_handle: ServiceRunner<SyncTask>,
+    production_timeout: Duration,
 }
 
 impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
@@ -169,6 +167,7 @@ where
             min_connected_reserved_peers,
             time_until_synced,
             trigger,
+            production_timeout,
             ..
         } = config;
 
@@ -197,6 +196,7 @@ where
             trigger,
             sync_task_handle,
             clock,
+            production_timeout,
         }
     }
 
@@ -260,9 +260,13 @@ where
         source: TransactionsSource,
         deadline: Instant,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
-        self.block_producer
-            .produce_and_execute_block(height, block_time, source, deadline)
+        let future = self
+            .block_producer
+            .produce_and_execute_block(height, block_time, source, deadline);
+
+        tokio::time::timeout(self.production_timeout, future)
             .await
+            .map_err(|_| anyhow::anyhow!("Block production timed out"))?
     }
 
     pub(crate) async fn produce_next_block(
@@ -586,7 +590,7 @@ where
                 Instant::now()
             }),
             Trigger::Interval { block_time } => {
-                let next_block_time = match self
+                let deadline = match self
                     .last_block_created
                     .checked_add(block_time)
                     .ok_or(anyhow!("Time exceeds system limits"))
@@ -594,13 +598,7 @@ where
                     Ok(time) => time,
                     Err(err) => return TaskNextAction::ErrorContinue(err),
                 };
-                let deadline = next_block_time;
-                Box::pin({
-                    async move {
-                        sleep_until(next_block_time).await;
-                        deadline
-                    }
-                })
+                Box::pin(async move { deadline })
             }
         };
 

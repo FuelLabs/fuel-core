@@ -11,6 +11,7 @@ pub struct Config {
     pub metrics: bool,
     pub min_connected_reserved_peers: usize,
     pub time_until_synced: Duration,
+    pub production_timeout: Duration,
     pub chain_id: ChainId,
 }
 
@@ -23,6 +24,7 @@ impl Default for Config {
             metrics: false,
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
+            production_timeout: Duration::from_secs(20),
             chain_id: ChainId::default(),
         }
     }

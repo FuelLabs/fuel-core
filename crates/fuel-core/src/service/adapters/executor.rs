@@ -83,18 +83,21 @@ impl fuel_core_executor::ports::RelayerPort for RelayerIterableKeyValueView {
 }
 
 impl NewTxWaiterPort for NewTxWaiter {
-    async fn wait_for_new_transactions(&self) -> WaitNewTransactionsResult {
-        let mut receiver = self.receiver.clone();
-        match tokio::time::timeout_at(self.timeout, async move {
-            match receiver.changed().await {
-                Ok(()) => WaitNewTransactionsResult::NewTransaction,
-                Err(_) => WaitNewTransactionsResult::Timeout,
+    async fn wait_for_new_transactions(&mut self) -> WaitNewTransactionsResult {
+        tokio::select! {
+            _ = tokio::time::sleep_until(self.timeout) => {
+                WaitNewTransactionsResult::Timeout
             }
-        })
-        .await
-        {
-            Ok(result) => result,
-            Err(_) => WaitNewTransactionsResult::Timeout,
+            res = self.receiver.changed() => {
+                match res {
+                    Ok(_) => {
+                        WaitNewTransactionsResult::NewTransaction
+                    }
+                    Err(_) => {
+                        WaitNewTransactionsResult::Timeout
+                    }
+                }
+            }
         }
     }
 }

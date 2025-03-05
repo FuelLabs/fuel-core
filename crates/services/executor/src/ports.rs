@@ -173,7 +173,7 @@ pub trait RelayerPort {
 pub trait NewTxWaiterPort: Send {
     /// Wait for new transactions to be available or timeout.
     fn wait_for_new_transactions(
-        &self,
+        &mut self,
     ) -> impl Future<Output = WaitNewTransactionsResult> + Send;
 }
 

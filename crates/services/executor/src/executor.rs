@@ -225,7 +225,7 @@ pub enum WaitNewTransactionsResult {
 pub struct TimeoutOnlyTxWaiter;
 
 impl NewTxWaiterPort for TimeoutOnlyTxWaiter {
-    async fn wait_for_new_transactions(&self) -> WaitNewTransactionsResult {
+    async fn wait_for_new_transactions(&mut self) -> WaitNewTransactionsResult {
         WaitNewTransactionsResult::Timeout
     }
 }
