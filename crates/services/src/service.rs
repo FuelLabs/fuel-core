@@ -291,46 +291,49 @@ where
     let state = Shared::new(sender);
     let stop_sender = state.clone();
     // Spawned as a task to check if the service is already running and to capture any panics.
-    tokio::task::spawn(
-        async move {
-            tracing::debug!("running");
-            let run = std::panic::AssertUnwindSafe(run(
-                service,
-                stop_sender.clone(),
-                params,
-                metric,
-            ));
-            tracing::debug!("awaiting run");
-            let result = run.catch_unwind().await;
+    tokio::task::Builder::new()
+        .name(S::NAME)
+        .spawn(
+            async move {
+                tracing::debug!("running");
+                let run = std::panic::AssertUnwindSafe(run(
+                    service,
+                    stop_sender.clone(),
+                    params,
+                    metric,
+                ));
+                tracing::debug!("awaiting run");
+                let result = run.catch_unwind().await;
 
-            let stopped_state = if let Err(e) = result {
-                let panic_information = panic_to_string(e);
-                State::StoppedWithError(panic_information)
-            } else {
-                State::Stopped
-            };
-
-            tracing::debug!("shutting down {:?}", stopped_state);
-
-            let _ = stop_sender.send_if_modified(|state| {
-                if !state.stopped() {
-                    *state = stopped_state.clone();
-                    tracing::debug!("Wasn't stopped, so sent stop.");
-                    true
+                let stopped_state = if let Err(e) = result {
+                    let panic_information = panic_to_string(e);
+                    State::StoppedWithError(panic_information)
                 } else {
-                    tracing::debug!("Was already stopped.");
-                    false
+                    State::Stopped
+                };
+
+                tracing::debug!("shutting down {:?}", stopped_state);
+
+                let _ = stop_sender.send_if_modified(|state| {
+                    if !state.stopped() {
+                        *state = stopped_state.clone();
+                        tracing::debug!("Wasn't stopped, so sent stop.");
+                        true
+                    } else {
+                        tracing::debug!("Was already stopped.");
+                        false
+                    }
+                });
+
+                tracing::info!("The service {} is shut down", S::NAME);
+
+                if let State::StoppedWithError(err) = stopped_state {
+                    std::panic::resume_unwind(Box::new(err));
                 }
-            });
-
-            tracing::info!("The service {} is shut down", S::NAME);
-
-            if let State::StoppedWithError(err) = stopped_state {
-                std::panic::resume_unwind(Box::new(err));
             }
-        }
-        .in_current_span(),
-    );
+            .in_current_span(),
+        )
+        .unwrap();
     state
 }
 

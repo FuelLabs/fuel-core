@@ -17,7 +17,7 @@ futures = { workspace = true }
 parking_lot = { workspace = true }
 pin-project-lite = { workspace = true }
 rayon = { workspace = true, optional = true }
-tokio = { workspace = true, features = ["full"] }
+tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
 
 [dev-dependencies]

@@ -8,3 +8,6 @@ protocol = "sparse"
 # https://github.com/rust-lang/cargo/issues/4133
 [target.aarch64-unknown-linux-gnu]
 linker = "aarch64-linux-gnu-gcc"
+
+[build]
+rustflags = ["--cfg", "tokio_unstable"]

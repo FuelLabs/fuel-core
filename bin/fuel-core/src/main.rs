@@ -6,5 +6,6 @@ use fuel_core_bin::cli;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    console_subscriber::init();
     cli::run_cli().await
 }

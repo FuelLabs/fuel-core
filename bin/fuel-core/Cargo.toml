@@ -22,6 +22,7 @@ aws-config = { version = "1.1.7", features = [
 ], optional = true }
 aws-sdk-kms = { version = "1.37.0", optional = true }
 clap = { workspace = true, features = ["derive", "env", "string"] }
+console-subscriber = { version = "0.4.1", features = ["parking_lot"] }
 const_format = { version = "0.2", optional = true }
 dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
@@ -38,7 +39,11 @@ pyroscope_pprofrs = "0.2"
 rlimit = "0.10.2"
 serde_json = { workspace = true }
 tikv-jemallocator = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = [
+  "macros",
+  "rt-multi-thread",
+  "tracing",
+] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
   "ansi",
