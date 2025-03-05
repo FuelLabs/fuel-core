@@ -30,6 +30,7 @@ use crate::{
         },
     },
     tx_status_stream::TxStatusMessage,
+    Constraints,
 };
 
 #[tokio::test]
@@ -535,4 +536,53 @@ async fn simple_insert_removal_subscription() {
     );
 
     service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test]
+async fn insert__tx_depends_one_extracted_and_one_pool_tx() {
+    // Given
+    let mut universe = TestPoolUniverse::default();
+    let service = universe.build_service(None, None);
+    service.start_and_await().await.unwrap();
+
+    let (output_a, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output_a]), 1);
+    let input_a = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
+    let (output_b, unset_input) = universe.create_output_and_input();
+    let tx2 = universe.build_script_transaction(None, Some(vec![output_b]), 1);
+    let input_b = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
+    let tx3 = universe.build_script_transaction(Some(vec![input_a, input_b]), None, 20);
+
+    // When
+    service.shared.insert(tx1.clone()).await.unwrap();
+    let txs_first_extract = service
+        .shared
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            maximum_txs: u16::MAX,
+            maximum_block_size: u32::MAX,
+        })
+        .unwrap();
+
+    // Don't use insert here because it will land to pending pool and so we will not have direct answer
+    service.shared.try_insert(vec![tx3.clone()]).unwrap();
+
+    service.shared.insert(tx2.clone()).await.unwrap();
+    let txs_second_extract = service
+        .shared
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            maximum_txs: u16::MAX,
+            maximum_block_size: u32::MAX,
+        })
+        .unwrap();
+
+    // Then
+    assert_eq!(txs_first_extract.len(), 1);
+    assert_eq!(txs_first_extract[0].id(), tx1.id(&Default::default()));
+    assert_eq!(txs_second_extract.len(), 2);
+    assert_eq!(txs_second_extract[0].id(), tx2.id(&Default::default()));
+    assert_eq!(txs_second_extract[1].id(), tx3.id(&Default::default()));
 }
