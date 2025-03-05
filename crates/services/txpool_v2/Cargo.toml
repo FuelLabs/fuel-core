@@ -26,6 +26,7 @@ tokio = { workspace = true, default-features = false, features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
+tokio-stream = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std", "test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
 fuel-core-txpool = { path = ".", features = ["test-helpers"] }

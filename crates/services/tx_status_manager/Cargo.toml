@@ -34,12 +34,18 @@ tracing = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+proptest = { workspace = true }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { path = "./../../types", features = ["test-helpers"] }
 mockall = { workspace = true }
 mockito = { version = "1.6.1" }
 serde_json = { workspace = true }
+test-strategy = { workspace = true }
+tracing = { workspace = true }
 
 [features]
-test-helpers = ["dep:mockito"]
+test-helpers = [
+  "fuel-core-types/test-helpers",
+  "fuel-core-storage/test-helpers",
+]

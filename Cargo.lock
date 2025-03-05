@@ -4068,11 +4068,13 @@ dependencies = [
  "mockito",
  "num_enum",
  "parking_lot",
+ "proptest",
  "reqwest 0.12.12",
  "serde",
  "serde_json",
  "strum 0.25.0",
  "strum_macros 0.25.3",
+ "test-strategy",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
@@ -4102,6 +4104,7 @@ dependencies = [
  "rand",
  "test-strategy",
  "tokio",
+ "tokio-stream",
  "tracing",
 ]
 

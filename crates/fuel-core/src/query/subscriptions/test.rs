@@ -19,6 +19,9 @@
 //! - `tx_status_message()`: Generates a TxStatusMessage
 //! - `transaction_status()`: Generates a TransactionStatus
 //! - `input_stream()`: Generates a Vec<TxStatusMessage> of length 0 to 5
+
+// TODO[RC]
+/*
 use fuel_core_txpool::{
     error::RemovedReason,
     TxStatusMessage,
@@ -335,3 +338,4 @@ impl From<crate::schema::tx::types::TransactionStatus> for TxStatus {
         }
     }
 }
+*/

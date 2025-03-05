@@ -20,5 +20,5 @@ pub use tx_status_stream::{
 };
 pub use utils::from_executor_to_status;
 
-//#[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
