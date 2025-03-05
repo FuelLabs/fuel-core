@@ -22,18 +22,12 @@ use tokio_stream::StreamExt;
 
 use crate::{
     config::Config,
-    tests::{
-        mocks::MockImporter,
-        universe::{
-            TestPoolUniverse,
-            DEFAULT_EXPIRATION_HEIGHT,
-        },
-    },
+    tests::universe::TestTxStatusManagerUniverse,
 };
 
 #[tokio::test]
 async fn test_start_stop() {
-    let service = TestPoolUniverse::default().build_service(None, None);
+    let service = TestTxStatusManagerUniverse::default().build_service(None);
     service.start_and_await().await.unwrap();
 
     // Double start will return false.
