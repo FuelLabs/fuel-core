@@ -38,7 +38,7 @@ impl TableWithBlueprint for ContractsRawCode {
     type Column = MerkleizedColumn<TableColumn>;
 
     fn column() -> Self::Column {
-        MerkleizedColumn::TableColumn(TableColumn::ContractsRawCode)
+        MerkleizedColumn::TableColumn(Self::table_column())
     }
 }
 
@@ -47,7 +47,7 @@ impl TableWithBlueprint for ContractsLatestUtxo {
     type Column = MerkleizedColumn<TableColumn>;
 
     fn column() -> Self::Column {
-        MerkleizedColumn::TableColumn(TableColumn::ContractsLatestUtxo)
+        MerkleizedColumn::TableColumn(Self::table_column())
     }
 }
 
