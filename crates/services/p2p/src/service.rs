@@ -469,9 +469,13 @@ pub struct Task<P, V, B, T> {
     cached_view: Arc<CachedView>,
 }
 
-impl<P, V, B: Broadcast, T> Task<P, V, B, T> {
+impl<P, V, B, T> Task<P, V, B, T>
+where
+    P: TaskP2PService,
+    B: Broadcast,
+{
     pub(crate) fn broadcast_gossip_message(
-        &self,
+        &mut self,
         message: GossipsubMessage,
         message_id: MessageId,
         peer_id: PeerId,
@@ -484,6 +488,17 @@ impl<P, V, B: Broadcast, T> Task<P, V, B, T> {
                 let _ = self.broadcast.tx_broadcast(next_transaction);
             }
             GossipsubMessage::TxPreConfirmations(confirmations) => {
+                // Continue to broadcast the message to the network
+                // without validation of the pre confirmation, because maybe we
+                // joined the network after delegation key was registered for this preconfirmation.
+                let fuel_peer_id: Vec<u8> = peer_id.into();
+                let _ = self.p2p_service.report_message(
+                    GossipsubMessageInfo {
+                        message_id: message_id.clone(),
+                        peer_id: fuel_peer_id.into(),
+                    },
+                    GossipsubMessageAcceptance::Accept,
+                );
                 let data = GossipData::new(confirmations, peer_id, message_id);
                 let _ = self.broadcast.pre_confirmation_broadcast(data);
             }
