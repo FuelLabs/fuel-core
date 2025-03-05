@@ -158,7 +158,7 @@ impl TaskP2PService for FakeP2PService {
         _message: GossipsubMessageInfo,
         _acceptance: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn report_peer(

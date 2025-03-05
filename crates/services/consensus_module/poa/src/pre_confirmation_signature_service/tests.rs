@@ -180,9 +180,6 @@ impl KeyRotationTrigger for FakeTrigger {
 
 impl FakeTrigger {
     pub fn new() -> (Self, tokio::sync::mpsc::Sender<Tai64>) {
-        // let notify = Notify::new();
-        // let inner = Arc::new(notify);
-        // let handle = inner.clone();
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
         let trigger = Self { inner: receiver };
         (trigger, sender)
