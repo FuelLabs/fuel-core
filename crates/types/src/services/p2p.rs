@@ -10,10 +10,7 @@ use super::txpool::ArcPoolTx;
 #[cfg(feature = "serde")]
 use super::txpool::PoolTransaction;
 use crate::{
-    fuel_crypto::{
-        PublicKey,
-        Signature,
-    },
+    fuel_crypto,
     fuel_tx::{
         Transaction,
         TxId,
@@ -34,6 +31,12 @@ use tai64::Tai64;
 
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
+
+/// The type of the public key used for signing pre-confirmations
+pub type DelegatePublicKey = ed25519_dalek::VerifyingKey;
+
+/// The type of the signature used by the block producer to sign delegation.
+pub type ProtocolSignature = fuel_crypto::Signature;
 
 /// List of transactions
 #[derive(Debug, Clone, Default)]
@@ -78,13 +81,10 @@ pub struct GossipData<T> {
 /// Transactions gossiped by peers for inclusion into a block
 pub type TransactionGossipData = GossipData<Transaction>;
 
-/// Transactions that have been confirmed by block producer
-pub type ConfirmationsGossipData = GossipData<PreConfirmationMessage>;
-
 /// A value and an associated signature
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Sealed<Entity, S = Signature> {
+pub struct Sealed<Entity, S> {
     /// The actual value
     pub entity: Entity,
     /// Seal
@@ -94,7 +94,7 @@ pub struct Sealed<Entity, S = Signature> {
 /// A key that will be used to sign a pre-confirmations
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DelegatePreConfirmationKey<P = PublicKey> {
+pub struct DelegatePreConfirmationKey<P> {
     /// The public key of the person who is allowed to create pre-confirmations.
     pub public_key: P,
     /// The time at which the key will expire. Used to indicate to the recipient which key
@@ -140,13 +140,13 @@ pub enum PreconfirmationStatus {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Preconfirmations {
     /// The expiration time of the key used to sign
-    expiration: Tai64,
+    pub expiration: Tai64,
     /// The transactions which have been pre-confirmed
-    preconfirmations: Vec<Preconfirmation>,
+    pub preconfirmations: Vec<Preconfirmation>,
 }
 
 /// A signed key delegation
-pub type SignedByBlockProducerDelegation<P> = Sealed<DelegatePreConfirmationKey<P>>;
+pub type SignedByBlockProducerDelegation<P, S> = Sealed<DelegatePreConfirmationKey<P>, S>;
 
 /// A signed pre-confirmation
 pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
@@ -154,15 +154,15 @@ pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 /// The possible messages sent by the parties pre-confirming transactinos
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreConfirmationMessage<P = PublicKey, S = Signature> {
+pub enum PreConfirmationMessage<DP, DS, S> {
     /// Notification of key delegation
-    Delegate(SignedByBlockProducerDelegation<P>),
+    Delegate(SignedByBlockProducerDelegation<DP, S>),
     /// Notification of pre-confirmations
-    Preconfirmations(SignedPreconfirmationByDelegate<S>),
+    Preconfirmations(SignedPreconfirmationByDelegate<DS>),
 }
 
 #[cfg(feature = "test-helpers")]
-impl PreConfirmationMessage {
+impl<DP, S> PreConfirmationMessage<DP, crate::fuel_tx::Bytes64, S> {
     /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
     pub fn default_test_confirmation() -> Self {
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
@@ -175,7 +175,7 @@ impl PreConfirmationMessage {
                     },
                 }],
             },
-            signature: Signature::default(),
+            signature: crate::fuel_tx::Bytes64::default(),
         })
     }
 }
