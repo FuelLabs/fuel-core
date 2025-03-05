@@ -1,0 +1,19 @@
+[package]
+name = "fuel-core-compression-service"
+description = "Service responsible for compression of fuel blocks for DA"
+version = { workspace = true }
+authors = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+fuel-core-compression = { workspace = true }
+fuel-core-services = { workspace = true }
+fuel-core-types = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
