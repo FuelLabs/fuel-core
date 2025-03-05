@@ -353,9 +353,6 @@ impl ExecutorAdapter {
     pub fn new(
         database: Database,
         relayer_database: Database<Relayer>,
-        // #[cfg(feature = "parallel-executor")]
-        // config: fuel_core_parallel_executor::config::Config,
-        // #[cfg(not(feature = "parallel-executor"))]
         config: fuel_core_upgradable_executor::config::Config,
         new_txs_watcher: tokio::sync::watch::Receiver<()>,
         preconfirmation_sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,

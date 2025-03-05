@@ -329,13 +329,7 @@ where
         };
 
         let options = self.config.as_ref().into();
-        self.produce_inner_sync(
-            component,
-            options,
-            ProduceBlockMode::Produce,
-            TimeoutOnlyTxWaiter,
-            TransparentPreconfirmationSender,
-        )
+        self.produce_inner_sync(component, options, ProduceBlockMode::Produce)
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
@@ -347,13 +341,7 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner_sync(
-            block,
-            options,
-            ProduceBlockMode::DryRunLatest,
-            TimeoutOnlyTxWaiter,
-            TransparentPreconfirmationSender,
-        )
+        self.produce_inner_sync(block, options, ProduceBlockMode::DryRunLatest)
     }
 }
 
@@ -373,13 +361,7 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner_sync(
-            block,
-            options,
-            ProduceBlockMode::Produce,
-            TimeoutOnlyTxWaiter,
-            TransparentPreconfirmationSender,
-        )
+        self.produce_inner_sync(block, options, ProduceBlockMode::Produce)
     }
 
     /// Produces the block and returns the result of the execution without committing the changes.
@@ -447,8 +429,6 @@ where
                     Some(height) => ProduceBlockMode::DryRunAt { height },
                     None => ProduceBlockMode::DryRunLatest,
                 },
-                TimeoutOnlyTxWaiter,
-                TransparentPreconfirmationSender,
             )?
             .into_result();
 
@@ -591,19 +571,23 @@ where
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
-        new_tx_waiter: impl NewTxWaiterPort,
-        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        self.produce_inner(block, options, mode, new_tx_waiter, preconfirmation_sender)
-            .now_or_never()
-            .ok_or_else(|| {
-                ExecutorError::Other(
-                    "Impossible to resolve the executor's future immediately".to_string(),
-                )
-            })?
+        self.produce_inner(
+            block,
+            options,
+            mode,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        )
+        .now_or_never()
+        .ok_or_else(|| {
+            ExecutorError::Other(
+                "Impossible to resolve the executor's future immediately".to_string(),
+            )
+        })?
     }
 
     #[cfg(feature = "wasm-executor")]

@@ -119,7 +119,7 @@ fn execute_production(
     let result = instance
         .produce_without_commit(block, false, NewTxWaiter, PreconfirmationSender)
         .now_or_never()
-        .unwrap();
+        .expect("The future should be resolved immediately");
     ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
 }
 
