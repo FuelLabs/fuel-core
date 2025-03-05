@@ -8,7 +8,5 @@ impl PreconfirmationSenderPort for PreconfirmationSender {
         vec![]
     }
 
-    async fn send(&self, _: Vec<PreconfirmationStatus>) -> anyhow::Result<()> {
-        Ok(())
-    }
+    async fn send(&self, _: Vec<PreconfirmationStatus>) {}
 }

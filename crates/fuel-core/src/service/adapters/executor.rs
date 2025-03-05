@@ -103,11 +103,10 @@ impl NewTxWaiterPort for NewTxWaiter {
 }
 
 impl PreconfirmationSenderPort for PreconfirmationSender {
-    async fn send(
-        &self,
-        preconfirmations: Vec<PreconfirmationStatus>,
-    ) -> anyhow::Result<()> {
-        self.sender.send(preconfirmations).await.map_err(Into::into)
+    async fn send(&self, preconfirmations: Vec<PreconfirmationStatus>) {
+        // If the receiver is closed, it means no one is listening to the preconfirmations and so we can drop them.
+        // We don't consider this an error.
+        let _ = self.sender.send(preconfirmations).await;
     }
 
     fn try_send(
@@ -116,10 +115,9 @@ impl PreconfirmationSenderPort for PreconfirmationSender {
     ) -> Vec<PreconfirmationStatus> {
         match self.sender.try_send(preconfirmations) {
             Ok(()) => vec![],
-            Err(TrySendError::Closed(preconfirmations)) => {
-                tracing::warn!("Preconfirmation sender is closed");
-                preconfirmations
-            }
+            // If the receiver is closed, it means no one is listening to the preconfirmations and so we can drop them.
+            // We don't consider this an error.
+            Err(TrySendError::Closed(_)) => vec![],
             Err(TrySendError::Full(preconfirmations)) => preconfirmations,
         }
     }

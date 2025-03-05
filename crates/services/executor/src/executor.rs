@@ -237,9 +237,7 @@ impl PreconfirmationSenderPort for TransparentPreconfirmationSender {
         vec![]
     }
 
-    async fn send(&self, _: Vec<PreconfirmationStatus>) -> anyhow::Result<()> {
-        Ok(())
-    }
+    async fn send(&self, _: Vec<PreconfirmationStatus>) {}
 }
 
 fn convert_tx_execution_result_to_preconfirmation(
@@ -766,9 +764,7 @@ where
                 .peekable();
         }
         if !status.is_empty() {
-            if let Err(e) = self.preconfirmation_sender.send(status).await {
-                tracing::warn!("Failed to send preconfirmation status: {:?}", e);
-            }
+            self.preconfirmation_sender.send(status).await;
         }
 
         Ok(())

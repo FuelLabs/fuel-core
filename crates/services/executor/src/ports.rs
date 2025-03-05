@@ -190,5 +190,5 @@ pub trait PreconfirmationSenderPort {
     fn send(
         &self,
         preconfirmations: Vec<PreconfirmationStatus>,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    ) -> impl Future<Output = ()> + Send;
 }

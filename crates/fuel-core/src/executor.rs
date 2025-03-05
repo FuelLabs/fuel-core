@@ -3149,12 +3149,8 @@ mod tests {
             }
 
             /// Send a batch of pre-confirmations, awaiting for the send to be successful.
-            async fn send(
-                &self,
-                preconfirmations: Vec<PreconfirmationStatus>,
-            ) -> anyhow::Result<()> {
+            async fn send(&self, preconfirmations: Vec<PreconfirmationStatus>) {
                 self.sender.send(preconfirmations).await.unwrap();
-                Ok(())
             }
         }
         let mut rng = StdRng::seed_from_u64(2322u64);
