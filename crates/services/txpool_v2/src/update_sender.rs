@@ -69,12 +69,12 @@ impl TxStatusChange {
         self.update_sender.send(TxUpdate::new(id, message));
     }
 
-    pub fn send_submitted(&self, id: Bytes32, time: Tai64) {
+    pub fn send_submitted(&self, id: Bytes32, timestamp: Tai64) {
         tracing::info!("Transaction {id} successfully submitted to the tx pool");
         let _ = self.new_tx_notification_sender.send(id);
         self.update_sender.send(TxUpdate::new(
             id,
-            TxStatusMessage::Status(TransactionStatus::Submitted { time }),
+            TxStatusMessage::Status(TransactionStatus::Submitted { timestamp }),
         ));
     }
 
@@ -84,6 +84,7 @@ impl TxStatusChange {
             id,
             TxStatusMessage::Status(TransactionStatus::SqueezedOut {
                 reason: reason.to_string(),
+                tx_id: id,
             }),
         ));
     }

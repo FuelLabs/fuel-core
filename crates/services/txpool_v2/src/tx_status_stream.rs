@@ -35,7 +35,7 @@ impl<E> From<Result<TransactionStatus, E>> for TxStatusMessage {
     fn from(result: Result<TransactionStatus, E>) -> Self {
         match result {
             Ok(status) => TxStatusMessage::Status(status),
-            _ => TxStatusMessage::FailedStatus,
+            Err(_) => TxStatusMessage::FailedStatus,
         }
     }
 }
@@ -78,8 +78,8 @@ impl TxUpdateStream {
         let state = std::mem::replace(&mut self.state, State::Empty);
         self.state = match state {
             State::Empty => match msg {
-                TxStatusMessage::Status(TransactionStatus::Submitted { time }) => {
-                    State::Initial(TransactionStatus::Submitted { time })
+                TxStatusMessage::Status(TransactionStatus::Submitted { timestamp }) => {
+                    State::Initial(TransactionStatus::Submitted { timestamp })
                 }
                 TxStatusMessage::Status(s) => State::EarlySuccess(s),
                 TxStatusMessage::FailedStatus => State::Failed,

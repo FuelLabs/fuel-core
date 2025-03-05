@@ -865,6 +865,26 @@ type Policies {
 	maxFee: U64
 }
 
+type PreconfirmationFailureStatus {
+	reason: String!
+	txPointer: TxPointer!
+	transactionId: TransactionId!
+	transaction: Transaction
+	receipts: [Receipt!]
+}
+
+type PreconfirmationSqueezedOutStatus {
+	transactionId: TransactionId!
+	reason: String!
+}
+
+type PreconfirmationSuccessStatus {
+	txPointer: TxPointer!
+	transactionId: TransactionId!
+	transaction: Transaction
+	receipts: [Receipt!]
+}
+
 type PredicateParameters {
 	version: PredicateParametersVersion!
 	maxPredicateLength: U64!
@@ -1164,6 +1184,7 @@ input SpendQueryElementInput {
 }
 
 type SqueezedOutStatus {
+	transactionId: TransactionId!
 	reason: String!
 }
 
@@ -1315,7 +1336,7 @@ type TransactionEdge {
 
 scalar TransactionId
 
-union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
+union TransactionStatus = SubmittedStatus | SuccessStatus | PreconfirmationSuccessStatus | SqueezedOutStatus | PreconfirmationSqueezedOutStatus | FailureStatus | PreconfirmationFailureStatus
 
 type TxParameters {
 	version: TxParametersVersion!
