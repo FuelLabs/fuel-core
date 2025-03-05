@@ -22,10 +22,7 @@ impl<T> Encode<T> for Postcard
 where
     T: ?Sized + serde::Serialize,
 {
-    type Encoder<'a>
-        = Cow<'a, [u8]>
-    where
-        T: 'a;
+    type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
 
     fn encode(value: &T) -> Self::Encoder<'_> {
         Cow::Owned(postcard::to_allocvec(value).expect(
