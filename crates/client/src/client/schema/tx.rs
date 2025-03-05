@@ -19,9 +19,7 @@ use crate::client::{
     PaginationRequest,
 };
 use fuel_core_types::{
-    fuel_tx::{
-        self,
-    },
+    fuel_tx,
     fuel_types::{
         canonical::Deserialize,
         Bytes32,

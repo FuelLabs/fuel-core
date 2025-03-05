@@ -251,6 +251,7 @@ pub enum StatusWithTransaction {
         reason: String,
     },
     PreconfirmationSqueezedOut {
+        transaction_id: TxId,
         reason: String,
     },
     Failure {
@@ -350,7 +351,10 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                 StatusWithTransaction::SqueezedOut { reason: s.reason }
             }
             SchemaStatusWithTx::PreconfirmationSqueezedOutStatus(s) => {
-                StatusWithTransaction::PreconfirmationSqueezedOut { reason: s.reason }
+                StatusWithTransaction::PreconfirmationSqueezedOut {
+                    reason: s.reason,
+                    transaction_id: s.transaction_id.into(),
+                }
             }
             SchemaStatusWithTx::Unknown => {
                 return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
