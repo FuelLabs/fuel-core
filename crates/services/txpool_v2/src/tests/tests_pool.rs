@@ -1260,7 +1260,7 @@ fn insert_tx_with_blob_already_insert_at_lower_tip() {
 }
 
 #[test]
-fn insert__tx_depends_on_extracted_tx() {
+fn verify_and_insert__when_dependent_tx_is_extracted_new_tx_still_accepted() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 

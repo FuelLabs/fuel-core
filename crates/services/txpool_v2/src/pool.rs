@@ -415,8 +415,9 @@ where
         self.tx_id_to_storage_id.keys()
     }
 
-    /// Remove transaction but keep its dependents.
-    /// The dependents become executables.
+    /// Process the result of a block :
+    /// - Remove transaction but keep its dependents and the dependents become executables.
+    /// - Notify about possible new executable transactions.
     pub fn process_block(&mut self, tx_ids: impl Iterator<Item = TxId>) {
         self.extracted_outputs.clear();
         let mut transactions_to_promote = vec![];
