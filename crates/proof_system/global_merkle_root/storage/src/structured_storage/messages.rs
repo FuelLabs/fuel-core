@@ -27,7 +27,7 @@ impl TableWithBlueprint for Messages {
     type Column = MerkleizedColumn<TableColumn>;
 
     fn column() -> Self::Column {
-        MerkleizedColumn::TableColumn(TableColumn::Messages)
+        MerkleizedColumn::TableColumn(Self::table_column())
     }
 }
 

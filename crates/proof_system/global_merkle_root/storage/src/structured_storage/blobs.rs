@@ -24,7 +24,7 @@ impl TableWithBlueprint for BlobData {
     type Column = MerkleizedColumn<TableColumn>;
 
     fn column() -> Self::Column {
-        MerkleizedColumn::TableColumn(TableColumn::Blobs)
+        MerkleizedColumn::TableColumn(Self::table_column())
     }
 }
 
