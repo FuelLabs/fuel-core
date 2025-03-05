@@ -43,7 +43,6 @@ use async_graphql::{
     Object,
     Subscription,
 };
-use fuel_core_executor::ports::TransactionExt;
 use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,
@@ -51,6 +50,7 @@ use fuel_core_storage::{
 };
 use fuel_core_txpool::TxStatusMessage;
 use fuel_core_types::{
+    blockchain::transaction::TransactionExt,
     fuel_tx::{
         Bytes32,
         Cacheable,

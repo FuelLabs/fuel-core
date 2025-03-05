@@ -2607,6 +2607,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
  "pkcs8",
+ "serde",
  "signature",
 ]
 
@@ -3359,6 +3360,8 @@ dependencies = [
  "clap",
  "cosmrs",
  "derive_more 0.99.19",
+ "ed25519",
+ "ed25519-dalek",
  "enum-iterator",
  "fuel-core",
  "fuel-core-chain-config",
@@ -3406,10 +3409,12 @@ dependencies = [
  "tokio",
  "tokio-rayon",
  "tokio-stream",
+ "tokio-test",
  "tokio-util",
  "tower 0.4.13",
  "tower-http 0.4.4",
  "tracing",
+ "tracing-subscriber",
  "url",
  "uuid 1.13.1",
 ]
@@ -3842,6 +3847,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-case",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -10087,6 +10093,19 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "tokio-test"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2468baabc3311435b55dd935f702f42cd1b8abb7e754fb7dfb16bd36aa88f9f7"
+dependencies = [
+ "async-stream",
+ "bytes",
+ "futures-core",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
