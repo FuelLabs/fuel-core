@@ -112,7 +112,7 @@ async fn test_tx__return_error_expired() {
 async fn test_tx__directly_removed_not_enough_space() {
     let mut universe = TestPoolUniverse::default();
     universe.config.utxo_validation = true;
-    universe.config.max_pending_pool_size_percentage = 1;
+    universe.config.max_pending_pool_size_percentage = 1.into();
     universe.config.pool_limits.max_txs = 1;
 
     let (_, unset_input) = universe.create_output_and_input();

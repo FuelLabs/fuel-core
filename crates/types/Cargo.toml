@@ -38,7 +38,7 @@ aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 tokio = { workspace = true, features = ["macros"] }
 
 [features]
-default = ["std", "serde"]
+default = ["std"]
 alloc = ["fuel-vm-private/alloc", "educe"]
 serde = ["dep:serde", "fuel-vm-private/serde"]
 da-compression = ["fuel-vm-private/da-compression"]

@@ -161,7 +161,7 @@ fn arb_small_tx<R: Rng + rand::CryptoRng>(
 }
 
 #[tokio::test]
-async fn latest_gas_price_if_no_mint_tx_in_previous_block_gas_price_is_zero() {
+async fn latest_gas_price__if_no_mint_tx_in_previous_block_gas_price_is_zero() {
     // given
     let node_config = Config::local_node();
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
@@ -177,7 +177,7 @@ async fn latest_gas_price_if_no_mint_tx_in_previous_block_gas_price_is_zero() {
 }
 
 #[tokio::test]
-async fn latest_gas_price_for_single_block_should_be_starting_gas_price() {
+async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
     // given
     let mut config = Config::local_node();
     let starting_gas_price = 982;
@@ -199,7 +199,7 @@ async fn latest_gas_price_for_single_block_should_be_starting_gas_price() {
 }
 
 #[tokio::test]
-async fn produce_block_raises_gas_price() {
+async fn produce_block__raises_gas_price() {
     // given
     let block_gas_limit = 3_000_000;
     let chain_config = ChainConfig {
@@ -216,14 +216,14 @@ async fn produce_block_raises_gas_price() {
     let threshold = 50;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.gas_price_config.starting_exec_gas_price = starting_gas_price;
-    node_config.gas_price_config.exec_gas_price_change_percent = percent;
+    node_config.gas_price_config.exec_gas_price_change_percent = percent.into();
     node_config
         .gas_price_config
-        .exec_gas_price_threshold_percent = threshold;
+        .exec_gas_price_threshold_percent = threshold.into();
     node_config.block_production = Trigger::Never;
     node_config.gas_price_config.da_gas_price_p_component = 0;
     node_config.gas_price_config.da_gas_price_d_component = 0;
-    node_config.gas_price_config.max_da_gas_price_change_percent = 0;
+    node_config.gas_price_config.max_da_gas_price_change_percent = 0.into();
     node_config.gas_price_config.min_da_gas_price = 0;
     node_config.gas_price_config.max_da_gas_price = 1;
 
@@ -251,7 +251,7 @@ async fn produce_block_raises_gas_price() {
 }
 
 #[tokio::test]
-async fn produce_block_lowers_gas_price() {
+async fn produce_block__lowers_gas_price() {
     // given
     let block_gas_limit = 3_000_000;
     let chain_config = ChainConfig {
@@ -268,14 +268,14 @@ async fn produce_block_lowers_gas_price() {
     let threshold = 50;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.gas_price_config.starting_exec_gas_price = starting_gas_price;
-    node_config.gas_price_config.exec_gas_price_change_percent = percent;
+    node_config.gas_price_config.exec_gas_price_change_percent = percent.into();
     node_config
         .gas_price_config
-        .exec_gas_price_threshold_percent = threshold;
+        .exec_gas_price_threshold_percent = threshold.into();
     node_config.block_production = Trigger::Never;
     node_config.gas_price_config.da_gas_price_p_component = 0;
     node_config.gas_price_config.da_gas_price_d_component = 0;
-    node_config.gas_price_config.max_da_gas_price_change_percent = 0;
+    node_config.gas_price_config.max_da_gas_price_change_percent = 0.into();
     node_config.gas_price_config.min_da_gas_price = 0;
     node_config.gas_price_config.max_da_gas_price = 1;
 
@@ -303,7 +303,7 @@ async fn produce_block_lowers_gas_price() {
 }
 
 #[tokio::test]
-async fn produce_block_dont_raises_gas_price_with_default_parameters() {
+async fn produce_block__dont_raises_gas_price_with_default_parameters() {
     // given
     let args = vec![
         "--debug",
@@ -347,17 +347,17 @@ async fn produce_block_dont_raises_gas_price_with_default_parameters() {
 }
 
 #[tokio::test]
-async fn estimate_gas_price_is_greater_than_actual_price_at_desired_height() {
+async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     // given
     let mut node_config = Config::local_node();
     let starting_gas_price = 1000;
     let percent = 10;
     node_config.gas_price_config.starting_exec_gas_price = starting_gas_price;
-    node_config.gas_price_config.exec_gas_price_change_percent = percent;
+    node_config.gas_price_config.exec_gas_price_change_percent = percent.into();
     // Always increase
     node_config
         .gas_price_config
-        .exec_gas_price_threshold_percent = 0;
+        .exec_gas_price_threshold_percent = 0.into();
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -385,7 +385,7 @@ async fn estimate_gas_price_is_greater_than_actual_price_at_desired_height() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn latest_gas_price_if_node_restarts_gets_latest_value() {
+async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     // given
     let args = vec![
         "--debug",
@@ -430,7 +430,7 @@ async fn latest_gas_price_if_node_restarts_gets_latest_value() {
 }
 
 #[tokio::test]
-async fn dry_run_opt_zero_gas_price_equal_to_none_gas_price() {
+async fn dry_run_opt__zero_gas_price_equal_to_none_gas_price() {
     // given
     let tx = TransactionBuilder::script(
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
@@ -488,7 +488,7 @@ async fn dry_run_opt_zero_gas_price_equal_to_none_gas_price() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn startup_can_override_gas_price_values_by_changing_config() {
+async fn startup__can_override_gas_price_values_by_changing_config() {
     // given
     let args = vec![
         "--debug",
@@ -648,7 +648,7 @@ fn produce_block__l1_committed_block_affects_gas_price() {
 }
 
 #[test]
-fn run_if_metadata_is_behind_l2_then_will_catch_up() {
+fn run__if_metadata_is_behind_l2_then_will_catch_up() {
     // given
     // produce 100 blocks
     let args = vec![
@@ -731,7 +731,7 @@ fn node_config_with_da_committer_url(url: url::Url) -> Config {
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.gas_price_config.min_da_gas_price = starting_gas_price;
     node_config.gas_price_config.max_da_gas_price = u64::MAX;
-    node_config.gas_price_config.max_da_gas_price_change_percent = 15;
+    node_config.gas_price_config.max_da_gas_price_change_percent = 15.into();
     node_config.block_production = Trigger::Never;
     node_config.gas_price_config.da_committer_url = Some(url);
     node_config.gas_price_config.da_poll_interval = Some(Duration::from_millis(100));
@@ -742,7 +742,7 @@ fn node_config_with_da_committer_url(url: url::Url) -> Config {
 }
 
 #[test]
-fn produce_block_algorithm_recovers_from_divergent_profit() {
+fn produce_block__algorithm_recovers_from_divergent_profit() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given
@@ -860,7 +860,7 @@ async fn produce_a_block<R: Rng + rand::CryptoRng>(client: &FuelClient, rng: &mu
 }
 
 #[test]
-fn produce_block_costs_from_da_are_properly_recorded_in_metadata() {
+fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     // given
@@ -934,7 +934,7 @@ fn produce_block_costs_from_da_are_properly_recorded_in_metadata() {
 }
 
 #[tokio::test]
-async fn sentry_gas_price_estimate_uses_gas_price_from_produced_block() {
+async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
     let mut rng = StdRng::seed_from_u64(1234_u64);
 
     // given
@@ -1007,7 +1007,7 @@ async fn sentry_gas_price_estimate_uses_gas_price_from_produced_block() {
 }
 
 #[tokio::test]
-async fn cli_starting_recorded_height_is_set_in_db() {
+async fn cli__starting_recorded_height_is_set_in_db() {
     // given
     let starting_recorded_height: u32 = 1234;
     let as_str = &starting_recorded_height.to_string();
