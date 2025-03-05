@@ -46,6 +46,7 @@ use async_graphql::{
 use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,
+    IsNotFound,
     Result as StorageResult,
 };
 use fuel_core_txpool::TxStatusMessage;
@@ -279,37 +280,6 @@ impl TxQuery {
             .collect()
     }
 
-    /// Get execution trace for an already-executed block.
-    #[graphql(complexity = "query_costs().storage_read_replay + child_complexity")]
-    async fn storage_read_replay(
-        &self,
-        ctx: &Context<'_>,
-        height: U32,
-    ) -> async_graphql::Result<Vec<StorageReadReplayEvent>> {
-        let config = ctx.data_unchecked::<GraphQLConfig>();
-        if !config.historical_execution {
-            return Err(anyhow::anyhow!(
-                "`--historical-execution` is required for this operation"
-            )
-            .into());
-        }
-
-        let block_height = height.into();
-        let block_producer = ctx.data_unchecked::<BlockProducer>();
-        Ok(block_producer
-            .storage_read_replay(block_height)
-            .await?
-            .into_iter()
-            .map(StorageReadReplayEvent::from)
-            .collect())
-    }
-}
-
-#[derive(Default)]
-pub struct TxMutation;
-
-#[Object]
-impl TxMutation {
     /// Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
     #[graphql(
         complexity = "query_costs().dry_run * txs.len() + child_complexity * txs.len()"
@@ -370,6 +340,59 @@ impl TxMutation {
             .collect();
 
         Ok(tx_statuses)
+    }
+
+    /// Get execution trace for an already-executed block.
+    #[graphql(complexity = "query_costs().storage_read_replay + child_complexity")]
+    async fn storage_read_replay(
+        &self,
+        ctx: &Context<'_>,
+        height: U32,
+    ) -> async_graphql::Result<Vec<StorageReadReplayEvent>> {
+        let config = ctx.data_unchecked::<GraphQLConfig>();
+        if !config.historical_execution {
+            return Err(anyhow::anyhow!(
+                "`--historical-execution` is required for this operation"
+            )
+            .into());
+        }
+
+        let block_height = height.into();
+        let block_producer = ctx.data_unchecked::<BlockProducer>();
+        Ok(block_producer
+            .storage_read_replay(block_height)
+            .await?
+            .into_iter()
+            .map(StorageReadReplayEvent::from)
+            .collect())
+    }
+}
+
+#[derive(Default)]
+pub struct TxMutation;
+
+#[Object]
+impl TxMutation {
+    /// Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
+    #[graphql(
+        complexity = "query_costs().dry_run * txs.len() + child_complexity * txs.len()",
+        deprecation = "This doesn't need to be a mutation. Use query of the same name instead."
+    )]
+    async fn dry_run(
+        &self,
+        ctx: &Context<'_>,
+        txs: Vec<HexString>,
+        // If set to false, disable input utxo validation, overriding the configuration of the node.
+        // This allows for non-existent inputs to be used without signature validation
+        // for read-only calls.
+        utxo_validation: Option<bool>,
+        gas_price: Option<U64>,
+        // This can be used to run the dry-run on top of a past block.
+        // Requires `--historical-execution` flag to be enabled.
+        block_height: Option<U32>,
+    ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
+        TxQuery::dry_run(&TxQuery, ctx, txs, utxo_validation, gas_price, block_height)
+            .await
     }
 
     /// Submits transaction to the `TxPool`.
@@ -507,14 +530,40 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
         id: Bytes32,
     ) -> StorageResult<Option<txpool::TransactionStatus>> {
         match self.query.tx_status(&id) {
-            Ok(status) => Ok(Some(status)),
+            Ok(status) => Ok(Some(status.into())),
             Err(StorageError::NotFound(_, _)) => Ok(self
                 .txpool
                 .submission_time(id)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?
-                .map(|time| txpool::TransactionStatus::Submitted { time })),
+                .map(|time| txpool::TransactionStatus::Submitted { timestamp: time })),
             Err(err) => Err(err),
+        }
+    }
+}
+
+pub trait ContextExt {
+    fn try_find_tx(
+        &self,
+        id: Bytes32,
+    ) -> impl std::future::Future<Output = StorageResult<Option<FuelTx>>> + Send;
+}
+
+impl<'a> ContextExt for Context<'a> {
+    async fn try_find_tx(&self, id: Bytes32) -> StorageResult<Option<FuelTx>> {
+        let query = self.read_view()?;
+        let txpool = self.data_unchecked::<TxPool>();
+
+        if let Some(tx) = txpool.transaction(id).await? {
+            Ok(Some(tx))
+        } else {
+            let result = query.transaction(&id);
+
+            if result.is_not_found() {
+                Ok(None)
+            } else {
+                result.map(Some)
+            }
         }
     }
 }
