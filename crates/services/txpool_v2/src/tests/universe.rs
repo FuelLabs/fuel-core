@@ -255,7 +255,8 @@ impl TestPoolUniverse {
                     .map_err(|e| match e {
                         InsertionErrorType::Error(e) => e,
                         InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
-                    })?,
+                    })?
+                    .0,
             ))
         } else {
             panic!("Pool needs to be built first");
@@ -290,6 +291,7 @@ impl TestPoolUniverse {
                     InsertionErrorType::Error(e) => e,
                     InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
                 })
+                .map(|(removed_txs, _)| removed_txs)
         } else {
             panic!("Pool needs to be built first");
         }
@@ -325,6 +327,7 @@ impl TestPoolUniverse {
                     InsertionErrorType::Error(e) => e,
                     InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
                 })
+                .map(|(removed_txs, _)| removed_txs)
         } else {
             panic!("Pool needs to be built first");
         }

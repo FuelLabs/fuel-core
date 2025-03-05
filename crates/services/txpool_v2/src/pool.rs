@@ -142,7 +142,7 @@ where
         &mut self,
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<Vec<ArcPoolTx>, InsertionErrorType> {
+    ) -> Result<(Vec<ArcPoolTx>, bool), InsertionErrorType> {
         let insertion_result = self.insert_inner(tx, persistent_storage);
         self.register_transaction_counts();
         insertion_result
@@ -152,7 +152,7 @@ where
         &mut self,
         tx: std::sync::Arc<PoolTransaction>,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<Vec<std::sync::Arc<PoolTransaction>>, InsertionErrorType> {
+    ) -> Result<(Vec<std::sync::Arc<PoolTransaction>>, bool), InsertionErrorType> {
         let CanStoreTransaction {
             checked_transaction,
             transactions_to_remove,
@@ -212,7 +212,7 @@ where
             .map(|data| data.transaction)
             .collect::<Vec<_>>();
         self.update_stats();
-        Ok(removed_transactions)
+        Ok((removed_transactions, !has_dependencies))
     }
 
     fn update_stats(&self) {

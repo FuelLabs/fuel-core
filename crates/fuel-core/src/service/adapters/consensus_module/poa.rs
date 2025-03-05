@@ -81,7 +81,7 @@ impl ConsensusModulePort for PoAAdapter {
 
 impl TransactionPool for TxPoolAdapter {
     fn new_txs_watcher(&self) -> watch::Receiver<()> {
-        self.service.get_new_txs_notifier()
+        self.service.get_new_executable_txs_notifier()
     }
 
     fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
