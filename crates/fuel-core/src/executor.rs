@@ -467,7 +467,7 @@ mod tests {
                 },
                 changes,
             ) = producer
-                .produce_without_commit_with_source(Components {
+                .produce_without_commit_with_source_direct_resolve(Components {
                     header_to_produce: header,
                     transactions_source: OnceTransactionsSource::new(vec![
                         script.into(),
@@ -550,7 +550,7 @@ mod tests {
                 },
                 changes,
             ) = producer
-                .produce_without_commit_with_source(Components {
+                .produce_without_commit_with_source_direct_resolve(Components {
                     header_to_produce: header,
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
                     gas_price: price,
@@ -692,7 +692,7 @@ mod tests {
                 skipped_transactions,
                 ..
             } = producer
-                .produce_without_commit_with_source(Components {
+                .produce_without_commit_with_source_direct_resolve(Components {
                     header_to_produce: PartialBlockHeader::default(),
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
                     gas_price: price,
@@ -1970,7 +1970,7 @@ mod tests {
         let ExecutionResult {
             block, tx_status, ..
         } = executor
-            .produce_without_commit_with_source(Components {
+            .produce_without_commit_with_source_direct_resolve(Components {
                 header_to_produce: block.header,
                 transactions_source: OnceTransactionsSource::new(block.transactions),
                 gas_price: 0,
@@ -2951,7 +2951,7 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .produce_without_commit_with_source(Components {
+            .produce_without_commit_with_source_direct_resolve(Components {
                 header_to_produce: PartialBlockHeader::default(),
                 transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                 coinbase_recipient: Default::default(),
@@ -3027,7 +3027,7 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .produce_without_commit_with_source(Components {
+            .produce_without_commit_with_source_direct_resolve(Components {
                 header_to_produce: PartialBlockHeader {
                     application: ApplicationHeader {
                         consensus_parameters_version:
@@ -3156,7 +3156,7 @@ mod tests {
         // When
         let producer = create_executor(Database::default(), config);
         let (result, _) = producer
-            .produce_without_commit_with_source(components)
+            .produce_without_commit_with_source_direct_resolve(components)
             .unwrap()
             .into();
 

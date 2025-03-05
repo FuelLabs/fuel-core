@@ -36,8 +36,13 @@ use fuel_core_wasm_executor::{
         ReturnType,
     },
 };
+use futures::FutureExt;
+use new_tx_waiter::NewTxWaiter;
+use preconfirmation_sender::PreconfirmationSender;
 
 mod ext;
+mod new_tx_waiter;
+mod preconfirmation_sender;
 mod relayer;
 mod storage;
 mod tx_source;
@@ -100,7 +105,10 @@ fn execute_dry_run(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
 ) -> ReturnType {
-    let result = instance.produce_without_commit(block, true);
+    let result = instance
+        .produce_without_commit(block, true, NewTxWaiter, PreconfirmationSender)
+        .now_or_never()
+        .expect("The future should be resolved immediately");
     ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
 }
 
@@ -108,7 +116,10 @@ fn execute_production(
     instance: ExecutionInstance<WasmRelayer, WasmStorage>,
     block: Components<WasmTxSource>,
 ) -> ReturnType {
-    let result = instance.produce_without_commit(block, false);
+    let result = instance
+        .produce_without_commit(block, false, NewTxWaiter, PreconfirmationSender)
+        .now_or_never()
+        .expect("The future should be resolved immediately");
     ReturnType::ExecutionV1(convert_to_v1_execution_result(result))
 }
 

@@ -80,7 +80,7 @@ async fn can_manually_produce_block(
     let mut producer = MockBlockProducer::default();
     producer
         .expect_produce_and_execute_block()
-        .returning(|_, time, _| {
+        .returning(|_, time, _, _| {
             let mut block = Block::default();
             block.header_mut().set_time(time);
             block.header_mut().recalculate_metadata();
@@ -112,4 +112,41 @@ async fn can_manually_produce_block(
 
     // Stop
     assert_eq!(ctx.stop().await, State::Stopped);
+}
+
+#[tokio::test]
+async fn manually_block_production_fails_in_open_mode() {
+    let mut rng = StdRng::seed_from_u64(1234u64);
+    let mut ctx_builder = TestContextBuilder::new();
+    ctx_builder.with_config(Config {
+        trigger: Trigger::Open {
+            period: Duration::from_secs(3),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    });
+
+    // initialize txpool with some txs
+    let tx = make_tx(&mut rng);
+    let TxPoolContext { txpool, .. } =
+        MockTransactionPool::new_with_txs(vec![tx.clone()]);
+    ctx_builder.with_txpool(txpool);
+
+    let ctx = ctx_builder.build().await;
+
+    // When
+    let result = ctx
+        .service
+        .shared
+        .manually_produce_block(
+            Some(Tai64::now()),
+            Mode::Blocks {
+                number_of_blocks: 1,
+            },
+        )
+        .await;
+
+    // Then
+    let _ = result.expect_err("Expected error");
 }

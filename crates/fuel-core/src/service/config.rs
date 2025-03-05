@@ -87,6 +87,8 @@ pub struct Config {
     pub min_connected_reserved_peers: usize,
     /// Time to wait after receiving the latest block before considered to be Synced.
     pub time_until_synced: Duration,
+    /// The timeout after which block production is considered failed.
+    pub production_timeout: Duration,
     /// The size of the memory pool in number of `MemoryInstance`s.
     pub memory_pool_size: usize,
 }
@@ -202,6 +204,7 @@ impl Config {
             relayer_consensus_config: Default::default(),
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
+            production_timeout: Duration::from_secs(20),
             memory_pool_size: 4,
         }
     }
@@ -232,6 +235,7 @@ impl From<&Config> for fuel_core_poa::Config {
             metrics: false,
             min_connected_reserved_peers: config.min_connected_reserved_peers,
             time_until_synced: config.time_until_synced,
+            production_timeout: config.production_timeout,
             chain_id: config
                 .snapshot_reader
                 .chain_config()

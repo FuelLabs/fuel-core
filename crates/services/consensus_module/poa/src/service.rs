@@ -8,10 +8,7 @@ use tokio::{
         mpsc,
         oneshot,
     },
-    time::{
-        sleep_until,
-        Instant,
-    },
+    time::Instant,
 };
 
 use crate::{
@@ -65,6 +62,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use serde::Serialize;
+use tokio::time::sleep_until;
 
 pub type Service<T, B, I, S, PB, C> = ServiceRunner<MainTask<T, B, I, S, PB, C>>;
 
@@ -136,6 +134,7 @@ pub struct MainTask<T, B, I, S, PB, C> {
     clock: C,
     /// Deadline clock, used by the triggers
     sync_task_handle: ServiceRunner<SyncTask>,
+    production_timeout: Duration,
 }
 
 impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
@@ -169,6 +168,7 @@ where
             min_connected_reserved_peers,
             time_until_synced,
             trigger,
+            production_timeout,
             ..
         } = config;
 
@@ -197,6 +197,7 @@ where
             trigger,
             sync_task_handle,
             clock,
+            production_timeout,
         }
     }
 
@@ -230,6 +231,7 @@ where
                 Trigger::Interval { block_time } => {
                     increase_time(self.last_timestamp, block_time)
                 }
+                Trigger::Open { period } => increase_time(self.last_timestamp, period),
             },
             RequestType::Trigger => {
                 let now = self.clock.now();
@@ -258,17 +260,33 @@ where
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
+        deadline: Instant,
     ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
-        self.block_producer
-            .produce_and_execute_block(height, block_time, source)
+        let future = self
+            .block_producer
+            .produce_and_execute_block(height, block_time, source, deadline);
+
+        let result = tokio::time::timeout(self.production_timeout, future)
             .await
+            .map_err(|_| anyhow::anyhow!("Block production timed out"))??;
+
+        // In the case if the block production finished before the deadline
+        // we need to wait until the deadline is reached to guarantee
+        // the correct interval between blocks
+        sleep_until(deadline).await;
+
+        Ok(result)
     }
 
-    pub(crate) async fn produce_next_block(&mut self) -> anyhow::Result<()> {
+    pub(crate) async fn produce_next_block(
+        &mut self,
+        deadline: Instant,
+    ) -> anyhow::Result<()> {
         self.produce_block(
             self.next_height(),
             self.next_time(RequestType::Trigger)?,
             TransactionsSource::TxPool,
+            deadline,
         )
         .await
     }
@@ -277,6 +295,14 @@ where
         &mut self,
         block_production: ManualProduction,
     ) -> anyhow::Result<()> {
+        // The caller of manual block production expects that it is resolved immediately
+        // while in the case of `Trigger::Open` we need to wait for the period to pass.
+        if matches!(self.trigger, Trigger::Open { .. }) {
+            return Err(anyhow!(
+                "Manual block production is not allowed with trigger `Open`"
+            ))
+        }
+
         let mut block_time = if let Some(time) = block_production.start_time {
             time
         } else {
@@ -289,6 +315,7 @@ where
                         self.next_height(),
                         block_time,
                         TransactionsSource::TxPool,
+                        Instant::now(),
                     )
                     .await?;
                     block_time = self.next_time(RequestType::Manual)?;
@@ -299,6 +326,7 @@ where
                     self.next_height(),
                     block_time,
                     TransactionsSource::SpecificTransactions(txs),
+                    Instant::now(),
                 )
                 .await?;
             }
@@ -311,6 +339,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
+        deadline: Instant,
     ) -> anyhow::Result<()> {
         let last_block_created = Instant::now();
         // verify signing key is set
@@ -321,7 +350,6 @@ where
         if self.last_timestamp > block_time {
             return Err(anyhow!("The block timestamp should monotonically increase"))
         }
-
         // Ask the block producer to create the block
         let (
             ExecutionResult {
@@ -332,7 +360,7 @@ where
             },
             changes,
         ) = self
-            .signal_produce_block(height, block_time, source)
+            .signal_produce_block(height, block_time, source, deadline)
             .await?
             .into();
 
@@ -497,8 +525,11 @@ where
         }
     }
 
-    async fn handle_normal_block_production(&mut self) -> TaskNextAction {
-        match self.produce_next_block().await {
+    async fn handle_normal_block_production(
+        &mut self,
+        deadline: Instant,
+    ) -> TaskNextAction {
+        match self.produce_next_block(deadline).await {
             Ok(()) => TaskNextAction::Continue,
             Err(err) => {
                 // Wait some time in case of error to avoid spamming retry block production
@@ -539,7 +570,7 @@ where
 
         match self.trigger {
             Trigger::Never | Trigger::Instant => {}
-            Trigger::Interval { .. } => {
+            Trigger::Interval { .. } | Trigger::Open { .. } => {
                 return Ok(Self {
                     last_block_created: Instant::now(),
                     ..self
@@ -569,10 +600,11 @@ where
             return action;
         }
 
-        let next_block_production: BoxFuture<()> = match self.trigger {
-            Trigger::Never => Box::pin(core::future::pending()),
+        let next_block_production: BoxFuture<Instant> = match self.trigger {
+            Trigger::Never => Box::pin(core::future::pending::<Instant>()),
             Trigger::Instant => Box::pin(async {
                 let _ = self.new_txs_watcher.changed().await;
+                Instant::now()
             }),
             Trigger::Interval { block_time } => {
                 let next_block_time = match self
@@ -583,7 +615,21 @@ where
                     Ok(time) => time,
                     Err(err) => return TaskNextAction::ErrorContinue(err),
                 };
-                Box::pin(sleep_until(next_block_time))
+                Box::pin(async move {
+                    sleep_until(next_block_time).await;
+                    Instant::now()
+                })
+            }
+            Trigger::Open { period } => {
+                let deadline = match self
+                    .last_block_created
+                    .checked_add(period)
+                    .ok_or(anyhow!("Time exceeds system limits"))
+                {
+                    Ok(time) => time,
+                    Err(err) => return TaskNextAction::ErrorContinue(err),
+                };
+                Box::pin(async move { deadline })
             }
         };
 
@@ -595,8 +641,8 @@ where
             request = self.request_receiver.recv() => {
                 self.handle_requested_production(request).await
             }
-            _ = next_block_production => {
-                self.handle_normal_block_production().await
+            deadline = next_block_production => {
+                self.handle_normal_block_production(deadline).await
             }
         }
     }
