@@ -18,6 +18,7 @@ path = "src/lib.rs"
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+fuel-core-types = { path = "../types" }
 
 [dev-dependencies]
 proptest = { workspace = true }
