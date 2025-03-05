@@ -1,5 +1,6 @@
 use crate::{
     ports::{
+        self,
         AtomicView,
         BlockImporter as BlockImporterTrait,
         ChainStateInfoProvider,
@@ -76,6 +77,18 @@ pub struct Data {
     pub contracts: HashMap<ContractId, Contract>,
     pub blobs: HashMap<BlobId, BlobBytes>,
     pub messages: HashMap<Nonce, Message>,
+}
+
+#[derive(Clone, Default)]
+pub struct MockTxStatusManager {}
+impl ports::TxStatusManager for MockTxStatusManager {
+    fn status_update(
+        &self,
+        tx_id: TxId,
+        tx_status: fuel_core_types::services::txpool::TransactionStatus,
+    ) {
+        todo!()
+    }
 }
 
 #[derive(Clone, Default)]

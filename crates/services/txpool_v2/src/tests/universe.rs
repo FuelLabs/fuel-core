@@ -96,6 +96,7 @@ use super::mocks::{
     MockImporter,
     MockP2P,
     MockTxPoolGasPrice,
+    MockTxStatusManager,
     MockWasmChecker,
 };
 
@@ -168,7 +169,7 @@ impl TestPoolUniverse {
         &self,
         p2p: Option<MockP2P>,
         importer: Option<MockImporter>,
-    ) -> Service<MockDb, MockP2P> {
+    ) -> Service<MockDb, MockP2P, MockTxStatusManager> {
         let gas_price = 0;
         let mut p2p = p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
         // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
@@ -186,6 +187,7 @@ impl TestPoolUniverse {
         chain_state_info_provider
             .expect_latest_consensus_parameters()
             .returning(|| (0, Arc::new(Default::default())));
+        let tx_status_manager = MockTxStatusManager::default();
 
         new_service(
             ChainId::default(),
@@ -197,6 +199,7 @@ impl TestPoolUniverse {
             Default::default(),
             gas_price_provider,
             MockWasmChecker { result: Ok(()) },
+            tx_status_manager,
         )
     }
 
