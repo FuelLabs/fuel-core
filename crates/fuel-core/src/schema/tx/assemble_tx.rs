@@ -298,7 +298,23 @@ where
         })
     }
 
+    pub fn add_missing_witnesses(&mut self) {
+        let witnesses = self.tx.witnesses_mut();
+        for (_, witness_index) in self.signature_witness_indexes.iter() {
+            let witness_index = *witness_index as usize;
+            if witness_index >= witnesses.len() {
+                witnesses.resize(witness_index.saturating_add(1), Vec::new().into());
+            }
+
+            let witness = witnesses[witness_index].as_vec_mut();
+            if witness.len() < Signature::LEN {
+                witness.resize(Signature::LEN, 0);
+            }
+        }
+    }
+
     pub async fn assemble(mut self) -> anyhow::Result<Tx> {
+        self.add_missing_witnesses();
         self.add_inputs_and_witnesses_and_changes().await?;
 
         if let Some(script) = self.tx.as_script_mut() {

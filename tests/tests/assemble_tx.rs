@@ -1,8 +1,17 @@
 use fuel_core::service::FuelService;
-use fuel_core_client::client::FuelClient;
+use fuel_core_client::client::{
+    types::CoinType,
+    FuelClient,
+};
 use fuel_core_types::{
     fuel_asm::op,
-    fuel_tx::TransactionBuilder,
+    fuel_tx::{
+        policies::Policies,
+        Input,
+        Transaction,
+        TransactionBuilder,
+        TxPointer,
+    },
     services::executor::TransactionExecutionResult,
 };
 use test_helpers::{
@@ -12,7 +21,7 @@ use test_helpers::{
 };
 
 #[tokio::test]
-async fn run_transaction() {
+async fn assemble_transaction__witness_limit() {
     let config = config_with_fee();
     let service = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(service.bound_address);
@@ -25,6 +34,54 @@ async fn run_transaction() {
     // When
     let tx = client
         .assemble_transaction(&tx, default_signing_wallet(), vec![])
+        .await
+        .unwrap();
+    let status = client.dry_run(&vec![tx]).await.unwrap();
+
+    // Then
+    let status = status.into_iter().next().unwrap();
+    assert!(matches!(
+        status.result,
+        TransactionExecutionResult::Success { .. }
+    ));
+}
+
+#[tokio::test]
+async fn assemble_transaction__input_without_witness() {
+    let config = config_with_fee();
+    let base_asset_id = config.base_asset_id();
+    let service = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(service.bound_address);
+    let account = default_signing_wallet();
+    let CoinType::Coin(coin) = client
+        .coins_to_spend(&account.owner(), vec![(base_asset_id, 100, None)], None)
+        .await
+        .unwrap()[0][0]
+    else {
+        panic!("Expected a coin");
+    };
+
+    // Given
+    let tx = Transaction::script(
+        0,
+        vec![],
+        vec![],
+        Policies::new(),
+        vec![Input::coin_signed(
+            coin.utxo_id,
+            coin.owner,
+            coin.amount,
+            coin.asset_id,
+            TxPointer::new(coin.block_created.into(), coin.tx_created_idx),
+            0,
+        )],
+        vec![],
+        vec![],
+    );
+
+    // When
+    let tx = client
+        .assemble_transaction(&tx.into(), account, vec![])
         .await
         .unwrap();
     let status = client.dry_run(&vec![tx]).await.unwrap();
