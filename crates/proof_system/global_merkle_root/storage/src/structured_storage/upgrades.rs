@@ -48,7 +48,7 @@ impl TableWithBlueprint for ConsensusParametersVersions {
     type Column = MerkleizedColumn<TableColumn>;
 
     fn column() -> Self::Column {
-        MerkleizedColumn::TableColumn(TableColumn::ConsensusParametersVersions)
+        MerkleizedColumn::TableColumn(Self::table_column())
     }
 }
 
@@ -57,7 +57,7 @@ impl TableWithBlueprint for StateTransitionBytecodeVersions {
     type Column = MerkleizedColumn<TableColumn>;
 
     fn column() -> Self::Column {
-        MerkleizedColumn::TableColumn(TableColumn::StateTransitionBytecodeVersions)
+        MerkleizedColumn::TableColumn(Self::table_column())
     }
 }
 
@@ -66,7 +66,7 @@ impl TableWithBlueprint for UploadedBytecodes {
     type Column = MerkleizedColumn<TableColumn>;
 
     fn column() -> Self::Column {
-        MerkleizedColumn::TableColumn(TableColumn::UploadedBytecodes)
+        MerkleizedColumn::TableColumn(Self::table_column())
     }
 }
 
