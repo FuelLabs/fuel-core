@@ -35,7 +35,7 @@ pub mod peer_reputation;
 pub type DelegatePublicKey = ed25519_dalek::VerifyingKey;
 
 /// The type of the signature used by the block producer to sign delegation.
-pub type ProtocolSignature = fuel_crypto::Signature;
+pub type ProtocolSignature = crate::fuel_crypto::Signature;
 
 /// List of transactions
 #[derive(Debug, Clone, Default)]

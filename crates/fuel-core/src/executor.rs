@@ -3,19 +3,28 @@
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
-    use crate as fuel_core;
-    use fuel_core::database::Database;
+    #[cfg(not(feature = "wasm-executor"))]
     use fuel_core_executor::{
         executor::{
-            OnceTransactionsSource,
             TimeoutOnlyTxWaiter,
             TransparentPreconfirmationSender,
             WaitNewTransactionsResult,
         },
         ports::{
-            MaybeCheckedTransaction,
             NewTxWaiterPort,
             PreconfirmationSenderPort,
+        },
+    };
+
+    #[cfg(not(feature = "wasm-executor"))]
+    use fuel_core_types::services::preconfirmation::PreconfirmationStatus;
+
+    use crate as fuel_core;
+    use fuel_core::database::Database;
+    use fuel_core_executor::{
+        executor::OnceTransactionsSource,
+        ports::{
+            MaybeCheckedTransaction,
             RelayerPort,
         },
         refs::ContractRef,
@@ -144,7 +153,6 @@ mod tests {
                 TransactionExecutionResult,
                 TransactionValidityError,
             },
-            preconfirmation::PreconfirmationStatus,
             relayer::Event,
         },
         tai64::Tai64,
@@ -3061,6 +3069,7 @@ mod tests {
         ));
     }
 
+    #[cfg(not(feature = "wasm-executor"))]
     #[tokio::test]
     async fn execute_block__new_transactions_trigger() {
         // Given
@@ -3123,6 +3132,7 @@ mod tests {
         assert_eq!(res.block.transactions().len(), 2);
     }
 
+    #[cfg(not(feature = "wasm-executor"))]
     #[tokio::test]
     async fn execute_block__send_preconfirmations() {
         // Given
