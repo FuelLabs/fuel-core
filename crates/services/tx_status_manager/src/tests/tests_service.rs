@@ -38,46 +38,6 @@ async fn test_start_stop() {
 }
 
 /*
-#[tokio::test]
-async fn test_find() {
-    let mut universe = TestPoolUniverse::default();
-
-    let tx1 = universe.build_script_transaction(None, None, 10);
-    let tx2 = universe.build_script_transaction(None, None, 20);
-    let tx3 = universe.build_script_transaction(None, None, 30);
-
-    let service = universe.build_service(None, None);
-    service.start_and_await().await.unwrap();
-
-    // Given
-    let ids = vec![tx1.id(&Default::default()), tx2.id(&Default::default())];
-    service
-        .shared
-        .try_insert(vec![tx1.clone(), tx2.clone()])
-        .unwrap();
-
-    universe
-        .waiting_txs_insertion(service.shared.new_tx_notification_subscribe(), ids)
-        .await;
-
-    // When
-    let out = service
-        .shared
-        .find(vec![
-            tx1.id(&Default::default()),
-            tx3.id(&Default::default()),
-        ])
-        .await
-        .unwrap();
-
-    // Then
-    assert_eq!(out.len(), 2, "Should be len 2:{out:?}");
-    assert!(out[0].is_some(), "Tx1 should be some:{out:?}");
-    let id = out[0].as_ref().unwrap().tx().id();
-    assert_eq!(id, tx1.id(&Default::default()), "Found tx id match{out:?}");
-    assert!(out[1].is_none(), "Tx3 should not be found:{out:?}");
-    service.stop_and_await().await.unwrap();
-}
 
 #[tokio::test]
 async fn test_prune_transactions() {

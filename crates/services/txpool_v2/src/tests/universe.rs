@@ -54,8 +54,20 @@ use fuel_core_types::{
     },
     services::txpool::ArcPoolTx,
 };
-use parking_lot::RwLock;
-use tokio::sync::broadcast::Receiver;
+use mockall::predicate::always;
+use parking_lot::{
+    Mutex,
+    RwLock,
+};
+use std::time::Duration;
+use tokio::{
+    sync::{
+        broadcast::Receiver,
+        mpsc,
+        Barrier,
+    },
+    time::Instant,
+};
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,
@@ -111,17 +123,23 @@ pub struct TestPoolUniverse {
     rng: StdRng,
     pub config: Config,
     pool: Option<Shared<TxPool>>,
+    mock_tx_status_manager: MockTxStatusManager,
+    rx: std::sync::mpsc::Receiver<TxId>,
     stats_receiver: Option<tokio::sync::watch::Receiver<TxPoolStats>>,
 }
 
 impl Default for TestPoolUniverse {
     fn default() -> Self {
+        let (tx, rx) = std::sync::mpsc::channel();
+
         Self {
             mock_db: MockDb::default(),
             rng: StdRng::seed_from_u64(0),
             config: Default::default(),
             pool: None,
             stats_receiver: None,
+            mock_tx_status_manager: MockTxStatusManager::new(tx),
+            rx,
         }
     }
 }
@@ -187,7 +205,6 @@ impl TestPoolUniverse {
         chain_state_info_provider
             .expect_latest_consensus_parameters()
             .returning(|| (0, Arc::new(Default::default())));
-        let tx_status_manager = MockTxStatusManager::default();
 
         new_service(
             ChainId::default(),
@@ -199,7 +216,7 @@ impl TestPoolUniverse {
             Default::default(),
             gas_price_provider,
             MockWasmChecker { result: Ok(()) },
-            tx_status_manager,
+            self.mock_tx_status_manager.clone(),
         )
     }
 
@@ -439,16 +456,31 @@ impl TestPoolUniverse {
         )
     }
 
-    pub async fn waiting_txs_insertion(
-        &self,
-        mut new_tx_notification_subscribe: Receiver<Bytes32>,
-        mut tx_ids: Vec<TxId>,
-    ) {
-        while !tx_ids.is_empty() {
-            let tx_id = new_tx_notification_subscribe.recv().await.unwrap();
-            let index = tx_ids.iter().position(|id| *id == tx_id).unwrap();
-            tx_ids.remove(index);
+    pub async fn waiting_txs_insertion(&mut self, tx_ids: Vec<TxId>) {
+        const TIMEOUT: Duration = Duration::from_secs(5);
+
+        let mut values = Vec::with_capacity(tx_ids.len());
+        let start_time = Instant::now();
+
+        while values.len() < tx_ids.len() {
+            if start_time.elapsed() > TIMEOUT {
+                panic!("timeout");
+            }
+
+            match self.rx.try_recv() {
+                Ok(message) => values.push(message),
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                    continue;
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    panic!("channel closed prematurely");
+                }
+            }
+            tokio::task::yield_now().await;
         }
+
+        assert_eq!(values, tx_ids, "should receive correct ids");
     }
 }
 

@@ -43,7 +43,6 @@ async fn test_start_stop() {
     assert!(state.stopped());
 }
 
-/*
 #[tokio::test]
 async fn test_find() {
     let mut universe = TestPoolUniverse::default();
@@ -62,9 +61,7 @@ async fn test_find() {
         .try_insert(vec![tx1.clone(), tx2.clone()])
         .unwrap();
 
-    universe
-        .waiting_txs_insertion(service.shared.new_tx_notification_subscribe(), ids)
-        .await;
+    universe.waiting_txs_insertion(ids).await;
 
     // When
     let out = service
@@ -85,6 +82,7 @@ async fn test_find() {
     service.stop_and_await().await.unwrap();
 }
 
+/*
 #[tokio::test]
 async fn test_prune_transactions() {
     const TIMEOUT: u64 = 3;

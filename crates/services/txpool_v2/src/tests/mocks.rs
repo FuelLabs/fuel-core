@@ -64,6 +64,9 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     sync::{
+        mpsc::{
+            self,
+        },
         Arc,
         Mutex,
     },
@@ -79,15 +82,46 @@ pub struct Data {
     pub messages: HashMap<Nonce, Message>,
 }
 
-#[derive(Clone, Default)]
-pub struct MockTxStatusManager {}
+/*
+mockall::mock! {
+    pub TxStatusManager {}
+
+    impl ports::TxStatusManager for TxStatusManager {
+        fn status_update(&self, tx_id: TxId, tx_status: fuel_core_types::services::txpool::TransactionStatus);
+    }
+}
+*/
+
+/*
+#[cfg_attr(test, mockall::automock)]
+pub trait TxStatusManagerTrait {
+    fn status_update(
+        &self,
+        tx_id: TxId,
+        tx_status: fuel_core_types::services::txpool::TransactionStatus,
+    );
+}
+*/
+
+#[derive(Clone)]
+pub struct MockTxStatusManager {
+    tx: mpsc::Sender<TxId>,
+}
+
+impl MockTxStatusManager {
+    pub fn new(tx: mpsc::Sender<TxId>) -> Self {
+        Self { tx }
+    }
+}
+
 impl ports::TxStatusManager for MockTxStatusManager {
     fn status_update(
         &self,
         tx_id: TxId,
         tx_status: fuel_core_types::services::txpool::TransactionStatus,
     ) {
-        todo!()
+        //panic!("TxPool has called the status_update method of TxStatusManager");
+        self.tx.send(tx_id).unwrap();
     }
 }
 
