@@ -20,10 +20,7 @@ impl<T> Encode<T> for Raw
 where
     T: ?Sized + AsRef<[u8]>,
 {
-    type Encoder<'a>
-        = Cow<'a, [u8]>
-    where
-        T: 'a;
+    type Encoder<'a> = Cow<'a, [u8]> where T: 'a;
 
     fn encode(t: &T) -> Self::Encoder<'_> {
         Cow::Borrowed(t.as_ref())

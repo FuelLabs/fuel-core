@@ -42,7 +42,7 @@ fuel-core-types = { path = ".", features = ["test-helpers"] }
 tokio = { workspace = true, features = ["macros"] }
 
 [features]
-default = ["std", "serde"]
+default = ["std"]
 alloc = ["fuel-vm-private/alloc", "educe"]
 serde = [
   "dep:serde",
