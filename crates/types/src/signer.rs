@@ -202,7 +202,8 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::fuel_crypto::SecretKey;
+    use crate as fuel_core_types;
+    use fuel_core_types::fuel_crypto::SecretKey;
     use rand::{
         rngs::StdRng,
         SeedableRng,
