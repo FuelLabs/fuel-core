@@ -28,9 +28,9 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     broadcast::PublicKey,
     signing_key::SigningKey,
 };
-use fuel_core_types::services::p2p::{
-    ProtocolSignature,
-    SignedByBlockProducerDelegation,
+use fuel_core_types::{
+    fuel_tx::Bytes64,
+    services::p2p::SignedByBlockProducerDelegation,
 };
 use std::sync::Arc;
 
@@ -51,7 +51,7 @@ impl Broadcast for P2PAdapter {
                 preconfirmations,
             };
             let signature_bytes = signature.to_bytes();
-            let signature = ProtocolSignature::from_bytes(signature_bytes);
+            let signature = Bytes64::new(signature_bytes);
             let preconfirmations = Arc::new(PreConfirmationMessage::Preconfirmations(
                 SignedPreconfirmationByDelegate { entity, signature },
             ));
@@ -136,7 +136,7 @@ mod tests {
             if pre_conf_matches_expected_values(
                 &inner,
                 &preconfirmations,
-                &ProtocolSignature::from_bytes(signature.to_bytes()),
+                &Bytes64::new(signature.to_bytes()),
                 &expiration,
             )
         ));
@@ -145,7 +145,7 @@ mod tests {
     fn pre_conf_matches_expected_values(
         inner: &Arc<P2PPreConfirmationMessage>,
         preconfirmations: &[Preconfirmation],
-        signature: &ProtocolSignature,
+        signature: &Bytes64,
         expiration: &Tai64,
     ) -> bool {
         let entity = Preconfirmations {

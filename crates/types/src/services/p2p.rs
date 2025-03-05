@@ -15,7 +15,10 @@ use crate::{
         Transaction,
         TxId,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        Bytes64,
+    },
 };
 use std::{
     collections::HashSet,
@@ -80,9 +83,6 @@ pub struct GossipData<T> {
 
 /// Transactions gossiped by peers for inclusion into a block
 pub type TransactionGossipData = GossipData<Transaction>;
-
-/// Transactions that have been confirmed by block producer
-pub type PreConfirmationsGossipData<P, S> = GossipData<PreConfirmationMessage<P, S>>;
 
 /// A value and an associated signature
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -157,15 +157,15 @@ pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 /// The possible messages sent by the parties pre-confirming transactinos
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreConfirmationMessage<P, S> {
+pub enum PreConfirmationMessage<DP, DS, S> {
     /// Notification of key delegation
-    Delegate(SignedByBlockProducerDelegation<P, S>),
+    Delegate(SignedByBlockProducerDelegation<DP, S>),
     /// Notification of pre-confirmations
-    Preconfirmations(SignedPreconfirmationByDelegate<S>),
+    Preconfirmations(SignedPreconfirmationByDelegate<DS>),
 }
 
 #[cfg(feature = "test-helpers")]
-impl<P> PreConfirmationMessage<P, ProtocolSignature> {
+impl<DP, S> PreConfirmationMessage<DP, Bytes64, S> {
     /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
     pub fn default_test_confirmation() -> Self {
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
@@ -178,7 +178,7 @@ impl<P> PreConfirmationMessage<P, ProtocolSignature> {
                     },
                 }],
             },
-            signature: ProtocolSignature::default(),
+            signature: Bytes64::default(),
         })
     }
 }
