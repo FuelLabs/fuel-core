@@ -470,9 +470,8 @@ where
     }
 
     fn process_block(&mut self, block_result: SharedImportResult) {
-        self.pool.remove_transactions(
-            block_result.tx_status.iter().map(|tx_status| tx_status.id),
-        );
+        self.pool
+            .process_block(block_result.tx_status.iter().map(|tx_status| tx_status.id));
         let resolved_txs = self.pending_pool.new_known_txs(
             block_result
                 .sealed_block

@@ -1260,6 +1260,46 @@ fn insert_tx_with_blob_already_insert_at_lower_tip() {
 }
 
 #[test]
+fn verify_and_insert__when_dependent_tx_is_extracted_new_tx_still_accepted() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    // Given
+    let mut inputs = None;
+    let (output_a, unset_input) = universe.create_output_and_input();
+    let dependency_tx =
+        universe.build_script_transaction(inputs.clone(), Some(vec![output_a]), 1);
+    let mut pool_dependency_tx = universe.verify_and_insert(dependency_tx).unwrap().0;
+    inputs = Some(vec![
+        unset_input.into_input(UtxoId::new(pool_dependency_tx.id(), 0))
+    ]);
+
+    // When
+    for _ in 0..10 {
+        let (output_a, new_unset_input) = universe.create_output_and_input();
+        let dependent_tx =
+            universe.build_script_transaction(inputs.clone(), Some(vec![output_a]), 1);
+        let txs =
+            universe
+                .get_pool()
+                .write()
+                .extract_transactions_for_block(Constraints {
+                    minimal_gas_price: 0,
+                    max_gas: u64::MAX,
+                    maximum_txs: u16::MAX,
+                    maximum_block_size: u32::MAX,
+                });
+        assert_eq!(txs.len(), 1);
+        assert_eq!(pool_dependency_tx.id(), txs[0].id());
+
+        // Then
+        pool_dependency_tx = universe.verify_and_insert(dependent_tx).unwrap().0;
+        let input_a = new_unset_input.into_input(UtxoId::new(pool_dependency_tx.id(), 0));
+        inputs = Some(vec![input_a.clone()]);
+    }
+}
+
+#[test]
 fn insert__tx_blob_already_in_db() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
