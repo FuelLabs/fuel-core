@@ -27,7 +27,7 @@ impl TableWithBlueprint for ProcessedTransactions {
     type Column = MerkleizedColumn<TableColumn>;
 
     fn column() -> Self::Column {
-        MerkleizedColumn::TableColumn(TableColumn::ProcessedTransactions)
+        MerkleizedColumn::TableColumn(Self::table_column())
     }
 }
 
