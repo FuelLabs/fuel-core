@@ -63,6 +63,7 @@ use fuel_core_types::{
             PeerReport,
         },
         BlockHeightHeartbeatData,
+        DelegatePublicKey,
         GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
@@ -129,7 +130,7 @@ pub enum TaskRequest {
     // Broadcast requests to p2p network
     BroadcastTransaction(Arc<Transaction>),
     // Broadcast Preconfirmations to p2p network
-    BroadcastPreConfirmations(Arc<PreConfirmationMessage>),
+    BroadcastPreConfirmations(Arc<PreConfirmationMessage<DelegatePublicKey>>),
     // Request to get information about all connected peers
     GetAllPeerInfo {
         channel: oneshot::Sender<Vec<(PeerId, PeerInfo)>>,
@@ -386,7 +387,7 @@ pub trait Broadcast: Send {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: PreConfirmationsGossipData,
+        confirmations: PreConfirmationsGossipData<DelegatePublicKey>,
     ) -> anyhow::Result<()>;
 
     fn new_tx_subscription_broadcast(&self, peer_id: FuelPeerId) -> anyhow::Result<()>;
@@ -417,7 +418,7 @@ impl Broadcast for SharedState {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: PreConfirmationsGossipData,
+        confirmations: PreConfirmationsGossipData<DelegatePublicKey>,
     ) -> anyhow::Result<()> {
         self.pre_confirmations_broadcast.send(confirmations)?;
         Ok(())
@@ -1102,7 +1103,8 @@ pub struct SharedState {
     /// Sender of p2p transaction used for subscribing.
     tx_broadcast: broadcast::Sender<TransactionGossipData>,
     /// Sender of p2p transaction preconfirmations used for subscribing.
-    pre_confirmations_broadcast: broadcast::Sender<PreConfirmationsGossipData>,
+    pre_confirmations_broadcast:
+        broadcast::Sender<PreConfirmationsGossipData<DelegatePublicKey>>,
     /// Sender of reserved peers connection updates.
     reserved_peers_broadcast: broadcast::Sender<usize>,
     /// Used for communicating with the `Task`.
@@ -1316,7 +1318,7 @@ impl SharedState {
 
     pub fn broadcast_preconfirmations(
         &self,
-        preconfirmations: Arc<PreConfirmationMessage>,
+        preconfirmations: Arc<PreConfirmationMessage<DelegatePublicKey>>,
     ) -> anyhow::Result<()> {
         self.request_sender
             .try_send(TaskRequest::BroadcastPreConfirmations(preconfirmations))?;
@@ -1343,7 +1345,7 @@ impl SharedState {
 
     pub fn subscribe_confirmations(
         &self,
-    ) -> broadcast::Receiver<PreConfirmationsGossipData> {
+    ) -> broadcast::Receiver<PreConfirmationsGossipData<DelegatePublicKey>> {
         self.pre_confirmations_broadcast.subscribe()
     }
 

@@ -70,12 +70,10 @@ impl Broadcast for P2PAdapter {
         signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> PreConfServiceResult<()> {
         if let Some(p2p) = &self.service {
-            let public_key = delegate.public_key.to_bytes();
-            let entity = DelegatePreConfirmationKey {
-                public_key,
-                expiration: delegate.expiration,
+            let sealed = SignedByBlockProducerDelegation {
+                entity: delegate,
+                signature,
             };
-            let sealed = SignedByBlockProducerDelegation { entity, signature };
             let delegate_key = Arc::new(PreConfirmationMessage::Delegate(sealed));
             p2p.broadcast_preconfirmations(delegate_key)
                 .map_err(|e| PreConfServiceError::Broadcast(format!("{e:?}")))?;
@@ -102,7 +100,10 @@ mod tests {
         build_shared_state,
         TaskRequest,
     };
-    use fuel_core_types::services::p2p::PreconfirmationStatus;
+    use fuel_core_types::services::p2p::{
+        DelegatePublicKey,
+        PreconfirmationStatus,
+    };
 
     #[tokio::test]
     async fn broadcast_preconfirmations__sends_expected_request_over_sender() {
@@ -142,7 +143,7 @@ mod tests {
     }
 
     fn pre_conf_matches_expected_values(
-        inner: &Arc<PreConfirmationMessage>,
+        inner: &Arc<PreConfirmationMessage<DelegatePublicKey>>,
         preconfirmations: &[Preconfirmation],
         signature: &Signature,
         expiration: &Tai64,
@@ -196,14 +197,13 @@ mod tests {
     }
 
     fn delegate_keys_matches_expected_values(
-        inner: &Arc<PreConfirmationMessage>,
+        inner: &Arc<PreConfirmationMessage<DelegatePublicKey>>,
         delegate_key: VerifyingKey,
         expiration: Tai64,
         signature: &Signature,
     ) -> bool {
-        let bytes_32 = delegate_key.to_bytes();
         let entity = DelegatePreConfirmationKey {
-            public_key: bytes_32,
+            public_key: delegate_key,
             expiration,
         };
         match &**inner {

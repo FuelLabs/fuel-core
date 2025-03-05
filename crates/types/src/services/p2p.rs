@@ -32,6 +32,9 @@ use tai64::Tai64;
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;
 
+/// The type of the public key used for signing pre-confirmations
+pub type DelegatePublicKey = ed25519_dalek::VerifyingKey;
+
 /// List of transactions
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -76,7 +79,7 @@ pub struct GossipData<T> {
 pub type TransactionGossipData = GossipData<Transaction>;
 
 /// Transactions that have been confirmed by block producer
-pub type PreConfirmationsGossipData = GossipData<PreConfirmationMessage>;
+pub type PreConfirmationsGossipData<P> = GossipData<PreConfirmationMessage<P>>;
 
 /// A value and an associated signature
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,7 +94,7 @@ pub struct Sealed<Entity, S = Signature> {
 /// A key that will be used to sign a pre-confirmations
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DelegatePreConfirmationKey<P = [u8; 32]> {
+pub struct DelegatePreConfirmationKey<P> {
     /// The public key of the person who is allowed to create pre-confirmations.
     pub public_key: P,
     /// The time at which the key will expire. Used to indicate to the recipient which key
@@ -151,7 +154,7 @@ pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 /// The possible messages sent by the parties pre-confirming transactinos
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PreConfirmationMessage<P = [u8; 32], S = Signature> {
+pub enum PreConfirmationMessage<P, S = Signature> {
     /// Notification of key delegation
     Delegate(SignedByBlockProducerDelegation<P>),
     /// Notification of pre-confirmations
@@ -159,7 +162,7 @@ pub enum PreConfirmationMessage<P = [u8; 32], S = Signature> {
 }
 
 #[cfg(feature = "test-helpers")]
-impl PreConfirmationMessage {
+impl<P> PreConfirmationMessage<P> {
     /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
     pub fn default_test_confirmation() -> Self {
         Self::Preconfirmations(SignedPreconfirmationByDelegate {

@@ -4100,6 +4100,7 @@ dependencies = [
  "aws-sdk-kms",
  "bs58",
  "derive_more 0.99.19",
+ "ed25519-dalek",
  "educe",
  "fuel-vm 0.60.0",
  "k256",
