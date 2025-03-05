@@ -58,6 +58,7 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             PeerId,
         },
+        txpool::TransactionStatus,
     },
 };
 use std::{
@@ -82,46 +83,21 @@ pub struct Data {
     pub messages: HashMap<Nonce, Message>,
 }
 
-/*
-mockall::mock! {
-    pub TxStatusManager {}
-
-    impl ports::TxStatusManager for TxStatusManager {
-        fn status_update(&self, tx_id: TxId, tx_status: fuel_core_types::services::txpool::TransactionStatus);
-    }
-}
-*/
-
-/*
-#[cfg_attr(test, mockall::automock)]
-pub trait TxStatusManagerTrait {
-    fn status_update(
-        &self,
-        tx_id: TxId,
-        tx_status: fuel_core_types::services::txpool::TransactionStatus,
-    );
-}
-*/
-
 #[derive(Clone)]
 pub struct MockTxStatusManager {
-    tx: mpsc::Sender<TxId>,
+    tx: mpsc::Sender<(TxId, TransactionStatus)>,
 }
 
 impl MockTxStatusManager {
-    pub fn new(tx: mpsc::Sender<TxId>) -> Self {
+    pub fn new(tx: mpsc::Sender<(TxId, TransactionStatus)>) -> Self {
         Self { tx }
     }
 }
 
 impl ports::TxStatusManager for MockTxStatusManager {
-    fn status_update(
-        &self,
-        tx_id: TxId,
-        tx_status: fuel_core_types::services::txpool::TransactionStatus,
-    ) {
+    fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
         //panic!("TxPool has called the status_update method of TxStatusManager");
-        self.tx.send(tx_id).unwrap();
+        self.tx.send((tx_id, tx_status)).unwrap();
     }
 }
 

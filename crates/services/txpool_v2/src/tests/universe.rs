@@ -1,5 +1,8 @@
 use std::{
-    collections::HashSet,
+    collections::{
+        BTreeSet,
+        HashSet,
+    },
     sync::Arc,
 };
 
@@ -52,7 +55,10 @@ use fuel_core_types::{
         interpreter::MemoryInstance,
         predicate::EmptyStorage,
     },
-    services::txpool::ArcPoolTx,
+    services::txpool::{
+        ArcPoolTx,
+        TransactionStatus,
+    },
 };
 use mockall::predicate::always;
 use parking_lot::{
@@ -124,7 +130,7 @@ pub struct TestPoolUniverse {
     pub config: Config,
     pool: Option<Shared<TxPool>>,
     mock_tx_status_manager: MockTxStatusManager,
-    rx: std::sync::mpsc::Receiver<TxId>,
+    tx_status_manager_receiver: std::sync::mpsc::Receiver<(TxId, TransactionStatus)>,
     stats_receiver: Option<tokio::sync::watch::Receiver<TxPoolStats>>,
 }
 
@@ -139,7 +145,7 @@ impl Default for TestPoolUniverse {
             pool: None,
             stats_receiver: None,
             mock_tx_status_manager: MockTxStatusManager::new(tx),
-            rx,
+            tx_status_manager_receiver: rx,
         }
     }
 }
@@ -467,8 +473,16 @@ impl TestPoolUniverse {
                 panic!("timeout");
             }
 
-            match self.rx.try_recv() {
-                Ok(message) => values.push(message),
+            match self.tx_status_manager_receiver.try_recv() {
+                Ok((tx_id, tx_status))
+                    if matches!(tx_status, TransactionStatus::Submitted { .. }) =>
+                {
+                    values.push(tx_id)
+                }
+                Ok(_) => {
+                    // Ignore other statuses, we're only interested in Submitted since
+                    // we're waiting for "insertion"
+                }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
                     tokio::time::sleep(Duration::from_millis(5)).await;
                     continue;
@@ -480,7 +494,9 @@ impl TestPoolUniverse {
             tokio::task::yield_now().await;
         }
 
-        assert_eq!(values, tx_ids, "should receive correct ids");
+        let expected: BTreeSet<_> = tx_ids.iter().collect();
+        let actual: BTreeSet<_> = values.iter().collect();
+        assert_eq!(expected, actual, "should receive correct ids");
     }
 }
 

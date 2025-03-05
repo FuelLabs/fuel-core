@@ -82,7 +82,6 @@ async fn test_find() {
     service.stop_and_await().await.unwrap();
 }
 
-/*
 #[tokio::test]
 async fn test_prune_transactions() {
     const TIMEOUT: u64 = 3;
@@ -110,9 +109,7 @@ async fn test_prune_transactions() {
         .try_insert(vec![tx1.clone(), tx2.clone(), tx3.clone()])
         .unwrap();
 
-    universe
-        .waiting_txs_insertion(service.shared.new_tx_notification_subscribe(), ids)
-        .await;
+    universe.waiting_txs_insertion(ids).await;
 
     let out = service
         .shared
@@ -178,10 +175,10 @@ async fn test_prune_transactions_the_oldest() {
     service.shared.try_insert(vec![tx2.clone()]).unwrap();
 
     universe
-        .waiting_txs_insertion(
-            service.shared.new_tx_notification_subscribe(),
-            vec![tx2.id(&Default::default())],
-        )
+        .waiting_txs_insertion(vec![
+            tx1.id(&Default::default()),
+            tx2.id(&Default::default()),
+        ])
         .await;
     // check that tx1 and tx2 are still there at time `4`
     let out = service
@@ -208,10 +205,10 @@ async fn test_prune_transactions_the_oldest() {
     service.shared.try_insert(vec![tx4.clone()]).unwrap();
 
     universe
-        .waiting_txs_insertion(
-            service.shared.new_tx_notification_subscribe(),
-            vec![tx4.id(&Default::default())],
-        )
+        .waiting_txs_insertion(vec![
+            tx3.id(&Default::default()),
+            tx4.id(&Default::default()),
+        ])
         .await;
     // time is now `11`, tx1 and tx2 should be pruned
     let out = service
@@ -253,6 +250,7 @@ async fn test_prune_transactions_the_oldest() {
     service.stop_and_await().await.unwrap();
 }
 
+/*
 #[tokio::test]
 async fn prune_expired_transactions() {
     let mut universe = TestPoolUniverse::default();
@@ -351,7 +349,9 @@ async fn prune_expired_transactions() {
 
     service.stop_and_await().await.unwrap();
 }
+*/
 
+/*
 #[tokio::test]
 async fn prune_expired_doesnt_trigger_twice() {
     let mut universe = TestPoolUniverse::default();
