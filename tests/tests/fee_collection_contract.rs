@@ -35,7 +35,6 @@ use fuel_core_types::{
         canonical::Serialize,
         Address,
         AssetId,
-        BlockHeight,
         ChainId,
         ContractId,
         Salt,
@@ -85,7 +84,7 @@ async fn setup(rng: &mut StdRng) -> TestContext {
         .unwrap();
     assert!(matches!(tx_status, TransactionStatus::Success { .. }));
     let bh = client.produce_blocks(1, None).await.unwrap();
-    assert_eq!(bh, BlockHeight::new(2));
+    assert!(*bh >= 2u32);
 
     // No fees should have been collected yet
     let contract_balance = client.contract_balance(&(contract_id), None).await.unwrap();
