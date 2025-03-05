@@ -411,7 +411,6 @@ where
                         .or_default();
                     block_height_expiration.push(tx_id);
                 }
-                self.shared_state.new_txs_notifier.send_replace(());
             }
             PoolNotification::ErrorInsertion {
                 tx_id,
@@ -801,9 +800,10 @@ where
             max_txs_chain_count: config.max_txs_chain_count,
         }),
         BasicCollisionManager::new(),
-        RatioTipGasSelection::new(),
+        RatioTipGasSelection::new(new_txs_notifier.clone()),
         config,
         pool_stats_sender,
+        new_txs_notifier.clone(),
     );
 
     // BlockHeight is < 64 bytes, so we can use SeqLock
@@ -821,7 +821,7 @@ where
         select_transactions_requests_sender: pool_worker
             .extract_block_transactions_sender
             .clone(),
-        new_txs_notifier,
+        new_executable_txs_notifier: new_txs_notifier,
         latest_stats: pool_stats_receiver,
     };
 
