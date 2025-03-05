@@ -474,7 +474,7 @@ pub struct P2PAdapter {
 }
 
 #[cfg(feature = "p2p")]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct PeerReportConfig {
     pub successful_block_import: AppScore,
     pub missing_block_headers: AppScore,

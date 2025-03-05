@@ -14,7 +14,7 @@ async fn shared_state__broadcast__tx_confirmations() {
     // given
     let broadcast = arb_shared_state();
     let confirmations = PreConfirmationMessage::default_test_confirmation();
-    let confirmations_gossip_data = ConfirmationsGossipData {
+    let confirmations_gossip_data = P2PPreConfirmationGossipData {
         data: Some(confirmations.clone()),
         peer_id: FuelPeerId::from(PeerId::random().to_bytes().to_vec()),
         message_id: vec![1, 2, 3, 4],

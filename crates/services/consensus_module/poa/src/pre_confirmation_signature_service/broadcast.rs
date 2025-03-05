@@ -4,7 +4,10 @@ use crate::pre_confirmation_signature_service::{
     signing_key::SigningKey,
 };
 use core::future::Future;
-use fuel_core_types::services::p2p::DelegatePreConfirmationKey;
+use fuel_core_types::{
+    services::p2p::DelegatePreConfirmationKey,
+    tai64::Tai64,
+};
 
 #[allow(type_alias_bounds)]
 pub type PublicKey<S>
@@ -28,6 +31,7 @@ pub trait Broadcast: Send {
         &mut self,
         message: Self::Preconfirmations,
         signature: Signature<Self>,
+        expiration: Tai64,
     ) -> impl Future<Output = Result<()>> + Send;
 
     fn broadcast_delegate_key(

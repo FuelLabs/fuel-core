@@ -121,6 +121,8 @@ educe = { version = "0.6", default-features = false, features = [
   "Hash",
   "Debug",
 ] }
+ed25519 = { version = "2.2.3", default-features = false }
+ed25519-dalek = { version = "2.1.1", default-features = false }
 derive_more = { version = "0.99" }
 enum_dispatch = "0.3.13"
 enum-iterator = "1.2"

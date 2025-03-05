@@ -21,7 +21,6 @@ fuel-core-types = { workspace = true, features = ["std", "serde"] }
 futures = { workspace = true }
 hex = { workspace = true }
 hickory-resolver = "0.24.1"
-ip_network = "0.4"
 libp2p = { version = "0.54.1", default-features = false, features = [
   "dns",
   "gossipsub",
@@ -38,17 +37,11 @@ libp2p = { version = "0.54.1", default-features = false, features = [
   "websocket",
   "metrics",
 ] }
-libp2p-mplex = "0.41.0"
 parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
-prometheus-client = { workspace = true }
-quick-protobuf = "0.8.1"
-quick-protobuf-codec = "0.3.0"
 quick_cache = "0.6.9"
 rand = { workspace = true }
-rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_with = { workspace = true }
 sha2 = "0.10"
 strum = { workspace = true }
 strum_macros = { workspace = true }
@@ -58,7 +51,6 @@ tracing = { workspace = true }
 void = "1"
 
 [dev-dependencies]
-ctor = "0.1"
 fuel-core-p2p = { path = ".", features = ["test-helpers"] }
 fuel-core-services = { path = "../../services", features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
@@ -66,7 +58,6 @@ fuel-core-types = { path = "../../types", features = ["serde", "test-helpers"] }
 rand = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 tracing-attributes = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
 
 [dev-dependencies.libp2p-swarm-test]
 version = "0.4.0"

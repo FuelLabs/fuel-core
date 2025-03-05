@@ -1,14 +1,20 @@
-use ed25519::signature::Signer;
-use ed25519_dalek::SigningKey as DalekSigningKey;
 use fuel_core_poa::pre_confirmation_signature_service::{
     error::{
         Error as PoAError,
         Result as PoAResult,
     },
-    key_generator::KeyGenerator,
+    key_generator::{
+        ExpiringKey,
+        KeyGenerator,
+    },
     signing_key::SigningKey,
 };
-use fuel_core_types::fuel_crypto::SecretKey;
+use fuel_core_types::{
+    ed25519::signature::Signer,
+    ed25519_dalek::SigningKey as DalekSigningKey,
+    fuel_crypto::SecretKey,
+    tai64::Tai64,
+};
 use rand::{
     prelude::StdRng,
     SeedableRng,
@@ -21,13 +27,13 @@ pub struct Ed25519KeyGenerator;
 impl KeyGenerator for Ed25519KeyGenerator {
     type Key = Ed25519Key;
 
-    async fn generate(&mut self) -> PoAResult<Self::Key> {
+    async fn generate(&mut self, expiration: Tai64) -> ExpiringKey<Self::Key> {
         let mut rng = StdRng::from_entropy();
         let secret = SecretKey::random(&mut rng);
-
-        Ok(Ed25519Key {
+        let key = Ed25519Key {
             signer: DalekSigningKey::from_bytes(secret.deref()),
-        })
+        };
+        ExpiringKey::new(key, expiration)
     }
 }
 
@@ -37,8 +43,8 @@ pub struct Ed25519Key {
 }
 
 impl SigningKey for Ed25519Key {
-    type Signature = ed25519::Signature;
-    type PublicKey = ed25519_dalek::VerifyingKey;
+    type Signature = fuel_core_types::ed25519::Signature;
+    type PublicKey = fuel_core_types::ed25519_dalek::VerifyingKey;
 
     fn public_key(&self) -> Self::PublicKey {
         self.signer.verifying_key()

@@ -19,8 +19,6 @@ axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cosmrs = { version = "0.21", optional = true }
 derive_more = { version = "0.99" }
-ed25519 = { version = "2.2.3", features = ["serde"] }
-ed25519-dalek = { version = "2.1.1", features = ["serde"] }
 enum-iterator = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
 fuel-core-compression = { workspace = true }
