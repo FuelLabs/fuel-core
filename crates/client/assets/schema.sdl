@@ -760,7 +760,7 @@ type Mutation {
 	"""
 	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
 	"""
-	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]!
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]! @deprecated(reason: "This doesn't need to be a mutation. Use query of the same name instead.")
 	"""
 	Submits transaction to the `TxPool`.
 	
@@ -942,6 +942,10 @@ type Query {
 	Returns all possible receipts for test purposes.
 	"""
 	allReceipts: [Receipt!]!
+	"""
+	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
+	"""
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]!
 	"""
 	Get execution trace for an already-executed block.
 	"""
@@ -1377,6 +1381,7 @@ type VariableOutput {
 	assetId: AssetId!
 }
 
+directive @deprecated(reason: String = "No longer supported") on FIELD_DEFINITION | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION | ENUM_VALUE
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
