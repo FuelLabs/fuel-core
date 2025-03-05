@@ -3076,7 +3076,6 @@ mod tests {
                     self.counter += 1;
                     WaitNewTransactionsResult::NewTransaction
                 } else {
-                    self.counter += 1;
                     WaitNewTransactionsResult::Timeout
                 }
             }

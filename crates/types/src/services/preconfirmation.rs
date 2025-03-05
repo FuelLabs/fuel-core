@@ -17,9 +17,9 @@ use alloc::{
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Preconfirmations {
     /// The expiration time of the key used to sign
-    pub(crate) expiration: Tai64,
+    pub expiration: Tai64,
     /// The transactions which have been pre-confirmed
-    pub(crate) preconfirmations: Vec<Preconfirmation>,
+    pub preconfirmations: Vec<Preconfirmation>,
 }
 
 /// A pre-confirmation is a message that is sent by the block producer to give the _final_
