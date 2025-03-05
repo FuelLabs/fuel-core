@@ -28,6 +28,7 @@ pub enum GossipsubBroadcastRequest {
     TxPreConfirmations(Arc<PreConfirmationMessage<DelegatePublicKey>>),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GossipsubMessage {
     NewTx(Transaction),
