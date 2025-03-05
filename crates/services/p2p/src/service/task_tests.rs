@@ -208,7 +208,8 @@ impl P2pDb for FakeDB {
 
 struct FakeBroadcast {
     pub peer_reports: mpsc::Sender<(FuelPeerId, AppScore, String)>,
-    pub confirmation_gossip_broadcast: mpsc::Sender<PreConfirmationsGossipData>,
+    pub confirmation_gossip_broadcast:
+        mpsc::Sender<PreConfirmationsGossipData<DelegatePublicKey>>,
 }
 
 impl Broadcast for FakeBroadcast {
@@ -236,7 +237,7 @@ impl Broadcast for FakeBroadcast {
 
     fn pre_confirmation_broadcast(
         &self,
-        confirmations: PreConfirmationsGossipData,
+        confirmations: PreConfirmationsGossipData<DelegatePublicKey>,
     ) -> anyhow::Result<()> {
         self.confirmation_gossip_broadcast.try_send(confirmations)?;
         Ok(())

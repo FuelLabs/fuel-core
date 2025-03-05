@@ -178,7 +178,7 @@ mod tests {
 
         // when
         adapter
-            .broadcast_delegate_key(delegate.clone(), signature.clone())
+            .broadcast_delegate_key(delegate.clone(), signature)
             .await
             .unwrap();
 
