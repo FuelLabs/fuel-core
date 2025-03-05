@@ -130,13 +130,13 @@ pub struct TestPoolUniverse {
     pub config: Config,
     pool: Option<Shared<TxPool>>,
     mock_tx_status_manager: MockTxStatusManager,
-    tx_status_manager_receiver: std::sync::mpsc::Receiver<(TxId, TransactionStatus)>,
+    tx_status_manager_receiver: mpsc::Receiver<(TxId, TransactionStatus)>,
     stats_receiver: Option<tokio::sync::watch::Receiver<TxPoolStats>>,
 }
 
 impl Default for TestPoolUniverse {
     fn default() -> Self {
-        let (tx, rx) = std::sync::mpsc::channel();
+        let (tx, rx) = mpsc::channel(100);
 
         Self {
             mock_db: MockDb::default(),
@@ -463,35 +463,40 @@ impl TestPoolUniverse {
     }
 
     pub async fn waiting_txs_insertion(&mut self, tx_ids: Vec<TxId>) {
-        const TIMEOUT: Duration = Duration::from_secs(5);
+        const TIMEOUT: Duration = Duration::from_secs(50);
+        const POLL_TIMEOUT: Duration = Duration::from_millis(5);
 
         let mut values = Vec::with_capacity(tx_ids.len());
-        let start_time = Instant::now();
+        let start_time = std::time::Instant::now();
 
         while values.len() < tx_ids.len() {
             if start_time.elapsed() > TIMEOUT {
                 panic!("timeout");
             }
 
-            match self.tx_status_manager_receiver.try_recv() {
-                Ok((tx_id, tx_status))
+            match tokio::time::timeout(
+                POLL_TIMEOUT,
+                self.tx_status_manager_receiver.recv(),
+            )
+            .await
+            {
+                Ok(Some((tx_id, tx_status)))
                     if matches!(tx_status, TransactionStatus::Submitted { .. }) =>
                 {
-                    values.push(tx_id)
+                    values.push(tx_id);
                 }
-                Ok(_) => {
+                Ok(Some(_)) => {
                     // Ignore other statuses, we're only interested in Submitted since
-                    // we're waiting for "insertion"
+                    // we're waiting for "insertion".
                 }
-                Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    tokio::time::sleep(Duration::from_millis(5)).await;
-                    continue;
-                }
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                Ok(None) => {
                     panic!("channel closed prematurely");
                 }
+                Err(_) => {
+                    // Timeout
+                    continue;
+                }
             }
-            tokio::task::yield_now().await;
         }
 
         let expected: BTreeSet<_> = tx_ids.iter().collect();

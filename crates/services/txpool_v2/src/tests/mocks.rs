@@ -65,14 +65,15 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     sync::{
-        mpsc::{
-            self,
-        },
         Arc,
         Mutex,
     },
+    thread,
 };
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{
+    Receiver,
+    Sender,
+};
 use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Default)]
@@ -85,19 +86,21 @@ pub struct Data {
 
 #[derive(Clone)]
 pub struct MockTxStatusManager {
-    tx: mpsc::Sender<(TxId, TransactionStatus)>,
+    tx: Sender<(TxId, TransactionStatus)>,
 }
 
 impl MockTxStatusManager {
-    pub fn new(tx: mpsc::Sender<(TxId, TransactionStatus)>) -> Self {
+    pub fn new(tx: Sender<(TxId, TransactionStatus)>) -> Self {
         Self { tx }
     }
 }
 
 impl ports::TxStatusManager for MockTxStatusManager {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
-        //panic!("TxPool has called the status_update method of TxStatusManager");
-        self.tx.send((tx_id, tx_status)).unwrap();
+        let tx = self.tx.clone();
+        thread::spawn(move || {
+            tx.blocking_send((tx_id, tx_status)).unwrap();
+        });
     }
 }
 
