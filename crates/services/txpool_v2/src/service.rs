@@ -158,7 +158,7 @@ impl TryFrom<TxInfo> for TransactionStatus {
             .as_secs() as i64;
 
         Ok(TransactionStatus::Submitted {
-            time: Tai64::from_unix(unit_time),
+            timestamp: Tai64::from_unix(unit_time),
         })
     }
 }
@@ -409,7 +409,7 @@ where
                 self.tx_status_manager.status_update(
                     tx_id,
                     TransactionStatus::Submitted {
-                        time: Tai64::from_unix(duration),
+                        timestamp: Tai64::from_unix(duration),
                     },
                 );
 
@@ -446,6 +446,7 @@ where
                     tx_id,
                     TransactionStatus::SqueezedOut {
                         reason: error.to_string(),
+                        tx_id,
                     },
                 );
             }
@@ -454,6 +455,7 @@ where
                     tx_id,
                     TransactionStatus::SqueezedOut {
                         reason: error.to_string(),
+                        tx_id,
                     },
                 );
             }
@@ -542,6 +544,7 @@ where
                         tx_id,
                         TransactionStatus::SqueezedOut {
                             reason: err.to_string(),
+                            tx_id,
                         },
                     );
                     return

@@ -94,9 +94,16 @@ async fn test_tx__return_error_expired() {
     let status = subscriber_status.next().await.unwrap();
     // The error returned is the error that the transaction was squeezed out for.
     // We don't need the user to know that pending pool exists
-    assert_eq!(status, TxStatusMessage::Status(TransactionStatus::SqueezedOut { reason:
-        "Transaction input validation failed: UTXO (id: cf6532b2371b3efb71ff8ca4ec32cf046fb1be64e620d21a0a98c0298f8196140000) does not exist".to_string(),
-    }));
+    assert_eq!(
+        status,
+        TxStatusMessage::Status(TransactionStatus::SqueezedOut {
+            tx_id: tx_id2,
+            reason: "Transaction input validation failed: UTXO \
+        (id: cf6532b2371b3efb71ff8ca4ec32cf046fb1be64e620d21a0a98c0298f8196140000) \
+        does not exist"
+                .to_string(),
+        })
+    );
 
     service.stop_and_await().await.unwrap();
 }
@@ -128,9 +135,16 @@ async fn test_tx__directly_removed_not_enough_space() {
     // Then
     // The error returned is the error that the transaction was squeezed out for.
     // We don't need the user to know that pending pool exists
-    assert_eq!(status, TxStatusMessage::Status(TransactionStatus::SqueezedOut { reason:
-        "Transaction input validation failed: UTXO (id: cf6532b2371b3efb71ff8ca4ec32cf046fb1be64e620d21a0a98c0298f8196140000) does not exist".to_string(),
-    }));
+    assert_eq!(
+        status,
+        TxStatusMessage::Status(TransactionStatus::SqueezedOut {
+            tx_id: tx_id2,
+            reason: "Transaction input validation failed: UTXO \
+            (id: cf6532b2371b3efb71ff8ca4ec32cf046fb1be64e620d21a0a98c0298f8196140000) \
+            does not exist"
+                .to_string(),
+        })
+    );
 
     service.stop_and_await().await.unwrap();
 }

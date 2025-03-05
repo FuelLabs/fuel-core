@@ -5,7 +5,7 @@ use crate::gossipsub::messages::{
 };
 use fuel_core_types::{
     fuel_tx::Transaction,
-    services::p2p::PreconfirmationMessage,
+    services::p2p::PreConfirmationMessage,
 };
 use std::{
     io,
@@ -28,8 +28,8 @@ impl<Codec> GossipsubCodec for GossipsubMessageHandler<Codec>
 where
     Codec: Encode<Transaction, Error = io::Error>
         + Decode<Transaction, Error = io::Error>
-        + Encode<PreconfirmationMessage, Error = io::Error>
-        + Decode<PreconfirmationMessage, Error = io::Error>,
+        + Encode<PreConfirmationMessage, Error = io::Error>
+        + Decode<PreConfirmationMessage, Error = io::Error>,
 {
     type RequestMessage = GossipsubBroadcastRequest;
     type ResponseMessage = GossipsubMessage;

@@ -99,7 +99,7 @@ struct StatusChangeState<'a> {
 impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>> {
         match self.db.get_tx_status(&id)? {
-            Some(status) => Ok(Some(status)),
+            Some(status) => Ok(Some(status.into())),
             None => {
                 // TODO[RC]: There's a lock inside 'status()', is this ok?
                 let status = self.tx_status_manager.status(&id);

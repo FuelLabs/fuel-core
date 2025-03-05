@@ -53,7 +53,45 @@ query TransactionsQuery($after: String, $before: String, $first: Int, $last: Int
             totalGas
             totalFee
           }
+          ... on PreconfirmationSuccessStatus {
+            txPointer
+            transactionId
+            receipts {
+              param1
+              param2
+              amount
+              assetId
+              gas
+              digest
+              id
+              is
+              pc
+              ptr
+              ra
+              rb
+              rc
+              rd
+              reason
+              receiptType
+              to
+              toAddress
+              val
+              len
+              result
+              gasUsed
+              data
+              sender
+              recipient
+              nonce
+              contractId
+              subId
+            }
+          }
           ... on SqueezedOutStatus {
+            reason
+          }
+          ... on PreconfirmationSqueezedOutStatus {
+            transactionId
             reason
           }
           ... on FailureStatus {
@@ -96,6 +134,41 @@ query TransactionsQuery($after: String, $before: String, $first: Int, $last: Int
             }
             totalGas
             totalFee
+          }
+          ... on PreconfirmationFailureStatus {
+            txPointer
+            transactionId
+            receipts {
+              param1
+              param2
+              amount
+              assetId
+              gas
+              digest
+              id
+              is
+              pc
+              ptr
+              ra
+              rb
+              rc
+              rd
+              reason
+              receiptType
+              to
+              toAddress
+              val
+              len
+              result
+              gasUsed
+              data
+              sender
+              recipient
+              nonce
+              contractId
+              subId
+            }
+            reason
           }
         }
       }

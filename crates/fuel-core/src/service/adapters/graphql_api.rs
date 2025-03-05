@@ -83,8 +83,8 @@ impl TxStatusManagerPort for TxStatusManagerAdapter {
     }
 
     fn submission_time(&self, id: TxId) -> Option<Tai64> {
-        if let Some(TransactionStatus::Submitted { time, .. }) = self.status(&id) {
-            Some(time)
+        if let Some(TransactionStatus::Submitted { timestamp }) = self.status(&id) {
+            Some(timestamp)
         } else {
             None
         }

@@ -9,6 +9,7 @@ use crate::client::{
         PageInfo,
         Tai64Timestamp,
         TransactionId,
+        TxPointer,
         U32,
         U64,
     },
@@ -187,8 +188,11 @@ impl TryFrom<ProgramState> for fuel_vm::ProgramState {
 pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatus),
+    PreconfirmationSuccessStatus(PreconfirmationSuccessStatus),
     SqueezedOutStatus(SqueezedOutStatus),
+    PreconfirmationSqueezedOutStatus(PreconfirmationSqueezedOutStatus),
     FailureStatus(FailureStatus),
+    PreconfirmationFailureStatus(PreconfirmationFailureStatus),
     #[cynic(fallback)]
     Unknown,
 }
@@ -202,8 +206,11 @@ pub enum TransactionStatus {
 pub enum StatusWithTransaction {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatusWithTransaction),
+    PreconfirmationSuccessStatus(PreconfirmationSuccessStatusWithTransaction),
     SqueezedOutStatus(SqueezedOutStatus),
+    PreconfirmationSqueezedOutStatus(PreconfirmationSqueezedOutStatus),
     FailureStatus(FailureStatusWithTransaction),
+    PreconfirmationFailureStatus(PreconfirmationFailureStatusWithTransaction),
     #[cynic(fallback)]
     Unknown,
 }
@@ -239,6 +246,26 @@ pub struct SuccessStatusWithTransaction {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
+pub struct PreconfirmationSuccessStatus {
+    pub tx_pointer: TxPointer,
+    pub transaction_id: TransactionId,
+    pub receipts: Option<Vec<Receipt>>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "PreconfirmationSuccessStatus"
+)]
+pub struct PreconfirmationSuccessStatusWithTransaction {
+    pub tx_pointer: TxPointer,
+    pub transaction_id: TransactionId,
+    pub transaction: Option<OpaqueTransaction>,
+    pub receipts: Option<Vec<Receipt>>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub block_height: U32,
     pub time: Tai64Timestamp,
@@ -264,7 +291,36 @@ pub struct FailureStatusWithTransaction {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
+pub struct PreconfirmationFailureStatus {
+    pub tx_pointer: TxPointer,
+    pub transaction_id: TransactionId,
+    pub receipts: Option<Vec<Receipt>>,
+    pub reason: String,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "PreconfirmationFailureStatus"
+)]
+pub struct PreconfirmationFailureStatusWithTransaction {
+    pub tx_pointer: TxPointer,
+    pub transaction_id: TransactionId,
+    pub transaction: Option<OpaqueTransaction>,
+    pub receipts: Option<Vec<Receipt>>,
+    pub reason: String,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SqueezedOutStatus {
+    pub reason: String,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct PreconfirmationSqueezedOutStatus {
+    pub transaction_id: TransactionId,
     pub reason: String,
 }
 

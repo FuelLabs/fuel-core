@@ -2,7 +2,7 @@ use fuel_core_types::{
     blockchain::block::Block,
     services::{
         executor::TransactionExecutionResult,
-        txpool::TransactionStatus,
+        txpool::TransactionExecutionStatus,
     },
 };
 
@@ -10,7 +10,7 @@ use fuel_core_types::{
 pub fn from_executor_to_status(
     block: &Block,
     result: TransactionExecutionResult,
-) -> TransactionStatus {
+) -> TransactionExecutionStatus {
     let time = block.header().time();
     let block_height = *block.header().height();
     match result {
@@ -19,7 +19,7 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-        } => TransactionStatus::Success {
+        } => TransactionExecutionStatus::Success {
             block_height,
             time,
             result,
@@ -32,7 +32,7 @@ pub fn from_executor_to_status(
             receipts,
             total_gas,
             total_fee,
-        } => TransactionStatus::Failed {
+        } => TransactionExecutionStatus::Failed {
             block_height,
             time,
             result,
