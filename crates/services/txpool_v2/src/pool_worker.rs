@@ -227,7 +227,6 @@ pub(super) enum PoolNotification {
         time: SystemTime,
         expiration: BlockHeight,
         source: ExtendedInsertionSource,
-        executable: bool,
     },
     ErrorInsertion {
         tx_id: TxId,
@@ -358,7 +357,7 @@ where
         let res = self.pool.insert(tx.clone(), &view);
 
         match res {
-            Ok((removed_txs, executable)) => {
+            Ok(removed_txs) => {
                 let extended_source = match source {
                     InsertionSource::P2P { from_peer_info } => {
                         ExtendedInsertionSource::P2P { from_peer_info }
@@ -385,7 +384,6 @@ where
                             expiration,
                             time: SystemTime::now(),
                             source: extended_source,
-                            executable,
                         })
                 {
                     tracing::error!("Failed to send inserted notification: {}", e);

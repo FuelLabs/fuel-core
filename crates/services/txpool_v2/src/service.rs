@@ -365,7 +365,6 @@ where
                 time,
                 expiration,
                 source,
-                executable,
             } => {
                 let duration = time
                     .duration_since(SystemTime::UNIX_EPOCH)
@@ -412,11 +411,9 @@ where
                         .or_default();
                     block_height_expiration.push(tx_id);
                 }
-                if executable {
-                    self.shared_state
-                        .new_executable_txs_notifier
-                        .send_replace(());
-                }
+                self.shared_state
+                    .new_executable_txs_notifier
+                    .send_replace(());
             }
             PoolNotification::ErrorInsertion {
                 tx_id,
@@ -806,9 +803,10 @@ where
             max_txs_chain_count: config.max_txs_chain_count,
         }),
         BasicCollisionManager::new(),
-        RatioTipGasSelection::new(),
+        RatioTipGasSelection::new(new_executable_txs_notifier.clone()),
         config,
         pool_stats_sender,
+        new_executable_txs_notifier.clone(),
     );
 
     // BlockHeight is < 64 bytes, so we can use SeqLock

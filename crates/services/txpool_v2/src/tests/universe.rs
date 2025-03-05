@@ -150,15 +150,17 @@ impl TestPoolUniverse {
     }
 
     pub fn build_pool(&mut self) {
+        let (tx_new_executable_txs, _) = tokio::sync::watch::channel(());
         let (tx, rx) = tokio::sync::watch::channel(TxPoolStats::default());
         let pool = Arc::new(RwLock::new(Pool::new(
             GraphStorage::new(GraphConfig {
                 max_txs_chain_count: self.config.max_txs_chain_count,
             }),
             BasicCollisionManager::new(),
-            RatioTipGasSelection::new(),
+            RatioTipGasSelection::new(tx_new_executable_txs.clone()),
             self.config.clone(),
             tx,
+            tx_new_executable_txs,
         )));
         self.stats_receiver = Some(rx);
         self.pool = Some(pool.clone());
@@ -255,8 +257,7 @@ impl TestPoolUniverse {
                     .map_err(|e| match e {
                         InsertionErrorType::Error(e) => e,
                         InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
-                    })?
-                    .0,
+                    })?,
             ))
         } else {
             panic!("Pool needs to be built first");
@@ -291,7 +292,6 @@ impl TestPoolUniverse {
                     InsertionErrorType::Error(e) => e,
                     InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
                 })
-                .map(|(removed_txs, _)| removed_txs)
         } else {
             panic!("Pool needs to be built first");
         }
@@ -327,7 +327,6 @@ impl TestPoolUniverse {
                     InsertionErrorType::Error(e) => e,
                     InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
                 })
-                .map(|(removed_txs, _)| removed_txs)
         } else {
             panic!("Pool needs to be built first");
         }

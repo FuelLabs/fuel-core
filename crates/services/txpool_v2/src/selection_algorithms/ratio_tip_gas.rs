@@ -81,24 +81,17 @@ where
     S: RatioTipGasSelectionAlgorithmStorage,
 {
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
-}
-
-impl<S> Default for RatioTipGasSelection<S>
-where
-    S: RatioTipGasSelectionAlgorithmStorage,
-{
-    fn default() -> Self {
-        Self::new()
-    }
+    new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
 }
 
 impl<S> RatioTipGasSelection<S>
 where
     S: RatioTipGasSelectionAlgorithmStorage,
 {
-    pub fn new() -> Self {
+    pub fn new(new_executable_txs_notifier: tokio::sync::watch::Sender<()>) -> Self {
         Self {
             executable_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
+            new_executable_txs_notifier,
         }
     }
 
@@ -248,11 +241,19 @@ where
                 self.on_removed_transaction_inner(key);
             }
 
+            if transactions_to_promote.is_empty() {
+                continue;
+            }
+            if let Err(e) = self.new_executable_txs_notifier.send(()) {
+                tracing::warn!(
+                    "Failed to notify about new executable transactions: {:?}",
+                    e
+                );
+            }
             for promote in transactions_to_promote {
                 let storage = storage.get(&promote).expect(
                     "We just get the dependent from the storage, it should exist.",
                 );
-
                 self.new_executable_transaction(promote, storage);
             }
         }

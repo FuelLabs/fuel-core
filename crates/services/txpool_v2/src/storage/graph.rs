@@ -671,14 +671,13 @@ impl Storage for GraphStorage {
                                 }
                             }
                             Ok(None) => {
-                                if saved_outputs.contains(&SavedOutput::Coin(
-                                    SavedCoinOutput {
-                                        utxo_id: *utxo_id,
-                                        to: *owner,
-                                        amount: *amount,
-                                        asset_id: *asset_id,
-                                    },
-                                )) {
+                                let linked_output = SavedOutput::Coin(SavedCoinOutput {
+                                    utxo_id: *utxo_id,
+                                    to: *owner,
+                                    amount: *amount,
+                                    asset_id: *asset_id,
+                                });
+                                if saved_outputs.contains(&linked_output) {
                                     continue;
                                 }
                                 missing_inputs.push(MissingInput::Utxo(*utxo_id));
@@ -731,9 +730,8 @@ impl Storage for GraphStorage {
                         match persistent_storage.contract_exist(contract_id) {
                             Ok(true) => {}
                             Ok(false) => {
-                                if saved_outputs
-                                    .contains(&SavedOutput::Contract(*contract_id))
-                                {
+                                let linked_output = SavedOutput::Contract(*contract_id);
+                                if saved_outputs.contains(&linked_output) {
                                     continue;
                                 }
                                 missing_inputs.push(MissingInput::Contract(*contract_id));

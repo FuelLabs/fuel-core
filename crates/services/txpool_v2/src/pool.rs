@@ -98,6 +98,8 @@ pub struct Pool<S, SI, CM, SA> {
     pub(crate) current_bytes_size: usize,
     /// The current pool gas.
     pub(crate) pool_stats_sender: tokio::sync::watch::Sender<TxPoolStats>,
+    /// New executable transactions notifier.
+    pub(crate) new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
 }
 
 impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
@@ -108,6 +110,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
         selection_algorithm: SA,
         config: Config,
         pool_stats_sender: tokio::sync::watch::Sender<TxPoolStats>,
+        new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
     ) -> Self {
         Pool {
             storage,
@@ -119,6 +122,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             current_gas: 0,
             current_bytes_size: 0,
             pool_stats_sender,
+            new_executable_txs_notifier,
         }
     }
 
@@ -142,7 +146,7 @@ where
         &mut self,
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<(Vec<ArcPoolTx>, bool), InsertionErrorType> {
+    ) -> Result<Vec<ArcPoolTx>, InsertionErrorType> {
         let insertion_result = self.insert_inner(tx, persistent_storage);
         self.register_transaction_counts();
         insertion_result
@@ -152,7 +156,7 @@ where
         &mut self,
         tx: std::sync::Arc<PoolTransaction>,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<(Vec<std::sync::Arc<PoolTransaction>>, bool), InsertionErrorType> {
+    ) -> Result<Vec<std::sync::Arc<PoolTransaction>>, InsertionErrorType> {
         let CanStoreTransaction {
             checked_transaction,
             transactions_to_remove,
@@ -203,6 +207,12 @@ where
 
         // No dependencies directly in the graph and the sorted transactions
         if !has_dependencies {
+            if let Err(e) = self.new_executable_txs_notifier.send(()) {
+                tracing::warn!(
+                    "Failed to notify about new executable transactions: {:?}",
+                    e
+                );
+            }
             self.selection_algorithm
                 .new_executable_transaction(storage_id, tx);
         }
@@ -212,7 +222,7 @@ where
             .map(|data| data.transaction)
             .collect::<Vec<_>>();
         self.update_stats();
-        Ok((removed_transactions, !has_dependencies))
+        Ok(removed_transactions)
     }
 
     fn update_stats(&self) {
@@ -325,7 +335,6 @@ where
     }
 
     fn populate_saved_outputs_cache(&mut self, best_txs: &[StorageData]) {
-        self.extracted_outputs.clear();
         for tx in best_txs {
             for (idx, output) in tx.transaction.outputs().iter().enumerate() {
                 match output {
@@ -440,6 +449,12 @@ where
                         );
                         continue
                     };
+                    if let Err(e) = self.new_executable_txs_notifier.send(()) {
+                        tracing::warn!(
+                            "Failed to notify about new executable transactions: {:?}",
+                            e
+                        );
+                    }
                     self.selection_algorithm
                         .new_executable_transaction(dependent, storage_data);
                 }
