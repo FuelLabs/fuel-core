@@ -116,7 +116,7 @@ async fn test_tx__directly_removed_not_enough_space() {
     let tx1 = universe.build_script_transaction(None, None, 10);
     let tx_id1 = tx1.id(&Default::default());
     let input = unset_input.into_input(UtxoId::new(tx_id1, 0));
-    let missing_utxoid = input.clone().utxo_id().unwrap().clone();
+    let missing_utxoid = *input.clone().utxo_id().unwrap();
     let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
     let tx2_id = tx2.id(&Default::default());
 
