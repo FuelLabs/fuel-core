@@ -36,6 +36,7 @@ use crate::{
     },
 };
 
+/*
 pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus> {
     prop_oneof![
         Just(TransactionStatus::Submitted {
@@ -277,3 +278,4 @@ pub(super) fn box_senders<
         })
         .collect::<HashMap<_, _>>()
 }
+*/

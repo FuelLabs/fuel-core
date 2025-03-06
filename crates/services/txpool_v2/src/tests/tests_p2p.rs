@@ -109,6 +109,8 @@ async fn test_new_subscription_p2p() {
             "Found tx id didn't match"
         );
     }
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -184,6 +186,8 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
             "Found tx id didn't match"
         );
     }
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -213,6 +217,8 @@ async fn can_insert_from_p2p() {
 
     let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
     assert_eq!(tx1, got_tx);
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -242,6 +248,8 @@ async fn insert_from_local_broadcasts_to_p2p() {
         })
         .await
         .unwrap();
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -279,7 +287,9 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     assert!(
         not_broadcast.is_err(),
         "expected a timeout because no broadcast should have occurred"
-    )
+    );
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -315,7 +325,9 @@ async fn test_gossipped_transaction_with_check_error_rejected() {
     assert!(
         gossip_validity_notified.is_ok(),
         "expected to receive gossip validity notification"
-    )
+    );
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -393,5 +405,6 @@ async fn test_gossipped_transaction_with_transient_error_ignored() {
         gossip_validity_notified.is_ok(),
         "expected to receive gossip validity notification"
     );
+
     service.stop_and_await().await.unwrap();
 }

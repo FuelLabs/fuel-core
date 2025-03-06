@@ -83,6 +83,7 @@ async fn test_find() {
     let id = out[0].as_ref().unwrap().tx().id();
     assert_eq!(id, tx1.id(&Default::default()), "Found tx id match{out:?}");
     assert!(out[1].is_none(), "Tx3 should not be found:{out:?}");
+
     service.stop_and_await().await.unwrap();
 }
 
@@ -353,7 +354,7 @@ async fn prune_expired_transactions() {
 }
 
 #[tokio::test]
-async fn prune_expired_doesnt_trigger_twice() {
+async fn prune_expired_does_not_trigger_twice() {
     let mut universe = TestPoolUniverse::default();
     let (sender, receiver) = tokio::sync::mpsc::channel(10);
 
