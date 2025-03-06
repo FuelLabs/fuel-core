@@ -292,10 +292,10 @@ where
             return Ok(())
         }
 
-        self.has_v1_history
-            .store(false, core::sync::atomic::Ordering::Release);
         self.db
             .clear_table(ModificationsHistoryV1::<Description>::column())?;
+        self.has_v1_history
+            .store(false, core::sync::atomic::Ordering::Release);
 
         Ok(())
     }
