@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.41.8]
+
+### Fixed
+
+- [2809](https://github.com/FuelLabs/fuel-core/pull/2809): Prevent `is_migration_in_progress` from running multiple times if previously detected.
+
 ## [Version 0.41.7]
 
 ### Fixed

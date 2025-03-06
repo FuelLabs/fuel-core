@@ -91,7 +91,7 @@ pub struct HistoricalRocksDB<Description> {
     /// The Description of the database.
     db: RocksDb<Historical<Description>>,
     /// Is the migration in progress
-    is_migration_in_progress: std::sync::Mutex<bool>,
+    is_migration_in_progress: std::sync::atomic::AtomicBool,
 }
 
 impl<Description> HistoricalRocksDB<Description>
@@ -105,7 +105,7 @@ where
         Ok(Self {
             state_rewind_policy,
             db,
-            is_migration_in_progress: std::sync::Mutex::new(false),
+            is_migration_in_progress: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -118,7 +118,7 @@ where
         Ok(Self {
             state_rewind_policy,
             db,
-            is_migration_in_progress: std::sync::Mutex::new(false),
+            is_migration_in_progress: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -370,14 +370,17 @@ where
     }
 
     fn is_migration_in_progress(&self) -> bool {
-        let mut lock = self.is_migration_in_progress.lock().unwrap();
+        use std::sync::atomic::Ordering;
 
-        if *lock {
+        if self.is_migration_in_progress.load(Ordering::Acquire) {
             return true;
         }
 
-        *lock = self.v1_entries().next().is_some();
-        *lock
+        let migration_in_progress = self.v1_entries().next().is_some();
+        self.is_migration_in_progress
+            .store(migration_in_progress, Ordering::Release);
+
+        migration_in_progress
     }
 }
 
