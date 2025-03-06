@@ -18,7 +18,7 @@ use crate::{
 
 use super::mocks::MockP2P;
 
-// TODO[RC]: Remove when the universe is fully implemented to support new tests
+// TODO[RC]: Remove "dead code" when the universe is fully implemented to support new tests
 // in `tests_service.rs`
 #[allow(dead_code)]
 pub struct TestTxStatusManagerUniverse {
@@ -37,6 +37,8 @@ impl Default for TestTxStatusManagerUniverse {
     }
 }
 
+// TODO[RC]: Remove "dead code" when the universe is fully implemented to support new tests
+// in `tests_service.rs`
 #[allow(dead_code)]
 impl TestTxStatusManagerUniverse {
     pub fn config(self, config: Config) -> Self {
