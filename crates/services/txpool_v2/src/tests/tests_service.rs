@@ -18,7 +18,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio_stream::StreamExt;
 
 use crate::{
     config::Config,
@@ -463,9 +462,8 @@ async fn prune_expired_doesnt_trigger_twice() {
     service.stop_and_await().await.unwrap();
 }
 
-/*
 #[tokio::test]
-async fn simple_insert_removal_subscription() {
+async fn simple_insert_removal() {
     const TIMEOUT: u64 = 2;
     let mut universe = TestPoolUniverse::default().config(Config {
         ttl_check_interval: Duration::from_secs(1),
@@ -479,72 +477,29 @@ async fn simple_insert_removal_subscription() {
     let service = universe.build_service(None, None);
     service.start_and_await().await.unwrap();
 
-    let mut new_tx_notification = service.shared.new_tx_notification_subscribe();
-    let tx1_id = tx1.cached_id().unwrap();
-    let mut tx1_subscribe_updates = service.shared.tx_update_subscribe(tx1_id).unwrap();
-    let tx2_id = tx2.cached_id().unwrap();
-    let mut tx2_subscribe_updates = service.shared.tx_update_subscribe(tx2_id).unwrap();
-
+    let ids = vec![tx1.id(&Default::default()), tx2.id(&Default::default())];
     service
         .shared
         .try_insert(vec![tx1.clone(), tx2.clone()])
         .unwrap();
 
-    assert_eq!(
-        new_tx_notification.recv().await,
-        Ok(tx1.cached_id().unwrap()),
-        "First added should be tx1"
-    );
-    let update = tx1_subscribe_updates.next().await.unwrap();
-    assert!(
-        matches!(
-            update,
-            TxStatusMessage::Status(TransactionStatus::Submitted { .. })
-        ),
-        "First message in tx1 stream should be Submitted"
-    );
-    assert_eq!(
-        new_tx_notification.recv().await,
-        Ok(tx2.cached_id().unwrap()),
-        "Second added should be tx2"
-    );
-    let update = tx2_subscribe_updates.next().await.unwrap();
-    assert!(
-        matches!(
-            update,
-            TxStatusMessage::Status(TransactionStatus::Submitted { .. })
-        ),
-        "First message in tx2 stream should be Submitted"
-    );
+    universe
+        .await_expected_tx_statuses(ids.clone(), |status| {
+            matches!(status, TransactionStatus::Submitted { .. })
+        })
+        .await
+        .unwrap();
 
     // waiting for them to be removed
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
 
-    let update = tx1_subscribe_updates.next().await.unwrap();
-    assert_eq!(
-        update,
-        TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            tx_id: tx1_id,
-            reason: "Transaction is removed: Transaction expired \
-                    because it exceeded the configured time to live `tx-pool-ttl`."
-                .to_string()
-        }),
-        "Second message in tx1 stream should be squeezed out"
-    );
-
-    let update = tx2_subscribe_updates.next().await.unwrap();
-    assert_eq!(
-        update,
-        TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            tx_id: tx2_id,
-            reason: "Transaction is removed: Transaction expired \
-                    because it exceeded the configured time to live `tx-pool-ttl`."
-                .to_string()
-        }),
-        "Second message in tx2 stream should be squeezed out"
-    );
+    universe
+        .await_expected_tx_statuses(ids, |status| {
+            matches!(status, TransactionStatus::SqueezedOut { .. })
+        })
+        .await
+        .unwrap();
 
     service.stop_and_await().await.unwrap();
 }
-*/
