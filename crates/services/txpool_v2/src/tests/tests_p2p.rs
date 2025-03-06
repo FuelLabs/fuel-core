@@ -232,7 +232,6 @@ async fn insert_from_local_broadcasts_to_p2p() {
     let service = universe.build_service(Some(p2p), None);
     service.start_and_await().await.unwrap();
 
-
     service.shared.insert(tx1.clone()).await.unwrap();
 
     // verify status updates
@@ -245,7 +244,6 @@ async fn insert_from_local_broadcasts_to_p2p() {
         .unwrap();
 }
 
-/*
 #[tokio::test]
 async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     let mut universe = TestPoolUniverse::default();
@@ -263,20 +261,17 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     // build txpool service
     let service = universe.build_service(Some(p2p), None);
 
-    // verify tx status update from p2p injected tx is successful
-    let mut receiver = service
-        .shared
-        .tx_update_subscribe(tx1.id(&Default::default()))
-        .unwrap();
-
     // start the service
     service.start_and_await().await.unwrap();
 
-    let res = receiver.next().await;
-    assert!(matches!(
-        res,
-        Some(TxStatusMessage::Status(TransactionStatus::Submitted { .. }))
-    ));
+    // verify tx status update from p2p injected tx is successful
+    let ids = vec![tx1.id(&Default::default())];
+    universe
+        .await_expected_tx_statuses(ids, |status| {
+            matches!(status, TransactionStatus::Submitted { .. })
+        })
+        .await
+        .unwrap();
 
     // verify tx was not broadcast to p2p
     let not_broadcast =
@@ -323,6 +318,7 @@ async fn test_gossipped_transaction_with_check_error_rejected() {
     )
 }
 
+/*
 #[tokio::test]
 async fn test_gossipped_mint_rejected() {
     let universe = TestPoolUniverse::default();
@@ -361,6 +357,7 @@ async fn test_gossipped_mint_rejected() {
         "expected to receive gossip validity notification"
     )
 }
+    */
 
 #[tokio::test]
 async fn test_gossipped_transaction_with_transient_error_ignored() {
@@ -398,4 +395,3 @@ async fn test_gossipped_transaction_with_transient_error_ignored() {
     );
     service.stop_and_await().await.unwrap();
 }
-*/
