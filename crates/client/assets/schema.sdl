@@ -998,7 +998,7 @@ type Query {
 	- Reserved witness slots for signed coins filled with `64` zeroes
 	- Set script gas limit(unless `script` is empty)
 	- Estimated predicates, if `estimate_predicates == true`
-
+	
 	Returns an error if:
 	- The number of required balances exceeds the maximum number of inputs allowed.
 	- The fee address index is out of bounds.
