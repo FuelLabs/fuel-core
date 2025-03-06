@@ -13,7 +13,6 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
-use tracing::instrument::WithSubscriber;
 use tracing_subscriber::{
     filter::EnvFilter,
     layer::SubscriberExt,
