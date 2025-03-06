@@ -6,6 +6,7 @@ pub mod executor;
 pub mod graphql_api;
 #[cfg(feature = "std")]
 pub mod p2p;
+pub mod preconfirmation;
 pub mod relayer;
 pub mod shared_sequencer;
 #[cfg(feature = "std")]

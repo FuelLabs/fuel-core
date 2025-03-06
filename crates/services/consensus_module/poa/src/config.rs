@@ -11,6 +11,7 @@ pub struct Config {
     pub metrics: bool,
     pub min_connected_reserved_peers: usize,
     pub time_until_synced: Duration,
+    pub production_timeout: Duration,
     pub chain_id: ChainId,
 }
 
@@ -23,6 +24,7 @@ impl Default for Config {
             metrics: false,
             min_connected_reserved_peers: 0,
             time_until_synced: Duration::ZERO,
+            production_timeout: Duration::from_secs(20),
             chain_id: ChainId::default(),
         }
     }
@@ -39,4 +41,7 @@ pub enum Trigger {
     Never,
     /// A new block is produced periodically. Used to simulate consensus block delay.
     Interval { block_time: Duration },
+    /// Opens the block production immediately and keeps it open for the specified period.
+    /// After period is over, the block is produced.
+    Open { period: Duration },
 }

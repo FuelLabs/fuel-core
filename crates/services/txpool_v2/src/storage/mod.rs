@@ -6,7 +6,11 @@ use std::{
 };
 
 use crate::{
-    error::Error,
+    error::{
+        Error,
+        InputValidationErrorType,
+    },
+    pool::SavedOutput,
     ports::TxPoolPersistentStorage,
 };
 use fuel_core_types::services::txpool::{
@@ -84,12 +88,14 @@ pub trait Storage {
     fn has_dependencies(&self, index: &Self::StorageIndex) -> bool;
 
     /// Validate inputs of a transaction.
+    /// If error is that some inputs are missing, the function should return the list of missing inputs.
     fn validate_inputs(
         &self,
         transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
+        saved_outputs: &HashSet<SavedOutput>,
         utxo_validation: bool,
-    ) -> Result<(), Error>;
+    ) -> Result<(), InputValidationErrorType>;
 
     /// Remove a transaction along with its dependents subtree.
     fn remove_transaction_and_dependents_subtree(

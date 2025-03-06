@@ -19,7 +19,6 @@ use crate::{
     Service,
     Trigger,
 };
-use async_trait::async_trait;
 use fuel_core_chain_config::default_consensus_dev_key;
 use fuel_core_services::{
     Service as StorageTrait,
@@ -81,13 +80,15 @@ use tokio::{
         broadcast,
         watch,
     },
-    time,
+    time::{
+        self,
+        Instant,
+    },
 };
 
 mod manually_produce_tests;
 mod test_time;
 mod trigger_tests;
-
 use test_time::TestTime;
 
 struct TestContextBuilder {
@@ -145,7 +146,7 @@ impl TestContextBuilder {
             let mut producer = MockBlockProducer::default();
             producer
                 .expect_produce_and_execute_block()
-                .returning(|_, _, _| {
+                .returning(|_, _, _, _| {
                     Ok(UncommittedResult::new(
                         ExecutionResult {
                             block: Default::default(),
@@ -196,7 +197,7 @@ impl TestContextBuilder {
     }
 }
 
-struct FakeBlockSigner {
+pub struct FakeBlockSigner {
     succeeds: bool,
 }
 
@@ -220,15 +221,17 @@ impl BlockSigner for FakeBlockSigner {
     }
 }
 
+pub type TestPoAService = Service<
+    MockTransactionPool,
+    MockBlockProducer,
+    MockBlockImporter,
+    FakeBlockSigner,
+    InMemoryPredefinedBlocks,
+    test_time::Watch,
+>;
+
 struct TestContext {
-    service: Service<
-        MockTransactionPool,
-        MockBlockProducer,
-        MockBlockImporter,
-        FakeBlockSigner,
-        InMemoryPredefinedBlocks,
-        test_time::Watch,
-    >,
+    service: TestPoAService,
     time: TestTime,
 }
 
@@ -297,7 +300,7 @@ async fn remove_skipped_transactions() {
     block_producer
         .expect_produce_and_execute_block()
         .times(1)
-        .returning(move |_, _, _| {
+        .returning(move |_, _, _, _| {
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block: Default::default(),
@@ -379,7 +382,7 @@ async fn remove_skipped_transactions() {
         time.watch(),
     );
 
-    assert!(task.produce_next_block().await.is_ok());
+    assert!(task.produce_next_block(Instant::now()).await.is_ok());
 }
 
 fn test_signing_key() -> Secret<SecretKeyWrapper> {
@@ -406,13 +409,14 @@ impl FakeBlockProducer {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl BlockProducer for FakeBlockProducer {
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         block_time: Tai64,
-        _source: TransactionsSource,
+        _: TransactionsSource,
+        _: Instant,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         self.block_sender
             .send(FakeProducedBlock::New(height, block_time))
@@ -494,6 +498,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+
     let task = MainTask::new(
         &last_block,
         config,
@@ -558,6 +563,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+
     let task = MainTask::new(
         &last_block,
         config,
