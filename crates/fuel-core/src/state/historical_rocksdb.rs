@@ -90,6 +90,8 @@ pub struct HistoricalRocksDB<Description> {
     state_rewind_policy: StateRewindPolicy,
     /// The Description of the database.
     db: RocksDb<Historical<Description>>,
+    /// Is the migration in progress
+    is_migration_in_progress: std::sync::Mutex<bool>,
 }
 
 impl<Description> HistoricalRocksDB<Description>
@@ -103,6 +105,7 @@ where
         Ok(Self {
             state_rewind_policy,
             db,
+            is_migration_in_progress: std::sync::Mutex::new(false),
         })
     }
 
@@ -115,6 +118,7 @@ where
         Ok(Self {
             state_rewind_policy,
             db,
+            is_migration_in_progress: std::sync::Mutex::new(false),
         })
     }
 
@@ -197,11 +201,12 @@ where
     where
         T: KeyValueInspect<Column = Column<Description>>,
     {
-        let modifications_history_migration_in_progress = self.is_migration_in_progress();
-
         if self.state_rewind_policy == StateRewindPolicy::NoRewind {
             return Ok(());
         }
+
+        let modifications_history_migration_in_progress = self.is_migration_in_progress();
+
         let height_u64 = height.as_u64();
 
         let reverse_changes =
@@ -365,7 +370,14 @@ where
     }
 
     fn is_migration_in_progress(&self) -> bool {
-        self.v1_entries().next().is_some()
+        let mut lock = self.is_migration_in_progress.lock().unwrap();
+
+        if *lock {
+            return true;
+        }
+
+        *lock = self.v1_entries().next().is_some();
+        *lock
     }
 }
 
