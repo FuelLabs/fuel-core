@@ -14,8 +14,6 @@ hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
-# TODO: Remove after https://github.com/FuelLabs/fuel-core/issues/2607
-symbolic-common = "=12.13.0"
 
 # Neutral deps
 fuel-core = { path = "../../crates/fuel-core", features = ["test-helpers"] }
