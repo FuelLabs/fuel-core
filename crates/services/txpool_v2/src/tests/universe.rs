@@ -462,7 +462,11 @@ impl TestPoolUniverse {
         )
     }
 
-    pub async fn waiting_txs_insertion(&mut self, tx_ids: Vec<TxId>) {
+    pub async fn await_expected_tx_statuses(
+        &mut self,
+        tx_ids: Vec<TxId>,
+        predicate: impl Fn(&TransactionStatus) -> bool,
+    ) {
         const TIMEOUT: Duration = Duration::from_secs(50);
         const POLL_TIMEOUT: Duration = Duration::from_millis(5);
 
@@ -480,9 +484,7 @@ impl TestPoolUniverse {
             )
             .await
             {
-                Ok(Some((tx_id, tx_status)))
-                    if matches!(tx_status, TransactionStatus::Submitted { .. }) =>
-                {
+                Ok(Some((tx_id, tx_status))) if predicate(&tx_status) => {
                     values.push(tx_id);
                 }
                 Ok(Some(_)) => {

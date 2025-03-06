@@ -61,7 +61,11 @@ async fn test_find() {
         .try_insert(vec![tx1.clone(), tx2.clone()])
         .unwrap();
 
-    universe.waiting_txs_insertion(ids).await;
+    universe
+        .await_expected_tx_statuses(ids, |status| {
+            matches!(status, TransactionStatus::Submitted { .. })
+        })
+        .await;
 
     // When
     let out = service
@@ -109,7 +113,11 @@ async fn test_prune_transactions() {
         .try_insert(vec![tx1.clone(), tx2.clone(), tx3.clone()])
         .unwrap();
 
-    universe.waiting_txs_insertion(ids).await;
+    universe
+        .await_expected_tx_statuses(ids, |status| {
+            matches!(status, TransactionStatus::Submitted { .. })
+        })
+        .await;
 
     let out = service
         .shared
@@ -175,10 +183,10 @@ async fn test_prune_transactions_the_oldest() {
     service.shared.try_insert(vec![tx2.clone()]).unwrap();
 
     universe
-        .waiting_txs_insertion(vec![
-            tx1.id(&Default::default()),
-            tx2.id(&Default::default()),
-        ])
+        .await_expected_tx_statuses(
+            vec![tx1.id(&Default::default()), tx2.id(&Default::default())],
+            |status| matches!(status, TransactionStatus::Submitted { .. }),
+        )
         .await;
     // check that tx1 and tx2 are still there at time `4`
     let out = service
@@ -205,10 +213,10 @@ async fn test_prune_transactions_the_oldest() {
     service.shared.try_insert(vec![tx4.clone()]).unwrap();
 
     universe
-        .waiting_txs_insertion(vec![
-            tx3.id(&Default::default()),
-            tx4.id(&Default::default()),
-        ])
+        .await_expected_tx_statuses(
+            vec![tx3.id(&Default::default()), tx4.id(&Default::default())],
+            |status| matches!(status, TransactionStatus::Submitted { .. }),
+        )
         .await;
     // time is now `11`, tx1 and tx2 should be pruned
     let out = service
@@ -250,7 +258,6 @@ async fn test_prune_transactions_the_oldest() {
     service.stop_and_await().await.unwrap();
 }
 
-/*
 #[tokio::test]
 async fn prune_expired_transactions() {
     let mut universe = TestPoolUniverse::default();
@@ -285,7 +292,9 @@ async fn prune_expired_transactions() {
         .unwrap();
 
     universe
-        .waiting_txs_insertion(service.shared.new_tx_notification_subscribe(), ids)
+        .await_expected_tx_statuses(ids.clone(), |status| {
+            matches!(status, TransactionStatus::Submitted { .. })
+        })
         .await;
 
     assert_eq!(
@@ -305,18 +314,6 @@ async fn prune_expired_transactions() {
     );
 
     // When
-    let mut update_1 = service
-        .shared
-        .tx_update_subscribe(tx1.id(&ChainId::default()))
-        .unwrap();
-    let mut update_2 = service
-        .shared
-        .tx_update_subscribe(tx2.id(&ChainId::default()))
-        .unwrap();
-    let mut update_3 = service
-        .shared
-        .tx_update_subscribe(tx3.id(&ChainId::default()))
-        .unwrap();
     sender
         .send(Arc::new(ImportResult::new_from_local(
             expiration_block,
@@ -326,30 +323,31 @@ async fn prune_expired_transactions() {
         .await
         .unwrap();
 
-    update_1.next().await.expect("tx1 should be pruned");
-    update_2.next().await.expect("tx2 should be pruned");
-    update_3.next().await.expect("tx3 should be pruned");
+    universe
+        .await_expected_tx_statuses(ids, |status| {
+            matches!(status, TransactionStatus::SqueezedOut { .. })
+        })
+        .await;
+
+    //     update_1.next().await.expect("tx1 should be pruned");
+    // update_2.next().await.expect("tx2 should be pruned");
+    // update_3.next().await.expect("tx3 should be pruned");
 
     // Then
-    assert_eq!(
-        service
-            .shared
-            .find(vec![
-                tx1.id(&Default::default()),
-                tx2.id(&Default::default()),
-                tx3.id(&Default::default()),
-            ])
-            .await
-            .unwrap()
-            .iter()
-            .filter(|x| x.is_some())
-            .count(),
-        0
-    );
+    assert!(service
+        .shared
+        .find(vec![
+            tx1.id(&Default::default()),
+            tx2.id(&Default::default()),
+            tx3.id(&Default::default()),
+        ])
+        .await
+        .unwrap()
+        .iter()
+        .all(|x| x.is_none()));
 
     service.stop_and_await().await.unwrap();
 }
-*/
 
 /*
 #[tokio::test]
