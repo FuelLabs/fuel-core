@@ -1,10 +1,6 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-// TODO: Remove after https://github.com/FuelLabs/fuel-core/issues/2607
-#[cfg(test)]
-use symbolic_common as _;
-
 #[cfg(test)]
 use fuel_core::{
     chain_config::{
