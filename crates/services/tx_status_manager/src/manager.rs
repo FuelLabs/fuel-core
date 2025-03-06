@@ -66,16 +66,19 @@ impl TxStatusManager {
             | TransactionStatus::Failure { .. } => (),
             // TODO[RC]: Handle these new variants
             TransactionStatus::PreconfirmationSuccess {
-                tx_pointer,
-                tx_id,
-                receipts,
+                tx_pointer: _,
+                tx_id: _,
+                receipts: _,
             } => todo!(),
-            TransactionStatus::PreconfirmationSqueezedOut { tx_id, reason } => todo!(),
+            TransactionStatus::PreconfirmationSqueezedOut {
+                tx_id: _,
+                reason: _,
+            } => todo!(),
             TransactionStatus::PreconfirmationFailure {
-                tx_pointer,
-                tx_id,
-                receipts,
-                reason,
+                tx_pointer: _,
+                tx_id: _,
+                receipts: _,
+                reason: _,
             } => todo!(),
         };
 

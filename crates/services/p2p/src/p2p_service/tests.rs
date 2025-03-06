@@ -1365,14 +1365,13 @@ async fn gossipsub_peer_limit_works() {
     tokio::time::timeout(
         Duration::from_secs(5),
         gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(
-                Transaction::default_test_tx(),
-            )),
+            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx())),
             GossipsubMessageAcceptance::Accept,
-            Some(1) // limit to 1 peer, therefore the function will timeout, as it will not be able to propagate the message
+            Some(1), // limit to 1 peer, therefore the function will timeout, as it will not be able to propagate the message
         ),
     )
-        .await.expect_err("Should have timed out");
+    .await
+    .expect_err("Should have timed out");
 }
 
 #[tokio::test]

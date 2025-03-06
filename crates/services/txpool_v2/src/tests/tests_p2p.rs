@@ -26,7 +26,6 @@ use tokio::sync::{
     broadcast,
     Notify,
 };
-use tokio_stream::StreamExt;
 
 use crate::tests::{
     mocks::MockP2P,

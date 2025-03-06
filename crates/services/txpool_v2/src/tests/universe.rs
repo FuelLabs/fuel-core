@@ -33,7 +33,6 @@ use fuel_core_types::{
             contract::Contract as ContractInput,
             Input,
         },
-        Bytes32,
         ConsensusParameters,
         Contract,
         ContractId,
@@ -60,20 +59,9 @@ use fuel_core_types::{
         TransactionStatus,
     },
 };
-use mockall::predicate::always;
-use parking_lot::{
-    Mutex,
-    RwLock,
-};
+use parking_lot::RwLock;
 use std::time::Duration;
-use tokio::{
-    sync::{
-        broadcast::Receiver,
-        mpsc,
-        Barrier,
-    },
-    time::Instant,
-};
+use tokio::sync::mpsc;
 
 use crate::{
     collision_manager::basic::BasicCollisionManager,

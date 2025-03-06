@@ -56,7 +56,7 @@ mod storage;
 pub type GasPrice = Word;
 
 #[cfg(test)]
- mod tests;
+mod tests;
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();
 
