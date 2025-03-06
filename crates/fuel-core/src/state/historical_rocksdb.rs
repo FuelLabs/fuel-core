@@ -1071,7 +1071,7 @@ mod tests {
 
         // When
         // Open the database again, but with the rewind range of 1.
-        // Commiting 2 new blocks, should add new entries to V2 history.
+        // Committing 2 new blocks, should add new entries to V2 history.
         // And because of the rewind range of 1, the V1 history should be removed.
         let rocks_db = RocksDb::<Historical<OnChain>>::default_open(
             &temp_dir,
