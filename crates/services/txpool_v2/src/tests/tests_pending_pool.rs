@@ -6,7 +6,6 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-use futures::StreamExt;
 
 use crate::tests::universe::TestPoolUniverse;
 
@@ -106,7 +105,6 @@ async fn test_tx__return_error_expired() {
     service.stop_and_await().await.unwrap();
 }
 
-/*
 #[tokio::test]
 async fn test_tx__directly_removed_not_enough_space() {
     let mut universe = TestPoolUniverse::default();
@@ -118,33 +116,33 @@ async fn test_tx__directly_removed_not_enough_space() {
     let tx1 = universe.build_script_transaction(None, None, 10);
     let tx_id1 = tx1.id(&Default::default());
     let input = unset_input.into_input(UtxoId::new(tx_id1, 0));
+    let missing_utxoid = input.clone().utxo_id().unwrap().clone();
     let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
-    let tx_id2 = tx2.id(&Default::default());
+    let tx2_id = tx2.id(&Default::default());
 
     let service = universe.build_service(None, None);
     service.start_and_await().await.unwrap();
 
     // Given
-    service.shared.try_insert(vec![tx2.clone()]).unwrap();
-
     // When
-    let mut subscriber_status = service.shared.tx_update_subscribe(tx_id2).unwrap();
-    let status = subscriber_status.next().await.unwrap();
+    service.shared.try_insert(vec![tx2.clone()]).unwrap();
 
     // Then
     // The error returned is the error that the transaction was squeezed out for.
     // We don't need the user to know that pending pool exists
-    assert_eq!(
-        status,
-        TxStatusMessage::Status(TransactionStatus::SqueezedOut {
-            tx_id: tx_id2,
-            reason: "Transaction input validation failed: UTXO \
-            (id: cf6532b2371b3efb71ff8ca4ec32cf046fb1be64e620d21a0a98c0298f8196140000) \
-            does not exist"
-                .to_string(),
-        })
+    let ids = vec![tx2_id];
+    let squeezed_out_reason = format!(
+        "Transaction input validation failed: UTXO \
+        (id: {missing_utxoid}) \
+        does not exist"
     );
+    universe
+        .await_expected_tx_statuses(ids, |status| {
+            matches!(status, TransactionStatus::SqueezedOut { tx_id, reason }
+                if *tx_id == tx2_id && reason == &squeezed_out_reason)
+        })
+        .await
+        .unwrap();
 
     service.stop_and_await().await.unwrap();
 }
-*/
