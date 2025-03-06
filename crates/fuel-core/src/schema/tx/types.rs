@@ -854,12 +854,10 @@ impl Transaction {
         let query = ctx.read_view()?;
 
         let tx_status_manager = ctx.data_unchecked::<TxStatusManager>();
-        let tx_status_manager_status =
-            get_tx_status(id, query.as_ref(), tx_status_manager)
-                .await
-                .map_err(Into::into);
 
-        tx_status_manager_status
+        get_tx_status(id, query.as_ref(), tx_status_manager)
+            .await
+            .map_err(Into::into)
     }
 
     async fn script(&self) -> Option<HexString> {

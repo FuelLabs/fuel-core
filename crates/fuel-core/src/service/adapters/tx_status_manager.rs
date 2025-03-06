@@ -43,7 +43,7 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
 
 #[cfg(not(feature = "p2p"))]
 impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
-    type GossipedStatuses = TransactionStatusGossipData;
+    type GossipedStatuses = PreconfirmationsGossipData;
 
     fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
         Box::pin(fuel_core_services::stream::pending())
