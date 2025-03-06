@@ -31,6 +31,7 @@ fuel-core-types-v0 = { package = "fuel-core-types", version = "0.35.0", default-
   "alloc",
   "serde",
 ], optional = true }
+futures = { workspace = true }
 postcard = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, default-features = false, features = [

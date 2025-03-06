@@ -157,7 +157,7 @@ impl TryFrom<TxInfo> for TransactionStatus {
             .as_secs() as i64;
 
         Ok(TransactionStatus::Submitted {
-            time: Tai64::from_unix(unit_time),
+            timestamp: Tai64::from_unix(unit_time),
         })
     }
 }
@@ -294,17 +294,13 @@ where
 {
     fn import_block(&mut self, result: SharedImportResult) -> TaskNextAction {
         let new_height = *result.sealed_block.entity.header().height();
-        let executed_transactions = result.tx_status.iter().map(|s| s.id).collect();
-        // We don't want block importer wait for us to process the result.
-        drop(result);
 
-        if let Err(err) = self
-            .pool_worker
-            .remove_executed_transactions(executed_transactions)
-        {
+        if let Err(err) = self.pool_worker.process_block(Arc::clone(&result)) {
             tracing::error!("{err}");
             return TaskNextAction::Stop
         }
+        // We don't want block importer wait for us to process the result.
+        drop(result);
 
         {
             self.current_height_writer.write(|data| {
@@ -415,7 +411,6 @@ where
                         .or_default();
                     block_height_expiration.push(tx_id);
                 }
-                self.shared_state.new_txs_notifier.send_replace(());
             }
             PoolNotification::ErrorInsertion {
                 tx_id,
@@ -723,6 +718,7 @@ pub fn new_service<
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
     wasm_checker: WasmChecker,
+    new_txs_notifier: watch::Sender<()>,
 ) -> Service<PSView, P2P>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
@@ -756,7 +752,6 @@ where
         // But we still want to drop subscribers after `2 * TxPool_TTL`.
         config.max_txs_ttl.saturating_mul(2),
     );
-    let (new_txs_notifier, _) = watch::channel(());
 
     let subscriptions = Subscriptions {
         new_tx_source: new_peers_subscribed_stream,
@@ -805,9 +800,10 @@ where
             max_txs_chain_count: config.max_txs_chain_count,
         }),
         BasicCollisionManager::new(),
-        RatioTipGasSelection::new(),
+        RatioTipGasSelection::new(new_txs_notifier.clone()),
         config,
         pool_stats_sender,
+        new_txs_notifier.clone(),
     );
 
     // BlockHeight is < 64 bytes, so we can use SeqLock
@@ -825,7 +821,7 @@ where
         select_transactions_requests_sender: pool_worker
             .extract_block_transactions_sender
             .clone(),
-        new_txs_notifier,
+        new_executable_txs_notifier: new_txs_notifier,
         latest_stats: pool_stats_receiver,
     };
 

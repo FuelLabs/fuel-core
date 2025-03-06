@@ -850,6 +850,103 @@ impl FuelClient {
         Ok(stream)
     }
 
+    /// Requests all storage slots for the `contract_id`.
+    #[cfg(feature = "subscriptions")]
+    pub async fn contract_storage_slots<'a>(
+        &'a self,
+        contract_id: &'a ContractId,
+    ) -> io::Result<impl Stream<Item = io::Result<(Bytes32, Vec<u8>)>> + 'a> {
+        use cynic::SubscriptionBuilder;
+        use schema::storage::ContractStorageSlotsArgs;
+        let s = schema::storage::ContractStorageSlots::build(ContractStorageSlotsArgs {
+            contract_id: (*contract_id).into(),
+        });
+
+        let stream = self.subscribe(s).await?.map(
+            |result: io::Result<schema::storage::ContractStorageSlots>| {
+                let result: (Bytes32, Vec<u8>) = result?.contract_storage_slots.into();
+                Result::<_, io::Error>::Ok(result)
+            },
+        );
+
+        Ok(stream)
+    }
+
+    /// Requests all storage balances for the `contract_id`.
+    #[cfg(feature = "subscriptions")]
+    pub async fn contract_storage_balances<'a>(
+        &'a self,
+        contract_id: &'a ContractId,
+    ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>> + 'a>
+    {
+        use cynic::SubscriptionBuilder;
+        use schema::{
+            contract::ContractBalance,
+            storage::ContractStorageBalancesArgs,
+        };
+        let s = schema::storage::ContractStorageBalances::build(
+            ContractStorageBalancesArgs {
+                contract_id: (*contract_id).into(),
+            },
+        );
+
+        let stream = self.subscribe(s).await?.map(
+            |result: io::Result<schema::storage::ContractStorageBalances>| {
+                let result: ContractBalance = result?.contract_storage_balances;
+                Result::<_, io::Error>::Ok(result)
+            },
+        );
+
+        Ok(stream)
+    }
+
+    pub async fn contract_slots_values(
+        &self,
+        contract_id: &ContractId,
+        block_height: Option<BlockHeight>,
+        requested_storage_slots: Vec<Bytes32>,
+    ) -> io::Result<Vec<(Bytes32, Vec<u8>)>> {
+        let query = schema::storage::ContractSlotValues::build(
+            schema::storage::ContractSlotValuesArgs {
+                contract_id: (*contract_id).into(),
+                block_height: block_height.map(|b| (*b).into()),
+                storage_slots: requested_storage_slots
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+            },
+        );
+
+        self.query(query)
+            .await
+            .map(|r| r.contract_slot_values.into_iter().map(Into::into).collect())
+    }
+
+    pub async fn contract_balance_values(
+        &self,
+        contract_id: &ContractId,
+        block_height: Option<BlockHeight>,
+        requested_storage_slots: Vec<AssetId>,
+    ) -> io::Result<Vec<schema::contract::ContractBalance>> {
+        let query = schema::storage::ContractBalanceValues::build(
+            schema::storage::ContractBalanceValuesArgs {
+                contract_id: (*contract_id).into(),
+                block_height: block_height.map(|b| (*b).into()),
+                assets: requested_storage_slots
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+            },
+        );
+
+        self.query(query).await.map(|r| {
+            r.contract_balance_values
+                .into_iter()
+                .map(Into::into)
+                .collect()
+        })
+    }
+
     pub async fn start_session(&self) -> io::Result<String> {
         let query = schema::StartSession::build(());
 

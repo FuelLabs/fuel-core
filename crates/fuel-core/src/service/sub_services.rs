@@ -1,15 +1,46 @@
 #![allow(clippy::let_unit_value)]
 
-use super::{
-    adapters::{
-        FuelBlockSigner,
-        P2PAdapter,
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
+
+use fuel_core_gas_price_service::v1::{
+    algorithm::AlgorithmV1,
+    da_source_service::block_committer_costs::{
+        BlockCommitterDaBlockCosts,
+        BlockCommitterHttpApi,
     },
-    genesis::create_genesis_block,
-    DbType,
+    metadata::V1AlgorithmConfig,
+    uninitialized_task::new_gas_price_service_v1,
+};
+
+#[cfg(feature = "p2p")]
+use fuel_core_poa::pre_confirmation_signature_service::PreConfirmationSignatureTask;
+use fuel_core_poa::Trigger;
+#[cfg(feature = "p2p")]
+use fuel_core_services::ServiceRunner;
+use fuel_core_storage::{
+    self,
+    transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::signer::SignMode;
+
+#[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
+
+#[cfg(feature = "p2p")]
+use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
+    key_generator::{
+        Ed25519Key,
+        Ed25519KeyGenerator,
+    },
+    parent_signature::FuelParentSigner,
+    trigger::TimeBasedTrigger,
+    tx_receiver::PreconfirmationsReceiver,
+};
+
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -43,25 +74,15 @@ use crate::{
         SubServices,
     },
 };
-use fuel_core_gas_price_service::v1::{
-    algorithm::AlgorithmV1,
-    da_source_service::block_committer_costs::{
-        BlockCommitterDaBlockCosts,
-        BlockCommitterHttpApi,
+
+use super::{
+    adapters::{
+        FuelBlockSigner,
+        P2PAdapter,
     },
-    metadata::V1AlgorithmConfig,
-    uninitialized_task::new_gas_price_service_v1,
+    genesis::create_genesis_block,
+    DbType,
 };
-use fuel_core_poa::Trigger;
-use fuel_core_storage::{
-    self,
-    transactional::AtomicView,
-};
-#[cfg(feature = "relayer")]
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::signer::SignMode;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
@@ -95,6 +116,9 @@ pub fn init_sub_services(
     let chain_id = chain_config.consensus_parameters.chain_id();
     let chain_name = chain_config.chain_name.clone();
     let on_chain_view = database.on_chain().latest_view()?;
+    let (new_txs_updater, new_txs_watcher) = tokio::sync::watch::channel(());
+    let (preconfirmation_sender, _preconfirmation_receiver) =
+        tokio::sync::mpsc::channel(1024);
 
     let genesis_block = on_chain_view
         .genesis_block()?
@@ -123,13 +147,9 @@ pub fn init_sub_services(
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
-        // #[cfg(not(feature = "parallel-executor"))]
         upgradable_executor_config,
-        // #[cfg(feature = "parallel-executor")]
-        // fuel_core_parallel_executor::config::Config {
-        //     number_of_cores: config.executor_number_of_cores,
-        //     executor_config: upgradable_executor_config,
-        // },
+        new_txs_watcher,
+        preconfirmation_sender,
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());
@@ -253,6 +273,7 @@ pub fn init_sub_services(
         last_height,
         universal_gas_price_provider.clone(),
         executor.clone(),
+        new_txs_updater,
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
@@ -307,6 +328,19 @@ pub fn init_sub_services(
 
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
+
+    #[cfg(feature = "p2p")]
+    let _pre_confirmation_service: ServiceRunner<
+        PreConfirmationSignatureTask<
+            PreconfirmationsReceiver,
+            P2PAdapter,
+            FuelParentSigner,
+            Ed25519KeyGenerator,
+            Ed25519Key,
+            TimeBasedTrigger<SystemTime>,
+        >,
+    >;
+
     let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
             &last_block_header,

@@ -286,6 +286,10 @@ pub struct Command {
     #[clap(long = "time-until-synced", default_value = "0s", env)]
     pub time_until_synced: humantime::Duration,
 
+    /// The timeout after which the production of a block is considered failed.
+    #[clap(long = "production-timeout", default_value = "20s", env)]
+    pub production_timeout: humantime::Duration,
+
     /// The size of the memory pool in number of `MemoryInstance`s.
     #[clap(long = "memory-pool-size", default_value = "32", env)]
     pub memory_pool_size: usize,
@@ -338,6 +342,7 @@ impl Command {
             graphql,
             min_connected_reserved_peers,
             time_until_synced,
+            production_timeout,
             memory_pool_size,
             profiling: _,
         } = self;
@@ -538,6 +543,8 @@ impl Command {
             tx_size_of_p2p_sync_queue,
             tx_max_pending_read_requests,
             tx_max_pending_write_requests,
+            tx_pending_pool_ttl,
+            tx_pending_pool_size_percentage,
         } = tx_pool;
 
         let black_list = BlackList::new(
@@ -656,6 +663,8 @@ impl Command {
                 pool_limits,
                 heavy_work: pool_heavy_work_config,
                 service_channel_limits,
+                pending_pool_tx_ttl: tx_pending_pool_ttl.into(),
+                max_pending_pool_size_percentage: tx_pending_pool_size_percentage,
                 metrics: disabled_metrics.is_enabled(Module::TxPool),
             },
             block_producer: ProducerConfig {
@@ -678,6 +687,7 @@ impl Command {
             relayer_consensus_config: verifier,
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
+            production_timeout: production_timeout.into(),
             memory_pool_size,
         };
         Ok(config)
