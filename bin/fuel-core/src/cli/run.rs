@@ -745,7 +745,11 @@ fn get_default_max_fds() -> i32 {
 
 pub async fn get_service_with_shutdown_listeners(
     command: Command,
-) -> anyhow::Result<(FuelService, ShutdownListener)> {
+) -> anyhow::Result<(
+    FuelService,
+    Option<PyroscopeAgent<PyroscopeAgentRunning>>,
+    ShutdownListener,
+)> {
     #[cfg(feature = "rocksdb")]
     if command.db_prune && command.database_path.exists() {
         fuel_core::combined_database::CombinedDatabase::prune(&command.database_path)?;
@@ -755,7 +759,7 @@ pub async fn get_service_with_shutdown_listeners(
     let config = command.get_config().await?;
 
     // start profiling agent if url is configured
-    let _profiling_agent = start_pyroscope_agent(profiling, &config)?;
+    let profiling_agent = start_pyroscope_agent(profiling, &config)?;
 
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
@@ -767,17 +771,18 @@ pub async fn get_service_with_shutdown_listeners(
 
     Ok((
         FuelService::new(combined_database, config, &mut shutdown_listener)?,
+        profiling_agent,
         shutdown_listener,
     ))
 }
 
 pub async fn get_service(command: Command) -> anyhow::Result<FuelService> {
-    let (service, _) = get_service_with_shutdown_listeners(command).await?;
+    let (service, _, _) = get_service_with_shutdown_listeners(command).await?;
     Ok(service)
 }
 
 pub async fn exec(command: Command) -> anyhow::Result<()> {
-    let (service, shutdown_listener) =
+    let (service, _profiling_agent, shutdown_listener) =
         get_service_with_shutdown_listeners(command).await?;
 
     // Genesis could take a long time depending on the snapshot size. Start needs to be
@@ -800,6 +805,8 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     }
 
     service.send_stop_signal_and_await_shutdown().await?;
+
+    drop(_profiling_agent);
 
     Ok(())
 }

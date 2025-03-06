@@ -42,8 +42,9 @@ resolver = "2"
 exclude = ["version-compatibility"]
 
 [profile.release]
+debug = true
 codegen-units = 1
-lto = "fat"
+lto = "thin"
 # The difference in performance for "fat" and "thin" is small,
 # but "thin" LTO is much faster to compile.
 # If you play with benchamrks or flamegraph, it is better to use "thin"
@@ -155,3 +156,6 @@ insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
 url = "2.2"
+
+# TODO: Remove after https://github.com/FuelLabs/fuel-core/issues/2607
+symbolic-common = "=12.13.0"
