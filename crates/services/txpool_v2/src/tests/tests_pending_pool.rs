@@ -64,7 +64,7 @@ async fn test_tx__return_error_expired() {
     let tx1 = universe.build_script_transaction(None, None, 10);
     let tx1_id = tx1.id(&Default::default());
     let input = unset_input.into_input(UtxoId::new(tx1_id, 0));
-    let missing_utxoid = input.clone().utxo_id().unwrap().clone();
+    let missing_utxoid = *input.clone().utxo_id().unwrap();
     let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
     let tx2_id = tx2.id(&Default::default());
 
