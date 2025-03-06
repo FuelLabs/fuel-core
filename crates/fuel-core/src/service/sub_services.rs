@@ -116,6 +116,9 @@ pub fn init_sub_services(
     let chain_id = chain_config.consensus_parameters.chain_id();
     let chain_name = chain_config.chain_name.clone();
     let on_chain_view = database.on_chain().latest_view()?;
+    let (new_txs_updater, new_txs_watcher) = tokio::sync::watch::channel(());
+    let (preconfirmation_sender, _preconfirmation_receiver) =
+        tokio::sync::mpsc::channel(1024);
 
     let genesis_block = on_chain_view
         .genesis_block()?
@@ -145,6 +148,8 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.relayer().clone(),
         upgradable_executor_config,
+        new_txs_watcher,
+        preconfirmation_sender,
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());
@@ -257,6 +262,7 @@ pub fn init_sub_services(
         last_height,
         universal_gas_price_provider.clone(),
         executor.clone(),
+        new_txs_updater,
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 

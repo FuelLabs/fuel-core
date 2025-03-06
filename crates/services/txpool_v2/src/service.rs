@@ -718,6 +718,7 @@ pub fn new_service<
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
     wasm_checker: WasmChecker,
+    new_txs_notifier: watch::Sender<()>,
 ) -> Service<PSView, P2P>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
@@ -751,7 +752,6 @@ where
         // But we still want to drop subscribers after `2 * TxPool_TTL`.
         config.max_txs_ttl.saturating_mul(2),
     );
-    let (new_executable_txs_notifier, _) = watch::channel(());
 
     let subscriptions = Subscriptions {
         new_tx_source: new_peers_subscribed_stream,
@@ -800,10 +800,10 @@ where
             max_txs_chain_count: config.max_txs_chain_count,
         }),
         BasicCollisionManager::new(),
-        RatioTipGasSelection::new(new_executable_txs_notifier.clone()),
+        RatioTipGasSelection::new(new_txs_notifier.clone()),
         config,
         pool_stats_sender,
-        new_executable_txs_notifier.clone(),
+        new_txs_notifier.clone(),
     );
 
     // BlockHeight is < 64 bytes, so we can use SeqLock
@@ -821,7 +821,7 @@ where
         select_transactions_requests_sender: pool_worker
             .extract_block_transactions_sender
             .clone(),
-        new_executable_txs_notifier,
+        new_executable_txs_notifier: new_txs_notifier,
         latest_stats: pool_stats_receiver,
     };
 

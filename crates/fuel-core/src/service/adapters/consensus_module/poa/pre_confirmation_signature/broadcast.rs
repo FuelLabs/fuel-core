@@ -14,12 +14,16 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     parent_signature::ParentSignature,
 };
 use fuel_core_types::{
-    services::p2p::{
-        DelegatePreConfirmationKey,
-        PreConfirmationMessage,
-        Preconfirmation,
-        Preconfirmations,
-        SignedPreconfirmationByDelegate,
+    services::{
+        p2p::{
+            DelegatePreConfirmationKey,
+            PreConfirmationMessage,
+            SignedPreconfirmationByDelegate,
+        },
+        preconfirmation::{
+            Preconfirmation,
+            Preconfirmations,
+        },
     },
     tai64::Tai64,
 };
@@ -99,9 +103,9 @@ mod tests {
     use fuel_core_types::{
         ed25519,
         ed25519_dalek::VerifyingKey,
-        services::p2p::{
-            PreconfirmationStatus,
-            ProtocolSignature,
+        services::{
+            p2p::ProtocolSignature,
+            preconfirmation::PreconfirmationStatus,
         },
     };
 

@@ -1,14 +1,30 @@
 use crate::{
     database::RelayerIterableKeyValueView,
-    service::adapters::TransactionsSource,
+    service::adapters::{
+        NewTxWaiter,
+        TransactionsSource,
+    },
 };
-use fuel_core_executor::ports::MaybeCheckedTransaction;
+use fuel_core_executor::{
+    executor::WaitNewTransactionsResult,
+    ports::{
+        MaybeCheckedTransaction,
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
+    },
+};
 use fuel_core_txpool::Constraints;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    services::relayer::Event,
+    services::{
+        preconfirmation::PreconfirmationStatus,
+        relayer::Event,
+    },
 };
 use std::sync::Arc;
+use tokio::sync::mpsc::error::TrySendError;
+
+use super::PreconfirmationSender;
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     fn next(
@@ -62,6 +78,47 @@ impl fuel_core_executor::ports::RelayerPort for RelayerIterableKeyValueView {
         {
             let _ = da_height;
             Ok(vec![])
+        }
+    }
+}
+
+impl NewTxWaiterPort for NewTxWaiter {
+    async fn wait_for_new_transactions(&mut self) -> WaitNewTransactionsResult {
+        tokio::select! {
+            _ = tokio::time::sleep_until(self.timeout) => {
+                WaitNewTransactionsResult::Timeout
+            }
+            res = self.receiver.changed() => {
+                match res {
+                    Ok(_) => {
+                        WaitNewTransactionsResult::NewTransaction
+                    }
+                    Err(_) => {
+                        WaitNewTransactionsResult::Timeout
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl PreconfirmationSenderPort for PreconfirmationSender {
+    async fn send(&self, preconfirmations: Vec<PreconfirmationStatus>) {
+        // If the receiver is closed, it means no one is listening to the preconfirmations and so we can drop them.
+        // We don't consider this an error.
+        let _ = self.sender.send(preconfirmations).await;
+    }
+
+    fn try_send(
+        &self,
+        preconfirmations: Vec<PreconfirmationStatus>,
+    ) -> Vec<PreconfirmationStatus> {
+        match self.sender.try_send(preconfirmations) {
+            Ok(()) => vec![],
+            // If the receiver is closed, it means no one is listening to the preconfirmations and so we can drop them.
+            // We don't consider this an error.
+            Err(TrySendError::Closed(_)) => vec![],
+            Err(TrySendError::Full(preconfirmations)) => preconfirmations,
         }
     }
 }
