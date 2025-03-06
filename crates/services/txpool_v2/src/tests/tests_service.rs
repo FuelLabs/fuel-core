@@ -329,10 +329,6 @@ async fn prune_expired_transactions() {
         })
         .await;
 
-    //     update_1.next().await.expect("tx1 should be pruned");
-    // update_2.next().await.expect("tx2 should be pruned");
-    // update_3.next().await.expect("tx3 should be pruned");
-
     // Then
     assert!(service
         .shared
