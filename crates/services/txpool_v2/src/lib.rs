@@ -38,8 +38,8 @@
 // TODO: Rename the folder from `txpool_v2` to `txpool` after the migration is complete.
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
-//#![deny(unused_crate_dependencies)]
-//#![deny(warnings)]
+#![deny(unused_crate_dependencies)]
+#![deny(warnings)]
 
 mod collision_manager;
 pub mod config;

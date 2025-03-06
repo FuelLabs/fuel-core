@@ -2,7 +2,7 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(unused_must_use)]
-//#![deny(warnings)]
+#![deny(warnings)]
 #![allow(clippy::blocks_in_conditions)] // False positives with tracing macros
 
 mod sync;
