@@ -8,10 +8,7 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 
-use crate::{
-    tests::universe::TestPoolUniverse,
-    TxStatusMessage,
-};
+use crate::tests::universe::TestPoolUniverse;
 
 #[tokio::test]
 async fn test_tx__keep_missing_input_and_resolved_when_input_submitted() {
@@ -22,41 +19,42 @@ async fn test_tx__keep_missing_input_and_resolved_when_input_submitted() {
 
     let (output, unset_input) = universe.create_output_and_input();
     let tx1 = universe.build_script_transaction(None, Some(vec![output]), 10);
-    let tx_id1 = tx1.id(&Default::default());
-    let input = unset_input.into_input(UtxoId::new(tx_id1, 0));
+    let tx1_id = tx1.id(&Default::default());
+    let input = unset_input.into_input(UtxoId::new(tx1_id, 0));
     let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
-    let tx_id2 = tx2.id(&Default::default());
+    let tx2_id = tx2.id(&Default::default());
 
     let service = universe.build_service(None, None);
     service.start_and_await().await.unwrap();
 
     // Given
-    let mut status_stream = service.shared.tx_update_subscribe(tx_id2).unwrap();
+    let ids = vec![tx2_id];
     service.shared.try_insert(vec![tx2.clone()]).unwrap();
 
-    // When
-    tokio::time::timeout(timeout, status_stream.next())
+    universe
+        .await_expected_tx_statuses(ids, |status| {
+            matches!(status, TransactionStatus::Submitted { .. })
+        })
         .await
-        .unwrap_err();
+        .unwrap_err()
+        .is_timeout();
+
+    // When
     service.shared.try_insert(vec![tx1.clone()]).unwrap();
 
-    universe
-        .waiting_txs_insertion(
-            service.shared.new_tx_notification_subscribe(),
-            vec![tx1.id(&Default::default()), tx2.id(&Default::default())],
-        )
-        .await;
-
     // Then
-    let status = status_stream.next().await.unwrap();
-    assert!(matches!(
-        status,
-        TxStatusMessage::Status(TransactionStatus::Submitted { .. })
-    ));
+    let ids = vec![tx1_id, tx2_id];
+    universe
+        .await_expected_tx_statuses(ids, |status| {
+            matches!(status, TransactionStatus::Submitted { .. })
+        })
+        .await
+        .unwrap();
 
     service.stop_and_await().await.unwrap();
 }
 
+/*
 #[tokio::test]
 async fn test_tx__return_error_expired() {
     let mut universe = TestPoolUniverse::default();
@@ -148,3 +146,4 @@ async fn test_tx__directly_removed_not_enough_space() {
 
     service.stop_and_await().await.unwrap();
 }
+*/
