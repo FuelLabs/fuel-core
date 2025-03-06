@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.41.8]
+
+### Fixed
+
+- [2809](https://github.com/FuelLabs/fuel-core/pull/2809): When the state rewind window of 7d was triggered, the `is_migration_in_progress` was repeatedly called, resulting in multiple iterations over the empty ModificationsHistoryV1 table. Iteration was slow because compaction didn't have a chance to clean up V1 table. We removed iteration from the migration process.
+
 ## [Version 0.41.7]
 
 ### Fixed
