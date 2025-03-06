@@ -28,16 +28,16 @@ impl BlockStreamAdapter {
         })
     }
 
-    async fn load_more_blocks(&mut self) -> anyhow::Result<()> {
+    async fn load_more_blocks(&mut self) -> Result<(), Error> {
         let latest_height = u32::from(self.block_fetcher.last_height().await?);
 
         let next_height = self
             .height
             .checked_add(self.batch_size)
-            .ok_or_else(|| anyhow::anyhow!("block height overflow"))?
+            .ok_or(Error::BlockHeightOverflow)?
             .min(latest_height)
             .checked_add(1)
-            .ok_or_else(|| anyhow::anyhow!("block height overflow"))?;
+            .ok_or(Error::BlockHeightOverflow)?;
 
         let blocks = self
             .block_fetcher
@@ -52,9 +52,9 @@ impl BlockStreamAdapter {
 }
 
 impl BlockStream for BlockStreamAdapter {
-    type Error = anyhow::Error;
+    type Error = Error;
 
-    async fn next(&mut self) -> anyhow::Result<Block> {
+    async fn next(&mut self) -> Result<Block, Self::Error> {
         loop {
             match self.blocks.pop_front() {
                 Some(block) => break Ok(block),
@@ -63,3 +63,12 @@ impl BlockStream for BlockStreamAdapter {
         }
     }
 }
+
+#[derive(Debug, derive_more::Display, derive_more::From)]
+pub enum Error {
+    BlockHeightOverflow,
+    #[from]
+    Other(anyhow::Error),
+}
+
+impl core::error::Error for Error {}

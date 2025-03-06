@@ -32,6 +32,8 @@ fuel-core-types = { workspace = true, default-features = false, features = [
 hex = { workspace = true }
 hyper = { workspace = true }
 itertools = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 

@@ -40,6 +40,7 @@ use fuel_core_types::{
 };
 use itertools::Itertools as _;
 
+#[derive(Clone)]
 pub struct StateRootDb(Database<StateRootDbDescription>);
 
 impl StateRootDb {
@@ -57,6 +58,10 @@ impl StateRootDb {
             state_rewind_policy,
             database_config,
         )?))
+    }
+
+    pub fn block_height(&self) -> StorageResult<BlockHeight> {
+        Ok(self.0.latest_height_from_metadata()?.unwrap_or_default())
     }
 }
 

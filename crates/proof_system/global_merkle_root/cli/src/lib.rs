@@ -6,8 +6,11 @@
 // #![deny(missing_docs)]
 // #![deny(warnings)]
 
-// Adapters
+/// Adapters
 pub mod adapters;
 
-// CLI definition
+/// CLI definition
 pub mod cli;
+
+/// Main executable
+pub mod run;

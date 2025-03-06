@@ -3750,6 +3750,8 @@ dependencies = [
  "hyper 0.14.32",
  "itertools 0.12.1",
  "reqwest 0.12.12",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
  "tokio",
  "tracing",
 ]
