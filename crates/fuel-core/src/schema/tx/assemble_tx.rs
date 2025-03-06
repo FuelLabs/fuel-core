@@ -159,6 +159,21 @@ where
     Tx: ExecutableTransaction + Cacheable + Send + 'static,
 {
     pub fn new(tx: Tx, mut arguments: AssembleArguments<'a>) -> anyhow::Result<Self> {
+        let max_inputs = arguments.consensus_parameters.tx_params().max_inputs();
+        let max_outputs = arguments.consensus_parameters.tx_params().max_outputs();
+
+        if tx.inputs().len() > max_inputs as usize {
+            return Err(anyhow::anyhow!(
+                "The transaction has more inputs than allowed by the consensus"
+            ));
+        }
+
+        if tx.outputs().len() > max_outputs as usize {
+            return Err(anyhow::anyhow!(
+                "The transaction has more outputs than allowed by the consensus"
+            ));
+        }
+
         if arguments.fee_index as usize >= arguments.required_balances.len() {
             return Err(anyhow::anyhow!("The fee address index is out of bounds"));
         }
@@ -171,11 +186,16 @@ where
             ));
         }
 
+        let base_asset_id = *arguments.consensus_parameters.base_asset_id();
         let mut signature_witness_indexes = HashMap::<Address, u16>::new();
 
         // Exclude inputs that already are used by the transaction
         let mut has_predicates = false;
         let inputs = tx.inputs();
+        let mut unique_used_asset = HashSet::new();
+        // The base asset is always used by the transaction
+        // so add it into expected inputs to add it later to required balances(if needed)
+        unique_used_asset.insert(base_asset_id);
         for input in inputs {
             if let Some(utxo_id) = input.utxo_id() {
                 arguments.exclude.exclude(CoinId::Utxo(*utxo_id));
@@ -183,6 +203,10 @@ where
 
             if let Some(nonce) = input.nonce() {
                 arguments.exclude.exclude(CoinId::Message(*nonce));
+            }
+
+            if let Some(asset_id) = input.asset_id(&base_asset_id) {
+                unique_used_asset.insert(*asset_id);
             }
 
             match input {
@@ -226,7 +250,6 @@ where
         }
 
         let mut base_asset_reserved: Option<u64> = None;
-        let base_asset_id = *arguments.consensus_parameters.base_asset_id();
 
         let fee_payer_account = arguments
             .required_balances
@@ -235,8 +258,10 @@ where
             .account
             .clone();
 
-        for required_balance in &mut arguments.required_balances {
+        let mut requested_asset = HashSet::new();
+        for required_balance in &arguments.required_balances {
             let asset_id = required_balance.asset_id;
+            requested_asset.insert(asset_id);
 
             if asset_id == base_asset_id
                 && fee_payer_account.owner() == required_balance.account.owner()
@@ -245,17 +270,23 @@ where
             }
         }
 
-        // If the user didn't provide the base asset, we add it to the required balances
-        // with minimal amount `0` and `ChangePolicy::Change` policy.
-        if base_asset_reserved.is_none() {
-            let recipient = fee_payer_account.owner();
+        // `unique_used_asset` always contains base asset
+        for input_asset_id in unique_used_asset {
+            // If the user didn't request the asset, we add it to the required balances
+            // with minimal amount `0` and `ChangePolicy::Change` policy.
+            if !requested_asset.contains(&input_asset_id) {
+                let recipient = fee_payer_account.owner();
 
-            arguments.required_balances.push(RequiredBalance {
-                account: fee_payer_account.clone(),
-                asset_id: base_asset_id,
-                amount: 0,
-                change_policy: ChangePolicy::Change(recipient),
-            });
+                arguments.required_balances.push(RequiredBalance {
+                    account: fee_payer_account.clone(),
+                    asset_id: input_asset_id,
+                    amount: 0,
+                    change_policy: ChangePolicy::Change(recipient),
+                });
+            }
+        }
+
+        if base_asset_reserved.is_none() {
             base_asset_reserved = Some(0);
         }
 
@@ -325,7 +356,7 @@ where
 
         self.adjust_witness_limit();
 
-        self.fill_with_variable_outputs();
+        self.fill_with_variable_outputs()?;
 
         // The `cover_fee` already can estimate predicates inside,
         // we don't need to duplicate the work, if it was already done.
@@ -368,6 +399,8 @@ where
             let amount = required_balance.amount;
             let owner = required_balance.account.owner();
 
+            self.satisfy_change_policy(asset_id)?;
+
             let selected_coins = self
                 .arguments
                 .coins(owner, asset_id, amount, remaining_input_slots)
@@ -377,7 +410,7 @@ where
                 .into_iter()
                 .take(remaining_input_slots as usize)
             {
-                self.add_input_and_witness_and_change(&required_balance.account, coin);
+                self.add_input_and_witness_and_change(&required_balance.account, coin)?;
             }
         }
 
@@ -399,9 +432,11 @@ where
             })
     }
 
-    fn add_input_and_witness_and_change(&mut self, account: &Account, coin: CoinType) {
-        let base_asset_id = *self.arguments.consensus_parameters.base_asset_id();
-
+    fn add_input_and_witness_and_change(
+        &mut self,
+        account: &Account,
+        coin: CoinType,
+    ) -> anyhow::Result<()> {
         let input = match account {
             Account::Address(account) => {
                 let signature_index = self.reserve_witness_index(account);
@@ -459,32 +494,56 @@ where
             self.arguments.exclude.exclude(CoinId::Message(*nonce));
         }
 
-        let asset_id = input.asset_id(&base_asset_id).cloned();
-
         self.tx.inputs_mut().push(input);
 
-        if let Some(asset_id) = asset_id {
-            if self.set_change_outputs.insert(asset_id) {
-                match self
-                    .change_output_policies
-                    .get(&asset_id)
-                    .expect("Policy was inserted in the `new`; qed")
-                {
-                    ChangePolicy::Change(change_receiver) => {
-                        self.tx.outputs_mut().push(Output::change(
-                            *change_receiver,
-                            0,
-                            asset_id,
-                        ));
-                    }
-                    ChangePolicy::Destroy => {
-                        // Do nothing for now, since `fuel-tx` crate doesn't have
-                        // `Destroy` output yet.
-                        // https://github.com/FuelLabs/fuel-specs/issues/621
-                    }
+        let max_inputs = self.arguments.consensus_parameters.tx_params().max_inputs();
+
+        if self.tx.inputs().len() > max_inputs as usize {
+            return Err(anyhow::anyhow!(
+                "Unable to add more inputs \
+                because reached the maximum allowed inputs limit"
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn satisfy_change_policy(&mut self, asset_id: AssetId) -> anyhow::Result<()> {
+        if self.set_change_outputs.insert(asset_id) {
+            match self
+                .change_output_policies
+                .get(&asset_id)
+                .expect("Policy was inserted in the `new`; qed")
+            {
+                ChangePolicy::Change(change_receiver) => {
+                    self.tx.outputs_mut().push(Output::change(
+                        *change_receiver,
+                        0,
+                        asset_id,
+                    ));
+                }
+                ChangePolicy::Destroy => {
+                    // Do nothing for now, since `fuel-tx` crate doesn't have
+                    // `Destroy` output yet.
+                    // https://github.com/FuelLabs/fuel-specs/issues/621
                 }
             }
         }
+
+        let max_outputs = self
+            .arguments
+            .consensus_parameters
+            .tx_params()
+            .max_outputs();
+
+        if self.tx.outputs().len() > max_outputs as usize {
+            return Err(anyhow::anyhow!(
+                "Unable to add more `Change` outputs \
+                because reached the maximum allowed outputs limit"
+            ));
+        }
+
+        Ok(())
     }
 
     fn is_runnable_script(&self) -> bool {
@@ -498,9 +557,9 @@ where
 
     // TODO: Optimize this function later to use information from the VM about missing
     //  `Variable` outputs.
-    fn fill_with_variable_outputs(&mut self) {
+    fn fill_with_variable_outputs(&mut self) -> anyhow::Result<()> {
         if !self.is_runnable_script() {
-            return
+            return Ok(())
         }
 
         let max_outputs = self
@@ -510,12 +569,15 @@ where
             .max_outputs();
 
         let outputs = u16::try_from(self.tx.outputs().len()).unwrap_or(u16::MAX);
+
         self.tx.outputs_mut().resize(
             max_outputs as usize,
             Output::variable(Default::default(), Default::default(), Default::default()),
         );
 
         self.index_of_first_fake_variable_output = Some(outputs);
+
+        Ok(())
     }
 
     fn remove_unused_variable_outputs(&mut self) {
@@ -523,7 +585,20 @@ where
             return
         }
 
+        if self.index_of_first_fake_variable_output.is_none() {
+            return
+        }
+
+        let index_of_first_fake_variable_output = self
+            .index_of_first_fake_variable_output
+            .take()
+            .expect("Checked above; qed");
+
         while let Some(output) = self.tx.outputs().last() {
+            if self.tx.outputs().len() <= index_of_first_fake_variable_output as usize {
+                break
+            }
+
             if let Output::Variable { amount, .. } = output {
                 if *amount == 0 {
                     self.tx.outputs_mut().pop();
@@ -534,7 +609,6 @@ where
                 break;
             }
         }
-        self.index_of_first_fake_variable_output = None;
     }
 
     fn adjust_witness_limit(&mut self) {
@@ -846,7 +920,7 @@ where
                         became too big when tried to cover fee"
                     ),
                 )?;
-                self.add_input_and_witness_and_change(&fee_payer_account, coin);
+                self.add_input_and_witness_and_change(&fee_payer_account, coin)?;
             }
 
             // In the case when predicates iterates over the inputs,
