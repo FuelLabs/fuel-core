@@ -2,6 +2,7 @@ use super::{
     input::Input,
     output::Output,
     receipt::Receipt,
+    ContextExt,
 };
 use crate::{
     fuel_core_graphql_api::{
@@ -142,8 +143,11 @@ impl From<VmProgramState> for ProgramState {
 pub enum TransactionStatus {
     Submitted(SubmittedStatus),
     Success(SuccessStatus),
+    PreconfirmationSuccess(PreconfirmationSuccessStatus),
     SqueezedOut(SqueezedOutStatus),
-    Failed(FailureStatus),
+    PreconfirmationSqueezedOut(PreconfirmationSqueezedOutStatus),
+    Failure(FailureStatus),
+    PreconfirmationFailure(PreconfirmationFailureStatus),
 }
 
 #[derive(Debug)]
@@ -213,6 +217,43 @@ impl SuccessStatus {
 }
 
 #[derive(Debug)]
+pub struct PreconfirmationSuccessStatus {
+    pub tx_pointer: TxPointer,
+    pub tx_id: TxId,
+    pub receipts: Option<Vec<fuel_tx::Receipt>>,
+}
+
+#[Object]
+impl PreconfirmationSuccessStatus {
+    async fn tx_pointer(&self) -> TxPointer {
+        self.tx_pointer
+    }
+
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn transaction(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<Transaction>> {
+        Ok(ctx
+            .try_find_tx(self.tx_id)
+            .await?
+            .map(|tx| Transaction::from_tx(self.tx_id, tx)))
+    }
+
+    async fn receipts(&self) -> async_graphql::Result<Option<Vec<Receipt>>> {
+        let receipts = self
+            .receipts
+            .as_ref()
+            .map(|receipts| receipts.iter().map(Into::into).collect());
+        Ok(receipts)
+    }
+}
+
+#[derive(Debug)]
 pub struct FailureStatus {
     tx_id: TxId,
     block_height: fuel_core_types::fuel_types::BlockHeight,
@@ -273,12 +314,76 @@ impl FailureStatus {
 }
 
 #[derive(Debug)]
+pub struct PreconfirmationFailureStatus {
+    pub tx_pointer: TxPointer,
+    pub tx_id: TxId,
+    pub receipts: Option<Vec<fuel_tx::Receipt>>,
+    pub reason: String,
+}
+
+#[Object]
+impl PreconfirmationFailureStatus {
+    async fn reason(&self) -> String {
+        self.reason.clone()
+    }
+
+    async fn tx_pointer(&self) -> TxPointer {
+        self.tx_pointer
+    }
+
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn transaction(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<Transaction>> {
+        Ok(ctx
+            .try_find_tx(self.tx_id)
+            .await?
+            .map(|tx| Transaction::from_tx(self.tx_id, tx)))
+    }
+
+    async fn receipts(&self) -> async_graphql::Result<Option<Vec<Receipt>>> {
+        let receipts = self
+            .receipts
+            .as_ref()
+            .map(|receipts| receipts.iter().map(Into::into).collect());
+        Ok(receipts)
+    }
+}
+
+#[derive(Debug)]
 pub struct SqueezedOutStatus {
+    pub tx_id: TxId,
     pub reason: String,
 }
 
 #[Object]
 impl SqueezedOutStatus {
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
+    async fn reason(&self) -> String {
+        self.reason.clone()
+    }
+}
+
+#[derive(Debug)]
+pub struct PreconfirmationSqueezedOutStatus {
+    pub tx_id: TxId,
+    pub reason: String,
+}
+
+#[Object]
+impl PreconfirmationSqueezedOutStatus {
+    async fn transaction_id(&self) -> TransactionId {
+        self.tx_id.into()
+    }
+
     async fn reason(&self) -> String {
         self.reason.clone()
     }
@@ -287,44 +392,74 @@ impl SqueezedOutStatus {
 impl TransactionStatus {
     pub fn new(tx_id: TxId, tx_status: TxStatus) -> Self {
         match tx_status {
-            TxStatus::Submitted { time } => {
-                TransactionStatus::Submitted(SubmittedStatus(time))
+            TxStatus::Submitted { timestamp } => {
+                TransactionStatus::Submitted(SubmittedStatus(timestamp))
             }
             TxStatus::Success {
                 block_height,
-                result,
-                time,
+                block_timestamp,
+                program_state,
                 receipts,
                 total_gas,
                 total_fee,
             } => TransactionStatus::Success(SuccessStatus {
                 tx_id,
                 block_height,
-                result,
-                time,
+                result: program_state,
+                time: block_timestamp,
                 receipts,
                 total_gas,
                 total_fee,
             }),
-            TxStatus::SqueezedOut { reason } => {
-                TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
+            TxStatus::SqueezedOut { reason, tx_id } => {
+                TransactionStatus::SqueezedOut(SqueezedOutStatus { reason, tx_id })
             }
-            TxStatus::Failed {
+            TxStatus::Failure {
                 block_height,
-                time,
-                result,
+                block_timestamp,
+                program_state,
                 receipts,
                 total_gas,
                 total_fee,
-            } => TransactionStatus::Failed(FailureStatus {
+                ..
+            } => TransactionStatus::Failure(FailureStatus {
                 tx_id,
                 block_height,
-                time,
-                state: result,
+                time: block_timestamp,
+                state: program_state,
                 receipts,
                 total_gas,
                 total_fee,
             }),
+            TxStatus::PreconfirmationSuccess {
+                tx_pointer,
+                tx_id,
+                receipts,
+            } => {
+                TransactionStatus::PreconfirmationSuccess(PreconfirmationSuccessStatus {
+                    tx_pointer: tx_pointer.into(),
+                    tx_id,
+                    receipts,
+                })
+            }
+            TxStatus::PreconfirmationSqueezedOut { reason, tx_id } => {
+                TransactionStatus::PreconfirmationSqueezedOut(
+                    PreconfirmationSqueezedOutStatus { reason, tx_id },
+                )
+            }
+            TxStatus::PreconfirmationFailure {
+                tx_pointer,
+                tx_id,
+                receipts,
+                reason,
+            } => {
+                TransactionStatus::PreconfirmationFailure(PreconfirmationFailureStatus {
+                    tx_pointer: tx_pointer.into(),
+                    tx_id,
+                    receipts,
+                    reason,
+                })
+            }
         }
     }
 }
@@ -332,8 +467,8 @@ impl TransactionStatus {
 impl From<TransactionStatus> for TxStatus {
     fn from(s: TransactionStatus) -> Self {
         match s {
-            TransactionStatus::Submitted(SubmittedStatus(time)) => {
-                TxStatus::Submitted { time }
+            TransactionStatus::Submitted(SubmittedStatus(timestamp)) => {
+                TxStatus::Submitted { timestamp }
             }
             TransactionStatus::Success(SuccessStatus {
                 block_height,
@@ -345,30 +480,54 @@ impl From<TransactionStatus> for TxStatus {
                 ..
             }) => TxStatus::Success {
                 block_height,
-                result,
-                time,
+                program_state: result,
+                block_timestamp: time,
                 receipts,
                 total_gas,
                 total_fee,
             },
-            TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
-                TxStatus::SqueezedOut { reason }
+            TransactionStatus::SqueezedOut(SqueezedOutStatus { reason, tx_id }) => {
+                TxStatus::SqueezedOut { reason, tx_id }
             }
-            TransactionStatus::Failed(FailureStatus {
+            TransactionStatus::Failure(FailureStatus {
                 block_height,
                 time,
-                state: result,
+                state,
                 receipts,
                 total_gas,
                 total_fee,
                 ..
-            }) => TxStatus::Failed {
+            }) => TxStatus::Failure {
+                reason: TransactionExecutionResult::reason(&receipts, &state),
                 block_height,
-                time,
-                result,
+                block_timestamp: time,
+                program_state: state,
                 receipts,
                 total_gas,
                 total_fee,
+            },
+            TransactionStatus::PreconfirmationSuccess(PreconfirmationSuccessStatus {
+                tx_pointer,
+                tx_id,
+                receipts,
+            }) => TxStatus::PreconfirmationSuccess {
+                tx_pointer: tx_pointer.into(),
+                tx_id,
+                receipts,
+            },
+            TransactionStatus::PreconfirmationSqueezedOut(
+                PreconfirmationSqueezedOutStatus { tx_id, reason },
+            ) => TxStatus::PreconfirmationSqueezedOut { tx_id, reason },
+            TransactionStatus::PreconfirmationFailure(PreconfirmationFailureStatus {
+                tx_pointer,
+                tx_id,
+                receipts,
+                reason,
+            }) => TxStatus::PreconfirmationFailure {
+                tx_pointer: tx_pointer.into(),
+                tx_id,
+                receipts,
+                reason,
             },
         }
     }

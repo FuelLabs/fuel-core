@@ -787,7 +787,7 @@ type Mutation {
 	"""
 	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
 	"""
-	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]!
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]! @deprecated(reason: "This doesn't need to be a mutation. Use query of the same name instead.")
 	"""
 	Submits transaction to the `TxPool`.
 	
@@ -892,6 +892,26 @@ type Policies {
 	maxFee: U64
 }
 
+type PreconfirmationFailureStatus {
+	reason: String!
+	txPointer: TxPointer!
+	transactionId: TransactionId!
+	transaction: Transaction
+	receipts: [Receipt!]
+}
+
+type PreconfirmationSqueezedOutStatus {
+	transactionId: TransactionId!
+	reason: String!
+}
+
+type PreconfirmationSuccessStatus {
+	txPointer: TxPointer!
+	transactionId: TransactionId!
+	transaction: Transaction
+	receipts: [Receipt!]
+}
+
 input Predicate {
 	predicateAddress: Address!
 	predicate: HexString!
@@ -978,7 +998,7 @@ type Query {
 	- Reserved witness slots for signed coins filled with `64` zeroes
 	- Set script gas limit(unless `script` is empty)
 	- Estimated predicates, if `estimate_predicates == true`
-	
+
 	Returns an error if:
 	- The number of required balances exceeds the maximum number of inputs allowed.
 	- The fee address index is out of bounds.
@@ -1029,6 +1049,10 @@ type Query {
 	Returns all possible receipts for test purposes.
 	"""
 	allReceipts: [Receipt!]!
+	"""
+	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
+	"""
+	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]!
 	"""
 	Get execution trace for an already-executed block.
 	"""
@@ -1121,6 +1145,18 @@ type Query {
 	consensusParameters(version: Int!): ConsensusParameters!
 	stateTransitionBytecodeByVersion(version: Int!): StateTransitionBytecode
 	stateTransitionBytecodeByRoot(root: HexString!): StateTransitionBytecode!
+	"""
+	Get storage slot values for a contract at a specific block height.
+	Use the latest block height if not provided.
+	Requires historical execution config to be enabled.
+	"""
+	contractSlotValues(contractId: ContractId!, blockHeight: U32, storageSlots: [Bytes32!]!): [StorageSlot!]!
+	"""
+	Get balance values for a contract at a specific block height.
+	Use the latest block height if not provided.
+	Requires historical execution config to be enabled.
+	"""
+	contractBalanceValues(contractId: ContractId!, blockHeight: U32, assets: [AssetId!]!): [ContractBalance!]!
 }
 
 type Receipt {
@@ -1242,6 +1278,7 @@ input SpendQueryElementInput {
 }
 
 type SqueezedOutStatus {
+	transactionId: TransactionId!
 	reason: String!
 }
 
@@ -1258,6 +1295,11 @@ type StorageReadReplayEvent {
 	column: U32!
 	key: HexString!
 	value: HexString
+}
+
+type StorageSlot {
+	key: Bytes32!
+	value: HexString!
 }
 
 
@@ -1298,6 +1340,8 @@ type Subscription {
 	SubmittedStatus` as an intermediate state.
 	"""
 	submitAndAwaitStatus(tx: HexString!): TransactionStatus!
+	contractStorageSlots(contractId: ContractId!): StorageSlot!
+	contractStorageBalances(contractId: ContractId!): ContractBalance!
 }
 
 type SuccessStatus {
@@ -1386,7 +1430,7 @@ type TransactionEdge {
 
 scalar TransactionId
 
-union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
+union TransactionStatus = SubmittedStatus | SuccessStatus | PreconfirmationSuccessStatus | SqueezedOutStatus | PreconfirmationSqueezedOutStatus | FailureStatus | PreconfirmationFailureStatus
 
 type TxParameters {
 	version: TxParametersVersion!
@@ -1452,6 +1496,7 @@ type VariableOutput {
 	assetId: AssetId!
 }
 
+directive @deprecated(reason: String = "No longer supported") on FIELD_DEFINITION | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION | ENUM_VALUE
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @oneOf on INPUT_OBJECT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT

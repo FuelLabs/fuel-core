@@ -42,5 +42,8 @@ pub fn dump_schema() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn is_latest_schema_committed() {
     let current_content = fs::read(SCHEMA_URL).unwrap();
-    assert_eq!(current_content, build_schema().finish().sdl().as_bytes());
+    assert!(
+        current_content == build_schema().finish().sdl().as_bytes(),
+        "The schema is not up to date"
+    );
 }

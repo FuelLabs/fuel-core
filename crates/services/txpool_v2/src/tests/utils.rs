@@ -38,25 +38,44 @@ use crate::{
 
 pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus> {
     prop_oneof![
-        Just(TransactionStatus::Submitted { time: Tai64(0) }),
+        Just(TransactionStatus::Submitted {
+            timestamp: Tai64(0)
+        }),
         Just(TransactionStatus::Success {
             block_height: Default::default(),
-            time: Tai64(0),
-            result: None,
+            block_timestamp: Tai64(0),
+            program_state: None,
             receipts: vec![],
             total_gas: 0,
             total_fee: 0,
         }),
-        Just(TransactionStatus::Failed {
+        Just(TransactionStatus::PreconfirmationSuccess {
+            tx_pointer: Default::default(),
+            tx_id: Bytes32::zeroed(),
+            receipts: None,
+        }),
+        Just(TransactionStatus::Failure {
             block_height: Default::default(),
-            time: Tai64(0),
-            result: None,
+            block_timestamp: Tai64(0),
+            program_state: None,
             receipts: vec![],
             total_gas: 0,
             total_fee: 0,
+            reason: "failure".to_string(),
+        }),
+        Just(TransactionStatus::PreconfirmationFailure {
+            tx_pointer: Default::default(),
+            tx_id: Bytes32::zeroed(),
+            receipts: None,
+            reason: "failure during block production".to_string(),
         }),
         Just(TransactionStatus::SqueezedOut {
+            tx_id: Default::default(),
             reason: Default::default(),
+        }),
+        Just(TransactionStatus::PreconfirmationSqueezedOut {
+            tx_id: Default::default(),
+            reason: "squeezed out".to_string(),
         }),
     ]
 }

@@ -6,6 +6,7 @@ use crate::{
             ChainStateInfoProvider,
             ExecutorAdapter,
             MaybeRelayerAdapter,
+            NewTxWaiter,
             StaticGasPrice,
             TransactionsSource,
             TxPoolAdapter,
@@ -73,6 +74,7 @@ use std::{
     borrow::Cow,
     sync::Arc,
 };
+use tokio::time::Instant;
 
 impl BlockProducerAdapter {
     pub fn new(block_producer: BlockProducerService) -> Self {
@@ -95,18 +97,29 @@ impl TxPool for TxPoolAdapter {
 }
 
 impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAdapter {
-    fn produce_without_commit(
+    type Deadline = Instant;
+    async fn produce_without_commit(
         &self,
         component: Components<TransactionsSource>,
+        deadline: Instant,
     ) -> ExecutorResult<UncommittedResult<Changes>> {
-        self.executor.produce_without_commit_with_source(component)
+        let new_tx_waiter = NewTxWaiter::new(self.new_txs_watcher.clone(), deadline);
+        self.executor
+            .produce_without_commit_with_source(
+                component,
+                new_tx_waiter,
+                self.preconfirmation_sender.clone(),
+            )
+            .await
     }
 }
 
 impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdapter {
-    fn produce_without_commit(
+    type Deadline = ();
+    async fn produce_without_commit(
         &self,
         component: Components<Vec<Transaction>>,
+        _: (),
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         self.produce_without_commit_from_vector(component)
     }

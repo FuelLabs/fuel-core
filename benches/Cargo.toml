@@ -15,7 +15,7 @@ criterion = { version = "0.5", features = [
   "async_tokio",
 ] }
 ctrlc = "3.2.3"
-ed25519-dalek = { version = "2.0", features = ["rand_core"] }
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
 enum-iterator = { workspace = true }
 ethnum = "1.3"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
