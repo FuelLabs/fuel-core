@@ -13,6 +13,7 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
+use tracing::instrument::WithSubscriber;
 use tracing_subscriber::{
     filter::EnvFilter,
     layer::SubscriberExt,
@@ -118,7 +119,7 @@ pub fn init_logging() {
 }
 
 pub async fn run_cli() -> anyhow::Result<()> {
-    init_logging();
+    // init_logging();
     if let Some(path) = init_environment() {
         let path = path.display();
         tracing::info!("Loading environment variables from {path}");
