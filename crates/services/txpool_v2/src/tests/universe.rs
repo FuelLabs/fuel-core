@@ -118,6 +118,17 @@ use super::mocks::{
     MockWasmChecker,
 };
 
+#[derive(Debug)]
+pub(crate) enum TxStatusWaitError {
+    Timeout,
+}
+
+impl TxStatusWaitError {
+    pub fn is_timeout(&self) -> bool {
+        matches!(self, TxStatusWaitError::Timeout)
+    }
+}
+
 // use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
 // the byte and gas price fees.
 pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
@@ -462,12 +473,12 @@ impl TestPoolUniverse {
         )
     }
 
-    pub async fn await_expected_tx_statuses(
+    pub(crate) async fn await_expected_tx_statuses(
         &mut self,
         tx_ids: Vec<TxId>,
         predicate: impl Fn(&TransactionStatus) -> bool,
-    ) {
-        const TIMEOUT: Duration = Duration::from_secs(50);
+    ) -> Result<(), TxStatusWaitError> {
+        const TIMEOUT: Duration = Duration::from_secs(3);
         const POLL_TIMEOUT: Duration = Duration::from_millis(5);
 
         let mut values = Vec::with_capacity(tx_ids.len());
@@ -475,7 +486,7 @@ impl TestPoolUniverse {
 
         while values.len() < tx_ids.len() {
             if start_time.elapsed() > TIMEOUT {
-                panic!("timeout");
+                return Err(TxStatusWaitError::Timeout);
             }
 
             match tokio::time::timeout(
@@ -495,7 +506,7 @@ impl TestPoolUniverse {
                     panic!("channel closed prematurely");
                 }
                 Err(_) => {
-                    // Timeout
+                    // Polling timeout
                     continue;
                 }
             }
@@ -504,6 +515,8 @@ impl TestPoolUniverse {
         let expected: BTreeSet<_> = tx_ids.iter().collect();
         let actual: BTreeSet<_> = values.iter().collect();
         assert_eq!(expected, actual, "should receive correct ids");
+
+        Ok(())
     }
 }
 
