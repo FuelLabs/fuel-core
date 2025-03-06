@@ -2,6 +2,9 @@
 #![deny(warnings)]
 
 #[cfg(test)]
+use symbolic_common as _;
+
+#[cfg(test)]
 mod backward_compatibility;
 #[cfg(test)]
 mod forward_compatibility;
