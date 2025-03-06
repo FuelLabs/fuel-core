@@ -318,7 +318,6 @@ async fn test_gossipped_transaction_with_check_error_rejected() {
     )
 }
 
-/*
 #[tokio::test]
 async fn test_gossipped_mint_rejected() {
     let universe = TestPoolUniverse::default();
@@ -355,9 +354,10 @@ async fn test_gossipped_mint_rejected() {
     assert!(
         gossip_validity_notified.is_ok(),
         "expected to receive gossip validity notification"
-    )
+    );
+
+    service.stop_and_await().await.unwrap();
 }
-    */
 
 #[tokio::test]
 async fn test_gossipped_transaction_with_transient_error_ignored() {
