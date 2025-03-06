@@ -487,8 +487,7 @@ impl TestPoolUniverse {
                     values.push(tx_id);
                 }
                 Ok(Some(_)) => {
-                    // Ignore other statuses, we're only interested in Submitted since
-                    // we're waiting for "insertion".
+                    // Ignore statuses other than the ones handled by the predicate
                 }
                 Ok(None) => {
                     panic!("channel closed prematurely");
