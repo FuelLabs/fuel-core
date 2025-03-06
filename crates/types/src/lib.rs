@@ -78,3 +78,7 @@ pub mod fuel_vm {
         util,
     };
 }
+
+/// Helpers for creating transactions in tests
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers;
