@@ -373,7 +373,6 @@ async fn remove_skipped_transactions() {
         });
 
     let tx_status_manager = MockTxStatusManagerTrait::no_skipped_status_updates();
-    // TODO[RC]: Add expected calls for `TxStatusManager`.
 
     let signer = SignMode::Key(Secret::new(secret_key.into()));
 
@@ -488,7 +487,6 @@ fn block_for_height(height: u32) -> Block {
     .unwrap()
 }
 
-/*
 #[tokio::test]
 async fn consensus_service__run__will_include_sequential_predefined_blocks_before_new_blocks(
 ) {
@@ -510,6 +508,9 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         metrics: false,
         ..Default::default()
     };
+
+    let tx_status_manager = MockTxStatusManagerTrait::no_skipped_status_updates();
+
     let mut block_importer = MockBlockImporter::default();
     block_importer.expect_commit_result().returning(|_| Ok(()));
     block_importer
@@ -576,6 +577,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         metrics: false,
         ..Default::default()
     };
+    let tx_status_manager = MockTxStatusManagerTrait::no_skipped_status_updates();
     let mut block_importer = MockBlockImporter::default();
     block_importer.expect_commit_result().returning(|_| Ok(()));
     block_importer
@@ -590,6 +592,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         &last_block,
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         generate_p2p_port(),
@@ -616,4 +619,3 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         }
     }
 }
-*/
