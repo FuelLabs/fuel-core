@@ -33,12 +33,12 @@ use fuel_core_types::{
         TransactionBuilder,
     },
 };
+use rand::SeedableRng;
 use test_helpers::{
     assemble_tx::AssembleAndRunTx,
     default_signing_wallet,
+    mint_contract,
 };
-use rand::SeedableRng;
-use test_helpers::mint_contract;
 
 const RETRYABLE: &[u8] = &[1];
 const NON_RETRYABLE: &[u8] = &[];
