@@ -28,9 +28,6 @@ use fuel_core_types::{
     fuel_tx::{
         Bytes32,
         ContractIdExt,
-        Input,
-        Output,
-        TransactionBuilder,
     },
 };
 use rand::SeedableRng;
