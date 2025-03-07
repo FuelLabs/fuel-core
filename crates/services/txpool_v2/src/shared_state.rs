@@ -39,8 +39,8 @@ pub struct SharedState {
     pub(crate) select_transactions_requests_sender:
         mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
     pub(crate) request_read_sender: mpsc::Sender<PoolReadRequest>,
-    // TODO[RC]: 'new_txs_notifier' could potentially be handled by TxStatusManager
-    pub(crate) new_txs_notifier: tokio::sync::watch::Sender<()>,
+    pub(crate) tx_status_sender: TxStatusChange,
+    pub(crate) new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
     pub(crate) latest_stats: tokio::sync::watch::Receiver<TxPoolStats>,
 }
 
@@ -141,9 +141,9 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)
     }
 
-    /// Get a notifier that is notified when new transactions are added to the pool.
-    pub fn get_new_txs_notifier(&self) -> watch::Receiver<()> {
-        self.new_txs_notifier.subscribe()
+    /// Get a notifier that is notified when new executable transactions are added to the pool.
+    pub fn get_new_executable_txs_notifier(&self) -> watch::Receiver<()> {
+        self.new_executable_txs_notifier.subscribe()
     }
 
     /// Notify the txpool that some transactions were skipped during block production.

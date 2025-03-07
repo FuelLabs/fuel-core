@@ -5,10 +5,17 @@ use fuel_core_types::{
         consensus::Genesis,
         SealedBlockHeader,
     },
-    fuel_tx::TxId,
+    fuel_tx::{
+        Bytes64,
+        TxId,
+    },
     fuel_types::BlockHeight,
     services::p2p::{
+        DelegatePublicKey,
+        GossipData,
         NetworkableTransactionPool,
+        PreConfirmationMessage,
+        ProtocolSignature,
         Transactions,
     },
 };
@@ -48,3 +55,8 @@ pub trait TxPool: Send + Sync + Clone {
         Output = anyhow::Result<Vec<Option<NetworkableTransactionPool>>>,
     > + Send;
 }
+
+pub type P2PPreConfirmationMessage =
+    PreConfirmationMessage<DelegatePublicKey, Bytes64, ProtocolSignature>;
+
+pub type P2PPreConfirmationGossipData = GossipData<P2PPreConfirmationMessage>;

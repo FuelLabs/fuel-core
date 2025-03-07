@@ -20,7 +20,6 @@ use crate::{
     Service,
     Trigger,
 };
-use async_trait::async_trait;
 use fuel_core_chain_config::default_consensus_dev_key;
 use fuel_core_services::{
     Service as StorageTrait,
@@ -82,7 +81,10 @@ use tokio::{
         broadcast,
         watch,
     },
-    time,
+    time::{
+        self,
+        Instant,
+    },
 };
 
 mod manually_produce_tests;
@@ -147,7 +149,7 @@ impl TestContextBuilder {
             let mut producer = MockBlockProducer::default();
             producer
                 .expect_produce_and_execute_block()
-                .returning(|_, _, _| {
+                .returning(|_, _, _, _| {
                     Ok(UncommittedResult::new(
                         ExecutionResult {
                             block: Default::default(),
@@ -317,7 +319,7 @@ async fn remove_skipped_transactions() {
     block_producer
         .expect_produce_and_execute_block()
         .times(1)
-        .returning(move |_, _, _| {
+        .returning(move |_, _, _, _| {
             Ok(UncommittedResult::new(
                 ExecutionResult {
                     block: Default::default(),
@@ -402,7 +404,7 @@ async fn remove_skipped_transactions() {
         time.watch(),
     );
 
-    assert!(task.produce_next_block().await.is_ok());
+    assert!(task.produce_next_block(Instant::now()).await.is_ok());
 }
 
 fn test_signing_key() -> Secret<SecretKeyWrapper> {
@@ -429,13 +431,14 @@ impl FakeBlockProducer {
     }
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl BlockProducer for FakeBlockProducer {
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         block_time: Tai64,
-        _source: TransactionsSource,
+        _: TransactionsSource,
+        _: Instant,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         self.block_sender
             .send(FakeProducedBlock::New(height, block_time))
