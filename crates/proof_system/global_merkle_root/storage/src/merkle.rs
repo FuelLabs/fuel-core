@@ -1,7 +1,3 @@
-use crate::column::{
-    Column,
-    TableColumn,
-};
 use alloc::borrow::Cow;
 use fuel_core_storage::{
     blueprint::{
@@ -15,6 +11,10 @@ use fuel_core_storage::{
         KeyValueInspect,
         StorageColumn,
         Value,
+    },
+    merkle::column::{
+        AsU32,
+        MerkleizedColumn,
     },
     structured_storage::TableWithBlueprint,
     Mappable,
@@ -50,13 +50,15 @@ pub struct Merkleized<Table>(core::marker::PhantomData<Table>);
 /// Implementation of this trait for the table, inherits
 /// the Merkle implementation for the [`Merkleized`] table.
 pub trait MerkleizedTableColumn {
+    /// The table column type
+    type TableColumn;
     /// Get the table column
-    fn table_column() -> TableColumn;
+    fn table_column() -> Self::TableColumn;
 }
 
-impl<Table> Mappable for Merkleized<Table>
+impl<Table, TC> Mappable for Merkleized<Table>
 where
-    Table: Mappable + MerkleizedTableColumn,
+    Table: Mappable + MerkleizedTableColumn<TableColumn = TC>,
 {
     type Key = <Table as Mappable>::Key;
     type OwnedKey = <Table as Mappable>::OwnedKey;
@@ -64,33 +66,36 @@ where
     type OwnedValue = <Table as Mappable>::OwnedValue;
 }
 
-type KeyCodec<Table> = <<Table as TableWithBlueprint>::Blueprint as BlueprintInspect<
-    Table,
-    DummyStorage<Column>,
->>::KeyCodec;
+type KeyCodec<Table, TC> =
+    <<Table as TableWithBlueprint>::Blueprint as BlueprintInspect<
+        Table,
+        DummyStorage<MerkleizedColumn<TC>>,
+    >>::KeyCodec;
 
-type ValueCodec<Table> = <<Table as TableWithBlueprint>::Blueprint as BlueprintInspect<
-    Table,
-    DummyStorage<Column>,
->>::ValueCodec;
+type ValueCodec<Table, TC> =
+    <<Table as TableWithBlueprint>::Blueprint as BlueprintInspect<
+        Table,
+        DummyStorage<MerkleizedColumn<TC>>,
+    >>::ValueCodec;
 
-impl<Table> TableWithBlueprint for Merkleized<Table>
+impl<Table, TC> TableWithBlueprint for Merkleized<Table>
 where
-    Table: Mappable + MerkleizedTableColumn,
+    Table: Mappable + MerkleizedTableColumn<TableColumn = TC>,
     Table: TableWithBlueprint,
-    Table::Blueprint: BlueprintInspect<Table, DummyStorage<Column>>,
+    TC: core::fmt::Debug + Copy + strum::EnumCount + AsU32,
+    Table::Blueprint: BlueprintInspect<Table, DummyStorage<MerkleizedColumn<TC>>>,
 {
     type Blueprint = Sparse<
-        KeyCodec<Table>,
-        ValueCodec<Table>,
+        KeyCodec<Table, TC>,
+        ValueCodec<Table, TC>,
         MerkleMetadata,
         MerkleData<Table>,
         KeyConverter<Table>,
     >;
-    type Column = Column;
+    type Column = MerkleizedColumn<TC>;
 
     fn column() -> Self::Column {
-        Column::TableColumn(Table::table_column())
+        Self::Column::TableColumn(Table::table_column())
     }
 }
 

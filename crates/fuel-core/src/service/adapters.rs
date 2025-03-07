@@ -1,17 +1,5 @@
-use crate::{
-    database::{
-        database_description::relayer::Relayer,
-        Database,
-    },
-    fuel_core_graphql_api::ports::GasPriceEstimate,
-    service::{
-        sub_services::{
-            BlockProducerService,
-            TxPoolSharedState,
-        },
-        vm_pool::MemoryPool,
-    },
-};
+use std::sync::Arc;
+
 use fuel_core_consensus_module::{
     block_verifier::Verifier,
     RelayerConsensusConfig,
@@ -47,13 +35,29 @@ use fuel_core_types::{
             Result as ExecutorResult,
             UncommittedResult,
         },
+        preconfirmation::PreconfirmationStatus,
     },
     signer::SignMode,
     tai64::Tai64,
 };
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
-use std::sync::Arc;
+use tokio::time::Instant;
+
+use crate::{
+    database::{
+        database_description::relayer::Relayer,
+        Database,
+    },
+    fuel_core_graphql_api::ports::GasPriceEstimate,
+    service::{
+        sub_services::{
+            BlockProducerService,
+            TxPoolSharedState,
+        },
+        vm_pool::MemoryPool,
+    },
+};
 
 pub mod block_importer;
 pub mod chain_state_info_provider;
@@ -100,8 +104,9 @@ impl StaticGasPrice {
 mod universal_gas_price_provider_tests {
     #![allow(non_snake_case)]
 
-    use super::*;
     use proptest::proptest;
+
+    use super::*;
 
     fn _worst_case__correctly_calculates_value(
         gas_price: u64,
@@ -315,23 +320,49 @@ impl TransactionsSource {
     }
 }
 
+pub struct NewTxWaiter {
+    pub receiver: tokio::sync::watch::Receiver<()>,
+    pub timeout: Instant,
+}
+
+impl NewTxWaiter {
+    pub fn new(receiver: tokio::sync::watch::Receiver<()>, timeout: Instant) -> Self {
+        Self { receiver, timeout }
+    }
+}
+
+#[derive(Clone)]
+pub struct PreconfirmationSender {
+    pub sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+}
+
+impl PreconfirmationSender {
+    pub fn new(sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>) -> Self {
+        Self { sender }
+    }
+}
+
 #[derive(Clone)]
 pub struct ExecutorAdapter {
     pub(crate) executor: Arc<Executor<Database, Database<Relayer>>>,
+    pub new_txs_watcher: tokio::sync::watch::Receiver<()>,
+    pub preconfirmation_sender: PreconfirmationSender,
 }
 
 impl ExecutorAdapter {
     pub fn new(
         database: Database,
         relayer_database: Database<Relayer>,
-        // #[cfg(feature = "parallel-executor")]
-        // config: fuel_core_parallel_executor::config::Config,
-        // #[cfg(not(feature = "parallel-executor"))]
         config: fuel_core_upgradable_executor::config::Config,
+        new_txs_watcher: tokio::sync::watch::Receiver<()>,
+        preconfirmation_sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);
+        let preconfirmation_sender = PreconfirmationSender::new(preconfirmation_sender);
         Self {
             executor: Arc::new(executor),
+            new_txs_watcher,
+            preconfirmation_sender,
         }
     }
 
@@ -349,7 +380,7 @@ impl ExecutorAdapter {
         };
 
         self.executor
-            .produce_without_commit_with_source(new_components)
+            .produce_without_commit_with_source_direct_resolve(new_components)
     }
 }
 
@@ -471,7 +502,7 @@ pub struct P2PAdapter {
 }
 
 #[cfg(feature = "p2p")]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct PeerReportConfig {
     pub successful_block_import: AppScore,
     pub missing_block_headers: AppScore,
