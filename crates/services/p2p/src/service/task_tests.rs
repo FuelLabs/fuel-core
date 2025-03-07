@@ -158,7 +158,7 @@ impl TaskP2PService for FakeP2PService {
         _message: GossipsubMessageInfo,
         _acceptance: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
-        todo!()
+        Ok(())
     }
 
     fn report_peer(
@@ -208,7 +208,7 @@ impl P2pDb for FakeDB {
 
 struct FakeBroadcast {
     pub peer_reports: mpsc::Sender<(FuelPeerId, AppScore, String)>,
-    pub preconfirmation_gossip_broadcast: mpsc::Sender<PreconfirmationsGossipData>,
+    pub confirmation_gossip_broadcast: mpsc::Sender<P2PPreConfirmationGossipData>,
 }
 
 impl Broadcast for FakeBroadcast {
@@ -236,7 +236,7 @@ impl Broadcast for FakeBroadcast {
 
     fn pre_confirmation_broadcast(
         &self,
-        preconfirmations: PreconfirmationsGossipData,
+        confirmations: P2PPreConfirmationGossipData,
     ) -> anyhow::Result<()> {
         self.preconfirmation_gossip_broadcast
             .try_send(preconfirmations)?;

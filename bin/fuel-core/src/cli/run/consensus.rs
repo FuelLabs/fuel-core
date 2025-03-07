@@ -13,6 +13,8 @@ pub struct PoATriggerArgs {
     instant: Instant,
     #[clap(flatten)]
     interval: Interval,
+    #[clap(flatten)]
+    open: Open,
 }
 
 // Convert from arg struct to PoATrigger enum
@@ -20,7 +22,14 @@ impl From<PoATriggerArgs> for PoATrigger {
     fn from(value: PoATriggerArgs) -> Self {
         match value {
             PoATriggerArgs {
-                interval: Interval { period: Some(p) },
+                open: Open { period: Some(p) },
+                ..
+            } => PoATrigger::Open { period: p.into() },
+            PoATriggerArgs {
+                interval:
+                    Interval {
+                        block_time: Some(p),
+                    },
                 ..
             } => PoATrigger::Interval {
                 block_time: p.into(),
@@ -35,7 +44,7 @@ impl From<PoATriggerArgs> for PoATrigger {
 
 #[derive(Debug, Clone, clap::Args)]
 #[clap(
-    group = ArgGroup::new("instant-mode").args(&["instant"]).conflicts_with_all(&["interval-mode"]),
+    group = ArgGroup::new("instant-mode").args(&["instant"]).conflicts_with_all(&["interval-mode", "open-mode"]),
 )]
 struct Instant {
     /// Use instant block production mode.
@@ -53,13 +62,25 @@ enum Boolean {
 
 #[derive(Debug, Clone, clap::Args)]
 #[clap(
-    group = ArgGroup::new("interval-mode").args(&["period"]).conflicts_with_all(&["instant-mode"]),
+    group = ArgGroup::new("interval-mode").args(&["block_time"]).conflicts_with_all(&["instant-mode", "open-mode"]),
 )]
 struct Interval {
     /// Interval trigger option.
     /// Produces blocks on a fixed interval regardless of txpool activity.
     /// Cannot be combined with other poa flags.
     #[clap(long = "poa-interval-period", env)]
+    pub block_time: Option<Duration>,
+}
+
+#[derive(Debug, Clone, clap::Args)]
+#[clap(
+    group = ArgGroup::new("open-mode").args(&["period"]).conflicts_with_all(&["instant-mode", "interval-mode"]),
+)]
+struct Open {
+    /// Opens the block production immediately and keeps it open for the specified period.
+    /// After period is over, the block is produced.
+    /// Cannot be combined with other poa flags.
+    #[clap(long = "poa-open-period", env)]
     pub period: Option<Duration>,
 }
 
@@ -80,7 +101,9 @@ mod tests {
     #[test_case(&[] => Ok(Trigger::Instant); "defaults to instant trigger")]
     #[test_case(&["", "--poa-instant=false"] => Ok(Trigger::Never); "never trigger if instant is explicitly disabled")]
     #[test_case(&["", "--poa-interval-period=1s"] => Ok(Trigger::Interval { block_time: StdDuration::from_secs(1)}); "uses interval mode if set")]
+    #[test_case(&["", "--poa-open-period=1s"] => Ok(Trigger::Open { period: StdDuration::from_secs(1)}); "uses open mode if set")]
     #[test_case(&["", "--poa-instant=true", "--poa-interval-period=1s"] => Err(()); "can't set interval and instant at the same time")]
+    #[test_case(&["", "--poa-open-period=1s", "--poa-interval-period=1s"] => Err(()); "can't set open and interval at the same time")]
     fn parse(args: &[&str]) -> Result<Trigger, ()> {
         Command::try_parse_from(args)
             .map_err(|_| ())

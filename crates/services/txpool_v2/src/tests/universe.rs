@@ -174,15 +174,17 @@ impl TestPoolUniverse {
     }
 
     pub fn build_pool(&mut self) {
+        let (tx_new_executable_txs, _) = tokio::sync::watch::channel(());
         let (tx, rx) = tokio::sync::watch::channel(TxPoolStats::default());
         let pool = Arc::new(RwLock::new(Pool::new(
             GraphStorage::new(GraphConfig {
                 max_txs_chain_count: self.config.max_txs_chain_count,
             }),
             BasicCollisionManager::new(),
-            RatioTipGasSelection::new(),
+            RatioTipGasSelection::new(tx_new_executable_txs.clone()),
             self.config.clone(),
             tx,
+            tx_new_executable_txs,
         )));
         self.stats_receiver = Some(rx);
         self.pool = Some(pool.clone());
@@ -193,6 +195,8 @@ impl TestPoolUniverse {
         p2p: Option<MockP2P>,
         importer: Option<MockImporter>,
     ) -> Service<MockDb, MockP2P, MockTxStatusManager> {
+    ) -> Service<MockDb, MockP2P> {
+        let (tx, _) = tokio::sync::watch::channel(());
         let gas_price = 0;
         let mut p2p = p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
         // set default handlers for p2p methods after test is set up, so they will be last on the FIFO
@@ -222,6 +226,7 @@ impl TestPoolUniverse {
             gas_price_provider,
             MockWasmChecker { result: Ok(()) },
             self.mock_tx_status_manager.clone(),
+            tx,
         )
     }
 

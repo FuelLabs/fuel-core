@@ -12,6 +12,8 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+pub use ed25519;
+pub use ed25519_dalek;
 #[doc(no_inline)]
 #[cfg(feature = "da-compression")]
 pub use fuel_vm_private::fuel_compression;
@@ -76,3 +78,7 @@ pub mod fuel_vm {
         util,
     };
 }
+
+/// Helpers for creating transactions in tests
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers;

@@ -421,7 +421,6 @@ where
                         .or_default();
                     block_height_expiration.push(tx_id);
                 }
-                self.shared_state.new_txs_notifier.send_replace(());
             }
             PoolNotification::ErrorInsertion {
                 tx_id,
@@ -748,6 +747,8 @@ pub fn new_service<
     wasm_checker: WasmChecker,
     tx_status_manager: TxStatusManager,
 ) -> Service<PSView, P2P, TxStatusManager>
+    new_txs_notifier: watch::Sender<()>,
+) -> Service<PSView, P2P>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
     P2P: P2PRequests,
@@ -774,6 +775,14 @@ where
     let (pool_stats_sender, pool_stats_receiver) =
         tokio::sync::watch::channel(TxPoolStats::default());
     let (new_txs_notifier, _) = watch::channel(());
+    let tx_status_sender = TxStatusChange::new(
+        config.max_tx_update_subscriptions,
+        // The connection should be closed automatically after the `SqueezedOut` event.
+        // But because of slow/malicious consumers, the subscriber can still be occupied.
+        // We allow the subscriber to receive the event produced by TxPool's TTL.
+        // But we still want to drop subscribers after `2 * TxPool_TTL`.
+        config.max_txs_ttl.saturating_mul(2),
+    );
 
     let subscriptions = Subscriptions {
         new_tx_source: new_peers_subscribed_stream,
@@ -822,9 +831,10 @@ where
             max_txs_chain_count: config.max_txs_chain_count,
         }),
         BasicCollisionManager::new(),
-        RatioTipGasSelection::new(),
+        RatioTipGasSelection::new(new_txs_notifier.clone()),
         config,
         pool_stats_sender,
+        new_txs_notifier.clone(),
     );
 
     // BlockHeight is < 64 bytes, so we can use SeqLock
@@ -841,7 +851,7 @@ where
         select_transactions_requests_sender: pool_worker
             .extract_block_transactions_sender
             .clone(),
-        new_txs_notifier,
+        new_executable_txs_notifier: new_txs_notifier,
         latest_stats: pool_stats_receiver,
     };
 

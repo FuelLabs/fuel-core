@@ -292,6 +292,10 @@ pub struct Command {
     #[clap(long = "time-until-synced", default_value = "0s", env)]
     pub time_until_synced: humantime::Duration,
 
+    /// The timeout after which the production of a block is considered failed.
+    #[clap(long = "production-timeout", default_value = "20s", env)]
+    pub production_timeout: humantime::Duration,
+
     /// The size of the memory pool in number of `MemoryInstance`s.
     #[clap(long = "memory-pool-size", default_value = "32", env)]
     pub memory_pool_size: usize,
@@ -345,6 +349,7 @@ impl Command {
             graphql,
             min_connected_reserved_peers,
             time_until_synced,
+            production_timeout,
             memory_pool_size,
             profiling: _,
         } = self;
@@ -691,6 +696,7 @@ impl Command {
             relayer_consensus_config: verifier,
             min_connected_reserved_peers,
             time_until_synced: time_until_synced.into(),
+            production_timeout: production_timeout.into(),
             memory_pool_size,
             tx_status_manager: TxStatusManagerConfig {
                 max_tx_update_subscriptions: tx_number_active_subscriptions,

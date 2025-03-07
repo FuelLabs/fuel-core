@@ -5,7 +5,7 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     },
     tx_receiver::TxReceiver,
 };
-use fuel_core_types::services::p2p::Preconfirmation;
+use fuel_core_types::services::preconfirmation::Preconfirmation;
 use tokio::sync::mpsc;
 
 pub struct PreconfirmationsReceiver {
@@ -55,7 +55,8 @@ mod tests {
     use crate::service::adapters::Tai64;
     use fuel_core_types::{
         fuel_tx::TxId,
-        services::txpool::TransactionStatus,
+        fuel_types::BlockHeight,
+        services::preconfirmation::PreconfirmationStatus,
     };
 
     #[tokio::test]

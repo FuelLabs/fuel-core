@@ -1,16 +1,46 @@
 #![allow(clippy::let_unit_value)]
 
-use super::{
-    adapters::{
-        FuelBlockSigner,
-        P2PAdapter,
-        TxStatusManagerAdapter,
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
+
+use fuel_core_gas_price_service::v1::{
+    algorithm::AlgorithmV1,
+    da_source_service::block_committer_costs::{
+        BlockCommitterDaBlockCosts,
+        BlockCommitterHttpApi,
     },
-    genesis::create_genesis_block,
-    DbType,
+    metadata::V1AlgorithmConfig,
+    uninitialized_task::new_gas_price_service_v1,
+};
+
+#[cfg(feature = "p2p")]
+use fuel_core_poa::pre_confirmation_signature_service::PreConfirmationSignatureTask;
+use fuel_core_poa::Trigger;
+#[cfg(feature = "p2p")]
+use fuel_core_services::ServiceRunner;
+use fuel_core_storage::{
+    self,
+    transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::signer::SignMode;
+
+#[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
+
+#[cfg(feature = "p2p")]
+use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
+    key_generator::{
+        Ed25519Key,
+        Ed25519KeyGenerator,
+    },
+    parent_signature::FuelParentSigner,
+    trigger::TimeBasedTrigger,
+    tx_receiver::PreconfirmationsReceiver,
+};
+
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -23,19 +53,7 @@ use crate::{
     service::{
         adapters::{
             chain_state_info_provider,
-            consensus_module::poa::{
-                pre_confirmation_signature::{
-                    broadcast::P2PBroadcast,
-                    key_generator::{
-                        Ed25519Key,
-                        Ed25519KeyGenerator,
-                    },
-                    parent_signature::FuelParentSigner,
-                    trigger::TimeBasedTrigger,
-                    tx_receiver::PreconfirmationsReceiver,
-                },
-                InDirectoryPredefinedBlocks,
-            },
+            consensus_module::poa::InDirectoryPredefinedBlocks,
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
@@ -56,29 +74,15 @@ use crate::{
         SubServices,
     },
 };
-use fuel_core_gas_price_service::v1::{
-    algorithm::AlgorithmV1,
-    da_source_service::block_committer_costs::{
-        BlockCommitterDaBlockCosts,
-        BlockCommitterHttpApi,
+
+use super::{
+    adapters::{
+        FuelBlockSigner,
+        P2PAdapter,
     },
-    metadata::V1AlgorithmConfig,
-    uninitialized_task::new_gas_price_service_v1,
+    genesis::create_genesis_block,
+    DbType,
 };
-use fuel_core_poa::{
-    pre_confirmation_signature_service::PreconfirmationSignatureTask,
-    Trigger,
-};
-use fuel_core_services::ServiceRunner;
-use fuel_core_storage::{
-    self,
-    transactional::AtomicView,
-};
-#[cfg(feature = "relayer")]
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::signer::SignMode;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 pub type PoAService = fuel_core_poa::Service<
     TxPoolAdapter,
@@ -112,6 +116,9 @@ pub fn init_sub_services(
     let chain_id = chain_config.consensus_parameters.chain_id();
     let chain_name = chain_config.chain_name.clone();
     let on_chain_view = database.on_chain().latest_view()?;
+    let (new_txs_updater, new_txs_watcher) = tokio::sync::watch::channel(());
+    let (preconfirmation_sender, _preconfirmation_receiver) =
+        tokio::sync::mpsc::channel(1024);
 
     let genesis_block = on_chain_view
         .genesis_block()?
@@ -141,6 +148,8 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.relayer().clone(),
         upgradable_executor_config,
+        new_txs_watcher,
+        preconfirmation_sender,
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());
@@ -261,6 +270,7 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
         executor.clone(),
         tx_status_manager_adapter.clone(),
+        new_txs_updater,
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
@@ -316,14 +326,15 @@ pub fn init_sub_services(
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
 
+    #[cfg(feature = "p2p")]
     let _pre_confirmation_service: ServiceRunner<
         PreconfirmationSignatureTask<
             PreconfirmationsReceiver,
-            P2PBroadcast,
+            P2PAdapter,
             FuelParentSigner,
             Ed25519KeyGenerator,
             Ed25519Key,
-            TimeBasedTrigger,
+            TimeBasedTrigger<SystemTime>,
         >,
     >;
 

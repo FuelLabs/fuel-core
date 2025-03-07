@@ -1077,14 +1077,8 @@ mod tests {
         .collect::<Vec<u8>>();
 
         let mut rng = StdRng::seed_from_u64(1337);
-        let create_contract_tx =
-            test_helpers::create_contract_tx(&contract_bytecode, &mut rng);
-        let contract_id = create_contract_tx
-            .metadata()
-            .as_ref()
-            .unwrap()
-            .body
-            .contract_id;
+        let (create_contract_tx, contract_id) =
+            fuel_core_types::test_helpers::create_contract(&contract_bytecode, &mut rng);
 
         let mut storage: InMemoryStorage<Column> = InMemoryStorage::default();
         let mut storage_tx = storage.write_transaction();
@@ -1097,6 +1091,7 @@ mod tests {
             .unwrap();
 
         storage_tx.commit().unwrap();
+
         let stored_contract = storage
             .read_transaction()
             .storage_as_ref::<ContractsRawCode>()

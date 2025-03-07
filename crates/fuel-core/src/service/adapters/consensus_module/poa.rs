@@ -43,7 +43,10 @@ use std::path::{
     Path,
     PathBuf,
 };
-use tokio::sync::watch;
+use tokio::{
+    sync::watch,
+    time::Instant,
+};
 use tokio_stream::{
     wrappers::BroadcastStream,
     StreamExt,
@@ -83,7 +86,7 @@ impl ConsensusModulePort for PoAAdapter {
 
 impl TransactionPool for TxPoolAdapter {
     fn new_txs_watcher(&self) -> watch::Receiver<()> {
-        self.service.get_new_txs_notifier()
+        self.service.get_new_executable_txs_notifier()
     }
 
     fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
@@ -104,11 +107,12 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
         height: BlockHeight,
         block_time: Tai64,
         source: TransactionsSource,
+        deadline: Instant,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         match source {
             TransactionsSource::TxPool => {
                 self.block_producer
-                    .produce_and_execute_block_txpool(height, block_time)
+                    .produce_and_execute_block_txpool(height, block_time, deadline)
                     .await
             }
             TransactionsSource::SpecificTransactions(txs) => {
@@ -124,7 +128,7 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
         block: &Block,
     ) -> anyhow::Result<UncommittedResult<Changes>> {
         self.block_producer
-            .produce_and_execute_predefined(block)
+            .produce_and_execute_predefined(block, ())
             .await
     }
 }

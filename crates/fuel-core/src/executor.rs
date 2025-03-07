@@ -3,6 +3,22 @@
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "wasm-executor"))]
+    use fuel_core_executor::{
+        executor::{
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+            WaitNewTransactionsResult,
+        },
+        ports::{
+            NewTxWaiterPort,
+            PreconfirmationSenderPort,
+        },
+    };
+
+    #[cfg(not(feature = "wasm-executor"))]
+    use fuel_core_types::services::preconfirmation::PreconfirmationStatus;
+
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
@@ -108,7 +124,6 @@ mod tests {
             BlockHeight,
             ChainId,
             ContractId,
-            Salt,
             Word,
         },
         fuel_vm::{
@@ -140,6 +155,7 @@ mod tests {
             relayer::Event,
         },
         tai64::Tai64,
+        test_helpers::create_contract,
     };
     use fuel_core_upgradable_executor::executor::Executor;
     use itertools::Itertools;
@@ -235,7 +251,8 @@ mod tests {
                 op::ret(RegId::ONE),
             ]
             .into_iter()
-            .collect::<Vec<u8>>(),
+            .collect::<Vec<u8>>()
+            .as_slice(),
             &mut rng,
         );
         let (script, data_offset) = script_with_data_offset!(
@@ -311,24 +328,6 @@ mod tests {
             .transaction()
             .to_owned()
             .into()
-    }
-
-    pub(crate) fn create_contract<R: Rng>(
-        contract_code: Vec<u8>,
-        rng: &mut R,
-    ) -> (Create, ContractId) {
-        let salt: Salt = rng.gen();
-        let contract = Contract::from(contract_code.clone());
-        let root = contract.root();
-        let state_root = Contract::default_state_root();
-        let contract_id = contract.id(&salt, &root, &state_root);
-
-        let tx =
-            TransactionBuilder::create(contract_code.into(), salt, Default::default())
-                .add_fee_input()
-                .add_output(Output::contract_created(contract_id, state_root))
-                .finalize();
-        (tx, contract_id)
     }
 
     // Happy path test case that a produced block will also validate
@@ -467,7 +466,7 @@ mod tests {
                 },
                 changes,
             ) = producer
-                .produce_without_commit_with_source(Components {
+                .produce_without_commit_with_source_direct_resolve(Components {
                     header_to_produce: header,
                     transactions_source: OnceTransactionsSource::new(vec![
                         script.into(),
@@ -550,7 +549,7 @@ mod tests {
                 },
                 changes,
             ) = producer
-                .produce_without_commit_with_source(Components {
+                .produce_without_commit_with_source_direct_resolve(Components {
                     header_to_produce: header,
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
                     gas_price: price,
@@ -692,7 +691,7 @@ mod tests {
                 skipped_transactions,
                 ..
             } = producer
-                .produce_without_commit_with_source(Components {
+                .produce_without_commit_with_source_direct_resolve(Components {
                     header_to_produce: PartialBlockHeader::default(),
                     transactions_source: OnceTransactionsSource::new(vec![script.into()]),
                     gas_price: price,
@@ -1651,7 +1650,7 @@ mod tests {
         // changes, the balance the root should be default - `[0; 32]`.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
-        let (create, contract_id) = create_contract(vec![], &mut rng);
+        let (create, contract_id) = create_contract(&[], &mut rng);
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
             .script_gas_limit(10000)
             .coin_input(AssetId::zeroed(), 10000)
@@ -1707,7 +1706,7 @@ mod tests {
         // it still should actualize them to use the balance and state roots before the execution.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
-        let (create, contract_id) = create_contract(vec![], &mut rng);
+        let (create, contract_id) = create_contract(&[], &mut rng);
         // The transaction with invalid script.
         let non_modify_state_tx: Transaction = TxBuilder::new(2322)
             .start_script(vec![op::add(RegId::PC, RegId::PC, RegId::PC)], vec![])
@@ -1776,7 +1775,8 @@ mod tests {
                 op::ret(1),
             ]
             .into_iter()
-            .collect::<Vec<u8>>(),
+            .collect::<Vec<u8>>()
+            .as_slice(),
             &mut rng,
         );
 
@@ -1880,7 +1880,8 @@ mod tests {
                 op::ret(1),
             ]
             .into_iter()
-            .collect::<Vec<u8>>(),
+            .collect::<Vec<u8>>()
+            .as_slice(),
             &mut rng,
         );
 
@@ -1970,7 +1971,7 @@ mod tests {
         let ExecutionResult {
             block, tx_status, ..
         } = executor
-            .produce_without_commit_with_source(Components {
+            .produce_without_commit_with_source_direct_resolve(Components {
                 header_to_produce: block.header,
                 transactions_source: OnceTransactionsSource::new(block.transactions),
                 gas_price: 0,
@@ -1996,7 +1997,7 @@ mod tests {
         // The foreign transfer of tokens should not affect the balance root of the transaction.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
-        let (create, contract_id) = create_contract(vec![], &mut rng);
+        let (create, contract_id) = create_contract(&[], &mut rng);
 
         let transfer_amount = 100 as Word;
         let asset_id = AssetId::from([2; 32]);
@@ -2127,7 +2128,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322);
         // create a contract in block 1
         // verify a block 2 with tx containing contract id from block 1, using the correct contract utxo_id from block 1.
-        let (tx, contract_id) = create_contract(vec![], &mut rng);
+        let (tx, contract_id) = create_contract(&[], &mut rng);
         let first_block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.into()],
@@ -2187,7 +2188,7 @@ mod tests {
 
         // create a contract in block 1
         // verify a block 2 containing contract id from block 1, with wrong input contract utxo_id
-        let (tx, contract_id) = create_contract(vec![], &mut rng);
+        let (tx, contract_id) = create_contract(&[], &mut rng);
         let tx2: Transaction = TxBuilder::new(2322)
             .start_script(vec![op::addi(0x10, RegId::ZERO, 0), op::ret(1)], vec![])
             .contract_input(contract_id)
@@ -2951,7 +2952,7 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .produce_without_commit_with_source(Components {
+            .produce_without_commit_with_source_direct_resolve(Components {
                 header_to_produce: PartialBlockHeader::default(),
                 transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
                 coinbase_recipient: Default::default(),
@@ -3027,7 +3028,7 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .produce_without_commit_with_source(Components {
+            .produce_without_commit_with_source_direct_resolve(Components {
                 header_to_produce: PartialBlockHeader {
                     application: ApplicationHeader {
                         consensus_parameters_version:
@@ -3051,6 +3052,139 @@ mod tests {
             skipped_transactions[0].1,
             ExecutorError::InvalidTransaction(_)
         ));
+    }
+
+    #[cfg(not(feature = "wasm-executor"))]
+    #[tokio::test]
+    async fn execute_block__new_transactions_trigger() {
+        // Given
+        struct MockNewTransactionsTrigger {
+            sender: tokio::sync::mpsc::Sender<()>,
+            counter: u8,
+        }
+
+        impl NewTxWaiterPort for MockNewTransactionsTrigger {
+            async fn wait_for_new_transactions(&mut self) -> WaitNewTransactionsResult {
+                self.sender.send(()).await.unwrap();
+                if self.counter == 0 {
+                    self.counter += 1;
+                    WaitNewTransactionsResult::NewTransaction
+                } else {
+                    WaitNewTransactionsResult::Timeout
+                }
+            }
+        }
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.gen();
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let config = Config {
+            utxo_validation_default: false,
+            ..Default::default()
+        };
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    gas_price: 0,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                MockNewTransactionsTrigger { sender, counter: 0 },
+                TransparentPreconfirmationSender,
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        receiver.recv().await.unwrap();
+        receiver.recv().await.unwrap();
+        assert_eq!(res.skipped_transactions.len(), 0);
+        assert_eq!(res.block.transactions().len(), 2);
+    }
+
+    #[cfg(not(feature = "wasm-executor"))]
+    #[tokio::test]
+    async fn execute_block__send_preconfirmations() {
+        // Given
+        struct MockPreconfirmationsSender {
+            sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+        }
+
+        impl PreconfirmationSenderPort for MockPreconfirmationsSender {
+            fn try_send(
+                &self,
+                preconfirmations: Vec<PreconfirmationStatus>,
+            ) -> Vec<PreconfirmationStatus> {
+                preconfirmations
+            }
+
+            /// Send a batch of pre-confirmations, awaiting for the send to be successful.
+            async fn send(&self, preconfirmations: Vec<PreconfirmationStatus>) {
+                self.sender.send(preconfirmations).await.unwrap();
+            }
+        }
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.gen();
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let config = Config {
+            utxo_validation_default: false,
+            ..Default::default()
+        };
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    gas_price: 0,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                TimeoutOnlyTxWaiter,
+                MockPreconfirmationsSender { sender },
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        let preconfirmations = receiver.recv().await.unwrap();
+        assert_eq!(preconfirmations.len(), 1);
+        assert_eq!(
+            preconfirmations[0],
+            PreconfirmationStatus::SuccessByBlockProducer {
+                block_height: 0u32.into()
+            }
+        );
+        assert_eq!(res.skipped_transactions.len(), 0);
+        assert_eq!(res.block.transactions().len(), 2);
     }
 
     #[test]
@@ -3156,7 +3290,7 @@ mod tests {
         // When
         let producer = create_executor(Database::default(), config);
         let (result, _) = producer
-            .produce_without_commit_with_source(components)
+            .produce_without_commit_with_source_direct_resolve(components)
             .unwrap()
             .into();
 
