@@ -12,10 +12,11 @@ use super::{
     preconfirmation::Preconfirmations,
     txpool::ArcPoolTx,
 };
+#[cfg(feature = "test-helpers")]
+use crate::services::preconfirmation::PreconfirmationStatus;
 use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::preconfirmation::PreconfirmationStatus,
 };
 use std::{
     collections::HashSet,
