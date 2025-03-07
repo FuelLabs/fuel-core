@@ -43,6 +43,12 @@ use crate::{
         DependencyError,
         Error,
         InputValidationError,
+        InputValidationErrorType,
+    },
+    pending_pool::MissingInput,
+    pool::{
+        SavedCoinOutput,
+        SavedOutput,
     },
     ports::TxPoolPersistentStorage,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
@@ -614,38 +620,75 @@ impl Storage for GraphStorage {
         &self,
         transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
+        saved_outputs: &HashSet<SavedOutput>,
         utxo_validation: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<(), InputValidationErrorType> {
+        let mut missing_inputs = Vec::new();
         for input in transaction.inputs() {
             match input {
                 // If the utxo is created in the pool, need to check if we don't spend too much (utxo can still be unresolved)
                 // If the utxo_validation is active, we need to check if the utxo exists in the database and is valid
-                Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                Input::CoinSigned(CoinSigned {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
+                | Input::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                }) => {
                     if let Some(node_id) = self.coins_creators.get(utxo_id) {
                         let Some(node) = self.graph.node_weight(*node_id) else {
-                            return Err(Error::Storage(format!(
-                                "Node with id {:?} not found",
-                                node_id
-                            )));
+                            return Err(InputValidationErrorType::Inconsistency(
+                                Error::Storage(format!(
+                                    "Node with id {:?} not found",
+                                    node_id
+                                )),
+                            ));
                         };
                         let output =
                             &node.transaction.outputs()[utxo_id.output_index() as usize];
-                        Self::check_if_coin_input_can_spend_output(output, input)?;
-                    } else if utxo_validation {
-                        let Some(coin) = persistent_storage
-                            .utxo(utxo_id)
-                            .map_err(|e| Error::Database(format!("{:?}", e)))?
-                        else {
-                            return Err(Error::InputValidation(
-                                InputValidationError::UtxoNotFound(*utxo_id),
-                            ));
+                        if let Err(e) =
+                            Self::check_if_coin_input_can_spend_output(output, input)
+                        {
+                            return Err(InputValidationErrorType::Inconsistency(e));
                         };
-                        if !coin.matches_input(input).expect("The input is coin above") {
-                            return Err(Error::InputValidation(
-                                InputValidationError::NotInsertedIoCoinMismatch,
-                            ));
-                        }
+                    } else if utxo_validation {
+                        match persistent_storage.utxo(utxo_id) {
+                            Ok(Some(coin)) => {
+                                if !coin
+                                    .matches_input(input)
+                                    .expect("The input is coin above")
+                                {
+                                    return Err(InputValidationErrorType::Inconsistency(Error::InputValidation(
+                                        InputValidationError::NotInsertedIoCoinMismatch,
+                                    )));
+                                }
+                            }
+                            Ok(None) => {
+                                let linked_output = SavedOutput::Coin(SavedCoinOutput {
+                                    utxo_id: *utxo_id,
+                                    to: *owner,
+                                    amount: *amount,
+                                    asset_id: *asset_id,
+                                });
+                                if saved_outputs.contains(&linked_output) {
+                                    continue;
+                                }
+                                missing_inputs.push(MissingInput::Utxo(*utxo_id));
+                                continue;
+                            }
+                            Err(e) => {
+                                return Err(InputValidationErrorType::Inconsistency(
+                                    Error::Database(format!("{:?}", e)),
+                                ));
+                            }
+                        };
                     }
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
@@ -655,44 +698,60 @@ impl Storage for GraphStorage {
                     // since message id is derived, we don't need to double check all the fields
                     // Maybe this should be on an other function as it's not a dependency finder but just a test
                     if utxo_validation {
-                        if let Some(db_message) = persistent_storage
-                            .message(nonce)
-                            .map_err(|e| Error::Database(format!("{:?}", e)))?
-                        {
-                            // verify message id integrity
-                            if !db_message
-                                .matches_input(input)
-                                .expect("Input is a message above")
-                            {
-                                return Err(Error::InputValidation(
-                                    InputValidationError::NotInsertedIoMessageMismatch,
+                        match persistent_storage.message(nonce) {
+                            Ok(Some(db_message)) => {
+                                // verify message id integrity
+                                if !db_message
+                                    .matches_input(input)
+                                    .expect("Input is a message above")
+                                {
+                                    return Err(InputValidationErrorType::Inconsistency(Error::InputValidation(
+                                InputValidationError::NotInsertedIoMessageMismatch,
+                            )));
+                                }
+                            }
+                            Ok(None) => {
+                                // For now we are not managing the case where the message is not found
+                                // as a missing input.
+                                return Err(InputValidationErrorType::Inconsistency(Error::InputValidation(
+                                    InputValidationError::NotInsertedInputMessageUnknown(*nonce),
+                                )));
+                            }
+                            Err(e) => {
+                                return Err(InputValidationErrorType::Inconsistency(
+                                    Error::Database(format!("{:?}", e)),
                                 ));
                             }
-                        } else {
-                            return Err(Error::InputValidation(
-                                InputValidationError::NotInsertedInputMessageUnknown(
-                                    *nonce,
-                                ),
-                            ));
-                        }
+                        };
                     }
                 }
                 Input::Contract(Contract { contract_id, .. }) => {
-                    if !self.contracts_creators.contains_key(contract_id)
-                        && !persistent_storage
-                            .contract_exist(contract_id)
-                            .map_err(|e| Error::Database(format!("{:?}", e)))?
-                    {
-                        return Err(Error::InputValidation(
-                            InputValidationError::NotInsertedInputContractDoesNotExist(
-                                *contract_id,
-                            ),
-                        ));
+                    if !self.contracts_creators.contains_key(contract_id) {
+                        match persistent_storage.contract_exist(contract_id) {
+                            Ok(true) => {}
+                            Ok(false) => {
+                                let linked_output = SavedOutput::Contract(*contract_id);
+                                if saved_outputs.contains(&linked_output) {
+                                    continue;
+                                }
+                                missing_inputs.push(MissingInput::Contract(*contract_id));
+                                continue;
+                            }
+                            Err(e) => {
+                                return Err(InputValidationErrorType::Inconsistency(
+                                    Error::Database(format!("{:?}", e)),
+                                ));
+                            }
+                        };
                     }
                 }
             }
         }
-        Ok(())
+        if missing_inputs.is_empty() {
+            Ok(())
+        } else {
+            Err(InputValidationErrorType::MissingInputs(missing_inputs))
+        }
     }
 
     fn remove_transaction_and_dependents_subtree(

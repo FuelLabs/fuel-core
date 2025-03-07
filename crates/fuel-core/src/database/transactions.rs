@@ -21,7 +21,7 @@ use fuel_core_types::{
         TxPointer,
     },
     fuel_types::Address,
-    services::txpool::TransactionStatus,
+    services::txpool::TransactionExecutionStatus,
 };
 
 #[cfg(feature = "test-helpers")]
@@ -65,7 +65,7 @@ impl OffChainIterableKeyValueView {
     pub fn get_tx_status(
         &self,
         id: &Bytes32,
-    ) -> StorageResult<Option<TransactionStatus>> {
+    ) -> StorageResult<Option<TransactionExecutionStatus>> {
         use fuel_core_storage::StorageAsRef;
         self.storage::<TransactionStatuses>()
             .get(id)
