@@ -29,7 +29,10 @@ use fuel_core_types::{
         },
     },
 };
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    future::Future,
+};
 
 pub trait BlockProducerDatabase: Send + Sync {
     /// Returns the latest block height.
@@ -90,12 +93,14 @@ pub trait Relayer: Send + Sync {
 }
 
 pub trait BlockProducer<TxSource>: Send + Sync {
+    type Deadline;
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
     fn produce_without_commit(
         &self,
         component: Components<TxSource>,
-    ) -> ExecutorResult<UncommittedResult<Changes>>;
+        deadline: Self::Deadline,
+    ) -> impl Future<Output = ExecutorResult<UncommittedResult<Changes>>>;
 }
 
 pub trait DryRunner: Send + Sync {

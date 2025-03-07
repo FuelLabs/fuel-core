@@ -21,9 +21,12 @@ use fuel_core_types::{
     fuel_vm::checked_transaction::CheckedTransaction,
     services::{
         executor::Result as ExecutorResult,
+        preconfirmation::PreconfirmationStatus,
         relayer::Event,
     },
 };
+
+use crate::executor::WaitNewTransactionsResult;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::{
@@ -33,6 +36,8 @@ use alloc::{
 
 #[cfg(feature = "std")]
 use std::borrow::Cow;
+
+use core::future::Future;
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]
@@ -161,4 +166,29 @@ pub trait RelayerPort {
 
     /// Get events from the relayer at a given da height.
     fn get_events(&self, da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>>;
+}
+
+/// Send to the block executor to know if there is new transactions available
+/// to include in the block or if we are good to end the block execution.
+pub trait NewTxWaiterPort: Send {
+    /// Wait for new transactions to be available or timeout.
+    fn wait_for_new_transactions(
+        &mut self,
+    ) -> impl Future<Output = WaitNewTransactionsResult> + Send;
+}
+
+/// Sending preconfirmation of transactions executed to other services.
+pub trait PreconfirmationSenderPort {
+    /// Try to send a batch of pre-confirmations. Will succeed only if
+    /// it can be directly sent. Otherwise it will return the batch.
+    fn try_send(
+        &self,
+        preconfirmations: Vec<PreconfirmationStatus>,
+    ) -> Vec<PreconfirmationStatus>;
+
+    /// Send a batch of pre-confirmations, awaiting for the send to be successful.
+    fn send(
+        &self,
+        preconfirmations: Vec<PreconfirmationStatus>,
+    ) -> impl Future<Output = ()> + Send;
 }

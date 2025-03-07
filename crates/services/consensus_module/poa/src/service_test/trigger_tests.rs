@@ -106,7 +106,7 @@ impl DefaultContext {
         let mut block_producer = MockBlockProducer::default();
         block_producer
             .expect_produce_and_execute_block()
-            .returning(|_, time, _| {
+            .returning(|_, time, _, _| {
                 let mut block = Block::default();
                 block.header_mut().set_time(time);
                 block.header_mut().recalculate_metadata();

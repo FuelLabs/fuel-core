@@ -5,7 +5,8 @@ use super::{
     FuelP2PService,
     PublishError,
 };
-use crate::{
+use crate as fuel_core_p2p;
+use fuel_core_p2p::{
     config::Config,
     gossipsub::{
         messages::{
