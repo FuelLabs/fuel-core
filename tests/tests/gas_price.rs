@@ -80,15 +80,11 @@ use std::{
     ops::Deref,
     time::Duration,
 };
-use test_helpers::fuel_core_driver::FuelCoreDriver;
-
-fn tx_for_gas_limit(max_fee_limit: Word) -> Transaction {
-    TransactionBuilder::script(vec![], vec![])
-        .max_fee_limit(max_fee_limit)
-        .add_fee_input()
-        .finalize()
-        .into()
-}
+use test_helpers::{
+    assemble_tx::AssembleAndRunTx,
+    default_signing_wallet,
+    fuel_core_driver::FuelCoreDriver,
+};
 
 fn infinite_loop_tx<R: Rng + rand::CryptoRng>(
     max_fee_limit: Word,
@@ -188,8 +184,10 @@ async fn latest_gas_price__for_single_block_should_be_starting_gas_price() {
     let client = FuelClient::from(srv.bound_address);
 
     // when
-    let tx = tx_for_gas_limit(1);
-    let _ = client.submit_and_await_commit(&tx).await.unwrap();
+    let _ = client
+        .run_script(vec![], vec![], default_signing_wallet())
+        .await
+        .unwrap();
     let LatestGasPrice { gas_price, .. } = client.latest_gas_price().await.unwrap();
 
     // then

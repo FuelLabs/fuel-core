@@ -41,6 +41,10 @@ use fuel_core_types::{
     fuel_vm::SecretKey,
 };
 use itertools::Itertools;
+use test_helpers::assemble_tx::{
+    AssembleAndRunTx,
+    SigningAccount,
+};
 
 use crate::config::{
     ClientConfig,
@@ -121,42 +125,15 @@ impl Wallet {
         asset_id: Option<AssetId>,
     ) -> anyhow::Result<Transaction> {
         let asset_id = asset_id.unwrap_or(*self.consensus_params.base_asset_id());
-        let total_amount = transfer_amount + BASE_AMOUNT;
-        // select coins
-        let coins = &self
+        let tx = self
             .client
-            .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
-            .await?[0];
+            .assemble_transfer(
+                SigningAccount::Wallet(self.secret),
+                vec![(destination, asset_id, transfer_amount)],
+            )
+            .await?;
 
-        // build transaction
-        let mut tx = TransactionBuilder::script(Default::default(), Default::default());
-        tx.max_fee_limit(BASE_AMOUNT);
-        tx.script_gas_limit(0);
-
-        for coin in coins {
-            if let CoinType::Coin(coin) = coin {
-                tx.add_unsigned_coin_input(
-                    self.secret,
-                    coin.utxo_id,
-                    coin.amount,
-                    coin.asset_id,
-                    Default::default(),
-                );
-            }
-        }
-        tx.add_output(Output::Coin {
-            to: destination,
-            amount: transfer_amount,
-            asset_id,
-        });
-        tx.add_output(Output::Change {
-            to: self.address,
-            amount: 0,
-            asset_id,
-        });
-        tx.with_params(self.consensus_params.clone());
-
-        Ok(tx.finalize_as_transaction())
+        Ok(tx)
     }
 
     /// Creates the script transaction that collects fee.
@@ -165,16 +142,6 @@ impl Wallet {
         coinbase_contract: ContractId,
         asset_id: AssetId,
     ) -> anyhow::Result<Transaction> {
-        // select coins
-        let coins = &self
-            .client
-            .coins_to_spend(
-                &self.address,
-                vec![(*self.consensus_params.base_asset_id(), BASE_AMOUNT, None)],
-                None,
-            )
-            .await?[0];
-
         let output_index = 2u64;
         let call_struct_register = 0x10;
         // Now call the fee collection contract to withdraw the fees
@@ -189,59 +156,21 @@ impl Wallet {
             op::call(call_struct_register, RegId::ZERO, RegId::ZERO, RegId::CGAS),
             op::ret(RegId::ONE),
         ];
+        let script_data = asset_id
+            .to_bytes()
+            .into_iter()
+            .chain(output_index.to_bytes().into_iter())
+            .chain(coinbase_contract.to_bytes().into_iter())
+            .chain(0u64.to_bytes().into_iter())
+            .chain(0u64.to_bytes().into_iter())
+            .collect();
 
-        // build transaction
-        let mut tx_builder = TransactionBuilder::script(
-            script.into_iter().collect(),
-            asset_id
-                .to_bytes()
-                .into_iter()
-                .chain(output_index.to_bytes().into_iter())
-                .chain(coinbase_contract.to_bytes().into_iter())
-                .chain(0u64.to_bytes().into_iter())
-                .chain(0u64.to_bytes().into_iter())
-                .collect(),
-        );
-        tx_builder.max_fee_limit(BASE_AMOUNT);
-        tx_builder
-            .script_gas_limit(self.consensus_params.tx_params().max_gas_per_tx() / 10);
+        let tx = self
+            .client
+            .assemble_script(script, script_data, SigningAccount::Wallet(self.secret))
+            .await?;
 
-        tx_builder.add_input(Input::contract(
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            coinbase_contract,
-        ));
-        for coin in coins {
-            if let CoinType::Coin(coin) = coin {
-                tx_builder.add_unsigned_coin_input(
-                    self.secret,
-                    coin.utxo_id,
-                    coin.amount,
-                    coin.asset_id,
-                    Default::default(),
-                );
-            }
-        }
-        tx_builder.add_output(Output::contract(
-            0,
-            Default::default(),
-            Default::default(),
-        ));
-        tx_builder.add_output(Output::Change {
-            to: self.address,
-            amount: 0,
-            asset_id,
-        });
-        tx_builder.add_output(Output::Variable {
-            to: Default::default(),
-            amount: Default::default(),
-            asset_id: Default::default(),
-        });
-        tx_builder.with_params(self.consensus_params.clone());
-
-        Ok(tx_builder.finalize_as_transaction())
+        Ok(tx)
     }
 
     /// Transfers coins from this wallet to another
@@ -280,7 +209,11 @@ impl Wallet {
         // select coins
         let coins = &self
             .client
-            .coins_to_spend(&self.address, vec![(asset_id, total_amount, None)], None)
+            .coins_to_spend(
+                &self.address,
+                vec![(asset_id, u128::from(total_amount), None)],
+                None,
+            )
             .await?[0];
 
         let ContractConfig {

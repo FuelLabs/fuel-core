@@ -57,8 +57,8 @@ impl InputCoin {
         self.tx_pointer
     }
 
-    async fn witness_index(&self) -> u16 {
-        self.witness_index
+    async fn witness_index(&self) -> U16 {
+        self.witness_index.into()
     }
 
     async fn predicate_gas_used(&self) -> U64 {
