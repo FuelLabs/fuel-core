@@ -209,7 +209,7 @@ mod tests {
     fn assert_present(tx_status_manager: &TxStatusManager, tx_ids: Vec<Bytes32>) {
         for tx_id in tx_ids {
             assert!(
-                tx_status_manager.status(&tx_id.into()).is_some(),
+                tx_status_manager.status(&tx_id).is_some(),
                 "tx_id {:?} should be present",
                 tx_id
             );
@@ -219,7 +219,7 @@ mod tests {
     fn assert_missing(tx_status_manager: &TxStatusManager, tx_ids: Vec<Bytes32>) {
         for tx_id in tx_ids {
             assert!(
-                tx_status_manager.status(&tx_id.into()).is_none(),
+                tx_status_manager.status(&tx_id).is_none(),
                 "tx_id {:?} should be missing",
                 tx_id
             );
