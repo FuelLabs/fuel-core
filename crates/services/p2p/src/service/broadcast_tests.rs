@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use fuel_core_types::services::p2p::PreconfirmationMessage;
+use fuel_core_types::services::p2p::PreConfirmationMessage;
 
 fn arb_shared_state() -> SharedState {
     let config = Config::default("test network");
@@ -23,10 +23,10 @@ async fn shared_state__broadcast__tx_preconfirmations() {
 
     // when
     broadcast
-        .pre_confirmation_broadcast(preconfirmations_gossip_data)
+        .pre_confirmation_broadcast(confirmations_gossip_data)
         .unwrap();
 
     // then
     let actual = preconfirmations_receiver.try_recv().unwrap().data.unwrap();
-    assert_eq!(preconfirmations, actual);
+    assert_eq!(confirmations, actual);
 }

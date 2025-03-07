@@ -73,7 +73,7 @@ impl Broadcast for FakeBroadcast {
 
     async fn broadcast_delegate_key(
         &mut self,
-        data: DelegatePreconfirmationKey<PublicKey<Self>>,
+        data: DelegatePreConfirmationKey<PublicKey<Self>>,
         signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> Result<()> {
         let delegate_key = FakeParentSignedData {
@@ -205,7 +205,7 @@ pub struct TaskBuilder {
     period: Option<Duration>,
 }
 
-type TestTask = PreconfirmationSignatureTask<
+type TestTask = PreConfirmationSignatureTask<
     FakeTxReceiver,
     FakeBroadcast,
     FakeParentSignature,
@@ -235,7 +235,7 @@ impl TaskBuilder {
         let (broadcast, broadcast_delegation_key_handle, broadcast_tx_handle) =
             self.get_broadcast();
         let (tx_receiver, tx_sender_handle) = self.get_tx_receiver();
-        let task = PreconfirmationSignatureTask {
+        let task = PreConfirmationSignatureTask {
             tx_receiver,
             broadcast,
             parent_signature,

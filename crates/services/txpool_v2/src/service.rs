@@ -445,7 +445,6 @@ where
                     tx_id,
                     TransactionStatus::SqueezedOut {
                         reason: error.to_string(),
-                        tx_id,
                     },
                 );
             }
@@ -454,7 +453,6 @@ where
                     tx_id,
                     TransactionStatus::SqueezedOut {
                         reason: error.to_string(),
-                        tx_id,
                     },
                 );
             }
@@ -543,7 +541,6 @@ where
                         tx_id,
                         TransactionStatus::SqueezedOut {
                             reason: err.to_string(),
-                            tx_id,
                         },
                     );
                     return
@@ -745,10 +742,9 @@ pub fn new_service<
     current_height: BlockHeight,
     gas_price_provider: GasPriceProvider,
     wasm_checker: WasmChecker,
+    new_txs_notifier: watch::Sender<()>,
     tx_status_manager: TxStatusManager,
 ) -> Service<PSView, P2P, TxStatusManager>
-    new_txs_notifier: watch::Sender<()>,
-) -> Service<PSView, P2P>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
     P2P: P2PRequests,
@@ -774,15 +770,6 @@ where
 
     let (pool_stats_sender, pool_stats_receiver) =
         tokio::sync::watch::channel(TxPoolStats::default());
-    let (new_txs_notifier, _) = watch::channel(());
-    let tx_status_sender = TxStatusChange::new(
-        config.max_tx_update_subscriptions,
-        // The connection should be closed automatically after the `SqueezedOut` event.
-        // But because of slow/malicious consumers, the subscriber can still be occupied.
-        // We allow the subscriber to receive the event produced by TxPool's TTL.
-        // But we still want to drop subscribers after `2 * TxPool_TTL`.
-        config.max_txs_ttl.saturating_mul(2),
-    );
 
     let subscriptions = Subscriptions {
         new_tx_source: new_peers_subscribed_stream,

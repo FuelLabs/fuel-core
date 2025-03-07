@@ -63,7 +63,7 @@ pub struct PreConfirmationSignatureTask<
 
 #[async_trait::async_trait]
 impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableService
-    for PreconfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+    for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver<Txs = Preconfirmations>,
     Brdcst: Broadcast<
@@ -96,7 +96,7 @@ where
 }
 
 impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger>
-    PreconfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+    PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver<Txs = Preconfirmations>,
     Brdcst: Broadcast<
@@ -209,7 +209,7 @@ where
 }
 
 impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableTask
-    for PreconfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+    for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
     TxRcv: TxReceiver<Txs = Preconfirmations>,
     Brdcst: Broadcast<

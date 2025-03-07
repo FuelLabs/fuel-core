@@ -50,8 +50,10 @@ use fuel_core_types::{
 };
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
-use tokio::sync::broadcast;
-use tokio::time::Instant;
+use tokio::{
+    sync::broadcast,
+    time::Instant,
+};
 
 use crate::{
     database::{

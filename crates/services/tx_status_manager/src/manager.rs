@@ -65,19 +65,23 @@ impl TxStatusManager {
             | TransactionStatus::SqueezedOut { .. }
             | TransactionStatus::Failure { .. } => (),
             // TODO[RC]: Handle these new variants
-            TransactionStatus::PreconfirmationSuccess {
+            TransactionStatus::PreConfirmationSuccess {
                 tx_pointer: _,
-                tx_id: _,
+                total_gas: _,
+                total_fee: _,
                 receipts: _,
+                outputs: _,
             } => todo!(),
-            TransactionStatus::PreconfirmationSqueezedOut {
-                tx_id: _,
-                reason: _,
-            } => todo!(),
-            TransactionStatus::PreconfirmationFailure {
+            TransactionStatus::PreConfirmationSqueezedOut { reason: _ } => {
+                // TODO[RC]: Squeezed out should still have the tx_id, not just the reason
+                todo!()
+            }
+            TransactionStatus::PreConfirmationFailure {
                 tx_pointer: _,
-                tx_id: _,
+                total_gas: _,
+                total_fee: _,
                 receipts: _,
+                outputs: _,
                 reason: _,
             } => todo!(),
         };
@@ -115,7 +119,6 @@ impl TxStatusManager {
                 tx_id,
                 TransactionStatus::SqueezedOut {
                     reason: error.to_string(),
-                    tx_id,
                 },
             );
         });

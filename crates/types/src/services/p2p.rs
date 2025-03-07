@@ -15,6 +15,7 @@ use super::{
 use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
+    services::preconfirmation::PreconfirmationStatus,
 };
 use std::{
     collections::HashSet,
@@ -26,6 +27,7 @@ use std::{
     str::FromStr,
     time::SystemTime,
 };
+
 use tai64::Tai64;
 
 /// Contains types and logic for Peer Reputation
@@ -124,18 +126,15 @@ impl<DP, S> PreConfirmationMessage<DP, crate::fuel_tx::Bytes64, S> {
     pub fn default_test_confirmation() -> Self {
         use crate::{
             fuel_tx::TxId,
-            services::preconfirmation::{
-                Preconfirmation,
-                PreconfirmationStatus,
-            },
+            services::preconfirmation::Preconfirmation,
         };
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
             entity: Preconfirmations {
                 expiration: Tai64::UNIX_EPOCH,
                 preconfirmations: vec![Preconfirmation {
                     tx_id: TxId::default(),
-                    status: TransactionStatus::Submitted {
-                        timestamp: Tai64::UNIX_EPOCH,
+                    status: PreconfirmationStatus::SqueezedOut {
+                        reason: "Dummy reason".to_string(),
                     },
                 }],
             },

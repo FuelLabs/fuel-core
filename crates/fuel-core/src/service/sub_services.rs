@@ -79,6 +79,7 @@ use super::{
     adapters::{
         FuelBlockSigner,
         P2PAdapter,
+        TxStatusManagerAdapter,
     },
     genesis::create_genesis_block,
     DbType,
@@ -269,8 +270,8 @@ pub fn init_sub_services(
         last_height,
         universal_gas_price_provider.clone(),
         executor.clone(),
-        tx_status_manager_adapter.clone(),
         new_txs_updater,
+        tx_status_manager_adapter.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
@@ -328,7 +329,7 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     let _pre_confirmation_service: ServiceRunner<
-        PreconfirmationSignatureTask<
+        PreConfirmationSignatureTask<
             PreconfirmationsReceiver,
             P2PAdapter,
             FuelParentSigner,

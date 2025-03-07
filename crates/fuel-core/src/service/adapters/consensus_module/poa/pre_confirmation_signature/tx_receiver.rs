@@ -52,10 +52,8 @@ mod tests {
     #![allow(non_snake_case)]
 
     use super::*;
-    use crate::service::adapters::Tai64;
     use fuel_core_types::{
         fuel_tx::TxId,
-        fuel_types::BlockHeight,
         services::preconfirmation::PreconfirmationStatus,
     };
 
@@ -65,15 +63,18 @@ mod tests {
         let txs = vec![
             Preconfirmation {
                 tx_id: TxId::default(),
-                status: TransactionStatus::Submitted {
-                    timestamp: Tai64::UNIX_EPOCH,
+                status: PreconfirmationStatus::SqueezedOut {
+                    reason: "Dummy reason".to_string(),
                 },
             },
             Preconfirmation {
                 tx_id: TxId::default(),
-                status: TransactionStatus::SqueezedOut {
-                    tx_id: TxId::default(),
-                    reason: "reason".to_string(),
+                status: PreconfirmationStatus::Success {
+                    tx_pointer: Default::default(),
+                    total_gas: 0,
+                    total_fee: 0,
+                    receipts: vec![],
+                    outputs: vec![],
                 },
             },
         ];
