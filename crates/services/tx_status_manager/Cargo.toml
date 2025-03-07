@@ -29,6 +29,4 @@ test-strategy = { workspace = true }
 tracing = { workspace = true }
 
 [features]
-test-helpers = [
-  "fuel-core-types/test-helpers",
-]
+test-helpers = ["fuel-core-types/test-helpers"]
