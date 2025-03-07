@@ -3584,6 +3584,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-compression-service"
+version = "0.41.7"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-compression",
+ "fuel-core-services",
+ "fuel-core-types 0.41.7",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fuel-core-consensus-module"
 version = "0.41.7"
 dependencies = [
