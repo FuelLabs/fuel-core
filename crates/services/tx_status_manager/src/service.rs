@@ -127,7 +127,8 @@ where
         // But we still want to drop subscribers after `2 * TxPool_TTL`.
         config.max_txs_ttl.saturating_mul(2),
     );
-    let tx_status_manager = TxStatusManager::new(tx_status_sender);
+    let tx_status_manager =
+        TxStatusManager::new(tx_status_sender, config.max_tx_status_ttl);
 
     ServiceRunner::new(Task {
         subscriptions,
