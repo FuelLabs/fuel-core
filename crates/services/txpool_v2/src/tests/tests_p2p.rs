@@ -8,12 +8,9 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types::ChainId,
-    services::{
-        p2p::{
-            GossipsubMessageAcceptance,
-            PeerId,
-        },
-        txpool::TransactionStatus,
+    services::p2p::{
+        GossipsubMessageAcceptance,
+        PeerId,
     },
 };
 use std::{
@@ -159,12 +156,7 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
     service.shared.try_insert(vec![tx1.clone()]).unwrap();
 
     let ids = vec![tx1.id(&Default::default())];
-    universe
-        .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     wait_notification.notified().await;
     tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -200,12 +192,7 @@ async fn can_insert_from_p2p() {
     service.start_and_await().await.unwrap();
 
     let ids = vec![tx1.id(&Default::default())];
-    universe
-        .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     // fetch tx from pool
     let out = service
@@ -241,12 +228,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
 
     // verify status updates
     let ids = vec![tx1.cached_id().unwrap()];
-    universe
-        .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     service.stop_and_await().await.unwrap();
 }
@@ -273,12 +255,7 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
 
     // verify tx status update from p2p injected tx is successful
     let ids = vec![tx1.id(&Default::default())];
-    universe
-        .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     // verify tx was not broadcast to p2p
     let not_broadcast =

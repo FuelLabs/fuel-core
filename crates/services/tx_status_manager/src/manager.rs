@@ -14,7 +14,6 @@ use fuel_core_types::{
     },
     services::txpool::TransactionStatus,
 };
-use tokio::sync::broadcast;
 
 use crate::{
     error::Error,
@@ -54,14 +53,8 @@ impl TxStatusManager {
             .insert(tx_id, tx_status.clone());
 
         match tx_status {
-            TransactionStatus::Submitted { .. } => {
-                if let Err(err) =
-                    self.tx_status_change.new_tx_notification_sender.send(tx_id)
-                {
-                    tracing::error!(%err, "new_tx_notification_sender failed");
-                }
-            }
-            TransactionStatus::Success { .. }
+            TransactionStatus::Submitted { .. }
+            | TransactionStatus::Success { .. }
             | TransactionStatus::SqueezedOut { .. }
             | TransactionStatus::Failure { .. } => (),
             // TODO[RC]: Handle these new variants
@@ -97,11 +90,6 @@ impl TxStatusManager {
             .expect("mutex poisoned")
             .get(tx_id)
             .cloned()
-    }
-
-    /// Subscribe to new transaction notifications.
-    pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
-        self.tx_status_change.new_tx_notification_sender.subscribe()
     }
 
     /// Subscribe to status updates for a transaction.

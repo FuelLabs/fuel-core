@@ -61,12 +61,7 @@ async fn test_find() {
         .try_insert(vec![tx1.clone(), tx2.clone()])
         .unwrap();
 
-    universe
-        .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     // When
     let out = service
@@ -115,12 +110,7 @@ async fn test_prune_transactions() {
         .try_insert(vec![tx1.clone(), tx2.clone(), tx3.clone()])
         .unwrap();
 
-    universe
-        .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     let out = service
         .shared
@@ -185,13 +175,8 @@ async fn test_prune_transactions_the_oldest() {
     // insert tx2 at time `4`
     service.shared.try_insert(vec![tx2.clone()]).unwrap();
 
-    universe
-        .await_expected_tx_statuses(
-            vec![tx1.id(&Default::default()), tx2.id(&Default::default())],
-            |status| matches!(status, TransactionStatus::Submitted { .. }),
-        )
-        .await
-        .unwrap();
+    let ids = vec![tx1.id(&Default::default()), tx2.id(&Default::default())];
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     // check that tx1 and tx2 are still there at time `4`
     let out = service
@@ -217,13 +202,8 @@ async fn test_prune_transactions_the_oldest() {
     // insert tx4 at time `11`
     service.shared.try_insert(vec![tx4.clone()]).unwrap();
 
-    universe
-        .await_expected_tx_statuses(
-            vec![tx3.id(&Default::default()), tx4.id(&Default::default())],
-            |status| matches!(status, TransactionStatus::Submitted { .. }),
-        )
-        .await
-        .unwrap();
+    let ids = vec![tx3.id(&Default::default()), tx4.id(&Default::default())];
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     // time is now `11`, tx1 and tx2 should be pruned
     let out = service
@@ -299,11 +279,8 @@ async fn prune_expired_transactions() {
         .unwrap();
 
     universe
-        .await_expected_tx_statuses(ids.clone(), |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+        .await_expected_tx_statuses_submitted(ids.clone())
+        .await;
 
     assert_eq!(
         service
@@ -374,12 +351,7 @@ async fn prune_expired_does_not_trigger_twice() {
         .try_insert(vec![tx1.clone(), tx2.clone()])
         .unwrap();
 
-    universe
-        .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     let tx3 = universe.build_script_transaction(
         Some(vec![
@@ -393,12 +365,7 @@ async fn prune_expired_does_not_trigger_twice() {
     let ids = vec![tx3.id(&Default::default())];
     service.shared.try_insert(vec![tx3.clone()]).unwrap();
 
-    universe
-        .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     // Given
     let expiration_block = Sealed {
@@ -486,11 +453,8 @@ async fn simple_insert_removal() {
         .unwrap();
 
     universe
-        .await_expected_tx_statuses(ids.clone(), |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+        .await_expected_tx_statuses_submitted(ids.clone())
+        .await;
 
     // waiting for them to be removed
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
@@ -498,7 +462,9 @@ async fn simple_insert_removal() {
 
     universe
         .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::SqueezedOut { .. })
+            matches!(status, TransactionStatus::SqueezedOut { reason }
+                    if reason == "Transaction is removed: Transaction expired \
+                    because it exceeded the configured time to live `tx-pool-ttl`.")
         })
         .await
         .unwrap();

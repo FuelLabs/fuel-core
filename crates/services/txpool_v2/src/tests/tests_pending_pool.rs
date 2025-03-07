@@ -43,12 +43,7 @@ async fn test_tx__keep_missing_input_and_resolved_when_input_submitted() {
 
     // Then
     let ids = vec![tx1_id, tx2_id];
-    universe
-        .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap();
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     service.stop_and_await().await.unwrap();
 }

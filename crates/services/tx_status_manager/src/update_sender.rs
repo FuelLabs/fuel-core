@@ -4,14 +4,10 @@ use std::{
     time::Duration,
 };
 
-use fuel_core_types::fuel_tx::{
-    Bytes32,
-    TxId,
-};
+use fuel_core_types::fuel_tx::Bytes32;
 use parking_lot::Mutex;
 use tokio::{
     sync::{
-        broadcast,
         mpsc::{
             self,
             error::TrySendError,
@@ -37,18 +33,13 @@ const BUFFER_SIZE: usize = 2;
 
 #[derive(Clone)]
 pub struct TxStatusChange {
-    pub new_tx_notification_sender: broadcast::Sender<TxId>,
     pub update_sender: UpdateSender,
 }
 
 impl TxStatusChange {
     pub fn new(capacity: usize, ttl: Duration) -> Self {
-        let (new_tx_notification_sender, _) = broadcast::channel(capacity);
         let update_sender = UpdateSender::new(capacity, ttl);
-        Self {
-            new_tx_notification_sender,
-            update_sender,
-        }
+        Self { update_sender }
     }
 }
 

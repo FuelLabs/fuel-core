@@ -33,7 +33,6 @@ use fuel_core_types::{
     fuel_tx::{
         Bytes32,
         Transaction,
-        TxId,
     },
     fuel_types::BlockHeight,
     services::{
@@ -50,10 +49,7 @@ use fuel_core_types::{
 };
 //#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
-use tokio::{
-    sync::broadcast,
-    time::Instant,
-};
+use tokio::time::Instant;
 
 use crate::{
     database::{
@@ -467,11 +463,6 @@ pub struct TxStatusManagerAdapter {
 impl TxStatusManagerAdapter {
     pub fn new(manager: TxStatusManager) -> Self {
         Self { manager }
-    }
-
-    /// Subscribe to new transaction notifications.
-    pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
-        self.manager.new_tx_notification_subscribe()
     }
 
     /// Subscribe to status updates for a transaction.

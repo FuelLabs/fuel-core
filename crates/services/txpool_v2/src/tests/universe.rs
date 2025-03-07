@@ -465,6 +465,17 @@ impl TestPoolUniverse {
         )
     }
 
+    pub(crate) async fn await_expected_tx_statuses_submitted(
+        &mut self,
+        tx_ids: Vec<TxId>,
+    ) {
+        self.await_expected_tx_statuses(tx_ids, |status| {
+            matches!(status, TransactionStatus::Submitted { .. })
+        })
+        .await
+        .unwrap();
+    }
+
     pub(crate) async fn await_expected_tx_statuses(
         &mut self,
         tx_ids: Vec<TxId>,
