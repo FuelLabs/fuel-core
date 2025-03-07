@@ -105,4 +105,30 @@ async fn preconfirmation__received_after_execution() {
     } else {
         panic!("Expected preconfirmation status");
     }
+
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Success { .. }
+    ));
 }
+
+#[tokio::test]
+async fn preconfirmation__received_after_failed_execution() {}
+
+#[tokio::test]
+async fn preconfirmation__received_after_squeezed_out() {}
+
+#[tokio::test]
+async fn preconfirmation__received_tx_inserted_end_block_open_period() {}
+
+#[tokio::test]
+async fn preconfirmation__received_after_execution__multiple_txs() {}
+
+#[tokio::test]
+async fn preconfirmation__propagate_p2p_after_execution() {}
+
+#[tokio::test]
+async fn preconfirmation__propagate_p2p_after_failed_execution() {}
+
+#[tokio::test]
+async fn preconfirmation__propagate_p2p_after_squeezed_out() {}
