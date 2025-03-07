@@ -151,7 +151,7 @@ fn test_send_inner(
         permits: Arc::new(()),
         ttl: Duration::from_secs(5),
     };
-    update.send(&msg.clone());
+    update.send(&msg);
 
     // If there were valid senders, validate the message send status
     if let Some(before) = before {
