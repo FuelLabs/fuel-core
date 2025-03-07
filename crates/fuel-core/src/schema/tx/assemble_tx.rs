@@ -193,9 +193,6 @@ where
         let mut has_predicates = false;
         let inputs = tx.inputs();
         let mut unique_used_asset = HashSet::new();
-        // The base asset is always used by the transaction
-        // so add it into expected inputs to add it later to required balances(if needed)
-        unique_used_asset.insert(base_asset_id);
         for input in inputs {
             if let Some(utxo_id) = input.utxo_id() {
                 arguments.exclude.exclude(CoinId::Utxo(*utxo_id));
@@ -270,16 +267,15 @@ where
             }
         }
 
-        // `unique_used_asset` always contains base asset
-        for input_asset_id in unique_used_asset {
+        for input_asset_id in &unique_used_asset {
             // If the user didn't request the asset, we add it to the required balances
             // with minimal amount `0` and `ChangePolicy::Change` policy.
-            if !requested_asset.contains(&input_asset_id) {
+            if !requested_asset.contains(input_asset_id) {
                 let recipient = fee_payer_account.owner();
 
                 arguments.required_balances.push(RequiredBalance {
                     account: fee_payer_account.clone(),
-                    asset_id: input_asset_id,
+                    asset_id: *input_asset_id,
                     amount: 0,
                     change_policy: ChangePolicy::Change(recipient),
                 });
@@ -309,6 +305,19 @@ where
                 }
             }
         }
+
+        // Removed required balances with zero amount and if they are not used in inputs
+        let required_balances = core::mem::take(&mut arguments.required_balances);
+        arguments.required_balances = required_balances
+            .into_iter()
+            .filter_map(|r| {
+                if r.amount != 0 || unique_used_asset.contains(&r.asset_id) {
+                    Some(r)
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         let original_max_fee = tx.max_fee_limit();
         let original_witness_limit = tx.witness_limit();
@@ -437,6 +446,8 @@ where
         account: &Account,
         coin: CoinType,
     ) -> anyhow::Result<()> {
+        let base_asset_id = *self.arguments.consensus_parameters.base_asset_id();
+
         let input = match account {
             Account::Address(account) => {
                 let signature_index = self.reserve_witness_index(account);
@@ -494,6 +505,10 @@ where
             self.arguments.exclude.exclude(CoinId::Message(*nonce));
         }
 
+        if let Some(asset_id) = input.asset_id(&base_asset_id) {
+            self.satisfy_change_policy(*asset_id)?;
+        }
+
         self.tx.inputs_mut().push(input);
 
         let max_inputs = self.arguments.consensus_parameters.tx_params().max_inputs();
@@ -521,6 +536,19 @@ where
                         0,
                         asset_id,
                     ));
+
+                    let max_outputs = self
+                        .arguments
+                        .consensus_parameters
+                        .tx_params()
+                        .max_outputs();
+
+                    if self.tx.outputs().len() > max_outputs as usize {
+                        return Err(anyhow::anyhow!(
+                            "Unable to add more `Change` outputs \
+                            because reached the maximum allowed outputs limit"
+                        ));
+                    }
                 }
                 ChangePolicy::Destroy => {
                     // Do nothing for now, since `fuel-tx` crate doesn't have
@@ -528,19 +556,6 @@ where
                     // https://github.com/FuelLabs/fuel-specs/issues/621
                 }
             }
-        }
-
-        let max_outputs = self
-            .arguments
-            .consensus_parameters
-            .tx_params()
-            .max_outputs();
-
-        if self.tx.outputs().len() > max_outputs as usize {
-            return Err(anyhow::anyhow!(
-                "Unable to add more `Change` outputs \
-                because reached the maximum allowed outputs limit"
-            ));
         }
 
         Ok(())

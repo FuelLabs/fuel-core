@@ -286,7 +286,7 @@ async fn assemble_transaction__adds_change_output_for_non_required_non_base_bala
     let outputs = tx.outputs();
     assert_eq!(outputs.len(), 2);
     assert!(outputs[0].is_change());
-    assert_eq!(outputs[0].asset_id(), Some(&base_asset_id));
+    assert_eq!(outputs[0].asset_id(), Some(&non_base_asset_id));
     assert!(outputs[1].is_change());
-    assert_eq!(outputs[1].asset_id(), Some(&non_base_asset_id));
+    assert_eq!(outputs[1].asset_id(), Some(&base_asset_id));
 }
