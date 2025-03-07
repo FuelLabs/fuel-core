@@ -28,7 +28,6 @@ use crate::{
             DEFAULT_EXPIRATION_HEIGHT,
         },
     },
-    tx_status_stream::TxStatusMessage,
     Constraints,
 };
 

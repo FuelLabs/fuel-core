@@ -9,7 +9,7 @@ use serde::{
 #[cfg(feature = "serde")]
 use super::txpool::PoolTransaction;
 use super::{
-    preconfirmation::Preconfirmations,
+    preconfirmation::PreConfirmations,
     txpool::ArcPoolTx,
 };
 use crate::{
@@ -106,7 +106,7 @@ pub struct DelegatePreConfirmationKey<P> {
 pub type SignedByBlockProducerDelegation<P, S> = Sealed<DelegatePreConfirmationKey<P>, S>;
 
 /// A signed pre-confirmation
-pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
+pub type SignedPreconfirmationByDelegate<S> = Sealed<PreConfirmations, S>;
 
 /// The possible messages sent by the parties pre-confirming transactions
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -125,17 +125,17 @@ impl<DP, S> PreConfirmationMessage<DP, crate::fuel_tx::Bytes64, S> {
         use crate::{
             fuel_tx::TxId,
             services::preconfirmation::{
-                Preconfirmation,
-                PreconfirmationStatus,
+                PreConfirmation,
+                PreConfirmationStatus,
             },
         };
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
-            entity: Preconfirmations {
+            entity: PreConfirmations {
                 expiration: Tai64::UNIX_EPOCH,
-                preconfirmations: vec![Preconfirmation {
+                preconfirmations: vec![PreConfirmation {
                     tx_id: TxId::default(),
-                    status: TransactionStatus::Submitted {
-                        timestamp: Tai64::UNIX_EPOCH,
+                    status: PreConfirmationStatus::SqueezedOut {
+                        reason: "Dummy reason".to_string(),
                     },
                 }],
             },

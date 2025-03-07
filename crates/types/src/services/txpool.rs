@@ -28,6 +28,7 @@ use crate::{
         checked_transaction::Checked,
         ProgramState,
     },
+    services::preconfirmation::PreConfirmationStatus,
 };
 use fuel_vm_private::{
     checked_transaction::CheckedTransaction,
@@ -400,10 +401,7 @@ impl From<TransactionExecutionStatus> for TransactionStatus {
             // TODO: Removed this variant as part of the
             //  https://github.com/FuelLabs/fuel-core/issues/2794
             TransactionExecutionStatus::SqueezedOut { reason } => {
-                TransactionStatus::SqueezedOut {
-                    reason,
-                    tx_id: Default::default(),
-                }
+                TransactionStatus::SqueezedOut { reason }
             }
             TransactionExecutionStatus::Failed {
                 block_height,
@@ -450,25 +448,25 @@ pub enum TransactionStatus {
         total_fee: u64,
     },
     /// Transaction was successfully executed by block producer
-    PreconfirmationSuccess {
-        /// Transaction pointer
+    PreConfirmationSuccess {
+        /// Transaction pointer within the block.
         tx_pointer: TxPointer,
-        /// Transaction ID
-        tx_id: TxId,
-        /// Receipts
+        /// The total gas used by the transaction.
+        total_gas: u64,
+        /// The total fee paid by the transaction.
+        total_fee: u64,
+        /// Receipts produced by the transaction during execution.
         receipts: Option<Vec<Receipt>>,
+        /// Dynamic outputs produced by the transaction during execution.
+        outputs: Option<Vec<Output>>,
     },
     /// Transaction was squeezed out of the TxPool
     SqueezedOut {
-        /// Transaction ID
-        tx_id: TxId,
         /// The reason why the transaction was squeezed out
         reason: String,
     },
     /// Transaction was squeezed out
-    PreconfirmationSqueezedOut {
-        /// Transaction ID
-        tx_id: TxId,
+    PreConfirmationSqueezedOut {
         /// The reason why the transaction was squeezed out
         reason: String,
     },
@@ -490,14 +488,58 @@ pub enum TransactionStatus {
         total_fee: u64,
     },
     /// Transaction was not included in a block
-    PreconfirmationFailure {
-        /// Transaction pointer
+    PreConfirmationFailure {
+        /// Transaction pointer within the block.
         tx_pointer: TxPointer,
-        /// Transaction ID
-        tx_id: TxId,
-        /// Receipts
+        /// The total gas used by the transaction.
+        total_gas: u64,
+        /// The total fee paid by the transaction.
+        total_fee: u64,
+        /// Receipts produced by the transaction during execution.
         receipts: Option<Vec<Receipt>>,
+        /// Dynamic outputs produced by the transaction during execution.
+        outputs: Option<Vec<Output>>,
         /// The reason why the transaction has failed
         reason: String,
     },
+}
+
+impl From<PreConfirmationStatus> for TransactionStatus {
+    fn from(value: PreConfirmationStatus) -> Self {
+        match value {
+            PreConfirmationStatus::SqueezedOut { reason } => {
+                TransactionStatus::PreConfirmationSqueezedOut { reason }
+            }
+            PreConfirmationStatus::Success {
+                tx_pointer,
+                total_gas,
+                total_fee,
+                receipts,
+                outputs,
+            } => TransactionStatus::PreConfirmationSuccess {
+                tx_pointer,
+                total_gas,
+                total_fee,
+                receipts: Some(receipts),
+                outputs: Some(outputs),
+            },
+            PreConfirmationStatus::Failure {
+                tx_pointer,
+                total_gas,
+                total_fee,
+                receipts,
+                outputs,
+            } => {
+                let reason = TransactionExecutionResult::reason(&receipts, &None);
+                TransactionStatus::PreConfirmationFailure {
+                    tx_pointer,
+                    total_gas,
+                    total_fee,
+                    receipts: Some(receipts),
+                    outputs: Some(outputs),
+                    reason,
+                }
+            }
+        }
+    }
 }

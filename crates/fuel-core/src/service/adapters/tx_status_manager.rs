@@ -1,12 +1,10 @@
 use fuel_core_services::stream::BoxStream;
+use fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData;
 use fuel_core_txpool::ports::TxStatusManager;
 use fuel_core_types::{
     self,
     fuel_tx::TxId,
-    services::{
-        p2p::PreconfirmationsGossipData,
-        txpool::TransactionStatus,
-    },
+    services::txpool::TransactionStatus,
 };
 
 use super::{
@@ -22,7 +20,7 @@ impl TxStatusManager for TxStatusManagerAdapter {
 
 #[cfg(feature = "p2p")]
 impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
-    type GossipedStatuses = PreconfirmationsGossipData;
+    type GossipedStatuses = P2PPreConfirmationGossipData;
 
     fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
         use tokio_stream::{
@@ -32,7 +30,7 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
 
         if let Some(service) = &self.service {
             Box::pin(
-                BroadcastStream::new(service.subscribe_preconfirmations())
+                BroadcastStream::new(service.subscribe_confirmations())
                     .filter_map(|result| result.ok()),
             )
         } else {
@@ -43,7 +41,7 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
 
 #[cfg(not(feature = "p2p"))]
 impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
-    type GossipedStatuses = PreconfirmationsGossipData;
+    type GossipedStatuses = P2PPreConfirmationGossipData;
 
     fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
         Box::pin(fuel_core_services::stream::pending())

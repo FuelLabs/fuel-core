@@ -21,8 +21,8 @@ use fuel_core_types::{
             SignedPreconfirmationByDelegate,
         },
         preconfirmation::{
-            Preconfirmation,
-            Preconfirmations,
+            PreConfirmation,
+            PreConfirmations,
         },
     },
     tai64::Tai64,
@@ -41,7 +41,7 @@ use std::sync::Arc;
 impl Broadcast for P2PAdapter {
     type ParentKey = FuelParentSigner;
     type DelegateKey = Ed25519Key;
-    type Preconfirmations = Vec<Preconfirmation>;
+    type Preconfirmations = Vec<PreConfirmation>;
 
     async fn broadcast_preconfirmations(
         &mut self,
@@ -50,7 +50,7 @@ impl Broadcast for P2PAdapter {
         expiration: Tai64,
     ) -> PreConfServiceResult<()> {
         if let Some(p2p) = &self.service {
-            let entity = Preconfirmations {
+            let entity = PreConfirmations {
                 expiration,
                 preconfirmations,
             };
@@ -105,7 +105,7 @@ mod tests {
         ed25519_dalek::VerifyingKey,
         services::{
             p2p::ProtocolSignature,
-            preconfirmation::PreconfirmationStatus,
+            preconfirmation::PreConfirmationStatus,
         },
     };
 
@@ -117,10 +117,14 @@ mod tests {
         let peer_report_config = PeerReportConfig::default();
         let service = Some(shared_state);
         let mut adapter = P2PAdapter::new(service, peer_report_config);
-        let preconfirmations = vec![Preconfirmation {
+        let preconfirmations = vec![PreConfirmation {
             tx_id: Default::default(),
-            status: PreconfirmationStatus::FailureByBlockProducer {
-                block_height: Default::default(),
+            status: PreConfirmationStatus::Failure {
+                tx_pointer: Default::default(),
+                total_gas: 0,
+                total_fee: 0,
+                receipts: vec![],
+                outputs: vec![],
             },
         }];
         let signature = ed25519::Signature::from_bytes(&[5u8; 64]);
@@ -148,11 +152,11 @@ mod tests {
 
     fn pre_conf_matches_expected_values(
         inner: &Arc<P2PPreConfirmationMessage>,
-        preconfirmations: &[Preconfirmation],
+        preconfirmations: &[PreConfirmation],
         signature: &Bytes64,
         expiration: &Tai64,
     ) -> bool {
-        let entity = Preconfirmations {
+        let entity = PreConfirmations {
             expiration: *expiration,
             preconfirmations: preconfirmations.to_vec(),
         };

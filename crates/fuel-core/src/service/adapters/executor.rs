@@ -17,7 +17,7 @@ use fuel_core_txpool::Constraints;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     services::{
-        preconfirmation::PreconfirmationStatus,
+        preconfirmation::PreConfirmationStatus,
         relayer::Event,
     },
 };
@@ -103,7 +103,7 @@ impl NewTxWaiterPort for NewTxWaiter {
 }
 
 impl PreconfirmationSenderPort for PreconfirmationSender {
-    async fn send(&self, preconfirmations: Vec<PreconfirmationStatus>) {
+    async fn send(&self, preconfirmations: Vec<PreConfirmationStatus>) {
         // If the receiver is closed, it means no one is listening to the preconfirmations and so we can drop them.
         // We don't consider this an error.
         let _ = self.sender.send(preconfirmations).await;
@@ -111,8 +111,8 @@ impl PreconfirmationSenderPort for PreconfirmationSender {
 
     fn try_send(
         &self,
-        preconfirmations: Vec<PreconfirmationStatus>,
-    ) -> Vec<PreconfirmationStatus> {
+        preconfirmations: Vec<PreConfirmationStatus>,
+    ) -> Vec<PreConfirmationStatus> {
         match self.sender.try_send(preconfirmations) {
             Ok(()) => vec![],
             // If the receiver is closed, it means no one is listening to the preconfirmations and so we can drop them.

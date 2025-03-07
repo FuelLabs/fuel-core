@@ -1,9 +1,6 @@
 #![allow(clippy::let_unit_value)]
 
-use std::sync::Arc;
-
-use tokio::sync::Mutex;
-
+use crate::service::TxStatusManagerAdapter;
 use fuel_core_gas_price_service::v1::{
     algorithm::AlgorithmV1,
     da_source_service::block_committer_costs::{
@@ -13,6 +10,8 @@ use fuel_core_gas_price_service::v1::{
     metadata::V1AlgorithmConfig,
     uninitialized_task::new_gas_price_service_v1,
 };
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[cfg(feature = "p2p")]
 use fuel_core_poa::pre_confirmation_signature_service::PreConfirmationSignatureTask;
@@ -270,6 +269,7 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
         executor.clone(),
         new_txs_updater,
+        tx_status_manager_adapter.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 

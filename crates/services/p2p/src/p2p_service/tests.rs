@@ -6,6 +6,7 @@ use super::{
     PublishError,
 };
 use crate as fuel_core_p2p;
+use crate::ports::P2PPreConfirmationMessage;
 use fuel_core_p2p::{
     config::Config,
     gossipsub::{
@@ -52,7 +53,6 @@ use fuel_core_types::{
     services::p2p::{
         GossipsubMessageAcceptance,
         NetworkableTransactionPool,
-        PreconfirmationMessage,
         Transactions,
     },
 };
@@ -90,6 +90,7 @@ use tokio::sync::{
     watch,
 };
 use tracing_attributes::instrument;
+
 type P2PService = FuelP2PService;
 
 /// helper function for building FuelP2PService
@@ -621,8 +622,8 @@ async fn gossipsub_broadcast_tx_with_accept__tx_preconfirmations() {
         tokio::time::timeout(
             Duration::from_secs(20),
             gossipsub_broadcast(
-                GossipsubBroadcastRequest::TxPreconfirmations(Arc::new(
-                    PreconfirmationMessage::default_test_preconfirmation(),
+                GossipsubBroadcastRequest::TxPreConfirmations(Arc::new(
+                    P2PPreConfirmationMessage::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Accept,
                 None,
@@ -659,8 +660,8 @@ async fn gossipsub_broadcast_tx_with_reject__tx_preconfirmations() {
         tokio::time::timeout(
             Duration::from_secs(5),
             gossipsub_broadcast(
-                GossipsubBroadcastRequest::TxPreconfirmations(Arc::new(
-                    PreconfirmationMessage::default_test_preconfirmation(),
+                GossipsubBroadcastRequest::TxPreConfirmations(Arc::new(
+                    P2PPreConfirmationMessage::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Reject,
                 None,
@@ -810,7 +811,7 @@ async fn gossipsub_broadcast(
             GossipsubBroadcastRequest::NewTx(_) => {
                 (NEW_TX_GOSSIP_TOPIC, GossipTopicTag::NewTx)
             }
-            GossipsubBroadcastRequest::TxPreconfirmations(_) => (
+            GossipsubBroadcastRequest::TxPreConfirmations(_) => (
                 TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
                 GossipTopicTag::TxPreconfirmations,
             ),
@@ -933,8 +934,8 @@ fn check_message_matches_request(
             assert_eq!(requested.deref(), received, "Both messages were `NewTx`s, but the received message did not match the requested message");
         }
         (
-            GossipsubMessage::TxPreconfirmations(received),
-            GossipsubBroadcastRequest::TxPreconfirmations(requested),
+            GossipsubMessage::TxPreConfirmations(received),
+            GossipsubBroadcastRequest::TxPreConfirmations(requested),
         ) => assert_eq!(requested.deref(), received, "Both messages were `Preconfirmations`, but the received message did not match the requested message"),
         _ => panic!("Message does not match the expected request, expected: {:?}, actual: {:?}", expected, message),
     }

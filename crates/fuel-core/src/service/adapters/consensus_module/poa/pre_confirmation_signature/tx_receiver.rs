@@ -5,12 +5,12 @@ use fuel_core_poa::pre_confirmation_signature_service::{
     },
     tx_receiver::TxReceiver,
 };
-use fuel_core_types::services::preconfirmation::Preconfirmation;
+use fuel_core_types::services::preconfirmation::PreConfirmation;
 use tokio::sync::mpsc;
 
 pub struct PreconfirmationsReceiver {
     capacity: usize,
-    receiver: mpsc::Receiver<Vec<Preconfirmation>>,
+    receiver: mpsc::Receiver<Vec<PreConfirmation>>,
 }
 
 impl Default for PreconfirmationsReceiver {
@@ -24,14 +24,14 @@ impl Default for PreconfirmationsReceiver {
 // link: https://github.com/FuelLabs/fuel-core/issues/2739
 #[allow(dead_code)]
 impl PreconfirmationsReceiver {
-    pub fn new(receiver: mpsc::Receiver<Vec<Preconfirmation>>) -> Self {
+    pub fn new(receiver: mpsc::Receiver<Vec<PreConfirmation>>) -> Self {
         let capacity = receiver.capacity();
         PreconfirmationsReceiver { capacity, receiver }
     }
 }
 
 impl TxReceiver for PreconfirmationsReceiver {
-    type Txs = Vec<Preconfirmation>;
+    type Txs = Vec<PreConfirmation>;
 
     async fn receive(&mut self) -> PoAResult<Self::Txs> {
         let mut buffer = Vec::new();
@@ -52,28 +52,29 @@ mod tests {
     #![allow(non_snake_case)]
 
     use super::*;
-    use crate::service::adapters::Tai64;
     use fuel_core_types::{
         fuel_tx::TxId,
-        services::preconfirmation::PreconfirmationStatus,
-        services::txpool::TransactionStatus,
+        services::preconfirmation::PreConfirmationStatus,
     };
 
     #[tokio::test]
     async fn receive__gets_what_is_sent_through_channel() {
         // given
         let txs = vec![
-            Preconfirmation {
+            PreConfirmation {
                 tx_id: TxId::default(),
-                status: TransactionStatus::Submitted {
-                    timestamp: Tai64::UNIX_EPOCH,
+                status: PreConfirmationStatus::SqueezedOut {
+                    reason: "Dummy reason".to_string(),
                 },
             },
-            Preconfirmation {
+            PreConfirmation {
                 tx_id: TxId::default(),
-                status: TransactionStatus::SqueezedOut {
-                    tx_id: TxId::default(),
-                    reason: "reason".to_string(),
+                status: PreConfirmationStatus::Success {
+                    tx_pointer: Default::default(),
+                    total_gas: 0,
+                    total_fee: 0,
+                    receipts: vec![],
+                    outputs: vec![],
                 },
             },
         ];

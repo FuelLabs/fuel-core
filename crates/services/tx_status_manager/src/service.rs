@@ -5,19 +5,23 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
 };
-use fuel_core_types::services::p2p::{
-    GossipData,
-    Preconfirmation,
-    PreconfirmationMessage,
-    PreconfirmationsGossipData,
-    Sealed,
+use fuel_core_types::services::{
+    p2p::{
+        GossipData,
+        Sealed,
+    },
+    preconfirmation::PreConfirmation,
 };
 use futures::StreamExt;
 
 use crate::{
     config::Config,
     manager::TxStatusManager,
-    ports::P2PSubscriptions,
+    ports::{
+        P2PPreConfirmationGossipData,
+        P2PPreConfirmationMessage,
+        P2PSubscriptions,
+    },
     subscriptions::Subscriptions,
     update_sender::TxStatusChange,
 };
@@ -30,23 +34,23 @@ pub struct Task {
 impl Task {
     fn new_preconfirmations_from_p2p(
         &mut self,
-        preconfirmations: PreconfirmationMessage,
+        preconfirmations: P2PPreConfirmationMessage,
     ) {
         match preconfirmations {
-            PreconfirmationMessage::Delegate(_sealed) => {
+            P2PPreConfirmationMessage::Delegate(_sealed) => {
                 // TODO[RC]: Handle the delegate message,
             }
-            PreconfirmationMessage::Preconfirmations(sealed) => {
+            P2PPreConfirmationMessage::Preconfirmations(sealed) => {
                 let Sealed {
                     signature: _,
-                    entity: preconfirmations,
+                    entity,
                 } = sealed;
                 // TODO[RC]: Add signature verification
-                preconfirmations
-                    .iter()
-                    .for_each(|Preconfirmation { tx_id, status }| {
-                        self.manager.status_update(*tx_id, status.clone());
-                    });
+                entity.preconfirmations.into_iter().for_each(
+                    |PreConfirmation { tx_id, status }| {
+                        self.manager.status_update(tx_id, status.into());
+                    },
+                );
             }
         }
     }
@@ -73,10 +77,7 @@ impl RunnableService for Task {
 }
 
 impl RunnableTask for Task {
-    async fn run(
-        &mut self,
-        watcher: &mut fuel_core_services::StateWatcher,
-    ) -> TaskNextAction {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
 
@@ -105,7 +106,7 @@ impl RunnableTask for Task {
 
 pub fn new_service<P2P>(p2p: P2P, config: Config) -> ServiceRunner<Task>
 where
-    P2P: P2PSubscriptions<GossipedStatuses = PreconfirmationsGossipData>,
+    P2P: P2PSubscriptions<GossipedStatuses = P2PPreConfirmationGossipData>,
 {
     let tx_status_from_p2p_stream = p2p.gossiped_tx_statuses();
     let subscriptions = Subscriptions {

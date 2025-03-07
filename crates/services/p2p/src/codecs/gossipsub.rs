@@ -38,7 +38,7 @@ where
             GossipsubBroadcastRequest::NewTx(tx) => {
                 Ok(self.codec.encode(tx.deref())?.into_bytes())
             }
-            GossipsubBroadcastRequest::TxPreconfirmations(msg) => {
+            GossipsubBroadcastRequest::TxPreConfirmations(msg) => {
                 Ok(self.codec.encode(msg.deref())?.into_bytes())
             }
         }
@@ -54,7 +54,7 @@ where
                 GossipsubMessage::NewTx(self.codec.decode(encoded_data)?)
             }
             GossipTopicTag::TxPreconfirmations => {
-                GossipsubMessage::TxPreconfirmations(self.codec.decode(encoded_data)?)
+                GossipsubMessage::TxPreConfirmations(self.codec.decode(encoded_data)?)
             }
         };
 

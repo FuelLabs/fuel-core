@@ -194,7 +194,7 @@ impl TestPoolUniverse {
         &self,
         p2p: Option<MockP2P>,
         importer: Option<MockImporter>,
-    ) -> Service<MockDb, MockP2P> {
+    ) -> Service<MockDb, MockP2P, MockTxStatusManager> {
         let (tx, _) = tokio::sync::watch::channel(());
         let gas_price = 0;
         let mut p2p = p2p.unwrap_or_else(|| MockP2P::new_with_txs(vec![]));
@@ -225,6 +225,7 @@ impl TestPoolUniverse {
             gas_price_provider,
             MockWasmChecker { result: Ok(()) },
             tx,
+            self.mock_tx_status_manager.clone(),
         )
     }
 

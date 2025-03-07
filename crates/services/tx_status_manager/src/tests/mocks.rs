@@ -1,16 +1,16 @@
-use fuel_core_services::stream::BoxStream;
-use fuel_core_types::services::p2p::{
-    GossipData,
-    PreconfirmationMessage,
+use crate::ports::{
+    P2PPreConfirmationGossipData,
+    P2PPreConfirmationMessage,
+    P2PSubscriptions,
 };
-
-use crate::ports::P2PSubscriptions;
+use fuel_core_services::stream::BoxStream;
+use fuel_core_types::services::p2p::GossipData;
 
 mockall::mock! {
     pub P2P {}
 
     impl P2PSubscriptions for P2P {
-        type GossipedStatuses = GossipData<PreconfirmationMessage>;
+        type GossipedStatuses = P2PPreConfirmationGossipData;
 
         fn gossiped_tx_statuses(&self) -> BoxStream<<MockP2P as P2PSubscriptions>::GossipedStatuses>;
     }
@@ -18,7 +18,7 @@ mockall::mock! {
 
 impl MockP2P {
     // TODO[RC]: statuses vs Preconfirmations :-/
-    pub fn new_with_statuses(statuses: Vec<PreconfirmationMessage>) -> Self {
+    pub fn new_with_statuses(statuses: Vec<P2PPreConfirmationMessage>) -> Self {
         let mut p2p = MockP2P::default();
         p2p.expect_gossiped_tx_statuses().returning(move || {
             let statuses_clone = statuses.clone();

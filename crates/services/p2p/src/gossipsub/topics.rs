@@ -55,7 +55,7 @@ impl GossipsubTopics {
     ) -> TopicHash {
         match outgoing_request {
             GossipsubBroadcastRequest::NewTx(_) => self.new_tx_topic.clone(),
-            GossipsubBroadcastRequest::TxPreconfirmations(_) => {
+            GossipsubBroadcastRequest::TxPreConfirmations(_) => {
                 self.tx_preconfirmations_topic.clone()
             }
         }

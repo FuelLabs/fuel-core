@@ -39,7 +39,6 @@ pub struct SharedState {
     pub(crate) select_transactions_requests_sender:
         mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
     pub(crate) request_read_sender: mpsc::Sender<PoolReadRequest>,
-    pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
     pub(crate) latest_stats: tokio::sync::watch::Receiver<TxPoolStats>,
 }
