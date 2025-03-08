@@ -461,6 +461,7 @@ pub fn init_sub_services(
 
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
+    services.push(Box::new(tx_status_manager));
 
     Ok((services, shared))
 }
