@@ -53,11 +53,12 @@ where
         .map(move |status| {
             // Close the stream if the transaction is anything other than
             // `Submitted`.
-            if let TxStatusMessage::Status(status) = &status {
-                if status.is_submitted() {
-                    if let Some(close) = close.take() {
-                        let _ = close.send(());
-                    }
+            if !matches!(
+                 status,
+                 TxStatusMessage::Status(TransactionStatus::Submitted(_))
+             ) {
+                if let Some(close) = close.take() {
+                    let _ = close.send(());
                 }
             }
 

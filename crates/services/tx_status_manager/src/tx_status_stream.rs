@@ -85,13 +85,10 @@ impl TxUpdateStream {
         let state = std::mem::replace(&mut self.state, State::Empty);
         self.state = match state {
             State::Empty => match msg {
-                TxStatusMessage::Status(s) => {
-                    if s.is_submitted() {
-                        State::Initial(s)
-                    } else {
-                        State::EarlySuccess(s)
-                    }
+                TxStatusMessage::Status(TransactionStatus::Submitted(s)) => {
+                    State::Initial(TransactionStatus::Submitted(s))
                 }
+                TxStatusMessage::Status(s) => State::EarlySuccess(s),
                 TxStatusMessage::FailedStatus => State::Failed,
             },
             State::Initial(s1) => {
