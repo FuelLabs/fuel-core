@@ -1,10 +1,7 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::{
-        block::Block,
-        header::ConsensusParametersVersion,
-    },
+    blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -31,7 +28,7 @@ use crate::{
         checked_transaction::Checked,
         ProgramState,
     },
-    services::executor::TransactionExecutionResult,
+    services::preconfirmation::PreconfirmationStatus,
 };
 use fuel_vm_private::{
     checked_transaction::CheckedTransaction,
@@ -40,6 +37,8 @@ use fuel_vm_private::{
 };
 use std::sync::Arc;
 use tai64::Tai64;
+
+use super::executor::TransactionExecutionResult;
 
 /// Pool transaction wrapped in an Arc for thread-safe sharing
 pub type ArcPoolTx = Arc<PoolTransaction>;
@@ -402,10 +401,7 @@ impl From<TransactionExecutionStatus> for TransactionStatus {
             // TODO: Removed this variant as part of the
             //  https://github.com/FuelLabs/fuel-core/issues/2794
             TransactionExecutionStatus::SqueezedOut { reason } => {
-                TransactionStatus::SqueezedOut {
-                    reason,
-                    tx_id: Default::default(),
-                }
+                TransactionStatus::SqueezedOut { reason }
             }
             TransactionExecutionStatus::Failed {
                 block_height,
@@ -452,25 +448,25 @@ pub enum TransactionStatus {
         total_fee: u64,
     },
     /// Transaction was successfully executed by block producer
-    PreconfirmationSuccess {
-        /// Transaction pointer
+    PreConfirmationSuccess {
+        /// Transaction pointer within the block.
         tx_pointer: TxPointer,
-        /// Transaction ID
-        tx_id: TxId,
-        /// Receipts
+        /// The total gas used by the transaction.
+        total_gas: u64,
+        /// The total fee paid by the transaction.
+        total_fee: u64,
+        /// Receipts produced by the transaction during execution.
         receipts: Option<Vec<Receipt>>,
+        /// Dynamic outputs produced by the transaction during execution.
+        outputs: Option<Vec<Output>>,
     },
     /// Transaction was squeezed out of the TxPool
     SqueezedOut {
-        /// Transaction ID
-        tx_id: TxId,
         /// The reason why the transaction was squeezed out
         reason: String,
     },
     /// Transaction was squeezed out
-    PreconfirmationSqueezedOut {
-        /// Transaction ID
-        tx_id: TxId,
+    PreConfirmationSqueezedOut {
         /// The reason why the transaction was squeezed out
         reason: String,
     },
@@ -492,51 +488,58 @@ pub enum TransactionStatus {
         total_fee: u64,
     },
     /// Transaction was not included in a block
-    PreconfirmationFailure {
-        /// Transaction pointer
+    PreConfirmationFailure {
+        /// Transaction pointer within the block.
         tx_pointer: TxPointer,
-        /// Transaction ID
-        tx_id: TxId,
-        /// Receipts
+        /// The total gas used by the transaction.
+        total_gas: u64,
+        /// The total fee paid by the transaction.
+        total_fee: u64,
+        /// Receipts produced by the transaction during execution.
         receipts: Option<Vec<Receipt>>,
+        /// Dynamic outputs produced by the transaction during execution.
+        outputs: Option<Vec<Output>>,
         /// The reason why the transaction has failed
         reason: String,
     },
 }
 
-/// Converts the transaction execution result to the transaction status.
-pub fn from_executor_to_status(
-    block: &Block,
-    result: TransactionExecutionResult,
-) -> TransactionExecutionStatus {
-    let timestamp = block.header().time();
-    let block_height = *block.header().height();
-    match result {
-        TransactionExecutionResult::Success {
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        } => TransactionExecutionStatus::Success {
-            block_height,
-            time: timestamp,
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        },
-        TransactionExecutionResult::Failed {
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        } => TransactionExecutionStatus::Failed {
-            block_height,
-            time: timestamp,
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        },
+impl From<PreconfirmationStatus> for TransactionStatus {
+    fn from(value: PreconfirmationStatus) -> Self {
+        match value {
+            PreconfirmationStatus::SqueezedOut { reason } => {
+                TransactionStatus::PreConfirmationSqueezedOut { reason }
+            }
+            PreconfirmationStatus::Success {
+                tx_pointer,
+                total_gas,
+                total_fee,
+                receipts,
+                outputs,
+            } => TransactionStatus::PreConfirmationSuccess {
+                tx_pointer,
+                total_gas,
+                total_fee,
+                receipts: Some(receipts),
+                outputs: Some(outputs),
+            },
+            PreconfirmationStatus::Failure {
+                tx_pointer,
+                total_gas,
+                total_fee,
+                receipts,
+                outputs,
+            } => {
+                let reason = TransactionExecutionResult::reason(&receipts, &None);
+                TransactionStatus::PreConfirmationFailure {
+                    tx_pointer,
+                    total_gas,
+                    total_fee,
+                    receipts: Some(receipts),
+                    outputs: Some(outputs),
+                    reason,
+                }
+            }
+        }
     }
 }

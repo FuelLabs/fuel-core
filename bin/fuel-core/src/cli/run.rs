@@ -7,6 +7,7 @@ use crate::{
             consensus::PoATriggerArgs,
             graphql::GraphQLArgs,
             tx_pool::TxPoolArgs,
+            tx_status_manager::TxStatusManagerArgs,
         },
         ShutdownListener,
     },
@@ -38,6 +39,7 @@ use fuel_core::{
         ColumnsPolicy,
         DatabaseConfig,
     },
+    tx_status_manager::config::Config as TxStatusManagerConfig,
     txpool::config::{
         BlackList,
         Config as TxPoolConfig,
@@ -82,6 +84,7 @@ use std::{
     num::NonZeroU64,
     path::PathBuf,
     str::FromStr,
+    time::Duration,
 };
 use tracing::{
     info,
@@ -104,13 +107,16 @@ mod p2p;
 mod shared_sequencer;
 
 mod consensus;
+mod gas_price;
 mod graphql;
 mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
 mod tx_pool;
+mod tx_status_manager;
 
-mod gas_price;
+// TODO[RC]: This goes to CLI
+const TX_STATUS_MANAGER_TTL: Duration = Duration::from_secs(5);
 
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
@@ -249,6 +255,10 @@ pub struct Command {
     #[clap(flatten)]
     pub tx_pool: TxPoolArgs,
 
+    /// The cli arguments supported by the `Tx Status Manager`.
+    #[clap(flatten)]
+    pub tx_status_manager: TxStatusManagerArgs,
+
     /// The cli arguments supported by the GraphQL API service.
     #[clap(flatten)]
     pub graphql: GraphQLArgs,
@@ -339,6 +349,7 @@ impl Command {
             max_da_lag,
             max_wait_time,
             tx_pool,
+            tx_status_manager,
             graphql,
             min_connected_reserved_peers,
             time_until_synced,
@@ -532,7 +543,6 @@ impl Command {
             tx_max_total_bytes,
             tx_max_total_gas,
             tx_max_chain_count,
-            tx_number_active_subscriptions,
             tx_blacklist_addresses,
             tx_blacklist_coins,
             tx_blacklist_messages,
@@ -546,6 +556,10 @@ impl Command {
             tx_pending_pool_ttl,
             tx_pending_pool_size_percentage,
         } = tx_pool;
+
+        let TxStatusManagerArgs {
+            tx_number_active_subscriptions,
+        } = tx_status_manager;
 
         let black_list = BlackList::new(
             tx_blacklist_addresses,
@@ -658,7 +672,6 @@ impl Command {
                 max_txs_ttl: tx_pool_ttl.into(),
                 ttl_check_interval: tx_ttl_check_interval.into(),
                 utxo_validation,
-                max_tx_update_subscriptions: tx_number_active_subscriptions,
                 black_list,
                 pool_limits,
                 heavy_work: pool_heavy_work_config,
@@ -689,6 +702,11 @@ impl Command {
             time_until_synced: time_until_synced.into(),
             production_timeout: production_timeout.into(),
             memory_pool_size,
+            tx_status_manager: TxStatusManagerConfig {
+                max_tx_update_subscriptions: tx_number_active_subscriptions,
+                max_txs_ttl: tx_pool_ttl.into(),
+                max_tx_status_ttl: TX_STATUS_MANAGER_TTL,
+            },
         };
         Ok(config)
     }

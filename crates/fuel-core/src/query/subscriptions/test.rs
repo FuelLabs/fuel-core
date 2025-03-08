@@ -19,10 +19,9 @@
 //! - `tx_status_message()`: Generates a TxStatusMessage
 //! - `transaction_status()`: Generates a TransactionStatus
 //! - `input_stream()`: Generates a Vec<TxStatusMessage> of length 0 to 5
-use fuel_core_txpool::{
-    error::RemovedReason,
-    TxStatusMessage,
-};
+
+use fuel_core_tx_status_manager::TxStatusMessage;
+use fuel_core_txpool::error::RemovedReason;
 use fuel_core_types::{
     fuel_types::Bytes32,
     services::txpool::TransactionStatus,
@@ -64,10 +63,12 @@ fn success() -> TransactionStatus {
 }
 
 fn success_during_block_production() -> TransactionStatus {
-    TransactionStatus::PreconfirmationSuccess {
+    TransactionStatus::PreConfirmationSuccess {
         tx_pointer: Default::default(),
-        tx_id: Bytes32::zeroed(),
+        total_gas: 0,
+        total_fee: 0,
         receipts: None,
+        outputs: None,
     }
 }
 
@@ -84,24 +85,24 @@ fn failure() -> TransactionStatus {
 }
 
 fn failure_during_block_production() -> TransactionStatus {
-    TransactionStatus::PreconfirmationFailure {
+    TransactionStatus::PreConfirmationFailure {
         tx_pointer: Default::default(),
-        tx_id: Bytes32::zeroed(),
+        total_gas: 0,
+        total_fee: 0,
         receipts: None,
+        outputs: None,
         reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }
 
 fn squeezed() -> TransactionStatus {
     TransactionStatus::SqueezedOut {
-        tx_id: Bytes32::zeroed(),
         reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }
 
 fn squeezed_during_block_production() -> TransactionStatus {
-    TransactionStatus::PreconfirmationSqueezedOut {
-        tx_id: Bytes32::zeroed(),
+    TransactionStatus::PreConfirmationSqueezedOut {
         reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
     }
 }
@@ -241,15 +242,15 @@ fn next_state(state: TransactionStatus) -> Flow {
     match state {
         TransactionStatus::Submitted { .. } => Flow::Continue(Submitted),
         TransactionStatus::Success { .. } => Flow::Break(FinalTxStatus::Success),
-        TransactionStatus::PreconfirmationSuccess { .. } => {
+        TransactionStatus::PreConfirmationSuccess { .. } => {
             Flow::Break(FinalTxStatus::PreconfirmationSuccess)
         }
         TransactionStatus::Failure { .. } => Flow::Break(FinalTxStatus::Failed),
-        TransactionStatus::PreconfirmationFailure { .. } => {
+        TransactionStatus::PreConfirmationFailure { .. } => {
             Flow::Break(FinalTxStatus::PreconfirmationFailure)
         }
         TransactionStatus::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
-        TransactionStatus::PreconfirmationSqueezedOut { .. } => {
+        TransactionStatus::PreConfirmationSqueezedOut { .. } => {
             Flow::Break(FinalTxStatus::PreconfirmationSqueezedOut)
         }
     }

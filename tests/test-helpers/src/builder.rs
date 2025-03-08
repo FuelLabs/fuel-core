@@ -246,7 +246,6 @@ impl TestSetupBuilder {
 
         let mut txpool = fuel_core_txpool::config::Config::default();
         txpool.pool_limits.max_txs = self.max_txs;
-        txpool.max_tx_update_subscriptions = self.max_txs;
         txpool.service_channel_limits = fuel_core_txpool::config::ServiceChannelLimits {
             max_pending_write_pool_requests: self.max_txs,
             max_pending_read_pool_requests: self.max_txs,

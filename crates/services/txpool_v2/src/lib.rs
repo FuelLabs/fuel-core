@@ -1,4 +1,4 @@
-//! This crate manage the verification, storage, organisation and selection of the transactions for the network.
+//! This crate manages the verification, storage, organization and selection of the transactions for the network.
 //! A transaction in Fuel has inputs and outputs. Inputs are outputs of previous transactions.
 //! In a case where one of the input is an output of a transaction that has not been executed in a committed block (transaction still in the pool),
 //! then the new transaction is considered dependent on that transaction.
@@ -52,8 +52,6 @@ mod selection_algorithms;
 mod service;
 mod shared_state;
 mod storage;
-mod tx_status_stream;
-mod update_sender;
 
 pub type GasPrice = Word;
 
@@ -70,4 +68,3 @@ pub use service::{
     Service,
 };
 pub use shared_state::SharedState;
-pub use tx_status_stream::TxStatusMessage;

@@ -15,6 +15,10 @@ use fuel_core_importer::ImporterResult;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
+use fuel_core_tx_status_manager::{
+    TxStatusManager,
+    TxStatusStream,
+};
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 #[cfg(feature = "p2p")]
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
@@ -26,7 +30,10 @@ use fuel_core_types::{
             Consensus,
         },
     },
-    fuel_tx::Transaction,
+    fuel_tx::{
+        Bytes32,
+        Transaction,
+    },
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
@@ -76,6 +83,7 @@ pub mod relayer;
 pub mod shared_sequencer;
 #[cfg(feature = "p2p")]
 pub mod sync;
+pub mod tx_status_manager;
 pub mod txpool;
 
 #[derive(Debug, Clone)]
@@ -444,6 +452,22 @@ impl BlockImporterAdapter {
                 .filter_map(|r| futures::future::ready(r.ok()))
                 .map(|r| r.shared_result),
         )
+    }
+}
+
+#[derive(Clone)]
+pub struct TxStatusManagerAdapter {
+    manager: TxStatusManager,
+}
+
+impl TxStatusManagerAdapter {
+    pub fn new(manager: TxStatusManager) -> Self {
+        Self { manager }
+    }
+
+    /// Subscribe to status updates for a transaction.
+    pub fn tx_update_subscribe(&self, tx_id: Bytes32) -> anyhow::Result<TxStatusStream> {
+        self.manager.tx_update_subscribe(tx_id)
     }
 }
 

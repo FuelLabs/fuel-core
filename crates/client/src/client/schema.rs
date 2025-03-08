@@ -85,7 +85,7 @@ pub struct Reset {
     pub reset: bool,
 }
 
-#[derive(cynic::QueryVariables)]
+#[derive(Debug, cynic::QueryVariables)]
 pub struct ExecuteArgs {
     pub id: cynic::Id,
     pub op: String,
@@ -102,7 +102,7 @@ pub struct Execute {
     pub execute: bool,
 }
 
-#[derive(cynic::QueryVariables)]
+#[derive(Debug, cynic::QueryVariables)]
 pub struct RegisterArgs {
     pub id: cynic::Id,
     pub register: U32,
@@ -119,7 +119,7 @@ pub struct Register {
     pub register: U64,
 }
 
-#[derive(cynic::QueryVariables)]
+#[derive(Debug, cynic::QueryVariables)]
 pub struct MemoryArgs {
     pub id: cynic::Id,
     pub start: U32,
