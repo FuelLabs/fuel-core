@@ -505,6 +505,35 @@ mod tests {
             assert_presence_with_status(&tx_status_manager, vec![(tx6_id, status_1())]);
         }
 
+        #[test]
+        fn status_preserved_in_cache_when_first_status_expires() {
+            let status_2: TransactionStatus =
+                TransactionStatus::squeezed_out("fishy tx".to_string());
+
+            let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
+            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+
+            let tx1_id = [1u8; 32].into();
+
+            // Register tx1 and remember it's timestamp
+            tx_status_manager.status_update(tx1_id, status_1());
+
+            // Sleep for less than a TTL
+            std::thread::sleep(Duration::from_secs(2));
+
+            // Given
+            // Update tx1 status, the timestamp cache should get updated.
+            tx_status_manager.status_update(tx1_id, status_2);
+
+            // When
+            // Sleep for TTL, it should expire the first status
+            std::thread::sleep(TTL);
+
+            // Then
+            let status = tx_status_manager.status(&tx1_id);
+            assert!(status.is_some());
+        }
+
         // TODO[RC]: Optimization - update the tests to not rely on systemtime, inject
         // timestamps instead. This will make it possible to write a efficient proptest.
     }
