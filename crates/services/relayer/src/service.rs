@@ -223,8 +223,10 @@ where
     async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
         let now = tokio::time::Instant::now();
 
+        tracing::info!("Running relayer task");
         let result = run::run(self).await;
-
+        tracing::info!("Relayer task finished, sleeping");
+        
         if self.shutdown.borrow_and_update().started()
             && (result.is_err() | self.synced.borrow().is_some())
         {
@@ -236,6 +238,7 @@ where
             )
             .await;
         }
+        tracing::info!("Relayer task sleep ended task fully finish");
 
         if let Err(err) = result {
             if !self.retry_on_error {
