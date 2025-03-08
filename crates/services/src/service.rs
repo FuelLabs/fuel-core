@@ -122,6 +122,48 @@ impl From<Result<bool, anyhow::Error>> for TaskNextAction {
     }
 }
 
+/// A replacement for the `?` operator for tasks. It will return a `TaskNextAction::ErrorContinue` if the
+/// expression returns an error.
+#[macro_export]
+macro_rules! try_or_continue {
+    ($expr:expr, $custom:expr) => {{
+        match $expr {
+            Ok(val) => val,
+            Err(err) => {
+                $custom(&err);
+                return TaskNextAction::ErrorContinue(err.into());
+            }
+        }
+    }};
+    ($expr:expr) => {{
+        match $expr {
+            Ok(val) => val,
+            Err(err) => return TaskNextAction::ErrorContinue(err.into()),
+        }
+    }};
+}
+
+/// A replacement for the `?` operator for tasks. It will return a `TaskNextAction::Stop` if the
+/// expression returns an error.
+#[macro_export]
+macro_rules! try_or_stop {
+    ($expr:expr, $custom:expr) => {{
+        match $expr {
+            Ok(val) => val,
+            Err(err) => {
+                $custom(&err);
+                return TaskNextAction::Stop;
+            }
+        }
+    }};
+    ($expr:expr) => {{
+        match $expr {
+            Ok(val) => val,
+            Err(err) => return TaskNextAction::Stop,
+        }
+    }};
+}
+
 /// The trait is implemented by the service task and contains a single iteration of the infinity
 /// loop.
 pub trait RunnableTask: Send {
