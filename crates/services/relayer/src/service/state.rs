@@ -57,6 +57,11 @@ impl EthState {
             EthSyncGap::new(local, remote)
         })
     }
+
+    /// Set the local state of the Ethereum node.
+    pub fn set_local(&mut self, local: EthHeight) {
+        self.local = Some(local);
+    }
 }
 
 impl EthSyncGap {

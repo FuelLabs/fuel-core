@@ -1,15 +1,13 @@
 //! Type safe state building
 
 use super::*;
-use async_trait::async_trait;
 
-#[async_trait]
 pub trait EthRemote {
     /// The most recently finalized height on the Ethereum node.
-    async fn finalized(&self) -> anyhow::Result<u64>;
+    fn finalized(&self)
+        -> impl core::future::Future<Output = anyhow::Result<u64>> + Send;
 }
 
-#[async_trait]
 pub trait EthLocal {
     /// The current finalized eth block that the relayer has seen.
     fn observed(&self) -> Option<u64>;
@@ -38,7 +36,6 @@ pub mod test_builder {
         pub eth_local_finalized: Option<u64>,
     }
 
-    #[async_trait]
     impl EthRemote for TestDataSource {
         async fn finalized(&self) -> anyhow::Result<u64> {
             Ok(self.eth_remote_finalized)
