@@ -124,8 +124,7 @@ impl TxStatusManager {
                 if let Some(timestamps) = data.timestamps.get_mut(&prev_timestamp_clone) {
                     timestamps.remove(&tx_id);
                     if timestamps.is_empty() {
-                        // TODO[RC]: If last id removed, remove the entire cached map
-                        // and then uncomment the last test
+                        data.timestamps.remove(&prev_timestamp_clone);
                     }
                 } else {
                     tracing::error!(%tx_id, "status manager inconsistency")
@@ -533,7 +532,6 @@ mod tests {
             assert_presence_with_status(&tx_status_manager, vec![(tx6_id, STATUS_1)]);
         }
 
-        #[ignore]
         #[test]
         fn removes_empty_map_from_cache() {
             let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
