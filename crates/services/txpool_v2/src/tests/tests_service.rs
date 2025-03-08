@@ -462,8 +462,8 @@ async fn simple_insert_removal() {
 
     universe
         .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::SqueezedOut { reason }
-                    if reason == "Transaction is removed: Transaction expired \
+            matches!(status, TransactionStatus::SqueezedOut(s)
+                    if s.reason == "Transaction is removed: Transaction expired \
                     because it exceeded the configured time to live `tx-pool-ttl`.")
         })
         .await

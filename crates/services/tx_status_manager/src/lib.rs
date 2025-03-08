@@ -18,6 +18,7 @@ pub mod utils;
 pub use manager::TxStatusManager;
 pub use service::{
     new_service,
+    SharedData,
     Task,
 };
 pub use tx_status_stream::{

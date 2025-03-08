@@ -82,7 +82,7 @@ impl FuelService {
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>> + '_> {
         let tx_status_manager = &self.shared.tx_status_manager;
         let db = self.shared.database.off_chain().latest_view()?;
-        let rx = tx_status_manager.tx_update_subscribe(id)?;
+        let rx = tx_status_manager.tx_update_subscribe(id).await?;
         let state = StatusChangeState {
             db,
             tx_status_manager,
@@ -101,7 +101,7 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
         match self.db.get_tx_status(&id)? {
             Some(status) => Ok(Some(status.into())),
             None => {
-                let status = self.tx_status_manager.status(&id);
+                let status = self.tx_status_manager.status(id).await?;
                 Ok(status)
             }
         }

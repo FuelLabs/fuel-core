@@ -2,7 +2,6 @@
 
 #![allow(clippy::arithmetic_side_effects)]
 
-use fuel_core_types::services::txpool::TransactionStatus;
 use test_strategy::{
     proptest,
     Arbitrary,
@@ -33,13 +32,16 @@ pub(crate) fn validate_tx_update_stream_state(
 ) -> State {
     use State::*;
     use StateTransitions::*;
+
     match (state, transition) {
-        (
-            Empty,
-            AddMsg(TxStatusMessage::Status(TransactionStatus::Submitted { timestamp })),
-        ) => Initial(TransactionStatus::Submitted { timestamp }),
         // If not Submitted, it's an early success.
-        (Empty, AddMsg(TxStatusMessage::Status(s))) => EarlySuccess(s),
+        (Empty, AddMsg(TxStatusMessage::Status(s))) => {
+            if s.is_submitted() {
+                Initial(s)
+            } else {
+                EarlySuccess(s)
+            }
+        }
         (Empty, AddMsg(TxStatusMessage::FailedStatus)) => Failed,
         (Empty, AddFailure) => Failed,
         (Empty | Initial(_), Next) => Empty,

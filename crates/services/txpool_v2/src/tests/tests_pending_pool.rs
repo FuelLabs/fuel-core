@@ -91,8 +91,8 @@ async fn test_tx__return_error_expired() {
     );
     universe
         .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::SqueezedOut {  reason }
-                if reason == &squeezed_out_reason)
+            matches!(status, TransactionStatus::SqueezedOut(s)
+                if s.reason == squeezed_out_reason)
         })
         .await
         .unwrap();
@@ -133,8 +133,8 @@ async fn test_tx__directly_removed_not_enough_space() {
     );
     universe
         .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::SqueezedOut {  reason }
-                if reason == &squeezed_out_reason)
+            matches!(status, TransactionStatus::SqueezedOut(s)
+                if s.reason == squeezed_out_reason)
         })
         .await
         .unwrap();

@@ -96,7 +96,7 @@ impl TransactionPool for TxPoolAdapter {
 
 impl TxStatusManagerTrait for TxStatusManagerAdapter {
     fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
-        self.manager.notify_skipped_txs(tx_ids_and_reasons)
+        self.manager.notify_skipped(tx_ids_and_reasons)
     }
 }
 

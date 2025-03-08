@@ -7,7 +7,6 @@
 use fuel_core_types::{
     fuel_tx::Bytes32,
     services::txpool::TransactionStatus,
-    tai64::Tai64,
 };
 use proptest::prelude::*;
 use test_strategy::{
@@ -65,12 +64,14 @@ pub(crate) fn validate_tx_update_stream_state(
     use State::*;
     use StateTransitions::*;
     match (state, transition) {
-        (
-            Empty,
-            AddMsg(TxStatusMessage::Status(TransactionStatus::Submitted { timestamp })),
-        ) => Initial(TransactionStatus::Submitted { timestamp }),
-        // If not Submitted, it's an early success.
-        (Empty, AddMsg(TxStatusMessage::Status(s))) => EarlySuccess(s),
+        (Empty, AddMsg(TxStatusMessage::Status(s))) => {
+            if s.is_submitted() {
+                Initial(s)
+            } else {
+                // If not Submitted, it's an early success.
+                EarlySuccess(s)
+            }
+        }
         (Empty, AddMsg(TxStatusMessage::FailedStatus)) => Failed,
         (Empty, AddFailure) => Failed,
         (Empty | Initial(_), Next) => Empty,
@@ -133,24 +134,9 @@ fn test_update_sender_reg() {
 
     let ops = vec![
         Subscribe(0),
-        Send(
-            0,
-            Status(TransactionStatus::Success {
-                block_height: Default::default(),
-                block_timestamp: Tai64(0),
-                program_state: None,
-                receipts: vec![],
-                total_gas: 0,
-                total_fee: 0,
-            }),
-        ),
+        Send(0, Status(TransactionStatus::Success(Default::default()))),
         Recv(0),
-        Send(
-            0,
-            Status(TransactionStatus::Submitted {
-                timestamp: Tai64(0),
-            }),
-        ),
+        Send(0, Status(TransactionStatus::Submitted(Default::default()))),
         Recv(0),
     ];
     test_update_sender_inner(ops);
@@ -187,7 +173,7 @@ fn test_update_sender_inner(ops: Vec<Op>) {
             // Sending a new update
             Op::Send(id, s) => {
                 // Real
-                update.send(&TxUpdate {
+                update.send(TxUpdate {
                     tx_id: Bytes32::from([id; 32]),
                     message: s.clone(),
                 });

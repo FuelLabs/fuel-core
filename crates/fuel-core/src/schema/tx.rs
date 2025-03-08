@@ -447,7 +447,7 @@ impl TxStatusSubscription {
     ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
     {
         let tx_status_manager = ctx.data_unchecked::<TxStatusManager>();
-        let rx = tx_status_manager.tx_update_subscribe(id.into())?;
+        let rx = tx_status_manager.tx_update_subscribe(id.into()).await?;
         let query = ctx.read_view()?;
 
         let status_change_state = StatusChangeState {
@@ -507,7 +507,7 @@ async fn submit_and_await_status<'a>(
         .current_consensus_params();
     let tx = FuelTx::from_bytes(&tx.0)?;
     let tx_id = tx.id(&params.chain_id());
-    let subscription = tx_status_manager.tx_update_subscribe(tx_id)?;
+    let subscription = tx_status_manager.tx_update_subscribe(tx_id).await?;
 
     txpool.insert(tx).await?;
 
@@ -536,10 +536,9 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     ) -> StorageResult<Option<txpool::TransactionStatus>> {
         match self.query.tx_status(&id) {
             Ok(status) => Ok(Some(status.into())),
-            Err(StorageError::NotFound(_, _)) => Ok(self
-                .tx_status_manager
-                .submission_time(id)
-                .map(|time| txpool::TransactionStatus::Submitted { timestamp: time })),
+            Err(StorageError::NotFound(_, _)) => {
+                Ok(self.tx_status_manager.status(id).await?)
+            }
             Err(err) => Err(err),
         }
     }

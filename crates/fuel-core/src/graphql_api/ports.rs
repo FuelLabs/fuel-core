@@ -259,10 +259,11 @@ pub trait TxPoolPort: Send + Sync {
     fn latest_pool_stats(&self) -> TxPoolStats;
 }
 
+#[async_trait]
 pub trait TxStatusManagerPort: Send + Sync {
-    fn status(&self, tx_id: &TxId) -> Option<TransactionStatus>;
-    fn submission_time(&self, id: TxId) -> Option<Tai64>;
-    fn tx_update_subscribe(
+    async fn status(&self, tx_id: TxId) -> anyhow::Result<Option<TransactionStatus>>;
+
+    async fn tx_update_subscribe(
         &self,
         tx_id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>>;

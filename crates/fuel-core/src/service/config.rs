@@ -188,7 +188,7 @@ impl Config {
                 ..Default::default()
             },
             tx_status_manager: TxStatusManagerConfig {
-                max_txs_ttl: MAX_TXS_TTL,
+                subscription_ttl: MAX_TXS_TTL,
                 ..Default::default()
             },
             block_producer: fuel_core_producer::Config {

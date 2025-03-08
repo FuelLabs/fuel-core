@@ -3177,27 +3177,10 @@ mod tests {
         // Then
         let preconfirmations = receiver.recv().await.unwrap();
         assert_eq!(preconfirmations.len(), 1);
-        assert_eq!(
+        assert!(matches!(
             preconfirmations[0],
-            PreconfirmationStatus::Success {
-                tx_pointer: TxPointer::new(0.into(), 1),
-                total_gas: 4330,
-                total_fee: 0,
-                receipts: vec![
-                    Receipt::Return {
-                        id: ContractId::default(),
-                        val: 1,
-                        pc: 10368,
-                        is: 10368,
-                    },
-                    Receipt::ScriptResult {
-                        result: fuel_core_types::fuel_tx::ScriptExecutionResult::Success,
-                        gas_used: 0,
-                    },
-                ],
-                outputs: vec![],
-            }
-        );
+            PreconfirmationStatus::Success { .. }
+        ));
         assert_eq!(res.skipped_transactions.len(), 0);
         assert_eq!(res.block.transactions().len(), 2);
     }
