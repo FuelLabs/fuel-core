@@ -81,11 +81,11 @@ impl Default for Costs {
     }
 }
 
-const BALANCES_QUERY_COST_WITH_INDEXATION: usize = 0;
+//const BALANCES_QUERY_COST_WITH_INDEXATION: usize = 0;
 const BALANCES_QUERY_COST_WITHOUT_INDEXATION: usize = 40001;
 
 pub const DEFAULT_QUERY_COSTS: Costs = Costs {
-    balance_query: BALANCES_QUERY_COST_WITH_INDEXATION,
+    balance_query: BALANCES_QUERY_COST_WITHOUT_INDEXATION,
     coins_to_spend: 40001,
     get_peers: 40001,
     estimate_predicates: 40001,
@@ -113,6 +113,8 @@ pub fn query_costs() -> &'static Costs {
 pub static QUERY_COSTS: OnceLock<Costs> = OnceLock::new();
 
 fn initialize_query_costs(costs: Costs) -> anyhow::Result<()> {
+    dbg!(&costs);
+    dbg!(&DEFAULT_QUERY_COSTS);
     #[cfg(feature = "test-helpers")]
     if costs != DEFAULT_QUERY_COSTS {
         // We don't support setting these values in test contexts, because

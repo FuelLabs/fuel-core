@@ -19,6 +19,7 @@ pub async fn wait_if_eth_syncing<P>(
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
+    tracing::info!("Enter wait if eth syncing.");
     let mut start = tokio::time::Instant::now();
     let mut loop_time = tokio::time::Instant::now();
     while let SyncingStatus::IsSyncing(is_syncing) = get_status(eth_node).await? {
@@ -34,9 +35,11 @@ where
                 status
             );
         }
+        tracing::info!("Sleeping for {:?}", sync_call_freq.saturating_sub(loop_time.elapsed()));
         tokio::time::sleep(sync_call_freq.saturating_sub(loop_time.elapsed())).await;
         loop_time = tokio::time::Instant::now();
     }
+    tracing::info!("Ethereum endpoint is synced.");
     Ok(())
 }
 
@@ -44,8 +47,12 @@ async fn get_status<P>(eth_node: &P) -> anyhow::Result<SyncingStatus>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
+    tracing::info!("Enter get status.");
     match eth_node.syncing().await {
-        Ok(s) => Ok(s),
+        Ok(s) => {
+            tracing::info!("Finish get status: {:?}", s);
+            Ok(s)
+        },
         Err(err) => Err(anyhow::anyhow!(
             "Failed to check if DA layer is syncing {}",
             err

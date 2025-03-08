@@ -157,8 +157,10 @@ where
         self.synced.send_if_modified(|last_state| {
             if let Some(val) = state.is_synced_at() {
                 *last_state = Some(DaBlockHeight::from(val));
+                tracing::info!("Sync update to height {}", val);
                 true
             } else {
+                tracing::info!("No need to sync update");
                 false
             }
         });
@@ -280,8 +282,14 @@ impl<D> SharedState<D> {
         height: &DaBlockHeight,
     ) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
-        while rx.borrow_and_update().deref().map_or(true, |h| h < *height) {
+        
+        while rx.borrow_and_update().deref().map_or(true, |h| {
+            tracing::info!("Received height: {}, await height: {}, will trigger changed call if received height is lower than await height", h, height);
+            h < *height
+        }) {
+            tracing::info!("Waiting for height: {}", height);
             rx.changed().await?;
+            tracing::info!("Waiting finished");
         }
         Ok(())
     }
@@ -292,9 +300,12 @@ impl<D> SharedState<D> {
     where
         D: RelayerDb + 'static,
     {
-        self.database
+        tracing::info!("Getting finalized da height");
+        let res = self.database
             .get_finalized_da_height()
-            .unwrap_or(self.start_da_block_height)
+            .unwrap_or(self.start_da_block_height);
+        tracing::info!("Finalized da height: {}", res);
+        res
     }
 
     /// Getter for database field
@@ -321,6 +332,7 @@ where
                     .and_then(|block| block.number)
                     .ok_or(anyhow::anyhow!("Block pending"))?
                     .as_u64();
+                tracing::info!("Finalized block number: {}", block_number);
                 Ok(block_number)
             }
         }

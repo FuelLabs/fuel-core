@@ -26,6 +26,7 @@ pub(crate) fn download_logs<'a, P>(
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
+    tracing::info!("Downloading logs from the DA layer, sync gap: {:?}", eth_sync_gap);
     // Create a stream of paginated logs.
     futures::stream::try_unfold(
         eth_sync_gap.page(page_size),
@@ -61,7 +62,7 @@ where
                         let page = page.reduce();
 
                         // Get the logs and return the reduced page.
-                        eth_node.get_logs(&filter).await.map(|logs| {
+                        let res = eth_node.get_logs(&filter).await.map(|logs| {
                             Some((
                                 DownloadedLogs {
                                     start_height: oldest_block,
@@ -70,7 +71,9 @@ where
                                 },
                                 page,
                             ))
-                        })
+                        });
+                        tracing::info!("Finish download logs for block range: {}..={}", oldest_block, latest_block);
+                        res
                     }
                 }
             }

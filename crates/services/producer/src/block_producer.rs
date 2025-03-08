@@ -441,6 +441,11 @@ where
             .relayer
             .wait_for_at_least_height(&previous_da_height)
             .await?;
+        tracing::info!(
+            "Selecting new da_height from {} to {}",
+            previous_da_height,
+            highest
+        );
         if highest < previous_da_height {
             return Err(Error::InvalidDaFinalizationState {
                 best: highest,

@@ -42,8 +42,11 @@ where
     // Build the DA layer state.
     let state = state::build_eth(relayer).await?;
 
+    tracing::info!("Synced state: {:?}", state);
+
     // Check if we need to sync.
     if let Some(eth_sync_gap) = state.needs_to_sync_eth() {
+        tracing::info!("Syncing the DA layer, gap: {:?}", eth_sync_gap);
         // Download events and write them to the database.
         relayer.download_logs(&eth_sync_gap).await?;
     }
