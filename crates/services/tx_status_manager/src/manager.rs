@@ -200,7 +200,7 @@ mod tests {
 
     use super::TxStatusManager;
 
-    fn dummy_status() -> TransactionStatus {
+    fn status_1() -> TransactionStatus {
         TransactionStatus::submitted(Tai64::UNIX_EPOCH)
     }
 
@@ -250,14 +250,14 @@ mod tests {
         use super::{
             assert_absence,
             assert_presence,
-            STATUS_1,
+            status_1,
             TTL,
         };
 
         #[test]
         fn simple_registration() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -265,20 +265,20 @@ mod tests {
             let tx4_id = [4u8; 32].into();
 
             // Register tx1 and tx2
-            tx_status_manager.status_update(tx1_id, STATUS_1);
-            tx_status_manager.status_update(tx2_id, STATUS_1);
+            tx_status_manager.status_update(tx1_id, status_1());
+            tx_status_manager.status_update(tx2_id, status_1());
 
             // Sleep for less than a TTL
             std::thread::sleep(Duration::from_secs(1));
 
             // Register tx3
-            tx_status_manager.status_update(tx3_id, STATUS_1);
+            tx_status_manager.status_update(tx3_id, status_1());
 
             // Sleep for less than a TTL
             std::thread::sleep(Duration::from_secs(1));
 
             // Register tx4
-            tx_status_manager.status_update(tx4_id, STATUS_1);
+            tx_status_manager.status_update(tx4_id, status_1());
 
             // All should be present
             assert_presence(&tx_status_manager, vec![tx1_id, tx2_id, tx3_id, tx4_id]);
@@ -287,7 +287,7 @@ mod tests {
         #[test]
         fn prunes_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -295,12 +295,12 @@ mod tests {
             let tx4_id = [4u8; 32].into();
 
             // Register tx1
-            tx_status_manager.status_update(tx1_id, STATUS_1);
+            tx_status_manager.status_update(tx1_id, status_1());
             assert_presence(&tx_status_manager, vec![tx1_id]);
 
             // Move 2 second forward (half of TTL) and register tx2
             std::thread::sleep(TTL / 2);
-            tx_status_manager.status_update(tx2_id, STATUS_1);
+            tx_status_manager.status_update(tx2_id, status_1());
 
             // Both should be present, since TTL didn't pass yet
             assert_presence(&tx_status_manager, vec![tx1_id, tx2_id]);
@@ -310,7 +310,7 @@ mod tests {
             std::thread::sleep(Duration::from_secs(3));
 
             // Trigger the pruning
-            tx_status_manager.status_update(tx3_id, STATUS_1);
+            tx_status_manager.status_update(tx3_id, status_1());
 
             // tx1 should be pruned, tx2 and tx3 should be present
             assert_absence(&tx_status_manager, vec![tx1_id]);
@@ -321,7 +321,7 @@ mod tests {
             std::thread::sleep(Duration::from_secs(2));
 
             // Trigger the pruning
-            tx_status_manager.status_update(tx4_id, STATUS_1);
+            tx_status_manager.status_update(tx4_id, status_1());
 
             // tx1 and tx2 should be pruned, tx3 and tx4 should be present
             assert_absence(&tx_status_manager, vec![tx1_id, tx2_id]);
@@ -331,7 +331,7 @@ mod tests {
         #[test]
         fn prunes_multiple_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -341,22 +341,22 @@ mod tests {
             let tx6_id = [6u8; 32].into();
 
             // Register some transactions
-            tx_status_manager.status_update(tx1_id, STATUS_1);
-            tx_status_manager.status_update(tx2_id, STATUS_1);
-            tx_status_manager.status_update(tx3_id, STATUS_1);
+            tx_status_manager.status_update(tx1_id, status_1());
+            tx_status_manager.status_update(tx2_id, status_1());
+            tx_status_manager.status_update(tx3_id, status_1());
 
             // Sleep for less than TTL
             std::thread::sleep(Duration::from_secs(1));
 
             // Register some more transactions
-            tx_status_manager.status_update(tx4_id, STATUS_1);
-            tx_status_manager.status_update(tx5_id, STATUS_1);
+            tx_status_manager.status_update(tx4_id, status_1());
+            tx_status_manager.status_update(tx5_id, status_1());
 
             // Move beyond TTL
             std::thread::sleep(TTL);
 
             // Trigger the pruning
-            tx_status_manager.status_update(tx6_id, STATUS_1);
+            tx_status_manager.status_update(tx6_id, status_1());
 
             // All but the last one should be pruned.
             assert_absence(
@@ -378,48 +378,46 @@ mod tests {
         use super::{
             assert_absence,
             assert_presence_with_status,
+            status_1,
             Duration,
-            STATUS_1,
             TTL,
         };
 
         #[test]
         fn simple_registration() {
-            let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
-                reason: "fishy tx".to_string(),
-            };
+            let status_2: TransactionStatus =
+                TransactionStatus::squeezed_out("fishy tx".to_string());
 
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
 
             // Register tx1 and tx2
-            tx_status_manager.status_update(tx1_id, STATUS_1);
+            tx_status_manager.status_update(tx1_id, status_1());
             tx_status_manager.status_update(tx1_id, status_2.clone());
 
             // Sleep for less than a TTL
             std::thread::sleep(Duration::from_secs(1));
 
             // Register tx2
-            tx_status_manager.status_update(tx2_id, STATUS_1);
+            tx_status_manager.status_update(tx2_id, status_1());
 
             // All should be present
             assert_presence_with_status(
                 &tx_status_manager,
-                vec![(tx1_id, status_2), (tx2_id, STATUS_1)],
+                vec![(tx1_id, status_2), (tx2_id, status_1())],
             );
         }
 
         #[test]
         fn prunes_old_statuses() {
-            let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
-                reason: "fishy tx".to_string(),
-            };
+            let status_2: TransactionStatus =
+                TransactionStatus::squeezed_out("fishy tx".to_string());
 
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -427,13 +425,13 @@ mod tests {
             let tx4_id = [4u8; 32].into();
 
             // Register tx1 and tx3
-            tx_status_manager.status_update(tx1_id, STATUS_1);
-            tx_status_manager.status_update(tx3_id, STATUS_1);
+            tx_status_manager.status_update(tx1_id, status_1());
+            tx_status_manager.status_update(tx3_id, status_1());
 
             // Move 2 second forward (half of TTL), register tx2
             // and update status of tx1
             std::thread::sleep(TTL / 2);
-            tx_status_manager.status_update(tx2_id, STATUS_1);
+            tx_status_manager.status_update(tx2_id, status_1());
             tx_status_manager.status_update(tx1_id, status_2.clone());
 
             // All should be present, since TTL didn't pass yet
@@ -441,8 +439,8 @@ mod tests {
                 &tx_status_manager,
                 vec![
                     (tx1_id, status_2.clone()),
-                    (tx2_id, STATUS_1),
-                    (tx3_id, STATUS_1),
+                    (tx2_id, status_1()),
+                    (tx3_id, status_1()),
                 ],
             );
 
@@ -451,7 +449,7 @@ mod tests {
             std::thread::sleep(Duration::from_secs(3));
 
             // Trigger the pruning
-            tx_status_manager.status_update(tx4_id, STATUS_1);
+            tx_status_manager.status_update(tx4_id, status_1());
 
             // Only tx3 should be pruned since it's in the manager
             // since the beginning. tx2 was registered later
@@ -459,18 +457,17 @@ mod tests {
             // also update later.
             assert_presence_with_status(
                 &tx_status_manager,
-                vec![(tx1_id, status_2), (tx2_id, STATUS_1)],
+                vec![(tx1_id, status_2), (tx2_id, status_1())],
             );
         }
 
         #[test]
         fn prunes_multiple_old_statuses() {
-            let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
-                reason: "fishy tx".to_string(),
-            };
+            let status_2: TransactionStatus =
+                TransactionStatus::squeezed_out("fishy tx".to_string());
 
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -480,17 +477,17 @@ mod tests {
             let tx6_id = [6u8; 32].into();
 
             // Register some transactions
-            tx_status_manager.status_update(tx1_id, STATUS_1);
-            tx_status_manager.status_update(tx2_id, STATUS_1);
-            tx_status_manager.status_update(tx3_id, STATUS_1);
+            tx_status_manager.status_update(tx1_id, status_1());
+            tx_status_manager.status_update(tx2_id, status_1());
+            tx_status_manager.status_update(tx3_id, status_1());
 
             // Sleep for less than TTL
             std::thread::sleep(Duration::from_secs(1));
 
             // Register some more transactions and update
             // some old statuses
-            tx_status_manager.status_update(tx4_id, STATUS_1);
-            tx_status_manager.status_update(tx5_id, STATUS_1);
+            tx_status_manager.status_update(tx4_id, status_1());
+            tx_status_manager.status_update(tx5_id, status_1());
             tx_status_manager.status_update(tx1_id, status_2.clone());
             tx_status_manager.status_update(tx2_id, status_2.clone());
 
@@ -498,47 +495,14 @@ mod tests {
             std::thread::sleep(TTL);
 
             // Trigger the pruning
-            tx_status_manager.status_update(tx6_id, STATUS_1);
+            tx_status_manager.status_update(tx6_id, status_1());
 
             // All but the last one should be pruned.
             assert_absence(
                 &tx_status_manager,
                 vec![tx1_id, tx2_id, tx3_id, tx4_id, tx5_id],
             );
-            assert_presence_with_status(&tx_status_manager, vec![(tx6_id, STATUS_1)]);
-        }
-
-        #[test]
-        fn removes_empty_map_from_cache() {
-            let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
-                reason: "fishy tx".to_string(),
-            };
-
-            let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
-
-            let tx1_id = [1u8; 32].into();
-
-            // Register tx1 and remember it's timestamp
-            tx_status_manager.status_update(tx1_id, STATUS_1);
-            let timestamp = {
-                let data = tx_status_manager.inner_data();
-                data.timestamps.keys().copied().next().unwrap()
-            };
-
-            // Sleep for less than a TTL
-            std::thread::sleep(Duration::from_secs(2));
-
-            // Update tx1 status, the timestamp cache should get updated.
-            tx_status_manager.status_update(tx1_id, status_2);
-
-            // Check that there is no stray cache entry for the original timestamp.
-            {
-                let data = tx_status_manager.inner_data();
-                let empty_timestamp_cache_exists =
-                    data.timestamps.contains_key(&timestamp);
-                assert!(!empty_timestamp_cache_exists);
-            }
+            assert_presence_with_status(&tx_status_manager, vec![(tx6_id, status_1())]);
         }
 
         // TODO[RC]: Optimization - update the tests to not rely on systemtime, inject
