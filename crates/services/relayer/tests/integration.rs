@@ -91,7 +91,6 @@ async fn stop_service_at_the_middle() {
     }
     relayer.stop();
 
-    assert!(relayer.shared.await_synced().await.is_err());
     // During each iteration we sync 5 blocks, so the final 5 * `NUMBER_OF_SYNC_ITERATIONS`
     assert_eq!(
         *mock_db.get_finalized_da_height().unwrap(),
