@@ -40,7 +40,6 @@ async fn logs_are_downloaded_and_written() {
 mockall::mock! {
     RelayerData {}
 
-    #[async_trait::async_trait]
     impl EthRemote for RelayerData {
         async fn finalized(&self) -> anyhow::Result<u64>;
     }

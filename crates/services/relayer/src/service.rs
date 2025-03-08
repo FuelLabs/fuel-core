@@ -302,7 +302,6 @@ impl<D> SharedState<D> {
     }
 }
 
-#[async_trait]
 impl<P, D> state::EthRemote for Task<P, D>
 where
     P: Middleware<Error = ProviderError>,
@@ -326,7 +325,6 @@ where
     }
 }
 
-#[async_trait]
 impl<P, D> EthLocal for Task<P, D>
 where
     P: Middleware<Error = ProviderError>,
