@@ -115,7 +115,6 @@ impl<P, D> NotInitializedTask<P, D> {
     }
 }
 
-#[async_trait]
 impl<P, D> RelayerData for Task<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,

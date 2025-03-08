@@ -40,7 +40,7 @@ async fn logs_are_downloaded_and_written() {
 mockall::mock! {
     RelayerData {}
 
-    #[async_trait]
+    #[async_trait::async_trait]
     impl EthRemote for RelayerData {
         async fn finalized(&self) -> anyhow::Result<u64>;
     }
@@ -49,7 +49,6 @@ mockall::mock! {
         fn observed(&self) -> Option<u64>;
     }
 
-    #[async_trait]
     impl RelayerData for RelayerData{
         async fn wait_if_eth_syncing(&self) -> anyhow::Result<()>;
 
