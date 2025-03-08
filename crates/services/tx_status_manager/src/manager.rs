@@ -93,6 +93,10 @@ impl TxStatusManager {
 
     fn prune_old_statuses(&self, data: &mut MutexGuard<Data>) {
         let timestamp = Tai64::now();
+
+        // If timestamp is longer than the entire possible timespan we can not
+        // do much about it anyway.
+        #[allow(clippy::arithmetic_side_effects)]
         let cutoff = timestamp - self.ttl;
 
         let old_ids = data
@@ -120,7 +124,7 @@ impl TxStatusManager {
 
         if let Some((_, prev_timestamp)) = data.statuses.get(&tx_id) {
             if timestamp != *prev_timestamp {
-                let prev_timestamp_clone = prev_timestamp.clone();
+                let prev_timestamp_clone = *prev_timestamp;
                 if let Some(timestamps) = data.timestamps.get_mut(&prev_timestamp_clone) {
                     timestamps.remove(&tx_id);
                     if timestamps.is_empty() {
@@ -547,12 +551,8 @@ mod tests {
             tx_status_manager.status_update(tx1_id, STATUS_1);
             let timestamp = {
                 let data = tx_status_manager.inner_data();
-                data.timestamps
-                    .iter()
-                    .map(|(timestamp, _)| *timestamp)
-                    .next()
+                data.timestamps.keys().copied().next().unwrap()
             };
-            let timestamp = timestamp.unwrap();
 
             // Sleep for less than a TTL
             std::thread::sleep(Duration::from_secs(2));
@@ -563,8 +563,9 @@ mod tests {
             // Check that there is no stray cache entry for the original timestamp.
             {
                 let data = tx_status_manager.inner_data();
-                let exists = data.timestamps.get(&timestamp).is_some();
-                assert!(!exists);
+                let empty_timestamp_cache_exists =
+                    data.timestamps.contains_key(&timestamp);
+                assert!(!empty_timestamp_cache_exists);
             }
         }
 
