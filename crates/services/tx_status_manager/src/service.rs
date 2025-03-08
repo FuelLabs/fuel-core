@@ -1,21 +1,3 @@
-use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
-    TaskNextAction,
-};
-use fuel_core_types::services::{
-    p2p::{
-        GossipData,
-        PreConfirmationMessage,
-        Sealed,
-    },
-    preconfirmation::Preconfirmation,
-    txpool::TransactionStatus,
-};
-use futures::StreamExt;
-
 use crate::{
     config::Config,
     manager::TxStatusManager,
@@ -26,28 +8,114 @@ use crate::{
     },
     subscriptions::Subscriptions,
     update_sender::TxStatusChange,
+    TxStatusStream,
 };
+use fuel_core_services::{
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
+    TaskNextAction,
+};
+use fuel_core_types::{
+    fuel_tx::{
+        Bytes32,
+        TxId,
+    },
+    services::{
+        p2p::{
+            GossipData,
+            PreConfirmationMessage,
+            Sealed,
+        },
+        preconfirmation::Preconfirmation,
+        txpool::TransactionStatus,
+    },
+};
+use futures::StreamExt;
+use tokio::sync::{
+    mpsc,
+    oneshot,
+};
+
+enum ReadRequest {
+    GetStatus {
+        tx_id: TxId,
+        sender: oneshot::Sender<Option<TransactionStatus>>,
+    },
+    Subscribe {
+        tx_id: TxId,
+        sender: oneshot::Sender<anyhow::Result<TxStatusStream>>,
+    },
+}
+
+enum WriteRequest {
+    UpdateStatus {
+        tx_id: TxId,
+        status: TransactionStatus,
+    },
+    NotifySkipped {
+        tx_ids_and_reason: Vec<(Bytes32, String)>,
+    },
+}
+
+#[derive(Clone)]
+pub struct SharedData {
+    read_requests_sender: mpsc::Sender<ReadRequest>,
+    write_requests_sender: mpsc::UnboundedSender<WriteRequest>,
+}
+
+impl SharedData {
+    pub async fn get_status(
+        &self,
+        tx_id: TxId,
+    ) -> anyhow::Result<Option<TransactionStatus>> {
+        let (sender, receiver) = oneshot::channel();
+        let request = ReadRequest::GetStatus { tx_id, sender };
+        self.read_requests_sender.send(request).await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn subscribe(&self, tx_id: TxId) -> anyhow::Result<TxStatusStream> {
+        let (sender, receiver) = oneshot::channel();
+        let request = ReadRequest::Subscribe { tx_id, sender };
+        self.read_requests_sender.send(request).await?;
+        receiver.await?
+    }
+
+    pub fn update_status(&self, tx_id: TxId, status: TransactionStatus) {
+        let request = WriteRequest::UpdateStatus { tx_id, status };
+        let _ = self.write_requests_sender.send(request);
+    }
+
+    pub fn notify_skipped(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
+        let request = WriteRequest::NotifySkipped { tx_ids_and_reason };
+        let _ = self.write_requests_sender.send(request);
+    }
+}
 
 pub struct Task {
     manager: TxStatusManager,
     subscriptions: Subscriptions,
+    read_requests_receiver: mpsc::Receiver<ReadRequest>,
+    write_requests_receiver: mpsc::UnboundedReceiver<WriteRequest>,
+    shared_data: SharedData,
 }
 
 impl Task {
+    // TODO: Implement signatures verifications logic for preconfirmation logic.
+    //  https://github.com/FuelLabs/fuel-core/issues/2823
     fn new_preconfirmations_from_p2p(
         &mut self,
         preconfirmations: P2PPreConfirmationMessage,
     ) {
         match preconfirmations {
-            PreConfirmationMessage::Delegate(_sealed) => {
-                // TODO[RC]: Handle the delegate message,
-            }
+            PreConfirmationMessage::Delegate(_) => {}
             PreConfirmationMessage::Preconfirmations(sealed) => {
                 let Sealed {
                     signature: _,
                     entity,
                 } = sealed;
-                // TODO[RC]: Add signature verification
                 entity.preconfirmations.into_iter().for_each(
                     |Preconfirmation { tx_id, status }| {
                         let status: TransactionStatus = status.into();
@@ -62,12 +130,12 @@ impl Task {
 #[async_trait::async_trait]
 impl RunnableService for Task {
     const NAME: &'static str = "TxStatusManagerTask";
-    type SharedData = TxStatusManager;
+    type SharedData = SharedData;
     type Task = Self;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        self.manager.clone()
+        self.shared_data.clone()
     }
 
     async fn into_task(
@@ -80,10 +148,7 @@ impl RunnableService for Task {
 }
 
 impl RunnableTask for Task {
-    async fn run(
-        &mut self,
-        watcher: &mut fuel_core_services::StateWatcher,
-    ) -> TaskNextAction {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
 
@@ -102,6 +167,35 @@ impl RunnableTask for Task {
                 }
             }
 
+            request = self.write_requests_receiver.recv() => {
+                match request {
+                    Some(WriteRequest::UpdateStatus { tx_id, status }) => {
+                        self.manager.status_update(tx_id, status);
+                        TaskNextAction::Continue
+                    }
+                    Some(WriteRequest::NotifySkipped { tx_ids_and_reason }) => {
+                        self.manager.notify_skipped_txs(tx_ids_and_reason);
+                        TaskNextAction::Continue
+                    }
+                    None => TaskNextAction::Stop,
+                }
+            }
+
+            request = self.read_requests_receiver.recv() => {
+                match request {
+                    Some(ReadRequest::GetStatus { tx_id, sender }) => {
+                        let status = self.manager.status(&tx_id);
+                        let _ = sender.send(status);
+                        TaskNextAction::Continue
+                    }
+                    Some(ReadRequest::Subscribe { tx_id, sender }) => {
+                        let result = self.manager.tx_update_subscribe(tx_id);
+                        let _ = sender.send(result);
+                        TaskNextAction::Continue
+                    }
+                    None => TaskNextAction::Stop,
+                }
+            }
         }
     }
 
@@ -119,19 +213,25 @@ where
         new_tx_status: tx_status_from_p2p_stream,
     };
 
-    let tx_status_sender = TxStatusChange::new(
-        config.max_tx_update_subscriptions,
-        // The connection should be closed automatically after the `SqueezedOut` event.
-        // But because of slow/malicious consumers, the subscriber can still be occupied.
-        // We allow the subscriber to receive the event produced by TxPool's TTL.
-        // But we still want to drop subscribers after `2 * TxPool_TTL`.
-        config.max_txs_ttl.saturating_mul(2),
-    );
+    let tx_status_sender =
+        TxStatusChange::new(config.max_tx_update_subscriptions, config.subscription_ttl);
     let tx_status_manager =
-        TxStatusManager::new(tx_status_sender, config.max_tx_status_ttl);
+        TxStatusManager::new(tx_status_sender, config.status_cache_ttl);
+
+    let (read_requests_sender, read_requests_receiver) =
+        mpsc::channel(config.max_tx_update_subscriptions);
+    let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
+
+    let shared_data = SharedData {
+        read_requests_sender,
+        write_requests_sender,
+    };
 
     ServiceRunner::new(Task {
         subscriptions,
         manager: tx_status_manager,
+        read_requests_receiver,
+        write_requests_receiver,
+        shared_data,
     })
 }

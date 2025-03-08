@@ -6,7 +6,6 @@ use std::{
 use fuel_core_types::{
     fuel_tx::Bytes32,
     services::txpool::TransactionStatus,
-    tai64::Tai64,
 };
 use proptest::{
     prelude::*,
@@ -15,7 +14,8 @@ use proptest::{
 use test_strategy::Arbitrary;
 use tokio::time::Instant;
 
-use crate::{
+use crate as fuel_core_tx_status_manager;
+use fuel_core_tx_status_manager::{
     tx_status_stream::{
         State,
         TxStatusMessage,
@@ -38,47 +38,15 @@ use crate::{
 
 pub fn transaction_status_strategy() -> impl Strategy<Value = TransactionStatus> {
     prop_oneof![
-        Just(TransactionStatus::Submitted {
-            timestamp: Tai64(0)
-        }),
-        Just(TransactionStatus::Success {
-            block_height: Default::default(),
-            block_timestamp: Tai64(0),
-            program_state: None,
-            receipts: vec![],
-            total_gas: 0,
-            total_fee: 0,
-        }),
-        Just(TransactionStatus::PreConfirmationSuccess {
-            tx_pointer: Default::default(),
-            total_gas: 0,
-            total_fee: 0,
-            receipts: None,
-            outputs: None,
-        }),
-        Just(TransactionStatus::Failure {
-            block_height: Default::default(),
-            block_timestamp: Tai64(0),
-            program_state: None,
-            receipts: vec![],
-            total_gas: 0,
-            total_fee: 0,
-            reason: "failure".to_string(),
-        }),
-        Just(TransactionStatus::PreConfirmationFailure {
-            tx_pointer: Default::default(),
-            total_gas: 0,
-            total_fee: 0,
-            receipts: None,
-            outputs: None,
-            reason: "failure during block production".to_string(),
-        }),
-        Just(TransactionStatus::SqueezedOut {
-            reason: Default::default(),
-        }),
-        Just(TransactionStatus::PreConfirmationSqueezedOut {
-            reason: "squeezed out".to_string(),
-        }),
+        Just(TransactionStatus::Submitted(Default::default())),
+        Just(TransactionStatus::Success(Default::default())),
+        Just(TransactionStatus::PreConfirmationSuccess(Default::default())),
+        Just(TransactionStatus::Failure(Default::default())),
+        Just(TransactionStatus::PreConfirmationFailure(Default::default())),
+        Just(TransactionStatus::SqueezedOut(Default::default())),
+        Just(TransactionStatus::PreConfirmationSqueezedOut(
+            Default::default()
+        )),
     ]
 }
 

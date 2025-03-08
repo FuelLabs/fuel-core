@@ -4052,6 +4052,7 @@ dependencies = [
  "async-trait",
  "derive_more 0.99.19",
  "fuel-core-services",
+ "fuel-core-tx-status-manager",
  "fuel-core-types 0.41.7",
  "futures",
  "mockall",

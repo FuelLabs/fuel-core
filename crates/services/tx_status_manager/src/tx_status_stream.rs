@@ -79,14 +79,19 @@ impl TxUpdateStream {
         &self.state
     }
 
+    // TODO: Update the code to handle new pre-confirmation statuses
+    //  https://github.com/FuelLabs/fuel-core/issues/2827
     pub fn add_msg(&mut self, msg: TxStatusMessage) {
         let state = std::mem::replace(&mut self.state, State::Empty);
         self.state = match state {
             State::Empty => match msg {
-                TxStatusMessage::Status(TransactionStatus::Submitted { timestamp }) => {
-                    State::Initial(TransactionStatus::Submitted { timestamp })
+                TxStatusMessage::Status(s) => {
+                    if s.is_submitted() {
+                        State::Initial(s)
+                    } else {
+                        State::EarlySuccess(s)
+                    }
                 }
-                TxStatusMessage::Status(s) => State::EarlySuccess(s),
                 TxStatusMessage::FailedStatus => State::Failed,
             },
             State::Initial(s1) => {

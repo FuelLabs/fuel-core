@@ -157,9 +157,7 @@ impl TryFrom<TxInfo> for TransactionStatus {
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_secs() as i64;
 
-        Ok(TransactionStatus::Submitted {
-            timestamp: Tai64::from_unix(unit_time),
-        })
+        Ok(TransactionStatus::submitted(Tai64::from_unix(unit_time)))
     }
 }
 
@@ -408,9 +406,7 @@ where
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
                 self.tx_status_manager.status_update(
                     tx_id,
-                    TransactionStatus::Submitted {
-                        timestamp: Tai64::from_unix(duration),
-                    },
+                    TransactionStatus::submitted(Tai64::from_unix(duration)),
                 );
 
                 if expiration < u32::MAX.into() {
@@ -443,17 +439,13 @@ where
 
                 self.tx_status_manager.status_update(
                     tx_id,
-                    TransactionStatus::SqueezedOut {
-                        reason: error.to_string(),
-                    },
+                    TransactionStatus::squeezed_out(error.to_string()),
                 );
             }
             PoolNotification::Removed { tx_id, error } => {
                 self.tx_status_manager.status_update(
                     tx_id,
-                    TransactionStatus::SqueezedOut {
-                        reason: error.to_string(),
-                    },
+                    TransactionStatus::squeezed_out(error.to_string()),
                 );
             }
         }
@@ -539,9 +531,7 @@ where
 
                     tx_status_manager.status_update(
                         tx_id,
-                        TransactionStatus::SqueezedOut {
-                            reason: err.to_string(),
-                        },
+                        TransactionStatus::squeezed_out(err.to_string()),
                     );
                     return
                 }

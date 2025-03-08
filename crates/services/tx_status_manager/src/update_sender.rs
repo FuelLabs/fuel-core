@@ -245,9 +245,10 @@ impl UpdateSender {
     }
 
     /// Send updates to all subscribed senders.
-    pub fn send(&self, update: &TxUpdate) {
+    pub fn send(&self, update: TxUpdate) {
         // Lock the senders Mutex.
         let mut senders = self.senders.lock();
+        let tx_id = *update.tx_id();
 
         // Remove closed senders from the list
         remove_closed_and_expired(&mut senders, self.ttl);
@@ -256,10 +257,10 @@ impl UpdateSender {
         // left for a given tx_id.
         let mut empty = false;
 
-        if let Some(senders) = senders.get_mut(update.tx_id()) {
+        if let Some(senders) = senders.get_mut(&tx_id) {
             // Retain only senders that are able to receive the update.
-            senders
-                .retain_mut(|sender| sender.try_send(update.clone().into_msg()).is_ok());
+            let message = update.into_msg();
+            senders.retain_mut(|sender| sender.try_send(message.clone()).is_ok());
 
             // Check if the list of senders for the tx_id is empty.
             empty = senders.is_empty();
@@ -267,7 +268,7 @@ impl UpdateSender {
 
         // Remove the tx_id from senders if there are no senders left
         if empty {
-            senders.remove(update.tx_id());
+            senders.remove(&tx_id);
         }
     }
 }

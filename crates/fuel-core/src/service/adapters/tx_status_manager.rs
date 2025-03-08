@@ -14,7 +14,7 @@ use super::{
 
 impl TxStatusManager for TxStatusManagerAdapter {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
-        self.manager.status_update(tx_id, tx_status);
+        self.manager.update_status(tx_id, tx_status);
     }
 }
 
