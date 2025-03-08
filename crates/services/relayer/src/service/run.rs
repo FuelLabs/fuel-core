@@ -25,7 +25,7 @@ pub trait RelayerData: EthRemote + EthLocal {
         &mut self,
 
         eth_sync_gap: &state::EthSyncGap,
-    ) -> impl core::future::Future<Output = anyhow::Result<()>> + Send;
+    ) -> impl core::future::Future<Output = anyhow::Result<Option<u64>>> + Send;
 
     /// Update the synced state.
     fn update_synced(&self, state: &EthState);
@@ -45,9 +45,11 @@ where
     // Check if we need to sync.
     if let Some(eth_sync_gap) = state.needs_to_sync_eth() {
         // Download events and write them to the database.
-        relayer.download_logs(&eth_sync_gap).await?;
-        // update the local state.
-        state.set_local(eth_sync_gap.latest());
+        let latest_written_height = relayer.download_logs(&eth_sync_gap).await?;
+        // update the local state, only if we have written something.
+        if let Some(latest_written_height) = latest_written_height {
+            state.set_local(latest_written_height);
+        }
     }
 
     // Update the synced state.
