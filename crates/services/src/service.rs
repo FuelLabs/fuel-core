@@ -359,7 +359,7 @@ async fn run<S>(
     let mut task = service
         .into_task(&state, params)
         .await
-        .expect(&format!("The initialization of {} failed", S::NAME));
+        .unwrap_or_else(|_| panic!("The initialization of {} failed", S::NAME));
 
     sender.send_if_modified(|s| {
         if s.starting() {
