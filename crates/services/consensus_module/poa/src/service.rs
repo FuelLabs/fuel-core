@@ -530,9 +530,12 @@ where
     TBP: TriggerBlockProduction,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        // more performant to do the sync check first
-        if self.block_production_trigger.should_wait_for_trigger() {
-            self.block_production_trigger.wait_for_trigger().await;
+        tokio::select! {
+            biased;
+            _ = watcher.while_started() => {
+                return TaskNextAction::Stop
+            }
+            _ = self.block_production_trigger.wait_for_trigger() => {}
         }
 
         let mut sync_state = self.sync_task_handle.shared.clone();

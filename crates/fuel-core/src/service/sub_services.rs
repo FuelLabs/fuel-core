@@ -88,7 +88,7 @@ pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
 pub fn init_sub_services(
     config: &Config,
     database: CombinedDatabase,
-) -> anyhow::Result<(SubServices, SharedState)> {
+) -> anyhow::Result<(SubServices, SharedState, BlockProductionTrigger)> {
     let chain_config = config.snapshot_reader.chain_config();
     let chain_id = chain_config.consensus_parameters.chain_id();
     let chain_name = chain_config.chain_name.clone();
@@ -371,7 +371,6 @@ pub fn init_sub_services(
         block_importer: importer_adapter,
         executor,
         config: config.clone(),
-        block_production_trigger,
     };
 
     #[allow(unused_mut)]
@@ -405,5 +404,5 @@ pub fn init_sub_services(
         services.push(Box::new(poa));
     }
 
-    Ok((services, shared))
+    Ok((services, shared, block_production_trigger))
 }

@@ -175,8 +175,4 @@ where
             notified: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
-
-    pub(crate) fn should_wait_for_trigger(&self) -> bool {
-        !self.notified.load(std::sync::atomic::Ordering::Acquire)
-    }
 }

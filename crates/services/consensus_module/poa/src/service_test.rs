@@ -601,3 +601,121 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         }
     }
 }
+
+#[derive(Clone)]
+struct MockBlockProductionTrigger(std::sync::Arc<tokio::sync::Notify>);
+
+impl TriggerBlockProduction for MockBlockProductionTrigger {
+    async fn wait_for_trigger(&self) {
+        self.0.notified().await;
+    }
+}
+
+impl Default for MockBlockProductionTrigger {
+    fn default() -> Self {
+        Self(std::sync::Arc::new(tokio::sync::Notify::new()))
+    }
+}
+
+impl MockBlockProductionTrigger {
+    fn send_trigger(&self) {
+        self.0.notify_one();
+    }
+}
+
+#[tokio::test]
+async fn consensus_service__run__will_not_produce_blocks_without_trigger() {
+    // this test basically checks that the block production trigger is working
+    // no blocks should be produced if the trigger is not set
+
+    // given
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: std::time::Duration::from_millis(10),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::empty()));
+    let mut rng = StdRng::seed_from_u64(0);
+    let tx = make_tx(&mut rng);
+    let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let time = TestTime::at_unix_epoch();
+    let block_production_trigger = MockBlockProductionTrigger::default();
+
+    let task = MainTask::new(
+        &last_block,
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        generate_p2p_port(),
+        FakeBlockSigner { succeeds: true }.into(),
+        InMemoryPredefinedBlocks::new(HashMap::new()),
+        time.watch(),
+        block_production_trigger.clone(),
+    );
+
+    // when
+    let service = ServiceRunner::new(task);
+    service.start_and_await().await.unwrap();
+    // we don't send the trigger
+
+    // then
+    time::sleep(Duration::from_millis(200)).await;
+    assert!(block_receiver.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn consensus_service__run__will_produce_blocks_with_trigger() {
+    // given
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: std::time::Duration::from_millis(10),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::empty()));
+    let mut rng = StdRng::seed_from_u64(0);
+    let tx = make_tx(&mut rng);
+    let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let time = TestTime::at_unix_epoch();
+    let block_production_trigger = MockBlockProductionTrigger::default();
+
+    let task = MainTask::new(
+        &last_block,
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        generate_p2p_port(),
+        FakeBlockSigner { succeeds: true }.into(),
+        InMemoryPredefinedBlocks::new(HashMap::new()),
+        time.watch(),
+        block_production_trigger.clone(),
+    );
+
+    // when
+    let service = ServiceRunner::new(task);
+    service.start_and_await().await.unwrap();
+    block_production_trigger.send_trigger();
+
+    // then
+    let produced_block = block_receiver.recv().await.unwrap();
+    assert!(matches!(produced_block, FakeProducedBlock::New(_, _)));
+}
