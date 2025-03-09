@@ -139,8 +139,14 @@ impl FuelService {
         // initialize sub services
         tracing::info!("Initializing sub services");
         database.sync_aux_db_heights(shutdown_listener)?;
-        let (services, shared, block_production_trigger) =
-            sub_services::init_sub_services(&config, database)?;
+
+        let block_production_trigger = BlockProductionTrigger::new();
+
+        let (services, shared) = sub_services::init_sub_services(
+            &config,
+            database,
+            block_production_trigger.clone(),
+        )?;
 
         let sub_services = Arc::new(services);
         let task = Task::new(sub_services.clone(), shared.clone())?;
