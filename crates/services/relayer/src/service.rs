@@ -167,7 +167,7 @@ where
     async fn download_logs(
         &mut self,
         eth_sync_gap: &state::EthSyncGap,
-    ) -> anyhow::Result<Option<u64>> {
+    ) -> anyhow::Result<()> {
         let logs = download_logs(
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
@@ -176,9 +176,7 @@ where
         );
         let logs = logs.take_until(self.shutdown.while_started());
 
-        let last_written_height = write_logs(&mut self.database, logs).await?;
-
-        Ok(last_written_height)
+        write_logs(&mut self.database, logs).await
     }
 
     fn update_synced(&self, state: &state::EthState) {

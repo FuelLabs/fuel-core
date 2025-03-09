@@ -80,17 +80,12 @@ where
 
 /// Write the logs to the database.
 /// returns the last height written.
-pub(crate) async fn write_logs<D, S>(
-    database: &mut D,
-    logs: S,
-) -> anyhow::Result<Option<u64>>
+pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<()>
 where
     D: RelayerDb,
     S: futures::Stream<Item = Result<DownloadedLogs, ProviderError>>,
 {
     tokio::pin!(logs);
-
-    let mut last_written_height = None;
 
     while let Some(DownloadedLogs {
         start_height,
@@ -130,10 +125,8 @@ where
             let events = unordered_events.get(&height).unwrap_or(&empty_events);
             database.insert_events(&height, events)?;
         }
-
-        last_written_height = Some(last_height);
     }
-    Ok(last_written_height)
+    Ok(())
 }
 
 fn sort_events_by_log_index(events: Vec<Log>) -> anyhow::Result<Vec<Log>> {

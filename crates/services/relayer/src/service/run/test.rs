@@ -11,7 +11,7 @@ async fn can_set_da_height() {
     let mut relayer = MockRelayerData::default();
     relayer.expect_wait_if_eth_syncing().returning(|| Ok(()));
     relayer.expect_update_synced().return_const(());
-    relayer.expect_download_logs().returning(|_| Ok(None));
+    relayer.expect_download_logs().returning(|_| Ok(()));
     relayer.expect_storage_da_block_height().returning(|| None);
     test_data_source(
         &mut relayer,
@@ -31,7 +31,7 @@ async fn logs_are_downloaded_and_written() {
     relayer
         .expect_download_logs()
         .withf(|gap| gap.oldest() == 1 && gap.latest() == 200)
-        .returning(|_| Ok(None));
+        .returning(|_| Ok(()));
     relayer.expect_storage_da_block_height().returning(|| None);
     test_data_source(
         &mut relayer,
@@ -67,45 +67,7 @@ async fn logs_are_downloaded_and_written_partially() {
     relayer
         .expect_download_logs()
         .withf(|gap| gap.oldest() == 1 && gap.latest() == 200)
-        .returning(|_| Ok(Some(100)));
-    relayer.expect_storage_da_block_height().returning(|| None);
-
-    // When
-    let result = run(&mut relayer).await;
-
-    // Then
-    assert!(result.is_ok());
-    let actual = *eth_state.lock().unwrap();
-    let expected = EthState::new(200, 100);
-
-    assert_eq!(actual, expected);
-}
-
-#[tokio::test]
-async fn logs_are_downloaded_and_not_written_but_database_updated() {
-    let mut relayer = MockRelayerData::default();
-    let eth_state = Arc::new(Mutex::new(EthState::new(200, 0)));
-    relayer.expect_wait_if_eth_syncing().returning(|| Ok(()));
-    relayer.expect_update_synced().returning({
-        let eth_state = eth_state.clone();
-        move |state| {
-            let mut eth_state = eth_state.lock().unwrap();
-            *eth_state = *state;
-        }
-    });
-    test_data_source(
-        &mut relayer,
-        TestDataSource {
-            eth_remote_finalized: 200,
-            eth_local_finalized: 0,
-        },
-    );
-
-    // Given
-    relayer
-        .expect_download_logs()
-        .withf(|gap| gap.oldest() == 1 && gap.latest() == 200)
-        .returning(|_| Ok(None));
+        .returning(|_| Ok(()));
     relayer
         .expect_storage_da_block_height()
         .returning(|| Some(100));
@@ -217,7 +179,7 @@ mockall::mock! {
         async fn download_logs(
             &mut self,
             eth_sync_gap: &state::EthSyncGap,
-        ) -> anyhow::Result<Option<u64>>;
+        ) -> anyhow::Result<()>;
 
         fn update_synced(&self, state: &EthState);
 
