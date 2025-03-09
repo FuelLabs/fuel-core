@@ -17,6 +17,7 @@ use crate::{
     schema::build_schema,
     service::{
         adapters::{
+            block_production_trigger::BlockProductionTrigger,
             consensus_module::poa::InDirectoryPredefinedBlocks,
             consensus_parameters_provider,
             fuel_gas_price_provider::FuelGasPriceProvider,
@@ -66,6 +67,7 @@ pub type PoAService = fuel_core_poa::Service<
     SignMode,
     InDirectoryPredefinedBlocks,
     SystemTime,
+    BlockProductionTrigger,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -86,6 +88,7 @@ pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
 pub fn init_sub_services(
     config: &Config,
     database: CombinedDatabase,
+    block_production_trigger: BlockProductionTrigger,
 ) -> anyhow::Result<(SubServices, SharedState)> {
     let chain_config = config.snapshot_reader.chain_config();
     let chain_id = chain_config.consensus_parameters.chain_id();
@@ -157,6 +160,8 @@ pub fn init_sub_services(
     let relayer_adapter = MaybeRelayerAdapter {
         #[cfg(feature = "relayer")]
         relayer_synced: relayer_service.as_ref().map(|r| r.shared.clone()),
+        #[cfg(feature = "relayer")]
+        relayer_database: database.relayer().clone(),
         #[cfg(feature = "relayer")]
         da_deploy_height: config.relayer.as_ref().map_or(
             DaBlockHeight(RelayerConfig::DEFAULT_DA_DEPLOY_HEIGHT),
@@ -295,6 +300,7 @@ pub fn init_sub_services(
             signer,
             predefined_blocks,
             SystemTime,
+            block_production_trigger,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
@@ -376,10 +382,6 @@ pub fn init_sub_services(
         Box::new(consensus_parameters_provider_service),
     ];
 
-    if let Some(poa) = poa {
-        services.push(Box::new(poa));
-    }
-
     #[cfg(feature = "relayer")]
     if let Some(relayer) = relayer_service {
         services.push(Box::new(relayer));
@@ -397,6 +399,11 @@ pub fn init_sub_services(
 
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
+
+    // always make sure that the block producer is inserted last
+    if let Some(poa) = poa {
+        services.push(Box::new(poa));
+    }
 
     Ok((services, shared))
 }
