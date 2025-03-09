@@ -15,12 +15,14 @@ use crate::{
     ports::{
         BlockImporter,
         BlockProducer,
+        BlockProductionTrigger,
         BlockSigner,
         GetTime,
         P2pPort,
         PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
+        TriggerBlockProduction,
     },
     sync::{
         SyncState,
@@ -64,7 +66,8 @@ use fuel_core_types::{
 use serde::Serialize;
 use tokio::time::sleep_until;
 
-pub type Service<T, B, I, S, PB, C> = ServiceRunner<MainTask<T, B, I, S, PB, C>>;
+pub type Service<T, B, I, S, PB, C, TBP> =
+    ServiceRunner<MainTask<T, B, I, S, PB, C, TBP>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -118,7 +121,7 @@ pub(crate) enum RequestType {
     Manual,
     Trigger,
 }
-pub struct MainTask<T, B, I, S, PB, C> {
+pub struct MainTask<T, B, I, S, PB, C, TBP> {
     signer: Arc<S>,
     block_producer: B,
     block_importer: I,
@@ -135,14 +138,17 @@ pub struct MainTask<T, B, I, S, PB, C> {
     /// Deadline clock, used by the triggers
     sync_task_handle: ServiceRunner<SyncTask>,
     production_timeout: Duration,
+    /// externally controlled start of block production
+    block_production_trigger: BlockProductionTrigger<TBP>,
 }
 
-impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TBP> MainTask<T, B, I, S, PB, C, TBP>
 where
     T: TransactionPool,
     I: BlockImporter,
     PB: PredefinedBlocks,
     C: GetTime,
+    TBP: TriggerBlockProduction,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort>(
@@ -155,6 +161,7 @@ where
         signer: Arc<S>,
         predefined_blocks: PB,
         clock: C,
+        block_production_trigger: TBP,
     ) -> Self {
         let new_txs_watcher = txpool.new_txs_watcher();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -182,6 +189,9 @@ where
 
         let sync_task_handle = ServiceRunner::new(sync_task);
 
+        let block_production_trigger =
+            BlockProductionTrigger::new(block_production_trigger);
+
         Self {
             signer,
             txpool,
@@ -198,6 +208,7 @@ where
             sync_task_handle,
             clock,
             production_timeout,
+            block_production_trigger,
         }
     }
 
@@ -245,7 +256,7 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TBP> MainTask<T, B, I, S, PB, C, TBP>
 where
     T: TransactionPool,
     B: BlockProducer,
@@ -253,6 +264,7 @@ where
     S: BlockSigner,
     PB: PredefinedBlocks,
     C: GetTime,
+    TBP: TriggerBlockProduction,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -547,14 +559,15 @@ struct PredefinedBlockWithSkippedTransactions {
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, S, PB, C> RunnableService for MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TBP> RunnableService for MainTask<T, B, I, S, PB, C, TBP>
 where
     Self: RunnableTask,
+    TBP: TriggerBlockProduction,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I, S, PB, C>;
+    type Task = MainTask<T, B, I, S, PB, C, TBP>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -582,7 +595,7 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C> RunnableTask for MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TBP> RunnableTask for MainTask<T, B, I, S, PB, C, TBP>
 where
     T: TransactionPool,
     B: BlockProducer,
@@ -590,8 +603,17 @@ where
     S: BlockSigner,
     PB: PredefinedBlocks,
     C: GetTime,
+    TBP: TriggerBlockProduction,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
+        tokio::select! {
+            biased;
+            _ = watcher.while_started() => {
+                return TaskNextAction::Stop
+            }
+            _ = self.block_production_trigger.wait_for_trigger() => {}
+        }
+
         if let Some(action) = self.ensure_synced(watcher).await {
             return action;
         }
@@ -655,7 +677,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn new_service<T, B, I, P, S, PB, C>(
+pub fn new_service<T, B, I, P, S, PB, C, TBP>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
@@ -665,7 +687,8 @@ pub fn new_service<T, B, I, P, S, PB, C>(
     block_signer: Arc<S>,
     predefined_blocks: PB,
     clock: C,
-) -> Service<T, B, I, S, PB, C>
+    block_production_trigger: TBP,
+) -> Service<T, B, I, S, PB, C, TBP>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
@@ -674,6 +697,7 @@ where
     PB: PredefinedBlocks + 'static,
     P: P2pPort,
     C: GetTime,
+    TBP: TriggerBlockProduction,
 {
     Service::new(MainTask::new(
         last_block,
@@ -685,6 +709,7 @@ where
         block_signer,
         predefined_blocks,
         clock,
+        block_production_trigger,
     ))
 }
 
