@@ -1,9 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::ports::{
-    EventProvider,
-    RelayerDb,
-};
+use crate::ports::RelayerDb;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -135,24 +132,5 @@ impl RelayerDb for MockDb {
 
     fn get_finalized_da_height(&self) -> Option<DaBlockHeight> {
         self.data.lock().unwrap().finalized_da_height
-    }
-}
-
-impl EventProvider for MockDb {
-    fn get_events(&self, da_height: &DaBlockHeight) -> StorageResult<Vec<Event>> {
-        let m = self.data.lock().unwrap();
-        let mut events = Vec::new();
-        if let Some(messages) = m.messages.get(da_height) {
-            for (_, message) in messages {
-                events.push(Event::Message(message.clone()));
-            }
-        }
-        if let Some(transactions) = m.transactions.get(da_height) {
-            for (_, transaction) in transactions {
-                events.push(Event::Transaction(transaction.clone()));
-            }
-        }
-
-        Ok(events)
     }
 }

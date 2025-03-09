@@ -2,10 +2,7 @@ use crate::database::{
     database_description::relayer::Relayer,
     Database,
 };
-use fuel_core_relayer::ports::{
-    EventProvider,
-    Transactional,
-};
+use fuel_core_relayer::ports::Transactional;
 use fuel_core_storage::{
     transactional::{
         AtomicView,
@@ -36,8 +33,8 @@ impl Transactional for Database<Relayer> {
     }
 }
 
-impl EventProvider for Database<Relayer> {
-    fn get_events(&self, da_height: &DaBlockHeight) -> StorageResult<Vec<Event>> {
+impl Database<Relayer> {
+    pub fn get_events(&self, da_height: &DaBlockHeight) -> StorageResult<Vec<Event>> {
         let events = self
             .latest_view()?
             .storage_as_ref::<fuel_core_relayer::storage::EventsHistory>()

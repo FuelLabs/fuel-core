@@ -24,12 +24,6 @@ pub trait RelayerDb: Send + Sync {
     fn get_finalized_da_height(&self) -> Option<DaBlockHeight>;
 }
 
-/// Provides the list of relayer events.
-pub trait EventProvider: Send + Sync {
-    /// Returns the list of relayer events.
-    fn get_events(&self, da_height: &DaBlockHeight) -> StorageResult<Vec<Event>>;
-}
-
 /// The trait that should be implemented by the database transaction returned by the database.
 #[cfg_attr(test, mockall::automock)]
 pub trait DatabaseTransaction {

@@ -2,10 +2,7 @@
 
 use crate::{
     log::EthEventLog,
-    ports::{
-        EventProvider,
-        RelayerDb,
-    },
+    ports::RelayerDb,
     service::state::EthLocal,
     Config,
 };
@@ -36,13 +33,9 @@ use fuel_core_services::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::Message,
-    services::relayer::Event,
 };
 use futures::StreamExt;
-use std::{
-    convert::TryInto,
-    sync::Arc,
-};
+use std::convert::TryInto;
 use tokio::sync::watch;
 
 use self::{
@@ -93,7 +86,6 @@ type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 pub struct SharedState {
     /// Receives signals when the relayer reaches consistency with the DA layer.
     synced: Synced,
-    storage: Arc<dyn EventProvider>,
 }
 
 /// Not initialized version of the [`Task`].
@@ -129,7 +121,7 @@ pub struct Task<P, D> {
 
 impl<P, D> NotInitializedTask<P, D>
 where
-    D: RelayerDb + EventProvider + Clone + 'static,
+    D: RelayerDb + 'static,
 {
     /// Create a new relayer task.
     fn new(eth_node: P, database: D, config: Config, retry_on_error: bool) -> Self {
@@ -212,7 +204,7 @@ where
 impl<P, D> RunnableService for NotInitializedTask<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + EventProvider + Clone + 'static,
+    D: RelayerDb + 'static,
 {
     const NAME: &'static str = "Relayer";
 
@@ -222,9 +214,8 @@ where
 
     fn shared_data(&self) -> Self::SharedData {
         let synced = self.synced.subscribe();
-        let storage = Arc::new(self.database.clone());
 
-        SharedState { synced, storage }
+        SharedState { synced }
     }
 
     async fn into_task(
@@ -340,11 +331,6 @@ impl SharedState {
     pub fn get_finalized_da_height(&self) -> DaBlockHeight {
         self.synced.borrow().da_block_height()
     }
-
-    /// Returns the list of relayer events at the given `da_height`.
-    pub fn get_events(&self, da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>> {
-        Ok(self.storage.get_events(da_height)?)
-    }
 }
 
 impl<P, D> state::EthRemote for Task<P, D>
@@ -383,7 +369,7 @@ where
 /// Creates an instance of runnable relayer service.
 pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
-    D: RelayerDb + EventProvider + Clone + 'static,
+    D: RelayerDb + 'static,
 {
     let urls = config
         .relayer
@@ -415,7 +401,7 @@ pub fn new_service_test<P, D>(
 ) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + EventProvider + Clone + 'static,
+    D: RelayerDb + 'static,
 {
     let retry_on_fail = false;
     new_service_internal(eth_node, database, config, retry_on_fail)
@@ -429,7 +415,7 @@ fn new_service_internal<P, D>(
 ) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + EventProvider + Clone + 'static,
+    D: RelayerDb + 'static,
 {
     let task = NotInitializedTask::new(eth_node, database, config, retry_on_error);
 
