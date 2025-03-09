@@ -79,14 +79,12 @@ where
 }
 
 /// Write the logs to the database.
-/// returns the last height written.
 pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<()>
 where
     D: RelayerDb,
     S: futures::Stream<Item = Result<DownloadedLogs, ProviderError>>,
 {
     tokio::pin!(logs);
-
     while let Some(DownloadedLogs {
         start_height,
         last_height,

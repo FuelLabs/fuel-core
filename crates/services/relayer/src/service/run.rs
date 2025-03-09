@@ -49,16 +49,15 @@ where
     if let Some(eth_sync_gap) = state.needs_to_sync_eth() {
         // Download events and write them to the database.
         let result = relayer.download_logs(&eth_sync_gap).await;
-        // update the local state, only if we have written something.
 
         let local_height = relayer.storage_da_block_height();
 
+        // Update the local state, only if we have written something.
         if let Some(latest_written_height) = local_height {
             state.set_local(latest_written_height);
+            // Update the synced state.
+            relayer.update_synced(&state);
         }
-
-        // Update the synced state.
-        relayer.update_synced(&state);
 
         result
     } else {
