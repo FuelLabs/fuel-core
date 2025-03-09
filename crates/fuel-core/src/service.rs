@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use adapters::block_production_trigger::BlockProductionTrigger;
 pub use config::{
     Config,
     DbType,
@@ -134,11 +135,23 @@ impl FuelService {
         // initialize sub services
         tracing::info!("Initializing sub services");
         database.sync_aux_db_heights(shutdown_listener)?;
-        let (services, shared) = sub_services::init_sub_services(&config, database)?;
+
+        let block_production_trigger = BlockProductionTrigger::new();
+
+        let (services, shared) = sub_services::init_sub_services(
+            &config,
+            database,
+            block_production_trigger.clone(),
+        )?;
 
         let sub_services = Arc::new(services);
         let task = Task::new(sub_services.clone(), shared.clone())?;
-        let runner = ServiceRunner::new(task);
+        let runner = ServiceRunner::new_with_params(
+            task,
+            TaskParams {
+                block_production_trigger,
+            },
+        );
         let bound_address = runner.shared.graph_ql.bound_address;
 
         Ok(FuelService {
@@ -392,12 +405,17 @@ impl Task {
     }
 }
 
+#[derive(Default)]
+struct TaskParams {
+    block_production_trigger: BlockProductionTrigger,
+}
+
 #[async_trait::async_trait]
 impl RunnableService for Task {
     const NAME: &'static str = "FuelService";
     type SharedData = SharedState;
     type Task = Task;
-    type TaskParams = ();
+    type TaskParams = TaskParams;
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()
@@ -406,7 +424,7 @@ impl RunnableService for Task {
     async fn into_task(
         mut self,
         watcher: &StateWatcher,
-        _: Self::TaskParams,
+        params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         let mut watcher = watcher.clone();
 
@@ -420,6 +438,9 @@ impl RunnableService for Task {
                 }
             }
         }
+
+        params.block_production_trigger.send_trigger();
+
         Ok(self)
     }
 }

@@ -74,6 +74,8 @@ pub mod shared_sequencer;
 pub mod sync;
 pub mod txpool;
 
+pub mod block_production_trigger;
+
 #[derive(Debug, Clone)]
 pub struct ConsensusParametersProvider {
     shared_state: consensus_parameters_provider::SharedState,
