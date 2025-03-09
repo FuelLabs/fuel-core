@@ -157,6 +157,7 @@ pub fn init_sub_services(
     let relayer_adapter = MaybeRelayerAdapter {
         #[cfg(feature = "relayer")]
         relayer_synced: relayer_service.as_ref().map(|r| r.shared.clone()),
+        #[cfg(feature = "relayer")]
         relayer_database: database.relayer().clone(),
         #[cfg(feature = "relayer")]
         da_deploy_height: config.relayer.as_ref().map_or(
