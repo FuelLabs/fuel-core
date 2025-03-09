@@ -117,8 +117,9 @@ impl<'a> AssembleArguments<'a> {
             )
             .await?
             .into_iter()
-            .next()
-            .expect("The query returns a single result; qed");
+            .next();
+
+        let result = result.ok_or(anyhow::anyhow!("No result for the coins to spend"))?;
 
         Ok(result)
     }
@@ -525,14 +526,17 @@ where
 
     fn satisfy_change_policy(&mut self, asset_id: AssetId) -> anyhow::Result<()> {
         if self.set_change_outputs.insert(asset_id) {
-            match self
-                .change_output_policies
-                .get(&asset_id)
-                .expect("Policy was inserted in the `new`; qed")
-            {
+            let change_policy =
+                if let Some(policy) = self.change_output_policies.get(&asset_id) {
+                    policy.clone()
+                } else {
+                    ChangePolicy::Change(self.fee_payer_account.owner())
+                };
+
+            match change_policy {
                 ChangePolicy::Change(change_receiver) => {
                     self.tx.outputs_mut().push(Output::change(
-                        *change_receiver,
+                        change_receiver,
                         0,
                         asset_id,
                     ));

@@ -94,16 +94,13 @@ impl AssembleAndRunTx for FuelClient {
         let base_asset_id = *params.base_asset_id();
         let wallet_owner = wallet.owner();
 
-        let mut base_balance_index = required_balances
+        let mut fee_payer_index = required_balances
             .iter()
             .enumerate()
-            .find(|(_, balance)| {
-                balance.asset_id == base_asset_id
-                    && balance.account.owner() == wallet_owner
-            })
+            .find(|(_, balance)| balance.account.owner() == wallet_owner)
             .map(|(i, _)| i);
 
-        if base_balance_index.is_none() {
+        if fee_payer_index.is_none() {
             let required_balance = match &wallet {
                 SigningAccount::Wallet(_) => RequiredBalance {
                     asset_id: base_asset_id,
@@ -126,12 +123,12 @@ impl AssembleAndRunTx for FuelClient {
                 },
             };
 
-            base_balance_index = Some(required_balances.len());
+            fee_payer_index = Some(required_balances.len());
             required_balances.push(required_balance);
         }
 
         let fee_index =
-            u16::try_from(base_balance_index.expect("Fee index set above; qed")).unwrap();
+            u16::try_from(fee_payer_index.expect("Fee index set above; qed")).unwrap();
         let mut tx = self
             .assemble_tx(
                 tx_to_assemble,

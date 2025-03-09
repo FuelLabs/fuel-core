@@ -25,6 +25,7 @@ use fuel_core_types::{
     fuel_crypto::SecretKey,
     fuel_tx::{
         policies::Policies,
+        Address,
         AssetId,
         Input,
         Output,
@@ -218,6 +219,66 @@ async fn assemble_transaction__user_provided_change_output() {
         .await
         .unwrap();
     let status = client.dry_run(&vec![tx]).await.unwrap();
+
+    // Then
+    let status = status.into_iter().next().unwrap();
+    assert!(matches!(
+        status.result,
+        TransactionExecutionResult::Success { .. }
+    ));
+}
+
+#[tokio::test]
+async fn assemble_transaction__transfer_non_based_asset() {
+    let mut state_config = StateConfig::local_testnet();
+    let chain_config = ChainConfig::local_testnet();
+
+    let secret: SecretKey = TESTNET_WALLET_SECRETS[1].parse().unwrap();
+    let account = SigningAccount::Wallet(secret);
+    let owner = account.owner();
+    let base_asset_id = *chain_config.consensus_parameters.base_asset_id();
+    let non_base_asset_id = AssetId::from([1; 32]);
+    assert_ne!(base_asset_id, non_base_asset_id);
+
+    // Given
+    state_config.coins[0].owner = owner;
+    state_config.coins[0].asset_id = base_asset_id;
+    state_config.coins[1].owner = owner;
+    state_config.coins[1].asset_id = non_base_asset_id;
+
+    let mut config = Config::local_node_with_configs(chain_config, state_config);
+    config.utxo_validation = true;
+    config.gas_price_config.min_exec_gas_price = 1000;
+
+    let service = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(service.bound_address);
+
+    // Given
+    let recipient = Address::new([123; 32]);
+    let amount = 5_000;
+    let tx = TransactionBuilder::script(vec![op::ret(1)].into_iter().collect(), vec![])
+        .add_output(Output::Coin {
+            to: recipient,
+            asset_id: non_base_asset_id,
+            amount,
+        })
+        .finalize_as_transaction();
+
+    // When
+    let tx = client
+        .assemble_transaction(
+            &tx,
+            default_signing_wallet(),
+            vec![RequiredBalance {
+                asset_id: non_base_asset_id,
+                amount,
+                account: account.clone().into_account(),
+                change_policy: ChangePolicy::Change(owner),
+            }],
+        )
+        .await
+        .unwrap();
+    let status = client.dry_run(&vec![tx.clone()]).await.unwrap();
 
     // Then
     let status = status.into_iter().next().unwrap();
