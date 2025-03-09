@@ -444,7 +444,6 @@ impl RunnableService for Task {
         }
 
         params.block_production_trigger.send_trigger();
-        tracing::info!("Block Production has been triggered.");
 
         Ok(self)
     }

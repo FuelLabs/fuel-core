@@ -160,6 +160,9 @@ where
             return;
         }
         self.notifier.wait_for_trigger().await;
+        // this is the first and only time we are notified
+        tracing::info!("Block Production has been triggered.");
+
         self.notified
             .store(true, std::sync::atomic::Ordering::Release);
     }
