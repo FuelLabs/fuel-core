@@ -51,33 +51,29 @@ where
         let result = relayer.download_logs(&eth_sync_gap).await;
         // update the local state, only if we have written something.
 
+        let local_height;
+        let final_result;
+
         match result {
             Ok(latest_written_height) => {
-                let latest_written_height =
+                local_height =
                     latest_written_height.or_else(|| relayer.storage_da_block_height());
-
-                if let Some(latest_written_height) = latest_written_height {
-                    state.set_local(latest_written_height);
-                }
-
-                // Update the synced state.
-                relayer.update_synced(&state);
-
-                Ok(())
+                final_result = Ok(());
             }
             Err(err) => {
-                let latest_written_height = relayer.storage_da_block_height();
-
-                if let Some(latest_written_height) = latest_written_height {
-                    state.set_local(latest_written_height);
-                }
-
-                // Update the synced state.
-                relayer.update_synced(&state);
-
-                Err(err)
+                local_height = relayer.storage_da_block_height();
+                final_result = Err(err);
             }
+        };
+
+        if let Some(latest_written_height) = local_height {
+            state.set_local(latest_written_height);
         }
+
+        // Update the synced state.
+        relayer.update_synced(&state);
+
+        final_result
     } else {
         Ok(())
     }
