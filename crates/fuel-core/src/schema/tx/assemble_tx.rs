@@ -528,7 +528,7 @@ where
         if self.set_change_outputs.insert(asset_id) {
             let change_policy =
                 if let Some(policy) = self.change_output_policies.get(&asset_id) {
-                    policy.clone()
+                    *policy
                 } else {
                     ChangePolicy::Change(self.fee_payer_account.owner())
                 };
