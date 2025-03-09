@@ -382,10 +382,6 @@ pub fn init_sub_services(
         Box::new(consensus_parameters_provider_service),
     ];
 
-    if let Some(poa) = poa {
-        services.push(Box::new(poa));
-    }
-
     #[cfg(feature = "relayer")]
     if let Some(relayer) = relayer_service {
         services.push(Box::new(relayer));
@@ -403,6 +399,11 @@ pub fn init_sub_services(
 
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
+
+    // always make sure that the block producer is inserted last
+    if let Some(poa) = poa {
+        services.push(Box::new(poa));
+    }
 
     Ok((services, shared))
 }
