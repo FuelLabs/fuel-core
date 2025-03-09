@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use adapters::block_production_trigger::BlockProductionTrigger;
 pub use config::{
     Config,
     DbType,
@@ -89,6 +90,8 @@ pub struct SharedState {
     pub executor: ExecutorAdapter,
     /// The config of the service.
     pub config: Config,
+    /// notifier to trigger block production
+    pub block_production_trigger: BlockProductionTrigger,
 }
 
 pub struct FuelService {
@@ -424,6 +427,10 @@ impl RunnableService for Task {
                 }
             }
         }
+
+        self.shared.block_production_trigger.send_trigger();
+        tracing::info!("Block Production has been triggered.");
+
         Ok(self)
     }
 }

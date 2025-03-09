@@ -17,6 +17,7 @@ use crate::{
     schema::build_schema,
     service::{
         adapters::{
+            block_production_trigger::BlockProductionTrigger,
             consensus_module::poa::InDirectoryPredefinedBlocks,
             consensus_parameters_provider,
             fuel_gas_price_provider::FuelGasPriceProvider,
@@ -66,6 +67,7 @@ pub type PoAService = fuel_core_poa::Service<
     SignMode,
     InDirectoryPredefinedBlocks,
     SystemTime,
+    BlockProductionTrigger,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -282,6 +284,8 @@ pub fn init_sub_services(
         )?
     };
 
+    let block_production_trigger = BlockProductionTrigger::default();
+
     let predefined_blocks =
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
     let poa = production_enabled.then(|| {
@@ -295,6 +299,7 @@ pub fn init_sub_services(
             signer,
             predefined_blocks,
             SystemTime,
+            block_production_trigger.clone(),
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
@@ -366,6 +371,7 @@ pub fn init_sub_services(
         block_importer: importer_adapter,
         executor,
         config: config.clone(),
+        block_production_trigger,
     };
 
     #[allow(unused_mut)]

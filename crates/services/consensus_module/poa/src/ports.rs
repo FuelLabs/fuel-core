@@ -140,3 +140,43 @@ impl PredefinedBlocks for InMemoryPredefinedBlocks {
 pub trait GetTime: Send + Sync {
     fn now(&self) -> Tai64;
 }
+
+pub trait TriggerBlockProduction: Send + Sync {
+    fn wait_for_trigger(&self) -> impl core::future::Future<Output = ()> + Send;
+}
+
+pub(crate) struct BlockProductionTrigger<TBP> {
+    notifier: TBP,
+    notified: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl<TBP> TriggerBlockProduction for BlockProductionTrigger<TBP>
+where
+    TBP: TriggerBlockProduction,
+{
+    /// Cache the notification to avoid waiting for the trigger multiple times.
+    async fn wait_for_trigger(&self) {
+        if self.notified.load(std::sync::atomic::Ordering::Acquire) {
+            return;
+        }
+        self.notifier.wait_for_trigger().await;
+        self.notified
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
+}
+
+impl<TBP> BlockProductionTrigger<TBP>
+where
+    TBP: TriggerBlockProduction,
+{
+    pub(crate) fn new(notifier: TBP) -> Self {
+        Self {
+            notifier,
+            notified: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        }
+    }
+
+    pub(crate) fn should_wait_for_trigger(&self) -> bool {
+        !self.notified.load(std::sync::atomic::Ordering::Acquire)
+    }
+}

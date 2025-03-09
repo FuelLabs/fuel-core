@@ -13,6 +13,7 @@ use crate::{
         MockP2pPort,
         MockTransactionPool,
         TransactionsSource,
+        TriggerBlockProduction,
     },
     service::MainTask,
     Config,
@@ -180,6 +181,8 @@ impl TestContextBuilder {
 
         let watch = time.watch();
 
+        let block_production_trigger = FakeBlockProductionTrigger;
+
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
             config.clone(),
@@ -190,7 +193,9 @@ impl TestContextBuilder {
             FakeBlockSigner { succeeds: true }.into(),
             predefined_blocks,
             watch,
+            block_production_trigger.clone(),
         );
+
         service.start_and_await().await.unwrap();
         TestContext { service, time }
     }
@@ -220,6 +225,13 @@ impl BlockSigner for FakeBlockSigner {
     }
 }
 
+#[derive(Clone)]
+struct FakeBlockProductionTrigger;
+
+impl TriggerBlockProduction for FakeBlockProductionTrigger {
+    async fn wait_for_trigger(&self) {}
+}
+
 struct TestContext {
     service: Service<
         MockTransactionPool,
@@ -228,6 +240,7 @@ struct TestContext {
         FakeBlockSigner,
         InMemoryPredefinedBlocks,
         test_time::Watch,
+        FakeBlockProductionTrigger,
     >,
     time: TestTime,
 }
@@ -367,6 +380,8 @@ async fn remove_skipped_transactions() {
 
     let time = TestTime::at_unix_epoch();
 
+    let block_production_trigger = FakeBlockProductionTrigger;
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
@@ -377,6 +392,7 @@ async fn remove_skipped_transactions() {
         FakeBlockSigner { succeeds: true }.into(),
         predefined_blocks,
         time.watch(),
+        block_production_trigger.clone(),
     );
 
     assert!(task.produce_next_block().await.is_ok());
@@ -486,6 +502,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+    let block_production_trigger = FakeBlockProductionTrigger;
     let task = MainTask::new(
         &last_block,
         config,
@@ -496,6 +513,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         FakeBlockSigner { succeeds: true }.into(),
         InMemoryPredefinedBlocks::new(blocks_map),
         time.watch(),
+        block_production_trigger.clone(),
     );
 
     // when
@@ -550,6 +568,8 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+    let block_production_trigger = FakeBlockProductionTrigger;
+
     let task = MainTask::new(
         &last_block,
         config,
@@ -560,6 +580,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         FakeBlockSigner { succeeds: true }.into(),
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
         time.watch(),
+        block_production_trigger.clone(),
     );
 
     // when
