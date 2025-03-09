@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.41.9]
+
+### Fixed
+
+- [2829](https://github.com/FuelLabs/fuel-core/pull/2829): Ensure that the local state of `fuel-core-relayer` is set correctly after downloading logs from DA.
+- [2830](https://github.com/FuelLabs/fuel-core/pull/2830): Ensure that the block producer _only_ starts after all the services have been initialized.
+
 ## [Version 0.41.8]
 
 ### Fixed
