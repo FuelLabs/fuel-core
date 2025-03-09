@@ -2,7 +2,10 @@
 
 use crate::{
     log::EthEventLog,
-    ports::RelayerDb,
+    ports::{
+        EventProvider,
+        RelayerDb,
+    },
     service::state::EthLocal,
     Config,
 };
@@ -33,11 +36,12 @@ use fuel_core_services::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::Message,
+    services::relayer::Event,
 };
 use futures::StreamExt;
 use std::{
     convert::TryInto,
-    ops::Deref,
+    sync::Arc,
 };
 use tokio::sync::watch;
 
@@ -54,8 +58,31 @@ mod syncing;
 #[cfg(test)]
 mod test;
 
-type Synced = watch::Receiver<Option<DaBlockHeight>>;
-type NotifySynced = watch::Sender<Option<DaBlockHeight>>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncState {
+    /// The relayer is partially synced with the DA layer. The variant contains the current
+    /// DA block height that the relayer synced to.
+    PartiallySynced(DaBlockHeight),
+    /// The relayer is fully synced with the DA layer.
+    Synced(DaBlockHeight),
+}
+
+impl SyncState {
+    /// Get the current DA block height that the relayer synced to.
+    pub fn da_block_height(&self) -> DaBlockHeight {
+        match self {
+            Self::PartiallySynced(height) | Self::Synced(height) => *height,
+        }
+    }
+
+    /// Returns `true` if the relayer is fully synced with the DA layer.
+    pub fn is_synced(&self) -> bool {
+        matches!(self, Self::Synced(_))
+    }
+}
+
+type Synced = watch::Receiver<SyncState>;
+type NotifySynced = watch::Sender<SyncState>;
 
 /// The alias of runnable relayer service.
 pub type Service<D> = CustomizableService<Provider<QuorumProvider<Http>>, D>;
@@ -63,11 +90,10 @@ type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 
 /// The shared state of the relayer task.
 #[derive(Clone)]
-pub struct SharedState<D> {
+pub struct SharedState {
     /// Receives signals when the relayer reaches consistency with the DA layer.
     synced: Synced,
-    start_da_block_height: DaBlockHeight,
-    database: D,
+    storage: Arc<dyn EventProvider>,
 }
 
 /// Not initialized version of the [`Task`].
@@ -101,10 +127,19 @@ pub struct Task<P, D> {
     retry_on_error: bool,
 }
 
-impl<P, D> NotInitializedTask<P, D> {
+impl<P, D> NotInitializedTask<P, D>
+where
+    D: RelayerDb + EventProvider + Clone + 'static,
+{
     /// Create a new relayer task.
     fn new(eth_node: P, database: D, config: Config, retry_on_error: bool) -> Self {
-        let (synced, _) = watch::channel(None);
+        let da_block_height = database.get_finalized_da_height().unwrap_or_else(|| {
+            let height_before_deployed = config.da_deploy_height.0.saturating_sub(1);
+            height_before_deployed.into()
+        });
+
+        let (synced, _) = watch::channel(SyncState::PartiallySynced(da_block_height));
+
         Self {
             synced,
             eth_node,
@@ -156,13 +191,20 @@ where
 
     fn update_synced(&self, state: &state::EthState) {
         self.synced.send_if_modified(|last_state| {
-            if let Some(val) = state.is_synced_at() {
-                *last_state = Some(DaBlockHeight::from(val));
+            let new_sync = state.sync_state();
+            if new_sync != *last_state {
+                *last_state = new_sync;
                 true
             } else {
                 false
             }
         });
+    }
+
+    fn storage_da_block_height(&self) -> Option<u64> {
+        self.database
+            .get_finalized_da_height()
+            .map(|height| height.into())
     }
 }
 
@@ -170,22 +212,19 @@ where
 impl<P, D> RunnableService for NotInitializedTask<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + Clone + 'static,
+    D: RelayerDb + EventProvider + Clone + 'static,
 {
     const NAME: &'static str = "Relayer";
 
-    type SharedData = SharedState<D>;
+    type SharedData = SharedState;
     type Task = Task<P, D>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
         let synced = self.synced.subscribe();
+        let storage = Arc::new(self.database.clone());
 
-        SharedState {
-            synced,
-            start_da_block_height: self.config.da_deploy_height,
-            database: self.database.clone(),
-        }
+        SharedState { synced, storage }
     }
 
     async fn into_task(
@@ -225,7 +264,7 @@ where
         let result = run::run(self).await;
 
         if self.shutdown.borrow_and_update().started()
-            && (result.is_err() | self.synced.borrow().is_some())
+            && (result.is_err() | self.synced.borrow().is_synced())
         {
             // Sleep the loop so the da node is not spammed.
             tokio::time::sleep(
@@ -238,7 +277,7 @@ where
 
         if let Err(err) = result {
             if !self.retry_on_error {
-                tracing::error!("Exiting due to Error in relayer task: {:?}", err);
+                tracing::error!("Exiting due to Error in relayer task: {}", err);
                 TaskNextAction::Stop
             } else {
                 TaskNextAction::ErrorContinue(err)
@@ -255,7 +294,7 @@ where
     }
 }
 
-impl<D> SharedState<D> {
+impl SharedState {
     /// Wait for the `Task` to be in sync with
     /// the data availability layer.
     ///
@@ -269,9 +308,14 @@ impl<D> SharedState<D> {
     /// some period of time.
     pub async fn await_synced(&self) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
-        if rx.borrow_and_update().deref().is_none() {
+        loop {
+            if rx.borrow_and_update().is_synced() {
+                break;
+            }
+
             rx.changed().await?;
         }
+
         Ok(())
     }
 
@@ -281,7 +325,11 @@ impl<D> SharedState<D> {
         height: &DaBlockHeight,
     ) -> anyhow::Result<()> {
         let mut rx = self.synced.clone();
-        while rx.borrow_and_update().deref().map_or(true, |h| h < *height) {
+        loop {
+            if rx.borrow_and_update().da_block_height() >= *height {
+                break;
+            }
+
             rx.changed().await?;
         }
         Ok(())
@@ -289,18 +337,13 @@ impl<D> SharedState<D> {
 
     /// Get finalized da height that represents last block from da layer that got finalized.
     /// Panics if height is not set as of initialization of the relayer.
-    pub fn get_finalized_da_height(&self) -> DaBlockHeight
-    where
-        D: RelayerDb + 'static,
-    {
-        self.database
-            .get_finalized_da_height()
-            .unwrap_or(self.start_da_block_height)
+    pub fn get_finalized_da_height(&self) -> DaBlockHeight {
+        self.synced.borrow().da_block_height()
     }
 
-    /// Getter for database field
-    pub fn database(&self) -> &D {
-        &self.database
+    /// Returns the list of relayer events at the given `da_height`.
+    pub fn get_events(&self, da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>> {
+        Ok(self.storage.get_events(da_height)?)
     }
 }
 
@@ -332,20 +375,15 @@ where
     P: Middleware<Error = ProviderError>,
     D: RelayerDb + 'static,
 {
-    fn observed(&self) -> Option<u64> {
-        Some(
-            self.database
-                .get_finalized_da_height()
-                .map(|h| h.into())
-                .unwrap_or(self.config.da_deploy_height.0),
-        )
+    fn observed(&self) -> u64 {
+        self.synced.borrow().da_block_height().into()
     }
 }
 
 /// Creates an instance of runnable relayer service.
 pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
-    D: RelayerDb + Clone + 'static,
+    D: RelayerDb + EventProvider + Clone + 'static,
 {
     let urls = config
         .relayer
@@ -377,7 +415,7 @@ pub fn new_service_test<P, D>(
 ) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + Clone + 'static,
+    D: RelayerDb + EventProvider + Clone + 'static,
 {
     let retry_on_fail = false;
     new_service_internal(eth_node, database, config, retry_on_fail)
@@ -391,7 +429,7 @@ fn new_service_internal<P, D>(
 ) -> CustomizableService<P, D>
 where
     P: Middleware<Error = ProviderError> + 'static,
-    D: RelayerDb + Clone + 'static,
+    D: RelayerDb + EventProvider + Clone + 'static,
 {
     let task = NotInitializedTask::new(eth_node, database, config, retry_on_error);
 

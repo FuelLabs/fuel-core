@@ -132,7 +132,7 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
     ) -> anyhow::Result<DaBlockHeight> {
         #[cfg(feature = "relayer")]
         {
-            if let Some(sync) = self.relayer_synced.as_ref() {
+            if let Some(sync) = &self.relayer_synced {
                 sync.await_at_least_synced(height).await?;
                 let highest = sync.get_finalized_da_height();
                 Ok(highest)
@@ -184,20 +184,12 @@ impl fuel_core_producer::ports::Relayer for MaybeRelayerAdapter {
 #[cfg(feature = "relayer")]
 fn get_gas_cost_and_transactions_number_for_height(
     height: u64,
-    sync: &fuel_core_relayer::SharedState<
-        crate::database::Database<
-            crate::database::database_description::relayer::Relayer,
-        >,
-    >,
+    sync: &fuel_core_relayer::SharedState,
 ) -> anyhow::Result<RelayerBlockInfo> {
     let da_height = DaBlockHeight(height);
-    let (gas_cost, tx_count) = sync
-        .database()
-        .storage::<fuel_core_relayer::storage::EventsHistory>()
-        .get(&da_height)?
-        .unwrap_or_default()
-        .iter()
-        .fold((0u64, 0u64), |(gas_cost, tx_count), event| {
+    let (gas_cost, tx_count) = sync.get_events(&da_height)?.iter().fold(
+        (0u64, 0u64),
+        |(gas_cost, tx_count), event| {
             let gas_cost = gas_cost.saturating_add(event.cost());
             let tx_count = match event {
                 fuel_core_types::services::relayer::Event::Message(_) => tx_count,
@@ -206,7 +198,8 @@ fn get_gas_cost_and_transactions_number_for_height(
                 }
             };
             (gas_cost, tx_count)
-        });
+        },
+    );
     Ok(RelayerBlockInfo { gas_cost, tx_count })
 }
 

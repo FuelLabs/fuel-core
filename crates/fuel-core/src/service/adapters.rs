@@ -407,7 +407,7 @@ impl ConsensusAdapter {
 #[derive(Clone)]
 pub struct MaybeRelayerAdapter {
     #[cfg(feature = "relayer")]
-    pub relayer_synced: Option<fuel_core_relayer::SharedState<Database<Relayer>>>,
+    pub relayer_synced: Option<fuel_core_relayer::SharedState>,
     #[cfg(feature = "relayer")]
     pub da_deploy_height: fuel_core_types::blockchain::primitives::DaBlockHeight,
 }

@@ -1,6 +1,5 @@
 //! Ports used by the relayer to access the outside world
 
-use async_trait::async_trait;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -11,7 +10,6 @@ use fuel_core_types::{
 mod tests;
 
 /// Manages state related to supported external chains.
-#[async_trait]
 pub trait RelayerDb: Send + Sync {
     /// Add bridge events to database. Events are not revertible.
     /// Must only set a new da height if it is greater than the current.
@@ -24,6 +22,12 @@ pub trait RelayerDb: Send + Sync {
     /// Get finalized da height that represent last block from da layer that got finalized.
     /// Panics if height is not set as of initialization of database.
     fn get_finalized_da_height(&self) -> Option<DaBlockHeight>;
+}
+
+/// Provides the list of relayer events.
+pub trait EventProvider: Send + Sync {
+    /// Returns the list of relayer events.
+    fn get_events(&self, da_height: &DaBlockHeight) -> StorageResult<Vec<Event>>;
 }
 
 /// The trait that should be implemented by the database transaction returned by the database.

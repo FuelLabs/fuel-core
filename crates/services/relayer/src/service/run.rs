@@ -29,6 +29,9 @@ pub trait RelayerData: EthRemote + EthLocal {
 
     /// Update the synced state.
     fn update_synced(&self, state: &EthState);
+
+    /// Get the block height from the storage.
+    fn storage_da_block_height(&self) -> Option<u64>;
 }
 
 /// A single iteration of the run loop.
@@ -45,15 +48,37 @@ where
     // Check if we need to sync.
     if let Some(eth_sync_gap) = state.needs_to_sync_eth() {
         // Download events and write them to the database.
-        let latest_written_height = relayer.download_logs(&eth_sync_gap).await?;
+        let result = relayer.download_logs(&eth_sync_gap).await;
         // update the local state, only if we have written something.
-        if let Some(latest_written_height) = latest_written_height {
-            state.set_local(latest_written_height);
+
+        match result {
+            Ok(latest_written_height) => {
+                let latest_written_height =
+                    latest_written_height.or_else(|| relayer.storage_da_block_height());
+
+                if let Some(latest_written_height) = latest_written_height {
+                    state.set_local(latest_written_height);
+                }
+
+                // Update the synced state.
+                relayer.update_synced(&state);
+
+                Ok(())
+            }
+            Err(err) => {
+                let latest_written_height = relayer.storage_da_block_height();
+
+                if let Some(latest_written_height) = latest_written_height {
+                    state.set_local(latest_written_height);
+                }
+
+                // Update the synced state.
+                relayer.update_synced(&state);
+
+                Err(err)
+            }
         }
+    } else {
+        Ok(())
     }
-
-    // Update the synced state.
-    relayer.update_synced(&state);
-
-    Ok(())
 }

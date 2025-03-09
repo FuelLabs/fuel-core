@@ -10,7 +10,7 @@ pub trait EthRemote {
 
 pub trait EthLocal {
     /// The current finalized eth block that the relayer has seen.
-    fn observed(&self) -> Option<u64>;
+    fn observed(&self) -> u64;
 }
 
 /// Build the Ethereum state.
@@ -33,7 +33,7 @@ pub mod test_builder {
     #[derive(Debug, Default, Clone)]
     pub struct TestDataSource {
         pub eth_remote_finalized: u64,
-        pub eth_local_finalized: Option<u64>,
+        pub eth_local_finalized: u64,
     }
 
     impl EthRemote for TestDataSource {
@@ -43,7 +43,7 @@ pub mod test_builder {
     }
 
     impl EthLocal for TestDataSource {
-        fn observed(&self) -> Option<u64> {
+        fn observed(&self) -> u64 {
             self.eth_local_finalized
         }
     }
