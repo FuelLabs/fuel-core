@@ -14,7 +14,7 @@ async fn test_start_stop() {
     assert!(state.stopped());
 }
 
-// Tests to implement
+// Tests to implement: https://github.com/FuelLabs/fuel-core/issues/2838
 // 1. `status_update()` sends correct notifications for `tx_status_change` and
 //    `new_tx_notification_sender` depending on the `TransactionStatus` variant.
 // 2. `status_update()` updates the `statuses` map with the correct `TransactionStatus`.

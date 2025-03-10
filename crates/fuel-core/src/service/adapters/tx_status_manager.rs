@@ -1,23 +1,7 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData;
-use fuel_core_txpool::ports::TxStatusManager;
-use fuel_core_types::{
-    self,
-    fuel_tx::TxId,
-    services::txpool::TransactionStatus,
-};
 
-use super::{
-    P2PAdapter,
-    TxStatusManagerAdapter,
-};
-
-impl TxStatusManager for TxStatusManagerAdapter {
-    fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
-        self.tx_status_manager_shared_data
-            .update_status(tx_id, tx_status);
-    }
-}
+use super::P2PAdapter;
 
 #[cfg(feature = "p2p")]
 impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
