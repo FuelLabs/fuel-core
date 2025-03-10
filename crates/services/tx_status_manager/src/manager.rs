@@ -683,6 +683,28 @@ mod tests {
             let status = tx_status_manager.status(&tx1_id);
             assert!(status.is_none());
         }
-    }
+
+        #[test]
+        fn respects_update_within_the_same_timestamp() {
+            let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
+                reason: "fishy tx".to_string(),
+            };
+
+            let test_time_provider = TestTimeProvider::new();
+            let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
+            let tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, test_time_provider);
+
+            let tx1_id = [1u8; 32].into();
+
+            // Register tx1 and remember it's timestamp
+            tx_status_manager.status_update(tx1_id, STATUS_1);
+
+            // Do not advance time, and update the status
+            tx_status_manager.status_update(tx1_id, status_2.clone());
+
+            // Tx should get the new status
+            assert_presence_with_status(&tx_status_manager, vec![(tx1_id, status_2)]);
+        }
     }
 }
