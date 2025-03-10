@@ -17,7 +17,6 @@ fuel-core-storage = { workspace = true, default-features = false, features = [
 fuel-core-types = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
-hex = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }

@@ -54,6 +54,8 @@ pub struct ServiceConfig {
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
     pub api_request_timeout: Duration,
+    pub assemble_tx_dry_run_limit: usize,
+    pub assemble_tx_estimate_predicates_limit: usize,
     /// Configurable cost parameters to limit graphql queries complexity
     pub costs: Costs,
 }

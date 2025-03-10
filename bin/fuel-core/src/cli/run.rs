@@ -608,6 +608,9 @@ impl Command {
                 max_concurrent_queries: graphql.graphql_max_concurrent_queries,
                 request_body_bytes_limit: graphql.graphql_request_body_bytes_limit,
                 api_request_timeout: graphql.api_request_timeout.into(),
+                assemble_tx_dry_run_limit: graphql.assemble_tx_dry_run_limit,
+                assemble_tx_estimate_predicates_limit: graphql
+                    .assemble_tx_estimate_predicates_limit,
                 query_log_threshold_time: graphql.query_log_threshold_time.into(),
                 costs: Costs {
                     balance_query: graphql.costs.balance_query,

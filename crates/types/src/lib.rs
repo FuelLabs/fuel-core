@@ -76,6 +76,7 @@ pub mod fuel_vm {
             BlobData,
         },
         util,
+        verification,
     };
 }
 

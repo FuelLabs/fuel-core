@@ -163,6 +163,8 @@ impl Config {
                 request_body_bytes_limit: 16 * 1024 * 1024,
                 query_log_threshold_time: Duration::from_secs(2),
                 api_request_timeout: Duration::from_secs(60),
+                assemble_tx_dry_run_limit: 3,
+                assemble_tx_estimate_predicates_limit: 5,
                 costs: Default::default(),
                 required_fuel_block_height_tolerance: 10,
                 required_fuel_block_height_timeout: Duration::from_secs(30),

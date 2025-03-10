@@ -66,6 +66,20 @@ pub struct GraphQLArgs {
     #[clap(long = "api-request-timeout", default_value = "30s", env)]
     pub api_request_timeout: humantime::Duration,
 
+    /// The max number how many times script can be executed
+    /// during `assemble_tx` GraphQL request.
+    #[clap(long = "assemble-tx-dry-run-limit", default_value = "3", env)]
+    pub assemble_tx_dry_run_limit: usize,
+
+    /// The max number how many times predicate can be estimated
+    /// during `assemble_tx` GraphQL request.
+    #[clap(
+        long = "assemble-tx-estimate-predicates-limit",
+        default_value = "10",
+        env
+    )]
+    pub assemble_tx_estimate_predicates_limit: usize,
+
     /// Maximum allowed block lag for GraphQL fuel block height requests.
     /// The client waits for the node to catch up if it's behind by no more blocks than
     /// this tolerance.

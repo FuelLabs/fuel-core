@@ -56,7 +56,10 @@ use fuel_core_types::{
         Script,
         Transaction,
     },
-    fuel_types::canonical::Serialize,
+    fuel_types::{
+        canonical::Serialize,
+        ContractId,
+    },
     fuel_vm::{
         checked_transaction::CheckPredicateParams,
         interpreter::ExecutableTransaction,
@@ -83,6 +86,8 @@ pub struct AssembleArguments<'a> {
     pub reserve_gas: u64,
     pub consensus_parameters: Arc<ConsensusParameters>,
     pub gas_price: u64,
+    pub dry_run_limit: usize,
+    pub estimate_predicates_limit: usize,
     pub read_view: Arc<ReadView>,
     pub block_producer: &'a BlockProducer,
     pub shared_memory_pool: &'a SharedMemoryPool,
@@ -145,6 +150,7 @@ pub struct AssembleTx<'a, Tx> {
     signature_witness_indexes: HashMap<Address, u16>,
     change_output_policies: HashMap<AssetId, ChangePolicy>,
     set_change_outputs: HashSet<AssetId>,
+    set_contracts: HashSet<ContractId>,
     // The amount of the base asset that is reserved for the application logic
     base_asset_reserved: u64,
     has_predicates: bool,
@@ -153,6 +159,7 @@ pub struct AssembleTx<'a, Tx> {
     original_witness_limit: u64,
     fee_payer_account: Account,
     estimated_predicates_count: usize,
+    dry_run_count: usize,
 }
 
 impl<'a, Tx> AssembleTx<'a, Tx>
@@ -194,6 +201,7 @@ where
         let mut has_predicates = false;
         let inputs = tx.inputs();
         let mut unique_used_asset = HashSet::new();
+        let mut set_contracts = HashSet::new();
         for input in inputs {
             if let Some(utxo_id) = input.utxo_id() {
                 arguments.exclude.exclude(CoinId::Utxo(*utxo_id));
@@ -225,8 +233,8 @@ where
                 }) => {
                     signature_witness_indexes.insert(*owner, *witness_index);
                 }
-                Input::Contract(_) => {
-                    // Do nothing
+                Input::Contract(c) => {
+                    set_contracts.insert(c.contract_id);
                 }
 
                 Input::CoinPredicate(_)
@@ -329,6 +337,7 @@ where
             signature_witness_indexes,
             change_output_policies,
             set_change_outputs,
+            set_contracts,
             base_asset_reserved: base_asset_reserved.expect("Set above; qed"),
             has_predicates,
             index_of_first_fake_variable_output: None,
@@ -336,6 +345,7 @@ where
             original_witness_limit,
             fee_payer_account,
             estimated_predicates_count: 0,
+            dry_run_count: 0,
         })
     }
 
@@ -647,9 +657,11 @@ where
             return Ok(self)
         }
 
-        if self.estimated_predicates_count > 10 {
+        if self.estimated_predicates_count > self.arguments.estimate_predicates_limit {
             return Err(anyhow::anyhow!(
-                "The transaction estimation requires running of predicate more than 10 times"
+                "The transaction estimation requires running \
+                of predicate more than {} times",
+                self.arguments.estimate_predicates_limit
             ));
         }
 
@@ -769,6 +781,14 @@ where
         let fee_params = self.arguments.consensus_parameters.fee_params();
 
         loop {
+            if self.dry_run_count > self.arguments.dry_run_limit {
+                return Err(anyhow::anyhow!(
+                    "The transaction script estimation \
+                    requires running of script more than {} times",
+                    self.arguments.dry_run_limit
+                ));
+            }
+
             if !has_spendable_input {
                 script.inputs_mut().push(fake_input());
             }
@@ -783,6 +803,9 @@ where
             *script.script_gas_limit_mut() = max_gas_limit;
 
             let (updated_tx, new_status) = self.arguments.dry_run(script).await?;
+
+            self.dry_run_count = self.dry_run_count.saturating_add(1);
+
             let Transaction::Script(updated_script) = updated_tx else {
                 return Err(anyhow::anyhow!(
                     "During script gas limit estimation, \
@@ -802,7 +825,7 @@ where
             match &status.result {
                 TransactionExecutionResult::Success { .. } => break,
                 TransactionExecutionResult::Failed { receipts, .. } => {
-                    for receipt in receipts.iter().rev() {
+                    for receipt in receipts.iter() {
                         if let Receipt::Panic {
                             reason,
                             contract_id,
@@ -825,6 +848,10 @@ where
             }
 
             for contract_id in contracts_not_in_inputs {
+                if !self.set_contracts.insert(contract_id) {
+                    continue
+                }
+
                 let inptus = script.inputs_mut();
 
                 let contract_idx = u16::try_from(inptus.len()).unwrap_or(u16::MAX);

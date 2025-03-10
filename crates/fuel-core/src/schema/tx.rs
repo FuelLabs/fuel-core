@@ -356,6 +356,7 @@ impl TxQuery {
         let exclude: Exclude = exclude_input.into();
 
         let gas_price = ctx.estimate_gas_price(Some(block_horizon.into()))?;
+        let config = &ctx.data_unchecked::<GraphQLConfig>().config;
 
         let tx = FuelTx::from_bytes(&tx.0)?;
 
@@ -371,6 +372,8 @@ impl TxQuery {
             reserve_gas,
             consensus_parameters,
             gas_price,
+            dry_run_limit: config.assemble_tx_dry_run_limit,
+            estimate_predicates_limit: config.assemble_tx_estimate_predicates_limit,
             block_producer,
             read_view,
             shared_memory_pool,
