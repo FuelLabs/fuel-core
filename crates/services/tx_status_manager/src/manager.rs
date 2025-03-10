@@ -621,6 +621,7 @@ mod tests {
         };
         assert!(!tx_id_pool.contains(&final_tx_id));
         tx_status_manager.status_update(final_tx_id.into(), status_1());
+        update_times.insert(final_tx_id, Instant::now());
 
         // Verify that only recent transactions are present
         let (recent_tx_ids, not_recent_tx_ids): (Vec<_>, Vec<_>) = update_times
