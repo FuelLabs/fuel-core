@@ -227,7 +227,7 @@ impl BlockSigner for FakeBlockSigner {
 }
 
 #[derive(Clone)]
-struct FakeBlockProductionTrigger;
+pub struct FakeBlockProductionTrigger;
 
 impl TriggerBlockProduction for FakeBlockProductionTrigger {
     async fn wait_for_trigger(&self) {}
