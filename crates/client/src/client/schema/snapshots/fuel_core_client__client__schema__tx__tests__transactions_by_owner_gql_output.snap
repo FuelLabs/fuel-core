@@ -88,7 +88,7 @@ query TransactionsByOwnerQuery($owner: Address!, $after: String, $before: String
               contractId
               subId
             }
-            outputs {
+            resolvedOutputs {
               __typename
               ... on CoinOutput {
                 to
@@ -199,7 +199,7 @@ query TransactionsByOwnerQuery($owner: Address!, $after: String, $before: String
               contractId
               subId
             }
-            outputs {
+            resolvedOutputs {
               __typename
               ... on CoinOutput {
                 to
