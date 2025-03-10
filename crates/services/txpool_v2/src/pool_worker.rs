@@ -587,21 +587,21 @@ where
             .config
             .pool_limits
             .max_gas
-            .saturating_mul(self.pool.config.max_pending_pool_size_percentage as u64)
+            .saturating_mul(*self.pool.config.max_pending_pool_size_percentage as u64)
             .saturating_div(100);
         let max_bytes = self
             .pool
             .config
             .pool_limits
             .max_bytes_size
-            .saturating_mul(self.pool.config.max_pending_pool_size_percentage as usize)
+            .saturating_mul(*self.pool.config.max_pending_pool_size_percentage as usize)
             .saturating_div(100);
         let max_txs = self
             .pool
             .config
             .pool_limits
             .max_txs
-            .saturating_mul(self.pool.config.max_pending_pool_size_percentage as usize)
+            .saturating_mul(*self.pool.config.max_pending_pool_size_percentage as usize)
             .saturating_div(100);
 
         if gas_used > max_gas || bytes_used > max_bytes || txs_used > max_txs {

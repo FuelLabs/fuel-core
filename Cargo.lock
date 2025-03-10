@@ -4206,6 +4206,7 @@ dependencies = [
 name = "fuel-gas-price-algorithm"
 version = "0.41.7"
 dependencies = [
+ "fuel-core-types 0.41.7",
  "proptest",
  "rand 0.8.5",
  "serde",

@@ -29,6 +29,7 @@ use fuel_core_relayer::Config as RelayerConfig;
 use fuel_core_txpool::config::Config as TxPoolConfig;
 use fuel_core_types::{
     blockchain::header::StateTransitionBytecodeVersion,
+    clamped_percentage::ClampedPercentage,
     signer::SignMode,
 };
 
@@ -262,16 +263,16 @@ pub enum DbType {
 #[derive(Clone, Debug)]
 pub struct GasPriceConfig {
     pub starting_exec_gas_price: u64,
-    pub exec_gas_price_change_percent: u16,
+    pub exec_gas_price_change_percent: ClampedPercentage,
     pub min_exec_gas_price: u64,
-    pub exec_gas_price_threshold_percent: u8,
+    pub exec_gas_price_threshold_percent: ClampedPercentage,
     pub da_committer_url: Option<url::Url>,
     pub da_poll_interval: Option<Duration>,
     pub da_gas_price_factor: NonZeroU64,
     pub starting_recorded_height: Option<u32>,
     pub min_da_gas_price: u64,
     pub max_da_gas_price: u64,
-    pub max_da_gas_price_change_percent: u16,
+    pub max_da_gas_price_change_percent: ClampedPercentage,
     pub da_gas_price_p_component: i64,
     pub da_gas_price_d_component: i64,
     pub gas_price_metrics: bool,
@@ -292,14 +293,18 @@ impl GasPriceConfig {
 
         GasPriceConfig {
             starting_exec_gas_price: starting_gas_price,
-            exec_gas_price_change_percent: gas_price_change_percent,
+            exec_gas_price_change_percent: ClampedPercentage::new(
+                gas_price_change_percent,
+            ),
             min_exec_gas_price: min_gas_price,
-            exec_gas_price_threshold_percent: gas_price_threshold_percent,
+            exec_gas_price_threshold_percent: ClampedPercentage::new(
+                gas_price_threshold_percent,
+            ),
             da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
             starting_recorded_height: None,
             min_da_gas_price: 0,
             max_da_gas_price: 1,
-            max_da_gas_price_change_percent: 0,
+            max_da_gas_price_change_percent: ClampedPercentage::new(0),
             da_gas_price_p_component: 0,
             da_gas_price_d_component: 0,
             gas_price_metrics,

@@ -31,6 +31,8 @@ pub use secrecy;
 pub use tai64;
 
 pub mod blockchain;
+/// A module that provides functionality for working with clamped percentages.
+pub mod clamped_percentage;
 pub mod entities;
 pub mod services;
 pub mod signer;
