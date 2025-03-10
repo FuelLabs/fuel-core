@@ -142,7 +142,7 @@ impl FuelService {
         let (services, shared) = sub_services::init_sub_services(
             &config,
             database,
-            block_production_trigger.clone(),
+            block_production_ready_signal.clone(),
         )?;
 
         let sub_services = Arc::new(services);
@@ -150,7 +150,7 @@ impl FuelService {
         let runner = ServiceRunner::new_with_params(
             task,
             TaskParams {
-                block_production_trigger,
+                block_production_ready_signal,
             },
         );
         let bound_address = runner.shared.graph_ql.bound_address;
@@ -439,7 +439,7 @@ impl RunnableService for Task {
             }
         }
 
-        params.block_production_trigger.send_trigger();
+        params.block_production_ready_signal.send_ready_signal();
 
         Ok(self)
     }

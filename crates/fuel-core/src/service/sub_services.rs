@@ -346,7 +346,7 @@ pub fn init_sub_services(
             signer,
             predefined_blocks,
             SystemTime,
-            block_production_trigger,
+            block_production_ready_signal,
         )
     });
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
