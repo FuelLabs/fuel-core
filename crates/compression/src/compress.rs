@@ -41,8 +41,34 @@ use std::collections::{
     HashSet,
 };
 
-pub trait CompressDb: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer {}
-impl<T> CompressDb for T where T: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer {}
+#[cfg(not(feature = "fault-proving"))]
+mod not_fault_proving {
+    use super::*;
+
+    pub trait CompressDb: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer {}
+    impl<T> CompressDb for T where T: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer {}
+}
+
+#[cfg(not(feature = "fault-proving"))]
+pub use not_fault_proving::*;
+
+#[cfg(feature = "fault-proving")]
+mod fault_proving {
+    use super::*;
+    use crate::ports::GetRegistryRoot;
+
+    pub trait CompressDb:
+        TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer + GetRegistryRoot
+    {
+    }
+    impl<T> CompressDb for T where
+        T: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer + GetRegistryRoot
+    {
+    }
+}
+
+#[cfg(feature = "fault-proving")]
+pub use fault_proving::*;
 
 /// This must be called for all new blocks in sequence, otherwise the result will be garbage, since
 /// the registry is valid for only the current block height. On any other height you could be
@@ -69,10 +95,16 @@ where
     let transactions = target.compress_with(&mut ctx).await?;
     let registrations: RegistrationsPerTable = ctx.finalize()?;
 
+    // Update the registry root
+    #[cfg(feature = "fault-proving")]
+    let registry_root = db.registry_root()?;
+
     Ok(VersionedCompressedBlock::new(
         block.header(),
         registrations,
         transactions,
+        #[cfg(feature = "fault-proving")]
+        registry_root,
     ))
 }
 

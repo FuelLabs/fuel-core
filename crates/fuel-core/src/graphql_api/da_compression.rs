@@ -332,18 +332,11 @@ mod v2_impl_temporal_registry {
                     value: &$type,
                     timestamp: Tai64,
                 ) -> anyhow::Result<()> {
+                    // we can't use replace due to restriction on merkleized tables
                     // Write the actual value
-                    let old_value = self.db_tx
+                    self.db_tx
                         .storage_as_mut::<[< DaCompressionTemporalRegistry $type V2>]>()
-                        .replace(key, value)?;
-
-                    // Remove the overwritten value from index, if any
-                    if let Some(old_value) = old_value {
-                        let old_reverse_key = (&old_value).into();
-                        self.db_tx
-                            .storage_as_mut::<DaCompressionTemporalRegistryIndexV2>()
-                            .remove(&old_reverse_key)?;
-                    }
+                        .insert(key, value)?;
 
                     // Add the new value to the index
                     let reverse_key = value.into();
@@ -500,6 +493,37 @@ impl<'a, Tx> UtxoIdToPointer for CompressDbTx<'a, Tx> {
             }
         }
         anyhow::bail!("UtxoId not found in the block events");
+    }
+}
+
+#[cfg(feature = "fault-proving")]
+impl<'a, Tx> fuel_core_compression::ports::GetRegistryRoot for CompressDbTx<'a, Tx>
+where
+    Tx: OffChainDatabaseTransaction,
+{
+    fn registry_root(&self) -> anyhow::Result<fuel_core_types::fuel_tx::Bytes32> {
+        let v = self
+            .db_tx
+            .db_tx
+            .registry_root()
+            .map_err(|e| anyhow::anyhow!(e))?;
+        Ok(v)
+    }
+}
+
+#[cfg(feature = "fault-proving")]
+impl<'a, Tx, ArbDb> fuel_core_compression::ports::GetRegistryRoot
+    for DecompressDbTx<'a, Tx, ArbDb>
+where
+    Tx: OffChainDatabaseTransaction,
+{
+    fn registry_root(&self) -> anyhow::Result<fuel_core_types::fuel_tx::Bytes32> {
+        let v = self
+            .db_tx
+            .db_tx
+            .registry_root()
+            .map_err(|e| anyhow::anyhow!(e))?;
+        Ok(v)
     }
 }
 
