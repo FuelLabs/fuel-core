@@ -3177,12 +3177,10 @@ mod tests {
         // Then
         let preconfirmations = receiver.recv().await.unwrap();
         assert_eq!(preconfirmations.len(), 1);
-        assert_eq!(
+        assert!(matches!(
             preconfirmations[0],
-            PreconfirmationStatus::SuccessByBlockProducer {
-                block_height: 0u32.into()
-            }
-        );
+            PreconfirmationStatus::Success { .. }
+        ));
         assert_eq!(res.skipped_transactions.len(), 0);
         assert_eq!(res.block.transactions().len(), 2);
     }

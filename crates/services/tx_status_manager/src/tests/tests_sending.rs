@@ -7,7 +7,6 @@ use std::{
 use fuel_core_types::{
     fuel_tx::Bytes32,
     services::txpool::TransactionStatus,
-    tai64::Tai64,
 };
 use parking_lot::lock_api::Mutex;
 use test_strategy::proptest;
@@ -82,14 +81,7 @@ fn test_send_reg() {
     use State::*;
     let update = TxUpdate {
         tx_id: Bytes32::from([2; 32]),
-        message: TxStatusMessage::Status(TransactionStatus::Success {
-            block_height: Default::default(),
-            block_timestamp: Tai64(0),
-            program_state: None,
-            receipts: vec![],
-            total_gas: 0,
-            total_fee: 0,
-        }),
+        message: TxStatusMessage::Status(TransactionStatus::Success(Default::default())),
     };
     test_send_inner(
         update,
@@ -97,16 +89,10 @@ fn test_send_reg() {
             2,
             &[
                 SenderData::closed(Success(
-                    TransactionStatus::Submitted {
-                        timestamp: Tai64(0),
-                    },
-                    TransactionStatus::Submitted {
-                        timestamp: Tai64(0),
-                    },
+                    TransactionStatus::Submitted(Default::default()),
+                    TransactionStatus::Submitted(Default::default()),
                 )),
-                SenderData::ok(Initial(TransactionStatus::Submitted {
-                    timestamp: Tai64(0),
-                })),
+                SenderData::ok(Initial(TransactionStatus::Submitted(Default::default()))),
             ],
         )]),
     );
@@ -151,16 +137,18 @@ fn test_send_inner(
         permits: Arc::new(()),
         ttl: Duration::from_secs(5),
     };
-    update.send(msg.clone());
+    let message = msg.message.clone();
+    let tx_id = msg.tx_id;
+    update.send(msg);
 
     // If there were valid senders, validate the message send status
     if let Some(before) = before {
         let lock = update.senders.lock();
-        if let Some(senders) = lock.get(&msg.tx_id) {
+        if let Some(senders) = lock.get(&tx_id) {
             let mut i = 0;
             for (tx, state) in before {
                 // Validate the send result and get the new state
-                let new_state = validate_send(tx, state, msg.message.clone());
+                let new_state = validate_send(tx, state, message.clone());
 
                 // If the new state is closed, skip validation
                 if matches!(new_state, State::Closed) {

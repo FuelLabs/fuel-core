@@ -3385,6 +3385,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-sync",
  "fuel-core-trace",
+ "fuel-core-tx-status-manager",
  "fuel-core-txpool",
  "fuel-core-types 0.41.7",
  "fuel-core-upgradable-executor",
@@ -4058,6 +4059,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-tx-status-manager"
+version = "0.41.7"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "derive_more 0.99.19",
+ "fuel-core-services",
+ "fuel-core-tx-status-manager",
+ "fuel-core-types 0.41.7",
+ "futures",
+ "mockall",
+ "parking_lot",
+ "proptest",
+ "test-strategy",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
 name = "fuel-core-txpool"
 version = "0.41.7"
 dependencies = [
@@ -4075,9 +4096,7 @@ dependencies = [
  "num-rational",
  "parking_lot",
  "petgraph",
- "proptest",
  "rand 0.8.5",
- "test-strategy",
  "tokio",
  "tokio-stream",
  "tracing",
