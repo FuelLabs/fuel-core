@@ -1,6 +1,7 @@
 //! # State
 //! Tracks all state that determines the actions of the relayer.
 
+use crate::service::SyncState;
 use core::ops::RangeInclusive;
 pub use state_builder::*;
 
@@ -9,16 +10,23 @@ mod state_builder;
 #[cfg(test)]
 mod test;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 /// The state of the Ethereum node.
 pub struct EthState {
     /// The state that the relayer thinks the remote Ethereum node is in.
     remote: EthHeight,
     /// State related to the Ethereum node that is tracked by the relayer.
-    local: Option<EthHeight>,
+    local: EthHeight,
 }
 
 type EthHeight = u64;
+
+impl EthState {
+    #[cfg(test)]
+    pub fn new(remote: EthHeight, local: EthHeight) -> Self {
+        Self { remote, local }
+    }
+}
 
 #[derive(Clone, Debug)]
 /// The gap between the eth block height on
@@ -38,24 +46,33 @@ pub struct EthSyncPage {
 }
 
 impl EthState {
-    /// Is the relayer in sync with the Ethereum node?
-    pub fn is_synced(&self) -> bool {
-        self.is_synced_at().is_some()
+    /// Returns the `SyncState` of the relayer.
+    pub fn sync_state(&self) -> SyncState {
+        if self.is_synced() {
+            SyncState::Synced(self.local.into())
+        } else {
+            SyncState::PartiallySynced(self.local.into())
+        }
     }
 
-    /// If synced to the remote Ethereum node, return the block height.
-    pub fn is_synced_at(&self) -> Option<u64> {
-        self.local.filter(|local| *local >= self.remote)
+    /// Is the relayer in sync with the Ethereum node?
+    pub fn is_synced(&self) -> bool {
+        self.local >= self.remote
     }
 
     /// Get the gap between the relayer and the Ethereum node if
     /// a sync is required.
     pub fn needs_to_sync_eth(&self) -> Option<EthSyncGap> {
         (!self.is_synced()).then(|| {
-            let local = self.local.map(|l| l.saturating_add(1)).unwrap_or(0);
+            let local = self.local.saturating_add(1);
             let remote = self.remote;
             EthSyncGap::new(local, remote)
         })
+    }
+
+    /// Set the local state of the Ethereum node.
+    pub fn set_local(&mut self, local: EthHeight) {
+        self.local = local;
     }
 }
 

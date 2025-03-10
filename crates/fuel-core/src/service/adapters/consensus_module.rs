@@ -67,7 +67,7 @@ impl RelayerPort for MaybeRelayerAdapter {
     ) -> anyhow::Result<()> {
         #[cfg(feature = "relayer")]
         {
-            if let Some(sync) = self.relayer_synced.as_ref() {
+            if let Some(sync) = &self.relayer_synced {
                 let current_height = sync.get_finalized_da_height();
                 anyhow::ensure!(
                     da_height.saturating_sub(*current_height) <= **_max_da_lag,

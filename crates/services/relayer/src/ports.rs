@@ -1,6 +1,5 @@
 //! Ports used by the relayer to access the outside world
 
-use async_trait::async_trait;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -11,7 +10,6 @@ use fuel_core_types::{
 mod tests;
 
 /// Manages state related to supported external chains.
-#[async_trait]
 pub trait RelayerDb: Send + Sync {
     /// Add bridge events to database. Events are not revertible.
     /// Must only set a new da height if it is greater than the current.
