@@ -1,4 +1,4 @@
-//! This module mirrors the tables from fuel-core-storage
+//! This module contains local mirrors for the tables from fuel-core-storage
 //! used for the state root service.
 //!
 //! The following tables are mirrored:
@@ -13,125 +13,48 @@
 //! - `Blobs` table.
 
 use fuel_core_storage::Mappable;
-use fuel_core_types::{
-    blockchain::header::{
-        ConsensusParametersVersion,
-        StateTransitionBytecodeVersion,
-    },
-    entities::{
-        coins::coin::CompressedCoin,
-        contract::ContractUtxoInfo,
-        Message,
-    },
-    fuel_tx::{
-        BlobId,
-        Bytes32,
-        ConsensusParameters,
-        ContractId,
-        TxId,
-        UtxoId,
-    },
-    fuel_types::Nonce,
-    fuel_vm::{
-        BlobBytes,
-        Contract,
-        UploadedBytecode,
-    },
-};
 
 /// The storage table for contract's raw byte code.
-pub struct ContractsRawCode;
-
-impl Mappable for ContractsRawCode {
-    type Key = Self::OwnedKey;
-    type OwnedKey = ContractId;
-    type OwnedValue = Contract;
-    type Value = [u8];
-}
+pub type ContractsRawCode = LocalMirror<fuel_core_storage::tables::ContractsRawCode>;
 
 /// The latest UTXO info of the contract. The contract's UTXO represents the unique id of the state.
 /// After each transaction, old UTXO is consumed, and new UTXO is produced. UTXO is used as an
 /// input to the next transaction related to the `ContractId` smart contract.
-pub struct ContractsLatestUtxo;
-
-impl Mappable for ContractsLatestUtxo {
-    type Key = Self::OwnedKey;
-    type OwnedKey = ContractId;
-    /// The latest UTXO info
-    type Value = Self::OwnedValue;
-    type OwnedValue = ContractUtxoInfo;
-}
+pub type ContractsLatestUtxo =
+    LocalMirror<fuel_core_storage::tables::ContractsLatestUtxo>;
 
 /// The storage table of coins. Each [`CompressedCoin`]
 /// is represented by unique `UtxoId`.
-pub struct Coins;
-
-impl Mappable for Coins {
-    type Key = Self::OwnedKey;
-    type OwnedKey = UtxoId;
-    type Value = Self::OwnedValue;
-    type OwnedValue = CompressedCoin;
-}
+pub type Coins = LocalMirror<fuel_core_storage::tables::Coins>;
 
 /// The storage table of bridged Ethereum message.
-pub struct Messages;
-
-impl Mappable for Messages {
-    type Key = Self::OwnedKey;
-    type OwnedKey = Nonce;
-    type Value = Self::OwnedValue;
-    type OwnedValue = Message;
-}
+pub type Messages = LocalMirror<fuel_core_storage::tables::Messages>;
 
 /// The storage table of processed transactions that were executed in the past.
 /// The table helps to drop duplicated transactions.
-pub struct ProcessedTransactions;
-
-impl Mappable for ProcessedTransactions {
-    type Key = Self::OwnedKey;
-    type OwnedKey = TxId;
-    type Value = Self::OwnedValue;
-    type OwnedValue = ();
-}
+pub type ProcessedTransactions =
+    LocalMirror<fuel_core_storage::tables::ProcessedTransactions>;
 
 /// The storage table of consensus parameters.
-pub struct ConsensusParametersVersions;
-
-impl Mappable for ConsensusParametersVersions {
-    type Key = Self::OwnedKey;
-    type OwnedKey = ConsensusParametersVersion;
-    type Value = Self::OwnedValue;
-    type OwnedValue = ConsensusParameters;
-}
+pub type ConsensusParametersVersions =
+    LocalMirror<fuel_core_storage::tables::ConsensusParametersVersions>;
 
 /// The storage table of state transition bytecodes.
-pub struct StateTransitionBytecodeVersions;
-
-impl Mappable for StateTransitionBytecodeVersions {
-    type Key = Self::OwnedKey;
-    type OwnedKey = StateTransitionBytecodeVersion;
-    type Value = Self::OwnedValue;
-    /// The Merkle root of the bytecode from the [`UploadedBytecodes`].
-    type OwnedValue = Bytes32;
-}
+pub type StateTransitionBytecodeVersions =
+    LocalMirror<fuel_core_storage::tables::StateTransitionBytecodeVersions>;
 
 /// The storage table for uploaded bytecode.
-pub struct UploadedBytecodes;
-
-impl Mappable for UploadedBytecodes {
-    /// The key is a Merkle root of the bytecode.
-    type Key = Self::OwnedKey;
-    type OwnedKey = Bytes32;
-    type OwnedValue = UploadedBytecode;
-    type Value = Self::OwnedValue;
-}
+pub type UploadedBytecodes = LocalMirror<fuel_core_storage::tables::UploadedBytecodes>;
 
 /// The storage table for blob data bytes.
-pub struct BlobData;
+pub type BlobData = LocalMirror<fuel_core_storage::tables::BlobData>;
 
-impl Mappable for BlobData {
-    type Key = <fuel_core_storage::tables::BlobData as Mappable>::Key;
-    type OwnedKey = <fuel_core_storage::tables::BlobData as Mappable>::OwnedKey;
-    type OwnedValue = <fuel_core_storage::tables::BlobData as Mappable>::OwnedValue;
-    type Value = <fuel_core_storage::tables::BlobData as Mappable>::Value;
+/// Wrapper over an existing table to allow implementing new foreign traits on it.
+pub struct LocalMirror<Table>(core::marker::PhantomData<Table>);
+
+impl<Table: Mappable> Mappable for LocalMirror<Table> {
+    type Key = <Table as Mappable>::Key;
+    type OwnedKey = <Table as Mappable>::OwnedKey;
+    type OwnedValue = <Table as Mappable>::OwnedValue;
+    type Value = <Table as Mappable>::Value;
 }
