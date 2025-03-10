@@ -873,7 +873,7 @@ type PreconfirmationFailureStatus {
 	transactionId: TransactionId!
 	transaction: Transaction
 	receipts: [Receipt!]
-	outputs: [Output!]
+	resolvedOutputs: [Output!]
 }
 
 type PreconfirmationSqueezedOutStatus {
@@ -888,7 +888,7 @@ type PreconfirmationSuccessStatus {
 	transactionId: TransactionId!
 	transaction: Transaction
 	receipts: [Receipt!]
-	outputs: [Output!]
+	resolvedOutputs: [Output!]
 }
 
 type PredicateParameters {

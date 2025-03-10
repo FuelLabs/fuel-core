@@ -261,7 +261,7 @@ impl PreconfirmationSuccessStatus {
         Ok(receipts)
     }
 
-    async fn outputs(&self) -> async_graphql::Result<Option<Vec<Output>>> {
+    async fn resolved_outputs(&self) -> async_graphql::Result<Option<Vec<Output>>> {
         let outputs = self
             .outputs
             .as_ref()
@@ -382,7 +382,7 @@ impl PreconfirmationFailureStatus {
         Ok(receipts)
     }
 
-    async fn outputs(&self) -> async_graphql::Result<Option<Vec<Output>>> {
+    async fn resolved_outputs(&self) -> async_graphql::Result<Option<Vec<Output>>> {
         let outputs = self
             .outputs
             .as_ref()

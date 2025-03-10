@@ -752,7 +752,7 @@ where
     BlockImporter: ports::worker::BlockImporter,
 {
     let Context {
-        tx_status_manager: tx_pool,
+        tx_status_manager,
         block_importer,
         on_chain_database,
         off_chain_database,
@@ -764,7 +764,7 @@ where
     let off_chain_block_height = off_chain_database.latest_height()?.unwrap_or_default();
 
     let service = ServiceRunner::new(InitializeTask {
-        tx_status_manager: tx_pool,
+        tx_status_manager,
         blocks_events: block_importer.block_events(),
         block_importer,
         on_chain_database,

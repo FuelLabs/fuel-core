@@ -17,7 +17,6 @@ mockall::mock! {
 }
 
 impl MockP2P {
-    // TODO[RC]: statuses vs Preconfirmations :-/
     pub fn new_with_statuses(statuses: Vec<P2PPreConfirmationMessage>) -> Self {
         let mut p2p = MockP2P::default();
         p2p.expect_gossiped_tx_statuses().returning(move || {

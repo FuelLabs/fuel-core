@@ -123,7 +123,7 @@ pub enum TransactionStatus {
         total_gas: u64,
         transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
-        outputs: Option<Vec<Output>>,
+        resolved_outputs: Option<Vec<Output>>,
     },
     SqueezedOut {
         reason: String,
@@ -147,8 +147,8 @@ pub enum TransactionStatus {
         total_gas: u64,
         transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
+        resolved_outputs: Option<Vec<Output>>,
         reason: String,
-        outputs: Option<Vec<Output>>,
     },
 }
 
@@ -188,7 +188,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     } else {
                         None
                     },
-                    outputs: if let Some(outputs) = s.outputs {
+                    resolved_outputs: if let Some(outputs) = s.resolved_outputs {
                         Some(
                             outputs
                                 .into_iter()
@@ -230,7 +230,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                         None
                     },
                     reason: s.reason,
-                    outputs: if let Some(outputs) = s.outputs {
+                    resolved_outputs: if let Some(outputs) = s.resolved_outputs {
                         Some(
                             outputs
                                 .into_iter()
@@ -277,6 +277,7 @@ pub enum StatusWithTransaction {
         transaction_id: TxId,
         transaction: Option<Transaction>,
         receipts: Option<Vec<Receipt>>,
+        resolved_outputs: Option<Vec<Output>>,
     },
     SqueezedOut {
         reason: String,
@@ -300,6 +301,7 @@ pub enum StatusWithTransaction {
         transaction_id: TxId,
         transaction: Option<Transaction>,
         receipts: Option<Vec<Receipt>>,
+        resolved_outputs: Option<Vec<Output>>,
         reason: String,
     },
 }
@@ -341,6 +343,16 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                     } else {
                         None
                     },
+                    resolved_outputs: if let Some(outputs) = s.resolved_outputs {
+                        Some(
+                            outputs
+                                .into_iter()
+                                .map(TryInto::try_into)
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    } else {
+                        None
+                    },
                 }
             }
 
@@ -367,6 +379,16 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                     receipts: if let Some(receipts) = s.receipts {
                         Some(
                             receipts
+                                .into_iter()
+                                .map(TryInto::try_into)
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )
+                    } else {
+                        None
+                    },
+                    resolved_outputs: if let Some(outputs) = s.resolved_outputs {
+                        Some(
+                            outputs
                                 .into_iter()
                                 .map(TryInto::try_into)
                                 .collect::<Result<Vec<_>, _>>()?,
