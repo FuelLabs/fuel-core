@@ -35,8 +35,8 @@ benches/ @xgreenx @Dentosal @MitchTurner @netrome
 # Code owners for docs
 docs/ @xgreenx @Dentosal @MitchTurner @netrome
 
-# Code owners for the fraud proofs
-crates/fraud_proofs @xgreenx @netrome @acerone85 @rymnc
+# Code owners for the proof system
+crates/proof_system @xgreenx @netrome @acerone85 @rymnc
 
 # Code owners for common files
 CHANGELOG.md @FuelLabs/client
