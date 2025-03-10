@@ -1,3 +1,8 @@
+use crate::assemble_tx::SigningAccount;
+use fuel_core::{
+    chain_config::TESTNET_WALLET_SECRETS,
+    service::Config,
+};
 use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
@@ -26,6 +31,7 @@ use rand::{
     RngCore,
 };
 
+pub mod assemble_tx;
 pub mod builder;
 pub mod counter_contract;
 pub mod fuel_core_driver;
@@ -126,4 +132,21 @@ pub async fn produce_block_with_tx(rng: &mut StdRng, client: &FuelClient) {
         matches!(status, TransactionStatus::Success { .. }),
         "{status:?}"
     );
+}
+
+/// Returns a config that enables utxo validation and sets a minimum gas price.
+/// It enables fee in the network and requirement to use real coins.
+pub fn config_with_fee() -> Config {
+    let mut config = Config::local_node();
+    config.utxo_validation = true;
+    config.gas_price_config.min_exec_gas_price = 1000;
+    config
+}
+
+pub fn default_signing_wallet() -> SigningAccount {
+    let wallet_secret: SecretKey = TESTNET_WALLET_SECRETS[1]
+        .parse()
+        .expect("Expected valid secret");
+
+    SigningAccount::Wallet(wallet_secret)
 }

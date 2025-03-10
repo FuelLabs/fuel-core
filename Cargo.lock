@@ -3640,6 +3640,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "test-helpers",
  "tikv-jemallocator",
  "tokio",
  "toml 0.5.11",

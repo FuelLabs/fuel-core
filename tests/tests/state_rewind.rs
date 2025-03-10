@@ -11,26 +11,20 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    pagination::PaginationRequest,
-    types::{
-        Coin,
-        TransactionStatus as ClientTransactionStatus,
-    },
+    types::TransactionStatus as ClientTransactionStatus,
     FuelClient,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
+    blockchain::transaction::TransactionExt,
     fuel_tx::{
-        Address,
         AssetId,
-        GasCosts,
         Input,
         Output,
         Receipt,
         Transaction,
         TransactionBuilder,
         TxId,
-        TxPointer,
         UniqueIdentifier,
     },
     fuel_types::BlockHeight,
@@ -53,6 +47,11 @@ use std::{
 };
 use tempfile::TempDir;
 use test_helpers::{
+    assemble_tx::{
+        AssembleAndRunTx,
+        SigningAccount,
+    },
+    config_with_fee,
     counter_contract,
     fuel_core_driver::FuelCoreDriver,
     produce_block_with_tx,
@@ -403,69 +402,35 @@ async fn backup_and_restore__should_work_with_state_rewind() -> anyhow::Result<(
     Ok(())
 }
 
-/// Get arbitrary coin from a wallet
-async fn get_wallet_coin(client: &FuelClient, wallet_address: &Address) -> Coin {
-    let coins = client
-        .coins(
-            wallet_address,
-            None,
-            PaginationRequest {
-                cursor: None,
-                results: 10,
-                direction: fuel_core_client::client::pagination::PageDirection::Forward,
-            },
-        )
-        .await
-        .expect("Unable to get coins")
-        .results;
-    coins
-        .into_iter()
-        .next()
-        .expect("Expected at least one coin")
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
     let poa_secret = SecretKey::random(&mut rng);
 
-    let mut config = fuel_core::service::Config::local_node();
+    let mut config = config_with_fee();
     config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
-    config.utxo_validation = true;
+    let base_asset_id = config.base_asset_id();
+
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
     // First, distribute one test wallet to multiple addresses
     let wallet_secret =
         SecretKey::from_str(TESTNET_WALLET_SECRETS[1]).expect("Expected valid secret");
-    let wallet_address = Address::from(*wallet_secret.public_key().hash());
-    let coin = get_wallet_coin(&client, &wallet_address).await;
 
     let wallets: Vec<SecretKey> = (0..2).map(|_| SecretKey::random(&mut rng)).collect();
 
-    let mut tx = TransactionBuilder::script(vec![], vec![]);
-    tx.max_fee_limit(0)
-        .script_gas_limit(1_000_000)
-        .with_gas_costs(GasCosts::free())
-        .add_unsigned_coin_input(
-            wallet_secret,
-            coin.utxo_id,
-            coin.amount,
-            coin.asset_id,
-            TxPointer::new(coin.block_created.into(), coin.tx_created_idx),
-        );
-    for key in wallets.iter() {
-        let public = key.public_key();
-        let owner: [u8; Address::LEN] = public.hash().into();
-
-        tx.add_output(Output::Coin {
-            to: owner.into(),
-            amount: coin.amount / (wallets.len() as u64),
-            asset_id: coin.asset_id,
-        });
-    }
-    let first_tx = tx.finalize_as_transaction();
-    let status = client.submit_and_await_commit(&first_tx).await.unwrap();
+    let recipients = wallets
+        .iter()
+        .map(|secret_key| {
+            let address = SigningAccount::Wallet(*secret_key).owner();
+            (address, base_asset_id, 1_000_000_000)
+        })
+        .collect();
+    let status = client
+        .run_transfer(SigningAccount::Wallet(wallet_secret), recipients)
+        .await
+        .unwrap();
     let ClientTransactionStatus::Success {
         block_height: bh_first,
         ..
@@ -475,28 +440,28 @@ async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
     };
 
     // Then, transfer one of these coins to another wallet
-    let source_public = wallets[0].public_key();
-    let source_owner: [u8; Address::LEN] = source_public.hash().into();
-    let source_coin = get_wallet_coin(&client, &source_owner.into()).await;
-    let target_public = wallets[1].public_key();
-    let target_owner: [u8; Address::LEN] = target_public.hash().into();
-    let second_tx = TransactionBuilder::script(vec![], vec![])
-        .max_fee_limit(0)
-        .script_gas_limit(1_000_000)
-        .with_gas_costs(GasCosts::free())
-        .add_unsigned_coin_input(
-            wallets[0],
-            source_coin.utxo_id,
-            source_coin.amount,
-            source_coin.asset_id,
-            TxPointer::new(source_coin.block_created.into(), source_coin.tx_created_idx),
+    let source_wallet = wallets[0];
+    let target_wallet = wallets[1];
+    let target_address = SigningAccount::Wallet(target_wallet).owner();
+
+    let second_tx = client
+        .assemble_transfer(
+            SigningAccount::Wallet(source_wallet),
+            vec![(target_address, base_asset_id, 2)],
         )
-        .add_output(Output::Coin {
-            to: target_owner.into(),
-            amount: source_coin.amount,
-            asset_id: source_coin.asset_id,
-        })
-        .finalize_as_transaction();
+        .await
+        .unwrap();
+    // `third_tx` is similar to `second_tx`, but sends less coins(`1` instead of `2`)
+    // We want `third_tx` have a different TxId than `second_tx`.
+    // Both transactions use the same UtxoId
+    let third_tx = client
+        .assemble_transfer(
+            SigningAccount::Wallet(source_wallet),
+            vec![(target_address, base_asset_id, 1)],
+        )
+        .await
+        .unwrap();
+    assert_eq!(second_tx.inputs(), third_tx.inputs());
     let status = client.submit_and_await_commit(&second_tx).await.unwrap();
     let ClientTransactionStatus::Success {
         block_height: bh_second,
@@ -535,24 +500,6 @@ async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
     assert!(err.contains("Transaction id was already used"));
 
     // At latest height, a similar transaction with a different TxId should still fail
-    let third_tx = TransactionBuilder::script(vec![], vec![])
-        .max_fee_limit(0)
-        .script_gas_limit(1_000_001) // changed to make it a different transaction
-        .with_gas_costs(GasCosts::free())
-        .add_unsigned_coin_input(
-            wallets[0],
-            source_coin.utxo_id,
-            source_coin.amount,
-            source_coin.asset_id,
-            TxPointer::new(source_coin.block_created.into(), source_coin.tx_created_idx),
-        )
-        .add_output(Output::Coin {
-            to: target_owner.into(),
-            amount: source_coin.amount,
-            asset_id: source_coin.asset_id,
-        })
-        .finalize_as_transaction();
-
     let err = client
         .dry_run_opt(&[third_tx.clone()], None, None, None)
         .await

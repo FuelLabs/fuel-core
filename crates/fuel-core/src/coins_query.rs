@@ -17,16 +17,10 @@ use fuel_core_storage::{
     Result as StorageResult,
 };
 use fuel_core_types::{
-    entities::coins::{
-        CoinId,
-        CoinType,
-    },
-    fuel_tx::UtxoId,
+    entities::coins::CoinType,
     fuel_types::{
         Address,
         AssetId,
-        Nonce,
-        Word,
     },
 };
 use futures::{
@@ -36,8 +30,8 @@ use futures::{
 };
 use rand::prelude::*;
 use std::{
+    borrow::Cow,
     cmp::Reverse,
-    collections::HashSet,
 };
 use thiserror::Error;
 
@@ -48,7 +42,7 @@ pub enum CoinsQueryError {
     #[error("the target cannot be met due to no coins available or exceeding the {max} coin limit.")]
     InsufficientCoinsForTheMax {
         asset_id: AssetId,
-        collected_amount: Word,
+        collected_amount: u128,
         max: u16,
     },
     #[error("the query contains duplicate assets")]
@@ -67,6 +61,8 @@ pub enum CoinsQueryError {
     UnexpectedInternalState(&'static str),
     #[error("coins to spend index contains incorrect key")]
     IncorrectCoinsToSpendIndexKey,
+    #[error("unknown error: {0}")]
+    Other(anyhow::Error),
 }
 
 #[cfg(test)]
@@ -76,50 +72,23 @@ impl PartialEq for CoinsQueryError {
     }
 }
 
-pub struct ExcludedCoinIds<'a> {
-    coins: HashSet<&'a UtxoId>,
-    messages: HashSet<&'a Nonce>,
-}
-
-impl<'a> ExcludedCoinIds<'a> {
-    pub(crate) fn new(
-        coins: impl Iterator<Item = &'a UtxoId>,
-        messages: impl Iterator<Item = &'a Nonce>,
-    ) -> Self {
-        Self {
-            coins: coins.collect(),
-            messages: messages.collect(),
-        }
-    }
-
-    pub(crate) fn is_coin_excluded(&self, coin: &UtxoId) -> bool {
-        self.coins.contains(&coin)
-    }
-
-    pub(crate) fn is_message_excluded(&self, message: &Nonce) -> bool {
-        self.messages.contains(&message)
-    }
-}
-
 /// The prepared spend queries.
-pub struct SpendQuery {
+pub struct SpendQuery<'a> {
     owner: Address,
     query_per_asset: Vec<AssetSpendTarget>,
-    exclude: Exclude,
+    exclude: Cow<'a, Exclude>,
     base_asset_id: AssetId,
 }
 
-impl SpendQuery {
+impl<'s> SpendQuery<'s> {
     // TODO: Check that number of `queries` is not too high(to prevent attacks).
     //  https://github.com/FuelLabs/fuel-core/issues/588#issuecomment-1240074551
     pub fn new(
         owner: Address,
         query_per_asset: &[AssetSpendTarget],
-        exclude_vec: Option<Vec<CoinId>>,
+        exclude: Cow<'s, Exclude>,
         base_asset_id: AssetId,
     ) -> Result<Self, CoinsQueryError> {
-        let exclude = exclude_vec.map_or_else(Default::default, Exclude::new);
-
         Ok(Self {
             owner,
             query_per_asset: query_per_asset.to_vec(),
@@ -142,7 +111,7 @@ impl SpendQuery {
                     &self.owner,
                     asset,
                     &self.base_asset_id,
-                    Some(&self.exclude),
+                    Some(self.exclude.as_ref()),
                     db,
                 )
             })
@@ -151,7 +120,7 @@ impl SpendQuery {
 
     /// Returns exclude that contains information about excluded ids.
     pub fn exclude(&self) -> &Exclude {
-        &self.exclude
+        self.exclude.as_ref()
     }
 
     /// Returns the owner of the query.
@@ -172,7 +141,7 @@ pub async fn largest_first(
     let mut inputs: Vec<CoinType> = query.coins().try_collect().await?;
     inputs.sort_by_key(|coin| Reverse(coin.amount()));
 
-    let mut collected_amount = 0u64;
+    let mut collected_amount = 0u128;
     let mut coins = vec![];
 
     for coin in inputs {
@@ -191,7 +160,7 @@ pub async fn largest_first(
         }
 
         // Add to list
-        collected_amount = collected_amount.saturating_add(coin.amount());
+        collected_amount = collected_amount.saturating_add(coin.amount() as u128);
         coins.push(coin);
     }
 
@@ -209,7 +178,7 @@ pub async fn largest_first(
 // An implementation of the method described on: https://iohk.io/en/blog/posts/2018/07/03/self-organisation-in-coin-selection/
 pub async fn random_improve(
     db: &ReadView,
-    spend_query: &SpendQuery,
+    spend_query: &SpendQuery<'_>,
 ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let mut coins_per_asset = vec![];
 
@@ -231,7 +200,9 @@ pub async fn random_improve(
             // Try to improve the result by adding dust to the result.
             if collected_amount >= target {
                 // Break if found coin exceeds max `u64` or the upper limit
-                if collected_amount == u64::MAX || coin.amount() > upper_target {
+                if collected_amount >= u64::MAX as u128
+                    || coin.amount() as u128 > upper_target
+                {
                     break
                 }
 
@@ -241,14 +212,14 @@ pub async fn random_improve(
                     .expect("We checked it above");
                 let distance = target.abs_diff(change_amount);
                 let next_distance =
-                    target.abs_diff(change_amount.saturating_add(coin.amount()));
+                    target.abs_diff(change_amount.saturating_add(coin.amount() as u128));
                 if next_distance >= distance {
                     break
                 }
             }
 
             // Add to list
-            collected_amount = collected_amount.saturating_add(coin.amount());
+            collected_amount = collected_amount.saturating_add(coin.amount() as u128);
             coins.push(coin);
         }
 
@@ -268,17 +239,17 @@ pub async fn select_coins_to_spend(
         big_coins_iter,
         dust_coins_iter,
     }: CoinsToSpendIndexIter<'_>,
-    total: u64,
+    total: u128,
     max: u16,
     asset_id: &AssetId,
-    excluded_ids: &ExcludedCoinIds<'_>,
+    exclude: &Exclude,
     batch_size: usize,
 ) -> Result<Vec<CoinsToSpendIndexKey>, CoinsQueryError> {
     // We aim to reduce dust creation by targeting twice the required amount for selection,
     // inspired by the random-improve approach. This increases the likelihood of generating
     // useful change outputs for future transactions, minimizing unusable dust outputs.
     // See also "let upper_target = target.saturating_mul(2);" in "fn random_improve()".
-    const TOTAL_AMOUNT_ADJUSTMENT_FACTOR: u64 = 2;
+    const TOTAL_AMOUNT_ADJUSTMENT_FACTOR: u128 = 2;
 
     // After selecting large coins that cover at least twice the required amount,
     // we include a limited number of small (dust) coins. The maximum number of dust coins
@@ -304,7 +275,7 @@ pub async fn select_coins_to_spend(
     let dust_coins_stream = futures::stream::iter(dust_coins_iter).yield_each(batch_size);
 
     let (selected_big_coins_total, selected_big_coins) =
-        big_coins(big_coins_stream, adjusted_total, max, excluded_ids).await?;
+        big_coins(big_coins_stream, adjusted_total, max, exclude).await?;
 
     if selected_big_coins_total < total {
         return Err(CoinsQueryError::InsufficientCoinsForTheMax {
@@ -339,7 +310,7 @@ pub async fn select_coins_to_spend(
         dust_coins_stream,
         last_selected_big_coin,
         max_dust_count,
-        excluded_ids,
+        exclude,
     )
     .await?;
 
@@ -354,11 +325,11 @@ pub async fn select_coins_to_spend(
 
 async fn big_coins(
     big_coins_stream: impl Stream<Item = StorageResult<CoinsToSpendIndexKey>> + Unpin,
-    total: u64,
+    total: u128,
     max: u16,
-    excluded_ids: &ExcludedCoinIds<'_>,
-) -> Result<(u64, Vec<CoinsToSpendIndexKey>), CoinsQueryError> {
-    select_coins_until(big_coins_stream, max, excluded_ids, |_, total_so_far| {
+    exclude: &Exclude,
+) -> Result<(u128, Vec<CoinsToSpendIndexKey>), CoinsQueryError> {
+    select_coins_until(big_coins_stream, max, exclude, |_, total_so_far| {
         total_so_far >= total
     })
     .await
@@ -368,35 +339,32 @@ async fn dust_coins(
     dust_coins_stream: impl Stream<Item = StorageResult<CoinsToSpendIndexKey>> + Unpin,
     last_big_coin: &CoinsToSpendIndexKey,
     max_dust_count: u16,
-    excluded_ids: &ExcludedCoinIds<'_>,
-) -> Result<(u64, Vec<CoinsToSpendIndexKey>), CoinsQueryError> {
-    select_coins_until(
-        dust_coins_stream,
-        max_dust_count,
-        excluded_ids,
-        |coin, _| coin == last_big_coin,
-    )
+    exclude: &Exclude,
+) -> Result<(u128, Vec<CoinsToSpendIndexKey>), CoinsQueryError> {
+    select_coins_until(dust_coins_stream, max_dust_count, exclude, |coin, _| {
+        coin == last_big_coin
+    })
     .await
 }
 
 async fn select_coins_until<Pred>(
     mut coins_stream: impl Stream<Item = StorageResult<CoinsToSpendIndexKey>> + Unpin,
     max: u16,
-    excluded_ids: &ExcludedCoinIds<'_>,
+    exclude: &Exclude,
     predicate: Pred,
-) -> Result<(u64, Vec<CoinsToSpendIndexKey>), CoinsQueryError>
+) -> Result<(u128, Vec<CoinsToSpendIndexKey>), CoinsQueryError>
 where
-    Pred: Fn(&CoinsToSpendIndexKey, u64) -> bool,
+    Pred: Fn(&CoinsToSpendIndexKey, u128) -> bool,
 {
-    let mut coins_total_value: u64 = 0;
+    let mut coins_total_value: u128 = 0;
     let mut coins = Vec::with_capacity(max as usize);
     while let Some(coin) = coins_stream.next().await {
         let coin = coin?;
-        if !is_excluded(&coin, excluded_ids) {
+        if !is_excluded(&coin, exclude) {
             if coins.len() >= max as usize || predicate(&coin, coins_total_value) {
                 break;
             }
-            let amount = coin.amount();
+            let amount = coin.amount() as u128;
             coins_total_value = coins_total_value.saturating_add(amount);
             coins.push(coin);
         }
@@ -404,14 +372,10 @@ where
     Ok((coins_total_value, coins))
 }
 
-fn is_excluded(key: &CoinsToSpendIndexKey, excluded_ids: &ExcludedCoinIds) -> bool {
+fn is_excluded(key: &CoinsToSpendIndexKey, exclude: &Exclude) -> bool {
     match key {
-        CoinsToSpendIndexKey::Coin { utxo_id, .. } => {
-            excluded_ids.is_coin_excluded(utxo_id)
-        }
-        CoinsToSpendIndexKey::Message { nonce, .. } => {
-            excluded_ids.is_message_excluded(nonce)
-        }
+        CoinsToSpendIndexKey::Coin { utxo_id, .. } => exclude.contains_coin(utxo_id),
+        CoinsToSpendIndexKey::Message { nonce, .. } => exclude.contains_message(nonce),
     }
 }
 
@@ -427,11 +391,11 @@ fn max_dust_count(max: u16, big_coins_len: u16, dust_to_big_coins_factor: u16) -
 
 fn skip_big_coins_up_to_amount(
     big_coins: impl IntoIterator<Item = CoinsToSpendIndexKey>,
-    skipped_amount: u64,
+    skipped_amount: u128,
 ) -> impl Iterator<Item = CoinsToSpendIndexKey> {
     let mut current_dust_coins_value = skipped_amount;
     big_coins.into_iter().skip_while(move |item| {
-        let item_amount = item.amount();
+        let item_amount = item.amount() as u128;
         current_dust_coins_value
             .checked_sub(item_amount)
             .map(|new_value| {
@@ -445,6 +409,12 @@ fn skip_big_coins_up_to_amount(
 impl From<StorageError> for CoinsQueryError {
     fn from(e: StorageError) -> Self {
         CoinsQueryError::StorageError(e)
+    }
+}
+
+impl From<anyhow::Error> for CoinsQueryError {
+    fn from(e: anyhow::Error) -> Self {
+        CoinsQueryError::Other(e)
     }
 }
 
@@ -476,6 +446,7 @@ mod tests {
         query::asset_query::{
             AssetQuery,
             AssetSpendTarget,
+            Exclude,
         },
     };
     use assert_matches::assert_matches;
@@ -513,7 +484,10 @@ mod tests {
         Rng,
         SeedableRng,
     };
-    use std::cmp::Reverse;
+    use std::{
+        borrow::Cow,
+        cmp::Reverse,
+    };
 
     fn setup_coins() -> (Address, [AssetId; 2], AssetId, TestDatabase) {
         let mut rng = StdRng::seed_from_u64(0xf00df00d);
@@ -739,6 +713,8 @@ mod tests {
 
     mod random_improve {
         use super::*;
+        use crate::query::asset_query::Exclude;
+        use std::borrow::Cow;
 
         async fn query(
             query_per_asset: Vec<AssetSpendTarget>,
@@ -749,7 +725,12 @@ mod tests {
         ) -> Result<Vec<(AssetId, u64)>, CoinsQueryError> {
             let coins = random_improve(
                 &db.test_view(),
-                &SpendQuery::new(owner, &query_per_asset, None, base_asset_id)?,
+                &SpendQuery::new(
+                    owner,
+                    &query_per_asset,
+                    Cow::Owned(Exclude::default()),
+                    base_asset_id,
+                )?,
             )
             .await;
 
@@ -810,7 +791,7 @@ mod tests {
                     // This range should...
                     1..=7 => {
                         // ...satisfy the amount
-                        assert_matches!(coins, Ok(coins) if coins.iter().sum::<u64>() >= amount)
+                        assert_matches!(coins, Ok(coins) if coins.iter().sum::<u64>() as u128 >= amount)
                         // ...and add more for dust management
                         // TODO: Implement the test
                     }
@@ -934,7 +915,9 @@ mod tests {
 
     mod exclusion {
         use super::*;
+        use crate::query::asset_query::Exclude;
         use fuel_core_types::entities::coins::CoinId;
+        use std::borrow::Cow;
 
         async fn query(
             db: &ServiceDatabase,
@@ -947,7 +930,7 @@ mod tests {
             let spend_query = SpendQuery::new(
                 owner,
                 &query_per_asset,
-                Some(excluded_ids),
+                Cow::Owned(Exclude::new(excluded_ids)),
                 base_asset_id,
             )?;
             let coins = random_improve(&db.test_view(), &spend_query).await;
@@ -1009,7 +992,7 @@ mod tests {
                     // This range should...
                     1..=4 => {
                         // ...satisfy the amount
-                        assert_matches!(coins, Ok(coins) if coins.iter().sum::<u64>() >= amount)
+                        assert_matches!(coins, Ok(coins) if coins.iter().sum::<u64>() as u128 >= amount)
                         // ...and add more for dust management
                         // TODO: Implement the test
                     }
@@ -1088,12 +1071,14 @@ mod tests {
     mod indexed_coins_to_spend {
         use fuel_core_storage::iter::IntoBoxedIter;
         use fuel_core_types::{
-            entities::coins::coin::Coin,
+            entities::coins::{
+                coin::Coin,
+                CoinId,
+            },
             fuel_tx::{
                 AssetId,
                 TxId,
                 UtxoId,
-                Word,
             },
         };
 
@@ -1103,9 +1088,9 @@ mod tests {
                 select_coins_until,
                 CoinsQueryError,
                 CoinsToSpendIndexKey,
-                ExcludedCoinIds,
             },
             graphql_api::ports::CoinsToSpendIndexIter,
+            query::asset_query::Exclude,
         };
 
         const BATCH_SIZE: usize = 1;
@@ -1150,13 +1135,13 @@ mod tests {
                 .map(|spec| (spec.index_entry, spec.utxo_id))
                 .unzip();
 
-            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+            let exclude = Exclude::default();
 
             // When
             let result = select_coins_until(
                 futures::stream::iter(coins),
                 MAX,
-                &excluded,
+                &exclude,
                 |_, _| false,
             )
             .await
@@ -1180,14 +1165,13 @@ mod tests {
 
             // Exclude coin with amount '2'.
             let utxo_id = utxo_ids[1];
-            let excluded =
-                ExcludedCoinIds::new(std::iter::once(&utxo_id), std::iter::empty());
+            let exclude = Exclude::new(vec![CoinId::Utxo(utxo_id)]);
 
             // When
             let result = select_coins_until(
                 futures::stream::iter(coins),
                 MAX,
-                &excluded,
+                &exclude,
                 |_, _| false,
             )
             .await
@@ -1202,7 +1186,7 @@ mod tests {
         async fn select_coins_until_respects_predicate() {
             // Given
             const MAX: u16 = u16::MAX;
-            const TOTAL: u64 = 7;
+            const TOTAL: u128 = 7;
 
             let coins = setup_test_coins([1, 2, 3, 4, 5]);
             let (coins, _): (Vec<_>, Vec<_>) = coins
@@ -1210,16 +1194,16 @@ mod tests {
                 .map(|spec| (spec.index_entry, spec.utxo_id))
                 .unzip();
 
-            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+            let exclude = Exclude::default();
 
-            let predicate: fn(&CoinsToSpendIndexKey, u64) -> bool =
+            let predicate: fn(&CoinsToSpendIndexKey, u128) -> bool =
                 |_, total| total > TOTAL;
 
             // When
             let result = select_coins_until(
                 futures::stream::iter(coins),
                 MAX,
-                &excluded,
+                &exclude,
                 predicate,
             )
             .await
@@ -1234,7 +1218,7 @@ mod tests {
         async fn already_selected_big_coins_are_never_reselected_as_dust() {
             // Given
             const MAX: u16 = u16::MAX;
-            const TOTAL: u64 = 101;
+            const TOTAL: u128 = 101;
 
             let test_coins = [100, 100, 4, 3, 2];
             let big_coins_iter = setup_test_coins(test_coins)
@@ -1253,7 +1237,7 @@ mod tests {
                 dust_coins_iter,
             };
 
-            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+            let exclude = Exclude::default();
 
             // When
             let result = select_coins_to_spend(
@@ -1261,7 +1245,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
-                &excluded,
+                &exclude,
                 BATCH_SIZE,
             )
             .await
@@ -1302,7 +1286,7 @@ mod tests {
         async fn selects_double_the_value_of_coins() {
             // Given
             const MAX: u16 = u16::MAX;
-            const TOTAL: u64 = 10;
+            const TOTAL: u128 = 10;
 
             let coins = setup_test_coins([10, 10, 9, 8, 7]);
             let (coins, _): (Vec<_>, Vec<_>) = coins
@@ -1310,7 +1294,7 @@ mod tests {
                 .map(|spec| (spec.index_entry, spec.utxo_id))
                 .unzip();
 
-            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+            let exclude = Exclude::default();
 
             let coins_to_spend_iter = CoinsToSpendIndexIter {
                 big_coins_iter: coins.into_iter().into_boxed(),
@@ -1323,7 +1307,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
-                &excluded,
+                &exclude,
                 BATCH_SIZE,
             )
             .await
@@ -1338,7 +1322,7 @@ mod tests {
         async fn selection_algorithm_should_bail_on_storage_error() {
             // Given
             const MAX: u16 = u16::MAX;
-            const TOTAL: u64 = 101;
+            const TOTAL: u128 = 101;
 
             let coins = setup_test_coins([10, 9, 8, 7]);
             let (mut coins, _): (Vec<_>, Vec<_>) = coins
@@ -1350,7 +1334,7 @@ mod tests {
             let first_2: Vec<_> = coins.drain(..2).collect();
             let last_2: Vec<_> = std::mem::take(&mut coins);
 
-            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+            let exclude = Exclude::default();
 
             // Inject an error into the middle of coins.
             let coins: Vec<_> = first_2
@@ -1370,7 +1354,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
-                &excluded,
+                &exclude,
                 BATCH_SIZE,
             )
             .await;
@@ -1384,9 +1368,9 @@ mod tests {
         async fn selection_algorithm_should_bail_on_incorrect_max() {
             // Given
             const MAX: u16 = 0;
-            const TOTAL: u64 = 101;
+            const TOTAL: u128 = 101;
 
-            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+            let exclude = Exclude::default();
 
             let coins_to_spend_iter = CoinsToSpendIndexIter {
                 big_coins_iter: std::iter::empty().into_boxed(),
@@ -1398,7 +1382,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
-                &excluded,
+                &exclude,
                 BATCH_SIZE,
             )
             .await;
@@ -1411,9 +1395,9 @@ mod tests {
         async fn selection_algorithm_should_bail_on_incorrect_total() {
             // Given
             const MAX: u16 = 101;
-            const TOTAL: u64 = 0;
+            const TOTAL: u128 = 0;
 
-            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+            let exclude = Exclude::default();
 
             let coins_to_spend_iter = CoinsToSpendIndexIter {
                 big_coins_iter: std::iter::empty().into_boxed(),
@@ -1425,7 +1409,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
-                &excluded,
+                &exclude,
                 BATCH_SIZE,
             )
             .await;
@@ -1438,7 +1422,7 @@ mod tests {
         async fn selection_algorithm_should_bail_on_not_enough_coins() {
             // Given
             const MAX: u16 = 3;
-            const TOTAL: u64 = 2137;
+            const TOTAL: u128 = 2137;
 
             let coins = setup_test_coins([10, 9, 8, 7]);
             let (coins, _): (Vec<_>, Vec<_>) = coins
@@ -1446,7 +1430,7 @@ mod tests {
                 .map(|spec| (spec.index_entry, spec.utxo_id))
                 .unzip();
 
-            let excluded = ExcludedCoinIds::new(std::iter::empty(), std::iter::empty());
+            let exclude = Exclude::default();
 
             let coins_to_spend_iter = CoinsToSpendIndexIter {
                 big_coins_iter: coins.into_iter().into_boxed(),
@@ -1460,12 +1444,12 @@ mod tests {
                 TOTAL,
                 MAX,
                 &asset_id,
-                &excluded,
+                &exclude,
                 BATCH_SIZE,
             )
             .await;
 
-            const EXPECTED_COLLECTED_AMOUNT: Word = 10 + 9 + 8; // Because MAX == 3
+            const EXPECTED_COLLECTED_AMOUNT: u128 = 10 + 9 + 8; // Because MAX == 3
 
             // Then
             assert!(matches!(result, Err(actual_error)
@@ -1476,7 +1460,7 @@ mod tests {
     #[derive(Clone, Debug)]
     struct TestCase {
         db_amount: Vec<Word>,
-        target_amount: u64,
+        target_amount: u128,
         max_coins: u16,
     }
 
@@ -1518,7 +1502,7 @@ mod tests {
                     target: target_amount,
                     max: max_coins,
                 }],
-                None,
+                Cow::Owned(Exclude::default()),
                 base_asset_id,
             )?,
         )
@@ -1532,7 +1516,7 @@ mod tests {
     async fn insufficient_coins_returns_error() {
         let test_case = TestCase {
             db_amount: vec![0],
-            target_amount: u64::MAX,
+            target_amount: u128::MAX,
             max_coins: u16::MAX,
         };
         let mut rng = StdRng::seed_from_u64(0xF00DF00D);
@@ -1576,7 +1560,7 @@ mod tests {
     #[test_case::test_case(
         TestCase {
             db_amount: vec![u64::MAX, u64::MAX],
-            target_amount: u64::MAX,
+            target_amount: u64::MAX as u128,
             max_coins: u16::MAX,
         }
         => Ok(1)
@@ -1585,7 +1569,7 @@ mod tests {
     #[test_case::test_case(
         TestCase {
             db_amount: vec![2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, u64::MAX - 1],
-            target_amount: u64::MAX,
+            target_amount: u64::MAX as u128,
             max_coins: 2,
         }
         => Ok(2)
@@ -1608,7 +1592,7 @@ mod tests {
 
         let case = TestCase {
             db_amount: vec![u64::MAX, u64::MAX],
-            target_amount: u64::MAX,
+            target_amount: u128::MAX,
             max_coins: 0,
         };
 
