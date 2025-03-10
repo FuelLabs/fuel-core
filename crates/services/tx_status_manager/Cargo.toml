@@ -27,6 +27,7 @@ fuel-core-types = { path = "./../../types", features = ["test-helpers"] }
 mockall = { workspace = true }
 proptest = { workspace = true }
 test-strategy = { workspace = true }
+tokio = { workspace = true, features = ["test-util", "macros"] }
 tracing = { workspace = true }
 
 [features]

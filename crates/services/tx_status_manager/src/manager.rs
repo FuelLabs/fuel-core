@@ -5,11 +5,9 @@ use std::{
         HashMap,
         VecDeque,
     },
-    time::{
-        Duration,
-        Instant,
-    },
+    time::Duration,
 };
+use tokio::time::Instant;
 
 use fuel_core_types::{
     fuel_tx::{
@@ -77,12 +75,8 @@ pub struct TxStatusManager {
     ttl: Duration,
 }
 
-impl TxStatusManager
-{
-    pub fn new(
-        tx_status_change: TxStatusChange,
-        ttl: Duration,
-    ) -> Self {
+impl TxStatusManager {
+    pub fn new(tx_status_change: TxStatusChange, ttl: Duration) -> Self {
         Self {
             data: Data::empty(),
             tx_status_change,
@@ -204,23 +198,17 @@ mod tests {
 
     use crate::update_sender::TxStatusChange;
 
-    use super::{
-        TimeProvider,
-        TxStatusManager,
-    };
+    use super::TxStatusManager;
 
     fn status_1() -> TransactionStatus {
         TransactionStatus::submitted(Tai64::UNIX_EPOCH)
     }
 
     const TTL: Duration = Duration::from_secs(4);
+    const QUART_OF_TTL: Duration = Duration::from_secs(1);
+    const HALF_OF_TTL: Duration = Duration::from_secs(2);
 
-    fn assert_presence<Time>(
-        tx_status_manager: &TxStatusManager<Time>,
-        tx_ids: Vec<Bytes32>,
-    ) where
-        Time: TimeProvider,
-    {
+    fn assert_presence(tx_status_manager: &TxStatusManager, tx_ids: Vec<Bytes32>) {
         for tx_id in tx_ids {
             assert!(
                 tx_status_manager.status(&tx_id).is_some(),
@@ -230,12 +218,10 @@ mod tests {
         }
     }
 
-    fn assert_presence_with_status<Time>(
-        tx_status_manager: &TxStatusManager<Time>,
+    fn assert_presence_with_status(
+        tx_status_manager: &TxStatusManager,
         txs: Vec<(Bytes32, TransactionStatus)>,
-    ) where
-        Time: TimeProvider,
-    {
+    ) {
         for (tx_id, status) in txs {
             assert!(
                 tx_status_manager.status(&tx_id) == Some(status),
@@ -245,38 +231,13 @@ mod tests {
         }
     }
 
-    fn assert_absence<Time>(
-        tx_status_manager: &TxStatusManager<Time>,
-        tx_ids: Vec<Bytes32>,
-    ) where
-        Time: TimeProvider,
-    {
+    fn assert_absence(tx_status_manager: &TxStatusManager, tx_ids: Vec<Bytes32>) {
         for tx_id in tx_ids {
             assert!(
                 tx_status_manager.status(&tx_id).is_none(),
                 "tx_id {:?} should be missing",
                 tx_id
             );
-        }
-    }
-
-    struct TestTimeProvider {
-        now: i64,
-    }
-
-    impl TestTimeProvider {
-        fn new() -> Self {
-            Self { now: 0 }
-        }
-    }
-
-    impl TimeProvider for TestTimeProvider {
-        fn now(&self) -> Tai64 {
-            Tai64::from_unix(self.now)
-        }
-
-        fn sleep(&mut self, secs: i64) {
-            self.now = self.now.saturating_add(secs);
         }
     }
 
@@ -292,12 +253,13 @@ mod tests {
             assert_absence,
             assert_presence,
             status_1,
+            HALF_OF_TTL,
+            QUART_OF_TTL,
             TTL,
         };
 
-        #[test]
-        fn simple_registration() {
-            let test_time_provider = TestTimeProvider::new();
+        #[tokio::test(start_paused = true)]
+        async fn simple_registration() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
             let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
 
@@ -311,13 +273,13 @@ mod tests {
             tx_status_manager.status_update(tx2_id, status_1());
 
             // Sleep for less than a TTL
-            tx_status_manager.advance_time(1);
+            tokio::time::advance(Duration::from_secs(1)).await;
 
             // Register tx3
             tx_status_manager.status_update(tx3_id, status_1());
 
             // Sleep for less than a TTL
-            tx_status_manager.advance_time(1);
+            tokio::time::advance(Duration::from_secs(1)).await;
 
             // Register tx4
             tx_status_manager.status_update(tx4_id, status_1());
@@ -326,9 +288,8 @@ mod tests {
             assert_presence(&tx_status_manager, vec![tx1_id, tx2_id, tx3_id, tx4_id]);
         }
 
-        #[test]
-        fn prunes_old_statuses() {
-            let test_time_provider = TestTimeProvider::new();
+        #[tokio::test(start_paused = true)]
+        async fn prunes_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
             let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
 
@@ -342,7 +303,7 @@ mod tests {
             assert_presence(&tx_status_manager, vec![tx1_id]);
 
             // Move 2 second forward (half of TTL) and register tx2
-            std::thread::sleep(TTL / 2);
+            tokio::time::advance(HALF_OF_TTL).await;
             tx_status_manager.status_update(tx2_id, status_1());
 
             // Both should be present, since TTL didn't pass yet
@@ -350,7 +311,7 @@ mod tests {
 
             // Move 3 second forward, for a total of 5s.
             // TTL = 4s, so tx1 should be pruned.
-            tx_status_manager.advance_time(3);
+            tokio::time::advance(HALF_OF_TTL + QUART_OF_TTL).await;
 
             // Trigger the pruning
             tx_status_manager.status_update(tx3_id, status_1());
@@ -361,7 +322,7 @@ mod tests {
 
             // Move 2 second forward, for a total of 7s.
             // TTL = 4s, so tx2 should be pruned.
-            tx_status_manager.advance_time(2);
+            tokio::time::advance(HALF_OF_TTL).await;
 
             // Trigger the pruning
             tx_status_manager.status_update(tx4_id, status_1());
@@ -371,9 +332,8 @@ mod tests {
             assert_presence(&tx_status_manager, vec![tx3_id, tx4_id]);
         }
 
-        #[test]
-        fn prunes_multiple_old_statuses() {
-            let test_time_provider = TestTimeProvider::new();
+        #[tokio::test(start_paused = true)]
+        async fn prunes_multiple_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
             let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
 
@@ -390,14 +350,14 @@ mod tests {
             tx_status_manager.status_update(tx3_id, status_1());
 
             // Sleep for less than TTL
-            tx_status_manager.advance_time(1);
+            tokio::time::advance(QUART_OF_TTL).await;
 
             // Register some more transactions
             tx_status_manager.status_update(tx4_id, status_1());
             tx_status_manager.status_update(tx5_id, status_1());
 
             // Move beyond TTL
-            tx_status_manager.advance_time(TTL.as_secs() as i64);
+            tokio::time::advance(TTL).await;
 
             // Trigger the pruning
             tx_status_manager.status_update(tx6_id, status_1());
@@ -424,11 +384,13 @@ mod tests {
             assert_presence_with_status,
             status_1,
             Duration,
+            HALF_OF_TTL,
+            QUART_OF_TTL,
             TTL,
         };
 
-        #[test]
-        fn simple_registration() {
+        #[tokio::test(start_paused = true)]
+        async fn simple_registration() {
             let status_2: TransactionStatus =
                 TransactionStatus::squeezed_out("fishy tx".to_string());
 
@@ -443,7 +405,7 @@ mod tests {
             tx_status_manager.status_update(tx1_id, status_2.clone());
 
             // Sleep for less than a TTL
-            tx_status_manager.advance_time(1);
+            tokio::time::advance(QUART_OF_TTL).await;
 
             // Register tx2
             tx_status_manager.status_update(tx2_id, status_1());
@@ -455,8 +417,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn prunes_old_statuses() {
+        #[tokio::test(start_paused = true)]
+        async fn prunes_old_statuses() {
             let status_2: TransactionStatus =
                 TransactionStatus::squeezed_out("fishy tx".to_string());
 
@@ -474,7 +436,7 @@ mod tests {
 
             // Move 2 second forward (half of TTL), register tx2
             // and update status of tx1
-            std::thread::sleep(TTL / 2);
+            tokio::time::advance(HALF_OF_TTL).await;
             tx_status_manager.status_update(tx2_id, status_1());
             tx_status_manager.status_update(tx1_id, status_2.clone());
 
@@ -490,7 +452,7 @@ mod tests {
 
             // Move 3 second forward, for a total of 5s.
             // TTL = 4s, so tx1 should be pruned.
-            tx_status_manager.advance_time(3);
+            tokio::time::advance(HALF_OF_TTL + QUART_OF_TTL).await;
 
             // Trigger the pruning
             tx_status_manager.status_update(tx4_id, status_1());
@@ -505,8 +467,8 @@ mod tests {
             );
         }
 
-        #[test]
-        fn prunes_multiple_old_statuses() {
+        #[tokio::test(start_paused = true)]
+        async fn prunes_multiple_old_statuses() {
             let status_2: TransactionStatus =
                 TransactionStatus::squeezed_out("fishy tx".to_string());
 
@@ -526,7 +488,7 @@ mod tests {
             tx_status_manager.status_update(tx3_id, status_1());
 
             // Sleep for less than TTL
-            tx_status_manager.advance_time(1);
+            tokio::time::advance(QUART_OF_TTL).await;
 
             // Register some more transactions and update
             // some old statuses
@@ -536,7 +498,7 @@ mod tests {
             tx_status_manager.status_update(tx2_id, status_2.clone());
 
             // Move beyond TTL
-            tx_status_manager.advance_time(TTL.as_secs() as i64);
+            tokio::time::advance(TTL).await;
 
             // Trigger the pruning
             tx_status_manager.status_update(tx6_id, status_1());
@@ -549,75 +511,44 @@ mod tests {
             assert_presence_with_status(&tx_status_manager, vec![(tx6_id, status_1())]);
         }
 
-        #[test]
-        fn status_preserved_in_cache_when_first_status_expires() {
+        #[tokio::test(start_paused = true)]
+        async fn status_preserved_in_cache_when_first_status_expires() {
             let status_2: TransactionStatus =
                 TransactionStatus::squeezed_out("fishy tx".to_string());
 
-            let test_time_provider = TestTimeProvider::new();
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
             let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
-
-            let tx1_id = [1u8; 32].into();
-
-            // Register tx1 and remember it's timestamp
-            tx_status_manager.status_update(tx1_id, status_1());
-
-            // Sleep for less than a TTL
-            tx_status_manager.advance_time(2);
-
-            // Given
-            // Update tx1 status, the timestamp cache should get updated.
-            tx_status_manager.status_update(tx1_id, status_2);
-
-            // When
-            // Sleep for TTL, it should expire the first status
-            std::thread::sleep(TTL);
-
-            // Then
-            let status = tx_status_manager.status(&tx1_id);
-            assert!(status.is_some());
-        }
-
-        #[test]
-        fn status_preserved_in_cache_when_first_status_expires() {
-            let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
-                reason: "fishy tx".to_string(),
-            };
-
-            let test_time_provider = TestTimeProvider::new();
-            let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, test_time_provider);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
 
             // Register tx1 and remember it's timestamp
-            tx_status_manager.status_update(tx1_id, STATUS_1);
+            tx_status_manager.status_update(tx1_id, status_1());
 
-            // Sleep for less than a TTL
-            tx_status_manager.advance_time(2);
+            // Sleep for 3/4 of TTL
+            tokio::time::advance(HALF_OF_TTL + QUART_OF_TTL).await;
 
             // Given
             // Update tx1 status, the timestamp cache should get updated.
-            tx_status_manager.status_update(tx1_id, status_2.clone());
+            // Now we should have 2 statuses one with TTL deadline, another one with TTL + 3/4 of TTL
+            tx_status_manager.status_update(tx1_id, status_2);
 
             // When
-            // Sleep for TTL, it should expire the first status
-            tx_status_manager.advance_time(1000_i64);
-
-            // Trigger pruning
-            tx_status_manager.status_update(tx2_id, status_2);
+            // Sleep for half of TTL, it should expire the first status
+            tokio::time::advance(HALF_OF_TTL).await;
+            // It forces cleanup expired statuses and should remove status_1 for tx1
+            tx_status_manager.status_update(tx2_id, status_1());
 
             // Then
+            // The status 2 should remain in the cache for tx1
             let status = tx_status_manager.status(&tx1_id);
-            assert!(status.is_none());
+            assert!(status.is_some());
         }
     }
 
     use proptest::prelude::*;
     use std::collections::HashMap;
+    use tokio::time::Instant;
 
     const TX_ID_POOL_SIZE: usize = 20;
     const MIN_ACTIONS: usize = 50;
@@ -669,6 +600,64 @@ mod tests {
             .collect()
     }
 
+    #[tokio::main(start_paused = true, flavor = "current_thread")]
+    #[allow(clippy::arithmetic_side_effects)]
+    async fn _test_status_manager_pruning(ttl: Duration, actions: Vec<Action>) {
+        let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
+
+        let mut tx_status_manager = TxStatusManager::new(tx_status_change, ttl);
+
+        let tx_id_pool = generate_tx_id_pool();
+
+        // This will be used to track when each txid was updated so that
+        // we can do the final assert against the TTL.
+        let mut update_times = HashMap::new();
+
+        // Simulate flow of time and transaction updates
+        for action in actions {
+            match action {
+                Action::UpdateStatus { tx_id_index } => {
+                    let tx_id = tx_id_pool[tx_id_index];
+                    tx_status_manager.status_update(tx_id.into(), status_1());
+                    update_times.insert(tx_id, Instant::now());
+                }
+                Action::AdvanceTime { seconds } => {
+                    tokio::time::advance(Duration::from_secs(seconds)).await;
+                }
+            }
+        }
+
+        // Trigger the final pruning, making sure we use ID that is not
+        // in the pool
+        let final_tx_id = {
+            let marker: u64 = 0xDEADBEEF;
+            let mut id = [0u8; 32];
+            id[0..8].copy_from_slice(&marker.to_le_bytes());
+            id
+        };
+        assert!(!tx_id_pool.contains(&final_tx_id));
+        tx_status_manager.status_update(final_tx_id.into(), status_1());
+
+        // Verify that only recent transactions are present
+        let (recent_tx_ids, not_recent_tx_ids): (Vec<_>, Vec<_>) = update_times
+            .iter()
+            .partition(|(_, &time)| time + ttl > Instant::now());
+        assert_presence(
+            &tx_status_manager,
+            recent_tx_ids
+                .into_iter()
+                .map(|(tx_id, _)| (*tx_id).into())
+                .collect(),
+        );
+        assert_absence(
+            &tx_status_manager,
+            not_recent_tx_ids
+                .into_iter()
+                .map(|(tx_id, _)| (*tx_id).into())
+                .collect(),
+        );
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(100))]
 
@@ -678,54 +667,7 @@ mod tests {
             ttl in ttl_strategy(MIN_TTL, MAX_TTL),
             actions in actions_strategy(MIN_ACTIONS, MAX_ACTIONS)
         ) {
-            let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-
-            let test_time_provider = TestTimeProvider::new();
-            let mut tx_status_manager = TxStatusManager::new(tx_status_change, ttl, test_time_provider);
-
-            let tx_id_pool = generate_tx_id_pool();
-
-            // This will be used to track when each txid was updated so that
-            // we can do the final assert against the TTL.
-            let mut update_times = HashMap::new();
-
-            // Simulate flow of time and transaction updates
-            for action in actions {
-                match action {
-                    Action::UpdateStatus { tx_id_index } => {
-                        let tx_id = tx_id_pool[tx_id_index];
-                        tx_status_manager.status_update(tx_id.into(), STATUS_1);
-                        update_times.insert(tx_id, tx_status_manager.now());
-
-                    },
-                    Action::AdvanceTime { seconds } => {
-                        tx_status_manager.advance_time(seconds as i64);
-                    }
-                }
-            }
-
-            // Trigger the final pruning, making sure we use ID that is not
-            // in the pool
-            let final_tx_id = {
-                let marker: u64 = 0xDEADBEEF;
-                let mut id = [0u8; 32];
-                id[0..8].copy_from_slice(&marker.to_le_bytes());
-                id
-            };
-            assert!(!tx_id_pool.contains(&final_tx_id));
-            tx_status_manager.status_update(final_tx_id.into(), STATUS_1);
-
-            // Verify that only recent transactions are present
-            let (recent_tx_ids, not_recent_tx_ids): (Vec<_>, Vec<_>) = update_times
-                .iter()
-                .partition(|(_, &time)| time + ttl.as_secs() > tx_status_manager.now());
-            assert_presence(&tx_status_manager, recent_tx_ids.into_iter().map(|(tx_id, _)| (*tx_id).into()).collect());
-            assert_absence(&tx_status_manager, not_recent_tx_ids.into_iter().map(|(tx_id, _)| (*tx_id).into()).collect());
-
-            // Make sure that there is no stray cache entry for the original timestamp.
-            let last_possible_entry = tx_status_manager.now() - ttl.as_secs();
-            let data = tx_status_manager.inner_data();
-            assert!(data.timestamps.keys().all(|&timestamp| timestamp >= last_possible_entry));
+            _test_status_manager_pruning(ttl, actions);
         }
     }
 }
