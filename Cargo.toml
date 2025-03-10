@@ -18,6 +18,7 @@ members = [
   "crates/proof_system/global_merkle_root/service",
   "crates/proof_system/global_merkle_root/storage",
   "crates/services",
+  "crates/services/compression",
   "crates/services/consensus_module",
   "crates/services/consensus_module/bft",
   "crates/services/consensus_module/poa",
