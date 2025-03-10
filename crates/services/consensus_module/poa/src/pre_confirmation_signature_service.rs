@@ -41,6 +41,7 @@ pub mod tx_receiver;
 #[cfg(test)]
 pub mod tests;
 
+#[allow(dead_code)]
 pub struct PreConfirmationSignatureTask<
     TxReceiver,
     Broadcast,
