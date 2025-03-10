@@ -631,15 +631,15 @@ impl Default for MockBlockProductionReadySignal {
 }
 
 impl MockBlockProductionReadySignal {
-    fn send_trigger(&self) {
+    fn send_ready_signal(&self) {
         self.0.notify_one();
     }
 }
 
 #[tokio::test]
 async fn consensus_service__run__will_not_produce_blocks_without_trigger() {
-    // this test basically checks that the block production trigger is working
-    // no blocks should be produced if the trigger is not set
+    // this test basically checks that the block production ready signal is working
+    // no blocks should be produced if the ready signal is not sent
 
     // given
     let (block_producer, mut block_receiver) = FakeBlockProducer::new();
@@ -679,7 +679,7 @@ async fn consensus_service__run__will_not_produce_blocks_without_trigger() {
     // when
     let service = ServiceRunner::new(task);
     service.start_and_await().await.unwrap();
-    // we don't send the trigger
+    // we don't send the ready signal
 
     // then
     time::sleep(Duration::from_millis(200)).await;
@@ -726,7 +726,7 @@ async fn consensus_service__run__will_produce_blocks_with_trigger() {
     // when
     let service = ServiceRunner::new(task);
     service.start_and_await().await.unwrap();
-    block_production_ready_signal.send_trigger();
+    block_production_ready_signal.send_ready_signal();
 
     // then
     let produced_block = block_receiver.recv().await.unwrap();
