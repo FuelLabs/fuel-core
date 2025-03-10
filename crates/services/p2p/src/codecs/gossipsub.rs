@@ -53,7 +53,7 @@ where
             GossipTopicTag::NewTx => {
                 GossipsubMessage::NewTx(self.codec.decode(encoded_data)?)
             }
-            GossipTopicTag::TxPreConfirmations => {
+            GossipTopicTag::TxPreconfirmations => {
                 GossipsubMessage::TxPreConfirmations(self.codec.decode(encoded_data)?)
             }
         };

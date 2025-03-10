@@ -5,7 +5,10 @@ use super::{
     FuelP2PService,
     PublishError,
 };
-use crate as fuel_core_p2p;
+use crate::{
+    self as fuel_core_p2p,
+    ports::P2PPreConfirmationMessage,
+};
 use fuel_core_p2p::{
     config::Config,
     gossipsub::{
@@ -52,7 +55,6 @@ use fuel_core_types::{
     services::p2p::{
         GossipsubMessageAcceptance,
         NetworkableTransactionPool,
-        PreConfirmationMessage,
         Transactions,
     },
 };
@@ -616,13 +618,13 @@ async fn gossipsub_broadcast_tx_with_accept__new_tx() {
 
 #[tokio::test]
 #[instrument]
-async fn gossipsub_broadcast_tx_with_accept__tx_confirmations() {
+async fn gossipsub_broadcast_tx_with_accept__tx_preconfirmations() {
     for _ in 0..100 {
         tokio::time::timeout(
             Duration::from_secs(20),
             gossipsub_broadcast(
                 GossipsubBroadcastRequest::TxPreConfirmations(Arc::new(
-                    PreConfirmationMessage::default_test_confirmation(),
+                    P2PPreConfirmationMessage::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Accept,
                 None,
@@ -654,13 +656,13 @@ async fn gossipsub_broadcast_tx_with_reject__new_tx() {
 
 #[tokio::test]
 #[instrument]
-async fn gossipsub_broadcast_tx_with_reject__tx_confirmations() {
+async fn gossipsub_broadcast_tx_with_reject__tx_preconfirmations() {
     for _ in 0..100 {
         tokio::time::timeout(
             Duration::from_secs(5),
             gossipsub_broadcast(
                 GossipsubBroadcastRequest::TxPreConfirmations(Arc::new(
-                    PreConfirmationMessage::default_test_confirmation(),
+                    P2PPreConfirmationMessage::default_test_confirmation(),
                 )),
                 GossipsubMessageAcceptance::Reject,
                 None,
@@ -812,7 +814,7 @@ async fn gossipsub_broadcast(
             }
             GossipsubBroadcastRequest::TxPreConfirmations(_) => (
                 TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
-                GossipTopicTag::TxPreConfirmations,
+                GossipTopicTag::TxPreconfirmations,
             ),
         };
 
@@ -935,7 +937,7 @@ fn check_message_matches_request(
         (
             GossipsubMessage::TxPreConfirmations(received),
             GossipsubBroadcastRequest::TxPreConfirmations(requested),
-        ) => assert_eq!(requested.deref(), received, "Both messages were `Confirmations`, but the received message did not match the requested message"),
+        ) => assert_eq!(requested.deref(), received, "Both messages were `Preconfirmations`, but the received message did not match the requested message"),
         _ => panic!("Message does not match the expected request, expected: {:?}, actual: {:?}", expected, message),
     }
 }
@@ -1366,14 +1368,13 @@ async fn gossipsub_peer_limit_works() {
     tokio::time::timeout(
         Duration::from_secs(5),
         gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(
-                Transaction::default_test_tx(),
-            )),
+            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default_test_tx())),
             GossipsubMessageAcceptance::Accept,
-            Some(1) // limit to 1 peer, therefore the function will timeout, as it will not be able to propagate the message
+            Some(1), // limit to 1 peer, therefore the function will timeout, as it will not be able to propagate the message
         ),
     )
-        .await.expect_err("Should have timed out");
+    .await
+    .expect_err("Should have timed out");
 }
 
 #[tokio::test]

@@ -1,6 +1,6 @@
 use crate::schema::tx::types::TransactionStatus as ApiTxStatus;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::TxStatusMessage;
+use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
     fuel_types::Bytes32,
     services::txpool::TransactionStatus,
@@ -54,9 +54,9 @@ where
             // Close the stream if the transaction is anything other than
             // `Submitted`.
             if !matches!(
-                status,
-                TxStatusMessage::Status(TransactionStatus::Submitted { .. })
-            ) {
+                 status,
+                 TxStatusMessage::Status(TransactionStatus::Submitted(_))
+             ) {
                 if let Some(close) = close.take() {
                     let _ = close.send(());
                 }

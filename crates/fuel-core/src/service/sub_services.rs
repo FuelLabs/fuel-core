@@ -79,6 +79,7 @@ use super::{
     adapters::{
         FuelBlockSigner,
         P2PAdapter,
+        TxStatusManagerAdapter,
     },
     genesis::create_genesis_block,
     DbType,
@@ -91,6 +92,7 @@ pub type PoAService = fuel_core_poa::Service<
     SignMode,
     InDirectoryPredefinedBlocks,
     SystemTime,
+    TxStatusManagerAdapter,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -102,7 +104,6 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     FuelGasPriceProvider<AlgorithmV1, u32, u64>,
     ChainStateInfoProvider,
 >;
-
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 
 // TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
@@ -252,6 +253,13 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
     );
 
+    let tx_status_manager = fuel_core_tx_status_manager::new_service(
+        p2p_adapter.clone(),
+        config.tx_status_manager.clone(),
+    );
+    let tx_status_manager_adapter =
+        TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
+
     let txpool = fuel_core_txpool::new_service(
         chain_id,
         config.txpool.clone(),
@@ -263,6 +271,7 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
         executor.clone(),
         new_txs_updater,
+        tx_status_manager_adapter.clone(),
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
@@ -335,6 +344,7 @@ pub fn init_sub_services(
             &last_block_header,
             poa_config,
             tx_pool_adapter.clone(),
+            tx_status_manager_adapter.clone(),
             producer_adapter.clone(),
             importer_adapter.clone(),
             p2p_adapter.clone(),
@@ -364,7 +374,7 @@ pub fn init_sub_services(
     let graphql_block_importer =
         GraphQLBlockImporter::new(importer_adapter.clone(), import_result_provider);
     let graphql_worker_context = worker_service::Context {
-        tx_pool: tx_pool_adapter.clone(),
+        tx_status_manager: tx_status_manager_adapter.clone(),
         block_importer: graphql_block_importer,
         on_chain_database: database.on_chain().clone(),
         off_chain_database: database.off_chain().clone(),
@@ -397,6 +407,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         database.off_chain().clone(),
         Box::new(tx_pool_adapter),
+        Box::new(tx_status_manager_adapter.clone()),
         Box::new(producer_adapter),
         Box::new(poa_adapter.clone()),
         Box::new(p2p_adapter),
@@ -418,6 +429,7 @@ pub fn init_sub_services(
         block_importer: importer_adapter,
         executor,
         config: config.clone(),
+        tx_status_manager: tx_status_manager_adapter,
     };
 
     #[allow(unused_mut)]
@@ -449,6 +461,7 @@ pub fn init_sub_services(
 
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
+    services.push(Box::new(tx_status_manager));
 
     Ok((services, shared))
 }

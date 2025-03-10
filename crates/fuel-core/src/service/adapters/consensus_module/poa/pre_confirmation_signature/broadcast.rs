@@ -6,18 +6,24 @@ use crate::service::adapters::{
     P2PAdapter,
 };
 use fuel_core_poa::pre_confirmation_signature_service::{
-    broadcast::Broadcast,
+    broadcast::{
+        Broadcast,
+        PublicKey,
+    },
     error::{
         Error as PreConfServiceError,
         Result as PreConfServiceResult,
     },
     parent_signature::ParentSignature,
+    signing_key::SigningKey,
 };
 use fuel_core_types::{
+    fuel_tx::Bytes64,
     services::{
         p2p::{
             DelegatePreConfirmationKey,
             PreConfirmationMessage,
+            SignedByBlockProducerDelegation,
             SignedPreconfirmationByDelegate,
         },
         preconfirmation::{
@@ -26,15 +32,6 @@ use fuel_core_types::{
         },
     },
     tai64::Tai64,
-};
-
-use fuel_core_poa::pre_confirmation_signature_service::{
-    broadcast::PublicKey,
-    signing_key::SigningKey,
-};
-use fuel_core_types::{
-    fuel_tx::Bytes64,
-    services::p2p::SignedByBlockProducerDelegation,
 };
 use std::sync::Arc;
 
@@ -119,8 +116,12 @@ mod tests {
         let mut adapter = P2PAdapter::new(service, peer_report_config);
         let preconfirmations = vec![Preconfirmation {
             tx_id: Default::default(),
-            status: PreconfirmationStatus::FailureByBlockProducer {
-                block_height: Default::default(),
+            status: PreconfirmationStatus::Failure {
+                tx_pointer: Default::default(),
+                total_gas: 0,
+                total_fee: 0,
+                receipts: vec![],
+                outputs: vec![],
             },
         }];
         let signature = ed25519::Signature::from_bytes(&[5u8; 64]);

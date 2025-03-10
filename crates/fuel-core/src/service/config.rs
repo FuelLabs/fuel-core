@@ -26,6 +26,7 @@ use fuel_core_p2p::config::{
 pub use fuel_core_poa::Trigger;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
+use fuel_core_tx_status_manager::config::Config as TxStatusManagerConfig;
 use fuel_core_txpool::config::Config as TxPoolConfig;
 use fuel_core_types::{
     blockchain::header::StateTransitionBytecodeVersion,
@@ -68,6 +69,7 @@ pub struct Config {
     pub predefined_blocks_path: Option<PathBuf>,
     pub vm: VMConfig,
     pub txpool: TxPoolConfig,
+    pub tx_status_manager: TxStatusManagerConfig,
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
     pub da_compression: DaCompressionConfig,
@@ -145,6 +147,8 @@ impl Config {
         let network_name = snapshot_reader.chain_config().chain_name.clone();
         let gas_price_config = GasPriceConfig::local_node();
 
+        const MAX_TXS_TTL: Duration = Duration::from_secs(60 * 100000000);
+
         Self {
             graphql_config: GraphQLConfig {
                 addr: std::net::SocketAddr::new(
@@ -180,7 +184,11 @@ impl Config {
             vm: Default::default(),
             txpool: TxPoolConfig {
                 utxo_validation,
-                max_txs_ttl: Duration::from_secs(60 * 100000000),
+                max_txs_ttl: MAX_TXS_TTL,
+                ..Default::default()
+            },
+            tx_status_manager: TxStatusManagerConfig {
+                subscription_ttl: MAX_TXS_TTL,
                 ..Default::default()
             },
             block_producer: fuel_core_producer::Config {

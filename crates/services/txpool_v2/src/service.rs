@@ -44,6 +44,7 @@ use fuel_core_txpool::{
         P2PRequests,
         P2PSubscriptions,
         TxPoolPersistentStorage,
+        TxStatusManager as TxStatusManagerTrait,
         WasmChecker as WasmCheckerTrait,
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
@@ -61,7 +62,6 @@ use fuel_core_txpool::{
         },
         Storage,
     },
-    update_sender::TxStatusChange,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -125,7 +125,8 @@ pub type TxPool = Pool<
 
 pub(crate) type Shared<T> = Arc<RwLock<T>>;
 
-pub type Service<View, P2P> = ServiceRunner<Task<View, P2P>>;
+pub type Service<View, P2P, TxStatusManager> =
+    ServiceRunner<Task<View, P2P, TxStatusManager>>;
 
 /// Structure returned to others modules containing the transaction and
 /// some useful infos
@@ -156,9 +157,7 @@ impl TryFrom<TxInfo> for TransactionStatus {
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_secs() as i64;
 
-        Ok(TransactionStatus::Submitted {
-            timestamp: Tai64::from_unix(unit_time),
-        })
+        Ok(TransactionStatus::submitted(Tai64::from_unix(unit_time)))
     }
 }
 
@@ -172,7 +171,10 @@ pub enum WritePoolRequest {
     },
 }
 
-pub struct Task<View, P2P> {
+pub struct Task<View, P2P, TxStatusManager>
+where
+    TxStatusManager: TxStatusManagerTrait,
+{
     chain_id: ChainId,
     utxo_validation: bool,
     subscriptions: Subscriptions,
@@ -182,6 +184,7 @@ pub struct Task<View, P2P> {
     p2p_sync_process: AsyncProcessor,
     pruner: TransactionPruner,
     pool_worker: PoolWorkerInterface,
+    tx_status_manager: Arc<TxStatusManager>,
     current_height_writer: SeqLockWriter<BlockHeight>,
     current_height_reader: SeqLockReader<BlockHeight>,
     tx_sync_history: Shared<HashSet<PeerId>>,
@@ -190,16 +193,17 @@ pub struct Task<View, P2P> {
 }
 
 #[async_trait::async_trait]
-impl<View, P2P> RunnableService for Task<View, P2P>
+impl<View, P2P, TxStatusManager> RunnableService for Task<View, P2P, TxStatusManager>
 where
     View: TxPoolPersistentStorage,
     P2P: P2PRequests,
+    TxStatusManager: TxStatusManagerTrait,
 {
     const NAME: &'static str = "TxPool";
 
     type SharedData = SharedState;
 
-    type Task = Task<View, P2P>;
+    type Task = Task<View, P2P, TxStatusManager>;
 
     type TaskParams = ();
 
@@ -216,10 +220,11 @@ where
     }
 }
 
-impl<View, P2P> RunnableTask for Task<View, P2P>
+impl<View, P2P, TxStatusManager> RunnableTask for Task<View, P2P, TxStatusManager>
 where
     View: TxPoolPersistentStorage,
     P2P: P2PRequests,
+    TxStatusManager: TxStatusManagerTrait,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -287,10 +292,11 @@ where
     }
 }
 
-impl<View, P2P> Task<View, P2P>
+impl<View, P2P, TxStatusManager> Task<View, P2P, TxStatusManager>
 where
     View: TxPoolPersistentStorage,
     P2P: P2PRequests,
+    TxStatusManager: TxStatusManagerTrait,
 {
     fn import_block(&mut self, result: SharedImportResult) -> TaskNextAction {
         let new_height = *result.sealed_block.entity.header().height();
@@ -398,10 +404,10 @@ where
                 }
 
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
-
-                self.shared_state
-                    .tx_status_sender
-                    .send_submitted(tx_id, Tai64::from_unix(duration));
+                self.tx_status_manager.status_update(
+                    tx_id,
+                    TransactionStatus::submitted(Tai64::from_unix(duration)),
+                );
 
                 if expiration < u32::MAX.into() {
                     let block_height_expiration = self
@@ -431,14 +437,16 @@ where
                     }
                 }
 
-                self.shared_state
-                    .tx_status_sender
-                    .send_squeezed_out(tx_id, error);
+                self.tx_status_manager.status_update(
+                    tx_id,
+                    TransactionStatus::squeezed_out(error.to_string()),
+                );
             }
             PoolNotification::Removed { tx_id, error } => {
-                self.shared_state
-                    .tx_status_sender
-                    .send_squeezed_out(tx_id, error);
+                self.tx_status_manager.status_update(
+                    tx_id,
+                    TransactionStatus::squeezed_out(error.to_string()),
+                );
             }
         }
     }
@@ -472,10 +480,10 @@ where
         let p2p = self.p2p.clone();
         let verification = self.verification.clone();
         let pool_insert_request_sender = self.pool_worker.request_insert_sender.clone();
-        let shared_state = self.shared_state.clone();
         let current_height_reader = self.current_height_reader.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
+        let tx_status_manager = self.tx_status_manager.clone();
 
         let insert_transaction_thread_pool_op = move || {
             let current_height = current_height_reader.read();
@@ -520,7 +528,11 @@ where
                             }
                         }
                     }
-                    shared_state.tx_status_sender.send_squeezed_out(tx_id, err);
+
+                    tx_status_manager.status_update(
+                        tx_id,
+                        TransactionStatus::squeezed_out(err.to_string()),
+                    );
                     return
                 }
             };
@@ -538,6 +550,7 @@ where
                 tracing::error!("Failed to send the insert request: {}", e);
             }
         };
+
         move || {
             if metrics {
                 let start_time = tokio::time::Instant::now();
@@ -708,6 +721,7 @@ pub fn new_service<
     ChainStateProvider,
     GasPriceProvider,
     WasmChecker,
+    TxStatusManager,
 >(
     chain_id: ChainId,
     config: Config,
@@ -719,7 +733,8 @@ pub fn new_service<
     gas_price_provider: GasPriceProvider,
     wasm_checker: WasmChecker,
     new_txs_notifier: watch::Sender<()>,
-) -> Service<PSView, P2P>
+    tx_status_manager: TxStatusManager,
+) -> Service<PSView, P2P, TxStatusManager>
 where
     P2P: P2PSubscriptions<GossipedTransaction = TransactionGossipData>,
     P2P: P2PRequests,
@@ -729,6 +744,7 @@ where
     GasPriceProvider: GasPriceProviderTrait,
     WasmChecker: WasmCheckerTrait,
     BlockImporter: BlockImporterTrait,
+    TxStatusManager: TxStatusManagerTrait,
 {
     let mut ttl_timer = tokio::time::interval(config.ttl_check_interval);
     ttl_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -744,14 +760,6 @@ where
 
     let (pool_stats_sender, pool_stats_receiver) =
         tokio::sync::watch::channel(TxPoolStats::default());
-    let tx_status_sender = TxStatusChange::new(
-        config.max_tx_update_subscriptions,
-        // The connection should be closed automatically after the `SqueezedOut` event.
-        // But because of slow/malicious consumers, the subscriber can still be occupied.
-        // We allow the subscriber to receive the event produced by TxPool's TTL.
-        // But we still want to drop subscribers after `2 * TxPool_TTL`.
-        config.max_txs_ttl.saturating_mul(2),
-    );
 
     let subscriptions = Subscriptions {
         new_tx_source: new_peers_subscribed_stream,
@@ -817,7 +825,6 @@ where
         request_remove_sender: pool_worker.request_remove_sender.clone(),
         request_read_sender: pool_worker.request_read_sender.clone(),
         write_pool_requests_sender,
-        tx_status_sender,
         select_transactions_requests_sender: pool_worker
             .extract_block_transactions_sender
             .clone(),
@@ -840,5 +847,6 @@ where
         shared_state,
         metrics,
         tx_sync_history: Default::default(),
+        tx_status_manager: Arc::new(tx_status_manager),
     })
 }

@@ -8,12 +8,9 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types::ChainId,
-    services::{
-        p2p::{
-            GossipsubMessageAcceptance,
-            PeerId,
-        },
-        txpool::TransactionStatus,
+    services::p2p::{
+        GossipsubMessageAcceptance,
+        PeerId,
     },
 };
 use std::{
@@ -26,17 +23,13 @@ use tokio::sync::{
     broadcast,
     Notify,
 };
-use tokio_stream::StreamExt;
 
-use crate::{
-    tests::{
-        mocks::MockP2P,
-        universe::{
-            TestPoolUniverse,
-            TEST_COIN_AMOUNT,
-        },
+use crate::tests::{
+    mocks::MockP2P,
+    universe::{
+        TestPoolUniverse,
+        TEST_COIN_AMOUNT,
     },
-    tx_status_stream::TxStatusMessage,
 };
 
 #[tokio::test]
@@ -112,6 +105,8 @@ async fn test_new_subscription_p2p() {
             "Found tx id didn't match"
         );
     }
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -160,12 +155,8 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
     service.start_and_await().await.unwrap();
     service.shared.try_insert(vec![tx1.clone()]).unwrap();
 
-    universe
-        .waiting_txs_insertion(
-            service.shared.new_tx_notification_subscribe(),
-            vec![tx1.id(&Default::default())],
-        )
-        .await;
+    let ids = vec![tx1.id(&Default::default())];
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     wait_notification.notified().await;
     tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -186,6 +177,8 @@ async fn test_new_subscription_p2p_ask_subset_of_transactions() {
             "Found tx id didn't match"
         );
     }
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -196,18 +189,10 @@ async fn can_insert_from_p2p() {
     let p2p = MockP2P::new_with_txs(vec![tx1.clone()]);
     let service = universe.build_service(Some(p2p), None);
 
-    let mut receiver = service
-        .shared
-        .tx_update_subscribe(tx1.id(&Default::default()))
-        .unwrap();
-
     service.start_and_await().await.unwrap();
 
-    let res = receiver.next().await;
-    assert!(matches!(
-        res,
-        Some(TxStatusMessage::Status(TransactionStatus::Submitted { .. }))
-    ));
+    let ids = vec![tx1.id(&Default::default())];
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     // fetch tx from pool
     let out = service
@@ -218,6 +203,8 @@ async fn can_insert_from_p2p() {
 
     let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
     assert_eq!(tx1, got_tx);
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -237,29 +224,13 @@ async fn insert_from_local_broadcasts_to_p2p() {
     let service = universe.build_service(Some(p2p), None);
     service.start_and_await().await.unwrap();
 
-    let mut new_tx_notification = service.shared.new_tx_notification_subscribe();
-    let mut subscribe_update = service
-        .shared
-        .tx_update_subscribe(tx1.cached_id().unwrap())
-        .unwrap();
-
     service.shared.insert(tx1.clone()).await.unwrap();
 
     // verify status updates
-    assert_eq!(
-        new_tx_notification.recv().await,
-        Ok(tx1.cached_id().unwrap()),
-        "First added should be tx1"
-    );
-    let update = subscribe_update.next().await;
-    assert!(
-        matches!(
-            update,
-            Some(TxStatusMessage::Status(TransactionStatus::Submitted { .. }))
-        ),
-        "Got {:?}",
-        update
-    );
+    let ids = vec![tx1.cached_id().unwrap()];
+    universe.await_expected_tx_statuses_submitted(ids).await;
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -279,20 +250,12 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     // build txpool service
     let service = universe.build_service(Some(p2p), None);
 
-    // verify tx status update from p2p injected tx is successful
-    let mut receiver = service
-        .shared
-        .tx_update_subscribe(tx1.id(&Default::default()))
-        .unwrap();
-
     // start the service
     service.start_and_await().await.unwrap();
 
-    let res = receiver.next().await;
-    assert!(matches!(
-        res,
-        Some(TxStatusMessage::Status(TransactionStatus::Submitted { .. }))
-    ));
+    // verify tx status update from p2p injected tx is successful
+    let ids = vec![tx1.id(&Default::default())];
+    universe.await_expected_tx_statuses_submitted(ids).await;
 
     // verify tx was not broadcast to p2p
     let not_broadcast =
@@ -300,7 +263,9 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     assert!(
         not_broadcast.is_err(),
         "expected a timeout because no broadcast should have occurred"
-    )
+    );
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -336,7 +301,9 @@ async fn test_gossipped_transaction_with_check_error_rejected() {
     assert!(
         gossip_validity_notified.is_ok(),
         "expected to receive gossip validity notification"
-    )
+    );
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -375,7 +342,9 @@ async fn test_gossipped_mint_rejected() {
     assert!(
         gossip_validity_notified.is_ok(),
         "expected to receive gossip validity notification"
-    )
+    );
+
+    service.stop_and_await().await.unwrap();
 }
 
 #[tokio::test]
@@ -412,5 +381,6 @@ async fn test_gossipped_transaction_with_transient_error_ignored() {
         gossip_validity_notified.is_ok(),
         "expected to receive gossip validity notification"
     );
+
     service.stop_and_await().await.unwrap();
 }

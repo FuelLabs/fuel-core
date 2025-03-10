@@ -11,7 +11,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum GossipTopicTag {
     NewTx,
-    TxPreConfirmations,
+    TxPreconfirmations,
 }
 
 /// Takes `Arc<T>` and wraps it in a matching GossipsubBroadcastRequest

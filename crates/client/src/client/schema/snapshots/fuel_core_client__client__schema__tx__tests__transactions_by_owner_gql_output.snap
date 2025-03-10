@@ -56,6 +56,8 @@ query TransactionsByOwnerQuery($owner: Address!, $after: String, $before: String
           ... on PreconfirmationSuccessStatus {
             txPointer
             transactionId
+            totalFee
+            totalGas
             receipts {
               param1
               param2
@@ -85,6 +87,33 @@ query TransactionsByOwnerQuery($owner: Address!, $after: String, $before: String
               nonce
               contractId
               subId
+            }
+            resolvedOutputs {
+              __typename
+              ... on CoinOutput {
+                to
+                amount
+                assetId
+              }
+              ... on ContractOutput {
+                inputIndex
+                balanceRoot
+                stateRoot
+              }
+              ... on ChangeOutput {
+                to
+                amount
+                assetId
+              }
+              ... on VariableOutput {
+                to
+                amount
+                assetId
+              }
+              ... on ContractCreated {
+                contract
+                stateRoot
+              }
             }
           }
           ... on SqueezedOutStatus {
@@ -138,6 +167,8 @@ query TransactionsByOwnerQuery($owner: Address!, $after: String, $before: String
           ... on PreconfirmationFailureStatus {
             txPointer
             transactionId
+            totalFee
+            totalGas
             receipts {
               param1
               param2
@@ -167,6 +198,33 @@ query TransactionsByOwnerQuery($owner: Address!, $after: String, $before: String
               nonce
               contractId
               subId
+            }
+            resolvedOutputs {
+              __typename
+              ... on CoinOutput {
+                to
+                amount
+                assetId
+              }
+              ... on ContractOutput {
+                inputIndex
+                balanceRoot
+                stateRoot
+              }
+              ... on ChangeOutput {
+                to
+                amount
+                assetId
+              }
+              ... on VariableOutput {
+                to
+                amount
+                assetId
+              }
+              ... on ContractCreated {
+                contract
+                stateRoot
+              }
             }
             reason
           }

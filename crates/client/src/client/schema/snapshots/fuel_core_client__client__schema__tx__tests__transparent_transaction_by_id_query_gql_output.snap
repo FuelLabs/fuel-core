@@ -138,6 +138,8 @@ query TransactionQuery($id: TransactionId!) {
       ... on PreconfirmationSuccessStatus {
         txPointer
         transactionId
+        totalFee
+        totalGas
         receipts {
           param1
           param2
@@ -167,6 +169,33 @@ query TransactionQuery($id: TransactionId!) {
           nonce
           contractId
           subId
+        }
+        resolvedOutputs {
+          __typename
+          ... on CoinOutput {
+            to
+            amount
+            assetId
+          }
+          ... on ContractOutput {
+            inputIndex
+            balanceRoot
+            stateRoot
+          }
+          ... on ChangeOutput {
+            to
+            amount
+            assetId
+          }
+          ... on VariableOutput {
+            to
+            amount
+            assetId
+          }
+          ... on ContractCreated {
+            contract
+            stateRoot
+          }
         }
       }
       ... on SqueezedOutStatus {
@@ -220,6 +249,8 @@ query TransactionQuery($id: TransactionId!) {
       ... on PreconfirmationFailureStatus {
         txPointer
         transactionId
+        totalFee
+        totalGas
         receipts {
           param1
           param2
@@ -249,6 +280,33 @@ query TransactionQuery($id: TransactionId!) {
           nonce
           contractId
           subId
+        }
+        resolvedOutputs {
+          __typename
+          ... on CoinOutput {
+            to
+            amount
+            assetId
+          }
+          ... on ContractOutput {
+            inputIndex
+            balanceRoot
+            stateRoot
+          }
+          ... on ChangeOutput {
+            to
+            amount
+            assetId
+          }
+          ... on VariableOutput {
+            to
+            amount
+            assetId
+          }
+          ... on ContractCreated {
+            contract
+            stateRoot
+          }
         }
         reason
       }

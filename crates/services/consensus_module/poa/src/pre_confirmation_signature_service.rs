@@ -79,7 +79,7 @@ where
     Parent: ParentSignature,
     Preconfirmations: serde::Serialize + Send,
 {
-    const NAME: &'static str = "PreConfirmationSignatureTask";
+    const NAME: &'static str = "PreconfirmationSignatureTask";
     type SharedData = EmptyShared;
     type Task = Self;
     type TaskParams = ();
