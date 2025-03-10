@@ -70,24 +70,17 @@ use std::{
 mod off_chain;
 mod on_chain;
 
+#[async_trait]
 impl TxStatusManagerPort for TxStatusManagerAdapter {
-    fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {
-        self.manager.status(tx_id)
+    async fn status(&self, tx_id: TxId) -> anyhow::Result<Option<TransactionStatus>> {
+        self.manager.get_status(tx_id).await
     }
 
-    fn tx_update_subscribe(
+    async fn tx_update_subscribe(
         &self,
         tx_id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
-        self.manager.tx_update_subscribe(tx_id)
-    }
-
-    fn submission_time(&self, id: TxId) -> Option<Tai64> {
-        if let Some(TransactionStatus::Submitted { timestamp }) = self.status(&id) {
-            Some(timestamp)
-        } else {
-            None
-        }
+        self.manager.subscribe(tx_id).await
     }
 }
 
@@ -193,7 +186,7 @@ impl worker::TxStatusManager for TxStatusManagerAdapter {
         status: TransactionStatus,
     ) {
         tracing::info!("Transaction {id} successfully included in block {block_height}");
-        self.manager.status_update(id, status);
+        self.manager.update_status(id, status);
     }
 }
 

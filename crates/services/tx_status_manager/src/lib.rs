@@ -3,7 +3,7 @@
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
-//#![deny(warnings)]
+// #![deny(warnings)]
 
 pub mod config;
 mod error;
@@ -15,13 +15,10 @@ mod tx_status_stream;
 mod update_sender;
 pub mod utils;
 
-pub use manager::{
-    TimeProvider,
-    TxStatusManager,
-};
+pub use manager::TxStatusManager;
 pub use service::{
     new_service,
-    SystemTimeProvider,
+    SharedData,
     Task,
 };
 pub use tx_status_stream::{

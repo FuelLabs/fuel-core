@@ -115,9 +115,6 @@ mod relayer;
 mod tx_pool;
 mod tx_status_manager;
 
-// TODO[RC]: This goes to CLI
-const TX_STATUS_MANAGER_TTL: Duration = Duration::from_secs(5);
-
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
@@ -559,6 +556,7 @@ impl Command {
 
         let TxStatusManagerArgs {
             tx_number_active_subscriptions,
+            status_cache_ttl,
         } = tx_status_manager;
 
         let black_list = BlackList::new(
@@ -607,6 +605,14 @@ impl Command {
             block_activity_threshold: 0,
             da_poll_interval: gas_price.da_poll_interval.map(Into::into),
         };
+
+        let tx_pool_ttl: Duration = tx_pool_ttl.into();
+        let subscription_ttl =
+            // The connection should be closed automatically after the `SqueezedOut` event.
+            // But because of slow/malicious consumers, the subscriber can still be occupied.
+            // We allow the subscriber to receive the event produced by TxPool's TTL.
+            // But we still want to drop subscribers after `2 * TxPool_TTL`.
+            tx_pool_ttl.saturating_mul(2);
 
         let config = Config {
             graphql_config: GraphQLConfig {
@@ -669,7 +675,7 @@ impl Command {
             },
             txpool: TxPoolConfig {
                 max_txs_chain_count: tx_max_chain_count,
-                max_txs_ttl: tx_pool_ttl.into(),
+                max_txs_ttl: tx_pool_ttl,
                 ttl_check_interval: tx_ttl_check_interval.into(),
                 utxo_validation,
                 black_list,
@@ -704,8 +710,8 @@ impl Command {
             memory_pool_size,
             tx_status_manager: TxStatusManagerConfig {
                 max_tx_update_subscriptions: tx_number_active_subscriptions,
-                max_txs_ttl: tx_pool_ttl.into(),
-                max_tx_status_ttl: TX_STATUS_MANAGER_TTL,
+                subscription_ttl,
+                status_cache_ttl: status_cache_ttl.into(),
             },
         };
         Ok(config)
