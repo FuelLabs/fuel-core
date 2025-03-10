@@ -85,7 +85,7 @@ query TransactionQuery($id: TransactionId!) {
           contractId
           subId
         }
-        outputs {
+        resolvedOutputs {
           __typename
           ... on CoinOutput {
             to
@@ -196,7 +196,7 @@ query TransactionQuery($id: TransactionId!) {
           contractId
           subId
         }
-        outputs {
+        resolvedOutputs {
           __typename
           ... on CoinOutput {
             to
