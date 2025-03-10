@@ -70,19 +70,42 @@ impl Data {
     }
 }
 
+pub trait TimeProvider {
+    fn now(&self) -> Tai64 {
+        Tai64::now()
+    }
+
+    #[cfg(test)]
+    fn sleep(&mut self, secs: i64) {
+        std::thread::sleep(Duration::from_secs(secs as u64));
+    }
+}
+
 #[derive(Clone)]
-pub struct TxStatusManager {
+pub struct TxStatusManager<Time>
+where
+    Time: TimeProvider,
+{
     data: Arc<Mutex<Data>>,
     tx_status_change: TxStatusChange,
     ttl: u64,
+    time_provider: Time,
 }
 
-impl TxStatusManager {
-    pub fn new(tx_status_change: TxStatusChange, ttl: Duration) -> Self {
+impl<Time> TxStatusManager<Time>
+where
+    Time: TimeProvider,
+{
+    pub fn new(
+        tx_status_change: TxStatusChange,
+        ttl: Duration,
+        time_provider: Time,
+    ) -> Self {
         Self {
             data: Arc::new(Mutex::new(Data::empty())),
             tx_status_change,
             ttl: ttl.as_secs(),
+            time_provider,
         }
     }
 
@@ -91,8 +114,13 @@ impl TxStatusManager {
         self.data.lock()
     }
 
+    #[cfg(test)]
+    fn advance_time(&mut self, secs: i64) {
+        self.time_provider.sleep(secs);
+    }
+
     fn prune_old_statuses(&self, data: &mut MutexGuard<Data>) {
-        let timestamp = Tai64::now();
+        let timestamp = self.time_provider.now();
 
         // If timestamp is longer than the entire possible timespan we can not
         // do much about it anyway.
@@ -120,7 +148,7 @@ impl TxStatusManager {
         tx_id: TxId,
         tx_status: &TransactionStatus,
     ) {
-        let timestamp = Tai64::now();
+        let timestamp = self.time_provider.now();
 
         if let Some((_, prev_timestamp)) = data.statuses.get(&tx_id) {
             if timestamp != *prev_timestamp {
@@ -226,7 +254,10 @@ mod tests {
         tai64::Tai64,
     };
 
-    use super::TxStatusManager;
+    use super::{
+        TimeProvider,
+        TxStatusManager,
+    };
 
     const STATUS_1: TransactionStatus = TransactionStatus::Submitted {
         timestamp: Tai64::UNIX_EPOCH,
@@ -234,7 +265,12 @@ mod tests {
 
     const TTL: Duration = Duration::from_secs(4);
 
-    fn assert_presence(tx_status_manager: &TxStatusManager, tx_ids: Vec<Bytes32>) {
+    fn assert_presence<Time>(
+        tx_status_manager: &TxStatusManager<Time>,
+        tx_ids: Vec<Bytes32>,
+    ) where
+        Time: TimeProvider,
+    {
         for tx_id in tx_ids {
             assert!(
                 tx_status_manager.status(&tx_id).is_some(),
@@ -244,10 +280,12 @@ mod tests {
         }
     }
 
-    fn assert_presence_with_status(
-        tx_status_manager: &TxStatusManager,
+    fn assert_presence_with_status<Time>(
+        tx_status_manager: &TxStatusManager<Time>,
         txs: Vec<(Bytes32, TransactionStatus)>,
-    ) {
+    ) where
+        Time: TimeProvider,
+    {
         for (tx_id, status) in txs {
             assert!(
                 tx_status_manager.status(&tx_id) == Some(status),
@@ -257,13 +295,38 @@ mod tests {
         }
     }
 
-    fn assert_absence(tx_status_manager: &TxStatusManager, tx_ids: Vec<Bytes32>) {
+    fn assert_absence<Time>(
+        tx_status_manager: &TxStatusManager<Time>,
+        tx_ids: Vec<Bytes32>,
+    ) where
+        Time: TimeProvider,
+    {
         for tx_id in tx_ids {
             assert!(
                 tx_status_manager.status(&tx_id).is_none(),
                 "tx_id {:?} should be missing",
                 tx_id
             );
+        }
+    }
+
+    struct TestTimeProvider {
+        now: i64,
+    }
+
+    impl TestTimeProvider {
+        fn new() -> Self {
+            Self { now: 0 }
+        }
+    }
+
+    impl TimeProvider for TestTimeProvider {
+        fn now(&self) -> Tai64 {
+            Tai64::from_unix(self.now)
+        }
+
+        fn sleep(&mut self, secs: i64) {
+            self.now += secs;
         }
     }
 
@@ -278,14 +341,17 @@ mod tests {
         use super::{
             assert_absence,
             assert_presence,
+            TestTimeProvider,
             STATUS_1,
             TTL,
         };
 
         #[test]
         fn simple_registration() {
+            let test_time_provider = TestTimeProvider::new();
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, test_time_provider);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -297,13 +363,13 @@ mod tests {
             tx_status_manager.status_update(tx2_id, STATUS_1);
 
             // Sleep for less than a TTL
-            std::thread::sleep(Duration::from_secs(1));
+            tx_status_manager.advance_time(1);
 
             // Register tx3
             tx_status_manager.status_update(tx3_id, STATUS_1);
 
             // Sleep for less than a TTL
-            std::thread::sleep(Duration::from_secs(1));
+            tx_status_manager.advance_time(1);
 
             // Register tx4
             tx_status_manager.status_update(tx4_id, STATUS_1);
@@ -314,8 +380,10 @@ mod tests {
 
         #[test]
         fn prunes_old_statuses() {
+            let test_time_provider = TestTimeProvider::new();
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, test_time_provider);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -327,7 +395,7 @@ mod tests {
             assert_presence(&tx_status_manager, vec![tx1_id]);
 
             // Move 2 second forward (half of TTL) and register tx2
-            std::thread::sleep(TTL / 2);
+            tx_status_manager.advance_time((TTL / 2).as_secs() as i64);
             tx_status_manager.status_update(tx2_id, STATUS_1);
 
             // Both should be present, since TTL didn't pass yet
@@ -335,7 +403,7 @@ mod tests {
 
             // Move 3 second forward, for a total of 5s.
             // TTL = 4s, so tx1 should be pruned.
-            std::thread::sleep(Duration::from_secs(3));
+            tx_status_manager.advance_time(3);
 
             // Trigger the pruning
             tx_status_manager.status_update(tx3_id, STATUS_1);
@@ -346,7 +414,7 @@ mod tests {
 
             // Move 2 second forward, for a total of 7s.
             // TTL = 4s, so tx2 should be pruned.
-            std::thread::sleep(Duration::from_secs(2));
+            tx_status_manager.advance_time(2);
 
             // Trigger the pruning
             tx_status_manager.status_update(tx4_id, STATUS_1);
@@ -358,8 +426,10 @@ mod tests {
 
         #[test]
         fn prunes_multiple_old_statuses() {
+            let test_time_provider = TestTimeProvider::new();
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, test_time_provider);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -374,14 +444,14 @@ mod tests {
             tx_status_manager.status_update(tx3_id, STATUS_1);
 
             // Sleep for less than TTL
-            std::thread::sleep(Duration::from_secs(1));
+            tx_status_manager.advance_time(1);
 
             // Register some more transactions
             tx_status_manager.status_update(tx4_id, STATUS_1);
             tx_status_manager.status_update(tx5_id, STATUS_1);
 
             // Move beyond TTL
-            std::thread::sleep(TTL);
+            tx_status_manager.advance_time(TTL.as_secs() as i64);
 
             // Trigger the pruning
             tx_status_manager.status_update(tx6_id, STATUS_1);
@@ -407,18 +477,21 @@ mod tests {
             assert_absence,
             assert_presence_with_status,
             Duration,
+            TestTimeProvider,
             STATUS_1,
             TTL,
         };
 
         #[test]
         fn simple_registration() {
+            let test_time_provider = TestTimeProvider::new();
             let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
                 reason: "fishy tx".to_string(),
             };
 
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, test_time_provider);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -428,7 +501,7 @@ mod tests {
             tx_status_manager.status_update(tx1_id, status_2.clone());
 
             // Sleep for less than a TTL
-            std::thread::sleep(Duration::from_secs(1));
+            tx_status_manager.advance_time(1);
 
             // Register tx2
             tx_status_manager.status_update(tx2_id, STATUS_1);
@@ -442,12 +515,14 @@ mod tests {
 
         #[test]
         fn prunes_old_statuses() {
+            let test_time_provider = TestTimeProvider::new();
             let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
                 reason: "fishy tx".to_string(),
             };
 
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, test_time_provider);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -460,7 +535,7 @@ mod tests {
 
             // Move 2 second forward (half of TTL), register tx2
             // and update status of tx1
-            std::thread::sleep(TTL / 2);
+            tx_status_manager.advance_time((TTL / 2).as_secs() as i64);
             tx_status_manager.status_update(tx2_id, STATUS_1);
             tx_status_manager.status_update(tx1_id, status_2.clone());
 
@@ -476,7 +551,7 @@ mod tests {
 
             // Move 3 second forward, for a total of 5s.
             // TTL = 4s, so tx1 should be pruned.
-            std::thread::sleep(Duration::from_secs(3));
+            tx_status_manager.advance_time(3);
 
             // Trigger the pruning
             tx_status_manager.status_update(tx4_id, STATUS_1);
@@ -493,12 +568,14 @@ mod tests {
 
         #[test]
         fn prunes_multiple_old_statuses() {
+            let test_time_provider = TestTimeProvider::new();
             let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
                 reason: "fishy tx".to_string(),
             };
 
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, test_time_provider);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -513,7 +590,7 @@ mod tests {
             tx_status_manager.status_update(tx3_id, STATUS_1);
 
             // Sleep for less than TTL
-            std::thread::sleep(Duration::from_secs(1));
+            tx_status_manager.advance_time(1);
 
             // Register some more transactions and update
             // some old statuses
@@ -523,7 +600,7 @@ mod tests {
             tx_status_manager.status_update(tx2_id, status_2.clone());
 
             // Move beyond TTL
-            std::thread::sleep(TTL);
+            tx_status_manager.advance_time(TTL.as_secs() as i64);
 
             // Trigger the pruning
             tx_status_manager.status_update(tx6_id, STATUS_1);
@@ -542,8 +619,10 @@ mod tests {
                 reason: "fishy tx".to_string(),
             };
 
+            let test_time_provider = TestTimeProvider::new();
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, test_time_provider);
 
             let tx1_id = [1u8; 32].into();
 
@@ -555,7 +634,7 @@ mod tests {
             };
 
             // Sleep for less than a TTL
-            std::thread::sleep(Duration::from_secs(2));
+            tx_status_manager.advance_time(2);
 
             // Update tx1 status, the timestamp cache should get updated.
             tx_status_manager.status_update(tx1_id, status_2);
@@ -569,8 +648,6 @@ mod tests {
             }
         }
 
-        // TODO[RC]: Optimization - update the tests to not rely on systemtime, inject
-        // Rafal, check slack please=D
-        // timestamps instead. This will make it possible to write a efficient proptest.
+        // Add proptest
     }
 }

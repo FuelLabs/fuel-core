@@ -16,6 +16,7 @@ use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_tx_status_manager::{
+    SystemTimeProvider,
     TxStatusManager,
     TxStatusStream,
 };
@@ -457,11 +458,11 @@ impl BlockImporterAdapter {
 
 #[derive(Clone)]
 pub struct TxStatusManagerAdapter {
-    manager: TxStatusManager,
+    manager: TxStatusManager<SystemTimeProvider>,
 }
 
 impl TxStatusManagerAdapter {
-    pub fn new(manager: TxStatusManager) -> Self {
+    pub fn new(manager: TxStatusManager<SystemTimeProvider>) -> Self {
         Self { manager }
     }
 

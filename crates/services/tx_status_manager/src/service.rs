@@ -18,7 +18,10 @@ use futures::StreamExt;
 
 use crate::{
     config::Config,
-    manager::TxStatusManager,
+    manager::{
+        TimeProvider,
+        TxStatusManager,
+    },
     ports::{
         P2PPreConfirmationGossipData,
         P2PPreConfirmationMessage,
@@ -28,12 +31,22 @@ use crate::{
     update_sender::TxStatusChange,
 };
 
-pub struct Task {
-    manager: TxStatusManager,
+#[derive(Clone)]
+pub struct SystemTimeProvider;
+impl TimeProvider for SystemTimeProvider {}
+
+pub struct Task<Time>
+where
+    Time: TimeProvider,
+{
+    manager: TxStatusManager<Time>,
     subscriptions: Subscriptions,
 }
 
-impl Task {
+impl<Time> Task<Time>
+where
+    Time: TimeProvider,
+{
     fn new_preconfirmations_from_p2p(
         &mut self,
         preconfirmations: P2PPreConfirmationMessage,
@@ -60,9 +73,12 @@ impl Task {
 }
 
 #[async_trait::async_trait]
-impl RunnableService for Task {
+impl<Time> RunnableService for Task<Time>
+where
+    Time: TimeProvider + Send + Sync + Clone + 'static,
+{
     const NAME: &'static str = "TxStatusManagerTask";
-    type SharedData = TxStatusManager;
+    type SharedData = TxStatusManager<Time>;
     type Task = Self;
     type TaskParams = ();
 
@@ -79,7 +95,10 @@ impl RunnableService for Task {
     }
 }
 
-impl RunnableTask for Task {
+impl<Time> RunnableTask for Task<Time>
+where
+    Time: TimeProvider + Send + Sync + Clone + 'static,
+{
     async fn run(
         &mut self,
         watcher: &mut fuel_core_services::StateWatcher,
@@ -110,14 +129,20 @@ impl RunnableTask for Task {
     }
 }
 
-pub fn new_service<P2P>(p2p: P2P, config: Config) -> ServiceRunner<Task>
+pub fn new_service<P2P>(
+    p2p: P2P,
+    config: Config,
+) -> ServiceRunner<Task<SystemTimeProvider>>
 where
     P2P: P2PSubscriptions<GossipedStatuses = P2PPreConfirmationGossipData>,
+    SystemTimeProvider: Clone,
 {
     let tx_status_from_p2p_stream = p2p.gossiped_tx_statuses();
     let subscriptions = Subscriptions {
         new_tx_status: tx_status_from_p2p_stream,
     };
+
+    let system_time_provider = SystemTimeProvider;
 
     let tx_status_sender = TxStatusChange::new(
         config.max_tx_update_subscriptions,
@@ -127,8 +152,11 @@ where
         // But we still want to drop subscribers after `2 * TxPool_TTL`.
         config.max_txs_ttl.saturating_mul(2),
     );
-    let tx_status_manager =
-        TxStatusManager::new(tx_status_sender, config.max_tx_status_ttl);
+    let tx_status_manager = TxStatusManager::new(
+        tx_status_sender,
+        config.max_tx_status_ttl,
+        system_time_provider,
+    );
 
     ServiceRunner::new(Task {
         subscriptions,
