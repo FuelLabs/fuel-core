@@ -12,6 +12,7 @@ use crate::{
     config::Config,
     new_service,
     update_sender::TxStatusChange,
+    SystemTimeProvider,
     Task,
     TxStatusManager,
 };
@@ -26,7 +27,7 @@ const TX_STATUS_MANAGER_TTL: Duration = Duration::from_secs(5);
 pub struct TestTxStatusManagerUniverse {
     rng: StdRng,
     config: Config,
-    tx_status_manager: Option<Arc<Mutex<TxStatusManager>>>,
+    tx_status_manager: Option<Arc<Mutex<TxStatusManager<SystemTimeProvider>>>>,
 }
 
 impl Default for TestTxStatusManagerUniverse {
@@ -53,14 +54,21 @@ impl TestTxStatusManagerUniverse {
     pub fn build_tx_status_manager(&mut self) {
         let tx_status_sender = TxStatusChange::new(1000, Duration::from_secs(360));
 
+        // TODO[RC]: Get from outside
+        let time_provider = SystemTimeProvider;
+
         let tx_status_manager = Arc::new(Mutex::new(TxStatusManager::new(
             tx_status_sender,
             TX_STATUS_MANAGER_TTL,
+            time_provider,
         )));
         self.tx_status_manager = Some(tx_status_manager.clone());
     }
 
-    pub fn build_service(&self, p2p: Option<MockP2P>) -> ServiceRunner<Task> {
+    pub fn build_service(
+        &self,
+        p2p: Option<MockP2P>,
+    ) -> ServiceRunner<Task<SystemTimeProvider>> {
         let p2p = p2p.unwrap_or_else(|| MockP2P::new_with_statuses(vec![]));
 
         new_service(p2p, self.config.clone())
