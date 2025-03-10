@@ -1,8 +1,9 @@
 use std::future::Future;
 
-use fuel_core_global_merkle_root_storage::column::Column;
+use fuel_core_global_merkle_root_storage::column::TableColumn;
 use fuel_core_storage::{
     kv_store::KeyValueInspect,
+    merkle::column::MerkleizedColumn,
     transactional::Modifiable,
 };
 use fuel_core_types::blockchain::block::Block;
@@ -17,6 +18,12 @@ pub trait BlockStream {
 }
 
 /// The storage requirements for the merkle root service
-pub trait ServiceStorage: KeyValueInspect<Column = Column> + Modifiable {}
+pub trait ServiceStorage:
+    KeyValueInspect<Column = MerkleizedColumn<TableColumn>> + Modifiable
+{
+}
 
-impl<T> ServiceStorage for T where T: KeyValueInspect<Column = Column> + Modifiable {}
+impl<T> ServiceStorage for T where
+    T: KeyValueInspect<Column = MerkleizedColumn<TableColumn>> + Modifiable
+{
+}

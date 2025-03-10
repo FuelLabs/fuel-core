@@ -8,12 +8,16 @@ use fuel_core_storage::tables::{
 };
 
 impl MerkleizedTableColumn for ContractsRawCode {
+    type TableColumn = TableColumn;
+
     fn table_column() -> TableColumn {
         TableColumn::ContractsRawCode
     }
 }
 
 impl MerkleizedTableColumn for ContractsLatestUtxo {
+    type TableColumn = TableColumn;
+
     fn table_column() -> TableColumn {
         TableColumn::ContractsLatestUtxo
     }

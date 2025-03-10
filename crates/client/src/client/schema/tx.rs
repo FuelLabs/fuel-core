@@ -255,7 +255,7 @@ pub struct PreconfirmationSuccessStatus {
     pub total_fee: U64,
     pub total_gas: U64,
     pub receipts: Option<Vec<Receipt>>,
-    pub outputs: Option<Vec<Output>>,
+    pub resolved_outputs: Option<Vec<Output>>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -270,7 +270,7 @@ pub struct PreconfirmationSuccessStatusWithTransaction {
     pub total_gas: U64,
     pub transaction: Option<OpaqueTransaction>,
     pub receipts: Option<Vec<Receipt>>,
-    pub outputs: Option<Vec<Output>>,
+    pub resolved_outputs: Option<Vec<Output>>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -306,7 +306,7 @@ pub struct PreconfirmationFailureStatus {
     pub total_fee: U64,
     pub total_gas: U64,
     pub receipts: Option<Vec<Receipt>>,
-    pub outputs: Option<Vec<Output>>,
+    pub resolved_outputs: Option<Vec<Output>>,
     pub reason: String,
 }
 
@@ -322,7 +322,7 @@ pub struct PreconfirmationFailureStatusWithTransaction {
     pub total_gas: U64,
     pub transaction: Option<OpaqueTransaction>,
     pub receipts: Option<Vec<Receipt>>,
-    pub outputs: Option<Vec<Output>>,
+    pub resolved_outputs: Option<Vec<Output>>,
     pub reason: String,
 }
 
