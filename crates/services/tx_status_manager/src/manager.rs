@@ -140,23 +140,7 @@ impl TxStatusManager {
     pub fn status_update(&mut self, tx_id: TxId, tx_status: TransactionStatus) {
         tracing::debug!(%tx_id, ?tx_status, "new tx status");
 
-        // TODO[RC]: Capacity checks? - Protected by TxPool capacity checks, except for the squeezed state. Maybe introduce some limit.
-        // TODO[RC]: Shall we store squeezed out variants as well?
         self.register_status(tx_id, tx_status.clone());
-
-        match &tx_status {
-            TransactionStatus::Submitted(_)
-            | TransactionStatus::Success(_)
-            | TransactionStatus::SqueezedOut(_)
-            | TransactionStatus::Failure(_) => (),
-            // TODO[RC]: Handle these new variants
-            TransactionStatus::PreConfirmationSuccess(_) => todo!(),
-            TransactionStatus::PreConfirmationSqueezedOut(_) => {
-                // TODO[RC]: Squeezed out should still have the tx_id, not just the reason
-                todo!()
-            }
-            TransactionStatus::PreConfirmationFailure(_) => todo!(),
-        };
 
         self.tx_status_change
             .update_sender
