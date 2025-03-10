@@ -84,6 +84,7 @@ use std::{
     num::NonZeroU64,
     path::PathBuf,
     str::FromStr,
+    time::Duration,
 };
 use tracing::{
     info,
@@ -113,6 +114,9 @@ mod profiling;
 mod relayer;
 mod tx_pool;
 mod tx_status_manager;
+
+// TODO[RC]: This goes to CLI
+const TX_STATUS_MANAGER_TTL: Duration = Duration::from_secs(5);
 
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
@@ -701,6 +705,7 @@ impl Command {
             tx_status_manager: TxStatusManagerConfig {
                 max_tx_update_subscriptions: tx_number_active_subscriptions,
                 max_txs_ttl: tx_pool_ttl.into(),
+                max_tx_status_ttl: TX_STATUS_MANAGER_TTL,
             },
         };
         Ok(config)

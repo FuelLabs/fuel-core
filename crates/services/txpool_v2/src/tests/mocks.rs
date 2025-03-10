@@ -68,7 +68,6 @@ use std::{
         Arc,
         Mutex,
     },
-    thread,
 };
 use tokio::sync::mpsc::{
     Receiver,
@@ -98,8 +97,8 @@ impl MockTxStatusManager {
 impl ports::TxStatusManager for MockTxStatusManager {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
         let tx = self.tx.clone();
-        thread::spawn(move || {
-            tx.blocking_send((tx_id, tx_status)).unwrap();
+        tokio::spawn(async move {
+            tx.send((tx_id, tx_status)).await.unwrap();
         });
     }
 }
