@@ -52,12 +52,12 @@ use crate::{
     schema::build_schema,
     service::{
         adapters::{
-            block_production_trigger::BlockProductionTrigger,
             chain_state_info_provider,
             consensus_module::poa::InDirectoryPredefinedBlocks,
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
+            ready_signal::ReadySignal,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ChainStateInfoProvider,
@@ -92,7 +92,7 @@ pub type PoAService = fuel_core_poa::Service<
     SignMode,
     InDirectoryPredefinedBlocks,
     SystemTime,
-    BlockProductionTrigger,
+    ReadySignal,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -113,7 +113,7 @@ pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
 pub fn init_sub_services(
     config: &Config,
     database: CombinedDatabase,
-    block_production_trigger: BlockProductionTrigger,
+    block_production_ready_signal: ReadySignal,
 ) -> anyhow::Result<(SubServices, SharedState)> {
     let chain_config = config.snapshot_reader.chain_config();
     let chain_id = chain_config.consensus_parameters.chain_id();

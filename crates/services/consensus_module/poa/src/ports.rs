@@ -143,25 +143,25 @@ pub trait GetTime: Send + Sync {
     fn now(&self) -> Tai64;
 }
 
-pub trait TriggerBlockProduction: Send + Sync {
-    fn wait_for_trigger(&self) -> impl core::future::Future<Output = ()> + Send;
+pub trait WaitForReadySignal: Send + Sync {
+    fn wait_for_ready_signal(&self) -> impl core::future::Future<Output = ()> + Send;
 }
 
-pub(crate) struct BlockProductionTrigger<TBP> {
-    notifier: TBP,
+pub(crate) struct BlockProductionReadySignal<RS> {
+    ready_signal: RS,
     notified: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
-impl<TBP> TriggerBlockProduction for BlockProductionTrigger<TBP>
+impl<RS> WaitForReadySignal for BlockProductionReadySignal<RS>
 where
-    TBP: TriggerBlockProduction,
+    RS: WaitForReadySignal,
 {
     /// Cache the notification to avoid waiting for the trigger multiple times.
-    async fn wait_for_trigger(&self) {
+    async fn wait_for_ready_signal(&self) {
         if self.notified.load(std::sync::atomic::Ordering::Acquire) {
             return;
         }
-        self.notifier.wait_for_trigger().await;
+        self.ready_signal.wait_for_ready_signal().await;
         // this is the first and only time we are notified
         tracing::info!("Block Production has been triggered.");
 
@@ -170,13 +170,13 @@ where
     }
 }
 
-impl<TBP> BlockProductionTrigger<TBP>
+impl<RS> BlockProductionReadySignal<RS>
 where
-    TBP: TriggerBlockProduction,
+    RS: WaitForReadySignal,
 {
-    pub(crate) fn new(notifier: TBP) -> Self {
+    pub(crate) fn new(ready_signal: RS) -> Self {
         Self {
-            notifier,
+            ready_signal,
             notified: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }

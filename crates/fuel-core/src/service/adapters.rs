@@ -78,7 +78,7 @@ pub mod shared_sequencer;
 pub mod sync;
 pub mod txpool;
 
-pub mod block_production_trigger;
+pub mod ready_signal;
 
 #[derive(Debug, Clone)]
 pub struct ChainStateInfoProvider {

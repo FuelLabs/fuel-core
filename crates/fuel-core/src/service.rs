@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use adapters::block_production_trigger::BlockProductionTrigger;
+use adapters::ready_signal::ReadySignal;
 pub use config::{
     Config,
     DbType,
@@ -137,7 +137,7 @@ impl FuelService {
         tracing::info!("Initializing sub services");
         database.sync_aux_db_heights(shutdown_listener)?;
 
-        let block_production_trigger = BlockProductionTrigger::new();
+        let block_production_ready_signal = ReadySignal::new();
 
         let (services, shared) = sub_services::init_sub_services(
             &config,
@@ -407,7 +407,7 @@ impl Task {
 
 #[derive(Default)]
 struct TaskParams {
-    block_production_trigger: BlockProductionTrigger,
+    block_production_ready_signal: ReadySignal,
 }
 
 #[async_trait::async_trait]
