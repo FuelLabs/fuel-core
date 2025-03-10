@@ -7,6 +7,5 @@ use fuel_core_types::{
 /// Represents the ability to retrieve a state root at a given block height
 pub trait GetStateRoot {
     /// Get the state root at the given height
-    fn state_root_at(&self, height: BlockHeight)
-        -> Result<Option<Bytes32>, StorageError>;
+    fn state_root_at(&self, height: BlockHeight) -> Result<Bytes32, StorageError>;
 }
