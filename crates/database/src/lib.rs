@@ -62,16 +62,10 @@ pub enum Error {
         /// The old height known by the database.
         prev_height: u64,
     },
-    #[display(fmt = "The historical database doesn't have any history yet")]
-    NoHistoryIsAvailable,
     #[display(
-        fmt = "The historical database doesn't have history for the requested height {requested_height:#x}, \
-            the oldest available height is {oldest_available_height:#x}"
+        fmt = "The historical database doesn't have history for the requested height {requested_height:#x}"
     )]
-    NoHistoryForRequestedHeight {
-        requested_height: u64,
-        oldest_available_height: u64,
-    },
+    NoHistoryForRequestedHeight { requested_height: u64 },
     #[display(fmt = "Reached the end of the history")]
     ReachedEndOfHistory,
 
