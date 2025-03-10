@@ -637,7 +637,7 @@ impl MockBlockProductionReadySignal {
 }
 
 #[tokio::test]
-async fn consensus_service__run__will_not_produce_blocks_without_trigger() {
+async fn consensus_service__run__will_not_produce_blocks_without_ready_signal() {
     // this test basically checks that the block production ready signal is working
     // no blocks should be produced if the ready signal is not sent
 
@@ -687,7 +687,7 @@ async fn consensus_service__run__will_not_produce_blocks_without_trigger() {
 }
 
 #[tokio::test]
-async fn consensus_service__run__will_produce_blocks_with_trigger() {
+async fn consensus_service__run__will_produce_blocks_with_ready_signal() {
     // given
     let (block_producer, mut block_receiver) = FakeBlockProducer::new();
     let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
