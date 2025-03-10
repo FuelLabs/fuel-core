@@ -31,8 +31,13 @@ use crate::{
     update_sender::TxStatusChange,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct SystemTimeProvider;
+impl SystemTimeProvider {
+    pub fn new() -> Self {
+        Self
+    }
+}
 impl TimeProvider for SystemTimeProvider {}
 
 pub struct Task<Time>

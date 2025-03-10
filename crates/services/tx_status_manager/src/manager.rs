@@ -119,6 +119,11 @@ where
         self.time_provider.sleep(secs);
     }
 
+    #[cfg(test)]
+    fn now(&mut self) -> Tai64 {
+        self.time_provider.now()
+    }
+
     fn prune_old_statuses(&self, data: &mut MutexGuard<Data>) {
         let timestamp = self.time_provider.now();
 
@@ -254,6 +259,8 @@ mod tests {
         tai64::Tai64,
     };
 
+    use crate::update_sender::TxStatusChange;
+
     use super::{
         TimeProvider,
         TxStatusManager,
@@ -326,7 +333,7 @@ mod tests {
         }
 
         fn sleep(&mut self, secs: i64) {
-            self.now += secs;
+            self.now = self.now.saturating_add(secs);
         }
     }
 
@@ -674,7 +681,7 @@ mod tests {
 
             // When
             // Sleep for TTL, it should expire the first status
-            tx_status_manager.advance_time(1000 as i64);
+            tx_status_manager.advance_time(1000_i64);
 
             // Trigger pruning
             tx_status_manager.status_update(tx2_id, status_2);
@@ -683,28 +690,118 @@ mod tests {
             let status = tx_status_manager.status(&tx1_id);
             assert!(status.is_none());
         }
+    }
+
+    use proptest::prelude::*;
+    use std::collections::HashMap;
+
+    const TX_ID_POOL_SIZE: usize = 20;
+    const MIN_ACTIONS: usize = 50;
+    const MAX_ACTIONS: usize = 1000;
+    const MIN_TTL: u64 = 10;
+    const MAX_TTL: u64 = 360;
+
+    #[derive(Debug, Clone)]
+    enum Action {
+        UpdateStatus { tx_id_index: usize },
+        AdvanceTime { seconds: u64 },
+    }
+
+    // How to select an ID from the pool
+    fn tx_id_index_strategy(pool_size: usize) -> impl Strategy<Value = usize> {
+        0..pool_size
+    }
+
+    // Possible values for TTL
+    fn ttl_strategy(min_ttl: u64, max_ttl: u64) -> impl Strategy<Value = Duration> {
+        (min_ttl..=max_ttl).prop_map(Duration::from_secs)
+    }
+
+    // Custom strategy to generate a sequence of actions
+    fn actions_strategy(
+        min_actions: usize,
+        max_actions: usize,
+    ) -> impl Strategy<Value = Vec<Action>> {
+        let update_status_strategy = (tx_id_index_strategy(TX_ID_POOL_SIZE))
+            .prop_map(|tx_id_index| Action::UpdateStatus { tx_id_index });
+
+        let advance_time_strategy =
+            (1..=MAX_TTL / 2).prop_map(|seconds| Action::AdvanceTime { seconds });
+
+        prop::collection::vec(
+            prop_oneof![update_status_strategy, advance_time_strategy],
+            min_actions..max_actions,
+        )
+    }
+
+    // Generate a pool of unique transaction IDs
+    fn generate_tx_id_pool() -> Vec<[u8; 32]> {
+        (0..TX_ID_POOL_SIZE)
+            .map(|i| {
+                let mut tx_id = [0u8; 32];
+                tx_id[0..8].copy_from_slice(&(i as u64).to_le_bytes());
+                tx_id
+            })
+            .collect()
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100))]
 
         #[test]
-        fn respects_update_within_the_same_timestamp() {
-            let status_2: TransactionStatus = TransactionStatus::SqueezedOut {
-                reason: "fishy tx".to_string(),
-            };
+        #[allow(clippy::arithmetic_side_effects)]
+        fn test_status_manager_pruning(
+            ttl in ttl_strategy(MIN_TTL, MAX_TTL),
+            actions in actions_strategy(MIN_ACTIONS, MAX_ACTIONS)
+        ) {
+            let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
 
             let test_time_provider = TestTimeProvider::new();
-            let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, test_time_provider);
+            let mut tx_status_manager = TxStatusManager::new(tx_status_change, ttl, test_time_provider);
 
-            let tx1_id = [1u8; 32].into();
+            let tx_id_pool = generate_tx_id_pool();
 
-            // Register tx1 and remember it's timestamp
-            tx_status_manager.status_update(tx1_id, STATUS_1);
+            // This will be used to track when each txid was updated so that
+            // we can do the final assert against the TTL.
+            let mut update_times = HashMap::new();
 
-            // Do not advance time, and update the status
-            tx_status_manager.status_update(tx1_id, status_2.clone());
+            // Simulate flow of time and transaction updates
+            for action in actions {
+                match action {
+                    Action::UpdateStatus { tx_id_index } => {
+                        let tx_id = tx_id_pool[tx_id_index];
+                        tx_status_manager.status_update(tx_id.into(), STATUS_1);
+                        update_times.insert(tx_id, tx_status_manager.now());
 
-            // Tx should get the new status
-            assert_presence_with_status(&tx_status_manager, vec![(tx1_id, status_2)]);
+                    },
+                    Action::AdvanceTime { seconds } => {
+                        tx_status_manager.advance_time(seconds as i64);
+                    }
+                }
+            }
+
+            // Trigger the final pruning, making sure we use ID that is not
+            // in the pool
+            let final_tx_id = {
+                let marker: u64 = 0xDEADBEEF;
+                let mut id = [0u8; 32];
+                id[0..8].copy_from_slice(&marker.to_le_bytes());
+                id
+            };
+            assert!(!tx_id_pool.contains(&final_tx_id));
+            tx_status_manager.status_update(final_tx_id.into(), STATUS_1);
+
+            // Verify that only recent transactions are present
+            let (recent_tx_ids, not_recent_tx_ids): (Vec<_>, Vec<_>) = update_times
+                .iter()
+                .partition(|(_, &time)| time + ttl.as_secs() > tx_status_manager.now());
+            assert_presence(&tx_status_manager, recent_tx_ids.into_iter().map(|(tx_id, _)| (*tx_id).into()).collect());
+            assert_absence(&tx_status_manager, not_recent_tx_ids.into_iter().map(|(tx_id, _)| (*tx_id).into()).collect());
+
+            // Make sure that there is no stray cache entry for the original timestamp.
+            let last_possible_entry = tx_status_manager.now() - ttl.as_secs();
+            let data = tx_status_manager.inner_data();
+            assert!(data.timestamps.keys().all(|&timestamp| timestamp >= last_possible_entry));
         }
     }
 }
