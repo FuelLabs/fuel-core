@@ -130,8 +130,8 @@ impl Mappable for UploadedBytecodes {
 pub struct BlobData;
 
 impl Mappable for BlobData {
-    type Key = Self::OwnedKey;
-    type OwnedKey = BlobId;
-    type OwnedValue = BlobBytes;
-    type Value = [u8];
+    type Key = <fuel_core_storage::tables::BlobData as Mappable>::Key;
+    type OwnedKey = <fuel_core_storage::tables::BlobData as Mappable>::OwnedKey;
+    type OwnedValue = <fuel_core_storage::tables::BlobData as Mappable>::OwnedValue;
+    type Value = <fuel_core_storage::tables::BlobData as Mappable>::Value;
 }
