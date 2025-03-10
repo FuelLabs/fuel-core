@@ -11,7 +11,7 @@ use crate::{
         query_costs,
         IntoApiResult,
     },
-    graphql_api::api_service::TxStatusManager,
+    graphql_api::api_service::DynTxStatusManager,
     schema::{
         block::Block,
         scalars::{
@@ -804,7 +804,7 @@ impl Transaction {
         let id = self.1;
         let query = ctx.read_view()?;
 
-        let tx_status_manager = ctx.data_unchecked::<TxStatusManager>();
+        let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
 
         get_tx_status(id, query.as_ref(), tx_status_manager)
             .await
@@ -1127,7 +1127,7 @@ impl StorageReadReplayEvent {
 pub(crate) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
     query: &ReadView,
-    tx_status_manager: &TxStatusManager,
+    tx_status_manager: &DynTxStatusManager,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     let api_result = query
         .tx_status(&id)

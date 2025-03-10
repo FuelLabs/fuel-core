@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 struct MockTxStatusManager;
 
-impl ports::worker::TxStatusManager for MockTxStatusManager {
+impl ports::worker::TxStatusCompletion for MockTxStatusManager {
     fn send_complete(
         &self,
         _id: Bytes32,

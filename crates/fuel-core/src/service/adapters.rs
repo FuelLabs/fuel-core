@@ -455,12 +455,14 @@ impl BlockImporterAdapter {
 
 #[derive(Clone)]
 pub struct TxStatusManagerAdapter {
-    manager: SharedData,
+    tx_status_manager_shared_data: SharedData,
 }
 
 impl TxStatusManagerAdapter {
-    pub fn new(manager: SharedData) -> Self {
-        Self { manager }
+    pub fn new(tx_status_manager_shared_data: SharedData) -> Self {
+        Self {
+            tx_status_manager_shared_data,
+        }
     }
 
     /// Subscribe to status updates for a transaction.
@@ -468,7 +470,7 @@ impl TxStatusManagerAdapter {
         &self,
         tx_id: Bytes32,
     ) -> anyhow::Result<TxStatusStream> {
-        self.manager.subscribe(tx_id).await
+        self.tx_status_manager_shared_data.subscribe(tx_id).await
     }
 }
 

@@ -12,7 +12,7 @@ use crate::{
         MockBlockProducer,
         MockP2pPort,
         MockTransactionPool,
-        MockTxStatusManagerTrait,
+        MockTxStatusManager,
         TransactionsSource,
     },
     service::MainTask,
@@ -95,7 +95,7 @@ use test_time::TestTime;
 struct TestContextBuilder {
     config: Option<Config>,
     txpool: Option<MockTransactionPool>,
-    tx_status_manager: Option<MockTxStatusManagerTrait>,
+    tx_status_manager: Option<MockTxStatusManager>,
     importer: Option<MockBlockImporter>,
     producer: Option<MockBlockProducer>,
     start_time: Option<Tai64N>,
@@ -178,7 +178,7 @@ impl TestContextBuilder {
 
         let tx_status_manager = self
             .tx_status_manager
-            .unwrap_or_else(MockTxStatusManagerTrait::no_skipped_status_updates);
+            .unwrap_or_else(MockTxStatusManager::no_skipped_status_updates);
 
         let p2p_port = generate_p2p_port();
 
@@ -236,7 +236,7 @@ pub type TestPoAService = Service<
     FakeBlockSigner,
     InMemoryPredefinedBlocks,
     test_time::Watch,
-    MockTxStatusManagerTrait,
+    MockTxStatusManager,
 >;
 
 struct TestContext {
@@ -286,9 +286,9 @@ impl MockTransactionPool {
     }
 }
 
-impl MockTxStatusManagerTrait {
+impl MockTxStatusManager {
     fn no_skipped_status_updates() -> Self {
-        let mut tx_status_manager = MockTxStatusManagerTrait::default();
+        let mut tx_status_manager = MockTxStatusManager::default();
         tx_status_manager
             .expect_notify_skipped_txs()
             .returning(|_| {});
@@ -374,7 +374,7 @@ async fn remove_skipped_transactions() {
             assert_eq!(skipped_transactions, skipped_ids);
         });
 
-    let tx_status_manager = MockTxStatusManagerTrait::no_skipped_status_updates();
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
 
     let signer = SignMode::Key(Secret::new(secret_key.into()));
 
@@ -512,7 +512,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         ..Default::default()
     };
 
-    let tx_status_manager = MockTxStatusManagerTrait::no_skipped_status_updates();
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
 
     let mut block_importer = MockBlockImporter::default();
     block_importer.expect_commit_result().returning(|_| Ok(()));
@@ -580,7 +580,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         metrics: false,
         ..Default::default()
     };
-    let tx_status_manager = MockTxStatusManagerTrait::no_skipped_status_updates();
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
     let mut block_importer = MockBlockImporter::default();
     block_importer.expect_commit_result().returning(|_| Ok(()));
     block_importer

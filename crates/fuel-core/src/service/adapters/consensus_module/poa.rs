@@ -17,7 +17,7 @@ use fuel_core_poa::{
         PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
-        TxStatusManagerTrait,
+        TxStatusManager,
     },
     service::{
         Mode,
@@ -94,9 +94,10 @@ impl TransactionPool for TxPoolAdapter {
     }
 }
 
-impl TxStatusManagerTrait for TxStatusManagerAdapter {
+impl TxStatusManager for TxStatusManagerAdapter {
     fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
-        self.manager.notify_skipped(tx_ids_and_reasons)
+        self.tx_status_manager_shared_data
+            .notify_skipped(tx_ids_and_reasons)
     }
 }
 

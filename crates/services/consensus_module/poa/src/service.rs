@@ -21,7 +21,7 @@ use crate::{
         PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
-        TxStatusManagerTrait,
+        TxStatusManager,
     },
     sync::{
         SyncState,
@@ -140,9 +140,9 @@ pub struct MainTask<T, B, I, S, PB, C, TxStatusManager> {
     production_timeout: Duration,
 }
 
-impl<T, B, I, S, PB, C, TxStatusManager> MainTask<T, B, I, S, PB, C, TxStatusManager>
+impl<T, B, I, S, PB, C, TxStatusMgr> MainTask<T, B, I, S, PB, C, TxStatusMgr>
 where
-    TxStatusManager: TxStatusManagerTrait,
+    TxStatusMgr: TxStatusManager,
     T: TransactionPool,
     I: BlockImporter,
     PB: PredefinedBlocks,
@@ -153,7 +153,7 @@ where
         last_block: &BlockHeader,
         config: Config,
         txpool: T,
-        tx_status_manager: TxStatusManager,
+        tx_status_manager: TxStatusMgr,
         block_producer: B,
         block_importer: I,
         p2p_port: P,
@@ -251,9 +251,9 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C, TxStatusManager> MainTask<T, B, I, S, PB, C, TxStatusManager>
+impl<T, B, I, S, PB, C, TxStatusMgr> MainTask<T, B, I, S, PB, C, TxStatusMgr>
 where
-    TxStatusManager: TxStatusManagerTrait,
+    TxStatusMgr: TxStatusManager,
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
@@ -591,10 +591,10 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C, TxStatusManager> RunnableTask
-    for MainTask<T, B, I, S, PB, C, TxStatusManager>
+impl<T, B, I, S, PB, C, TxStatusMgr> RunnableTask
+    for MainTask<T, B, I, S, PB, C, TxStatusMgr>
 where
-    TxStatusManager: TxStatusManagerTrait,
+    TxStatusMgr: TxStatusManager,
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
@@ -666,20 +666,20 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn new_service<T, B, I, P, S, PB, C, TxStatusManager>(
+pub fn new_service<T, B, I, P, S, PB, C, TxStatusMgr>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
-    tx_status_manager: TxStatusManager,
+    tx_status_manager: TxStatusMgr,
     block_producer: B,
     block_importer: I,
     p2p_port: P,
     block_signer: Arc<S>,
     predefined_blocks: PB,
     clock: C,
-) -> Service<T, B, I, S, PB, C, TxStatusManager>
+) -> Service<T, B, I, S, PB, C, TxStatusMgr>
 where
-    TxStatusManager: TxStatusManagerTrait + 'static,
+    TxStatusMgr: TxStatusManager + 'static,
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,

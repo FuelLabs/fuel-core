@@ -159,7 +159,7 @@ pub struct Task<TxStatusManager, D> {
 
 impl<TxStatusManager, D> Task<TxStatusManager, D>
 where
-    TxStatusManager: ports::worker::TxStatusManager,
+    TxStatusManager: ports::worker::TxStatusCompletion,
     D: ports::worker::OffChainDatabase,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
@@ -561,7 +561,7 @@ where
 impl<TxStatusManager, BlockImporter, OnChain, OffChain> RunnableService
     for InitializeTask<TxStatusManager, BlockImporter, OnChain, OffChain>
 where
-    TxStatusManager: ports::worker::TxStatusManager,
+    TxStatusManager: ports::worker::TxStatusCompletion,
     BlockImporter: ports::worker::BlockImporter,
     OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
@@ -657,7 +657,7 @@ fn sync_databases<TxStatusManager, BlockImporter, OffChain>(
 where
     BlockImporter: ports::worker::BlockImporter,
     OffChain: ports::worker::OffChainDatabase,
-    TxStatusManager: ports::worker::TxStatusManager,
+    TxStatusManager: ports::worker::TxStatusCompletion,
 {
     loop {
         let off_chain_height = task.database.latest_height()?;
@@ -692,7 +692,7 @@ where
 impl<TxStatusManager, D> RunnableTask for Task<TxStatusManager, D>
 where
     D: ports::worker::OffChainDatabase,
-    TxStatusManager: ports::worker::TxStatusManager,
+    TxStatusManager: ports::worker::TxStatusCompletion,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -746,7 +746,7 @@ pub(crate) fn new_service<TxStatusManager, BlockImporter, OnChain, OffChain>(
     ServiceRunner<InitializeTask<TxStatusManager, BlockImporter, OnChain, OffChain>>,
 >
 where
-    TxStatusManager: ports::worker::TxStatusManager,
+    TxStatusManager: ports::worker::TxStatusCompletion,
     OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
     BlockImporter: ports::worker::BlockImporter,

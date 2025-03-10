@@ -260,7 +260,7 @@ pub trait TxPoolPort: Send + Sync {
 }
 
 #[async_trait]
-pub trait TxStatusManagerPort: Send + Sync {
+pub trait TxStatusManager: Send + Sync {
     async fn status(&self, tx_id: TxId) -> anyhow::Result<Option<TransactionStatus>>;
 
     async fn tx_update_subscribe(
@@ -540,7 +540,7 @@ pub mod worker {
         ) -> anyhow::Result<SharedImportResult>;
     }
 
-    pub trait TxStatusManager: Send + Sync {
+    pub trait TxStatusCompletion: Send + Sync {
         /// Sends the complete status of the transaction.
         fn send_complete(
             &self,

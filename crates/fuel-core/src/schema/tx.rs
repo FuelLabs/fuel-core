@@ -7,8 +7,8 @@ use crate::{
         api_service::{
             BlockProducer,
             ChainInfoProvider,
+            DynTxStatusManager,
             TxPool,
-            TxStatusManager,
         },
         query_costs,
         Config as GraphQLConfig,
@@ -446,7 +446,7 @@ impl TxStatusSubscription {
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
     {
-        let tx_status_manager = ctx.data_unchecked::<TxStatusManager>();
+        let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
         let rx = tx_status_manager.tx_update_subscribe(id.into()).await?;
         let query = ctx.read_view()?;
 
@@ -501,7 +501,7 @@ async fn submit_and_await_status<'a>(
 > {
     use tokio_stream::StreamExt;
     let txpool = ctx.data_unchecked::<TxPool>();
-    let tx_status_manager = ctx.data_unchecked::<TxStatusManager>();
+    let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
     let params = ctx
         .data_unchecked::<ChainInfoProvider>()
         .current_consensus_params();
@@ -526,7 +526,7 @@ async fn submit_and_await_status<'a>(
 
 struct StatusChangeState<'a> {
     query: Cow<'a, ReadView>,
-    tx_status_manager: &'a TxStatusManager,
+    tx_status_manager: &'a DynTxStatusManager,
 }
 
 impl<'a> TxnStatusChangeState for StatusChangeState<'a> {

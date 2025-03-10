@@ -22,7 +22,7 @@ use crate::{
     },
     graphql_api::ports::{
         MemoryPool,
-        TxStatusManagerPort,
+        TxStatusManager,
     },
     service::{
         adapters::{
@@ -71,16 +71,16 @@ mod off_chain;
 mod on_chain;
 
 #[async_trait]
-impl TxStatusManagerPort for TxStatusManagerAdapter {
+impl TxStatusManager for TxStatusManagerAdapter {
     async fn status(&self, tx_id: TxId) -> anyhow::Result<Option<TransactionStatus>> {
-        self.manager.get_status(tx_id).await
+        self.tx_status_manager_shared_data.get_status(tx_id).await
     }
 
     async fn tx_update_subscribe(
         &self,
         tx_id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
-        self.manager.subscribe(tx_id).await
+        self.tx_status_manager_shared_data.subscribe(tx_id).await
     }
 }
 
@@ -178,7 +178,7 @@ impl P2pPort for P2PAdapter {
     }
 }
 
-impl worker::TxStatusManager for TxStatusManagerAdapter {
+impl worker::TxStatusCompletion for TxStatusManagerAdapter {
     fn send_complete(
         &self,
         id: Bytes32,
@@ -186,7 +186,7 @@ impl worker::TxStatusManager for TxStatusManagerAdapter {
         status: TransactionStatus,
     ) {
         tracing::info!("Transaction {id} successfully included in block {block_height}");
-        self.manager.update_status(id, status);
+        self.tx_status_manager_shared_data.update_status(id, status);
     }
 }
 

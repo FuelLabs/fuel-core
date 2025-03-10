@@ -1,5 +1,5 @@
 //! Queries we can run directly on `FuelService`.
-use crate::graphql_api::ports::TxStatusManagerPort;
+use crate::graphql_api::ports::TxStatusManager;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     fuel_tx::{

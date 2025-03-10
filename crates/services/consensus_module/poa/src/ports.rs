@@ -35,7 +35,7 @@ pub trait TransactionPool: Send + Sync {
 }
 
 #[cfg_attr(test, mockall::automock)]
-pub trait TxStatusManagerTrait: Send + Sync {
+pub trait TxStatusManager: Send + Sync {
     fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
 }
 
