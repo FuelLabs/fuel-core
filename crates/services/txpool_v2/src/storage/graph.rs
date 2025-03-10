@@ -624,6 +624,7 @@ impl Storage for GraphStorage {
         utxo_validation: bool,
     ) -> Result<(), InputValidationErrorType> {
         let mut missing_inputs = Vec::new();
+        dbg!(utxo_validation);
         for input in transaction.inputs() {
             match input {
                 // If the utxo is created in the pool, need to check if we don't spend too much (utxo can still be unresolved)

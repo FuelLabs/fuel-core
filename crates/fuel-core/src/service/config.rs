@@ -226,7 +226,8 @@ impl Config {
             self.utxo_validation = true;
         }
 
-        if self.txpool.utxo_validation != self.utxo_validation {
+        // Allow to have an inconsistency in debug. Useful for testing potential scenarios
+        if !self.debug && self.txpool.utxo_validation != self.utxo_validation {
             tracing::warn!("The `utxo_validation` of `TxPool` was inconsistent");
             self.txpool.utxo_validation = self.utxo_validation;
         }
