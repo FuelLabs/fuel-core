@@ -20,6 +20,7 @@ use fuel_core_services::{
 use fuel_core_types::{
     fuel_tx::{
         Bytes32,
+        Bytes64,
         TxId,
     },
     services::{
@@ -30,7 +31,10 @@ use fuel_core_types::{
             ProtocolSignature,
             Sealed,
         },
-        preconfirmation::Preconfirmation,
+        preconfirmation::{
+            Preconfirmation,
+            Preconfirmations,
+        },
         txpool::TransactionStatus,
     },
 };
@@ -115,6 +119,12 @@ pub trait SignatureVerification: Send {
         delegate: DelegatePublicKey,
         protocol_signature: ProtocolSignature,
     ) -> impl Future<Output = bool> + Send;
+
+    /// Checks pre-confirmation signature
+    fn check_preconfirmation_signature(
+        &mut self,
+        sealed: &Sealed<Preconfirmations, Bytes64>,
+    ) -> impl Future<Output = bool> + Send;
 }
 
 impl<T: SignatureVerification> Task<T> {
@@ -139,16 +149,23 @@ impl<T: SignatureVerification> Task<T> {
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
                 tracing::debug!("Received new preconfirmations from peer");
-                let Sealed {
-                    signature: _,
-                    entity,
-                } = sealed;
-                entity.preconfirmations.into_iter().for_each(
-                    |Preconfirmation { tx_id, status }| {
-                        let status: TransactionStatus = status.into();
-                        self.manager.status_update(tx_id, status);
-                    },
-                );
+                if self
+                    .signature_verification
+                    .check_preconfirmation_signature(&sealed)
+                    .await
+                {
+                    tracing::debug!("Preconfirmation signature verified");
+                    let Sealed { entity, .. } = sealed;
+                    entity.preconfirmations.into_iter().for_each(
+                        |Preconfirmation { tx_id, status }| {
+                            let status: TransactionStatus = status.into();
+                            self.manager.status_update(tx_id, status);
+                        },
+                    );
+                } else {
+                    // TODO: Allow to retry later when a new delegate key is added
+                    tracing::warn!("Preconfirmation signature verification failed");
+                }
             }
         }
     }
@@ -273,19 +290,37 @@ mod tests {
     #![allow(non_snake_case)]
 
     use super::*;
-    use crate::tests::FakeSignatureVerification;
-    use fuel_core_types::services::p2p::{
-        DelegatePreConfirmationKey,
-        Tai64,
+    use crate::{
+        tests::FakeSignatureVerification,
+        update_sender::{
+            MpscChannel,
+            UpdateSender,
+        },
+        TxStatusMessage,
+    };
+    use fuel_core_types::services::{
+        p2p::{
+            DelegatePreConfirmationKey,
+            Tai64,
+        },
+        preconfirmation::{
+            PreconfirmationStatus,
+            Preconfirmations,
+        },
     };
     use std::time::Duration;
     use tokio_stream::wrappers::ReceiverStream;
 
     const TTL: Duration = Duration::from_secs(4);
 
-    fn new_task_with_signature_verification<T: SignatureVerification>(
+    struct Handles {
+        pub new_delegate_handle: mpsc::Sender<P2PPreConfirmationGossipData>,
+        pub update_sender: UpdateSender,
+    }
+
+    fn new_task_with_handles<T: SignatureVerification>(
         signature_verification: T,
-    ) -> (Task<T>, mpsc::Sender<P2PPreConfirmationGossipData>) {
+    ) -> (Task<T>, Handles) {
         let (read_requests_sender, read_requests_receiver) = mpsc::channel(1);
         let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
         let shared_data = SharedData {
@@ -297,6 +332,7 @@ mod tests {
         let subscriptions = Subscriptions { new_tx_status };
 
         let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
+        let updater_sender = tx_status_change.update_sender.clone();
         let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
         let task = Task {
             manager: tx_status_manager,
@@ -306,7 +342,11 @@ mod tests {
             shared_data,
             signature_verification,
         };
-        (task, sender)
+        let handles = Handles {
+            new_delegate_handle: sender,
+            update_sender: updater_sender,
+        };
+        (task, handles)
     }
 
     fn arbitrary_delegate_signatures_message() -> P2PPreConfirmationGossipData {
@@ -325,6 +365,36 @@ mod tests {
         }
     }
 
+    fn arbitrary_pre_confirmation_message(
+        tx_ids: &[TxId],
+    ) -> P2PPreConfirmationGossipData {
+        let preconfirmations = tx_ids
+            .iter()
+            .map(|tx_id| Preconfirmation {
+                tx_id: *tx_id,
+                status: PreconfirmationStatus::Success {
+                    tx_pointer: Default::default(),
+                    total_gas: 0,
+                    total_fee: 0,
+                    receipts: vec![],
+                    outputs: vec![],
+                },
+            })
+            .collect::<Vec<_>>();
+        let entity = Preconfirmations {
+            preconfirmations,
+            expiration: Tai64(1234u64),
+        };
+        let signature = Bytes64::from([1u8; 64]);
+        let sealed = Sealed { signature, entity };
+        let inner = P2PPreConfirmationMessage::Preconfirmations(sealed);
+        GossipData {
+            data: Some(inner),
+            peer_id: Default::default(),
+            message_id: vec![],
+        }
+    }
+
     #[tokio::test]
     async fn run__when_receive_pre_confirmation_delegations_message_updates_delegate() {
         let _ = tracing_subscriber::fmt()
@@ -333,9 +403,8 @@ mod tests {
 
         // given
         let (signature_verification, mut new_delegate_handle) =
-            FakeSignatureVerification::new_with_handles(true);
-        let (mut task, sender) =
-            new_task_with_signature_verification(signature_verification);
+            FakeSignatureVerification::new_with_handles(true, true);
+        let (mut task, handles) = new_task_with_handles(signature_verification);
         let delegate_signature_message = arbitrary_delegate_signatures_message();
         let mut state_watcher = StateWatcher::started();
 
@@ -343,7 +412,8 @@ mod tests {
         tokio::task::spawn(async move {
             let _ = task.run(&mut state_watcher).await;
         });
-        sender
+        handles
+            .new_delegate_handle
             .send(delegate_signature_message.clone())
             .await
             .unwrap();
@@ -362,5 +432,94 @@ mod tests {
             };
         assert_eq!(actual_delegate_key, expected_delegate_key);
         assert_eq!(actual_protocol_signature, expected_protocol_signature);
+    }
+
+    #[tokio::test]
+    async fn run__when_pre_confirmations_pass_verification_then_send() {
+        // given
+        let (signature_verification, _) =
+            FakeSignatureVerification::new_with_handles(true, true);
+        let (mut task, handles) = new_task_with_handles(signature_verification);
+
+        let tx_ids = vec![[3u8; 32].into(), [4u8; 32].into()];
+        let pre_confirmation_message = arbitrary_pre_confirmation_message(&tx_ids);
+        let mut state_watcher = StateWatcher::started();
+
+        let streams = tx_ids
+            .iter()
+            .map(|tx_id| {
+                handles
+                    .update_sender
+                    .try_subscribe::<MpscChannel>(*tx_id)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        // when
+        tokio::task::spawn(async move {
+            let _ = task.run(&mut state_watcher).await;
+        });
+        handles
+            .new_delegate_handle
+            .send(pre_confirmation_message.clone())
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // then
+        // pub type TxStatusStream = Pin<Box<dyn Stream<Item = TxStatusMessage> + Send + Sync>>;
+        for mut stream in streams {
+            let msg = stream.next().await.unwrap();
+            match msg {
+                TxStatusMessage::Status(_) => {
+                    // should be good if we get this
+                }
+                _ => panic!("Expected Status message"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn run__when_pre_confirmations_fail_then_do_not_send() {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .try_init();
+
+        // given
+        let (signature_verification, _) =
+            FakeSignatureVerification::new_with_handles(false, false);
+        let (mut task, handles) = new_task_with_handles(signature_verification);
+
+        let tx_ids = vec![[3u8; 32].into(), [4u8; 32].into()];
+        let pre_confirmation_message = arbitrary_pre_confirmation_message(&tx_ids);
+        let mut state_watcher = StateWatcher::started();
+
+        let streams = tx_ids
+            .iter()
+            .map(|tx_id| {
+                handles
+                    .update_sender
+                    .try_subscribe::<MpscChannel>(*tx_id)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        // when
+        tokio::task::spawn(async move {
+            let _ = task.run(&mut state_watcher).await;
+        });
+        handles
+            .new_delegate_handle
+            .send(pre_confirmation_message.clone())
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // then
+        for mut stream in streams {
+            let res =
+                tokio::time::timeout(Duration::from_millis(100), stream.next()).await;
+            assert!(res.is_err());
+        }
     }
 }

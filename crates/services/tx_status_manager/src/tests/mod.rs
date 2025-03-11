@@ -1,9 +1,16 @@
 #![allow(non_snake_case)]
 
 use crate::service::SignatureVerification;
-use fuel_core_types::services::p2p::{
-    DelegatePublicKey,
-    ProtocolSignature,
+use fuel_core_types::{
+    fuel_tx::Bytes64,
+    services::{
+        p2p::{
+            DelegatePublicKey,
+            ProtocolSignature,
+            Sealed,
+        },
+        preconfirmation::Preconfirmations,
+    },
 };
 use tokio::sync::mpsc;
 
@@ -20,16 +27,19 @@ mod utils;
 pub(crate) struct FakeSignatureVerification {
     new_delegate_sender: mpsc::Sender<(DelegatePublicKey, ProtocolSignature)>,
     new_delegate_response: bool,
+    preconfirmation_signature_success: bool,
 }
 
 impl FakeSignatureVerification {
     pub fn new_with_handles(
         new_delegate_response: bool,
+        preconfirmation_signature_success: bool,
     ) -> (Self, mpsc::Receiver<(DelegatePublicKey, ProtocolSignature)>) {
         let (new_delegate_sender, new_delegate_receiver) = mpsc::channel(1_000);
         let adapter = Self {
             new_delegate_sender,
             new_delegate_response,
+            preconfirmation_signature_success,
         };
         (adapter, new_delegate_receiver)
     }
@@ -47,5 +57,12 @@ impl SignatureVerification for FakeSignatureVerification {
             .await
             .unwrap();
         self.new_delegate_response
+    }
+
+    async fn check_preconfirmation_signature(
+        &mut self,
+        _sealed: &Sealed<Preconfirmations, Bytes64>,
+    ) -> bool {
+        self.preconfirmation_signature_success
     }
 }
