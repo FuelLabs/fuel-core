@@ -3,8 +3,10 @@ use std::{
     sync::Arc,
 };
 
-use adapters::ready_signal::ReadySignal;
-use adapters::TxStatusManagerAdapter;
+use adapters::{
+    ready_signal::ReadySignal,
+    TxStatusManagerAdapter,
+};
 pub use config::{
     Config,
     DbType,

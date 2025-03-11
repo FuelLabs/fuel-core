@@ -22,8 +22,8 @@ use crate::{
         PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
-        WaitForReadySignal,
         TxStatusManager,
+        WaitForReadySignal,
     },
     sync::{
         SyncState,
