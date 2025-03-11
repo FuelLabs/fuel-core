@@ -27,7 +27,7 @@ async fn can_download_logs() {
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 5,
-        eth_local_finalized: Some(1),
+        eth_local_finalized: 1,
     };
     let eth_state = state::build_eth(&eth_state).await.unwrap();
 
@@ -64,7 +64,7 @@ async fn quorum_agrees_on_logs() {
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 5,
-        eth_local_finalized: Some(1),
+        eth_local_finalized: 1,
     };
     let eth_state = state::build_eth(&eth_state).await.unwrap();
 
@@ -115,7 +115,7 @@ async fn quorum__disagree_on_logs() {
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 5,
-        eth_local_finalized: Some(1),
+        eth_local_finalized: 1,
     };
     let eth_state = state::build_eth(&eth_state).await.unwrap();
 
@@ -173,20 +173,22 @@ async fn deploy_height_does_not_override() {
     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 50);
 }
 
-#[test_case(6, Some(6), Some(6); "if local is up to date with remote, then update sync")]
-#[test_case(6, Some(100), Some(100); "if local is somehow ahead of remote, then update sync")]
-#[test_case(6, Some(5), None; "if local is behind remote, then nothing sent to sync")]
-#[test_case(6, None, None; "if local is not set, then nothing sent to sync")]
+const STARTING_HEIGHT: u64 = 2;
+
+#[test_case(6, 6, SyncState::Synced(6u64.into()); "if local is up to date with remote, then fully synced state")]
+#[test_case(6, 100, SyncState::Synced(100u64.into()); "if local is somehow ahead of remote, then fully synced state")]
+#[test_case(6, 5, SyncState::PartiallySynced(5u64.into()); "if local is behind remote, then partially synced state")]
+#[test_case(6, 0, SyncState::PartiallySynced(0u64.into()); "if local is set to starting height, then partially synced state")]
 #[tokio::test]
 async fn update_sync__changes_latest_eth_state(
     remote: u64,
-    local: Option<u64>,
-    expected: Option<u64>,
+    local: u64,
+    expected: SyncState,
 ) {
     // given
     let mock_db = crate::mock_db::MockDb::default();
     let config = Config {
-        da_deploy_height: 20u64.into(),
+        da_deploy_height: STARTING_HEIGHT.into(),
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
@@ -203,7 +205,6 @@ async fn update_sync__changes_latest_eth_state(
     task.update_synced(&eth_state);
 
     // then
-    let expected = expected.map(DaBlockHeight);
-    let actual = *shared.synced.borrow().deref();
+    let actual = *shared.synced.borrow();
     assert_eq!(expected, actual);
 }
