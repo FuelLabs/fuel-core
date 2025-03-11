@@ -48,7 +48,7 @@ impl Data {
     ) -> impl Iterator<Item = (&Bytes32, &(Instant, TransactionStatus))> {
         self.statuses
             .iter()
-            .filter(|(_, (_, status))| !matches!(status, TransactionStatus::Submitted(_)))
+            .filter(|(_, (_, status))| TxStatusManager::affected_by_pruning(status))
     }
 
     #[cfg(test)]
@@ -91,6 +91,10 @@ impl TxStatusManager {
             tx_status_change,
             ttl,
         }
+    }
+
+    fn affected_by_pruning(status: &TransactionStatus) -> bool {
+        !matches!(status, TransactionStatus::Submitted(_))
     }
 
     fn prune_old_statuses(&mut self) {
@@ -138,7 +142,7 @@ impl TxStatusManager {
 
     fn add_new_status(&mut self, tx_id: TxId, tx_status: TransactionStatus) {
         let now = Instant::now();
-        if !matches!(tx_status, TransactionStatus::Submitted(_)) {
+        if Self::affected_by_pruning(&tx_status) {
             self.data.pruning_queue.push_front((now, tx_id));
         }
         self.data.statuses.insert(tx_id, (now, tx_status));
@@ -185,6 +189,8 @@ impl TxStatusManager {
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
+
+    use test_case::test_case;
 
     use fuel_core_types::{
         fuel_crypto::rand::rngs::StdRng,
@@ -262,6 +268,17 @@ mod tests {
                 tx_id
             );
         }
+    }
+
+    #[test_case(submitted() => false)]
+    #[test_case(success() => true)]
+    #[test_case(preconfirmation_success() => true)]
+    #[test_case(squeezed_out() => true)]
+    #[test_case(preconfirmation_squeezed_out() => true)]
+    #[test_case(failure() => true)]
+    #[test_case(preconfirmation_failure() => true)]
+    fn is_affected_for_pruning(status: TransactionStatus) -> bool {
+        TxStatusManager::affected_by_pruning(&status)
     }
 
     mod equal_ids {
