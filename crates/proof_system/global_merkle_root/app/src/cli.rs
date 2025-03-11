@@ -14,7 +14,7 @@ use strum::{
 #[derive(Debug, Clone, Parser)]
 pub struct Args {
     #[clap(long, env = "SRS_DB_PATH")]
-    pub db_path: PathBuf,
+    pub db_path: Option<PathBuf>,
 
     #[clap(
         long,
@@ -70,4 +70,22 @@ pub enum DbType {
 pub enum LogFormat {
     JSON,
     Human,
+}
+
+#[cfg(test)]
+impl Args {
+    pub fn test_defaults() -> Self {
+        Self {
+            db_path: None,
+            db_type: DbType::RocksDb,
+            db_max_files: 128,
+            db_cache_capacity: None,
+            fuel_node_url: "".to_string(),
+            batch_size: 4,
+            chain_id: 0,
+            host: "localhost".to_string(),
+            port: 0,
+            log_format: LogFormat::Human,
+        }
+    }
 }

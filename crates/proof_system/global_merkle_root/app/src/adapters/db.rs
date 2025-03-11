@@ -61,6 +61,16 @@ impl StateRootDb {
         )?))
     }
 
+    pub fn open_temporary_rocksdb(
+        state_rewind_policy: StateRewindPolicy,
+        database_config: DatabaseConfig,
+    ) -> Result<Self, database::Error> {
+        Ok(Self(Database::rocksdb_temp(
+            state_rewind_policy,
+            database_config,
+        )?))
+    }
+
     pub fn block_height(&self) -> StorageResult<BlockHeight> {
         Ok(self.0.latest_height_from_metadata()?.unwrap_or_default())
     }

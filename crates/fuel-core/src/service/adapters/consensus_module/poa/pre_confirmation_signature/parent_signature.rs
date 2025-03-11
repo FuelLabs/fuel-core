@@ -12,6 +12,7 @@ use fuel_core_types::{
 };
 use serde::Serialize;
 
+#[allow(dead_code)]
 pub struct FuelParentSigner {
     mode: SignMode,
 }

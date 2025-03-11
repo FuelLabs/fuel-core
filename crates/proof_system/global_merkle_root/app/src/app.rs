@@ -120,13 +120,14 @@ fn open_db(args: &cli::Args) -> anyhow::Result<StateRootDb> {
         columns_policy: ColumnsPolicy::OnCreation,
     };
 
-    let db = match args.db_type {
-        DbType::InMemory => StateRootDb::in_memory(),
-        DbType::RocksDb => StateRootDb::open_rocksdb(
-            &args.db_path,
-            state_rewind_policy,
-            database_config,
-        )?,
+    let db = match (args.db_type, &args.db_path) {
+        (DbType::InMemory, _) => StateRootDb::in_memory(),
+        (DbType::RocksDb, Some(path)) => {
+            StateRootDb::open_rocksdb(&path, state_rewind_policy, database_config)?
+        }
+        (DbType::RocksDb, None) => {
+            StateRootDb::open_temporary_rocksdb(state_rewind_policy, database_config)?
+        }
     };
 
     Ok(db)

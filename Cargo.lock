@@ -4020,6 +4020,7 @@ dependencies = [
  "derive_more 0.99.19",
  "fuel-block-fetcher",
  "fuel-core",
+ "fuel-core-client 0.41.7",
  "fuel-core-database",
  "fuel-core-global-merkle-root-api",
  "fuel-core-global-merkle-root-service",

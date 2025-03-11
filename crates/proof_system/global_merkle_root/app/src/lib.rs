@@ -14,3 +14,7 @@ pub mod cli;
 
 /// Application
 pub mod app;
+
+/// Integration tests
+#[cfg(test)]
+mod tests;
