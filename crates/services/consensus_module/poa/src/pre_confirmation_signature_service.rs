@@ -98,65 +98,6 @@ where
     }
 }
 
-impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger>
-    PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
-where
-    TxRcv: TxReceiver<Txs = Preconfirmations>,
-    Brdcst: Broadcast<
-        DelegateKey = DelegateKey,
-        ParentKey = Parent,
-        Preconfirmations = Preconfirmations,
-    >,
-    Gen: KeyGenerator<Key = DelegateKey>,
-    Trigger: KeyRotationTrigger,
-    DelegateKey: SigningKey,
-    Parent: ParentSignature,
-    Preconfirmations: serde::Serialize + Send,
-{
-    pub async fn _run(&mut self) -> Result<()> {
-        tracing::debug!("Running pre-confirmation task");
-        tokio::select! {
-            res = self.tx_receiver.receive() => {
-                tracing::debug!("Received transactions");
-                let pre_confirmations = res?;
-                let signature = self.current_delegate_key.sign(&pre_confirmations)?;
-                let expiration = self.current_delegate_key.expiration();
-
-                let result = self.broadcast.broadcast_preconfirmations(pre_confirmations, signature, expiration).await;
-                if let Err(err) = result {
-                    tracing::error!("Failed to broadcast pre-confirmations: {:?}", err);
-                }
-            }
-            res = self.key_rotation_trigger.next_rotation() => {
-                tracing::debug!("Key rotation triggered");
-                let expiration = res?;
-
-                let (new_delegate_key, sealed) = create_delegate_key(
-                    &mut self.key_generator,
-                    &self.parent_signature,
-                    expiration,
-                ).await?;
-
-                self.current_delegate_key = new_delegate_key;
-                self.sealed_delegate_message = sealed.clone();
-
-                if let Err(err) = self.broadcast.broadcast_delegate_key(sealed.entity, sealed.signature).await {
-                    tracing::error!("Failed to broadcast newly generated delegate key: {:?}", err);
-                }
-            }
-            _ = self.echo_delegation_trigger.tick() => {
-                tracing::debug!("Echo delegation trigger");
-                let sealed = self.sealed_delegate_message.clone();
-
-                if let Err(err) = self.broadcast.broadcast_delegate_key(sealed.entity, sealed.signature).await {
-                    tracing::error!("Failed to re-broadcast delegate key: {:?}", err);
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
 #[allow(dead_code)]
 async fn create_delegate_key<Gen, DelegateKey, Parent>(
     key_generator: &mut Gen,
