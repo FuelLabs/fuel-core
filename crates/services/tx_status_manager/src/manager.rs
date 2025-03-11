@@ -174,7 +174,7 @@ impl TxStatusManager {
             .get(tx_id)
             .map(|(_, status)| status)
             .or_else(|| self.data.non_prunable_statuses.get(tx_id))
-            .map(|status| status.clone())
+            .cloned()
     }
 
     /// Subscribe to status updates for a transaction.
@@ -259,10 +259,10 @@ mod tests {
         ]
     }
 
-    fn random_prunable_status(rng: &mut StdRng) -> TransactionStatus {
+    fn random_prunable_tx_status(rng: &mut StdRng) -> TransactionStatus {
         all_statuses()
             .into_iter()
-            .filter(|tx| TxStatusManager::is_prunable(tx))
+            .filter(TxStatusManager::is_prunable)
             .collect::<Vec<_>>()
             .choose(rng)
             .unwrap()
@@ -794,7 +794,7 @@ mod tests {
                     // Make sure we'll never update back to submitted
                     let current_tx_status = tx_status_manager.status(&tx_id.into());
                     let new_tx_status = match current_tx_status {
-                        Some(_) => random_prunable_status(&mut rng),
+                        Some(_) => random_prunable_tx_status(&mut rng),
                         None => random_tx_status(&mut rng),
                     };
 
