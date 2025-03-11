@@ -689,12 +689,14 @@ async fn consensus_service__run__will_not_produce_blocks_without_ready_signal() 
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
     let block_production_ready_signal = MockBlockProductionReadySignal::default();
 
     let task = MainTask::new(
         &last_block,
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         generate_p2p_port(),
@@ -736,12 +738,14 @@ async fn consensus_service__run__will_produce_blocks_with_ready_signal() {
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
     let block_production_ready_signal = MockBlockProductionReadySignal::default();
 
     let task = MainTask::new(
         &last_block,
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         generate_p2p_port(),

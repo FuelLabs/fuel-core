@@ -188,7 +188,7 @@ async fn update_sync__changes_latest_eth_state(
     // given
     let mock_db = crate::mock_db::MockDb::default();
     let config = Config {
-        da_deploy_height: STATING_HEIGHT.into(),
+        da_deploy_height: STARTING_HEIGHT.into(),
         ..Default::default()
     };
     let eth_node = MockMiddleware::default();
