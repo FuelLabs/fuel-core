@@ -325,7 +325,15 @@ mod tests {
         use std::time::Duration;
 
         use crate::{
-            manager::tests::success,
+            manager::tests::{
+                failure,
+                preconfirmation_failure,
+                preconfirmation_squeezed_out,
+                preconfirmation_success,
+                squeezed_out,
+                submitted,
+                success,
+            },
             update_sender::TxStatusChange,
             TxStatusManager,
         };
@@ -339,7 +347,6 @@ mod tests {
         };
 
         #[tokio::test(start_paused = true)]
-        // TODO[RC]: Include all statuses to validate that submittes is also returned.
         async fn simple_registration() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
             let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
@@ -348,25 +355,37 @@ mod tests {
             let tx2_id = [2u8; 32].into();
             let tx3_id = [3u8; 32].into();
             let tx4_id = [4u8; 32].into();
+            let tx5_id = [5u8; 32].into();
+            let tx6_id = [6u8; 32].into();
+            let tx7_id = [7u8; 32].into();
+            let tx99_id = [99u8; 32].into();
 
             // Register tx1 and tx2
-            tx_status_manager.status_update(tx1_id, success());
+            tx_status_manager.status_update(tx1_id, submitted());
             tx_status_manager.status_update(tx2_id, success());
+            tx_status_manager.status_update(tx3_id, preconfirmation_success());
 
             // Sleep for less than a TTL
             tokio::time::advance(Duration::from_secs(1)).await;
 
-            // Register tx3
-            tx_status_manager.status_update(tx3_id, success());
+            tx_status_manager.status_update(tx4_id, squeezed_out());
+            tx_status_manager.status_update(tx5_id, preconfirmation_squeezed_out());
+            tx_status_manager.status_update(tx6_id, failure());
+            tx_status_manager.status_update(tx7_id, preconfirmation_failure());
 
             // Sleep for less than a TTL
             tokio::time::advance(Duration::from_secs(1)).await;
 
-            // Register tx4
-            tx_status_manager.status_update(tx4_id, success());
+            // Trigger pruning
+            tx_status_manager.status_update(tx99_id, success());
 
             // All should be present
-            assert_presence(&tx_status_manager, vec![tx1_id, tx2_id, tx3_id, tx4_id]);
+            assert_presence(
+                &tx_status_manager,
+                vec![
+                    tx1_id, tx2_id, tx3_id, tx4_id, tx5_id, tx6_id, tx7_id, tx99_id,
+                ],
+            );
         }
 
         #[tokio::test(start_paused = true)]
