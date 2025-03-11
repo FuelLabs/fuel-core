@@ -11,8 +11,8 @@ mod upgrades;
 pub struct LocalMirror<Table>(core::marker::PhantomData<Table>);
 
 impl<Table: Mappable> Mappable for LocalMirror<Table> {
-    type Key = <Table as Mappable>::Key;
-    type OwnedKey = <Table as Mappable>::OwnedKey;
-    type OwnedValue = <Table as Mappable>::OwnedValue;
-    type Value = <Table as Mappable>::Value;
+    type Key = Table::Key;
+    type OwnedKey = Table::OwnedKey;
+    type OwnedValue = Table::OwnedValue;
+    type Value = Table::Value;
 }
