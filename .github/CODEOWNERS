@@ -10,6 +10,9 @@ crates/services/txpool_v2 @xgreenx @Dentosal @MitchTurner @AurelienFT
 # Code owners for the gas price service (v0 & v1)
 crates/services/gas_price_service @xgreenx @Dentosal @MitchTurner @rymnc
 
+# Code owners for the compression service
+crates/services/compression @xgreenx @Dentosal @rymnc
+
 # Code owners for the GraphQL API
 crates/fuel-core/src/graphql_api @xgreenx @Dentosal @MitchTurner @netrome @acerone85
 crates/fuel-core/src/graphql_api.rs @xgreenx @Dentosal @MitchTurner @netrome @acerone85

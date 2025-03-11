@@ -241,17 +241,49 @@ impl PreconfirmationSenderPort for TransparentPreconfirmationSender {
 }
 
 fn convert_tx_execution_result_to_preconfirmation(
+    tx: &Transaction,
     tx_exec_result: &TransactionExecutionResult,
     block_height: BlockHeight,
-    _tx_index: u16,
+    tx_index: u16,
 ) -> PreconfirmationStatus {
+    let tx_pointer = TxPointer::new(block_height, tx_index);
+    let dynamic_outputs = tx
+        .outputs()
+        .iter()
+        .filter_map(|output| {
+            if output.is_change() || output.is_variable() && output.amount() != Some(0) {
+                Some(*output)
+            } else {
+                None
+            }
+        })
+        .collect();
+
     match tx_exec_result {
-        TransactionExecutionResult::Success { .. } => {
-            PreconfirmationStatus::SuccessByBlockProducer { block_height }
-        }
-        TransactionExecutionResult::Failed { .. } => {
-            PreconfirmationStatus::FailureByBlockProducer { block_height }
-        }
+        TransactionExecutionResult::Success {
+            receipts,
+            total_gas,
+            total_fee,
+            ..
+        } => PreconfirmationStatus::Success {
+            total_gas: *total_gas,
+            total_fee: *total_fee,
+            tx_pointer,
+            receipts: receipts.clone(),
+            outputs: dynamic_outputs,
+        },
+        TransactionExecutionResult::Failed {
+            receipts,
+            total_gas,
+            total_fee,
+            ..
+        } => PreconfirmationStatus::Failure {
+            total_gas: *total_gas,
+            total_fee: *total_fee,
+            tx_pointer,
+            receipts: receipts.clone(),
+            outputs: dynamic_outputs,
+        },
     }
 }
 
@@ -731,8 +763,12 @@ where
                         let latest_executed_tx = data.tx_status.last().expect(
                             "Shouldn't happens as we just added a transaction; qed",
                         );
+                        let tx = block.transactions.last().expect(
+                            "Shouldn't happens as we just added a transaction; qed",
+                        );
                         let preconfirmation_status =
                             convert_tx_execution_result_to_preconfirmation(
+                                tx,
                                 &latest_executed_tx.result,
                                 *block.header.height(),
                                 data.tx_count,
@@ -740,7 +776,7 @@ where
                         status.push(preconfirmation_status);
                     }
                     Err(err) => {
-                        status.push(PreconfirmationStatus::SqueezedOutByBlockProducer {
+                        status.push(PreconfirmationStatus::SqueezedOut {
                             reason: err.to_string(),
                         });
                         data.skipped_transactions.push((tx_id, err));

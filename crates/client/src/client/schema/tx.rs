@@ -2,7 +2,10 @@ use crate::client::{
     schema::{
         coins::ExcludeInput,
         schema,
-        tx::transparent_receipt::Receipt,
+        tx::{
+            transparent_receipt::Receipt,
+            transparent_tx::Output,
+        },
         Address,
         AssetId,
         ConnectionArgsFields,
@@ -252,7 +255,10 @@ pub struct SuccessStatusWithTransaction {
 pub struct PreconfirmationSuccessStatus {
     pub tx_pointer: TxPointer,
     pub transaction_id: TransactionId,
+    pub total_fee: U64,
+    pub total_gas: U64,
     pub receipts: Option<Vec<Receipt>>,
+    pub resolved_outputs: Option<Vec<Output>>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -263,8 +269,11 @@ pub struct PreconfirmationSuccessStatus {
 pub struct PreconfirmationSuccessStatusWithTransaction {
     pub tx_pointer: TxPointer,
     pub transaction_id: TransactionId,
+    pub total_fee: U64,
+    pub total_gas: U64,
     pub transaction: Option<OpaqueTransaction>,
     pub receipts: Option<Vec<Receipt>>,
+    pub resolved_outputs: Option<Vec<Output>>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -297,7 +306,10 @@ pub struct FailureStatusWithTransaction {
 pub struct PreconfirmationFailureStatus {
     pub tx_pointer: TxPointer,
     pub transaction_id: TransactionId,
+    pub total_fee: U64,
+    pub total_gas: U64,
     pub receipts: Option<Vec<Receipt>>,
+    pub resolved_outputs: Option<Vec<Output>>,
     pub reason: String,
 }
 
@@ -309,8 +321,11 @@ pub struct PreconfirmationFailureStatus {
 pub struct PreconfirmationFailureStatusWithTransaction {
     pub tx_pointer: TxPointer,
     pub transaction_id: TransactionId,
+    pub total_fee: U64,
+    pub total_gas: U64,
     pub transaction: Option<OpaqueTransaction>,
     pub receipts: Option<Vec<Receipt>>,
+    pub resolved_outputs: Option<Vec<Output>>,
     pub reason: String,
 }
 

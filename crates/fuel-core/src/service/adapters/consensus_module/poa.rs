@@ -6,6 +6,7 @@ use crate::{
         P2PAdapter,
         PoAAdapter,
         TxPoolAdapter,
+        TxStatusManagerAdapter,
     },
 };
 use anyhow::anyhow;
@@ -16,6 +17,7 @@ use fuel_core_poa::{
         PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
+        TxStatusManager,
     },
     service::{
         Mode,
@@ -89,6 +91,13 @@ impl TransactionPool for TxPoolAdapter {
 
     fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
         self.service.notify_skipped_txs(tx_ids_and_reasons)
+    }
+}
+
+impl TxStatusManager for TxStatusManagerAdapter {
+    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
+        self.tx_status_manager_shared_data
+            .notify_skipped(tx_ids_and_reasons)
     }
 }
 

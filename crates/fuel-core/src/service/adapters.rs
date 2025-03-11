@@ -10,14 +10,14 @@ use fuel_core_gas_price_service::{
     v1::service::LatestGasPrice,
 };
 use fuel_core_importer::ImporterResult;
-// #[cfg(feature = "parallel-executor")]
-// use fuel_core_parallel_executor::executor::Executor;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
+use fuel_core_tx_status_manager::{
+    SharedData,
+    TxStatusStream,
+};
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
-#[cfg(feature = "p2p")]
-use fuel_core_types::services::p2p::peer_reputation::AppScore;
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -26,7 +26,10 @@ use fuel_core_types::{
             Consensus,
         },
     },
-    fuel_tx::Transaction,
+    fuel_tx::{
+        Bytes32,
+        Transaction,
+    },
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
@@ -40,9 +43,11 @@ use fuel_core_types::{
     signer::SignMode,
     tai64::Tai64,
 };
-//#[cfg(not(feature = "parallel-executor"))]
 use fuel_core_upgradable_executor::executor::Executor;
 use tokio::time::Instant;
+
+#[cfg(feature = "p2p")]
+use fuel_core_types::services::p2p::peer_reputation::AppScore;
 
 use crate::{
     database::{
@@ -76,6 +81,7 @@ pub mod relayer;
 pub mod shared_sequencer;
 #[cfg(feature = "p2p")]
 pub mod sync;
+pub mod tx_status_manager;
 pub mod txpool;
 
 #[derive(Debug, Clone)]
@@ -444,6 +450,27 @@ impl BlockImporterAdapter {
                 .filter_map(|r| futures::future::ready(r.ok()))
                 .map(|r| r.shared_result),
         )
+    }
+}
+
+#[derive(Clone)]
+pub struct TxStatusManagerAdapter {
+    tx_status_manager_shared_data: SharedData,
+}
+
+impl TxStatusManagerAdapter {
+    pub fn new(tx_status_manager_shared_data: SharedData) -> Self {
+        Self {
+            tx_status_manager_shared_data,
+        }
+    }
+
+    /// Subscribe to status updates for a transaction.
+    pub async fn tx_update_subscribe(
+        &self,
+        tx_id: Bytes32,
+    ) -> anyhow::Result<TxStatusStream> {
+        self.tx_status_manager_shared_data.subscribe(tx_id).await
     }
 }
 

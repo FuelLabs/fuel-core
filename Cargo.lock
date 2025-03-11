@@ -3385,6 +3385,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-sync",
  "fuel-core-trace",
+ "fuel-core-tx-status-manager",
  "fuel-core-txpool",
  "fuel-core-types 0.41.7",
  "fuel-core-upgradable-executor",
@@ -3581,6 +3582,20 @@ dependencies = [
  "strum 0.25.0",
  "strum_macros 0.25.3",
  "tokio",
+]
+
+[[package]]
+name = "fuel-core-compression-service"
+version = "0.41.7"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-compression",
+ "fuel-core-services",
+ "fuel-core-types 0.41.7",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4045,6 +4060,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-tx-status-manager"
+version = "0.41.7"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "derive_more 0.99.19",
+ "fuel-core-services",
+ "fuel-core-tx-status-manager",
+ "fuel-core-types 0.41.7",
+ "futures",
+ "mockall",
+ "parking_lot",
+ "proptest",
+ "test-strategy",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
 name = "fuel-core-txpool"
 version = "0.41.7"
 dependencies = [
@@ -4062,9 +4097,7 @@ dependencies = [
  "num-rational",
  "parking_lot",
  "petgraph",
- "proptest",
  "rand 0.8.5",
- "test-strategy",
  "tokio",
  "tokio-stream",
  "tracing",

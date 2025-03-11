@@ -1,10 +1,7 @@
 //! Types for interoperability with the txpool service
 
 use crate::{
-    blockchain::{
-        block::Block,
-        header::ConsensusParametersVersion,
-    },
+    blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
         field::{
@@ -31,7 +28,7 @@ use crate::{
         checked_transaction::Checked,
         ProgramState,
     },
-    services::executor::TransactionExecutionResult,
+    services::preconfirmation::PreconfirmationStatus,
 };
 use fuel_vm_private::{
     checked_transaction::CheckedTransaction,
@@ -40,6 +37,8 @@ use fuel_vm_private::{
 };
 use std::sync::Arc;
 use tai64::Tai64;
+
+use super::executor::TransactionExecutionResult;
 
 /// Pool transaction wrapped in an Arc for thread-safe sharing
 pub type ArcPoolTx = Arc<PoolTransaction>;
@@ -382,7 +381,9 @@ impl From<TransactionExecutionStatus> for TransactionStatus {
     fn from(value: TransactionExecutionStatus) -> Self {
         match value {
             TransactionExecutionStatus::Submitted { time } => {
-                TransactionStatus::Submitted { timestamp: time }
+                TransactionStatus::Submitted(
+                    statuses::Submitted { timestamp: time }.into(),
+                )
             }
             TransactionExecutionStatus::Success {
                 block_height,
@@ -391,21 +392,21 @@ impl From<TransactionExecutionStatus> for TransactionStatus {
                 receipts,
                 total_gas,
                 total_fee,
-            } => TransactionStatus::Success {
-                block_height,
-                block_timestamp: time,
-                program_state: result,
-                receipts,
-                total_gas,
-                total_fee,
-            },
+            } => TransactionStatus::Success(
+                statuses::Success {
+                    block_height,
+                    block_timestamp: time,
+                    program_state: result,
+                    receipts,
+                    total_gas,
+                    total_fee,
+                }
+                .into(),
+            ),
             // TODO: Removed this variant as part of the
             //  https://github.com/FuelLabs/fuel-core/issues/2794
             TransactionExecutionStatus::SqueezedOut { reason } => {
-                TransactionStatus::SqueezedOut {
-                    reason,
-                    tx_id: Default::default(),
-                }
+                TransactionStatus::SqueezedOut(statuses::SqueezedOut { reason }.into())
             }
             TransactionExecutionStatus::Failed {
                 block_height,
@@ -414,15 +415,18 @@ impl From<TransactionExecutionStatus> for TransactionStatus {
                 receipts,
                 total_gas,
                 total_fee,
-            } => TransactionStatus::Failure {
-                reason: TransactionExecutionResult::reason(&receipts, &result),
-                block_height,
-                block_timestamp: time,
-                program_state: result,
-                receipts,
-                total_gas,
-                total_fee,
-            },
+            } => TransactionStatus::Failure(
+                statuses::Failure {
+                    reason: TransactionExecutionResult::reason(&receipts, &result),
+                    block_height,
+                    block_timestamp: time,
+                    program_state: result,
+                    receipts,
+                    total_gas,
+                    total_fee,
+                }
+                .into(),
+            ),
         }
     }
 }
@@ -432,111 +436,254 @@ impl From<TransactionExecutionStatus> for TransactionStatus {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransactionStatus {
     /// Transaction was submitted into the TxPool
-    Submitted {
-        /// Timestamp of submission into the TxPool
-        timestamp: Tai64,
-    },
+    Submitted(Arc<statuses::Submitted>),
     /// Transaction was successfully included in a block
-    Success {
-        /// Included in this block
-        block_height: BlockHeight,
-        /// Timestamp of the block
-        block_timestamp: Tai64,
-        /// Result of executing the transaction for scripts
-        program_state: Option<ProgramState>,
-        /// The receipts generated during execution of the transaction
-        receipts: Vec<Receipt>,
-        /// The total gas used by the transaction
-        total_gas: u64,
-        /// The total fee paid by the transaction
-        total_fee: u64,
-    },
+    Success(Arc<statuses::Success>),
     /// Transaction was successfully executed by block producer
-    PreconfirmationSuccess {
-        /// Transaction pointer
-        tx_pointer: TxPointer,
-        /// Transaction ID
-        tx_id: TxId,
-        /// Receipts
-        receipts: Option<Vec<Receipt>>,
-    },
+    PreConfirmationSuccess(Arc<statuses::PreConfirmationSuccess>),
     /// Transaction was squeezed out of the TxPool
-    SqueezedOut {
-        /// Transaction ID
-        tx_id: TxId,
-        /// The reason why the transaction was squeezed out
-        reason: String,
-    },
+    SqueezedOut(Arc<statuses::SqueezedOut>),
     /// Transaction was squeezed out
-    PreconfirmationSqueezedOut {
-        /// Transaction ID
-        tx_id: TxId,
-        /// The reason why the transaction was squeezed out
-        reason: String,
-    },
+    PreConfirmationSqueezedOut(Arc<statuses::PreConfirmationSqueezedOut>),
     /// Transaction was included in a block, but the execution has failed
-    Failure {
-        /// Included in this block
-        block_height: BlockHeight,
-        /// Timestamp of the block
-        block_timestamp: Tai64,
-        /// The reason why the transaction has failed
-        reason: String,
-        /// Result of executing the transaction for scripts
-        program_state: Option<ProgramState>,
-        /// The receipts generated during execution of the transaction
-        receipts: Vec<Receipt>,
-        /// The total gas used by the transaction
-        total_gas: u64,
-        /// The total fee paid by the transaction
-        total_fee: u64,
-    },
-    /// Transaction was not included in a block
-    PreconfirmationFailure {
-        /// Transaction pointer
-        tx_pointer: TxPointer,
-        /// Transaction ID
-        tx_id: TxId,
-        /// Receipts
-        receipts: Option<Vec<Receipt>>,
-        /// The reason why the transaction has failed
-        reason: String,
-    },
+    Failure(Arc<statuses::Failure>),
+    /// Transaction was included in a block by block producer, but the execution has failed
+    PreConfirmationFailure(Arc<statuses::PreConfirmationFailure>),
 }
 
-/// Converts the transaction execution result to the transaction status.
-pub fn from_executor_to_status(
-    block: &Block,
-    result: TransactionExecutionResult,
-) -> TransactionExecutionStatus {
-    let timestamp = block.header().time();
-    let block_height = *block.header().height();
-    match result {
-        TransactionExecutionResult::Success {
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        } => TransactionExecutionStatus::Success {
-            block_height,
-            time: timestamp,
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        },
-        TransactionExecutionResult::Failed {
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        } => TransactionExecutionStatus::Failed {
-            block_height,
-            time: timestamp,
-            result,
-            receipts,
-            total_gas,
-            total_fee,
-        },
+impl TransactionStatus {
+    /// Returns `true` if the status is `Submitted`.
+    pub fn is_submitted(&self) -> bool {
+        matches!(self, Self::Submitted { .. })
+    }
+
+    /// Creates a new `TransactionStatus::Submitted` variant.
+    pub fn submitted(timestamp: Tai64) -> Self {
+        Self::Submitted(statuses::Submitted { timestamp }.into())
+    }
+
+    /// Creates a new `TransactionStatus::SqueezedOut` variant.
+    pub fn squeezed_out(reason: String) -> Self {
+        Self::SqueezedOut(statuses::SqueezedOut { reason }.into())
+    }
+
+    /// Creates a new `TransactionStatus::PreConfirmationSqueezedOut` variant.
+    pub fn preconfirmation_squeezed_out(reason: String) -> Self {
+        Self::PreConfirmationSqueezedOut(
+            statuses::PreConfirmationSqueezedOut { reason }.into(),
+        )
+    }
+}
+
+impl From<PreconfirmationStatus> for TransactionStatus {
+    fn from(value: PreconfirmationStatus) -> Self {
+        match value {
+            PreconfirmationStatus::SqueezedOut { reason } => {
+                TransactionStatus::PreConfirmationSqueezedOut(
+                    statuses::PreConfirmationSqueezedOut { reason }.into(),
+                )
+            }
+            PreconfirmationStatus::Success {
+                tx_pointer,
+                total_gas,
+                total_fee,
+                receipts,
+                outputs,
+            } => TransactionStatus::PreConfirmationSuccess(
+                statuses::PreConfirmationSuccess {
+                    tx_pointer,
+                    total_gas,
+                    total_fee,
+                    receipts: Some(receipts),
+                    outputs: Some(outputs),
+                }
+                .into(),
+            ),
+            PreconfirmationStatus::Failure {
+                tx_pointer,
+                total_gas,
+                total_fee,
+                receipts,
+                outputs,
+            } => {
+                let reason = TransactionExecutionResult::reason(&receipts, &None);
+                TransactionStatus::PreConfirmationFailure(
+                    statuses::PreConfirmationFailure {
+                        tx_pointer,
+                        total_gas,
+                        total_fee,
+                        receipts: Some(receipts),
+                        outputs: Some(outputs),
+                        reason,
+                    }
+                    .into(),
+                )
+            }
+        }
+    }
+}
+
+/// The status of the transaction during its lifecycle.
+pub mod statuses {
+    use super::*;
+
+    /// Transaction was submitted into the TxPool
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Submitted {
+        /// Timestamp of submission into the TxPool
+        pub timestamp: Tai64,
+    }
+
+    impl Default for Submitted {
+        fn default() -> Self {
+            Self {
+                timestamp: Tai64::UNIX_EPOCH,
+            }
+        }
+    }
+
+    /// Transaction was successfully included in a block
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Success {
+        /// Included in this block
+        pub block_height: BlockHeight,
+        /// Timestamp of the block
+        pub block_timestamp: Tai64,
+        /// Result of executing the transaction for scripts
+        pub program_state: Option<ProgramState>,
+        /// The receipts generated during execution of the transaction
+        pub receipts: Vec<Receipt>,
+        /// The total gas used by the transaction
+        pub total_gas: u64,
+        /// The total fee paid by the transaction
+        pub total_fee: u64,
+    }
+
+    impl Default for Success {
+        fn default() -> Self {
+            Self {
+                block_height: Default::default(),
+                block_timestamp: Tai64::UNIX_EPOCH,
+                program_state: None,
+                receipts: vec![],
+                total_gas: 0,
+                total_fee: 0,
+            }
+        }
+    }
+
+    /// Transaction was successfully executed by block producer
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Default, Clone, Debug, PartialEq, Eq)]
+    pub struct PreConfirmationSuccess {
+        /// Transaction pointer within the block.
+        pub tx_pointer: TxPointer,
+        /// The total gas used by the transaction.
+        pub total_gas: u64,
+        /// The total fee paid by the transaction.
+        pub total_fee: u64,
+        /// Receipts produced by the transaction during execution.
+        pub receipts: Option<Vec<Receipt>>,
+        /// Dynamic outputs produced by the transaction during execution.
+        pub outputs: Option<Vec<Output>>,
+    }
+
+    /// Transaction was squeezed out of the TxPool
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct SqueezedOut {
+        /// The reason why the transaction was squeezed out
+        pub reason: String,
+    }
+
+    impl Default for SqueezedOut {
+        fn default() -> Self {
+            Self {
+                reason: "Default reason".to_string(),
+            }
+        }
+    }
+
+    /// Transaction was squeezed out from block producer
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct PreConfirmationSqueezedOut {
+        /// The reason why the transaction was squeezed out
+        pub reason: String,
+    }
+
+    impl Default for PreConfirmationSqueezedOut {
+        fn default() -> Self {
+            Self {
+                reason: "Default reason".to_string(),
+            }
+        }
+    }
+
+    /// Transaction was included in a block, but the execution has failed
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Failure {
+        /// Included in this block
+        pub block_height: BlockHeight,
+        /// Timestamp of the block
+        pub block_timestamp: Tai64,
+        /// The reason why the transaction has failed
+        pub reason: String,
+        /// Result of executing the transaction for scripts
+        pub program_state: Option<ProgramState>,
+        /// The receipts generated during execution of the transaction
+        pub receipts: Vec<Receipt>,
+        /// The total gas used by the transaction
+        pub total_gas: u64,
+        /// The total fee paid by the transaction
+        pub total_fee: u64,
+    }
+
+    impl Default for Failure {
+        fn default() -> Self {
+            Self {
+                block_height: Default::default(),
+                block_timestamp: Tai64::UNIX_EPOCH,
+                reason: "Dummy reason".to_string(),
+                program_state: None,
+                receipts: vec![],
+                total_gas: 0,
+                total_fee: 0,
+            }
+        }
+    }
+
+    /// Transaction was included in a block by block producer, but the execution has failed
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct PreConfirmationFailure {
+        /// Transaction pointer within the block.
+        pub tx_pointer: TxPointer,
+        /// The total gas used by the transaction.
+        pub total_gas: u64,
+        /// The total fee paid by the transaction.
+        pub total_fee: u64,
+        /// Receipts produced by the transaction during execution.
+        pub receipts: Option<Vec<Receipt>>,
+        /// Dynamic outputs produced by the transaction during execution.
+        pub outputs: Option<Vec<Output>>,
+        /// The reason why the transaction has failed
+        pub reason: String,
+    }
+
+    impl Default for PreConfirmationFailure {
+        fn default() -> Self {
+            Self {
+                tx_pointer: Default::default(),
+                total_gas: 0,
+                total_fee: 0,
+                receipts: None,
+                outputs: None,
+                reason: "Dummy reason".to_string(),
+            }
+        }
     }
 }

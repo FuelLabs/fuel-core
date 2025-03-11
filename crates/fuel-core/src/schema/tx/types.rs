@@ -6,14 +6,12 @@ use super::{
 };
 use crate::{
     fuel_core_graphql_api::{
-        api_service::{
-            ChainInfoProvider,
-            TxPool,
-        },
+        api_service::ChainInfoProvider,
         database::ReadView,
         query_costs,
         IntoApiResult,
     },
+    graphql_api::api_service::DynTxStatusManager,
     schema::{
         block::Block,
         scalars::{
@@ -92,7 +90,10 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::vec::IntoIter;
+use std::{
+    sync::Arc,
+    vec::IntoIter,
+};
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -163,12 +164,7 @@ impl SubmittedStatus {
 #[derive(Debug)]
 pub struct SuccessStatus {
     tx_id: TxId,
-    block_height: fuel_core_types::fuel_types::BlockHeight,
-    time: Tai64,
-    result: Option<VmProgramState>,
-    receipts: Vec<fuel_tx::Receipt>,
-    total_gas: u64,
-    total_fee: u64,
+    status: Arc<txpool::statuses::Success>,
 }
 
 #[Object]
@@ -178,13 +174,13 @@ impl SuccessStatus {
     }
 
     async fn block_height(&self) -> U32 {
-        self.block_height.into()
+        self.status.block_height.into()
     }
 
     #[graphql(complexity = "query_costs().block_header + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query = ctx.read_view()?;
-        let block = query.block(&self.block_height)?;
+        let block = query.block(&self.status.block_height)?;
         Ok(block.into())
     }
 
@@ -196,37 +192,44 @@ impl SuccessStatus {
     }
 
     async fn time(&self) -> Tai64Timestamp {
-        Tai64Timestamp(self.time)
+        Tai64Timestamp(self.status.block_timestamp)
     }
 
     async fn program_state(&self) -> Option<ProgramState> {
-        self.result.map(Into::into)
+        self.status.program_state.map(Into::into)
     }
 
     async fn receipts(&self) -> async_graphql::Result<Vec<Receipt>> {
-        Ok(self.receipts.iter().map(Into::into).collect())
+        Ok(self.status.receipts.iter().map(Into::into).collect())
     }
 
     async fn total_gas(&self) -> U64 {
-        self.total_gas.into()
+        self.status.total_gas.into()
     }
 
     async fn total_fee(&self) -> U64 {
-        self.total_fee.into()
+        self.status.total_fee.into()
     }
 }
 
 #[derive(Debug)]
 pub struct PreconfirmationSuccessStatus {
-    pub tx_pointer: TxPointer,
     pub tx_id: TxId,
-    pub receipts: Option<Vec<fuel_tx::Receipt>>,
+    pub status: Arc<txpool::statuses::PreConfirmationSuccess>,
 }
 
 #[Object]
 impl PreconfirmationSuccessStatus {
     async fn tx_pointer(&self) -> TxPointer {
-        self.tx_pointer
+        self.status.tx_pointer.into()
+    }
+
+    async fn total_gas(&self) -> U64 {
+        self.status.total_gas.into()
+    }
+
+    async fn total_fee(&self) -> U64 {
+        self.status.total_fee.into()
     }
 
     async fn transaction_id(&self) -> TransactionId {
@@ -246,22 +249,27 @@ impl PreconfirmationSuccessStatus {
 
     async fn receipts(&self) -> async_graphql::Result<Option<Vec<Receipt>>> {
         let receipts = self
+            .status
             .receipts
             .as_ref()
             .map(|receipts| receipts.iter().map(Into::into).collect());
         Ok(receipts)
+    }
+
+    async fn resolved_outputs(&self) -> async_graphql::Result<Option<Vec<Output>>> {
+        let outputs = self
+            .status
+            .outputs
+            .as_ref()
+            .map(|outputs| outputs.iter().map(Into::into).collect());
+        Ok(outputs)
     }
 }
 
 #[derive(Debug)]
 pub struct FailureStatus {
     tx_id: TxId,
-    block_height: fuel_core_types::fuel_types::BlockHeight,
-    time: Tai64,
-    state: Option<VmProgramState>,
-    receipts: Vec<fuel_tx::Receipt>,
-    total_gas: u64,
-    total_fee: u64,
+    status: Arc<txpool::statuses::Failure>,
 }
 
 #[Object]
@@ -271,13 +279,13 @@ impl FailureStatus {
     }
 
     async fn block_height(&self) -> U32 {
-        self.block_height.into()
+        self.status.block_height.into()
     }
 
     #[graphql(complexity = "query_costs().block_header + child_complexity")]
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let query = ctx.read_view()?;
-        let block = query.block(&self.block_height)?;
+        let block = query.block(&self.status.block_height)?;
         Ok(block.into())
     }
 
@@ -289,46 +297,55 @@ impl FailureStatus {
     }
 
     async fn time(&self) -> Tai64Timestamp {
-        Tai64Timestamp(self.time)
+        Tai64Timestamp(self.status.block_timestamp)
     }
 
     async fn reason(&self) -> String {
-        TransactionExecutionResult::reason(&self.receipts, &self.state)
+        TransactionExecutionResult::reason(
+            &self.status.receipts,
+            &self.status.program_state,
+        )
     }
 
     async fn program_state(&self) -> Option<ProgramState> {
-        self.state.map(Into::into)
+        self.status.program_state.map(Into::into)
     }
 
     async fn receipts(&self) -> async_graphql::Result<Vec<Receipt>> {
-        Ok(self.receipts.iter().map(Into::into).collect())
+        Ok(self.status.receipts.iter().map(Into::into).collect())
     }
 
     async fn total_gas(&self) -> U64 {
-        self.total_gas.into()
+        self.status.total_gas.into()
     }
 
     async fn total_fee(&self) -> U64 {
-        self.total_fee.into()
+        self.status.total_fee.into()
     }
 }
 
 #[derive(Debug)]
 pub struct PreconfirmationFailureStatus {
-    pub tx_pointer: TxPointer,
     pub tx_id: TxId,
-    pub receipts: Option<Vec<fuel_tx::Receipt>>,
-    pub reason: String,
+    pub status: Arc<txpool::statuses::PreConfirmationFailure>,
 }
 
 #[Object]
 impl PreconfirmationFailureStatus {
     async fn reason(&self) -> String {
-        self.reason.clone()
+        self.status.reason.clone()
     }
 
     async fn tx_pointer(&self) -> TxPointer {
-        self.tx_pointer
+        self.status.tx_pointer.into()
+    }
+
+    async fn total_gas(&self) -> U64 {
+        self.status.total_gas.into()
+    }
+
+    async fn total_fee(&self) -> U64 {
+        self.status.total_fee.into()
     }
 
     async fn transaction_id(&self) -> TransactionId {
@@ -348,17 +365,27 @@ impl PreconfirmationFailureStatus {
 
     async fn receipts(&self) -> async_graphql::Result<Option<Vec<Receipt>>> {
         let receipts = self
+            .status
             .receipts
             .as_ref()
             .map(|receipts| receipts.iter().map(Into::into).collect());
         Ok(receipts)
+    }
+
+    async fn resolved_outputs(&self) -> async_graphql::Result<Option<Vec<Output>>> {
+        let outputs = self
+            .status
+            .outputs
+            .as_ref()
+            .map(|outputs| outputs.iter().map(Into::into).collect());
+        Ok(outputs)
     }
 }
 
 #[derive(Debug)]
 pub struct SqueezedOutStatus {
     pub tx_id: TxId,
-    pub reason: String,
+    pub status: Arc<txpool::statuses::SqueezedOut>,
 }
 
 #[Object]
@@ -368,14 +395,14 @@ impl SqueezedOutStatus {
     }
 
     async fn reason(&self) -> String {
-        self.reason.clone()
+        self.status.reason.clone()
     }
 }
 
 #[derive(Debug)]
 pub struct PreconfirmationSqueezedOutStatus {
     pub tx_id: TxId,
-    pub reason: String,
+    pub status: Arc<txpool::statuses::PreConfirmationSqueezedOut>,
 }
 
 #[Object]
@@ -385,79 +412,40 @@ impl PreconfirmationSqueezedOutStatus {
     }
 
     async fn reason(&self) -> String {
-        self.reason.clone()
+        self.status.reason.clone()
     }
 }
 
 impl TransactionStatus {
     pub fn new(tx_id: TxId, tx_status: TxStatus) -> Self {
         match tx_status {
-            TxStatus::Submitted { timestamp } => {
-                TransactionStatus::Submitted(SubmittedStatus(timestamp))
+            TxStatus::Submitted(status) => {
+                TransactionStatus::Submitted(SubmittedStatus(status.timestamp))
             }
-            TxStatus::Success {
-                block_height,
-                block_timestamp,
-                program_state,
-                receipts,
-                total_gas,
-                total_fee,
-            } => TransactionStatus::Success(SuccessStatus {
-                tx_id,
-                block_height,
-                result: program_state,
-                time: block_timestamp,
-                receipts,
-                total_gas,
-                total_fee,
-            }),
-            TxStatus::SqueezedOut { reason, tx_id } => {
-                TransactionStatus::SqueezedOut(SqueezedOutStatus { reason, tx_id })
+            TxStatus::Success(status) => {
+                TransactionStatus::Success(SuccessStatus { tx_id, status })
             }
-            TxStatus::Failure {
-                block_height,
-                block_timestamp,
-                program_state,
-                receipts,
-                total_gas,
-                total_fee,
-                ..
-            } => TransactionStatus::Failure(FailureStatus {
-                tx_id,
-                block_height,
-                time: block_timestamp,
-                state: program_state,
-                receipts,
-                total_gas,
-                total_fee,
-            }),
-            TxStatus::PreconfirmationSuccess {
-                tx_pointer,
-                tx_id,
-                receipts,
-            } => {
+            TxStatus::SqueezedOut(status) => {
+                TransactionStatus::SqueezedOut(SqueezedOutStatus { status, tx_id })
+            }
+            TxStatus::Failure(status) => {
+                TransactionStatus::Failure(FailureStatus { tx_id, status })
+            }
+            TxStatus::PreConfirmationSuccess(status) => {
                 TransactionStatus::PreconfirmationSuccess(PreconfirmationSuccessStatus {
-                    tx_pointer: tx_pointer.into(),
                     tx_id,
-                    receipts,
+                    status,
                 })
             }
-            TxStatus::PreconfirmationSqueezedOut { reason, tx_id } => {
+            TxStatus::PreConfirmationSqueezedOut(status) => {
                 TransactionStatus::PreconfirmationSqueezedOut(
-                    PreconfirmationSqueezedOutStatus { reason, tx_id },
+                    PreconfirmationSqueezedOutStatus { status, tx_id },
                 )
             }
-            TxStatus::PreconfirmationFailure {
-                tx_pointer,
-                tx_id,
-                receipts,
-                reason,
-            } => {
+            TxStatus::PreConfirmationFailure(status) => {
                 TransactionStatus::PreconfirmationFailure(PreconfirmationFailureStatus {
-                    tx_pointer: tx_pointer.into(),
                     tx_id,
-                    receipts,
-                    reason,
+                    status,
                 })
             }
         }
@@ -468,67 +456,28 @@ impl From<TransactionStatus> for TxStatus {
     fn from(s: TransactionStatus) -> Self {
         match s {
             TransactionStatus::Submitted(SubmittedStatus(timestamp)) => {
-                TxStatus::Submitted { timestamp }
+                TxStatus::submitted(timestamp)
             }
-            TransactionStatus::Success(SuccessStatus {
-                block_height,
-                result,
-                time,
-                receipts,
-                total_gas,
-                total_fee,
-                ..
-            }) => TxStatus::Success {
-                block_height,
-                program_state: result,
-                block_timestamp: time,
-                receipts,
-                total_gas,
-                total_fee,
-            },
-            TransactionStatus::SqueezedOut(SqueezedOutStatus { reason, tx_id }) => {
-                TxStatus::SqueezedOut { reason, tx_id }
+            TransactionStatus::Success(SuccessStatus { status, .. }) => {
+                TxStatus::Success(status)
             }
-            TransactionStatus::Failure(FailureStatus {
-                block_height,
-                time,
-                state,
-                receipts,
-                total_gas,
-                total_fee,
-                ..
-            }) => TxStatus::Failure {
-                reason: TransactionExecutionResult::reason(&receipts, &state),
-                block_height,
-                block_timestamp: time,
-                program_state: state,
-                receipts,
-                total_gas,
-                total_fee,
-            },
+            TransactionStatus::SqueezedOut(SqueezedOutStatus { status, .. }) => {
+                TxStatus::SqueezedOut(status)
+            }
+            TransactionStatus::Failure(FailureStatus { status, .. }) => {
+                TxStatus::Failure(status)
+            }
             TransactionStatus::PreconfirmationSuccess(PreconfirmationSuccessStatus {
-                tx_pointer,
-                tx_id,
-                receipts,
-            }) => TxStatus::PreconfirmationSuccess {
-                tx_pointer: tx_pointer.into(),
-                tx_id,
-                receipts,
-            },
+                status,
+                ..
+            }) => TxStatus::PreConfirmationSuccess(status),
             TransactionStatus::PreconfirmationSqueezedOut(
-                PreconfirmationSqueezedOutStatus { tx_id, reason },
-            ) => TxStatus::PreconfirmationSqueezedOut { tx_id, reason },
+                PreconfirmationSqueezedOutStatus { status, .. },
+            ) => TxStatus::PreConfirmationSqueezedOut(status),
             TransactionStatus::PreconfirmationFailure(PreconfirmationFailureStatus {
-                tx_pointer,
-                tx_id,
-                receipts,
-                reason,
-            }) => TxStatus::PreconfirmationFailure {
-                tx_pointer: tx_pointer.into(),
-                tx_id,
-                receipts,
-                reason,
-            },
+                status,
+                ..
+            }) => TxStatus::PreConfirmationFailure(status),
         }
     }
 }
@@ -854,8 +803,10 @@ impl Transaction {
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.1;
         let query = ctx.read_view()?;
-        let txpool = ctx.data_unchecked::<TxPool>();
-        get_tx_status(id, query.as_ref(), txpool)
+
+        let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
+
+        get_tx_status(id, query.as_ref(), tx_status_manager)
             .await
             .map_err(Into::into)
     }
@@ -1172,30 +1123,25 @@ impl StorageReadReplayEvent {
     }
 }
 
-#[tracing::instrument(level = "debug", skip(query, txpool), ret, err)]
+#[tracing::instrument(level = "debug", skip(query, tx_status_manager), ret, err)]
 pub(crate) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
     query: &ReadView,
-    txpool: &TxPool,
+    tx_status_manager: &DynTxStatusManager,
 ) -> Result<Option<TransactionStatus>, StorageError> {
-    match query
+    let api_result = query
         .tx_status(&id)
-        .into_api_result::<txpool::TransactionStatus, StorageError>()?
-    {
+        .into_api_result::<txpool::TransactionStatus, StorageError>()?;
+    match api_result {
         Some(status) => {
             let status = TransactionStatus::new(id, status);
             Ok(Some(status))
         }
         None => {
-            let submitted_time = txpool
-                .submission_time(id)
-                .await
-                .map_err(|e| StorageError::Other(anyhow::anyhow!(e)))?;
-            match submitted_time {
-                Some(submitted_time) => Ok(Some(TransactionStatus::Submitted(
-                    SubmittedStatus(submitted_time),
-                ))),
-                _ => Ok(None),
+            let status = tx_status_manager.status(id).await?;
+            match status {
+                Some(status) => Ok(Some(TransactionStatus::new(id, status))),
+                None => Ok(None),
             }
         }
     }

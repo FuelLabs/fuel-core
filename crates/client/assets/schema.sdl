@@ -895,9 +895,12 @@ type Policies {
 type PreconfirmationFailureStatus {
 	reason: String!
 	txPointer: TxPointer!
+	totalGas: U64!
+	totalFee: U64!
 	transactionId: TransactionId!
 	transaction: Transaction
 	receipts: [Receipt!]
+	resolvedOutputs: [Output!]
 }
 
 type PreconfirmationSqueezedOutStatus {
@@ -907,9 +910,12 @@ type PreconfirmationSqueezedOutStatus {
 
 type PreconfirmationSuccessStatus {
 	txPointer: TxPointer!
+	totalGas: U64!
+	totalFee: U64!
 	transactionId: TransactionId!
 	transaction: Transaction
 	receipts: [Receipt!]
+	resolvedOutputs: [Output!]
 }
 
 input Predicate {

@@ -14,9 +14,9 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-struct MockTxPool;
+struct MockTxStatusManager;
 
-impl ports::worker::TxPool for MockTxPool {
+impl ports::worker::TxStatusCompletion for MockTxStatusManager {
     fn send_complete(
         &self,
         _id: Bytes32,
@@ -73,11 +73,11 @@ fn block_importer_for_event(event: Event) -> BoxStream<SharedImportResult> {
 fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
     block_importer: BoxStream<SharedImportResult>,
     database: D,
-) -> Task<MockTxPool, D> {
-    let tx_pool = MockTxPool;
+) -> Task<MockTxStatusManager, D> {
+    let tx_status_manager = MockTxStatusManager;
     let chain_id = Default::default();
     Task {
-        tx_pool,
+        tx_status_manager,
         block_importer,
         database,
         chain_id,
