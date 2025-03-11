@@ -89,24 +89,44 @@ impl EstimateGasPriceQuery {
         )]
         block_horizon: Option<U32>,
     ) -> async_graphql::Result<EstimateGasPrice> {
-        let query = ctx.read_view()?;
+        let block_horizon = block_horizon.map(|h| h.0);
+
+        let gas_price = ctx.estimate_gas_price(block_horizon)?;
+
+        Ok(EstimateGasPrice {
+            gas_price: gas_price.into(),
+        })
+    }
+}
+
+pub trait EstimateGasPriceExt {
+    fn estimate_gas_price(
+        &self,
+        block_horizon: Option<u32>,
+    ) -> async_graphql::Result<u64>;
+}
+
+impl EstimateGasPriceExt for Context<'_> {
+    fn estimate_gas_price(
+        &self,
+        block_horizon: Option<u32>,
+    ) -> async_graphql::Result<u64> {
+        let query = self.read_view()?;
 
         let latest_block_height: u32 = query.latest_block_height()?.into();
         let target_block = block_horizon
-            .and_then(|h| h.0.checked_add(latest_block_height))
+            .and_then(|h| h.checked_add(latest_block_height))
             .ok_or(async_graphql::Error::new(format!(
                 "Invalid block horizon. Overflows latest block :{latest_block_height:?}"
             )))?;
 
-        let gas_price_provider = ctx.data_unchecked::<GasPriceProvider>();
+        let gas_price_provider = self.data_unchecked::<GasPriceProvider>();
         let gas_price = gas_price_provider
             .worst_case_gas_price(target_block.into())
             .ok_or(async_graphql::Error::new(format!(
                 "Failed to estimate gas price for block, algorithm not yet set: {target_block:?}"
             )))?;
 
-        Ok(EstimateGasPrice {
-            gas_price: gas_price.into(),
-        })
+        Ok(gas_price)
     }
 }
