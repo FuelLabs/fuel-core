@@ -31,14 +31,16 @@ use crate::{
 
 pub struct Data {
     pruning_queue: VecDeque<(Instant, TxId)>,
-    statuses: HashMap<TxId, (Instant, TransactionStatus)>,
+    non_prunable_statuses: HashMap<TxId, TransactionStatus>,
+    prunable_statuses: HashMap<TxId, (Instant, TransactionStatus)>,
 }
 
 impl Data {
     pub fn empty() -> Self {
         Self {
             pruning_queue: VecDeque::new(),
-            statuses: HashMap::new(),
+            prunable_statuses: HashMap::new(),
+            non_prunable_statuses: HashMap::new(),
         }
     }
 
@@ -46,7 +48,7 @@ impl Data {
     fn all_but_submitted_statuses(
         &self,
     ) -> impl Iterator<Item = (&Bytes32, &(Instant, TransactionStatus))> {
-        self.statuses
+        self.prunable_statuses
             .iter()
             .filter(|(_, (_, status))| TxStatusManager::is_prunable(status))
     }
@@ -64,7 +66,7 @@ impl Data {
 
         // There should be a transaction with given id for each timestamp cache
         for (_, tx_id) in self.pruning_queue.iter() {
-            assert!(self.statuses.contains_key(tx_id));
+            assert!(self.prunable_statuses.contains_key(tx_id));
         }
 
         // The count of transactions in both collections must match
@@ -74,12 +76,6 @@ impl Data {
             .iter()
             .map(|(_, tx_id)| *tx_id)
             .collect::<HashSet<_>>();
-
-        if tx_count != tx_count_from_queue.len() {
-            dbg!(&self.statuses);
-            dbg!(&self.pruning_queue);
-        }
-
         assert_eq!(tx_count, tx_count_from_queue.len());
     }
 }
@@ -110,10 +106,7 @@ impl TxStatusManager {
             let duration = now.duration_since(*past);
 
             if duration < self.ttl {
-                println!("Not pruning");
                 break;
-            } else {
-                println!("Pruning considered");
             }
 
             let (past, tx_id) = self
@@ -122,7 +115,7 @@ impl TxStatusManager {
                 .pop_back()
                 .expect("Queue is not empty, checked above; qed");
 
-            let entry = self.data.statuses.entry(tx_id);
+            let entry = self.data.prunable_statuses.entry(tx_id);
             match entry {
                 Entry::Occupied(entry) => {
                     // One transaction can have multiple statuses during its lifetime.
@@ -151,14 +144,16 @@ impl TxStatusManager {
 
     fn add_new_status(&mut self, tx_id: TxId, tx_status: TransactionStatus) {
         let now = Instant::now();
-        if Self::is_prunable(&tx_status) {
+        if TxStatusManager::is_prunable(&tx_status) {
             self.data.pruning_queue.push_front((now, tx_id));
+            self.data.prunable_statuses.insert(tx_id, (now, tx_status));
+            self.data.non_prunable_statuses.remove(&tx_id);
+        } else {
+            self.data.non_prunable_statuses.insert(tx_id, tx_status);
         }
-        self.data.statuses.insert(tx_id, (now, tx_status));
     }
 
     fn register_status(&mut self, tx_id: TxId, tx_status: TransactionStatus) {
-        println!("New status: {:?}, {:?}", tx_id, tx_status);
         self.prune_old_statuses();
         self.add_new_status(tx_id, tx_status);
     }
@@ -175,9 +170,11 @@ impl TxStatusManager {
 
     pub fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {
         self.data
-            .statuses
+            .prunable_statuses
             .get(tx_id)
-            .map(|(_, status)| status.clone())
+            .map(|(_, status)| status)
+            .or_else(|| self.data.non_prunable_statuses.get(tx_id))
+            .map(|status| status.clone())
     }
 
     /// Subscribe to status updates for a transaction.
@@ -262,17 +259,15 @@ mod tests {
         ]
     }
 
-    /*
-    fn random_tx_status_affected_by_pruning(rng: &mut StdRng) -> TransactionStatus {
+    fn random_prunable_status(rng: &mut StdRng) -> TransactionStatus {
         all_statuses()
             .into_iter()
-            .filter(|tx| TxStatusManager::affected_by_pruning(tx))
+            .filter(|tx| TxStatusManager::is_prunable(tx))
             .collect::<Vec<_>>()
             .choose(rng)
             .unwrap()
             .clone()
     }
-    */
 
     fn random_tx_status(rng: &mut StdRng) -> TransactionStatus {
         all_statuses().choose(rng).unwrap().clone()
@@ -338,13 +333,13 @@ mod tests {
         use super::{
             assert_absence,
             assert_presence,
-            submitted,
             HALF_OF_TTL,
             QUART_OF_TTL,
             TTL,
         };
 
         #[tokio::test(start_paused = true)]
+        // TODO[RC]: Include all statuses to validate that submittes is also returned.
         async fn simple_registration() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
             let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
@@ -458,7 +453,6 @@ mod tests {
     }
 
     mod distinct_ids {
-        use fuel_core_types::services::txpool::TransactionStatus;
 
         use crate::{
             manager::tests::{
@@ -475,7 +469,6 @@ mod tests {
         use super::{
             assert_absence,
             assert_presence_with_status,
-            submitted,
             Duration,
             HALF_OF_TTL,
             QUART_OF_TTL,
@@ -771,19 +764,28 @@ mod tests {
         // This will be used to track when each txid was updated so that
         // we can do the final assert against the TTL.
         let mut update_times = HashMap::new();
-        let mut non_prunable_txs = HashSet::new();
+        let mut non_prunable_ids = HashSet::new();
 
         // Simulate flow of time and transaction updates
         for action in actions {
             match action {
                 Action::UpdateStatus { tx_id_index } => {
                     let tx_id = tx_id_pool[tx_id_index];
-                    let tx_status = random_tx_status(&mut rng);
-                    if !TxStatusManager::is_prunable(&tx_status) {
-                        non_prunable_txs.insert(tx_id);
+
+                    // Make sure we'll never update back to submitted
+                    let current_tx_status = tx_status_manager.status(&tx_id.into());
+                    let new_tx_status = match current_tx_status {
+                        Some(_) => random_prunable_status(&mut rng),
+                        None => random_tx_status(&mut rng),
+                    };
+
+                    if TxStatusManager::is_prunable(&new_tx_status) {
+                        update_times.insert(tx_id, Instant::now());
+                        non_prunable_ids.remove(&tx_id);
+                    } else {
+                        non_prunable_ids.insert(tx_id);
                     }
-                    tx_status_manager.status_update(tx_id.into(), tx_status);
-                    update_times.insert(tx_id, Instant::now());
+                    tx_status_manager.status_update(tx_id.into(), new_tx_status);
                 }
                 Action::AdvanceTime { seconds } => {
                     tokio::time::advance(Duration::from_secs(seconds)).await;
@@ -812,15 +814,17 @@ mod tests {
             recent_tx_ids
                 .into_iter()
                 .map(|(tx_id, _)| (*tx_id).into())
+                .chain(non_prunable_ids.iter().cloned().map(Into::into))
                 .collect(),
         );
-        // assert_absence(
-        //     &tx_status_manager,
-        //     not_recent_tx_ids
-        //         .into_iter()
-        //         .map(|(tx_id, _)| (*tx_id).into())
-        //         .collect(),
-        // );
+        assert_absence(
+            &tx_status_manager,
+            not_recent_tx_ids
+                .into_iter()
+                .filter(|(tx_id, _)| !non_prunable_ids.contains(*tx_id))
+                .map(|(tx_id, _)| (*tx_id).into())
+                .collect(),
+        );
     }
 
     proptest! {
