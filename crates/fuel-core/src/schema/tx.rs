@@ -1,8 +1,11 @@
 use super::scalars::{
+    AssetId,
+    U16,
     U32,
     U64,
 };
 use crate::{
+    coins_query::CoinsQueryError,
     fuel_core_graphql_api::{
         api_service::{
             BlockProducer,
@@ -19,10 +22,13 @@ use crate::{
         ports::MemoryPool,
     },
     query::{
+        asset_query::Exclude,
         transaction_status_change,
         TxnStatusChangeState,
     },
     schema::{
+        coins::ExcludeInput,
+        gas_price::EstimateGasPriceExt,
         scalars::{
             Address,
             HexString,
@@ -30,7 +36,16 @@ use crate::{
             TransactionId,
             TxPointer,
         },
-        tx::types::TransactionStatus,
+        tx::{
+            assemble_tx::{
+                AssembleArguments,
+                AssembleTx,
+            },
+            types::{
+                AssembleTransactionResult,
+                TransactionStatus,
+            },
+        },
         ReadViewProvider,
     },
     service::adapters::SharedMemoryPool,
@@ -54,6 +69,7 @@ use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
     fuel_tx::{
+        self,
         Bytes32,
         Cacheable,
         Transaction as FuelTx,
@@ -76,6 +92,7 @@ use futures::{
 use std::{
     borrow::Cow,
     iter,
+    sync::Arc,
 };
 use types::{
     DryRunTransactionExecutionStatus,
@@ -83,6 +100,7 @@ use types::{
     Transaction,
 };
 
+mod assemble_tx;
 pub mod input;
 pub mod output;
 pub mod receipt;
@@ -243,6 +261,162 @@ impl TxQuery {
         .await
     }
 
+    /// Assembles the transaction based on the provided requirements.
+    /// The return transaction contains:
+    /// - Input coins to cover `required_balances`
+    /// - Input coins to cover the fee of the transaction based on the gas price from `block_horizon`
+    /// - `Change` or `Destroy` outputs for all assets from the inputs
+    /// - `Variable` outputs in the case they are required during the execution
+    /// - `Contract` inputs and outputs in the case they are required during the execution
+    /// - Reserved witness slots for signed coins filled with `64` zeroes
+    /// - Set script gas limit(unless `script` is empty)
+    /// - Estimated predicates, if `estimate_predicates == true`
+    ///
+    /// Returns an error if:
+    /// - The number of required balances exceeds the maximum number of inputs allowed.
+    /// - The fee address index is out of bounds.
+    /// - The same asset has multiple change policies(either the receiver of
+    ///     the change is different, or one of the policies states about the destruction
+    ///     of the token while the other does not). The `Change` output from the transaction
+    ///     also count as a `ChangePolicy`.
+    /// - The number of excluded coin IDs exceeds the maximum number of inputs allowed.
+    /// - Required assets have multiple entries.
+    /// - If accounts don't have sufficient amounts to cover the transaction requirements in assets.
+    /// - If a constructed transaction breaks the rules defined by consensus parameters.
+    #[graphql(complexity = "query_costs().assemble_tx")]
+    #[allow(clippy::too_many_arguments)]
+    async fn assemble_tx(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(
+            desc = "The original transaction that contains application level logic only"
+        )]
+        tx: HexString,
+        #[graphql(
+            desc = "Number of blocks into the future to estimate the gas price for"
+        )]
+        block_horizon: U32,
+        #[graphql(
+            desc = "The list of required balances for the transaction to include as inputs. \
+                    The list should be created based on the application-required assets. \
+                    The base asset requirement should not require assets to cover the \
+                    transaction fee, which will be calculated and added automatically \
+                    at the end of the assembly process."
+        )]
+        required_balances: Vec<schema_types::RequiredBalance>,
+        #[graphql(desc = "The index from the `required_balances` list \
+                that points to the address who pays fee for the transaction. \
+                If you only want to cover the fee of transaction, you can set the required balance \
+                to 0, set base asset and point to this required address.")]
+        fee_address_index: U16,
+        #[graphql(
+            desc = "The list of resources to exclude from the selection for the inputs"
+        )]
+        exclude_input: Option<ExcludeInput>,
+        #[graphql(
+            desc = "Perform the estimation of the predicates before cover fee of the transaction"
+        )]
+        estimate_predicates: Option<bool>,
+        #[graphql(
+            desc = "During the phase of the fee calculation, adds `reserve_gas` to the \
+                    total gas used by the transaction and fetch assets to cover the fee."
+        )]
+        reserve_gas: Option<U64>,
+    ) -> async_graphql::Result<AssembleTransactionResult> {
+        let consensus_parameters = ctx
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params();
+
+        let max_input = consensus_parameters.tx_params().max_inputs();
+
+        if required_balances.len() > max_input as usize {
+            return Err(CoinsQueryError::TooManyCoinsSelected {
+                required: required_balances.len(),
+                max: max_input,
+            }
+            .into());
+        }
+
+        let fee_index: u16 = fee_address_index.into();
+        let estimate_predicates: bool = estimate_predicates.unwrap_or(false);
+        let reserve_gas: u64 = reserve_gas.map(Into::into).unwrap_or(0);
+
+        let excluded_id_count = exclude_input.as_ref().map_or(0, |exclude| {
+            exclude.utxos.len().saturating_add(exclude.messages.len())
+        });
+        if excluded_id_count > max_input as usize {
+            return Err(CoinsQueryError::TooManyExcludedId {
+                provided: excluded_id_count,
+                allowed: max_input,
+            }
+            .into());
+        }
+
+        let required_balances: Vec<RequiredBalance> =
+            required_balances.into_iter().map(Into::into).collect();
+        let exclude: Exclude = exclude_input.into();
+
+        let gas_price = ctx.estimate_gas_price(Some(block_horizon.into()))?;
+
+        let tx = FuelTx::from_bytes(&tx.0)?;
+
+        let read_view = Arc::new(ctx.read_view()?.into_owned());
+        let block_producer = ctx.data_unchecked::<BlockProducer>();
+        let shared_memory_pool = ctx.data_unchecked::<SharedMemoryPool>();
+
+        let arguments = AssembleArguments {
+            fee_index,
+            required_balances,
+            exclude,
+            estimate_predicates,
+            reserve_gas,
+            consensus_parameters,
+            gas_price,
+            block_producer,
+            read_view,
+            shared_memory_pool,
+        };
+
+        let assembled_tx: fuel_tx::Transaction = match tx {
+            fuel_tx::Transaction::Script(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
+            fuel_tx::Transaction::Create(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
+            fuel_tx::Transaction::Mint(_) => {
+                return Err(anyhow::anyhow!("Mint transaction is not supported").into());
+            }
+            fuel_tx::Transaction::Upgrade(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
+            fuel_tx::Transaction::Upload(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
+            fuel_tx::Transaction::Blob(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
+        };
+
+        let (assembled_tx, status) = block_producer
+            .dry_run_txs(vec![assembled_tx], None, None, Some(false), Some(gas_price))
+            .await?
+            .into_iter()
+            .next()
+            .ok_or(anyhow::anyhow!(
+                "Failed to do the final `dry_run` of the assembled transaction"
+            ))?;
+
+        let result = AssembleTransactionResult {
+            tx_id: status.id,
+            tx: assembled_tx,
+            status: status.result,
+            gas_price,
+        };
+
+        Ok(result)
+    }
+
     /// Estimate the predicate gas for the provided transaction
     #[graphql(complexity = "query_costs().estimate_predicates + child_complexity")]
     async fn estimate_predicates(
@@ -337,7 +511,7 @@ impl TxQuery {
             .await?;
         let tx_statuses = tx_statuses
             .into_iter()
-            .map(DryRunTransactionExecutionStatus)
+            .map(|(_, status)| DryRunTransactionExecutionStatus(status))
             .collect();
 
         Ok(tx_statuses)
@@ -540,6 +714,121 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
                 Ok(self.tx_status_manager.status(id).await?)
             }
             Err(err) => Err(err),
+        }
+    }
+}
+
+pub mod schema_types {
+    use super::*;
+
+    #[derive(async_graphql::Enum, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+    pub enum Destroy {
+        Destroy,
+    }
+
+    #[derive(async_graphql::OneofObject)]
+    pub enum ChangePolicy {
+        /// Adds `Output::Change` to the transaction if it is not already present.
+        /// Sending remaining assets to the provided address.
+        Change(Address),
+        /// Destroys the remaining assets by the transaction for provided address.
+        Destroy(Destroy),
+    }
+
+    #[derive(async_graphql::OneofObject)]
+    pub enum Account {
+        Address(Address),
+        Predicate(Predicate),
+    }
+
+    #[derive(async_graphql::InputObject)]
+    pub struct Predicate {
+        // The address of the predicate can be different from the actual bytecode.
+        // This feature is used by wallets during estimation of the predicate that requires
+        // signature verification. They provide a mocked version of the predicate that
+        // returns `true` even if the signature doesn't match.
+        pub predicate_address: Address,
+        pub predicate: HexString,
+        pub predicate_data: HexString,
+    }
+
+    #[derive(async_graphql::InputObject)]
+    pub struct RequiredBalance {
+        pub asset_id: AssetId,
+        pub amount: U64,
+        pub account: Account,
+        pub change_policy: ChangePolicy,
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ChangePolicy {
+    /// Adds `Output::Change` to the transaction if it is not already present.
+    /// Sending remaining assets to the provided address.
+    Change(fuel_tx::Address),
+    /// Destroys the remaining assets by the transaction for provided address.
+    Destroy,
+}
+
+#[derive(Clone)]
+pub enum Account {
+    Address(fuel_tx::Address),
+    Predicate(Predicate),
+}
+
+impl Account {
+    pub fn owner(&self) -> fuel_tx::Address {
+        match self {
+            Account::Address(address) => *address,
+            Account::Predicate(predicate) => predicate.predicate_address,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Predicate {
+    pub predicate_address: fuel_tx::Address,
+    pub predicate: Vec<u8>,
+    pub predicate_data: Vec<u8>,
+}
+
+struct RequiredBalance {
+    asset_id: fuel_tx::AssetId,
+    amount: fuel_tx::Word,
+    account: Account,
+    change_policy: ChangePolicy,
+}
+
+impl From<schema_types::RequiredBalance> for RequiredBalance {
+    fn from(required_balance: schema_types::RequiredBalance) -> Self {
+        let asset_id: fuel_tx::AssetId = required_balance.asset_id.into();
+        let amount: fuel_tx::Word = required_balance.amount.into();
+        let account = match required_balance.account {
+            schema_types::Account::Address(address) => Account::Address(address.into()),
+            schema_types::Account::Predicate(predicate) => {
+                let predicate_address = predicate.predicate_address.into();
+                let predicate_data = predicate.predicate_data.into();
+                let predicate = predicate.predicate.into();
+                Account::Predicate(Predicate {
+                    predicate_address,
+                    predicate,
+                    predicate_data,
+                })
+            }
+        };
+
+        let change_policy = match required_balance.change_policy {
+            schema_types::ChangePolicy::Change(address) => {
+                ChangePolicy::Change(address.into())
+            }
+            schema_types::ChangePolicy::Destroy(_) => ChangePolicy::Destroy,
+        };
+
+        Self {
+            asset_id,
+            amount,
+            account,
+            change_policy,
         }
     }
 }

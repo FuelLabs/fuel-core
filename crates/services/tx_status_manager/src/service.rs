@@ -24,10 +24,8 @@ use fuel_core_types::{
     },
     services::{
         p2p::{
-            DelegatePublicKey,
             GossipData,
             PreConfirmationMessage,
-            ProtocolSignature,
             Sealed,
         },
         preconfirmation::Preconfirmation,
@@ -102,14 +100,6 @@ pub struct Task {
     read_requests_receiver: mpsc::Receiver<ReadRequest>,
     write_requests_receiver: mpsc::UnboundedReceiver<WriteRequest>,
     shared_data: SharedData,
-}
-
-pub trait SignatureVerification {
-    fn add_new_delegate(
-        &mut self,
-        delegate: DelegatePublicKey,
-        protocol_signature: ProtocolSignature,
-    ) -> bool;
 }
 
 impl Task {
@@ -244,14 +234,4 @@ where
         write_requests_receiver,
         shared_data,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn run__when_receive_pre_confirmation_delegations_message_updates_delegate() {
-        todo!()
-    }
 }

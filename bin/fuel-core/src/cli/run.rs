@@ -634,6 +634,7 @@ impl Command {
                     coins_to_spend: graphql.costs.coins_to_spend,
                     get_peers: graphql.costs.get_peers,
                     estimate_predicates: graphql.costs.estimate_predicates,
+                    assemble_tx: graphql.costs.assemble_tx,
                     dry_run: graphql.costs.dry_run,
                     storage_read_replay: graphql.costs.storage_read_replay,
                     submit: graphql.costs.submit,

@@ -112,7 +112,7 @@ pub trait DryRunner: Send + Sync {
         block: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
         at_height: Option<BlockHeight>,
-    ) -> ExecutorResult<Vec<TransactionExecutionStatus>>;
+    ) -> ExecutorResult<Vec<(Transaction, TransactionExecutionStatus)>>;
 }
 
 pub trait StorageReadReplayRecorder: Send + Sync {

@@ -52,6 +52,11 @@ use std::{
     io::ErrorKind::NotFound,
     time::Duration,
 };
+use test_helpers::{
+    assemble_tx::AssembleAndRunTx,
+    config_with_fee,
+    default_signing_wallet,
+};
 
 mod predicates;
 mod tx_pointer;
@@ -335,28 +340,20 @@ async fn transaction_selector_can_select_a_transaction_that_fits_the_block_size_
 
 #[tokio::test]
 async fn submit() {
-    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let srv = FuelService::new_node(config_with_fee()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_limit = 1_000_000;
-    let maturity = Default::default();
-
-    let script = [
+    let script = vec![
         op::addi(0x10, RegId::ZERO, 0xca),
         op::addi(0x11, RegId::ZERO, 0xba),
         op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
         op::ret(RegId::ONE),
     ];
-    let script: Vec<u8> = script
-        .iter()
-        .flat_map(|op| u32::from(*op).to_be_bytes())
-        .collect();
 
-    let tx = TransactionBuilder::script(script, vec![])
-        .script_gas_limit(gas_limit)
-        .maturity(maturity)
-        .add_fee_input()
-        .finalize_as_transaction();
+    let tx = client
+        .assemble_script(script, vec![], default_signing_wallet())
+        .await
+        .unwrap();
 
     client.submit_and_await_commit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
@@ -373,28 +370,19 @@ async fn submit() {
 
 #[tokio::test]
 async fn submit_and_await_status() {
-    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let srv = FuelService::new_node(config_with_fee()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_limit = 1_000_000;
-    let maturity = Default::default();
-
-    let script = [
+    let script = vec![
         op::addi(0x10, RegId::ZERO, 0xca),
         op::addi(0x11, RegId::ZERO, 0xba),
         op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
         op::ret(RegId::ONE),
     ];
-    let script: Vec<u8> = script
-        .iter()
-        .flat_map(|op| u32::from(*op).to_be_bytes())
-        .collect();
-
-    let tx = TransactionBuilder::script(script, vec![])
-        .script_gas_limit(gas_limit)
-        .maturity(maturity)
-        .add_fee_input()
-        .finalize_as_transaction();
+    let tx = client
+        .assemble_script(script, vec![], default_signing_wallet())
+        .await
+        .unwrap();
 
     let mut status_stream = client.submit_and_await_status(&tx).await.unwrap();
     let intermediate_status = status_stream.next().await.unwrap().unwrap();
@@ -413,29 +401,19 @@ async fn dry_run_transaction_should_use_latest_block_time() {
     let block_production_interval_seconds = 10;
     let number_of_blocks_to_produce_manually = 5;
 
-    let mut config = Config::local_node();
+    let mut config = config_with_fee();
     config.block_production = Trigger::Interval {
         block_time: Duration::from_secs(block_production_interval_seconds),
     };
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let gas_limit = 1_000_000;
-    let maturity = Default::default();
+    let script = vec![op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
 
-    let get_block_timestamp_script =
-        [op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
-
-    let script: Vec<u8> = get_block_timestamp_script
-        .iter()
-        .flat_map(|op| u32::from(*op).to_be_bytes())
-        .collect();
-
-    let tx = TransactionBuilder::script(script, vec![])
-        .script_gas_limit(gas_limit)
-        .maturity(maturity)
-        .add_fee_input()
-        .finalize_as_transaction();
+    let tx = client
+        .assemble_script(script, vec![], default_signing_wallet())
+        .await
+        .unwrap();
 
     // When
     client
@@ -461,17 +439,6 @@ async fn dry_run_transaction_should_use_latest_block_time() {
             * number_of_blocks_to_produce_manually.saturating_sub(1) as u64;
 
     assert_eq!(expected_returned_timestamp, returned_timestamp);
-}
-
-#[ignore]
-#[tokio::test]
-async fn transaction_status_submitted() {
-    // This test should ensure a transaction's status is Submitted while it is in the mempool
-    // This test should also ensure a transaction's time of submission is correct in the returned status
-    // Currently blocked until https://github.com/FuelLabs/fuel-core/issues/50 is resolved
-    // as execution must be separate from submission for a tx to persist inside of the txpool
-    // Merge with the submit_utxo_verified_tx test once utxo_verification is the default
-    todo!();
 }
 
 #[tokio::test]
