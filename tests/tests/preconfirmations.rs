@@ -1,0 +1,387 @@
+use std::time::Duration;
+
+use fuel_core::service::Config;
+use fuel_core_bin::FuelService;
+use fuel_core_client::client::{
+    types::TransactionStatus,
+    FuelClient,
+};
+use fuel_core_poa::Trigger;
+use fuel_core_types::{
+    fuel_asm::{
+        op,
+        RegId,
+    },
+    fuel_tx::{
+        Address,
+        AssetId,
+        Output,
+        Receipt,
+        TransactionBuilder,
+        TxPointer,
+    },
+    fuel_types::BlockHeight,
+    fuel_vm::SecretKey,
+};
+use futures::StreamExt;
+use rand::Rng;
+
+#[tokio::test]
+async fn preconfirmation__received_after_execution() {
+    let mut config = Config::local_node();
+    let block_production_period = Duration::from_secs(1);
+    let address = Address::new([0; 32]);
+
+    config.block_production = Trigger::Open {
+        period: block_production_period,
+    };
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let gas_limit = 1_000_000;
+    let maturity = Default::default();
+
+    // Given
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
+    ];
+    let script: Vec<u8> = script
+        .iter()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
+        .collect();
+
+    let tx = TransactionBuilder::script(script, vec![])
+        .script_gas_limit(gas_limit)
+        .maturity(maturity)
+        .add_fee_input()
+        .add_output(Output::variable(address, 0, AssetId::default()))
+        .finalize_as_transaction();
+
+    let tx_id = client.submit(&tx).await.unwrap();
+    let mut tx_statuses_subscriber =
+        client.subscribe_transaction_status(&tx_id).await.unwrap();
+
+    // When
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+    if let TransactionStatus::PreconfirmationSuccess {
+        tx_pointer,
+        total_fee,
+        total_gas,
+        transaction_id,
+        receipts,
+        resolved_outputs,
+    } = tx_statuses_subscriber.next().await.unwrap().unwrap()
+    {
+        // Then
+        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 0));
+        assert_eq!(total_fee, 0);
+        assert_eq!(total_gas, 4450);
+        assert_eq!(transaction_id, tx_id);
+        let receipts = receipts.unwrap();
+        assert_eq!(receipts.len(), 2);
+        assert!(matches!(receipts[0],
+            Receipt::Log {
+                ra, rb, ..
+            } if ra == 0xca && rb == 0xba));
+
+        assert!(matches!(receipts[1],
+            Receipt::Return {
+                val, ..
+            } if val == 1));
+        let outputs = resolved_outputs.unwrap();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(
+            outputs[0],
+            Output::Coin {
+                to: address,
+                amount: 2,
+                asset_id: AssetId::default()
+            }
+        );
+    } else {
+        panic!("Expected preconfirmation status");
+    }
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Success { .. }
+    ));
+}
+
+#[tokio::test]
+async fn preconfirmation__received_after_failed_execution() {
+    let mut config = Config::local_node();
+    let block_production_period = Duration::from_secs(1);
+    let address = Address::new([0; 32]);
+
+    config.block_production = Trigger::Open {
+        period: block_production_period,
+    };
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let gas_limit = 1_000_000;
+    let maturity = Default::default();
+
+    // Given
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::rvrt(RegId::ONE),
+        op::ret(RegId::ONE),
+    ];
+    let script: Vec<u8> = script
+        .iter()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
+        .collect();
+
+    let tx = TransactionBuilder::script(script, vec![])
+        .script_gas_limit(gas_limit)
+        .maturity(maturity)
+        .add_fee_input()
+        .add_output(Output::variable(address, 0, AssetId::default()))
+        .finalize_as_transaction();
+
+    let tx_id = client.submit(&tx).await.unwrap();
+    let mut tx_statuses_subscriber =
+        client.subscribe_transaction_status(&tx_id).await.unwrap();
+
+    // When
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+
+    if let TransactionStatus::PreconfirmationFailure {
+        tx_pointer,
+        total_fee,
+        total_gas,
+        transaction_id,
+        receipts,
+        resolved_outputs,
+        reason: _,
+    } = tx_statuses_subscriber.next().await.unwrap().unwrap()
+    {
+        // Then
+        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 0));
+        assert_eq!(total_fee, 0);
+        assert_eq!(total_gas, 4450);
+        assert_eq!(transaction_id, tx_id);
+        let receipts = receipts.unwrap();
+        assert_eq!(receipts.len(), 2);
+        assert!(matches!(receipts[0],
+            Receipt::Log {
+                ra, rb, ..
+            } if ra == 0xca && rb == 0xba));
+
+        assert!(matches!(receipts[1],
+            Receipt::Revert {
+                ra, ..
+            } if ra == 1));
+        let outputs = resolved_outputs.unwrap();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(
+            outputs[0],
+            Output::Coin {
+                to: address,
+                amount: 2,
+                asset_id: AssetId::default()
+            }
+        );
+    } else {
+        panic!("Expected preconfirmation status");
+    }
+
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Failure { .. }
+    ));
+}
+
+#[tokio::test]
+async fn preconfirmation__received_after_squeezed_out() {
+    let mut config = Config::local_node();
+    let mut rng = rand::thread_rng();
+    let block_production_period = Duration::from_secs(1);
+
+    config.block_production = Trigger::Open {
+        period: block_production_period,
+    };
+    // Given
+    // Disable UTXO validation in TxPool so that the transaction is squeezed out by
+    // block production
+    config.debug = true;
+    config.txpool.utxo_validation = false;
+    config.utxo_validation = true;
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let gas_limit = 1_000_000;
+    let tx = TransactionBuilder::script(
+        vec![op::ret(RegId::ONE)].into_iter().collect(),
+        vec![],
+    )
+    .script_gas_limit(gas_limit)
+    .add_unsigned_coin_input(
+        SecretKey::random(&mut rng),
+        rng.gen(),
+        10,
+        Default::default(),
+        Default::default(),
+    )
+    .add_output(Output::Change {
+        to: Default::default(),
+        amount: 0,
+        asset_id: Default::default(),
+    })
+    .finalize_as_transaction();
+
+    let tx_id = client.submit(&tx).await.unwrap();
+    let mut tx_statuses_subscriber =
+        client.subscribe_transaction_status(&tx_id).await.unwrap();
+
+    // When
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+    if let TransactionStatus::PreconfirmationSqueezedOut {
+        transaction_id,
+        reason: _,
+    } = tx_statuses_subscriber.next().await.unwrap().unwrap()
+    {
+        // Then
+        assert_eq!(transaction_id, tx_id);
+    } else {
+        panic!("Expected preconfirmation status");
+    }
+
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::SqueezedOut { .. }
+    ));
+}
+
+#[tokio::test]
+async fn preconfirmation__received_tx_inserted_end_block_open_period() {
+    let mut config = Config::local_node();
+    let block_production_period = Duration::from_secs(1);
+    let address = Address::new([0; 32]);
+
+    config.block_production = Trigger::Open {
+        period: block_production_period,
+    };
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // Given
+    let tx = TransactionBuilder::script(
+        vec![op::ret(RegId::ONE)].into_iter().collect(),
+        vec![],
+    )
+    .script_gas_limit(1_000_000)
+    .add_fee_input()
+    .add_output(Output::variable(address, 0, AssetId::default()))
+    .finalize_as_transaction();
+
+    // Given
+    tokio::time::sleep(block_production_period.checked_div(2).unwrap()).await;
+
+    let tx_id = client.submit(&tx).await.unwrap();
+    let mut tx_statuses_subscriber =
+        client.subscribe_transaction_status(&tx_id).await.unwrap();
+
+    // When
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::PreconfirmationSuccess { .. }
+    ));
+    // Then
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Success { block_height, .. } if block_height == BlockHeight::new(1)
+    ));
+}
+
+#[tokio::test]
+async fn preconfirmation__received_after_execution__multiple_txs() {
+    let mut config = Config::local_node();
+    let block_production_period = Duration::from_secs(1);
+
+    config.block_production = Trigger::Open {
+        period: block_production_period,
+    };
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // Given
+    let tx1 = TransactionBuilder::script(
+        vec![op::ret(RegId::ONE)].into_iter().collect(),
+        vec![],
+    )
+    .script_gas_limit(1_000_000)
+    .add_fee_input()
+    .add_output(Output::variable(
+        Address::new([0; 32]),
+        0,
+        AssetId::default(),
+    ))
+    .finalize_as_transaction();
+    let tx2 = TransactionBuilder::script(
+        vec![op::ret(RegId::ONE)].into_iter().collect(),
+        vec![],
+    )
+    .script_gas_limit(1_000_000)
+    .add_fee_input()
+    .add_output(Output::variable(
+        Address::new([1; 32]),
+        0,
+        AssetId::default(),
+    ))
+    .finalize_as_transaction();
+
+    // Given
+    let tx_id1 = client.submit(&tx1).await.unwrap();
+    let mut tx_statuses_subscriber1 =
+        client.subscribe_transaction_status(&tx_id1).await.unwrap();
+    let tx_id2 = client.submit(&tx2).await.unwrap();
+    let mut tx_statuses_subscriber2 =
+        client.subscribe_transaction_status(&tx_id2).await.unwrap();
+
+    // When
+    assert!(matches!(
+        tx_statuses_subscriber1.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+    assert!(matches!(
+        tx_statuses_subscriber2.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+    assert!(matches!(
+        tx_statuses_subscriber1.next().await.unwrap().unwrap(),
+        TransactionStatus::PreconfirmationSuccess { .. }
+    ));
+    assert!(matches!(
+        tx_statuses_subscriber2.next().await.unwrap().unwrap(),
+        TransactionStatus::PreconfirmationSuccess { .. }
+    ));
+    // Then
+    assert!(matches!(
+        tx_statuses_subscriber1.next().await.unwrap().unwrap(),
+        TransactionStatus::Success { block_height, .. } if block_height == BlockHeight::new(1)
+    ));
+    assert!(matches!(
+        tx_statuses_subscriber2.next().await.unwrap().unwrap(),
+        TransactionStatus::Success { block_height, .. } if block_height == BlockHeight::new(1)
+    ));
+}
