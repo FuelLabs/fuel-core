@@ -345,14 +345,7 @@ async fn test_regenesis_message_proofs_are_preserved() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
     let core =
         FuelCoreDriver::spawn_feeless(&["--debug", "--poa-instant", "true"]).await?;
-    let base_asset_id = *core
-        .node
-        .shared
-        .config
-        .snapshot_reader
-        .chain_config()
-        .consensus_parameters
-        .base_asset_id();
+    let base_asset_id = core.node.shared.config.base_asset_id();
 
     let secret = SecretKey::random(&mut rng);
     let public_key: PublicKey = (&secret).into();

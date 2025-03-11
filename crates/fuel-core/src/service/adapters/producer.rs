@@ -131,7 +131,7 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         block: Components<Vec<Transaction>>,
         utxo_validation: Option<bool>,
         at_height: Option<BlockHeight>,
-    ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
+    ) -> ExecutorResult<Vec<(Transaction, TransactionExecutionStatus)>> {
         self.executor.dry_run(block, utxo_validation, at_height)
     }
 }

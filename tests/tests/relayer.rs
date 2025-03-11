@@ -63,7 +63,6 @@ use hyper::{
 };
 use rand::{
     prelude::StdRng,
-    Rng,
     SeedableRng,
 };
 use serde_json::json;
@@ -75,6 +74,13 @@ use std::{
     },
     sync::Arc,
     time::Duration,
+};
+use test_helpers::{
+    assemble_tx::{
+        AssembleAndRunTx,
+        SigningAccount,
+    },
+    config_with_fee,
 };
 use tokio::sync::oneshot::Sender;
 
@@ -150,7 +156,7 @@ async fn relayer_can_download_logs() {
 #[tokio::test(flavor = "multi_thread")]
 async fn messages_are_spendable_after_relayer_is_synced() {
     let mut rng = StdRng::seed_from_u64(1234);
-    let mut config = Config::local_node();
+    let mut config = config_with_fee();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
     let eth_node = MockMiddleware::default();
@@ -185,8 +191,6 @@ async fn messages_are_spendable_after_relayer_is_synced() {
         .try_into()
         .unwrap()]);
 
-    config.utxo_validation = true;
-
     // setup fuel node with mocked eth url
     let db = Database::in_memory();
 
@@ -199,16 +203,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     // wait for relayer to catch up to eth node
     srv.await_relayer_synced().await.unwrap();
     // Wait for the block producer to create a block that targets the latest da height.
-    srv.shared
-        .poa_adapter
-        .manually_produce_blocks(
-            None,
-            Mode::Blocks {
-                number_of_blocks: 1,
-            },
-        )
-        .await
-        .unwrap();
+    client.produce_blocks(1, None).await.unwrap();
 
     // verify we have downloaded the message
     let query = client
@@ -226,14 +221,8 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     assert_eq!(query.results.len(), 1);
 
     // attempt to spend the message downloaded from the relayer
-    let tx = TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![])
-        .script_gas_limit(10_000)
-        .add_unsigned_message_input(secret_key, sender, nonce, amount, vec![])
-        .add_output(Output::change(rng.gen(), 0, AssetId::BASE))
-        .finalize();
-
     let status = client
-        .submit_and_await_commit(&tx.clone().into())
+        .run_script(vec![op::ret(0)], vec![], SigningAccount::Wallet(secret_key))
         .await
         .unwrap();
 
@@ -650,7 +639,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     let query = client
         .coins_to_spend(
             &recipient,
-            vec![(base_asset_id, NON_RETRYABLE_AMOUNT, None)],
+            vec![(base_asset_id, NON_RETRYABLE_AMOUNT as u128, None)],
             None,
         )
         .await
@@ -673,7 +662,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     let query = client
         .coins_to_spend(
             &recipient,
-            vec![(base_asset_id, NON_RETRYABLE_AMOUNT + 1, None)],
+            vec![(base_asset_id, (NON_RETRYABLE_AMOUNT + 1) as u128, None)],
             None,
         )
         .await

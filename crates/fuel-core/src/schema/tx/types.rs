@@ -1152,3 +1152,25 @@ impl From<fuel_tx::policies::Policies> for Policies {
         Policies(value)
     }
 }
+
+pub struct AssembleTransactionResult {
+    pub tx_id: fuel_tx::TxId,
+    pub tx: fuel_tx::Transaction,
+    pub status: TransactionExecutionResult,
+    pub gas_price: u64,
+}
+
+#[Object]
+impl AssembleTransactionResult {
+    async fn transaction(&self) -> Transaction {
+        Transaction::from_tx(self.tx_id, self.tx.clone())
+    }
+
+    async fn status(&self) -> DryRunTransactionStatus {
+        DryRunTransactionStatus::new(self.status.clone())
+    }
+
+    async fn gas_price(&self) -> U64 {
+        self.gas_price.into()
+    }
+}
