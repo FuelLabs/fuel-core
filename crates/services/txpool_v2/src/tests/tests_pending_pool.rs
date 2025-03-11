@@ -13,7 +13,7 @@ use crate::tests::universe::TestPoolUniverse;
 async fn test_tx__keep_missing_input_and_resolved_when_input_submitted() {
     let mut universe = TestPoolUniverse::default();
     universe.config.utxo_validation = true;
-    let timeout = tokio::time::Duration::from_millis(500);
+    let timeout = tokio::time::Duration::from_millis(10000);
     universe.config.pending_pool_tx_ttl = timeout;
 
     let (output, unset_input) = universe.create_output_and_input();

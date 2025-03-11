@@ -481,7 +481,7 @@ impl TestPoolUniverse {
         tx_ids: Vec<TxId>,
         predicate: impl Fn(&TransactionStatus) -> bool,
     ) -> Result<(), TxStatusWaitError> {
-        const TIMEOUT: Duration = Duration::from_secs(5);
+        const TIMEOUT: Duration = Duration::from_secs(3);
         const POLL_TIMEOUT: Duration = Duration::from_millis(5);
 
         let mut values = Vec::with_capacity(tx_ids.len());
