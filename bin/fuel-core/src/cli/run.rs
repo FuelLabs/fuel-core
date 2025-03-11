@@ -32,7 +32,6 @@ use fuel_core::{
         Config,
         DbType,
         RelayerConsensusConfig,
-        VMConfig,
     },
     state::rocks_db::{
         ColumnsPolicy,
@@ -194,6 +193,7 @@ pub struct Command {
 
     /// Enable logging of backtraces from vm errors
     #[arg(long = "vm-backtrace", env)]
+    #[deprecated]
     pub vm_backtrace: bool,
 
     /// Enable full utxo stateful validation
@@ -300,6 +300,7 @@ pub struct Command {
 
 impl Command {
     pub async fn get_config(self) -> anyhow::Result<Config> {
+        #[allow(deprecated)]
         let Command {
             service_name: name,
             max_database_cache_size,
@@ -312,7 +313,7 @@ impl Command {
             db_prune,
             snapshot,
             continue_on_error,
-            vm_backtrace,
+            vm_backtrace: _,
             debug,
             historical_execution,
             utxo_validation,
@@ -654,9 +655,6 @@ impl Command {
             executor_number_of_cores,
             block_production: trigger,
             predefined_blocks_path,
-            vm: VMConfig {
-                backtrace: vm_backtrace,
-            },
             txpool: TxPoolConfig {
                 max_txs_chain_count: tx_max_chain_count,
                 max_txs_ttl: tx_pool_ttl.into(),

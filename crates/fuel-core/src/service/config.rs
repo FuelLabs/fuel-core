@@ -67,7 +67,6 @@ pub struct Config {
     pub executor_number_of_cores: NonZeroUsize,
     pub block_production: Trigger,
     pub predefined_blocks_path: Option<PathBuf>,
-    pub vm: VMConfig,
     pub txpool: TxPoolConfig,
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
@@ -180,7 +179,6 @@ impl Config {
             snapshot_reader,
             block_production: Trigger::Instant,
             predefined_blocks_path: None,
-            vm: Default::default(),
             txpool: TxPoolConfig {
                 utxo_validation,
                 max_txs_ttl: Duration::from_secs(60 * 100000000),
@@ -254,11 +252,6 @@ impl From<&Config> for fuel_core_poa::Config {
                 .chain_id(),
         }
     }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct VMConfig {
-    pub backtrace: bool,
 }
 
 #[derive(

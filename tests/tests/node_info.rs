@@ -26,7 +26,6 @@ async fn node_info() {
     } = client.node_info().await.unwrap();
 
     assert_eq!(utxo_validation, node_config.utxo_validation);
-    assert_eq!(vm_backtrace, node_config.vm.backtrace);
     assert_eq!(max_depth, node_config.txpool.max_txs_chain_count as u64);
     assert_eq!(max_tx, node_config.txpool.pool_limits.max_txs as u64);
 }

@@ -171,10 +171,8 @@ mod tests {
         /// The executor already has these parameters, and this field allows us
         /// to override the existing value.
         pub consensus_parameters: ConsensusParameters,
-        /// Print execution backtraces if transaction execution reverts.
-        pub backtrace: bool,
-        /// Default mode for utxo_validation
-        pub utxo_validation_default: bool,
+        /// Default mode for `forbid_fake_coins` in the executor.
+        pub forbid_fake_coins_default: bool,
     }
 
     #[derive(Clone, Debug)]
@@ -216,8 +214,7 @@ mod tests {
         config: Config,
     ) -> Executor<Database, DisabledRelayer> {
         let executor_config = fuel_core_upgradable_executor::config::Config {
-            backtrace: config.backtrace,
-            utxo_validation_default: config.utxo_validation_default,
+            forbid_fake_coins_default: config.forbid_fake_coins_default,
             native_executor_version: None,
             allow_historical_execution: true,
         };
@@ -825,7 +822,7 @@ mod tests {
             let mut validator = create_executor(
                 Default::default(),
                 Config {
-                    utxo_validation_default: false,
+                    forbid_fake_coins_default: false,
                     ..Default::default()
                 },
             );
@@ -1158,7 +1155,7 @@ mod tests {
 
         // setup executors with utxo-validation enabled
         let config = Config {
-            utxo_validation_default: true,
+            forbid_fake_coins_default: true,
             ..Default::default()
         };
         let producer = create_executor(Database::default(), config.clone());
@@ -1286,7 +1283,7 @@ mod tests {
         let mut executor = create_executor(
             Database::default(),
             Config {
-                utxo_validation_default: true,
+                forbid_fake_coins_default: true,
                 ..Default::default()
             },
         );
@@ -1354,7 +1351,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                utxo_validation_default: true,
+                forbid_fake_coins_default: true,
                 ..Default::default()
             },
         );
@@ -1423,7 +1420,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                utxo_validation_default: true,
+                forbid_fake_coins_default: true,
                 ..Default::default()
             },
         );
@@ -1472,7 +1469,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                utxo_validation_default: true,
+                forbid_fake_coins_default: true,
                 ..Default::default()
             },
         );
@@ -1667,7 +1664,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                utxo_validation_default: false,
+                forbid_fake_coins_default: false,
                 ..Default::default()
             },
         );
@@ -1722,7 +1719,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                utxo_validation_default: false,
+                forbid_fake_coins_default: false,
                 ..Default::default()
             },
         );
@@ -1824,7 +1821,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                utxo_validation_default: false,
+                forbid_fake_coins_default: false,
                 ..Default::default()
             },
         );
@@ -1930,9 +1927,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                utxo_validation_default: false,
+                forbid_fake_coins_default: false,
                 consensus_parameters: consensus_parameters.clone(),
-                ..Default::default()
             },
         );
 
@@ -2091,7 +2087,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                utxo_validation_default: true,
+                forbid_fake_coins_default: true,
                 ..Default::default()
             },
         );
@@ -2380,7 +2376,7 @@ mod tests {
         create_executor(
             database,
             Config {
-                utxo_validation_default: true,
+                forbid_fake_coins_default: true,
                 ..Default::default()
             },
         )
@@ -2807,7 +2803,7 @@ mod tests {
         let mut executor = create_executor(
             database.clone(),
             Config {
-                utxo_validation_default: true,
+                forbid_fake_coins_default: true,
                 ..Default::default()
             },
         );
@@ -2871,7 +2867,7 @@ mod tests {
         let mut executor = create_executor(
             database.clone(),
             Config {
-                utxo_validation_default: true,
+                forbid_fake_coins_default: true,
                 ..Default::default()
             },
         );
@@ -2893,9 +2889,8 @@ mod tests {
 
         let consensus_parameters = ConsensusParameters::default();
         let config = Config {
-            utxo_validation_default: true,
+            forbid_fake_coins_default: true,
             consensus_parameters: consensus_parameters.clone(),
-            ..Default::default()
         };
 
         let mut tx = TransactionBuilder::script(
@@ -3088,7 +3083,7 @@ mod tests {
             .finalize();
 
         let config = Config {
-            utxo_validation_default: false,
+            forbid_fake_coins_default: false,
             ..Default::default()
         };
         let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
@@ -3152,7 +3147,7 @@ mod tests {
             .finalize();
 
         let config = Config {
-            utxo_validation_default: false,
+            forbid_fake_coins_default: false,
             ..Default::default()
         };
         let (sender, mut receiver) = tokio::sync::mpsc::channel(2);

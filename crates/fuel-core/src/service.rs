@@ -7,7 +7,6 @@ pub use config::{
     Config,
     DbType,
     RelayerConsensusConfig,
-    VMConfig,
 };
 use fuel_core_chain_config::{
     ConsensusConfig,

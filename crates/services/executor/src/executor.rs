@@ -298,21 +298,22 @@ impl ExecutionData {
 /// Per-block execution options
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
-    // TODO: This is a bad name and the real motivation for this field should be specified
-    /// UTXO Validation flag, when disabled the executor skips signature and UTXO existence checks
-    pub extra_tx_checks: bool,
+    /// The flag allows the usage of fake coins in the inputs of the transaction.
+    /// When `false` the executor skips signature and UTXO existence checks.
+    pub forbid_fake_coins: bool,
     /// Print execution backtraces if transaction execution reverts.
     ///
-    /// Deprecated field. Do nothing.
+    /// Deprecated field. Do nothing. This fields exists for serialization and
+    /// deserialization compatibility.
     pub backtrace: bool,
 }
 
 /// Per-block execution options
 #[derive(Clone, Default, Debug)]
 struct ExecutionOptionsInner {
-    // TODO: This is a bad name and the real motivation for this field should be specified
-    /// UTXO Validation flag, when disabled the executor skips signature and UTXO existence checks
-    pub extra_tx_checks: bool,
+    /// The flag allows the usage of fake coins in the inputs of the transaction.
+    /// When `false` the executor skips signature and UTXO existence checks.
+    pub forbid_fake_coins: bool,
     pub dry_run: bool,
 }
 
@@ -494,7 +495,7 @@ impl<R, TxWaiter, PreconfirmationSender>
             relayer,
             consensus_params,
             options: ExecutionOptionsInner {
-                extra_tx_checks: options.extra_tx_checks,
+                forbid_fake_coins: options.forbid_fake_coins,
                 dry_run,
             },
             new_tx_waiter,
@@ -1366,7 +1367,7 @@ where
             let input = mint.input_contract().clone();
             let mut input = Input::Contract(input);
 
-            if self.options.extra_tx_checks {
+            if self.options.forbid_fake_coins {
                 self.verify_inputs_exist_and_values_match(
                     storage_tx,
                     core::slice::from_ref(&input),
@@ -1411,7 +1412,7 @@ where
     {
         let tx_id = checked_tx.id();
 
-        if self.options.extra_tx_checks {
+        if self.options.forbid_fake_coins {
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
@@ -2112,7 +2113,7 @@ where
                 }) => {
                     let contract = ContractRef::new(db, *contract_id);
                     let utxo_info =
-                        contract.validated_utxo(self.options.extra_tx_checks)?;
+                        contract.validated_utxo(self.options.forbid_fake_coins)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
                     *balance_root = contract.balance_root()?;
@@ -2174,7 +2175,7 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        if self.options.extra_tx_checks {
+        if self.options.forbid_fake_coins {
             db.storage::<Coins>()
                 .get(&utxo_id)?
                 .ok_or(ExecutorError::TransactionValidity(

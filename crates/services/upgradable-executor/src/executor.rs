@@ -401,11 +401,11 @@ where
 
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation =
-            utxo_validation.unwrap_or(self.config.utxo_validation_default);
+            utxo_validation.unwrap_or(self.config.forbid_fake_coins_default);
 
         let options = ExecutionOptions {
-            extra_tx_checks: utxo_validation,
-            backtrace: self.config.backtrace,
+            forbid_fake_coins: utxo_validation,
+            backtrace: false,
         };
 
         let component = Components {
