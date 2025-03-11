@@ -390,7 +390,7 @@ where
     pub fn dry_run(
         &self,
         component: Components<Vec<Transaction>>,
-        utxo_validation: Option<bool>,
+        forbid_fake_coins: Option<bool>,
         at_height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<(Transaction, TransactionExecutionStatus)>> {
         if at_height.is_some() && !self.config.allow_historical_execution {
@@ -400,11 +400,11 @@ where
         }
 
         // fallback to service config value if no utxo_validation override is provided
-        let utxo_validation =
-            utxo_validation.unwrap_or(self.config.forbid_fake_coins_default);
+        let forbid_fake_coins =
+            forbid_fake_coins.unwrap_or(self.config.forbid_fake_coins_default);
 
         let options = ExecutionOptions {
-            forbid_fake_coins: utxo_validation,
+            forbid_fake_coins,
             backtrace: false,
         };
 

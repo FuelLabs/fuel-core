@@ -19,7 +19,6 @@ async fn node_info() {
 
     let NodeInfo {
         utxo_validation,
-        vm_backtrace,
         max_depth,
         max_tx,
         ..
