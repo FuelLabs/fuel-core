@@ -13,7 +13,6 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -27,21 +26,16 @@ use fuel_core_types::{
         BlobIdExt,
         Finalizable,
         Input,
-        Transaction,
         TransactionBuilder,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::{
-        checked_transaction::IntoChecked,
         constraints::reg_key::{
             IS,
             SSP,
             ZERO,
         },
-        interpreter::{
-            ExecutableTransaction,
-            MemoryInstance,
-        },
+        interpreter::ExecutableTransaction,
     },
 };
 use tokio::io;
@@ -104,29 +98,14 @@ impl TestContext {
         Ok((status, blob_id))
     }
 
-    async fn submit<Tx>(&mut self, mut tx: Tx) -> io::Result<TransactionStatus>
+    async fn submit<Tx>(&mut self, tx: Tx) -> io::Result<TransactionStatus>
     where
         Tx: ExecutableTransaction,
     {
-        let consensus_parameters =
-            self.client.chain_info().await.unwrap().consensus_parameters;
-
-        let database = self._node.shared.database.on_chain().latest_view().unwrap();
-        tx.estimate_predicates(
-            &consensus_parameters.clone().into(),
-            MemoryInstance::new(),
-            &database,
-        )
-        .unwrap();
-
-        let tx: Transaction = tx.into();
-        let tx = tx
-            .into_checked_basic(Default::default(), &consensus_parameters)
-            .expect("Cannot check transaction");
-
+        let estimate_predicates = true;
         let status = self
             .client
-            .submit_and_await_commit(tx.transaction())
+            .submit_and_await_commit_opt(&tx.into(), Some(estimate_predicates))
             .await?;
         Ok(status)
     }
