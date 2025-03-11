@@ -19,10 +19,9 @@
 //! - `tx_status_message()`: Generates a TxStatusMessage
 //! - `transaction_status()`: Generates a TransactionStatus
 //! - `input_stream()`: Generates a Vec<TxStatusMessage> of length 0 to 5
-use fuel_core_txpool::{
-    error::RemovedReason,
-    TxStatusMessage,
-};
+
+use fuel_core_tx_status_manager::TxStatusMessage;
+use fuel_core_txpool::error::RemovedReason;
 use fuel_core_types::{
     fuel_types::Bytes32,
     services::txpool::TransactionStatus,
@@ -47,63 +46,35 @@ fn txn_id(i: u8) -> Bytes32 {
 }
 
 fn submitted() -> TransactionStatus {
-    TransactionStatus::Submitted {
-        timestamp: Tai64(0),
-    }
+    TransactionStatus::submitted(Tai64(0))
 }
 
 fn success() -> TransactionStatus {
-    TransactionStatus::Success {
-        block_height: Default::default(),
-        block_timestamp: Tai64(0),
-        program_state: None,
-        receipts: vec![],
-        total_gas: 0,
-        total_fee: 0,
-    }
+    TransactionStatus::Success(Default::default())
 }
 
 fn success_during_block_production() -> TransactionStatus {
-    TransactionStatus::PreconfirmationSuccess {
-        tx_pointer: Default::default(),
-        tx_id: Bytes32::zeroed(),
-        receipts: None,
-    }
+    TransactionStatus::PreConfirmationSuccess(Default::default())
 }
 
 fn failure() -> TransactionStatus {
-    TransactionStatus::Failure {
-        block_height: Default::default(),
-        block_timestamp: Tai64(0),
-        program_state: None,
-        receipts: vec![],
-        total_gas: 0,
-        total_fee: 0,
-        reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
-    }
+    TransactionStatus::Failure(Default::default())
 }
 
 fn failure_during_block_production() -> TransactionStatus {
-    TransactionStatus::PreconfirmationFailure {
-        tx_pointer: Default::default(),
-        tx_id: Bytes32::zeroed(),
-        receipts: None,
-        reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
-    }
+    TransactionStatus::PreConfirmationFailure(Default::default())
 }
 
 fn squeezed() -> TransactionStatus {
-    TransactionStatus::SqueezedOut {
-        tx_id: Bytes32::zeroed(),
-        reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
-    }
+    TransactionStatus::squeezed_out(
+        fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
+    )
 }
 
 fn squeezed_during_block_production() -> TransactionStatus {
-    TransactionStatus::PreconfirmationSqueezedOut {
-        tx_id: Bytes32::zeroed(),
-        reason: fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
-    }
+    TransactionStatus::preconfirmation_squeezed_out(
+        fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
+    )
 }
 
 /// Represents the different status that a transaction can have.
@@ -241,15 +212,15 @@ fn next_state(state: TransactionStatus) -> Flow {
     match state {
         TransactionStatus::Submitted { .. } => Flow::Continue(Submitted),
         TransactionStatus::Success { .. } => Flow::Break(FinalTxStatus::Success),
-        TransactionStatus::PreconfirmationSuccess { .. } => {
+        TransactionStatus::PreConfirmationSuccess { .. } => {
             Flow::Break(FinalTxStatus::PreconfirmationSuccess)
         }
         TransactionStatus::Failure { .. } => Flow::Break(FinalTxStatus::Failed),
-        TransactionStatus::PreconfirmationFailure { .. } => {
+        TransactionStatus::PreConfirmationFailure { .. } => {
             Flow::Break(FinalTxStatus::PreconfirmationFailure)
         }
         TransactionStatus::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
-        TransactionStatus::PreconfirmationSqueezedOut { .. } => {
+        TransactionStatus::PreConfirmationSqueezedOut { .. } => {
             Flow::Break(FinalTxStatus::PreconfirmationSqueezedOut)
         }
     }

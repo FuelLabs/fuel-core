@@ -7,14 +7,12 @@
 use fuel_core_types::{
     fuel_tx::Bytes32,
     services::txpool::TransactionStatus,
-    tai64::Tai64,
 };
 use proptest::prelude::*;
 use test_strategy::{
     proptest,
     Arbitrary,
 };
-use tests_sending::validate_send;
 use tokio_stream::StreamExt;
 
 use super::*;
@@ -51,6 +49,75 @@ enum Op {
     DropRecv(#[strategy(0..MAX_CHANNELS)] usize),
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Arbitrary)]
+pub(crate) enum StateTransitions {
+    AddMsg(#[strategy(utils::tx_status_message_strategy())] TxStatusMessage),
+    AddFailure,
+    CloseRecv,
+    Next,
+}
+
+pub(crate) fn validate_tx_update_stream_state(
+    state: State,
+    transition: StateTransitions,
+) -> State {
+    use State::*;
+    use StateTransitions::*;
+    match (state, transition) {
+        (Empty, AddMsg(TxStatusMessage::Status(s))) => {
+            if s.is_submitted() {
+                Initial(s)
+            } else {
+                // If not Submitted, it's an early success.
+                EarlySuccess(s)
+            }
+        }
+        (Empty, AddMsg(TxStatusMessage::FailedStatus)) => Failed,
+        (Empty, AddFailure) => Failed,
+        (Empty | Initial(_), Next) => Empty,
+        (Initial(s1), AddMsg(TxStatusMessage::Status(s2))) => Success(s1, s2),
+        (Initial(s1), AddMsg(TxStatusMessage::FailedStatus)) => LateFailed(s1),
+        (Initial(s), AddFailure) => LateFailed(s),
+        (_, CloseRecv) => Closed,
+        (EarlySuccess(_) | Failed | SenderClosed(_), Next) => Closed,
+        (LateFailed(_), Next) => Failed,
+        (Success(_, s2), Next) => SenderClosed(s2),
+        // Final states.
+        (Closed, _) => Closed,
+        (EarlySuccess(s), _) => EarlySuccess(s),
+        (Success(s1, s2), _) => Success(s1, s2),
+        (Failed, _) => Failed,
+        (LateFailed(s), _) => LateFailed(s),
+        (SenderClosed(s), _) => SenderClosed(s),
+    }
+}
+
+pub(super) fn validate_send(
+    tx: Result<(), SendError>,
+    state: State,
+    msg: TxStatusMessage,
+) -> State {
+    // Add the message to the stream.
+    let state = validate_tx_update_stream_state(state, StateTransitions::AddMsg(msg));
+
+    // Try to get the next message from the stream.
+    let state = validate_tx_update_stream_state(state, StateTransitions::Next);
+
+    // Try to send the message to the receiver.
+    match tx {
+        // If ok, then use this state.
+        Ok(()) => state,
+        // If the receiver is closed, then update the state.
+        Err(SendError::Closed) => {
+            validate_tx_update_stream_state(state, StateTransitions::CloseRecv)
+        }
+        // If the receiver is full, then update the state.
+        Err(SendError::Full) => {
+            validate_tx_update_stream_state(state, StateTransitions::AddFailure)
+        }
+    }
+}
+
 /// Proptest based test for update_sender
 #[proptest]
 fn test_update_sender(
@@ -67,24 +134,9 @@ fn test_update_sender_reg() {
 
     let ops = vec![
         Subscribe(0),
-        Send(
-            0,
-            Status(TransactionStatus::Success {
-                block_height: Default::default(),
-                block_timestamp: Tai64(0),
-                program_state: None,
-                receipts: vec![],
-                total_gas: 0,
-                total_fee: 0,
-            }),
-        ),
+        Send(0, Status(TransactionStatus::Success(Default::default()))),
         Recv(0),
-        Send(
-            0,
-            Status(TransactionStatus::Submitted {
-                timestamp: Tai64(0),
-            }),
-        ),
+        Send(0, Status(TransactionStatus::Submitted(Default::default()))),
         Recv(0),
     ];
     test_update_sender_inner(ops);

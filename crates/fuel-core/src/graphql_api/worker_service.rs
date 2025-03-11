@@ -52,6 +52,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
 };
+use fuel_core_tx_status_manager::from_executor_to_status;
 use fuel_core_types::{
     blockchain::{
         block::{
@@ -97,7 +98,6 @@ use fuel_core_types::{
             TransactionExecutionResult,
             TransactionExecutionStatus,
         },
-        txpool::from_executor_to_status,
     },
 };
 use futures::{
@@ -111,8 +111,8 @@ use std::{
 #[cfg(test)]
 mod tests;
 
-pub(crate) struct Context<'a, TxPool, BlockImporter, OnChain, OffChain> {
-    pub(crate) tx_pool: TxPool,
+pub(crate) struct Context<'a, TxStatusManager, BlockImporter, OnChain, OffChain> {
+    pub(crate) tx_status_manager: TxStatusManager,
     pub(crate) block_importer: BlockImporter,
     pub(crate) on_chain_database: OnChain,
     pub(crate) off_chain_database: OffChain,
@@ -128,11 +128,11 @@ pub enum DaCompressionConfig {
 }
 
 /// The initialization task recovers the state of the GraphQL service database on startup.
-pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
+pub struct InitializeTask<TxStatusManager, BlockImporter, OnChain, OffChain> {
     chain_id: ChainId,
     da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
-    tx_pool: TxPool,
+    tx_status_manager: TxStatusManager,
     blocks_events: BoxStream<SharedImportResult>,
     block_importer: BlockImporter,
     on_chain_database: OnChain,
@@ -143,8 +143,8 @@ pub struct InitializeTask<TxPool, BlockImporter, OnChain, OffChain> {
 
 /// The off-chain GraphQL API worker task processes the imported blocks
 /// and actualize the information used by the GraphQL service.
-pub struct Task<TxPool, D> {
-    tx_pool: TxPool,
+pub struct Task<TxStatusManager, D> {
+    tx_status_manager: TxStatusManager,
     block_importer: BoxStream<SharedImportResult>,
     database: D,
     chain_id: ChainId,
@@ -157,9 +157,9 @@ pub struct Task<TxPool, D> {
     block_height_subscription_handler: block_height_subscription::Handler,
 }
 
-impl<TxPool, D> Task<TxPool, D>
+impl<TxStatusManager, D> Task<TxStatusManager, D>
 where
-    TxPool: ports::worker::TxPool,
+    TxStatusManager: ports::worker::TxStatusCompletion,
     D: ports::worker::OffChainDatabase,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
@@ -208,7 +208,8 @@ where
         for status in result.tx_status.iter() {
             let tx_id = status.id;
             let status = from_executor_to_status(block, status.result.clone());
-            self.tx_pool.send_complete(tx_id, height, status.into());
+            self.tx_status_manager
+                .send_complete(tx_id, height, status.into());
         }
 
         // Notify subscribers and update last seen block height
@@ -557,17 +558,17 @@ where
 }
 
 #[async_trait::async_trait]
-impl<TxPool, BlockImporter, OnChain, OffChain> RunnableService
-    for InitializeTask<TxPool, BlockImporter, OnChain, OffChain>
+impl<TxStatusManager, BlockImporter, OnChain, OffChain> RunnableService
+    for InitializeTask<TxStatusManager, BlockImporter, OnChain, OffChain>
 where
-    TxPool: ports::worker::TxPool,
+    TxStatusManager: ports::worker::TxStatusCompletion,
     BlockImporter: ports::worker::BlockImporter,
     OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
 {
     const NAME: &'static str = "GraphQL_Off_Chain_Worker";
     type SharedData = block_height_subscription::Subscriber;
-    type Task = Task<TxPool, OffChain>;
+    type Task = Task<TxStatusManager, OffChain>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -607,7 +608,7 @@ where
         let InitializeTask {
             chain_id,
             da_compression_config,
-            tx_pool,
+            tx_status_manager,
             block_importer,
             blocks_events,
             on_chain_database,
@@ -618,7 +619,7 @@ where
         } = self;
 
         let mut task = Task {
-            tx_pool,
+            tx_status_manager,
             block_importer: blocks_events,
             database: off_chain_database,
             chain_id,
@@ -648,15 +649,15 @@ where
     }
 }
 
-fn sync_databases<TxPool, BlockImporter, OffChain>(
-    task: &mut Task<TxPool, OffChain>,
+fn sync_databases<TxStatusManager, BlockImporter, OffChain>(
+    task: &mut Task<TxStatusManager, OffChain>,
     target_chain_height: Option<BlockHeight>,
     import_result_provider: &BlockImporter,
 ) -> anyhow::Result<()>
 where
-    TxPool: ports::worker::TxPool,
     BlockImporter: ports::worker::BlockImporter,
     OffChain: ports::worker::OffChainDatabase,
+    TxStatusManager: ports::worker::TxStatusCompletion,
 {
     loop {
         let off_chain_height = task.database.latest_height()?;
@@ -688,10 +689,10 @@ where
     Ok(())
 }
 
-impl<TxPool, D> RunnableTask for Task<TxPool, D>
+impl<TxStatusManager, D> RunnableTask for Task<TxStatusManager, D>
 where
-    TxPool: ports::worker::TxPool,
     D: ports::worker::OffChainDatabase,
+    TxStatusManager: ports::worker::TxStatusCompletion,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -739,17 +740,19 @@ where
 }
 
 #[allow(clippy::type_complexity)]
-pub(crate) fn new_service<TxPool, BlockImporter, OnChain, OffChain>(
-    context: Context<TxPool, BlockImporter, OnChain, OffChain>,
-) -> anyhow::Result<ServiceRunner<InitializeTask<TxPool, BlockImporter, OnChain, OffChain>>>
+pub(crate) fn new_service<TxStatusManager, BlockImporter, OnChain, OffChain>(
+    context: Context<TxStatusManager, BlockImporter, OnChain, OffChain>,
+) -> anyhow::Result<
+    ServiceRunner<InitializeTask<TxStatusManager, BlockImporter, OnChain, OffChain>>,
+>
 where
-    TxPool: ports::worker::TxPool,
+    TxStatusManager: ports::worker::TxStatusCompletion,
     OnChain: ports::worker::OnChainDatabase,
     OffChain: ports::worker::OffChainDatabase,
     BlockImporter: ports::worker::BlockImporter,
 {
     let Context {
-        tx_pool,
+        tx_status_manager,
         block_importer,
         on_chain_database,
         off_chain_database,
@@ -761,7 +764,7 @@ where
     let off_chain_block_height = off_chain_database.latest_height()?.unwrap_or_default();
 
     let service = ServiceRunner::new(InitializeTask {
-        tx_pool,
+        tx_status_manager,
         blocks_events: block_importer.block_events(),
         block_importer,
         on_chain_database,

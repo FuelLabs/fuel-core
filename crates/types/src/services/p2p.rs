@@ -12,6 +12,8 @@ use super::{
     preconfirmation::Preconfirmations,
     txpool::ArcPoolTx,
 };
+#[cfg(feature = "test-helpers")]
+use crate::services::preconfirmation::PreconfirmationStatus;
 use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
@@ -26,6 +28,7 @@ use std::{
     str::FromStr,
     time::SystemTime,
 };
+
 use tai64::Tai64;
 
 /// Contains types and logic for Peer Reputation
@@ -108,7 +111,7 @@ pub type SignedByBlockProducerDelegation<P, S> = Sealed<DelegatePreConfirmationK
 /// A signed pre-confirmation
 pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 
-/// The possible messages sent by the parties pre-confirming transactinos
+/// The possible messages sent by the parties pre-confirming transactions
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreConfirmationMessage<DP, DS, S> {
@@ -124,18 +127,15 @@ impl<DP, S> PreConfirmationMessage<DP, crate::fuel_tx::Bytes64, S> {
     pub fn default_test_confirmation() -> Self {
         use crate::{
             fuel_tx::TxId,
-            services::preconfirmation::{
-                Preconfirmation,
-                PreconfirmationStatus,
-            },
+            services::preconfirmation::Preconfirmation,
         };
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
             entity: Preconfirmations {
                 expiration: Tai64::UNIX_EPOCH,
                 preconfirmations: vec![Preconfirmation {
                     tx_id: TxId::default(),
-                    status: PreconfirmationStatus::SuccessByBlockProducer {
-                        block_height: BlockHeight::new(0),
+                    status: PreconfirmationStatus::SqueezedOut {
+                        reason: "Dummy reason".to_string(),
                     },
                 }],
             },
