@@ -10,9 +10,11 @@ use fuel_core_types::{
         CoinId,
         CoinType,
     },
+    fuel_tx::UtxoId,
     fuel_types::{
         Address,
         AssetId,
+        Nonce,
     },
 };
 use futures::{
@@ -26,17 +28,17 @@ use tokio_stream::StreamExt;
 #[derive(Clone)]
 pub struct AssetSpendTarget {
     pub id: AssetId,
-    pub target: u64,
+    pub target: u128,
     pub max: u16,
 }
 
 impl AssetSpendTarget {
-    pub fn new(id: AssetId, target: u64, max: u16) -> Self {
+    pub fn new(id: AssetId, target: u128, max: u16) -> Self {
         Self { id, target, max }
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Exclude {
     pub coin_ids: HashSet<CoinId>,
 }
@@ -50,6 +52,18 @@ impl Exclude {
         }
 
         instance
+    }
+
+    pub fn exclude(&mut self, coin: CoinId) {
+        self.coin_ids.insert(coin);
+    }
+
+    pub fn contains_coin(&self, id: &UtxoId) -> bool {
+        self.coin_ids.contains(&CoinId::Utxo(*id))
+    }
+
+    pub fn contains_message(&self, id: &Nonce) -> bool {
+        self.coin_ids.contains(&CoinId::Message(*id))
     }
 }
 

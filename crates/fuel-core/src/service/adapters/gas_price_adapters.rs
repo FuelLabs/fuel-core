@@ -88,7 +88,7 @@ impl From<Config> for V1AlgorithmConfig {
             block_activity_threshold,
         } = value.gas_price_config;
         V1AlgorithmConfig {
-            new_exec_gas_price: starting_exec_gas_price,
+            new_exec_gas_price: starting_exec_gas_price.max(min_exec_gas_price),
             min_exec_gas_price,
             exec_gas_price_change_percent,
             l2_block_fullness_threshold_percent: exec_gas_price_threshold_percent,

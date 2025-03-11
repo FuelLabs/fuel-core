@@ -1,4 +1,3 @@
-use crate::helpers::TestContext;
 use fuel_core::{
     chain_config::{
         CoinConfig,
@@ -20,6 +19,10 @@ use rand::{
     prelude::StdRng,
     SeedableRng,
 };
+use test_helpers::{
+    assemble_tx::AssembleAndRunTx,
+    builder::TestContext,
+};
 
 mod coin {
     use super::*;
@@ -28,8 +31,12 @@ mod coin {
         ChainConfig,
     };
     use fuel_core_client::client::types::CoinType;
-    use fuel_core_types::fuel_crypto::SecretKey;
+    use fuel_core_types::{
+        fuel_crypto::SecretKey,
+        fuel_tx::Address,
+    };
     use rand::Rng;
+    use test_helpers::assemble_tx::SigningAccount;
 
     async fn setup(
         owner: Address,
@@ -99,39 +106,29 @@ mod coin {
         let owner = Input::owner(&pk);
         let cp = ConsensusParameters::default();
         let context = setup(owner, asset_id_a, asset_id_b, &cp).await;
-        // select all available coins to spend
-        let coins_per_asset = context
+
+        let burn_address: Address = rng.gen();
+
+        let balance_a = context
             .client
-            .coins_to_spend(
-                &owner,
-                vec![(asset_id_a, 300, None), (asset_id_b, 300, None)],
-                None,
-            )
+            .balance(&owner, Some(&asset_id_a))
             .await
             .unwrap();
+        let balance_b = context
+            .client
+            .balance(&owner, Some(&asset_id_b))
+            .await
+            .unwrap();
+        let recipients = vec![
+            (burn_address, asset_id_a, balance_a),
+            (burn_address, asset_id_b, balance_b),
+        ];
 
-        // spend all coins
-        let mut script = TransactionBuilder::script(vec![], vec![]);
-
-        for asset_group in coins_per_asset {
-            for asset in asset_group {
-                if let CoinType::Coin(coin) = asset {
-                    script.add_unsigned_coin_input(
-                        secret_key,
-                        coin.utxo_id,
-                        coin.amount,
-                        coin.asset_id,
-                        Default::default(),
-                    );
-                }
-            }
-        }
-        // send change to different address
-        script.add_output(Output::change(rng.gen(), 0, asset_id_a));
-        script.add_output(Output::change(rng.gen(), 0, asset_id_b));
-        let tx = script.finalize_as_transaction();
-
-        context.client.submit_and_await_commit(&tx).await.unwrap();
+        context
+            .client
+            .run_transfer(SigningAccount::Wallet(secret_key), recipients)
+            .await
+            .unwrap();
 
         // select all available asset a coins to spend
         let remaining_coins_a = context
@@ -286,8 +283,8 @@ mod coin {
             .coins_to_spend(
                 &owner,
                 vec![
-                    (asset_id_a, 300, Some(MAX as u32)),
-                    (asset_id_b, 300, Some(MAX as u32)),
+                    (asset_id_a, 300, Some(MAX as u16)),
+                    (asset_id_b, 300, Some(MAX as u16)),
                 ],
                 None,
             )
@@ -312,6 +309,7 @@ mod message_coin {
         fuel_crypto::SecretKey,
     };
     use rand::Rng;
+    use test_helpers::assemble_tx::SigningAccount;
 
     use super::*;
 
@@ -378,31 +376,21 @@ mod message_coin {
         let owner = Input::owner(&pk);
         let (base_asset_id, context, _) = setup(owner).await;
         // select all available coins to spend
-        let coins_per_asset = context
+        let balance = context
             .client
-            .coins_to_spend(&owner, vec![(base_asset_id, 300, None)], None)
+            .balance(&owner, Some(&base_asset_id))
             .await
             .unwrap();
+        let burn_address: Address = rng.gen();
 
-        // spend all coins
-        let mut script = TransactionBuilder::script(vec![], vec![]);
-
-        coins_per_asset[0].iter().for_each(|coin| {
-            if let CoinType::MessageCoin(message) = coin {
-                script.add_unsigned_message_input(
-                    secret_key,
-                    message.sender,
-                    message.nonce,
-                    message.amount,
-                    vec![],
-                );
-            }
-        });
-        // send change to different address
-        script.add_output(Output::change(rng.gen(), 0, base_asset_id));
-        let tx = script.finalize_as_transaction();
-
-        context.client.submit_and_await_commit(&tx).await.unwrap();
+        context
+            .client
+            .run_transfer(
+                SigningAccount::Wallet(secret_key),
+                vec![(burn_address, base_asset_id, balance)],
+            )
+            .await
+            .unwrap();
 
         // select all available coins to spend
         let remaining_coins = context
@@ -507,7 +495,7 @@ mod message_coin {
         // not enough inputs
         let coins_per_asset = context
             .client
-            .coins_to_spend(&owner, vec![(base_asset_id, 300, Some(MAX as u32))], None)
+            .coins_to_spend(&owner, vec![(base_asset_id, 300, Some(MAX as u16))], None)
             .await;
         assert!(coins_per_asset.is_err());
         assert_eq!(
@@ -732,8 +720,8 @@ mod all_coins {
             .coins_to_spend(
                 &owner,
                 vec![
-                    (asset_id_a, 300, Some(MAX as u32)),
-                    (asset_id_b, 300, Some(MAX as u32)),
+                    (asset_id_a, 300, Some(MAX as u16)),
+                    (asset_id_b, 300, Some(MAX as u16)),
                 ],
                 None,
             )

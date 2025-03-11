@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use fuel_core::{
     chain_config::{
         MessageConfig,
@@ -16,12 +14,15 @@ use fuel_core_client::client::{
         PaginationRequest,
     },
     types::{
+        assemble_tx::{
+            ChangePolicy,
+            RequiredBalance,
+        },
         message::MessageStatus,
         TransactionStatus,
     },
     FuelClient,
 };
-use fuel_core_storage::tables::Coins;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -40,6 +41,14 @@ use fuel_core_types::{
 use itertools::Itertools;
 use rstest::rstest;
 use std::ops::Deref;
+use test_helpers::{
+    assemble_tx::{
+        AssembleAndRunTx,
+        SigningAccount,
+    },
+    config_with_fee,
+    default_signing_wallet,
+};
 
 mod relayer;
 
@@ -288,18 +297,12 @@ async fn message_status__can_get_notfound() {
 #[tokio::test]
 async fn can_get_message_proof() {
     for n in [1, 2, 10] {
-        let config = Config::local_node();
+        let config = config_with_fee();
+        let base_asset_id = config.base_asset_id();
 
-        let coin = config
-            .snapshot_reader
-            .read::<Coins>()
-            .unwrap()
-            .into_iter()
-            .next()
-            .unwrap()
-            .unwrap()[0]
-            .value
-            .clone();
+        // setup server & client
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
 
         struct MessageArgs {
             recipient_address: [u8; 32],
@@ -353,8 +356,7 @@ async fn can_get_message_proof() {
         let output = Output::contract_created(id, state_root);
 
         // Create the contract deploy transaction.
-        let mut contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
-            .add_fee_input()
+        let contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
             .add_output(output)
             .finalize_as_transaction();
 
@@ -371,7 +373,7 @@ async fn can_get_message_proof() {
                     // The message data
                     .chain(arg.message_data.clone().into_iter())
             })).collect();
-        let script_data = AssetId::BASE
+        let script_data = base_asset_id
             .into_iter()
             .chain(smo_data.into_iter())
             .collect();
@@ -380,7 +382,7 @@ async fn can_get_message_proof() {
         // Save the ptr to the script data to register 16.
         // This will be used to read the contract id + two
         // empty params. So 32 + 8 + 8.
-        let script = [
+        let script = vec![
             op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
             // load balance to forward to 0x11
             op::movi(0x11, n as u32 * amount),
@@ -391,75 +393,49 @@ async fn can_get_message_proof() {
             // Return.
             op::ret(RegId::ONE),
         ];
-        let script: Vec<u8> = script
-            .iter()
-            .flat_map(|op| u32::from(*op).to_be_bytes())
-            .collect();
 
-        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate);
-        let coin_input = Input::coin_predicate(
-            Default::default(),
-            owner,
-            1000,
-            *coin.asset_id(),
-            TxPointer::default(),
-            Default::default(),
-            predicate,
-            vec![],
-        );
+        let script_tx =
+            TransactionBuilder::script(script.into_iter().collect(), script_data)
+                .finalize_as_transaction();
 
-        // Set the contract input because we are calling a contract.
-        let inputs = vec![
-            Input::contract(
-                UtxoId::new(Bytes32::zeroed(), 0),
-                Bytes32::zeroed(),
-                state_root,
-                TxPointer::default(),
-                id,
-            ),
-            coin_input,
-        ];
+        let predicate_account = SigningAccount::Predicate {
+            predicate: op::ret(RegId::ONE).to_bytes().to_vec(),
+            predicate_data: vec![],
+        };
+        let predicate_address = predicate_account.owner();
 
-        // The transaction will output a contract output and message output.
-        let outputs = vec![Output::contract(0, Bytes32::zeroed(), Bytes32::zeroed())];
-
-        // Create the contract calling script.
-        let script = Transaction::script(
-            1_000_000,
-            script,
-            script_data,
-            policies::Policies::new().with_max_fee(0),
-            inputs,
-            outputs,
-            vec![],
-        );
-
-        let transaction_id = script.id(&ChainId::default());
-
-        // setup server & client
-        let srv = FuelService::new_node(config).await.unwrap();
-        let client = FuelClient::from(srv.bound_address);
-
+        // Send some funds to the predicate
         client
-            .estimate_predicates(&mut contract_deploy)
+            .run_transfer(
+                default_signing_wallet(),
+                vec![(predicate_address, base_asset_id, 1_000_000)],
+            )
             .await
-            .expect("Should be able to estimate deploy tx");
+            .unwrap();
 
         // Deploy the contract.
         matches!(
-            client.submit_and_await_commit(&contract_deploy).await,
+            client
+                .assemble_and_run_tx(&contract_deploy, default_signing_wallet())
+                .await,
             Ok(TransactionStatus::Success { .. })
         );
 
-        let mut script = script.into();
-        client
-            .estimate_predicates(&mut script)
-            .await
-            .expect("Should be able to estimate script tx");
         // Call the contract.
+        let money_for_smo = RequiredBalance {
+            asset_id: base_asset_id,
+            amount: amount as u64,
+            account: predicate_account.clone().into_account(),
+            change_policy: ChangePolicy::Change(predicate_account.owner()),
+        };
+        let tx = client
+            .assemble_transaction(&script_tx, predicate_account, vec![money_for_smo])
+            .await
+            .unwrap();
+
+        let transaction_id = tx.id(&ChainId::default());
         matches!(
-            client.submit_and_await_commit(&script).await,
+            client.submit_and_await_commit(&tx).await,
             Ok(TransactionStatus::Success { .. })
         );
 
