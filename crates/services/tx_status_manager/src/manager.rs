@@ -45,7 +45,7 @@ impl Data {
     }
 
     #[cfg(test)]
-    fn all_but_submitted_statuses(
+    fn all_but_prunable_statuses(
         &self,
     ) -> impl Iterator<Item = (&Bytes32, &(Instant, TransactionStatus))> {
         self.prunable_statuses
@@ -57,7 +57,7 @@ impl Data {
     fn assert_consistency(&self) {
         use std::collections::HashSet;
         // There should be a timestamp entry for each registered tx id
-        for (status_tx_id, (status_time, _)) in self.all_but_submitted_statuses() {
+        for (status_tx_id, (status_time, _)) in self.all_but_prunable_statuses() {
             assert!(self
                 .pruning_queue
                 .iter()
@@ -70,13 +70,18 @@ impl Data {
         }
 
         // The count of transactions in both collections must match
-        let tx_count = self.all_but_submitted_statuses().count();
+        let tx_count = self.all_but_prunable_statuses().count();
         let tx_count_from_queue = self
             .pruning_queue
             .iter()
             .map(|(_, tx_id)| *tx_id)
             .collect::<HashSet<_>>();
         assert_eq!(tx_count, tx_count_from_queue.len());
+
+        // There should never be a single id in both prunable and non-prunable collections
+        let prunable_ids = self.prunable_statuses.keys().collect::<HashSet<_>>();
+        let non_prunable_ids = self.non_prunable_statuses.keys().collect::<HashSet<_>>();
+        assert!(prunable_ids.is_disjoint(&non_prunable_ids));
     }
 }
 
@@ -149,6 +154,12 @@ impl TxStatusManager {
             self.data.prunable_statuses.insert(tx_id, (now, tx_status));
             self.data.non_prunable_statuses.remove(&tx_id);
         } else {
+            if self.data.prunable_statuses.contains_key(&tx_id) {
+                // TODO[RC]: This should be shown in metrics: https://github.com/FuelLabs/fuel-core/issues/2851
+                tracing::warn!(%tx_id, "switching back to non-prunable status");
+                self.data.prunable_statuses.remove(&tx_id);
+                self.data.pruning_queue.retain(|(_, id)| id != &tx_id);
+            }
             self.data.non_prunable_statuses.insert(tx_id, tx_status);
         }
     }
@@ -317,7 +328,7 @@ mod tests {
     #[test_case(preconfirmation_squeezed_out() => true)]
     #[test_case(failure() => true)]
     #[test_case(preconfirmation_failure() => true)]
-    fn is_affected_for_pruning(status: TransactionStatus) -> bool {
+    fn is_prunable(status: TransactionStatus) -> bool {
         TxStatusManager::is_prunable(&status)
     }
 
@@ -847,7 +858,7 @@ mod tests {
     }
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(1))]
+        #![proptest_config(ProptestConfig::with_cases(100))]
 
         #[test]
         #[allow(clippy::arithmetic_side_effects)]
