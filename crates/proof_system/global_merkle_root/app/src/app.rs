@@ -27,6 +27,7 @@ use crate::{
     },
 };
 
+/// App struct, holds handles to the services in the app.
 pub struct App {
     merkle_root_service:
         ServiceRunner<UpdateMerkleRootTask<BlockStreamAdapter, StateRootDb>>,
@@ -34,6 +35,7 @@ pub struct App {
 }
 
 impl App {
+    /// Create a new app.
     pub async fn new(args: &cli::Args) -> anyhow::Result<Self> {
         let db = open_db(args)?;
         let height = u32::from(db.block_height()?);
@@ -60,6 +62,7 @@ impl App {
         })
     }
 
+    /// Start the app and run until receiving a ctrl-c signal.
     pub async fn run(&self, args: &cli::Args) -> anyhow::Result<()> {
         setup_logging(args.log_format)?;
 
@@ -72,6 +75,7 @@ impl App {
         Ok(())
     }
 
+    /// Start the app.
     pub async fn start(&self) -> anyhow::Result<()> {
         self.merkle_root_service.start_and_await().await?;
         self.api_service.start_and_await().await?;
@@ -79,6 +83,7 @@ impl App {
         Ok(())
     }
 
+    /// Stop the app.
     pub async fn stop(&self) -> anyhow::Result<()> {
         self.merkle_root_service.stop_and_await().await?;
         self.api_service.stop_and_await().await?;

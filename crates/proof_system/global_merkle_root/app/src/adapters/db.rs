@@ -42,13 +42,16 @@ use fuel_core_types::{
 use itertools::Itertools as _;
 
 #[derive(Clone)]
+/// State root database.
 pub struct StateRootDb(Database<StateRootDbDescription>);
 
 impl StateRootDb {
+    /// Create an in-memory database.
     pub fn in_memory() -> Self {
         Self(Database::in_memory())
     }
 
+    /// Open a rocksdb database.
     pub fn open_rocksdb(
         path: &Path,
         state_rewind_policy: StateRewindPolicy,
@@ -61,11 +64,13 @@ impl StateRootDb {
         )?))
     }
 
+    /// Get the latest block height from the database metadata.
     pub fn block_height(&self) -> StorageResult<BlockHeight> {
         Ok(self.0.latest_height_from_metadata()?.unwrap_or_default())
     }
 }
 
+/// Database description for the state root DB.
 #[derive(Clone, Copy, Debug)]
 pub struct StateRootDbDescription;
 

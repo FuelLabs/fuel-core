@@ -4,6 +4,7 @@ use fuel_block_fetcher::BlockFetcher;
 use fuel_core_global_merkle_root_service::ports::BlockStream;
 use fuel_core_types::blockchain::block::Block;
 
+/// Wrapper around the fuel block fetcher that implements block stream.
 pub struct BlockStreamAdapter {
     block_fetcher: BlockFetcher,
     height: u32,
@@ -12,6 +13,7 @@ pub struct BlockStreamAdapter {
 }
 
 impl BlockStreamAdapter {
+    /// Construct a new block stream adapter.
     pub fn new(
         url: impl AsRef<str>,
         height: u32,
@@ -66,9 +68,12 @@ impl BlockStream for BlockStreamAdapter {
     }
 }
 
+/// Block streaming error.
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
+    /// Integer overflow when incrementing block height.
     BlockHeightOverflow,
+    /// Other error.
     #[from]
     Other(anyhow::Error),
 }
