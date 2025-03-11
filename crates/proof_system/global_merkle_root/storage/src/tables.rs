@@ -14,39 +14,35 @@
 
 use fuel_core_storage::Mappable;
 
-/// The storage table for contract's raw byte code.
+/// Local mirror of the [`fuel_core_storage::tables::ContractsRawCode`] table.
 pub type ContractsRawCode = LocalMirror<fuel_core_storage::tables::ContractsRawCode>;
 
-/// The latest UTXO info of the contract. The contract's UTXO represents the unique id of the state.
-/// After each transaction, old UTXO is consumed, and new UTXO is produced. UTXO is used as an
-/// input to the next transaction related to the `ContractId` smart contract.
+/// Local mirror of the [`fuel_core_storage::tables::ContractsLatestUtxo`] table.
 pub type ContractsLatestUtxo =
     LocalMirror<fuel_core_storage::tables::ContractsLatestUtxo>;
 
-/// The storage table of coins. Each [`CompressedCoin`]
-/// is represented by unique `UtxoId`.
+/// Local mirror of the [`fuel_core_storage::tables::Coins`] table.
 pub type Coins = LocalMirror<fuel_core_storage::tables::Coins>;
 
-/// The storage table of bridged Ethereum message.
+/// Local mirror of the [`fuel_core_storage::tables::Messages`] table.
 pub type Messages = LocalMirror<fuel_core_storage::tables::Messages>;
 
-/// The storage table of processed transactions that were executed in the past.
-/// The table helps to drop duplicated transactions.
+/// Local mirror of the [`fuel_core_storage::tables::ProcessedTransactions`] table.
 pub type ProcessedTransactions =
     LocalMirror<fuel_core_storage::tables::ProcessedTransactions>;
 
-/// The storage table of consensus parameters.
+/// Local mirror of the [`fuel_core_storage::tables::ConsensusParametersVersions`] table.
 pub type ConsensusParametersVersions =
     LocalMirror<fuel_core_storage::tables::ConsensusParametersVersions>;
 
-/// The storage table of state transition bytecodes.
+/// Local mirror of the [`fuel_core_storage::tables::StateTransitionBytecodeVersions`] table.
 pub type StateTransitionBytecodeVersions =
     LocalMirror<fuel_core_storage::tables::StateTransitionBytecodeVersions>;
 
-/// The storage table for uploaded bytecode.
+/// Local mirror of the [`fuel_core_storage::tables::UploadedBytecodes`] table.
 pub type UploadedBytecodes = LocalMirror<fuel_core_storage::tables::UploadedBytecodes>;
 
-/// The storage table for blob data bytes.
+/// Local mirror of the [`fuel_core_storage::tables::BlobData`] table.
 pub type BlobData = LocalMirror<fuel_core_storage::tables::BlobData>;
 
 /// Wrapper over an existing table to allow implementing new foreign traits on it.
