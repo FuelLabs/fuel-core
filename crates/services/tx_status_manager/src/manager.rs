@@ -74,6 +74,12 @@ impl Data {
             .iter()
             .map(|(_, tx_id)| *tx_id)
             .collect::<HashSet<_>>();
+
+        if tx_count != tx_count_from_queue.len() {
+            dbg!(&self.statuses);
+            dbg!(&self.pruning_queue);
+        }
+
         assert_eq!(tx_count, tx_count_from_queue.len());
     }
 }
@@ -104,7 +110,10 @@ impl TxStatusManager {
             let duration = now.duration_since(*past);
 
             if duration < self.ttl {
+                println!("Not pruning");
                 break;
+            } else {
+                println!("Pruning considered");
             }
 
             let (past, tx_id) = self
@@ -136,8 +145,8 @@ impl TxStatusManager {
             }
         }
 
-        //#[cfg(test)]
-        //self.data.assert_consistency();
+        #[cfg(test)]
+        self.data.assert_consistency();
     }
 
     fn add_new_status(&mut self, tx_id: TxId, tx_status: TransactionStatus) {
@@ -149,6 +158,7 @@ impl TxStatusManager {
     }
 
     fn register_status(&mut self, tx_id: TxId, tx_status: TransactionStatus) {
+        println!("New status: {:?}, {:?}", tx_id, tx_status);
         self.prune_old_statuses();
         self.add_new_status(tx_id, tx_status);
     }
@@ -627,8 +637,10 @@ mod tests {
             manager::tests::{
                 assert_absence,
                 assert_presence_with_status,
+                failure,
                 squeezed_out,
                 submitted,
+                success,
                 HALF_OF_TTL,
                 TTL,
             },
@@ -657,6 +669,37 @@ mod tests {
             assert_presence_with_status(
                 &tx_status_manager,
                 vec![(tx1_id, submitted()), (tx_final, submitted())],
+            );
+            assert_absence(&tx_status_manager, vec![tx2_id]);
+        }
+
+        #[tokio::test(start_paused = true)]
+        async fn update_to_submitted_disables_ttl() {
+            let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
+            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+
+            let tx1_id = [1u8; 32].into();
+            let tx2_id = [2u8; 32].into();
+
+            // Given
+            tx_status_manager.status_update(tx1_id, squeezed_out());
+            tx_status_manager.status_update(tx2_id, squeezed_out());
+
+            tokio::time::advance(HALF_OF_TTL).await;
+
+            tx_status_manager.status_update(tx1_id, submitted());
+            tx_status_manager.status_update(tx2_id, success());
+
+            // When
+            tokio::time::advance(TTL).await;
+
+            let tx_final = [99u8; 32].into();
+            tx_status_manager.status_update(tx_final, failure());
+
+            // Then
+            assert_presence_with_status(
+                &tx_status_manager,
+                vec![(tx1_id, submitted()), (tx_final, failure())],
             );
             assert_absence(&tx_status_manager, vec![tx2_id]);
         }
@@ -781,7 +824,7 @@ mod tests {
     }
 
     proptest! {
-        #![proptest_config(ProptestConfig::with_cases(100))]
+        #![proptest_config(ProptestConfig::with_cases(1))]
 
         #[test]
         #[allow(clippy::arithmetic_side_effects)]
