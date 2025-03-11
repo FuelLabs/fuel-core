@@ -1,0 +1,28 @@
+[package]
+name = "fuel-core-client-block-query-extension"
+authors = { workspace = true }
+categories = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+build = "build.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+cynic = { workspace = true, features = ["http-reqwest"] }
+fuel-core-client = { workspace = true }
+fuel-core-types = { workspace = true }
+itertools = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[build-dependencies]
+fuel-core-client = { workspace = true }
+
+[features]
+fault-proving = ["fuel-core-types/fault-proving"]

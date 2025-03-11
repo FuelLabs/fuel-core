@@ -1,0 +1,30 @@
+[package]
+name = "fuel-block-fetcher"
+authors = { workspace = true }
+categories = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+description = "Fetches blocks from fuel nodes via GraphQL"
+
+[dependencies]
+anyhow = { workspace = true }
+fuel-core-client = { workspace = true }
+fuel-core-client-block-query-extension = { workspace = true }
+fuel-core-compression = { workspace = true }
+fuel-core-types = { workspace = true, features = ["test-helpers"] }
+futures = { workspace = true }
+itertools = { workspace = true }
+postcard = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[features]
+fault-proving = [
+  "fuel-core-types/fault-proving",
+  "fuel-core-client-block-query-extension/fault-proving",
+]

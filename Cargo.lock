@@ -3342,6 +3342,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-block-fetcher"
+version = "0.41.7"
+dependencies = [
+ "anyhow",
+ "fuel-core-client",
+ "fuel-core-client-block-query-extension",
+ "fuel-core-compression",
+ "fuel-core-types 0.41.7",
+ "futures",
+ "itertools 0.12.1",
+ "postcard",
+ "tokio",
+]
+
+[[package]]
 name = "fuel-compression"
 version = "0.60.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3563,6 +3578,19 @@ dependencies = [
  "fuel-core-client",
  "fuel-core-types 0.41.7",
  "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "fuel-core-client-block-query-extension"
+version = "0.41.7"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "cynic",
+ "fuel-core-client",
+ "fuel-core-types 0.41.7",
+ "itertools 0.12.1",
  "tokio",
 ]
 
