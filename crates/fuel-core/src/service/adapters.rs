@@ -84,6 +84,8 @@ pub mod sync;
 pub mod tx_status_manager;
 pub mod txpool;
 
+pub mod ready_signal;
+
 #[derive(Debug, Clone)]
 pub struct ChainStateInfoProvider {
     shared_state: chain_state_info_provider::SharedState,
@@ -419,7 +421,9 @@ impl ConsensusAdapter {
 #[derive(Clone)]
 pub struct MaybeRelayerAdapter {
     #[cfg(feature = "relayer")]
-    pub relayer_synced: Option<fuel_core_relayer::SharedState<Database<Relayer>>>,
+    pub relayer_synced: Option<fuel_core_relayer::SharedState>,
+    #[cfg(feature = "relayer")]
+    pub relayer_database: Database<Relayer>,
     #[cfg(feature = "relayer")]
     pub da_deploy_height: fuel_core_types::blockchain::primitives::DaBlockHeight,
 }
