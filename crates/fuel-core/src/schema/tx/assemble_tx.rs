@@ -657,7 +657,7 @@ where
             return Ok(self)
         }
 
-        if self.estimated_predicates_count > self.arguments.estimate_predicates_limit {
+        if self.estimated_predicates_count >= self.arguments.estimate_predicates_limit {
             return Err(anyhow::anyhow!(
                 "The transaction estimation requires running \
                 of predicate more than {} times",
@@ -689,8 +689,10 @@ where
 
         self.tx = estimated_tx;
 
-        self.estimated_predicates_count =
-            self.estimated_predicates_count.saturating_add(1);
+        self.estimated_predicates_count = self
+            .estimated_predicates_count
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("estimated predicates count overflow"))?;
 
         Ok(self)
     }
@@ -804,7 +806,10 @@ where
 
             let (updated_tx, new_status) = self.arguments.dry_run(script).await?;
 
-            self.dry_run_count = self.dry_run_count.saturating_add(1);
+            self.dry_run_count = self
+                .dry_run_count
+                .checked_add(1)
+                .ok_or_else(|| anyhow::anyhow!("dry run count overflow"))?;
 
             let Transaction::Script(updated_script) = updated_tx else {
                 return Err(anyhow::anyhow!(
