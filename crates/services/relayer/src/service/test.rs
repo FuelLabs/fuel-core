@@ -173,7 +173,7 @@ async fn deploy_height_does_not_override() {
     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 50);
 }
 
-const STATING_HEIGHT: u64 = 2;
+const STARTING_HEIGHT: u64 = 2;
 
 #[test_case(6, 6, SyncState::Synced(6u64.into()); "if local is up to date with remote, then fully synced state")]
 #[test_case(6, 100, SyncState::Synced(100u64.into()); "if local is somehow ahead of remote, then fully synced state")]
