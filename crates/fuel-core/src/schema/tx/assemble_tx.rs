@@ -124,7 +124,8 @@ impl<'a> AssembleArguments<'a> {
             .into_iter()
             .next();
 
-        let result = result.ok_or(anyhow::anyhow!("No result for the coins to spend"))?;
+        let result =
+            result.ok_or_else(|| anyhow::anyhow!("No result for the coins to spend"))?;
 
         Ok(result)
     }
@@ -140,7 +141,7 @@ impl<'a> AssembleArguments<'a> {
             .await?
             .into_iter()
             .next()
-            .ok_or(anyhow::anyhow!("No result for the dry run"))
+            .ok_or_else(|| anyhow::anyhow!("No result for the dry run"))
     }
 }
 
@@ -920,9 +921,11 @@ where
 
             if asset_id == &base_asset_id && &fee_payer_account.owner() == owner {
                 total_base_asset =
-                    total_base_asset.checked_add(amount).ok_or(anyhow::anyhow!(
+                    total_base_asset.checked_add(amount).ok_or_else(|| {
+                        anyhow::anyhow!(
                         "The total base asset amount used by the transaction is too big"
-                    ))?;
+                    )
+                    })?;
             }
         }
 
