@@ -112,7 +112,8 @@ impl TxStatusManager {
                     // We only need to remove status from the cache if it is the last status
                     // for the transaction(in other words timestamp from queue matches
                     // timestamp from the cache).
-                    if entry.get().0 == past {
+                    let (timestamp, _) = entry.get();
+                    if *timestamp == past {
                         entry.remove();
                     }
                 }
