@@ -54,7 +54,6 @@ mod tests {
     use super::*;
     use fuel_core_types::{
         fuel_tx::TxId,
-        fuel_types::BlockHeight,
         services::preconfirmation::PreconfirmationStatus,
     };
 
@@ -64,14 +63,18 @@ mod tests {
         let txs = vec![
             Preconfirmation {
                 tx_id: TxId::default(),
-                status: PreconfirmationStatus::SuccessByBlockProducer {
-                    block_height: BlockHeight::from(123),
+                status: PreconfirmationStatus::SqueezedOut {
+                    reason: "Dummy reason".to_string(),
                 },
             },
             Preconfirmation {
                 tx_id: TxId::default(),
-                status: PreconfirmationStatus::SqueezedOutByBlockProducer {
-                    reason: "test".to_string(),
+                status: PreconfirmationStatus::Success {
+                    tx_pointer: Default::default(),
+                    total_gas: 0,
+                    total_fee: 0,
+                    receipts: vec![],
+                    outputs: vec![],
                 },
             },
         ];

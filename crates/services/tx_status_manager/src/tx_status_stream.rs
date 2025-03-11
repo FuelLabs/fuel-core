@@ -39,6 +39,11 @@ impl<E> From<Result<TransactionStatus, E>> for TxStatusMessage {
         }
     }
 }
+impl From<TransactionStatus> for TxStatusMessage {
+    fn from(status: TransactionStatus) -> Self {
+        TxStatusMessage::Status(status)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum State {
@@ -74,12 +79,14 @@ impl TxUpdateStream {
         &self.state
     }
 
+    // TODO: Update the code to handle new pre-confirmation statuses
+    //  https://github.com/FuelLabs/fuel-core/issues/2827
     pub fn add_msg(&mut self, msg: TxStatusMessage) {
         let state = std::mem::replace(&mut self.state, State::Empty);
         self.state = match state {
             State::Empty => match msg {
-                TxStatusMessage::Status(TransactionStatus::Submitted { timestamp }) => {
-                    State::Initial(TransactionStatus::Submitted { timestamp })
+                TxStatusMessage::Status(TransactionStatus::Submitted(s)) => {
+                    State::Initial(TransactionStatus::Submitted(s))
                 }
                 TxStatusMessage::Status(s) => State::EarlySuccess(s),
                 TxStatusMessage::FailedStatus => State::Failed,

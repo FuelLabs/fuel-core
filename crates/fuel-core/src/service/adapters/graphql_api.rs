@@ -4,12 +4,15 @@ use super::{
     ChainStateInfoProvider,
     SharedMemoryPool,
     StaticGasPrice,
+    TxStatusManagerAdapter,
 };
 use crate::{
     database::OnChainIterableKeyValueView,
     fuel_core_graphql_api::ports::{
-        worker,
-        worker::BlockAt,
+        worker::{
+            self,
+            BlockAt,
+        },
         BlockProducerPort,
         ChainStateProvider,
         DatabaseMessageProof,
@@ -17,7 +20,10 @@ use crate::{
         P2pPort,
         TxPoolPort,
     },
-    graphql_api::ports::MemoryPool,
+    graphql_api::ports::{
+        MemoryPool,
+        TxStatusManager,
+    },
     service::{
         adapters::{
             import_result_provider::ImportResultProvider,
@@ -30,10 +36,8 @@ use crate::{
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_txpool::{
-    TxPoolStats,
-    TxStatusMessage,
-};
+use fuel_core_tx_status_manager::TxStatusMessage;
+use fuel_core_txpool::TxPoolStats;
 use fuel_core_types::{
     blockchain::header::{
         ConsensusParametersVersion,
@@ -67,6 +71,20 @@ mod off_chain;
 mod on_chain;
 
 #[async_trait]
+impl TxStatusManager for TxStatusManagerAdapter {
+    async fn status(&self, tx_id: TxId) -> anyhow::Result<Option<TransactionStatus>> {
+        self.tx_status_manager_shared_data.get_status(tx_id).await
+    }
+
+    async fn tx_update_subscribe(
+        &self,
+        tx_id: TxId,
+    ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
+        self.tx_status_manager_shared_data.subscribe(tx_id).await
+    }
+}
+
+#[async_trait]
 impl TxPoolPort for TxPoolAdapter {
     async fn transaction(&self, id: TxId) -> anyhow::Result<Option<Transaction>> {
         Ok(self
@@ -77,34 +95,11 @@ impl TxPoolPort for TxPoolAdapter {
             .map(|info| info.tx().clone().deref().into()))
     }
 
-    async fn submission_time(&self, id: TxId) -> anyhow::Result<Option<Tai64>> {
-        Ok(self
-            .service
-            .find_one(id)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?
-            .map(|info| {
-                Tai64::from_unix(
-                    info.creation_instant()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .expect("Time can't be lower than 0")
-                        .as_secs() as i64,
-                )
-            }))
-    }
-
     async fn insert(&self, tx: Transaction) -> anyhow::Result<()> {
         self.service
             .insert(tx)
             .await
             .map_err(|e| anyhow::anyhow!(e))
-    }
-
-    fn tx_update_subscribe(
-        &self,
-        id: TxId,
-    ) -> anyhow::Result<BoxStream<TxStatusMessage>> {
-        self.service.tx_update_subscribe(id)
     }
 
     fn latest_pool_stats(&self) -> TxPoolStats {
@@ -183,14 +178,15 @@ impl P2pPort for P2PAdapter {
     }
 }
 
-impl worker::TxPool for TxPoolAdapter {
+impl worker::TxStatusCompletion for TxStatusManagerAdapter {
     fn send_complete(
         &self,
         id: Bytes32,
         block_height: &BlockHeight,
         status: TransactionStatus,
     ) {
-        self.service.notify_complete_tx(id, block_height, status)
+        tracing::info!("Transaction {id} successfully included in block {block_height}");
+        self.tx_status_manager_shared_data.update_status(id, status);
     }
 }
 

@@ -12,7 +12,9 @@ use crate::{
         MockBlockProducer,
         MockP2pPort,
         MockTransactionPool,
+        MockTxStatusManager,
         TransactionsSource,
+        WaitForReadySignal,
     },
     service::MainTask,
     Config,
@@ -94,6 +96,7 @@ use test_time::TestTime;
 struct TestContextBuilder {
     config: Option<Config>,
     txpool: Option<MockTransactionPool>,
+    tx_status_manager: Option<MockTxStatusManager>,
     importer: Option<MockBlockImporter>,
     producer: Option<MockBlockProducer>,
     start_time: Option<Tai64N>,
@@ -117,6 +120,7 @@ impl TestContextBuilder {
             importer: None,
             producer: None,
             start_time: None,
+            tx_status_manager: None,
         }
     }
 
@@ -173,6 +177,10 @@ impl TestContextBuilder {
             .txpool
             .unwrap_or_else(MockTransactionPool::no_tx_updates);
 
+        let tx_status_manager = self
+            .tx_status_manager
+            .unwrap_or_else(MockTxStatusManager::no_skipped_status_updates);
+
         let p2p_port = generate_p2p_port();
 
         let predefined_blocks = HashMap::new().into();
@@ -181,17 +189,22 @@ impl TestContextBuilder {
 
         let watch = time.watch();
 
+        let block_production_ready_signal = FakeBlockProductionReadySignal;
+
         let service = new_service(
             &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
             config.clone(),
             txpool,
+            tx_status_manager,
             producer,
             importer,
             p2p_port,
             FakeBlockSigner { succeeds: true }.into(),
             predefined_blocks,
             watch,
+            block_production_ready_signal.clone(),
         );
+
         service.start_and_await().await.unwrap();
         TestContext { service, time }
     }
@@ -221,6 +234,13 @@ impl BlockSigner for FakeBlockSigner {
     }
 }
 
+#[derive(Clone)]
+pub struct FakeBlockProductionReadySignal;
+
+impl WaitForReadySignal for FakeBlockProductionReadySignal {
+    async fn wait_for_ready_signal(&self) {}
+}
+
 pub type TestPoAService = Service<
     MockTransactionPool,
     MockBlockProducer,
@@ -228,6 +248,8 @@ pub type TestPoAService = Service<
     FakeBlockSigner,
     InMemoryPredefinedBlocks,
     test_time::Watch,
+    MockTxStatusManager,
+    FakeBlockProductionReadySignal,
 >;
 
 struct TestContext {
@@ -274,6 +296,16 @@ impl MockTransactionPool {
             txs,
             new_txs_notifier,
         }
+    }
+}
+
+impl MockTxStatusManager {
+    fn no_skipped_status_updates() -> Self {
+        let mut tx_status_manager = MockTxStatusManager::default();
+        tx_status_manager
+            .expect_notify_skipped_txs()
+            .returning(|_| {});
+        tx_status_manager
     }
 }
 
@@ -355,6 +387,8 @@ async fn remove_skipped_transactions() {
             assert_eq!(skipped_transactions, skipped_ids);
         });
 
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
+
     let signer = SignMode::Key(Secret::new(secret_key.into()));
 
     let config = Config {
@@ -370,16 +404,20 @@ async fn remove_skipped_transactions() {
 
     let time = TestTime::at_unix_epoch();
 
+    let block_production_ready_signal = FakeBlockProductionReadySignal;
+
     let mut task = MainTask::new(
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         p2p_port,
         FakeBlockSigner { succeeds: true }.into(),
         predefined_blocks,
         time.watch(),
+        block_production_ready_signal.clone(),
     );
 
     assert!(task.produce_next_block(Instant::now()).await.is_ok());
@@ -489,6 +527,9 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         metrics: false,
         ..Default::default()
     };
+
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
+
     let mut block_importer = MockBlockImporter::default();
     block_importer.expect_commit_result().returning(|_| Ok(()));
     block_importer
@@ -498,17 +539,20 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+    let block_production_ready_signal = FakeBlockProductionReadySignal;
 
     let task = MainTask::new(
         &last_block,
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         generate_p2p_port(),
         FakeBlockSigner { succeeds: true }.into(),
         InMemoryPredefinedBlocks::new(blocks_map),
         time.watch(),
+        block_production_ready_signal.clone(),
     );
 
     // when
@@ -554,6 +598,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         metrics: false,
         ..Default::default()
     };
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
     let mut block_importer = MockBlockImporter::default();
     block_importer.expect_commit_result().returning(|_| Ok(()));
     block_importer
@@ -563,17 +608,20 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
     let time = TestTime::at_unix_epoch();
+    let block_production_ready_signal = FakeBlockProductionReadySignal;
 
     let task = MainTask::new(
         &last_block,
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         generate_p2p_port(),
         FakeBlockSigner { succeeds: true }.into(),
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
         time.watch(),
+        block_production_ready_signal.clone(),
     );
 
     // when
@@ -593,4 +641,126 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
             });
         }
     }
+}
+
+#[derive(Clone)]
+struct MockBlockProductionReadySignal(std::sync::Arc<tokio::sync::Notify>);
+
+impl WaitForReadySignal for MockBlockProductionReadySignal {
+    async fn wait_for_ready_signal(&self) {
+        self.0.notified().await;
+    }
+}
+
+impl Default for MockBlockProductionReadySignal {
+    fn default() -> Self {
+        Self(std::sync::Arc::new(tokio::sync::Notify::new()))
+    }
+}
+
+impl MockBlockProductionReadySignal {
+    fn send_ready_signal(&self) {
+        self.0.notify_one();
+    }
+}
+
+#[tokio::test]
+async fn consensus_service__run__will_not_produce_blocks_without_ready_signal() {
+    // this test basically checks that the block production ready signal is working
+    // no blocks should be produced if the ready signal is not sent
+
+    // given
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: std::time::Duration::from_millis(10),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::empty()));
+    let mut rng = StdRng::seed_from_u64(0);
+    let tx = make_tx(&mut rng);
+    let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let time = TestTime::at_unix_epoch();
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
+    let block_production_ready_signal = MockBlockProductionReadySignal::default();
+
+    let task = MainTask::new(
+        &last_block,
+        config,
+        txpool,
+        tx_status_manager,
+        block_producer,
+        block_importer,
+        generate_p2p_port(),
+        FakeBlockSigner { succeeds: true }.into(),
+        InMemoryPredefinedBlocks::new(HashMap::new()),
+        time.watch(),
+        block_production_ready_signal.clone(),
+    );
+
+    // when
+    let service = ServiceRunner::new(task);
+    service.start_and_await().await.unwrap();
+    // we don't send the ready signal
+
+    // then
+    time::sleep(Duration::from_millis(200)).await;
+    assert!(block_receiver.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn consensus_service__run__will_produce_blocks_with_ready_signal() {
+    // given
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let last_block = BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now());
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: std::time::Duration::from_millis(10),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::empty()));
+    let mut rng = StdRng::seed_from_u64(0);
+    let tx = make_tx(&mut rng);
+    let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
+    let time = TestTime::at_unix_epoch();
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
+    let block_production_ready_signal = MockBlockProductionReadySignal::default();
+
+    let task = MainTask::new(
+        &last_block,
+        config,
+        txpool,
+        tx_status_manager,
+        block_producer,
+        block_importer,
+        generate_p2p_port(),
+        FakeBlockSigner { succeeds: true }.into(),
+        InMemoryPredefinedBlocks::new(HashMap::new()),
+        time.watch(),
+        block_production_ready_signal.clone(),
+    );
+
+    // when
+    let service = ServiceRunner::new(task);
+    service.start_and_await().await.unwrap();
+    block_production_ready_signal.send_ready_signal();
+
+    // then
+    let produced_block = block_receiver.recv().await.unwrap();
+    assert!(matches!(produced_block, FakeProducedBlock::New(_, _)));
 }

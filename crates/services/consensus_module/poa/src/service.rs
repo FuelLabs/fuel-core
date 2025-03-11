@@ -15,12 +15,15 @@ use crate::{
     ports::{
         BlockImporter,
         BlockProducer,
+        BlockProductionReadySignal,
         BlockSigner,
         GetTime,
         P2pPort,
         PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
+        TxStatusManager,
+        WaitForReadySignal,
     },
     sync::{
         SyncState,
@@ -64,7 +67,8 @@ use fuel_core_types::{
 use serde::Serialize;
 use tokio::time::sleep_until;
 
-pub type Service<T, B, I, S, PB, C> = ServiceRunner<MainTask<T, B, I, S, PB, C>>;
+pub type Service<T, B, I, S, PB, C, TxStatusManager, RS> =
+    ServiceRunner<MainTask<T, B, I, S, PB, C, TxStatusManager, RS>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -118,11 +122,13 @@ pub(crate) enum RequestType {
     Manual,
     Trigger,
 }
-pub struct MainTask<T, B, I, S, PB, C> {
+
+pub struct MainTask<T, B, I, S, PB, C, TxStatusManager, RS> {
     signer: Arc<S>,
     block_producer: B,
     block_importer: I,
     txpool: T,
+    tx_status_manager: TxStatusManager,
     new_txs_watcher: tokio::sync::watch::Receiver<()>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
@@ -135,26 +141,32 @@ pub struct MainTask<T, B, I, S, PB, C> {
     /// Deadline clock, used by the triggers
     sync_task_handle: ServiceRunner<SyncTask>,
     production_timeout: Duration,
+    /// externally controlled start of block production
+    block_production_ready_signal: BlockProductionReadySignal<RS>,
 }
 
-impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TxStatusMgr, RS> MainTask<T, B, I, S, PB, C, TxStatusMgr, RS>
 where
+    TxStatusMgr: TxStatusManager,
     T: TransactionPool,
     I: BlockImporter,
     PB: PredefinedBlocks,
     C: GetTime,
+    RS: WaitForReadySignal,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort>(
         last_block: &BlockHeader,
         config: Config,
         txpool: T,
+        tx_status_manager: TxStatusMgr,
         block_producer: B,
         block_importer: I,
         p2p_port: P,
         signer: Arc<S>,
         predefined_blocks: PB,
         clock: C,
+        block_production_ready_signal: RS,
     ) -> Self {
         let new_txs_watcher = txpool.new_txs_watcher();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -182,6 +194,9 @@ where
 
         let sync_task_handle = ServiceRunner::new(sync_task);
 
+        let block_production_ready_signal =
+            BlockProductionReadySignal::new(block_production_ready_signal);
+
         Self {
             signer,
             txpool,
@@ -197,7 +212,9 @@ where
             trigger,
             sync_task_handle,
             clock,
+            tx_status_manager,
             production_timeout,
+            block_production_ready_signal,
         }
     }
 
@@ -245,14 +262,16 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C> MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TxStatusMgr, RS> MainTask<T, B, I, S, PB, C, TxStatusMgr, RS>
 where
+    TxStatusMgr: TxStatusManager,
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
     S: BlockSigner,
     PB: PredefinedBlocks,
     C: GetTime,
+    RS: WaitForReadySignal,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -374,7 +393,8 @@ where
             );
                 tx_ids_to_remove.push((tx_id, err.to_string()));
             }
-            self.txpool.notify_skipped_txs(tx_ids_to_remove);
+            self.txpool.notify_skipped_txs(tx_ids_to_remove.clone());
+            self.tx_status_manager.notify_skipped_txs(tx_ids_to_remove);
         }
 
         // Sign the block and seal it
@@ -547,14 +567,16 @@ struct PredefinedBlockWithSkippedTransactions {
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, S, PB, C> RunnableService for MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TxStatusManager, RS> RunnableService
+    for MainTask<T, B, I, S, PB, C, TxStatusManager, RS>
 where
     Self: RunnableTask,
+    RS: WaitForReadySignal,
 {
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I, S, PB, C>;
+    type Task = MainTask<T, B, I, S, PB, C, TxStatusManager, RS>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -582,16 +604,27 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C> RunnableTask for MainTask<T, B, I, S, PB, C>
+impl<T, B, I, S, PB, C, TxStatusMgr, RS> RunnableTask
+    for MainTask<T, B, I, S, PB, C, TxStatusMgr, RS>
 where
+    TxStatusMgr: TxStatusManager,
     T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
     S: BlockSigner,
     PB: PredefinedBlocks,
     C: GetTime,
+    RS: WaitForReadySignal,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
+        tokio::select! {
+            biased;
+            _ = watcher.while_started() => {
+                return TaskNextAction::Stop
+            }
+            _ = self.block_production_ready_signal.wait_for_ready_signal() => {}
+        }
+
         if let Some(action) = self.ensure_synced(watcher).await {
             return action;
         }
@@ -655,18 +688,21 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn new_service<T, B, I, P, S, PB, C>(
+pub fn new_service<T, B, I, P, S, PB, C, TxStatusMgr, RS>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
+    tx_status_manager: TxStatusMgr,
     block_producer: B,
     block_importer: I,
     p2p_port: P,
     block_signer: Arc<S>,
     predefined_blocks: PB,
     clock: C,
-) -> Service<T, B, I, S, PB, C>
+    block_production_ready_signal: RS,
+) -> Service<T, B, I, S, PB, C, TxStatusMgr, RS>
 where
+    TxStatusMgr: TxStatusManager + 'static,
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,
@@ -674,17 +710,20 @@ where
     PB: PredefinedBlocks + 'static,
     P: P2pPort,
     C: GetTime,
+    RS: WaitForReadySignal,
 {
     Service::new(MainTask::new(
         last_block,
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         p2p_port,
         block_signer,
         predefined_blocks,
         clock,
+        block_production_ready_signal,
     ))
 }
 
