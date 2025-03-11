@@ -5,6 +5,7 @@ use crate::{
         ChainStateInfoProvider,
         P2PAdapter,
         StaticGasPrice,
+        TxStatusManagerAdapter,
     },
 };
 use fuel_core_services::stream::BoxStream;
@@ -21,6 +22,7 @@ use fuel_core_txpool::ports::{
     BlockImporter,
     ChainStateInfoProvider as ChainStateInfoProviderTrait,
     GasPriceProvider,
+    TxStatusManager,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
@@ -48,6 +50,7 @@ use fuel_core_types::{
             PeerId,
             TransactionGossipData,
         },
+        txpool::TransactionStatus,
     },
 };
 use std::sync::Arc;
@@ -225,5 +228,12 @@ impl ChainStateInfoProviderTrait for ChainStateInfoProvider {
         &self,
     ) -> (ConsensusParametersVersion, Arc<ConsensusParameters>) {
         self.shared_state.latest_consensus_parameters_with_version()
+    }
+}
+
+impl TxStatusManager for TxStatusManagerAdapter {
+    fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
+        self.tx_status_manager_shared_data
+            .update_status(tx_id, tx_status);
     }
 }

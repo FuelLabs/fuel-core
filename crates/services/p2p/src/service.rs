@@ -1356,7 +1356,7 @@ impl SharedState {
         self.tx_broadcast.subscribe()
     }
 
-    pub fn subscribe_confirmations(
+    pub fn subscribe_preconfirmations(
         &self,
     ) -> broadcast::Receiver<P2PPreConfirmationGossipData> {
         self.pre_confirmations_broadcast.subscribe()
@@ -1404,7 +1404,7 @@ pub fn build_shared_state(
 ) -> (SharedState, Receiver<TaskRequest>) {
     let (request_sender, request_receiver) = mpsc::channel(CHANNEL_SIZE);
     let (tx_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
-    let (confirmations_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
+    let (preconfirmations_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
     let (new_tx_subscription_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
     let (block_height_broadcast, _) = broadcast::channel(CHANNEL_SIZE);
 
@@ -1421,7 +1421,7 @@ pub fn build_shared_state(
             request_sender,
             new_tx_subscription_broadcast,
             tx_broadcast,
-            pre_confirmations_broadcast: confirmations_broadcast,
+            pre_confirmations_broadcast: preconfirmations_broadcast,
             reserved_peers_broadcast,
             block_height_broadcast,
             max_txs_per_request: config.max_txs_per_request,

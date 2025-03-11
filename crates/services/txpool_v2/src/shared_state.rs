@@ -1,20 +1,14 @@
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use fuel_core_types::{
     fuel_tx::{
         Bytes32,
         Transaction,
         TxId,
     },
-    fuel_types::BlockHeight,
-    services::txpool::{
-        ArcPoolTx,
-        TransactionStatus,
-    },
+    services::txpool::ArcPoolTx,
 };
 use tokio::sync::{
-    broadcast,
     mpsc,
     oneshot::{
         self,
@@ -26,22 +20,14 @@ use tokio::sync::{
 use crate::{
     error::Error,
     pool::TxPoolStats,
-    pool_worker,
     pool_worker::{
+        self,
         PoolReadRequest,
         PoolRemoveRequest,
     },
     service::{
         TxInfo,
         WritePoolRequest,
-    },
-    tx_status_stream::{
-        TxStatusMessage,
-        TxStatusStream,
-    },
-    update_sender::{
-        MpscChannel,
-        TxStatusChange,
     },
     Constraints,
 };
@@ -53,7 +39,6 @@ pub struct SharedState {
     pub(crate) select_transactions_requests_sender:
         mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
     pub(crate) request_read_sender: mpsc::Sender<PoolReadRequest>,
-    pub(crate) tx_status_sender: TxStatusChange,
     pub(crate) new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
     pub(crate) latest_stats: tokio::sync::watch::Receiver<TxPoolStats>,
 }
@@ -160,33 +145,6 @@ impl SharedState {
         self.new_executable_txs_notifier.subscribe()
     }
 
-    /// Subscribe to new transaction notifications.
-    pub fn new_tx_notification_subscribe(&self) -> broadcast::Receiver<TxId> {
-        self.tx_status_sender.new_tx_notification_sender.subscribe()
-    }
-
-    /// Subscribe to status updates for a transaction.
-    pub fn tx_update_subscribe(&self, tx_id: Bytes32) -> anyhow::Result<TxStatusStream> {
-        self.tx_status_sender
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx_id)
-            .ok_or(anyhow!("Maximum number of subscriptions reached"))
-    }
-
-    /// Notify the txpool that a transaction was executed and committed to a block.
-    pub fn notify_complete_tx(
-        &self,
-        id: Bytes32,
-        block_height: &BlockHeight,
-        status: TransactionStatus,
-    ) {
-        self.tx_status_sender.send_complete(
-            id,
-            block_height,
-            TxStatusMessage::Status(status),
-        )
-    }
-
     /// Notify the txpool that some transactions were skipped during block production.
     /// This is used to update the status of the skipped transactions internally and in subscriptions
     pub fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
@@ -194,8 +152,6 @@ impl SharedState {
             .into_iter()
             .map(|(tx_id, reason)| {
                 let error = Error::SkippedTransaction(reason);
-                self.tx_status_sender
-                    .send_squeezed_out(tx_id, error.clone());
                 (tx_id, error)
             })
             .collect();
