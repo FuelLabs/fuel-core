@@ -4,6 +4,7 @@ use std::{
 };
 
 use adapters::ready_signal::ReadySignal;
+use adapters::TxStatusManagerAdapter;
 pub use config::{
     Config,
     DbType,
@@ -71,6 +72,8 @@ pub struct SharedState {
     pub poa_adapter: PoAAdapter,
     /// The transaction pool shared state.
     pub txpool_shared_state: TxPoolSharedState,
+    /// The Tx Status Manager
+    pub tx_status_manager: TxStatusManagerAdapter,
     /// The P2P network shared state.
     #[cfg(feature = "p2p")]
     pub network: Option<fuel_core_p2p::service::SharedState>,
@@ -523,9 +526,16 @@ mod tests {
             i += 1;
         }
 
-        // current services: graphql, graphql worker, txpool, PoA, gas price service
+        // Current services:
+        // -    tx status manager
+        // -    graphql
+        // -    graphql worker
+        // -    txpool
+        // -    PoA
+        // -    gas price service
+        // -    chain info provider
         #[allow(unused_mut)]
-        let mut expected_services = 6;
+        let mut expected_services = 7;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]

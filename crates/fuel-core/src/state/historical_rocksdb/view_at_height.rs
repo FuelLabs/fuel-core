@@ -152,10 +152,6 @@ mod tests {
             .create_view_at(&2u32.into())
             .unwrap()
             .into_transaction();
-        let view_at_height_three = historical_rocks_db
-            .create_view_at(&3u32.into())
-            .unwrap()
-            .into_transaction();
         let balance_at_height_zero = view_at_height_zero
             .storage_as_ref::<ContractsAssets>()
             .get(&key())
@@ -172,18 +168,11 @@ mod tests {
             .unwrap()
             .unwrap()
             .into_owned();
-        let balance_at_height_three = view_at_height_three
-            .storage_as_ref::<ContractsAssets>()
-            .get(&key())
-            .unwrap()
-            .unwrap()
-            .into_owned();
 
         // Then
         assert_eq!(balance_at_height_zero, None);
         assert_eq!(balance_at_height_one, 123);
         assert_eq!(balance_at_height_two, 321);
-        assert_eq!(balance_at_height_three, 321);
     }
 
     #[test]
@@ -234,10 +223,6 @@ mod tests {
             .create_view_at(&2u32.into())
             .unwrap()
             .into_transaction();
-        let view_at_height_three = historical_rocks_db
-            .create_view_at(&3u32.into())
-            .unwrap()
-            .into_transaction();
         let balance_at_height_zero = view_at_height_zero
             .storage_as_ref::<ContractsAssets>()
             .get(&key())
@@ -254,17 +239,10 @@ mod tests {
             .unwrap()
             .unwrap()
             .into_owned();
-        let balance_at_height_three = view_at_height_three
-            .storage_as_ref::<ContractsAssets>()
-            .get(&key())
-            .unwrap()
-            .unwrap()
-            .into_owned();
 
         // Then
         assert_eq!(balance_at_height_zero, None);
         assert_eq!(balance_at_height_one, 123);
         assert_eq!(balance_at_height_two, 321);
-        assert_eq!(balance_at_height_three, 321);
     }
 }

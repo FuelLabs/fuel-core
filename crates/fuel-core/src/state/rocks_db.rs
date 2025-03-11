@@ -136,6 +136,7 @@ impl DatabaseConfig {
 pub struct RocksDb<Description> {
     read_options: ReadOptions,
     db: Arc<DB>,
+    block_opts: Arc<BlockBasedOptions>,
     create_family: Option<Arc<Mutex<BTreeMap<String, Options>>>>,
     snapshot: Option<rocksdb::SnapshotWithThreadMode<'static, DB>>,
     metrics: Arc<DatabaseMetrics>,
@@ -405,6 +406,7 @@ where
 
         let rocks_db = RocksDb {
             read_options: Self::generate_read_options(&None),
+            block_opts: Arc::new(block_opts),
             snapshot: None,
             db,
             metrics,
@@ -439,6 +441,7 @@ where
         &self,
     ) -> RocksDb<TargetDescription> {
         let db = self.db.clone();
+        let block_opts = self.block_opts.clone();
         let create_family = self.create_family.clone();
         let metrics = self.metrics.clone();
         let _drop = self._drop.clone();
@@ -457,6 +460,7 @@ where
 
         RocksDb {
             read_options: Self::generate_read_options(&snapshot),
+            block_opts,
             snapshot,
             db,
             create_family,
@@ -603,6 +607,24 @@ where
             })
             .map_err(|e| DatabaseError::Other(e.into()).into())
         })
+    }
+
+    /// The fast way to remove all data from the column.
+    pub fn clear_table(&self, column: Description::Column) -> DatabaseResult<()> {
+        // Mark column for deletion
+        let column_name = Self::col_name(column.id());
+        self.db
+            .drop_cf(&column_name)
+            .map_err(|e| DatabaseError::Other(e.into()))?;
+
+        // Insert new fresh column without data
+        let column_name = Self::col_name(column.id());
+        let opts = Self::cf_opts(column, self.block_opts.as_ref());
+        self.db
+            .create_cf(&column_name, &opts)
+            .map_err(|e| DatabaseError::Other(e.into()))?;
+
+        Ok(())
     }
 
     pub fn multi_get<K, I>(
@@ -1561,5 +1583,27 @@ mod tests {
 
         // Then
         assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+    }
+
+    #[test]
+    fn clear_table__keeps_column_accessible_after_marking_for_deletion() {
+        // Given
+        let (mut db, _tmp) = create_db();
+        let value = Value::from([]);
+        let key_1 = [1, 1];
+        let key_2 = [255, 254];
+        let key_3 = [255, 255];
+        db.put(&key_1, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_2, Column::Metadata, value.clone()).unwrap();
+        db.put(&key_3, Column::Metadata, value.clone()).unwrap();
+
+        // When
+        db.clear_table(Column::Metadata).unwrap();
+
+        // Then
+        let db_iter = db
+            .iter_store_keys(Column::Metadata, None, None, IterDirection::Forward)
+            .collect::<Vec<_>>();
+        assert_eq!(db_iter, vec![]);
     }
 }

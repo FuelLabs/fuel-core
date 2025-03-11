@@ -1,5 +1,6 @@
 use crate::{
     ports::{
+        self,
         AtomicView,
         BlockImporter as BlockImporterTrait,
         ChainStateInfoProvider,
@@ -57,6 +58,7 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             PeerId,
         },
+        txpool::TransactionStatus,
     },
 };
 use std::{
@@ -67,7 +69,10 @@ use std::{
         Mutex,
     },
 };
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::{
+    Receiver,
+    Sender,
+};
 use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Default)]
@@ -76,6 +81,26 @@ pub struct Data {
     pub contracts: HashMap<ContractId, Contract>,
     pub blobs: HashMap<BlobId, BlobBytes>,
     pub messages: HashMap<Nonce, Message>,
+}
+
+#[derive(Clone)]
+pub struct MockTxStatusManager {
+    tx: Sender<(TxId, TransactionStatus)>,
+}
+
+impl MockTxStatusManager {
+    pub fn new(tx: Sender<(TxId, TransactionStatus)>) -> Self {
+        Self { tx }
+    }
+}
+
+impl ports::TxStatusManager for MockTxStatusManager {
+    fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            tx.send((tx_id, tx_status)).await.unwrap();
+        });
+    }
 }
 
 #[derive(Clone, Default)]

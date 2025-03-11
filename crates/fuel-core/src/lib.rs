@@ -28,6 +28,8 @@ pub use fuel_core_relayer as relayer;
 #[doc(no_inline)]
 pub use fuel_core_sync as sync;
 #[doc(no_inline)]
+pub use fuel_core_tx_status_manager as tx_status_manager;
+#[doc(no_inline)]
 pub use fuel_core_txpool as txpool;
 #[doc(no_inline)]
 pub use fuel_core_types as types;

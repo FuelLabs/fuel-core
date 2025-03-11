@@ -12,6 +12,7 @@ use crate::{
         MockBlockProducer,
         MockP2pPort,
         MockTransactionPool,
+        MockTxStatusManager,
         TransactionsSource,
         WaitForReadySignal,
     },
@@ -95,6 +96,7 @@ use test_time::TestTime;
 struct TestContextBuilder {
     config: Option<Config>,
     txpool: Option<MockTransactionPool>,
+    tx_status_manager: Option<MockTxStatusManager>,
     importer: Option<MockBlockImporter>,
     producer: Option<MockBlockProducer>,
     start_time: Option<Tai64N>,
@@ -118,6 +120,7 @@ impl TestContextBuilder {
             importer: None,
             producer: None,
             start_time: None,
+            tx_status_manager: None,
         }
     }
 
@@ -174,6 +177,10 @@ impl TestContextBuilder {
             .txpool
             .unwrap_or_else(MockTransactionPool::no_tx_updates);
 
+        let tx_status_manager = self
+            .tx_status_manager
+            .unwrap_or_else(MockTxStatusManager::no_skipped_status_updates);
+
         let p2p_port = generate_p2p_port();
 
         let predefined_blocks = HashMap::new().into();
@@ -188,6 +195,7 @@ impl TestContextBuilder {
             &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
             config.clone(),
             txpool,
+            tx_status_manager,
             producer,
             importer,
             p2p_port,
@@ -240,6 +248,7 @@ pub type TestPoAService = Service<
     FakeBlockSigner,
     InMemoryPredefinedBlocks,
     test_time::Watch,
+    MockTxStatusManager,
     FakeBlockProductionReadySignal,
 >;
 
@@ -287,6 +296,16 @@ impl MockTransactionPool {
             txs,
             new_txs_notifier,
         }
+    }
+}
+
+impl MockTxStatusManager {
+    fn no_skipped_status_updates() -> Self {
+        let mut tx_status_manager = MockTxStatusManager::default();
+        tx_status_manager
+            .expect_notify_skipped_txs()
+            .returning(|_| {});
+        tx_status_manager
     }
 }
 
@@ -368,6 +387,8 @@ async fn remove_skipped_transactions() {
             assert_eq!(skipped_transactions, skipped_ids);
         });
 
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
+
     let signer = SignMode::Key(Secret::new(secret_key.into()));
 
     let config = Config {
@@ -389,6 +410,7 @@ async fn remove_skipped_transactions() {
         &BlockHeader::new_block(BlockHeight::from(1u32), Tai64::now()),
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         p2p_port,
@@ -505,6 +527,9 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         metrics: false,
         ..Default::default()
     };
+
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
+
     let mut block_importer = MockBlockImporter::default();
     block_importer.expect_commit_result().returning(|_| Ok(()));
     block_importer
@@ -520,6 +545,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         &last_block,
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         generate_p2p_port(),
@@ -572,6 +598,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         metrics: false,
         ..Default::default()
     };
+    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
     let mut block_importer = MockBlockImporter::default();
     block_importer.expect_commit_result().returning(|_| Ok(()));
     block_importer
@@ -587,6 +614,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         &last_block,
         config,
         txpool,
+        tx_status_manager,
         block_producer,
         block_importer,
         generate_p2p_port(),
