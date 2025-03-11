@@ -33,7 +33,7 @@ use crate::{
     },
 };
 
-use super::tests_update_stream_state::{
+use super::tests_e2e::{
     validate_tx_update_stream_state,
     StateTransitions,
 };
@@ -92,7 +92,9 @@ fn test_send_reg() {
                     TransactionStatus::Submitted(Default::default()),
                     TransactionStatus::Submitted(Default::default()),
                 )),
-                SenderData::ok(Initial(TransactionStatus::Submitted(Default::default()))),
+                SenderData::ok(Submitted(TransactionStatus::Submitted(
+                    Default::default(),
+                ))),
             ],
         )]),
     );

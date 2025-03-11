@@ -64,20 +64,46 @@ pub(crate) fn validate_tx_update_stream_state(
     use State::*;
     use StateTransitions::*;
     match (state, transition) {
-        (Empty, AddMsg(TxStatusMessage::Status(s))) => {
-            if s.is_submitted() {
-                Initial(s)
-            } else {
-                // If not Submitted, it's an early success.
-                EarlySuccess(s)
+        (Empty, AddMsg(TxStatusMessage::Status(s))) => match s {
+            TransactionStatus::Submitted(s) => Submitted(TransactionStatus::Submitted(s)),
+            TransactionStatus::PreConfirmationSuccess(s) => {
+                Preconfirmed(TransactionStatus::PreConfirmationSuccess(s))
             }
-        }
+            TransactionStatus::PreConfirmationFailure(s) => {
+                Preconfirmed(TransactionStatus::PreConfirmationFailure(s))
+            }
+            TransactionStatus::PreConfirmationSqueezedOut(s) => {
+                Preconfirmed(TransactionStatus::PreConfirmationSqueezedOut(s))
+            }
+            s => EarlySuccess(s),
+        },
         (Empty, AddMsg(TxStatusMessage::FailedStatus)) => Failed,
         (Empty, AddFailure) => Failed,
-        (Empty | Initial(_), Next) => Empty,
-        (Initial(s1), AddMsg(TxStatusMessage::Status(s2))) => Success(s1, s2),
-        (Initial(s1), AddMsg(TxStatusMessage::FailedStatus)) => LateFailed(s1),
-        (Initial(s), AddFailure) => LateFailed(s),
+        (Empty | Submitted(_) | Preconfirmed(_), Next) => Empty,
+        (
+            Submitted(_),
+            AddMsg(TxStatusMessage::Status(TransactionStatus::Submitted(s))),
+        ) => Submitted(TransactionStatus::Submitted(s)),
+        (
+            Submitted(_),
+            AddMsg(TxStatusMessage::Status(TransactionStatus::PreConfirmationSuccess(s))),
+        ) => Preconfirmed(TransactionStatus::PreConfirmationSuccess(s)),
+        (
+            Submitted(_),
+            AddMsg(TxStatusMessage::Status(TransactionStatus::PreConfirmationFailure(s))),
+        ) => Preconfirmed(TransactionStatus::PreConfirmationFailure(s)),
+        (
+            Submitted(_),
+            AddMsg(TxStatusMessage::Status(
+                TransactionStatus::PreConfirmationSqueezedOut(s),
+            )),
+        ) => Preconfirmed(TransactionStatus::PreConfirmationSqueezedOut(s)),
+        (Submitted(s1), AddMsg(TxStatusMessage::Status(s2))) => Success(s1, s2),
+        (Submitted(s1), AddMsg(TxStatusMessage::FailedStatus)) => LateFailed(s1),
+        (Submitted(s), AddFailure) => LateFailed(s),
+        (Preconfirmed(s1), AddMsg(TxStatusMessage::Status(s2))) => Success(s1, s2),
+        (Preconfirmed(s1), AddMsg(TxStatusMessage::FailedStatus)) => LateFailed(s1),
+        (Preconfirmed(s), AddFailure) => LateFailed(s),
         (_, CloseRecv) => Closed,
         (EarlySuccess(_) | Failed | SenderClosed(_), Next) => Closed,
         (LateFailed(_), Next) => Failed,

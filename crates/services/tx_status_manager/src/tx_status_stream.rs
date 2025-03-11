@@ -48,7 +48,8 @@ impl From<TransactionStatus> for TxStatusMessage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum State {
     Empty,
-    Initial(TransactionStatus),
+    Submitted(TransactionStatus),
+    Preconfirmed(TransactionStatus),
     EarlySuccess(TransactionStatus),
     Success(TransactionStatus, TransactionStatus),
     Failed,
@@ -86,12 +87,47 @@ impl TxUpdateStream {
         self.state = match state {
             State::Empty => match msg {
                 TxStatusMessage::Status(TransactionStatus::Submitted(s)) => {
-                    State::Initial(TransactionStatus::Submitted(s))
+                    State::Submitted(TransactionStatus::Submitted(s))
                 }
+
+                TxStatusMessage::Status(TransactionStatus::PreConfirmationSuccess(s)) => {
+                    State::Preconfirmed(TransactionStatus::PreConfirmationSuccess(s))
+                }
+                TxStatusMessage::Status(TransactionStatus::PreConfirmationFailure(s)) => {
+                    State::Preconfirmed(TransactionStatus::PreConfirmationFailure(s))
+                }
+                TxStatusMessage::Status(
+                    TransactionStatus::PreConfirmationSqueezedOut(s),
+                ) => {
+                    State::Preconfirmed(TransactionStatus::PreConfirmationSqueezedOut(s))
+                }
+
                 TxStatusMessage::Status(s) => State::EarlySuccess(s),
+
                 TxStatusMessage::FailedStatus => State::Failed,
             },
-            State::Initial(s1) => {
+            State::Submitted(s1) => match msg {
+                TxStatusMessage::Status(TransactionStatus::Submitted(s2)) => {
+                    State::Submitted(TransactionStatus::Submitted(s2))
+                }
+
+                TxStatusMessage::Status(TransactionStatus::PreConfirmationSuccess(
+                    s2,
+                )) => State::Preconfirmed(TransactionStatus::PreConfirmationSuccess(s2)),
+                TxStatusMessage::Status(TransactionStatus::PreConfirmationFailure(
+                    s2,
+                )) => State::Preconfirmed(TransactionStatus::PreConfirmationFailure(s2)),
+                TxStatusMessage::Status(
+                    TransactionStatus::PreConfirmationSqueezedOut(s2),
+                ) => {
+                    State::Preconfirmed(TransactionStatus::PreConfirmationSqueezedOut(s2))
+                }
+
+                TxStatusMessage::Status(s2) => State::Success(s1, s2),
+
+                TxStatusMessage::FailedStatus => State::LateFailed(s1),
+            },
+            State::Preconfirmed(s1) => {
                 if let TxStatusMessage::Status(s2) = msg {
                     State::Success(s1, s2)
                 } else {
@@ -105,7 +141,7 @@ impl TxUpdateStream {
     pub fn add_failure(&mut self) {
         let state = std::mem::replace(&mut self.state, State::Empty);
         self.state = match state {
-            State::Initial(s) => State::LateFailed(s),
+            State::Submitted(s) | State::Preconfirmed(s) => State::LateFailed(s),
             State::Empty => State::Failed,
             s => s,
         };
@@ -118,7 +154,8 @@ impl TxUpdateStream {
     pub fn try_next(&mut self) -> Option<TxStatusMessage> {
         let state = std::mem::replace(&mut self.state, State::Empty);
         match state {
-            State::Initial(s) => Some(TxStatusMessage::Status(s)),
+            State::Submitted(s) => Some(TxStatusMessage::Status(s)),
+            State::Preconfirmed(s) => Some(TxStatusMessage::Status(s)),
             State::Empty => None,
             State::EarlySuccess(s) | State::SenderClosed(s) => {
                 self.state = State::Closed;
