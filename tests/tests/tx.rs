@@ -1039,6 +1039,33 @@ async fn get_owned_transactions() {
     assert_eq!(&charlie_txs, &[tx1, tx2, tx3]);
 }
 
+#[tokio::test]
+async fn pending_pool_returns_error_after_timeout_for_transaction_that_spends_already_spent_utxo(
+) {
+    let config = config_with_fee();
+    let base_asset_id = config.base_asset_id();
+    let service = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(service.bound_address);
+    let recipient = Address::new([13; 32]);
+
+    // Given
+    let transfer = client
+        .assemble_transfer(
+            default_signing_wallet(),
+            vec![(recipient, base_asset_id, 1)],
+        )
+        .await
+        .unwrap();
+
+    // When
+    let status = client.submit_and_await_commit(&transfer).await.unwrap();
+    assert!(matches!(status, TransactionStatus::Success { .. }));
+
+    // Then
+    // The same transfer should fail because the UTXO has already been spent.
+    client.submit_and_await_commit(&transfer).await.unwrap_err();
+}
+
 // add random val for unique tx
 fn create_mock_tx(val: u64) -> Transaction {
     let mut rng = StdRng::seed_from_u64(val);

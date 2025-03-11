@@ -17,9 +17,14 @@ use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_types::{
     fuel_tx::{
         field::BlobId,
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
         Address,
         AssetId,
         ContractId,
+        Input,
         Output,
         TxId,
         UtxoId,
@@ -358,6 +363,40 @@ where
                     Output::Contract { .. }
                     | Output::Change { .. }
                     | Output::Variable { .. } => {
+                        continue;
+                    }
+                }
+            }
+            for input in tx.transaction.inputs() {
+                match input {
+                    Input::CoinSigned(CoinSigned {
+                        utxo_id,
+                        owner,
+                        amount,
+                        asset_id,
+                        ..
+                    })
+                    | Input::CoinPredicate(CoinPredicate {
+                        utxo_id,
+                        owner,
+                        amount,
+                        asset_id,
+                        ..
+                    }) => {
+                        self.extracted_outputs.remove(&SavedOutput::Coin(
+                            SavedCoinOutput {
+                                utxo_id: *utxo_id,
+                                to: *owner,
+                                amount: *amount,
+                                asset_id: *asset_id,
+                            },
+                        ));
+                    }
+                    Input::Contract(_)
+                    | Input::MessageCoinPredicate(_)
+                    | Input::MessageCoinSigned(_)
+                    | Input::MessageDataPredicate(_)
+                    | Input::MessageDataSigned(_) => {
                         continue;
                     }
                 }

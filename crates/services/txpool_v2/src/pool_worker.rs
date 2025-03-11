@@ -16,13 +16,19 @@ use std::{
     sync::Arc,
     time::SystemTime,
 };
-use tokio::sync::{
-    mpsc,
-    mpsc::{
-        Receiver,
-        Sender,
+use tokio::{
+    sync::{
+        mpsc::{
+            self,
+            Receiver,
+            Sender,
+        },
+        oneshot,
     },
-    oneshot,
+    time::{
+        Interval,
+        MissedTickBehavior,
+    },
 };
 
 use crate::{
@@ -91,6 +97,7 @@ impl PoolWorkerInterface {
                     tracing::error!("Failed to build tokio runtime for pool worker");
                     return;
                 };
+                let pending_pool_tx_ttl = tx_pool.config.pending_pool_tx_ttl;
                 let mut worker = PoolWorker {
                     tx_insert_from_pending_sender,
                     thread_management_receiver,
@@ -104,7 +111,13 @@ impl PoolWorkerInterface {
                     view_provider,
                 };
 
-                tokio_runtime.block_on(async { while !worker.run().await {} });
+                tokio_runtime.block_on(async {
+                    let mut pending_pool_expiration_check =
+                        tokio::time::interval(pending_pool_tx_ttl);
+                    pending_pool_expiration_check
+                        .set_missed_tick_behavior(MissedTickBehavior::Skip);
+                    while !worker.run(&mut pending_pool_expiration_check).await {}
+                });
             }
         });
         Self {
@@ -256,7 +269,7 @@ impl<View> PoolWorker<View>
 where
     View: TxPoolPersistentStorage,
 {
-    pub async fn run(&mut self) -> bool {
+    pub async fn run(&mut self, pending_pool_expiration_check: &mut Interval) -> bool {
         let mut remove_buffer = vec![];
         let mut read_buffer = vec![];
         let mut insert_buffer = vec![];
@@ -329,6 +342,9 @@ where
 
                     self.insert(tx, source);
                 }
+            }
+            _ = pending_pool_expiration_check.tick() => {
+                self.pending_pool.expire_transactions(self.notification_sender.clone());
             }
         }
         false
