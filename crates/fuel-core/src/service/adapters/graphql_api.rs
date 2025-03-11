@@ -126,7 +126,7 @@ impl BlockProducerPort for BlockProducerAdapter {
         time: Option<Tai64>,
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
-    ) -> anyhow::Result<Vec<TransactionExecutionStatus>> {
+    ) -> anyhow::Result<Vec<(Transaction, TransactionExecutionStatus)>> {
         self.block_producer
             .dry_run(transactions, height, time, utxo_validation, gas_price)
             .await

@@ -3,7 +3,10 @@ use std::{
     sync::Arc,
 };
 
-use adapters::TxStatusManagerAdapter;
+use adapters::{
+    ready_signal::ReadySignal,
+    TxStatusManagerAdapter,
+};
 pub use config::{
     Config,
     DbType,
@@ -78,11 +81,7 @@ pub struct SharedState {
     pub network: Option<fuel_core_p2p::service::SharedState>,
     #[cfg(feature = "relayer")]
     /// The Relayer shared state.
-    pub relayer: Option<
-        fuel_core_relayer::SharedState<
-            Database<crate::database::database_description::relayer::Relayer>,
-        >,
-    >,
+    pub relayer: Option<fuel_core_relayer::SharedState>,
     /// The GraphQL shared state.
     pub graph_ql: crate::fuel_core_graphql_api::api_service::SharedState,
     /// The underlying database.
@@ -142,11 +141,23 @@ impl FuelService {
         // initialize sub services
         tracing::info!("Initializing sub services");
         database.sync_aux_db_heights(shutdown_listener)?;
-        let (services, shared) = sub_services::init_sub_services(&config, database)?;
+
+        let block_production_ready_signal = ReadySignal::new();
+
+        let (services, shared) = sub_services::init_sub_services(
+            &config,
+            database,
+            block_production_ready_signal.clone(),
+        )?;
 
         let sub_services = Arc::new(services);
         let task = Task::new(sub_services.clone(), shared.clone())?;
-        let runner = ServiceRunner::new(task);
+        let runner = ServiceRunner::new_with_params(
+            task,
+            TaskParams {
+                block_production_ready_signal,
+            },
+        );
         let bound_address = runner.shared.graph_ql.bound_address;
 
         Ok(FuelService {
@@ -399,12 +410,17 @@ impl Task {
     }
 }
 
+#[derive(Default)]
+struct TaskParams {
+    block_production_ready_signal: ReadySignal,
+}
+
 #[async_trait::async_trait]
 impl RunnableService for Task {
     const NAME: &'static str = "FuelService";
     type SharedData = SharedState;
     type Task = Task;
-    type TaskParams = ();
+    type TaskParams = TaskParams;
 
     fn shared_data(&self) -> Self::SharedData {
         self.shared.clone()
@@ -413,7 +429,7 @@ impl RunnableService for Task {
     async fn into_task(
         mut self,
         watcher: &StateWatcher,
-        _: Self::TaskParams,
+        params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         let mut watcher = watcher.clone();
 
@@ -427,6 +443,9 @@ impl RunnableService for Task {
                 }
             }
         }
+
+        params.block_production_ready_signal.send_ready_signal();
+
         Ok(self)
     }
 }
