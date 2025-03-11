@@ -414,7 +414,6 @@ async fn can_get_message_proof() {
             .unwrap();
 
         // Deploy the contract.
-        let estimate_predicates = true;
         matches!(
             client
                 .assemble_and_run_tx(&contract_deploy, default_signing_wallet())
