@@ -12,14 +12,10 @@ version = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-async-graphql = { workspace = true }
-async-trait = { workspace = true }
-axum = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, features = ["env"] }
 derive_more = { workspace = true }
 fuel-block-fetcher = { workspace = true }
-fuel-core = { workspace = true }
-fuel-core-database = { workspace = true }
+fuel-core = { workspace = true, features = ["rocksdb"] }
 fuel-core-global-merkle-root-api = { workspace = true }
 fuel-core-global-merkle-root-service = { workspace = true }
 fuel-core-global-merkle-root-storage = { workspace = true }
@@ -29,14 +25,11 @@ fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
   "alloc",
 ] }
-hex = { workspace = true }
-hyper = { workspace = true }
 itertools = { workspace = true }
 strum = { workspace = true }
-strum_macros = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 
 [dev-dependencies]
 fuel-core-storage = { workspace = true, features = ["std", "test-helpers"] }
@@ -45,4 +38,3 @@ fuel-core-types = { workspace = true, default-features = false, features = [
   "random",
   "test-helpers",
 ] }
-reqwest = { workspace = true }
