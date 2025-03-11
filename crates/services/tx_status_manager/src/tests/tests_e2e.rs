@@ -57,7 +57,7 @@ pub(crate) enum StateTransitions {
     Next,
 }
 
-pub(crate) fn validate_tx_update_stream_state(
+pub(crate) fn apply_tx_state_transition(
     state: State,
     transition: StateTransitions,
 ) -> State {
@@ -71,9 +71,6 @@ pub(crate) fn validate_tx_update_stream_state(
             }
             TransactionStatus::PreConfirmationFailure(s) => {
                 Preconfirmed(TransactionStatus::PreConfirmationFailure(s))
-            }
-            TransactionStatus::PreConfirmationSqueezedOut(s) => {
-                Preconfirmed(TransactionStatus::PreConfirmationSqueezedOut(s))
             }
             s => EarlySuccess(s),
         },
@@ -92,12 +89,6 @@ pub(crate) fn validate_tx_update_stream_state(
             Submitted(_),
             AddMsg(TxStatusMessage::Status(TransactionStatus::PreConfirmationFailure(s))),
         ) => Preconfirmed(TransactionStatus::PreConfirmationFailure(s)),
-        (
-            Submitted(_),
-            AddMsg(TxStatusMessage::Status(
-                TransactionStatus::PreConfirmationSqueezedOut(s),
-            )),
-        ) => Preconfirmed(TransactionStatus::PreConfirmationSqueezedOut(s)),
         (Submitted(s1), AddMsg(TxStatusMessage::Status(s2))) => Success(s1, s2),
         (Submitted(s1), AddMsg(TxStatusMessage::FailedStatus)) => LateFailed(s1),
         (Submitted(s), AddFailure) => LateFailed(s),
@@ -124,10 +115,10 @@ pub(super) fn validate_send(
     msg: TxStatusMessage,
 ) -> State {
     // Add the message to the stream.
-    let state = validate_tx_update_stream_state(state, StateTransitions::AddMsg(msg));
+    let state = apply_tx_state_transition(state, StateTransitions::AddMsg(msg));
 
     // Try to get the next message from the stream.
-    let state = validate_tx_update_stream_state(state, StateTransitions::Next);
+    let state = apply_tx_state_transition(state, StateTransitions::Next);
 
     // Try to send the message to the receiver.
     match tx {
@@ -135,11 +126,11 @@ pub(super) fn validate_send(
         Ok(()) => state,
         // If the receiver is closed, then update the state.
         Err(SendError::Closed) => {
-            validate_tx_update_stream_state(state, StateTransitions::CloseRecv)
+            apply_tx_state_transition(state, StateTransitions::CloseRecv)
         }
         // If the receiver is full, then update the state.
         Err(SendError::Full) => {
-            validate_tx_update_stream_state(state, StateTransitions::AddFailure)
+            apply_tx_state_transition(state, StateTransitions::AddFailure)
         }
     }
 }

@@ -48,11 +48,17 @@ impl From<TransactionStatus> for TxStatusMessage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum State {
     Empty,
+    // The transaction has been submitted to the txpool
     Submitted(TransactionStatus),
+    // The transaction has been preconfirmed by execution
     Preconfirmed(TransactionStatus),
+    // We received a final status for the transaction without receiving anything before
     EarlySuccess(TransactionStatus),
+    // We received a final status for the transaction after receiving an other status first
     Success(TransactionStatus, TransactionStatus),
+    // We received a failed status
     Failed,
+    // We received a failed status after receiving an other status first
     LateFailed(TransactionStatus),
     SenderClosed(TransactionStatus),
     Closed,
@@ -80,8 +86,6 @@ impl TxUpdateStream {
         &self.state
     }
 
-    // TODO: Update the code to handle new pre-confirmation statuses
-    //  https://github.com/FuelLabs/fuel-core/issues/2827
     pub fn add_msg(&mut self, msg: TxStatusMessage) {
         let state = std::mem::replace(&mut self.state, State::Empty);
         self.state = match state {
@@ -95,11 +99,6 @@ impl TxUpdateStream {
                 }
                 TxStatusMessage::Status(TransactionStatus::PreConfirmationFailure(s)) => {
                     State::Preconfirmed(TransactionStatus::PreConfirmationFailure(s))
-                }
-                TxStatusMessage::Status(
-                    TransactionStatus::PreConfirmationSqueezedOut(s),
-                ) => {
-                    State::Preconfirmed(TransactionStatus::PreConfirmationSqueezedOut(s))
                 }
 
                 TxStatusMessage::Status(s) => State::EarlySuccess(s),
@@ -117,11 +116,6 @@ impl TxUpdateStream {
                 TxStatusMessage::Status(TransactionStatus::PreConfirmationFailure(
                     s2,
                 )) => State::Preconfirmed(TransactionStatus::PreConfirmationFailure(s2)),
-                TxStatusMessage::Status(
-                    TransactionStatus::PreConfirmationSqueezedOut(s2),
-                ) => {
-                    State::Preconfirmed(TransactionStatus::PreConfirmationSqueezedOut(s2))
-                }
 
                 TxStatusMessage::Status(s2) => State::Success(s1, s2),
 

@@ -34,7 +34,7 @@ use crate::{
 };
 
 use super::tests_e2e::{
-    validate_tx_update_stream_state,
+    apply_tx_state_transition,
     StateTransitions,
 };
 
@@ -45,10 +45,10 @@ pub(super) fn validate_send(
     msg: TxStatusMessage,
 ) -> State {
     // Add the message to the stream.
-    let state = validate_tx_update_stream_state(state, StateTransitions::AddMsg(msg));
+    let state = apply_tx_state_transition(state, StateTransitions::AddMsg(msg));
 
     // Try to get the next message from the stream.
-    let state = validate_tx_update_stream_state(state, StateTransitions::Next);
+    let state = apply_tx_state_transition(state, StateTransitions::Next);
 
     // Try to send the message to the receiver.
     match tx {
@@ -56,11 +56,11 @@ pub(super) fn validate_send(
         Ok(()) => state,
         // If the receiver is closed, then update the state.
         Err(SendError::Closed) => {
-            validate_tx_update_stream_state(state, StateTransitions::CloseRecv)
+            apply_tx_state_transition(state, StateTransitions::CloseRecv)
         }
         // If the receiver is full, then update the state.
         Err(SendError::Full) => {
-            validate_tx_update_stream_state(state, StateTransitions::AddFailure)
+            apply_tx_state_transition(state, StateTransitions::AddFailure)
         }
     }
 }

@@ -6,7 +6,7 @@ use test_strategy::proptest;
 
 use crate::{
     tests::{
-        tests_e2e::validate_tx_update_stream_state,
+        tests_e2e::apply_tx_state_transition,
         utils,
     },
     tx_status_stream::{
@@ -24,7 +24,7 @@ fn test_tx_update_stream_state(
     transition: StateTransitions,
 ) {
     let mut stream = TxUpdateStream::with_state(state.clone());
-    let new_state = validate_tx_update_stream_state(state, transition.clone());
+    let new_state = apply_tx_state_transition(state, transition.clone());
     match transition {
         StateTransitions::AddMsg(s) => {
             stream.add_msg(s);
