@@ -592,6 +592,19 @@ impl<'a> ContextExt for Context<'a> {
         mut tx: FuelTx,
         query: impl PredicateStorageRequirements + Send + Sync + 'static,
     ) -> anyhow::Result<FuelTx> {
+        let mut has_predicates = false;
+
+        for input in tx.inputs()? {
+            if input.predicate().is_some() {
+                has_predicates = true;
+                break;
+            }
+        }
+
+        if !has_predicates {
+            return Ok(tx);
+        }
+
         let params = self
             .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params();
