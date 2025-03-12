@@ -1,5 +1,11 @@
 use fuel_core_tx_status_manager::service::SignatureVerification;
 use fuel_core_types::{
+    //  ed25519::Signature,
+    // ed25519_dalek::Verifier,
+    fuel_crypto::{
+        Message,
+        PublicKey,
+    },
     fuel_tx::Bytes64,
     services::{
         p2p::{
@@ -10,25 +16,198 @@ use fuel_core_types::{
         },
         preconfirmation::Preconfirmations,
     },
+    tai64::Tai64,
 };
+use std::collections::VecDeque;
 
-pub struct PreconfirmationSignatureVerification;
+pub struct PreconfirmationSignatureVerification {
+    protocol_pubkey: PublicKey,
+    delegate_keys: VecDeque<(Tai64, DelegatePublicKey)>,
+}
+
+impl PreconfirmationSignatureVerification {
+    pub fn new(protocol_pubkey: PublicKey) -> Self {
+        Self {
+            protocol_pubkey,
+            delegate_keys: VecDeque::new(),
+        }
+    }
+}
 
 impl SignatureVerification for PreconfirmationSignatureVerification {
     async fn add_new_delegate(
         &mut self,
-        _sealed: &Sealed<
-            DelegatePreConfirmationKey<DelegatePublicKey>,
-            ProtocolSignature,
-        >,
+        sealed: &Sealed<DelegatePreConfirmationKey<DelegatePublicKey>, ProtocolSignature>,
     ) -> bool {
-        true
+        let Sealed { entity, signature } = sealed;
+        let bytes = postcard::to_allocvec(&entity).unwrap();
+        let message = Message::new(&bytes);
+        let verified = signature.verify(&self.protocol_pubkey, &message);
+        match verified {
+            Ok(_) => {
+                self.delegate_keys
+                    .push_front((entity.expiration, entity.public_key));
+                true
+            }
+            Err(_) => false,
+        }
     }
 
     async fn check_preconfirmation_signature(
         &mut self,
-        _sealed: &Sealed<Preconfirmations, Bytes64>,
+        sealed: &Sealed<Preconfirmations, Bytes64>,
     ) -> bool {
-        true
+        let expiration = sealed.entity.expiration;
+        let delegate_key = self
+            .delegate_keys
+            .iter()
+            .find(|(exp, _)| exp == &expiration)
+            .map(|(_, key)| key);
+        if let Some(_delegate_key) = delegate_key {
+            // let bytes = postcard::to_allocvec(&sealed.entity).unwrap();
+            // let signature = Signature::from_bytes(&sealed.signature);
+            // let verified = delegate_key.verify(&bytes, &signature);
+            // match verified {
+            //     Ok(_) => true,
+            //     Err(_) => false,
+            // }
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(non_snake_case)]
+
+    use super::*;
+    use fuel_core_types::{
+        ed25519_dalek::{
+            Signer,
+            SigningKey as DalekSigningKey,
+            VerifyingKey as DalekVerifyingKey,
+        },
+        fuel_crypto::{
+            Message,
+            SecretKey,
+            Signature,
+        },
+        tai64::Tai64,
+    };
+
+    fn valid_sealed_delegate_signature(
+        protocol_secret_key: SecretKey,
+        delegate_public_key: DelegatePublicKey,
+        expiration: Tai64,
+    ) -> Sealed<DelegatePreConfirmationKey<DelegatePublicKey>, ProtocolSignature> {
+        let entity = DelegatePreConfirmationKey {
+            public_key: delegate_public_key,
+            expiration,
+        };
+        let bytes = postcard::to_allocvec(&entity).unwrap();
+        let message = Message::new(&bytes);
+        let signature = Signature::sign(&protocol_secret_key, &message);
+        Sealed { entity, signature }
+    }
+
+    fn arb_valid_sealed_delegate_signature(
+        protocol_secret_key: SecretKey,
+    ) -> Sealed<DelegatePreConfirmationKey<DelegatePublicKey>, ProtocolSignature> {
+        let delegate_public_key = DelegatePublicKey::default();
+        let expiration = Tai64(u64::MAX);
+        valid_sealed_delegate_signature(
+            protocol_secret_key,
+            delegate_public_key,
+            expiration,
+        )
+    }
+
+    fn valid_pre_confirmation_signature(
+        delegate_private_key: DalekSigningKey,
+        expiration: Tai64,
+    ) -> Sealed<Preconfirmations, Bytes64> {
+        let entity = Preconfirmations {
+            expiration,
+            preconfirmations: vec![],
+        };
+        let bytes = postcard::to_allocvec(&entity).unwrap();
+        let typed_signature = delegate_private_key.sign(&bytes);
+        let signature = Bytes64::new(typed_signature.to_bytes());
+        Sealed { entity, signature }
+    }
+
+    fn protocol_key_pair() -> (SecretKey, PublicKey) {
+        let secret_key = SecretKey::default();
+        let public_key = secret_key.public_key();
+        (secret_key, public_key)
+    }
+
+    fn delegate_key_pair() -> (DalekSigningKey, DalekVerifyingKey) {
+        let secret_key = [99u8; 32];
+        let secret_key = DalekSigningKey::from_bytes(&secret_key);
+        let public_key = secret_key.verifying_key();
+        (secret_key, public_key)
+    }
+
+    #[tokio::test]
+    async fn add_new_delegate__includes_delegate_if_protocol_signature_verified() {
+        // given
+        let (secret_key, public_key) = protocol_key_pair();
+        let mut adapter = PreconfirmationSignatureVerification::new(public_key);
+        let valid_delegate_signature = arb_valid_sealed_delegate_signature(secret_key);
+
+        // when
+        let added = adapter.add_new_delegate(&valid_delegate_signature).await;
+
+        // then
+        assert!(added);
+    }
+
+    #[tokio::test]
+    async fn check_preconfirmation_signature__can_verify_valid_pre_confirmations_signature_for_known_key(
+    ) {
+        // given
+        let (protocol_secret_key, protocol_public_key) = protocol_key_pair();
+        let (delegate_secret_key, delegate_public_key) = delegate_key_pair();
+        let mut adapter = PreconfirmationSignatureVerification::new(protocol_public_key);
+        let expiration = Tai64(100u64);
+        let valid_delegate_signature = valid_sealed_delegate_signature(
+            protocol_secret_key,
+            delegate_public_key,
+            expiration,
+        );
+        let valid_pre_confirmation_signature =
+            valid_pre_confirmation_signature(delegate_secret_key, expiration);
+        let _ = adapter.add_new_delegate(&valid_delegate_signature).await;
+
+        // when
+        let verified = adapter
+            .check_preconfirmation_signature(&valid_pre_confirmation_signature)
+            .await;
+
+        // then
+        assert!(verified);
+    }
+
+    #[tokio::test]
+    async fn check_preconfirmation_signature__will_not_verify_pre_confirmations_signature_for_unknown_delegate_key(
+    ) {
+        // given
+        let (_, protocol_public_key) = protocol_key_pair();
+        let (delegate_secret_key, _) = delegate_key_pair();
+        let mut adapter = PreconfirmationSignatureVerification::new(protocol_public_key);
+        let expiration = Tai64(100u64);
+        let valid_pre_confirmation_signature =
+            valid_pre_confirmation_signature(delegate_secret_key, expiration);
+
+        // when
+        let verified = adapter
+            .check_preconfirmation_signature(&valid_pre_confirmation_signature)
+            .await;
+
+        // then
+        assert!(!verified);
     }
 }
