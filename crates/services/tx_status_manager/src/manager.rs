@@ -77,11 +77,6 @@ impl Data {
             .map(|(_, tx_id)| *tx_id)
             .collect::<HashSet<_>>();
         assert_eq!(tx_count, tx_count_from_queue.len());
-
-        // There should never be a single id in both prunable and non-prunable collections
-        let prunable_ids = self.prunable_statuses.keys().collect::<HashSet<_>>();
-        let non_prunable_ids = self.non_prunable_statuses.keys().collect::<HashSet<_>>();
-        assert!(prunable_ids.is_disjoint(&non_prunable_ids));
     }
 }
 
@@ -154,12 +149,6 @@ impl TxStatusManager {
             self.data.prunable_statuses.insert(tx_id, (now, tx_status));
             self.data.non_prunable_statuses.remove(&tx_id);
         } else {
-            if self.data.prunable_statuses.contains_key(&tx_id) {
-                // TODO[RC]: This should be shown in metrics: https://github.com/FuelLabs/fuel-core/issues/2851
-                tracing::warn!(%tx_id, "switching back to non-prunable status");
-                self.data.prunable_statuses.remove(&tx_id);
-                self.data.pruning_queue.retain(|(_, id)| id != &tx_id);
-            }
             self.data.non_prunable_statuses.insert(tx_id, tx_status);
         }
     }
@@ -179,13 +168,13 @@ impl TxStatusManager {
             .send(TxUpdate::new(tx_id, tx_status.into()));
     }
 
-    pub fn status(&self, tx_id: &TxId) -> Option<TransactionStatus> {
-        self.data
-            .prunable_statuses
-            .get(tx_id)
-            .map(|(_, status)| status)
-            .or_else(|| self.data.non_prunable_statuses.get(tx_id))
-            .cloned()
+    pub fn status(&self, tx_id: &TxId) -> Option<&TransactionStatus> {
+        self.data.non_prunable_statuses.get(tx_id).or_else(|| {
+            self.data
+                .prunable_statuses
+                .get(tx_id)
+                .map(|(_, status)| status)
+        })
     }
 
     /// Subscribe to status updates for a transaction.
@@ -304,7 +293,7 @@ mod tests {
     ) {
         for (tx_id, status) in txs {
             assert!(
-                tx_status_manager.status(&tx_id) == Some(status),
+                tx_status_manager.status(&tx_id) == Some(&status),
                 "tx_id {:?} should be present with correct status",
                 tx_id
             );
@@ -713,13 +702,19 @@ mod tests {
             tx_status_manager.status_update(tx1_id, submitted());
             tx_status_manager.status_update(tx2_id, success());
 
+            assert_presence_with_status(
+                &tx_status_manager,
+                vec![(tx1_id, submitted()), (tx2_id, success())],
+            );
+
             // When
-            tokio::time::advance(TTL).await;
+            tokio::time::advance(TTL + HALF_OF_TTL).await;
 
             let tx_final = [99u8; 32].into();
             tx_status_manager.status_update(tx_final, failure());
 
             // Then
+            // tx1 is back in "submitted", so it should survive pruning
             assert_presence_with_status(
                 &tx_status_manager,
                 vec![(tx1_id, submitted()), (tx_final, failure())],
