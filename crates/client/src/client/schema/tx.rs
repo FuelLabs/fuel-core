@@ -491,6 +491,13 @@ pub struct TxArg {
     pub tx: HexString,
 }
 
+#[derive(cynic::QueryVariables)]
+pub struct TxWithEstimatedPredicatesArg {
+    pub tx: HexString,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub estimate_predicates: Option<bool>,
+}
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
@@ -604,10 +611,10 @@ pub struct DryRun {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    variables = "TxArg"
+    variables = "TxWithEstimatedPredicatesArg"
 )]
 pub struct Submit {
-    #[arguments(tx: $tx)]
+    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates)]
     pub submit: TransactionIdFragment,
 }
 
@@ -615,10 +622,10 @@ pub struct Submit {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Subscription",
-    variables = "TxArg"
+    variables = "TxWithEstimatedPredicatesArg"
 )]
 pub struct SubmitAndAwaitSubscription {
-    #[arguments(tx: $tx)]
+    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates)]
     pub submit_and_await: TransactionStatus,
 }
 
@@ -626,10 +633,10 @@ pub struct SubmitAndAwaitSubscription {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Subscription",
-    variables = "TxArg"
+    variables = "TxWithEstimatedPredicatesArg"
 )]
 pub struct SubmitAndAwaitSubscriptionWithTransaction {
-    #[arguments(tx: $tx)]
+    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates)]
     pub submit_and_await: StatusWithTransaction,
 }
 
@@ -637,10 +644,10 @@ pub struct SubmitAndAwaitSubscriptionWithTransaction {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Subscription",
-    variables = "TxArg"
+    variables = "TxWithEstimatedPredicatesArg"
 )]
 pub struct SubmitAndAwaitStatusSubscription {
-    #[arguments(tx: $tx)]
+    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates)]
     pub submit_and_await_status: TransactionStatus,
 }
 
@@ -723,8 +730,9 @@ pub mod tests {
     fn submit_tx_gql_output() {
         use cynic::MutationBuilder;
         let tx = fuel_tx::Transaction::default_test_tx();
-        let query = Submit::build(TxArg {
+        let query = Submit::build(TxWithEstimatedPredicatesArg {
             tx: HexString(Bytes(tx.to_bytes())),
+            estimate_predicates: Some(true),
         });
         insta::assert_snapshot!(query.query)
     }
