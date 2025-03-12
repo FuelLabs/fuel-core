@@ -8,6 +8,7 @@ use fuel_core_types::{
     services::{
         block_importer::SharedImportResult,
         p2p::GossipsubMessageInfo,
+        preconfirmation::PreconfirmationStatus,
         txpool::ArcPoolTx,
     },
 };
@@ -58,7 +59,7 @@ const SIZE_THREAD_MANAGEMENT_CHANNEL: usize = 10;
 pub(super) struct PoolWorkerInterface {
     thread_management_sender: Sender<ThreadManagementRequest>,
     pub(super) request_insert_sender: Sender<PoolInsertRequest>,
-    pub(super) request_remove_sender: Sender<PoolRemoveRequest>,
+    pub(super) request_remove_sender: Sender<PoolTxUpdateRequest>,
     pub(super) request_read_sender: Sender<PoolReadRequest>,
     pub(super) extract_block_transactions_sender: Sender<PoolExtractBlockTransactions>,
     pub(super) notification_receiver: Receiver<PoolNotification>,
@@ -78,7 +79,7 @@ impl PoolWorkerInterface {
             mpsc::channel(limits.max_pending_read_pool_requests);
         let (extract_block_transactions_sender, extract_block_transactions_receiver) =
             mpsc::channel(SIZE_EXTRACT_BLOCK_TRANSACTIONS_CHANNEL);
-        let (request_remove_sender, request_remove_receiver) =
+        let (request_remove_sender, request_update_tx_receiver) =
             mpsc::channel(limits.max_pending_write_pool_requests);
         let (request_insert_sender, request_insert_receiver) =
             mpsc::channel(limits.max_pending_write_pool_requests);
@@ -101,7 +102,7 @@ impl PoolWorkerInterface {
                 let mut worker = PoolWorker {
                     tx_insert_from_pending_sender,
                     thread_management_receiver,
-                    request_remove_receiver,
+                    request_update_tx_receiver,
                     request_read_receiver,
                     extract_block_transactions_receiver,
                     request_insert_receiver,
@@ -133,16 +134,16 @@ impl PoolWorkerInterface {
 
     pub fn process_block(&self, block_result: SharedImportResult) -> anyhow::Result<()> {
         self.request_remove_sender
-            .try_send(PoolRemoveRequest::ProcessBlock { block_result })
+            .try_send(PoolTxUpdateRequest::ProcessBlock { block_result })
             .map_err(|e| anyhow::anyhow!("Failed to send remove request: {}", e))
     }
 
-    pub fn remove_tx_and_coin_dependents(
+    pub fn expired_transactions(
         &self,
         tx_and_dependents_ids: (Vec<TxId>, Error),
     ) -> anyhow::Result<()> {
         self.request_remove_sender
-            .try_send(PoolRemoveRequest::TxAndCoinDependents {
+            .try_send(PoolTxUpdateRequest::ExpiredTransactionsAndDependents {
                 tx_and_dependents_ids,
             })
             .map_err(|e| {
@@ -197,14 +198,17 @@ pub(super) enum PoolExtractBlockTransactions {
     },
 }
 
-pub(super) enum PoolRemoveRequest {
+pub(super) enum PoolTxUpdateRequest {
+    PreconfirmedTransactions {
+        txs: Vec<(TxId, PreconfirmationStatus)>,
+    },
     ProcessBlock {
         block_result: SharedImportResult,
     },
     SkippedTransactions {
         dependents_ids: Vec<(TxId, Error)>,
     },
-    TxAndCoinDependents {
+    ExpiredTransactionsAndDependents {
         tx_and_dependents_ids: (Vec<TxId>, Error),
     },
 }
@@ -255,7 +259,7 @@ pub(super) enum PoolNotification {
 pub(super) struct PoolWorker<View> {
     tx_insert_from_pending_sender: Sender<PoolInsertRequest>,
     thread_management_receiver: Receiver<ThreadManagementRequest>,
-    request_remove_receiver: Receiver<PoolRemoveRequest>,
+    request_update_tx_receiver: Receiver<PoolTxUpdateRequest>,
     request_read_receiver: Receiver<PoolReadRequest>,
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
     request_insert_receiver: Receiver<PoolInsertRequest>,
@@ -270,7 +274,7 @@ where
     View: TxPoolPersistentStorage,
 {
     pub async fn run(&mut self, pending_pool_expiration_check: &mut Interval) -> bool {
-        let mut remove_buffer = vec![];
+        let mut update_tx_buffer = vec![];
         let mut read_buffer = vec![];
         let mut insert_buffer = vec![];
         tokio::select! {
@@ -291,20 +295,23 @@ where
                     None => return true,
                 }
             }
-            _ = self.request_remove_receiver.recv_many(&mut remove_buffer, MAX_PENDING_REMOVE_POOL_REQUESTS) => {
-                if remove_buffer.is_empty() {
+            _ = self.request_update_tx_receiver.recv_many(&mut update_tx_buffer, MAX_PENDING_REMOVE_POOL_REQUESTS) => {
+                if update_tx_buffer.is_empty() {
                     return true;
                 }
-                for remove in remove_buffer {
-                    match remove {
-                        PoolRemoveRequest::ProcessBlock { block_result } => {
+                for update_tx in update_tx_buffer {
+                    match update_tx {
+                        PoolTxUpdateRequest::ProcessBlock { block_result } => {
                             self.process_block(block_result);
                         }
-                        PoolRemoveRequest::SkippedTransactions { dependents_ids } => {
+                        PoolTxUpdateRequest::SkippedTransactions { dependents_ids } => {
                             self.remove_skipped_transactions(dependents_ids);
                         }
-                        PoolRemoveRequest::TxAndCoinDependents { tx_and_dependents_ids } => {
-                            self.remove_and_coin_dependents(tx_and_dependents_ids);
+                        PoolTxUpdateRequest::ExpiredTransactionsAndDependents { tx_and_dependents_ids } => {
+                            self.expired_transactions_and_dependents(tx_and_dependents_ids);
+                        }
+                        PoolTxUpdateRequest::PreconfirmedTransactions { txs } => {
+                            self.preconfirmed_transactions(txs);
                         }
                     }
                 }
@@ -521,7 +528,7 @@ where
         }
     }
 
-    fn remove_and_coin_dependents(&mut self, tx_ids: (Vec<TxId>, Error)) {
+    fn expired_transactions_and_dependents(&mut self, tx_ids: (Vec<TxId>, Error)) {
         let (tx_ids, error) = tx_ids;
         let removed = self.pool.remove_transaction_and_dependents(tx_ids);
         for tx in removed {
@@ -534,6 +541,21 @@ where
                 })
             {
                 tracing::error!("Failed to send removed notification: {}", e);
+            }
+        }
+    }
+
+    fn preconfirmed_transactions(&mut self, txs: Vec<(TxId, PreconfirmationStatus)>) {
+        for (tx_id, status) in txs {
+            match status {
+                PreconfirmationStatus::Success { .. }
+                | PreconfirmationStatus::Failure { .. } => {}
+                PreconfirmationStatus::SqueezedOut { reason } => {
+                    self.remove_skipped_transactions(vec![(
+                        tx_id,
+                        Error::SkippedTransaction(reason),
+                    )]);
+                }
             }
         }
     }
