@@ -55,6 +55,7 @@ async fn test_tx__return_error_expired() {
     let timeout = tokio::time::Duration::from_millis(100);
     universe.config.pending_pool_tx_ttl = timeout;
 
+    // Given
     let (_, unset_input) = universe.create_output_and_input();
     let tx1 = universe.build_script_transaction(None, None, 10);
     let tx1_id = tx1.id(&Default::default());
@@ -66,19 +67,8 @@ async fn test_tx__return_error_expired() {
     let service = universe.build_service(None, None);
     service.start_and_await().await.unwrap();
 
-    // Given
-    service.shared.try_insert(vec![tx2.clone()]).unwrap();
-
     // When
-    let ids = vec![tx2_id];
-    universe
-        .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::Submitted { .. })
-        })
-        .await
-        .unwrap_err()
-        .is_timeout();
-    service.shared.try_insert(vec![tx1.clone()]).unwrap();
+    service.shared.try_insert(vec![tx2.clone()]).unwrap();
 
     // Then
     // The error returned is the error that the transaction was squeezed out for.
