@@ -16,12 +16,9 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::{
-        primitives::{
-            Address,
-            AssetId,
-        },
-        CoinType,
+    types::primitives::{
+        Address,
+        AssetId,
     },
     FuelClient,
 };
@@ -31,20 +28,22 @@ use fuel_core_types::{
     fuel_tx::{
         Bytes32,
         ContractIdExt,
-        Input,
-        Output,
-        TransactionBuilder,
     },
 };
 use rand::SeedableRng;
-use test_helpers::mint_contract;
+use test_helpers::{
+    assemble_tx::AssembleAndRunTx,
+    default_signing_wallet,
+    mint_contract,
+};
 
 const RETRYABLE: &[u8] = &[1];
 const NON_RETRYABLE: &[u8] = &[];
 
 #[tokio::test]
 async fn balance() {
-    let owner = Address::default();
+    let wallet = default_signing_wallet();
+    let owner = wallet.owner();
     let asset_id = AssetId::BASE;
 
     // setup config
@@ -92,59 +91,17 @@ async fn balance() {
     let balance = client.balance(&owner, Some(&asset_id)).await.unwrap();
     assert_eq!(balance, 450);
 
-    // spend some coins and check again
-    let coins_per_asset = client
-        .coins_to_spend(&owner, vec![(asset_id, 1, None)], None)
+    // Spend almost all coins - 449, from available balance 450
+    client
+        .run_transfer(wallet, vec![(Address::new([1u8; 32]), asset_id, 449)])
         .await
         .unwrap();
-
-    let mut tx = TransactionBuilder::script(vec![], vec![])
-        .script_gas_limit(1_000_000)
-        .to_owned();
-    for coins in coins_per_asset {
-        for coin in coins {
-            match coin {
-                CoinType::Coin(coin) => tx.add_input(Input::coin_signed(
-                    coin.utxo_id,
-                    coin.owner,
-                    coin.amount,
-                    coin.asset_id,
-                    Default::default(),
-                    0,
-                )),
-                CoinType::MessageCoin(message) => {
-                    tx.add_input(Input::message_coin_signed(
-                        message.sender,
-                        message.recipient,
-                        message.amount,
-                        message.nonce,
-                        0,
-                    ))
-                }
-                CoinType::Unknown => panic!("Unknown coin"),
-            };
-        }
-    }
-    let tx = tx
-        .add_output(Output::Coin {
-            to: Address::new([1u8; 32]),
-            amount: 1,
-            asset_id,
-        })
-        .add_output(Output::Change {
-            to: owner,
-            amount: 0,
-            asset_id,
-        })
-        .add_witness(Default::default())
-        .finalize_as_transaction();
-
-    client.submit_and_await_commit(&tx).await.unwrap();
 
     let balance = client.balance(&owner, Some(&asset_id)).await.unwrap();
 
     // Note that the big (200000) message, which is RETRYABLE is not included in the balance
-    assert_eq!(balance, 449);
+    // 1 coin is left, 449 spent, 200000 message is not included in the balance
+    assert_eq!(balance, 1);
 }
 
 #[tokio::test]

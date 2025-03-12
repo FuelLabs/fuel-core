@@ -25,7 +25,6 @@ pub struct Config {
     pub utxo_validation: bool,
     pub debug: bool,
     pub historical_execution: bool,
-    pub vm_backtrace: bool,
     pub max_tx: usize,
     pub max_gas: u64,
     pub max_size: usize,
@@ -54,6 +53,8 @@ pub struct ServiceConfig {
     /// Time to wait after submitting a query before debug info will be logged about query.
     pub query_log_threshold_time: Duration,
     pub api_request_timeout: Duration,
+    pub assemble_tx_dry_run_limit: usize,
+    pub assemble_tx_estimate_predicates_limit: usize,
     /// Configurable cost parameters to limit graphql queries complexity
     pub costs: Costs,
 }
@@ -64,6 +65,7 @@ pub struct Costs {
     pub coins_to_spend: usize,
     pub get_peers: usize,
     pub estimate_predicates: usize,
+    pub assemble_tx: usize,
     pub dry_run: usize,
     pub storage_read_replay: usize,
     pub submit: usize,
@@ -98,6 +100,7 @@ pub const DEFAULT_QUERY_COSTS: Costs = Costs {
     get_peers: 40001,
     estimate_predicates: 40001,
     dry_run: 12000,
+    assemble_tx: 76_000,
     storage_read_replay: 40001,
     submit: 40001,
     submit_and_await: 40001,

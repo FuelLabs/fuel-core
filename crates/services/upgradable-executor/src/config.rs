@@ -3,10 +3,8 @@ use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 
 #[derive(Clone, Debug, Default)]
 pub struct Config {
-    /// Print execution backtraces if transaction execution reverts.
-    pub backtrace: bool,
-    /// Default mode for utxo_validation
-    pub utxo_validation_default: bool,
+    /// Default mode for `forbid_fake_coins` in `ExecutionOptions`.
+    pub forbid_fake_coins_default: bool,
     /// The version of the native executor to determine usage of native vs WASM executor.
     /// If it is `None`, the `Executor::VERSION` is used.
     ///
@@ -21,8 +19,8 @@ pub struct Config {
 impl From<&Config> for ExecutionOptions {
     fn from(value: &Config) -> Self {
         Self {
-            extra_tx_checks: value.utxo_validation_default,
-            backtrace: value.backtrace,
+            forbid_fake_coins: value.forbid_fake_coins_default,
+            backtrace: false,
         }
     }
 }

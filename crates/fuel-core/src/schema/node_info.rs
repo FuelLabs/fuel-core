@@ -110,7 +110,7 @@ impl NodeQuery {
         let read_view = db.view()?;
         Ok(NodeInfo {
             utxo_validation: config.utxo_validation,
-            vm_backtrace: config.vm_backtrace,
+            vm_backtrace: false,
             max_tx: (config.max_tx as u64).into(),
             max_gas: config.max_gas.into(),
             max_size: (config.max_size as u64).into(),

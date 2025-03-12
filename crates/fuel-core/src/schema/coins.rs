@@ -1,11 +1,13 @@
-use std::collections::HashSet;
+use std::{
+    borrow::Cow,
+    collections::HashSet,
+};
 
 use crate::{
     coins_query::{
         random_improve,
         select_coins_to_spend,
         CoinsQueryError,
-        ExcludedCoinIds,
         SpendQuery,
     },
     database::database_description::IndexationKind,
@@ -18,13 +20,17 @@ use crate::{
         api_service::ChainInfoProvider,
         database::ReadView,
     },
-    query::asset_query::AssetSpendTarget,
+    query::asset_query::{
+        AssetSpendTarget,
+        Exclude,
+    },
     schema::{
         scalars::{
             Address,
             AssetId,
             Nonce,
             UtxoId,
+            U128,
             U16,
             U32,
             U64,
@@ -51,6 +57,7 @@ use fuel_core_types::{
     },
     fuel_tx::{
         self,
+        ConsensusParameters,
     },
 };
 use itertools::Itertools;
@@ -143,6 +150,15 @@ pub enum CoinType {
     MessageCoin(MessageCoin),
 }
 
+impl CoinType {
+    pub fn amount(&self) -> u64 {
+        match self {
+            CoinType::Coin(coin) => coin.0.amount,
+            CoinType::MessageCoin(coin) => coin.0.amount,
+        }
+    }
+}
+
 impl From<coins::CoinType> for CoinType {
     fn from(value: coins::CoinType) -> Self {
         match value {
@@ -163,19 +179,37 @@ struct CoinFilterInput {
 #[derive(async_graphql::InputObject)]
 pub struct SpendQueryElementInput {
     /// Identifier of the asset to spend.
-    asset_id: AssetId,
+    pub asset_id: AssetId,
     /// Target amount for the query.
-    amount: U64,
+    pub amount: U128,
     /// The maximum number of currencies for selection.
-    max: Option<U32>,
+    pub max: Option<U16>,
 }
 
 #[derive(async_graphql::InputObject)]
 pub struct ExcludeInput {
     /// Utxos to exclude from the selection.
-    utxos: Vec<UtxoId>,
+    pub utxos: Vec<UtxoId>,
     /// Messages to exclude from the selection.
-    messages: Vec<Nonce>,
+    pub messages: Vec<Nonce>,
+}
+
+impl From<Option<ExcludeInput>> for Exclude {
+    fn from(value: Option<ExcludeInput>) -> Self {
+        let excluded_ids: Option<Vec<_>> = value.map(|exclude| {
+            let utxos = exclude
+                .utxos
+                .into_iter()
+                .map(|utxo| coins::CoinId::Utxo(utxo.into()));
+            let messages = exclude
+                .messages
+                .into_iter()
+                .map(|message| coins::CoinId::Message(message.into()));
+            utxos.chain(messages).collect()
+        });
+
+        Exclude::new(excluded_ids.unwrap_or_default())
+    }
 }
 
 #[derive(Default)]
@@ -271,6 +305,8 @@ impl CoinQuery {
             .into());
         }
 
+        let exclude: Exclude = excluded_ids.into();
+
         let mut duplicate_checker = HashSet::with_capacity(query_per_asset.len());
         for query in &query_per_asset {
             let asset_id: fuel_tx::AssetId = query.asset_id.into();
@@ -290,27 +326,38 @@ impl CoinQuery {
         query_per_asset.truncate(max_input as usize);
 
         let read_view = ctx.read_view()?;
-        let indexation_available = read_view
+        let result = read_view
+            .coins_to_spend(owner, &query_per_asset, &exclude, &params, max_input)
+            .await?;
+
+        Ok(result)
+    }
+}
+
+impl ReadView {
+    pub async fn coins_to_spend(
+        &self,
+        owner: fuel_tx::Address,
+        query_per_asset: &[SpendQueryElementInput],
+        excluded: &Exclude,
+        params: &ConsensusParameters,
+        max_input: u16,
+    ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
+        let indexation_available = self
             .indexation_flags
             .contains(&IndexationKind::CoinsToSpend);
         if indexation_available {
-            coins_to_spend_with_cache(
-                owner,
-                query_per_asset,
-                excluded_ids,
-                max_input,
-                read_view.as_ref(),
-            )
-            .await
+            coins_to_spend_with_cache(owner, query_per_asset, excluded, max_input, self)
+                .await
         } else {
             let base_asset_id = params.base_asset_id();
             coins_to_spend_without_cache(
                 owner,
                 query_per_asset,
-                excluded_ids,
+                excluded,
                 max_input,
                 base_asset_id,
-                read_view.as_ref(),
+                self,
             )
             .await
         }
@@ -319,39 +366,29 @@ impl CoinQuery {
 
 async fn coins_to_spend_without_cache(
     owner: fuel_tx::Address,
-    query_per_asset: Vec<SpendQueryElementInput>,
-    excluded_ids: Option<ExcludeInput>,
+    query_per_asset: &[SpendQueryElementInput],
+    exclude: &Exclude,
     max_input: u16,
     base_asset_id: &fuel_tx::AssetId,
     db: &ReadView,
-) -> async_graphql::Result<Vec<Vec<CoinType>>> {
+) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let query_per_asset = query_per_asset
-        .into_iter()
+        .iter()
         .map(|e| {
             AssetSpendTarget::new(
                 e.asset_id.0,
                 e.amount.0,
-                e.max
-                    .and_then(|max| u16::try_from(max.0).ok())
-                    .unwrap_or(max_input)
-                    .min(max_input),
+                e.max.map(|max| max.0).unwrap_or(max_input).min(max_input),
             )
         })
         .collect_vec();
-    let excluded_ids: Option<Vec<_>> = excluded_ids.map(|exclude| {
-        let utxos = exclude
-            .utxos
-            .into_iter()
-            .map(|utxo| coins::CoinId::Utxo(utxo.into()));
-        let messages = exclude
-            .messages
-            .into_iter()
-            .map(|message| coins::CoinId::Message(message.into()));
-        utxos.chain(messages).collect()
-    });
 
-    let spend_query =
-        SpendQuery::new(owner, &query_per_asset, excluded_ids, *base_asset_id)?;
+    let spend_query = SpendQuery::new(
+        owner,
+        &query_per_asset,
+        Cow::Borrowed(exclude),
+        *base_asset_id,
+    )?;
 
     let all_coins = random_improve(db, &spend_query)
         .await?
@@ -374,30 +411,19 @@ async fn coins_to_spend_without_cache(
 
 async fn coins_to_spend_with_cache(
     owner: fuel_tx::Address,
-    query_per_asset: Vec<SpendQueryElementInput>,
-    excluded_ids: Option<ExcludeInput>,
+    query_per_asset: &[SpendQueryElementInput],
+    excluded: &Exclude,
     max_input: u16,
     db: &ReadView,
-) -> async_graphql::Result<Vec<Vec<CoinType>>> {
+) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let mut all_coins = Vec::with_capacity(query_per_asset.len());
-
-    let excluded = ExcludedCoinIds::new(
-        excluded_ids
-            .iter()
-            .flat_map(|exclude| exclude.utxos.iter())
-            .map(|utxo_id| &utxo_id.0),
-        excluded_ids
-            .iter()
-            .flat_map(|exclude| exclude.messages.iter())
-            .map(|nonce| &nonce.0),
-    );
 
     for asset in query_per_asset {
         let asset_id = asset.asset_id.0;
         let total_amount = asset.amount.0;
         let max = asset
             .max
-            .and_then(|max| u16::try_from(max.0).ok())
+            .map(|max| max.0)
             .unwrap_or(max_input)
             .min(max_input);
 
@@ -406,7 +432,7 @@ async fn coins_to_spend_with_cache(
             total_amount,
             max,
             &asset_id,
-            &excluded,
+            excluded,
             db.batch_size,
         )
         .await?;

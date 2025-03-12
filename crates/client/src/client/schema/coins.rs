@@ -6,12 +6,17 @@ use crate::client::{
         Nonce,
         PageInfo,
         UtxoId,
+        U128,
         U16,
         U32,
         U64,
     },
     PageDirection,
     PaginationRequest,
+};
+use fuel_core_types::{
+    fuel_tx,
+    fuel_types,
 };
 
 #[derive(cynic::QueryVariables, Debug)]
@@ -139,15 +144,26 @@ impl From<(Vec<UtxoId>, Vec<Nonce>)> for ExcludeInput {
     }
 }
 
+impl From<(Vec<fuel_tx::UtxoId>, Vec<fuel_types::Nonce>)> for ExcludeInput {
+    fn from(value: (Vec<fuel_tx::UtxoId>, Vec<fuel_types::Nonce>)) -> Self {
+        let vectors: (Vec<UtxoId>, Vec<Nonce>) = (
+            value.0.into_iter().map(Into::into).collect(),
+            value.1.into_iter().map(Into::into).collect(),
+        );
+
+        vectors.into()
+    }
+}
+
 #[derive(cynic::InputObject, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SpendQueryElementInput {
     /// asset ID of the coins
     pub asset_id: AssetId,
     /// the amount to cover with this asset
-    pub amount: U64,
+    pub amount: U128,
     /// the maximum number of coins per asset from the owner to return.
-    pub max: Option<U32>,
+    pub max: Option<U16>,
 }
 
 #[derive(cynic::QueryFragment, Debug, Clone)]

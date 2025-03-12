@@ -138,13 +138,7 @@ pub async fn increment(
 ) -> (BlockHeight, u64) {
     let tx = increment_tx(rng, contract_id);
 
-    let mut status_stream = client.submit_and_await_status(&tx).await.unwrap();
-    let intermediate_status = status_stream.next().await.unwrap().unwrap();
-    assert!(matches!(
-        intermediate_status,
-        TransactionStatus::Submitted { .. }
-    ));
-    let final_status = status_stream.next().await.unwrap().unwrap();
+    let final_status = client.submit_and_await_commit(&tx).await.unwrap();
     let TransactionStatus::Success {
         block_height,
         receipts,
