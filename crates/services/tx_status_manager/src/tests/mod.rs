@@ -25,6 +25,8 @@ mod tests_update_stream_state;
 mod universe;
 mod utils;
 
+use tracing_subscriber as _;
+
 pub(crate) struct FakeSignatureVerification {
     new_delegate_sender: mpsc::Sender<(DelegatePublicKey, ProtocolSignature)>,
     preconfirmation_signature_success: Arc<std::sync::atomic::AtomicBool>,

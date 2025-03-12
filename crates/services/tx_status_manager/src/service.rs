@@ -419,10 +419,6 @@ mod tests {
 
     #[tokio::test]
     async fn run__when_receive_pre_confirmation_delegations_message_updates_delegate() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .try_init();
-
         // given
         let (signature_verification, mut new_delegate_handle) =
             FakeSignatureVerification::new_with_handles(true);
@@ -459,6 +455,19 @@ mod tests {
         assert_eq!(actual_protocol_signature, expected_protocol_signature);
     }
 
+    async fn all_streams_return_success(streams: Vec<TxStatusStream>) -> bool {
+        for mut stream in streams {
+            let msg = stream.next().await.unwrap();
+            match msg {
+                TxStatusMessage::Status(_) => {
+                    // should be good if we get this
+                }
+                _ => return false,
+            }
+        }
+        true
+    }
+
     #[tokio::test]
     async fn run__when_pre_confirmations_pass_verification_then_send() {
         // given
@@ -492,24 +501,11 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // then
-        // pub type TxStatusStream = Pin<Box<dyn Stream<Item = TxStatusMessage> + Send + Sync>>;
-        for mut stream in streams {
-            let msg = stream.next().await.unwrap();
-            match msg {
-                TxStatusMessage::Status(_) => {
-                    // should be good if we get this
-                }
-                _ => panic!("Expected Status message"),
-            }
-        }
+        all_streams_return_success(streams).await;
     }
 
     #[tokio::test]
     async fn run__when_pre_confirmations_fail_verification_then_do_not_send() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .try_init();
-
         // given
         let (signature_verification, _) =
             FakeSignatureVerification::new_with_handles(false);
@@ -551,10 +547,6 @@ mod tests {
     #[tokio::test]
     async fn run__when_pre_confirmations_fail_verification_they_can_be_retried_on_next_delegate_update(
     ) {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .try_init();
-
         // given
         let (signature_verification, mut fake_signature_handles) =
             FakeSignatureVerification::new_with_handles(false);
@@ -598,14 +590,6 @@ mod tests {
             .unwrap();
 
         // then
-        for mut stream in streams {
-            let msg = stream.next().await.unwrap();
-            match msg {
-                TxStatusMessage::Status(_) => {
-                    // should be good if we get this
-                }
-                _ => panic!("Expected Status message"),
-            }
-        }
+        all_streams_return_success(streams).await;
     }
 }
