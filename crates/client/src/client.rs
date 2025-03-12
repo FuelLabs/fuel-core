@@ -110,6 +110,7 @@ use schema::{
         StorageReadReplayArgs,
     },
     tx::{
+        AssembleTxArg,
         TransactionsByOwnerConnectionArgs,
         TxArg,
         TxIdArgs,
@@ -153,6 +154,10 @@ use std::{
 use tai64::Tai64;
 use tracing as _;
 use types::{
+    assemble_tx::{
+        AssembleTransactionResult,
+        RequiredBalance,
+    },
     TransactionResponse,
     TransactionStatus,
 };
@@ -743,6 +748,68 @@ impl FuelClient {
             .collect())
     }
 
+    /// Assembles the transaction based on the provided requirements.
+    /// The return transaction contains:
+    /// - Input coins to cover `required_balances`
+    /// - Input coins to cover the fee of the transaction based on the gas price from `block_horizon`
+    /// - `Change` or `Destroy` outputs for all assets from the inputs
+    /// - `Variable` outputs in the case they are required during the execution
+    /// - `Contract` inputs and outputs in the case they are required during the execution
+    /// - Reserved witness slots for signed coins filled with `64` zeroes
+    /// - Set script gas limit(unless `script` is empty)
+    /// - Estimated predicates, if `estimate_predicates == true`
+    ///
+    /// Returns an error if:
+    /// - The number of required balances exceeds the maximum number of inputs allowed.
+    /// - The fee address index is out of bounds.
+    /// - The same asset has multiple change policies(either the receiver of
+    ///     the change is different, or one of the policies states about the destruction
+    ///     of the token while the other does not). The `Change` output from the transaction
+    ///     also count as a `ChangePolicy`.
+    /// - The number of excluded coin IDs exceeds the maximum number of inputs allowed.
+    /// - Required assets have multiple entries.
+    /// - If accounts don't have sufficient amounts to cover the transaction requirements in assets.
+    /// - If a constructed transaction breaks the rules defined by consensus parameters.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn assemble_tx(
+        &self,
+        tx: &Transaction,
+        block_horizon: u32,
+        required_balances: Vec<RequiredBalance>,
+        fee_address_index: u16,
+        exclude: Option<(Vec<UtxoId>, Vec<Nonce>)>,
+        estimate_predicates: bool,
+        reserve_gas: Option<u64>,
+    ) -> io::Result<AssembleTransactionResult> {
+        let tx = HexString(Bytes(tx.to_bytes()));
+        let block_horizon = block_horizon.into();
+
+        let required_balances: Vec<_> = required_balances
+            .into_iter()
+            .map(schema::tx::RequiredBalance::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let fee_address_index = fee_address_index.into();
+
+        let exclude_input = exclude.map(Into::into);
+
+        let reserve_gas = reserve_gas.map(U64::from);
+
+        let query_arg = AssembleTxArg {
+            tx,
+            block_horizon,
+            required_balances,
+            fee_address_index,
+            exclude_input,
+            estimate_predicates,
+            reserve_gas,
+        };
+
+        let query = schema::tx::AssembleTx::build(query_arg);
+        let assemble_tx_result = self.query(query).await.map(|r| r.assemble_tx)?;
+        Ok(assemble_tx_result.try_into()?)
+    }
+
     /// Estimate predicates for the transaction
     pub async fn estimate_predicates(&self, tx: &mut Transaction) -> io::Result<()> {
         let serialized_tx = tx.to_bytes();
@@ -1331,7 +1398,7 @@ impl FuelClient {
     pub async fn coins_to_spend(
         &self,
         owner: &Address,
-        spend_query: Vec<(AssetId, u64, Option<u32>)>,
+        spend_query: Vec<(AssetId, u128, Option<u16>)>,
         // (Utxos, Messages Nonce)
         excluded_ids: Option<(Vec<UtxoId>, Vec<Nonce>)>,
     ) -> io::Result<Vec<Vec<types::CoinType>>> {
@@ -1346,16 +1413,7 @@ impl FuelClient {
                 })
             })
             .try_collect()?;
-        let excluded_ids: Option<ExcludeInput> = excluded_ids
-            .map(
-                |(utxos, nonces)| -> (Vec<schema::UtxoId>, Vec<schema::Nonce>) {
-                    (
-                        utxos.into_iter().map(Into::into).collect(),
-                        nonces.into_iter().map(Into::into).collect(),
-                    )
-                },
-            )
-            .map(Into::into);
+        let excluded_ids: Option<ExcludeInput> = excluded_ids.map(Into::into);
         let args =
             schema::coins::CoinsToSpendArgs::from((owner, spend_query, excluded_ids));
         let query = schema::coins::CoinsToSpendQuery::build(args);

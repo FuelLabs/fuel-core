@@ -472,7 +472,7 @@ pub struct InputCoin {
     pub amount: U64,
     pub asset_id: AssetId,
     pub tx_pointer: TxPointer,
-    pub witness_index: i32,
+    pub witness_index: U16,
     pub predicate_gas_used: U64,
     pub predicate: HexString,
     pub predicate_data: HexString,
@@ -515,7 +515,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         coin.amount.into(),
                         coin.asset_id.into(),
                         coin.tx_pointer.into(),
-                        coin.witness_index.try_into()?,
+                        coin.witness_index.into(),
                     )
                 } else {
                     fuel_tx::Input::coin_predicate(

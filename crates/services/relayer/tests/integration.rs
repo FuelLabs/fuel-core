@@ -30,13 +30,18 @@ async fn can_set_da_height() {
     let eth_node = MockMiddleware::default();
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(100.into()));
+    let da_block_height = 100u64;
+    eth_node.update_data(|data| data.best_block.number = Some(da_block_height.into()));
     let relayer = new_service_test(eth_node, mock_db.clone(), Default::default());
     relayer.start_and_await().await.unwrap();
 
-    relayer.shared.await_synced().await.unwrap();
+    relayer
+        .shared
+        .await_at_least_synced(&da_block_height.into())
+        .await
+        .unwrap();
 
-    assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 100);
+    assert_eq!(*mock_db.get_finalized_da_height().unwrap(), da_block_height);
 }
 
 #[tokio::test(start_paused = true)]
@@ -91,7 +96,6 @@ async fn stop_service_at_the_middle() {
     }
     relayer.stop();
 
-    assert!(relayer.shared.await_synced().await.is_err());
     // During each iteration we sync 5 blocks, so the final 5 * `NUMBER_OF_SYNC_ITERATIONS`
     assert_eq!(
         *mock_db.get_finalized_da_height().unwrap(),

@@ -6,14 +6,15 @@ use fuel_core::{
         database_description::on_chain::OnChain,
         Database,
     },
-    service::Config,
+    service::{
+        Config,
+        FuelService,
+    },
 };
-use fuel_core_bin::FuelService;
 use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
-use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -27,22 +28,21 @@ use fuel_core_types::{
         BlobIdExt,
         Finalizable,
         Input,
-        Transaction,
         TransactionBuilder,
     },
     fuel_types::canonical::Serialize,
-    fuel_vm::{
-        checked_transaction::IntoChecked,
-        constraints::reg_key::{
-            IS,
-            SSP,
-            ZERO,
-        },
-        interpreter::{
-            ExecutableTransaction,
-            MemoryInstance,
-        },
+    fuel_vm::constraints::reg_key::{
+        IS,
+        SSP,
+        ZERO,
     },
+};
+use test_helpers::{
+    assemble_tx::{
+        AssembleAndRunTx,
+        SigningAccount,
+    },
+    config_with_fee,
 };
 use tokio::io;
 
@@ -50,13 +50,11 @@ struct TestContext {
     _node: FuelService,
     client: FuelClient,
 }
+
 impl TestContext {
     async fn new() -> Self {
-        let config = Config {
-            debug: true,
-            utxo_validation: false,
-            ..Config::local_node()
-        };
+        let mut config = config_with_fee();
+        config.debug = true;
 
         Self::new_with_config(config).await
     }
@@ -74,16 +72,16 @@ impl TestContext {
     }
 
     async fn new_blob(
-        &mut self,
+        &self,
         blob_data: Vec<u8>,
     ) -> io::Result<(TransactionStatus, BlobId)> {
         self.new_blob_with_input(blob_data, None).await
     }
 
     async fn new_blob_with_input(
-        &mut self,
+        &self,
         blob_data: Vec<u8>,
-        input: Option<Input>,
+        account: Option<SigningAccount>,
     ) -> io::Result<(TransactionStatus, BlobId)> {
         let blob_id = BlobId::compute(&blob_data);
         let mut builder = TransactionBuilder::blob(BlobBody {
@@ -92,50 +90,39 @@ impl TestContext {
         });
         builder.add_witness(blob_data.into());
 
-        if let Some(input) = input {
-            builder.add_input(input);
-        } else {
-            builder.add_fee_input();
-        }
-
         let tx = builder.finalize();
-        let status = self.submit(tx).await?;
+
+        let status = self
+            .client
+            .assemble_and_run_tx(&tx.into(), unwrap_account(account))
+            .await?;
 
         Ok((status, blob_id))
     }
 
-    async fn submit<Tx>(&mut self, mut tx: Tx) -> io::Result<TransactionStatus>
-    where
-        Tx: ExecutableTransaction,
-    {
-        let consensus_parameters =
-            self.client.chain_info().await.unwrap().consensus_parameters;
+    async fn run_script(
+        &self,
+        script: Vec<Instruction>,
+        script_data: Vec<u8>,
+        account: Option<SigningAccount>,
+    ) -> io::Result<TransactionStatus> {
+        self.client
+            .run_script(script, script_data, unwrap_account(account))
+            .await
+    }
+}
 
-        let database = self._node.shared.database.on_chain().latest_view().unwrap();
-        tx.estimate_predicates(
-            &consensus_parameters.clone().into(),
-            MemoryInstance::new(),
-            &database,
-        )
-        .unwrap();
-
-        let tx: Transaction = tx.into();
-        let tx = tx
-            .into_checked_basic(Default::default(), &consensus_parameters)
-            .expect("Cannot check transaction");
-
-        let status = self
-            .client
-            .submit_and_await_commit(tx.transaction())
-            .await?;
-        Ok(status)
+fn unwrap_account(account: Option<SigningAccount>) -> SigningAccount {
+    match account {
+        Some(account) => account,
+        None => test_helpers::default_signing_wallet(),
     }
 }
 
 #[tokio::test]
 async fn blob__upload_works() {
     // Given
-    let mut ctx = TestContext::new().await;
+    let ctx = TestContext::new().await;
 
     // When
     let (status, blob_id) = ctx
@@ -145,37 +132,47 @@ async fn blob__upload_works() {
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // Then
-    let script_tx = TransactionBuilder::script(
-        vec![
-            op::gtf_args(0x11, RegId::ZERO, GTFArgs::ScriptData),
-            op::bsiz(0x20, 0x11), // This panics if blob doesn't exist
-            op::ret(RegId::ONE),
-        ]
-        .into_iter()
-        .collect(),
-        blob_id.to_bytes(),
-    )
-    .script_gas_limit(1000000)
-    .add_fee_input()
-    .finalize_as_transaction();
-    let tx_status = ctx
-        .client
-        .submit_and_await_commit(&script_tx)
-        .await
-        .unwrap();
+    let script = vec![
+        op::gtf_args(0x11, RegId::ZERO, GTFArgs::ScriptData),
+        op::bsiz(0x20, 0x11), // This panics if blob doesn't exist
+        op::ret(RegId::ONE),
+    ];
+    let script_data = blob_id.to_bytes();
+    let tx_status = ctx.run_script(script, script_data, None).await.unwrap();
     assert!(matches!(tx_status, TransactionStatus::Success { .. }));
 }
 
 #[tokio::test]
-async fn blob__cannot_post_already_existing_blob() {
+async fn blob__cannot_post_already_existing_blob_in_tx_pool() {
     // Given
-    let mut ctx = TestContext::new().await;
+    let mut config = Config::local_node();
+    config.utxo_validation = false;
+    config.gas_price_config.min_exec_gas_price = 1000;
+    let params = config
+        .snapshot_reader
+        .chain_config()
+        .consensus_parameters
+        .clone();
+
+    let ctx = TestContext::new_with_config(config).await;
     let payload: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
     let (status, _blob_id) = ctx.new_blob(payload.clone()).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // When
-    let result = ctx.new_blob(payload).await;
+    // We want to submit blob directly to TxPool, because we test that TxPool
+    // will reject the blob if it's already was deployed.
+    let blob_id = BlobId::compute(&payload);
+    let mut builder = TransactionBuilder::blob(BlobBody {
+        id: blob_id,
+        witness_index: 0,
+    });
+    builder.with_params(params);
+    builder.max_fee_limit(1_000_000_000);
+    builder.add_witness(payload.into());
+    builder.add_fee_input();
+    let blob = builder.finalize();
+    let result = ctx.client.submit_and_await_commit(&blob.into()).await;
 
     // Then
     let err = result.expect_err("Should fail because of the same blob id");
@@ -193,24 +190,13 @@ async fn blob__accessing_nonexistent_blob_panics_vm() {
     let blob_id = BlobId::new([0; 32]); // Nonexistent
 
     // When
-    let script_tx = TransactionBuilder::script(
-        vec![
-            op::gtf_args(0x11, RegId::ZERO, GTFArgs::ScriptData),
-            op::bsiz(0x20, 0x11), // This panics if blob doesn't exist
-            op::ret(RegId::ONE),
-        ]
-        .into_iter()
-        .collect(),
-        blob_id.to_bytes(),
-    )
-    .script_gas_limit(1000000)
-    .add_fee_input()
-    .finalize_as_transaction();
-    let tx_status = ctx
-        .client
-        .submit_and_await_commit(&script_tx)
-        .await
-        .unwrap();
+    let script = vec![
+        op::gtf_args(0x11, RegId::ZERO, GTFArgs::ScriptData),
+        op::bsiz(0x20, 0x11), // This panics if blob doesn't exist
+        op::ret(RegId::ONE),
+    ];
+    let script_data = blob_id.to_bytes();
+    let tx_status = ctx.run_script(script, script_data, None).await.unwrap();
 
     // Then
     assert!(matches!(tx_status, TransactionStatus::Failure { .. }));
@@ -219,7 +205,7 @@ async fn blob__accessing_nonexistent_blob_panics_vm() {
 #[tokio::test]
 async fn blob__can_be_queried_if_uploaded() {
     // Given
-    let mut ctx = TestContext::new().await;
+    let ctx = TestContext::new().await;
     let bytecode: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
     let (status, blob_id) = ctx.new_blob(bytecode.clone()).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
@@ -240,7 +226,7 @@ async fn blob__can_be_queried_if_uploaded() {
 #[tokio::test]
 async fn blob__exists_if_uploaded() {
     // Given
-    let mut ctx = TestContext::new().await;
+    let ctx = TestContext::new().await;
     let bytecode: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
     let (status, blob_id) = ctx.new_blob(bytecode.clone()).await.unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
@@ -277,7 +263,7 @@ async fn predicate_can_load_blob() {
     let blob_predicate = vec![op::ret(RegId::ONE)].into_iter().collect::<Vec<u8>>();
 
     // Use `LDC` with mode `1` to load the blob into the predicate.
-    let predicate = vec![
+    let predicate_with_blob = vec![
         // Take the pointer to the predicate data section
         // where the blob ID is stored
         op::gtf(0x10, ZERO, GTFArgs::InputCoinPredicateData as u16),
@@ -298,58 +284,43 @@ async fn predicate_can_load_blob() {
     .into_iter()
     .collect::<Vec<u8>>();
 
-    let owner = Input::predicate_owner(predicate.clone());
     let blob_owner = Input::predicate_owner(blob_predicate.clone());
+    let predicate_with_blob_owner = Input::predicate_owner(predicate_with_blob.clone());
 
     let mut state = StateConfig::local_testnet();
 
     state.coins[0].owner = blob_owner;
-    let blob_coin = state.coins[0].clone();
-    let blob_input = Input::coin_predicate(
-        blob_coin.utxo_id(),
-        blob_owner,
-        blob_coin.amount,
-        blob_coin.asset_id,
-        Default::default(),
-        0,
-        blob_predicate,
-        vec![],
-    );
+    state.coins[1].owner = predicate_with_blob_owner;
 
-    state.coins[1].owner = owner;
-    let predicate_coin = state.coins[1].clone();
+    let blob_predicate_account = SigningAccount::Predicate {
+        predicate: blob_predicate,
+        predicate_data: vec![],
+    };
 
     let mut config = Config::local_node_with_state_config(state);
     config.debug = true;
     config.utxo_validation = true;
+    config.gas_price_config.min_exec_gas_price = 1000;
 
-    let mut ctx = TestContext::new_with_config(config).await;
+    let ctx = TestContext::new_with_config(config).await;
 
     let bytecode: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
     let (status, blob_id) = ctx
-        .new_blob_with_input(bytecode.clone(), Some(blob_input))
+        .new_blob_with_input(bytecode.clone(), Some(blob_predicate_account))
         .await
         .unwrap();
     assert!(matches!(status, TransactionStatus::Success { .. }));
 
     // Given
-    let predicate_data = blob_id.to_bytes();
-    let predicate_input = Input::coin_predicate(
-        predicate_coin.utxo_id(),
-        owner,
-        predicate_coin.amount,
-        predicate_coin.asset_id,
-        Default::default(),
-        0,
-        predicate,
-        predicate_data,
-    );
+    let predicate_with_blob_account = SigningAccount::Predicate {
+        predicate: predicate_with_blob,
+        predicate_data: blob_id.to_bytes(),
+    };
 
     // When
-    let mut builder = TransactionBuilder::script(vec![], vec![]);
-    builder.add_input(predicate_input);
-    let tx_with_blobed_predicate = builder.finalize();
-    let result = ctx.submit(tx_with_blobed_predicate).await;
+    let result = ctx
+        .run_script(vec![], vec![], Some(predicate_with_blob_account))
+        .await;
 
     // Then
     let status = result.expect("Transaction failed");

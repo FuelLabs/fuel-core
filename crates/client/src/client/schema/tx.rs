@@ -1,11 +1,13 @@
 use crate::client::{
     schema::{
+        coins::ExcludeInput,
         schema,
         tx::{
             transparent_receipt::Receipt,
             transparent_tx::Output,
         },
         Address,
+        AssetId,
         ConnectionArgsFields,
         ConversionError,
         HexString,
@@ -13,6 +15,7 @@ use crate::client::{
         Tai64Timestamp,
         TransactionId,
         TxPointer,
+        U16,
         U32,
         U64,
     },
@@ -497,6 +500,85 @@ pub struct TxArg {
 pub struct EstimatePredicates {
     #[arguments(tx: $tx)]
     pub estimate_predicates: OpaqueTransaction,
+}
+
+#[derive(cynic::InputObject, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct Predicate {
+    pub predicate_address: Address,
+    pub predicate: HexString,
+    pub predicate_data: HexString,
+}
+
+#[derive(cynic::InputObject, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct Account {
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub address: Option<Address>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub predicate: Option<Predicate>,
+}
+
+#[derive(cynic::InputObject, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct ChangePolicy {
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub change: Option<Address>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub destroy: Option<Destroy>,
+}
+
+#[derive(cynic::Enum, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum Destroy {
+    Destroy,
+}
+
+#[derive(cynic::InputObject, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct RequiredBalance {
+    pub asset_id: AssetId,
+    pub amount: U64,
+    pub account: Account,
+    pub change_policy: ChangePolicy,
+}
+
+#[derive(cynic::QueryVariables)]
+pub struct AssembleTxArg {
+    pub tx: HexString,
+    pub block_horizon: U32,
+    pub required_balances: Vec<RequiredBalance>,
+    pub fee_address_index: U16,
+    pub exclude_input: Option<ExcludeInput>,
+    pub estimate_predicates: bool,
+    pub reserve_gas: Option<U64>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "AssembleTxArg"
+)]
+pub struct AssembleTx {
+    #[arguments(
+        tx: $tx,
+        blockHorizon: $block_horizon,
+        requiredBalances: $required_balances,
+        feeAddressIndex: $fee_address_index,
+        excludeInput: $exclude_input,
+        estimatePredicates: $estimate_predicates,
+        reserveGas: $reserve_gas,
+    )]
+    pub assemble_tx: AssembleTransactionResult,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct AssembleTransactionResult {
+    pub transaction: OpaqueTransaction,
+    pub status: DryRunTransactionStatus,
+    pub gas_price: U64,
 }
 
 #[derive(cynic::QueryVariables)]
