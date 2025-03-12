@@ -21,6 +21,7 @@ use fuel_core_types::{
 
 pub struct ExtractedOutputs {
     contract_created: HashMap<ContractId, TxId>,
+    contract_created_by_tx: HashMap<TxId, Vec<ContractId>>,
     coins_created: HashMap<TxId, HashMap<u16, (Address, u64, AssetId)>>,
 }
 
@@ -28,6 +29,7 @@ impl ExtractedOutputs {
     pub fn new() -> Self {
         Self {
             contract_created: HashMap::new(),
+            contract_created_by_tx: HashMap::new(),
             coins_created: HashMap::new(),
         }
     }
@@ -46,6 +48,10 @@ impl ExtractedOutputs {
             match output {
                 Output::ContractCreated { contract_id, .. } => {
                     self.contract_created.insert(*contract_id, tx_id);
+                    self.contract_created_by_tx
+                        .entry(tx_id)
+                        .or_default()
+                        .push(*contract_id);
                 }
                 Output::Coin {
                     to,
@@ -90,7 +96,12 @@ impl ExtractedOutputs {
     }
 
     pub fn new_executed_transaction(&mut self, tx_id: &TxId) {
-        self.contract_created.retain(|_, v| v != tx_id);
+        let contract_ids = self.contract_created_by_tx.remove(tx_id);
+        if let Some(contract_ids) = contract_ids {
+            for contract_id in contract_ids {
+                self.contract_created.remove(&contract_id);
+            }
+        }
         self.coins_created.remove(tx_id);
     }
 
