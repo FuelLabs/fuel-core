@@ -793,7 +793,7 @@ type Mutation {
 	
 	Returns submitted transaction if the transaction is included in the `TxPool` without problems.
 	"""
-	submit(tx: HexString!): Transaction!
+	submit(tx: HexString!, estimatePredicates: Boolean): Transaction!
 	"""
 	Sequentially produces `blocks_to_produce` blocks. The first block starts with
 	`start_timestamp`. If the block production in the [`crate::service::Config`] is
@@ -1339,13 +1339,13 @@ type Subscription {
 	"""
 	Submits transaction to the `TxPool` and await either confirmation or failure.
 	"""
-	submitAndAwait(tx: HexString!): TransactionStatus!
+	submitAndAwait(tx: HexString!, estimatePredicates: Boolean): TransactionStatus!
 	"""
 	Submits the transaction to the `TxPool` and returns a stream of events.
 	Compared to the `submitAndAwait`, the stream also contains `
 	SubmittedStatus` as an intermediate state.
 	"""
-	submitAndAwaitStatus(tx: HexString!): TransactionStatus!
+	submitAndAwaitStatus(tx: HexString!, estimatePredicates: Boolean): TransactionStatus!
 	contractStorageSlots(contractId: ContractId!): StorageSlot!
 	contractStorageBalances(contractId: ContractId!): ContractBalance!
 }

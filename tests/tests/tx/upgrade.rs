@@ -49,12 +49,11 @@ async fn can_upload_current_state_transition_function() {
 
     for upload in transactions {
         // When
-        let mut tx = upload.into();
-        client
-            .estimate_predicates(&mut tx)
-            .await
-            .expect("Should estimate transaction");
-        let result = client.submit_and_await_commit(&tx).await;
+        let tx = upload.into();
+        let estimate_predicates = true;
+        let result = client
+            .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+            .await;
 
         // Then
         let result = result.expect("We should be able to upload the bytecode subsection");
@@ -81,9 +80,12 @@ async fn can_upgrade_to_uploaded_state_transition() {
 
     let transactions = transactions_from_subsections(&mut rng, subsections, amount);
     for upload in transactions {
-        let mut tx = upload.into();
-        client.estimate_predicates(&mut tx).await.unwrap();
-        client.submit_and_await_commit(&tx).await.unwrap();
+        let tx = upload.into();
+        let estimate_predicates = true;
+        client
+            .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+            .await
+            .unwrap();
     }
 
     // Given
@@ -105,9 +107,11 @@ async fn can_upgrade_to_uploaded_state_transition() {
     );
 
     // When
-    let mut tx = upgrade.into();
-    client.estimate_predicates(&mut tx).await.unwrap();
-    let result = client.submit_and_await_commit(&tx).await;
+    let tx = upgrade.into();
+    let estimate_predicates = true;
+    let result = client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await;
 
     // Then
     let TransactionStatus::Success { block_height, .. } =
@@ -158,9 +162,12 @@ async fn upgrading_to_invalid_state_transition_fails() {
 
     let transactions = transactions_from_subsections(&mut rng, subsections, amount);
     for upload in transactions {
-        let mut tx = upload.into();
-        client.estimate_predicates(&mut tx).await.unwrap();
-        client.submit_and_await_commit(&tx).await.unwrap();
+        let tx = upload.into();
+        let estimate_predicates = true;
+        client
+            .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+            .await
+            .unwrap();
     }
 
     // Given
@@ -182,9 +189,11 @@ async fn upgrading_to_invalid_state_transition_fails() {
     );
 
     // When
-    let mut tx = upgrade.into();
-    client.estimate_predicates(&mut tx).await.unwrap();
-    let result = client.submit_and_await_commit(&tx).await;
+    let tx = upgrade.into();
+    let estimate_predicates = true;
+    let result = client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await;
 
     // Then
     let result_str = format!("{:?}", result); // io::Result forces string handling
@@ -231,9 +240,11 @@ async fn upgrading_to_missing_state_transition_fails() {
     );
 
     // When
-    let mut tx = upgrade.into();
-    client.estimate_predicates(&mut tx).await.unwrap();
-    let result = client.submit_and_await_commit(&tx).await;
+    let tx = upgrade.into();
+    let estimate_predicates = true;
+    let result = client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await;
 
     // Then
     let result_str = format!("{:?}", result); // io::Result forces string handling
@@ -266,9 +277,12 @@ async fn upgrade_to_a_partially_uploaded_state_transition_fails() {
     assert!(transactions.len() > 1);
     let _ = transactions.pop(); // Don't upload the last subsection
     for upload in transactions {
-        let mut tx = upload.into();
-        client.estimate_predicates(&mut tx).await.unwrap();
-        client.submit_and_await_commit(&tx).await.unwrap();
+        let tx = upload.into();
+        let estimate_predicates = true;
+        client
+            .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+            .await
+            .unwrap();
     }
 
     // Given
@@ -290,9 +304,11 @@ async fn upgrade_to_a_partially_uploaded_state_transition_fails() {
     );
 
     // When
-    let mut tx = upgrade.into();
-    client.estimate_predicates(&mut tx).await.unwrap();
-    let result = client.submit_and_await_commit(&tx).await;
+    let tx = upgrade.into();
+    let estimate_predicates = true;
+    let result = client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await;
 
     // Then
     let result_str = format!("{:?}", result); // io::Result forces string handling
@@ -343,9 +359,12 @@ async fn upgrade_of_consensus_parameters_affects_used_gas_of_next_tx() {
     } = test_builder.finalize().await;
 
     // Given
-    let mut tx = valid_transaction(&mut rng, amount);
-    client.estimate_predicates(&mut tx).await.unwrap();
-    let result = client.submit_and_await_commit(&tx).await.unwrap();
+    let tx = valid_transaction(&mut rng, amount);
+    let estimate_predicates = true;
+    let result = client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await
+        .unwrap();
     let TransactionStatus::Success { receipts, .. } = result else {
         panic!("{result:?}")
     };
@@ -372,14 +391,20 @@ async fn upgrade_of_consensus_parameters_affects_used_gas_of_next_tx() {
         vec![],
     )
     .unwrap();
-    let mut tx = upgrade.into();
-    client.estimate_predicates(&mut tx).await.unwrap();
-    client.submit_and_await_commit(&tx).await.unwrap();
+    let tx = upgrade.into();
+    let estimate_predicates = true;
+    client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await
+        .unwrap();
 
     // Then
-    let mut tx = valid_transaction(&mut rng, amount);
-    client.estimate_predicates(&mut tx).await.unwrap();
-    let result = client.submit_and_await_commit(&tx).await.unwrap();
+    let tx = valid_transaction(&mut rng, amount);
+    let estimate_predicates = true;
+    let result = client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await
+        .unwrap();
     let TransactionStatus::Success { receipts, .. } = result else {
         panic!("{result:?}")
     };
@@ -424,9 +449,12 @@ async fn old_consensus_parameters_should_be_queryable_after_upgrade() {
     .unwrap();
 
     // When
-    let mut tx = upgrade.into();
-    client.estimate_predicates(&mut tx).await.unwrap();
-    client.submit_and_await_commit(&tx).await.unwrap();
+    let tx = upgrade.into();
+    let estimate_predicates = true;
+    client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await
+        .unwrap();
     let next_block_height = client.produce_blocks(1, None).await.unwrap();
 
     let latest_consensus_parameters_version = client
@@ -476,9 +504,12 @@ async fn state_transition_bytecode_should_be_queryable_by_its_root_and_version()
 
     let transactions = transactions_from_subsections(&mut rng, subsections, amount);
     for upload in transactions {
-        let mut tx = upload.into();
-        client.estimate_predicates(&mut tx).await.unwrap();
-        client.submit_and_await_commit(&tx).await.unwrap();
+        let tx = upload.into();
+        let estimate_predicates = true;
+        client
+            .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+            .await
+            .unwrap();
     }
 
     // Given
@@ -500,9 +531,12 @@ async fn state_transition_bytecode_should_be_queryable_by_its_root_and_version()
     );
 
     // When
-    let mut tx = upgrade.into();
-    client.estimate_predicates(&mut tx).await.unwrap();
-    client.submit_and_await_commit(&tx).await.unwrap();
+    let tx = upgrade.into();
+    let estimate_predicates = true;
+    client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await
+        .unwrap();
 
     let next_block_height = client.produce_blocks(1, None).await.unwrap();
 
