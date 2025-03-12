@@ -201,7 +201,7 @@ pub(super) enum PoolRemoveRequest {
     ProcessBlock {
         block_result: SharedImportResult,
     },
-    CoinDependents {
+    SkippedTransactions {
         dependents_ids: Vec<(TxId, Error)>,
     },
     TxAndCoinDependents {
@@ -300,8 +300,8 @@ where
                         PoolRemoveRequest::ProcessBlock { block_result } => {
                             self.process_block(block_result);
                         }
-                        PoolRemoveRequest::CoinDependents { dependents_ids } => {
-                            self.remove_coin_dependents(dependents_ids);
+                        PoolRemoveRequest::SkippedTransactions { dependents_ids } => {
+                            self.remove_skipped_transactions(dependents_ids);
                         }
                         PoolRemoveRequest::TxAndCoinDependents { tx_and_dependents_ids } => {
                             self.remove_and_coin_dependents(tx_and_dependents_ids);
@@ -504,9 +504,9 @@ where
             .expire_transactions(self.notification_sender.clone());
     }
 
-    fn remove_coin_dependents(&mut self, parent_txs: Vec<(TxId, Error)>) {
+    fn remove_skipped_transactions(&mut self, parent_txs: Vec<(TxId, Error)>) {
         for (tx_id, reason) in parent_txs {
-            let removed = self.pool.remove_coin_dependents(tx_id);
+            let removed = self.pool.remove_skipped_transaction(tx_id);
             for tx in removed {
                 let tx_id = tx.id();
                 if let Err(e) = self.notification_sender.try_send(PoolNotification::Removed {

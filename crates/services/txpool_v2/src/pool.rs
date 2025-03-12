@@ -366,6 +366,7 @@ where
     pub fn process_block(&mut self, tx_ids: impl Iterator<Item = TxId>) {
         let mut transactions_to_promote = vec![];
         for tx_id in tx_ids {
+            self.extracted_outputs.new_executed_transaction(&tx_id);
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents: Vec<S::StorageIndex> =
                     self.storage.get_direct_dependents(storage_id).collect();
@@ -377,8 +378,6 @@ where
                     );
                     continue
                 };
-                self.extracted_outputs
-                    .new_executed_transaction(&transaction.transaction);
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
 
                 for dependent in dependents {
@@ -570,7 +569,8 @@ where
         removed_transactions
     }
 
-    pub fn remove_coin_dependents(&mut self, tx_id: TxId) -> Vec<ArcPoolTx> {
+    pub fn remove_skipped_transaction(&mut self, tx_id: TxId) -> Vec<ArcPoolTx> {
+        self.extracted_outputs.new_skipped_transaction(&tx_id);
         let mut txs_removed = vec![];
         let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
         for dependent in coin_dependents {
