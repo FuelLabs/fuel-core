@@ -12,6 +12,7 @@ use fuel_core_types::{
         preconfirmation::Preconfirmations,
     },
 };
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 mod mocks;
@@ -26,22 +27,39 @@ mod utils;
 
 pub(crate) struct FakeSignatureVerification {
     new_delegate_sender: mpsc::Sender<(DelegatePublicKey, ProtocolSignature)>,
-    new_delegate_response: bool,
-    preconfirmation_signature_success: bool,
+    preconfirmation_signature_success: Arc<std::sync::atomic::AtomicBool>,
+}
+
+pub(crate) struct FakeSignatureVerificationHandles {
+    pub new_delegate_receiver: mpsc::Receiver<(DelegatePublicKey, ProtocolSignature)>,
+    pub verification_result: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl FakeSignatureVerificationHandles {
+    pub fn update_signature_verification_result(&mut self, result: bool) {
+        self.verification_result
+            .store(result, std::sync::atomic::Ordering::Relaxed);
+    }
 }
 
 impl FakeSignatureVerification {
     pub fn new_with_handles(
-        new_delegate_response: bool,
         preconfirmation_signature_success: bool,
-    ) -> (Self, mpsc::Receiver<(DelegatePublicKey, ProtocolSignature)>) {
+    ) -> (Self, FakeSignatureVerificationHandles) {
         let (new_delegate_sender, new_delegate_receiver) = mpsc::channel(1_000);
+        let preconfirmation_signature_success = Arc::new(
+            std::sync::atomic::AtomicBool::new(preconfirmation_signature_success),
+        );
+        let verification_result = preconfirmation_signature_success.clone();
         let adapter = Self {
             new_delegate_sender,
-            new_delegate_response,
             preconfirmation_signature_success,
         };
-        (adapter, new_delegate_receiver)
+        let handles = FakeSignatureVerificationHandles {
+            new_delegate_receiver,
+            verification_result,
+        };
+        (adapter, handles)
     }
 }
 
@@ -56,7 +74,7 @@ impl SignatureVerification for FakeSignatureVerification {
             .send((_delegate, _protocol_signature))
             .await
             .unwrap();
-        self.new_delegate_response
+        true
     }
 
     async fn check_preconfirmation_signature(
@@ -64,5 +82,6 @@ impl SignatureVerification for FakeSignatureVerification {
         _sealed: &Sealed<Preconfirmations, Bytes64>,
     ) -> bool {
         self.preconfirmation_signature_success
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 }

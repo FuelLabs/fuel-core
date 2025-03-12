@@ -66,7 +66,7 @@ impl TestTxStatusManagerUniverse {
     ) -> ServiceRunner<Task<FakeSignatureVerification>> {
         let p2p = p2p.unwrap_or_else(|| MockP2P::new_with_statuses(vec![]));
         let (signature_verification, _) =
-            FakeSignatureVerification::new_with_handles(true, true);
+            FakeSignatureVerification::new_with_handles(true);
 
         new_service(p2p, signature_verification, self.config.clone())
     }
