@@ -15,7 +15,7 @@ name = "fuel_gas_price_algorithm"
 path = "src/lib.rs"
 
 [dependencies]
-fuel-core-types = { path = "../types" }
+fuel-core-types = { path = "../types", features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
