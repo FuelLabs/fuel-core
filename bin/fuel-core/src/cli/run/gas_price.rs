@@ -20,11 +20,11 @@ pub struct GasPriceArgs {
     /// The percentage change in gas price per block
     #[cfg_attr(
         feature = "production",
-        arg(long = "gas-price-change-percent", default_value_t = DEFAULT_GAS_PRICE_CHANGE_PERCENT, value_parser = parse_clamped_percentage, env)
+        arg(long = "gas-price-change-percent", default_value_t = ClampedPercentage::new(DEFAULT_GAS_PRICE_CHANGE_PERCENT.try_into().unwrap()), env)
     )]
     #[cfg_attr(
         not(feature = "production"),
-        arg(long = "gas-price-change-percent", default_value = "0", value_parser = parse_clamped_percentage, env)
+        arg(long = "gas-price-change-percent", default_value = "0", env)
     )]
     pub gas_price_change_percent: ClampedPercentage,
 
@@ -33,7 +33,7 @@ pub struct GasPriceArgs {
     pub min_gas_price: u64,
 
     /// The percentage threshold for gas price increase
-    #[arg(long = "gas-price-threshold-percent", default_value = "50", value_parser = parse_clamped_percentage, env)]
+    #[arg(long = "gas-price-threshold-percent", default_value = "50", env)]
     pub gas_price_threshold_percent: ClampedPercentage,
 
     /// Minimum DA gas price
@@ -83,11 +83,4 @@ pub struct GasPriceArgs {
     /// i.e. If you want the Gas Price Service to look for the costs of block 1000, set to 999
     #[arg(long = "da-starting-recorded-height", env)]
     pub da_starting_recorded_height: Option<u32>,
-}
-
-fn parse_clamped_percentage(
-    s: &str,
-) -> Result<ClampedPercentage, std::num::ParseIntError> {
-    let value = s.parse::<u8>()?;
-    Ok(ClampedPercentage::new(value))
 }
