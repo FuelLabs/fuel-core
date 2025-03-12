@@ -282,10 +282,7 @@ mod coin {
             .client
             .coins_to_spend(
                 &owner,
-                vec![
-                    (asset_id_a, 300, Some(MAX)),
-                    (asset_id_b, 300, Some(MAX)),
-                ],
+                vec![(asset_id_a, 300, Some(MAX)), (asset_id_b, 300, Some(MAX))],
                 None,
             )
             .await;
@@ -719,10 +716,7 @@ mod all_coins {
             .client
             .coins_to_spend(
                 &owner,
-                vec![
-                    (asset_id_a, 300, Some(MAX)),
-                    (asset_id_b, 300, Some(MAX)),
-                ],
+                vec![(asset_id_a, 300, Some(MAX)), (asset_id_b, 300, Some(MAX))],
                 None,
             )
             .await;
