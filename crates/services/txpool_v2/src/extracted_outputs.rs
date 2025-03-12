@@ -21,7 +21,7 @@ use fuel_core_types::{
 
 pub struct ExtractedOutputs {
     contract_created: HashMap<ContractId, TxId>,
-    coins_created: HashMap<TxId, HashMap<UtxoId, (Address, u64, AssetId)>>,
+    coins_created: HashMap<TxId, HashMap<u16, (Address, u64, AssetId)>>,
 }
 
 impl ExtractedOutputs {
@@ -53,11 +53,7 @@ impl ExtractedOutputs {
                     asset_id,
                 } => {
                     self.coins_created.entry(tx_id).or_default().insert(
-                        UtxoId::new(
-                            tx_id,
-                            u16::try_from(idx)
-                                .expect("Outputs count is less than u16::MAX"),
-                        ),
+                        u16::try_from(idx).expect("Outputs count is less than u16::MAX"),
                         (*to, *amount, *asset_id),
                     );
                 }
@@ -74,8 +70,9 @@ impl ExtractedOutputs {
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     self.coins_created
                         .entry(*utxo_id.tx_id())
-                        .or_default()
-                        .remove(utxo_id);
+                        .and_modify(|coins| {
+                            coins.remove(&utxo_id.output_index());
+                        });
                 }
                 Input::Contract(_)
                 | Input::MessageCoinPredicate(_)
@@ -111,9 +108,11 @@ impl ExtractedOutputs {
         self.coins_created
             .get(utxo_id.tx_id())
             .map_or(false, |coins| {
-                coins.get(utxo_id).map_or(false, |(a, am, asid)| {
-                    a == address && am == amount && asid == asset_id
-                })
+                coins
+                    .get(&utxo_id.output_index())
+                    .map_or(false, |(a, am, asid)| {
+                        a == address && am == amount && asid == asset_id
+                    })
             })
     }
 }
