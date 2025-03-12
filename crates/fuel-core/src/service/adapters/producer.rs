@@ -129,10 +129,10 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
     fn dry_run(
         &self,
         block: Components<Vec<Transaction>>,
-        utxo_validation: Option<bool>,
+        forbid_fake_coins: Option<bool>,
         at_height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<(Transaction, TransactionExecutionStatus)>> {
-        self.executor.dry_run(block, utxo_validation, at_height)
+        self.executor.dry_run(block, forbid_fake_coins, at_height)
     }
 }
 
