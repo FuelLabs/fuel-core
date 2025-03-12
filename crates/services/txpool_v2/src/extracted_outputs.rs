@@ -54,14 +54,14 @@ impl ExtractedOutputs {
                 } => {
                     self.coins_created
                         .entry(tx_id)
-                        .or_insert_with(HashMap::new)
+                        .or_default()
                         .insert(
                             UtxoId::new(
                                 tx_id,
                                 u16::try_from(idx)
                                     .expect("Outputs count is less than u16::MAX"),
                             ),
-                            (to.clone(), *amount, *asset_id),
+                            (*to, *amount, *asset_id),
                         );
                 }
                 Output::Contract { .. }
@@ -77,7 +77,7 @@ impl ExtractedOutputs {
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
                     self.coins_created
                         .entry(*utxo_id.tx_id())
-                        .or_insert_with(HashMap::new)
+                        .or_default()
                         .remove(utxo_id);
                 }
                 Input::Contract(_)
