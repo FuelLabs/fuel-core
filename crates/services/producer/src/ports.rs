@@ -105,12 +105,12 @@ pub trait BlockProducer<TxSource>: Send + Sync {
 
 pub trait DryRunner: Send + Sync {
     /// Executes the block without committing it to the database. During execution collects the
-    /// receipts to return them. The `utxo_validation` field can be used to disable the validation
+    /// receipts to return them. The `forbid_fake_coins` field can be used to enable/disable the validation
     /// of utxos during execution. The `at_height` field can be used to dry run on top of a past block.
     fn dry_run(
         &self,
         block: Components<Vec<Transaction>>,
-        utxo_validation: Option<bool>,
+        forbid_fake_coins: Option<bool>,
         at_height: Option<BlockHeight>,
     ) -> ExecutorResult<Vec<(Transaction, TransactionExecutionStatus)>>;
 }

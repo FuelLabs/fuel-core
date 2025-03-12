@@ -53,10 +53,7 @@ use fuel_core_types::{
         contract::ContractUtxoInfo,
         RelayedTransaction,
     },
-    fuel_asm::{
-        RegId,
-        Word,
-    },
+    fuel_asm::Word,
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
         field::{
@@ -118,11 +115,9 @@ use fuel_core_types::{
             CheckedMetadata as CheckedMetadataTrait,
             ExecutableTransaction,
             InterpreterParams,
-            Memory,
             MemoryInstance,
         },
         state::StateTransition,
-        Backtrace as FuelBacktrace,
         Interpreter,
         ProgramState,
     },
@@ -163,6 +158,17 @@ use alloc::{
     string::ToString,
     vec,
     vec::Vec,
+};
+use fuel_core_types::{
+    fuel_asm::{
+        op,
+        PanicInstruction,
+    },
+    fuel_tx::PanicReason,
+    fuel_vm::{
+        interpreter::NotSupportedEcal,
+        verification,
+    },
 };
 
 /// The maximum amount of transactions that can be included in a block,
@@ -324,11 +330,23 @@ impl ExecutionData {
 /// Per-block execution options
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
-    // TODO: This is a bad name and the real motivation for this field should be specified
-    /// UTXO Validation flag, when disabled the executor skips signature and UTXO existence checks
-    pub extra_tx_checks: bool,
+    /// The flag allows the usage of fake coins in the inputs of the transaction.
+    /// When `false` the executor skips signature and UTXO existence checks.
+    pub forbid_fake_coins: bool,
     /// Print execution backtraces if transaction execution reverts.
+    ///
+    /// Deprecated field. Do nothing. This fields exists for serialization and
+    /// deserialization compatibility.
     pub backtrace: bool,
+}
+
+/// Per-block execution options
+#[derive(Clone, Default, Debug)]
+struct ExecutionOptionsInner {
+    /// The flag allows the usage of fake coins in the inputs of the transaction.
+    /// When `false` the executor skips signature and UTXO existence checks.
+    pub forbid_fake_coins: bool,
+    pub dry_run: bool,
 }
 
 /// The executor instance performs block production and validation. Given a block, it will execute all
@@ -370,16 +388,14 @@ where
             consensus_params_version,
             new_tx_waiter,
             preconfirmation_sender,
+            dry_run,
         )?;
 
         #[cfg(feature = "fault-proving")]
         let chain_id = block_executor.consensus_params.chain_id();
 
-        let (partial_block, execution_data) = if dry_run {
-            block_executor.dry_run_block(components, storage_tx).await?
-        } else {
-            block_executor.produce_block(components, storage_tx).await?
-        };
+        let (partial_block, execution_data) =
+            block_executor.execute(components, storage_tx).await?;
 
         let ExecutionData {
             message_ids,
@@ -429,6 +445,7 @@ where
             consensus_params_version,
             TimeoutOnlyTxWaiter,
             TransparentPreconfirmationSender,
+            false,
         )?;
 
         let ExecutionData {
@@ -458,6 +475,7 @@ where
         consensus_params_version: ConsensusParametersVersion,
         new_tx_waiter: N,
         preconfirmation_sender: P,
+        dry_run: bool,
     ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>)> {
         let storage_tx = self
             .database
@@ -476,6 +494,7 @@ where
             consensus_params,
             new_tx_waiter,
             preconfirmation_sender,
+            dry_run,
         )?;
         Ok((executor, storage_tx))
     }
@@ -488,7 +507,7 @@ type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransa
 pub struct BlockExecutor<R, TxWaiter, PreconfirmationSender> {
     relayer: R,
     consensus_params: ConsensusParameters,
-    options: ExecutionOptions,
+    options: ExecutionOptionsInner,
     new_tx_waiter: TxWaiter,
     preconfirmation_sender: PreconfirmationSender,
 }
@@ -502,11 +521,15 @@ impl<R, TxWaiter, PreconfirmationSender>
         consensus_params: ConsensusParameters,
         new_tx_waiter: TxWaiter,
         preconfirmation_sender: PreconfirmationSender,
+        dry_run: bool,
     ) -> ExecutorResult<Self> {
         Ok(Self {
             relayer,
             consensus_params,
-            options,
+            options: ExecutionOptionsInner {
+                forbid_fake_coins: options.forbid_fake_coins,
+                dry_run,
+            },
             new_tx_waiter,
             preconfirmation_sender,
         })
@@ -519,6 +542,22 @@ where
     N: NewTxWaiterPort,
     P: PreconfirmationSenderPort,
 {
+    async fn execute<TxSource, D>(
+        self,
+        components: Components<TxSource>,
+        block_storage_tx: BlockStorageTransaction<D>,
+    ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
+    where
+        TxSource: TransactionsSource,
+        D: KeyValueInspect<Column = Column>,
+    {
+        if self.options.dry_run {
+            self.dry_run_block(components, block_storage_tx).await
+        } else {
+            self.produce_block(components, block_storage_tx).await
+        }
+    }
+
     #[tracing::instrument(skip_all)]
     /// Produce the fuel block with specified components
     async fn produce_block<TxSource, D>(
@@ -1364,7 +1403,7 @@ where
             let input = mint.input_contract().clone();
             let mut input = Input::Contract(input);
 
-            if self.options.extra_tx_checks {
+            if self.options.forbid_fake_coins {
                 self.verify_inputs_exist_and_values_match(
                     storage_tx,
                     core::slice::from_ref(&input),
@@ -1409,7 +1448,7 @@ where
     {
         let tx_id = checked_tx.id();
 
-        if self.options.extra_tx_checks {
+        if self.options.forbid_fake_coins {
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
@@ -1798,22 +1837,78 @@ where
             Some(*header.height()),
         )?;
 
-        let mut vm = Interpreter::<_, _, _>::with_storage(
-            memory,
-            vm_db,
-            InterpreterParams::new(gas_price, &self.consensus_params),
-        );
+        let mut reverted;
 
-        let vm_result: StateTransition<_> = vm
-            .transact(ready_tx)
-            .map_err(|error| ExecutorError::VmExecution {
-                error: error.to_string(),
-                transaction_id: tx_id,
-            })?
-            .into();
-        let reverted = vm_result.should_revert();
+        let (state, mut tx, receipts) = if !self.options.dry_run {
+            let mut vm = Interpreter::<_, _, _, NotSupportedEcal,
+                verification::Normal>::with_storage(
+                memory,
+                vm_db,
+                InterpreterParams::new(gas_price, &self.consensus_params),
+            );
 
-        let (state, mut tx, receipts): (_, Tx, _) = vm_result.into_inner();
+            let vm_result: StateTransition<_> = vm
+                .transact(ready_tx)
+                .map_err(|error| ExecutorError::VmExecution {
+                    error: error.to_string(),
+                    transaction_id: tx_id,
+                })?
+                .into();
+            reverted = vm_result.should_revert();
+
+            vm_result.into_inner()
+        } else {
+            let mut vm = Interpreter::<
+                _,
+                _,
+                _,
+                NotSupportedEcal,
+                verification::AttemptContinue,
+            >::with_storage(
+                memory,
+                vm_db,
+                InterpreterParams::new(gas_price, &self.consensus_params),
+            );
+
+            let vm_result: StateTransition<_> = vm
+                .transact(ready_tx)
+                .map_err(|error| ExecutorError::VmExecution {
+                    error: error.to_string(),
+                    transaction_id: tx_id,
+                })?
+                .into();
+
+            reverted = vm_result.should_revert();
+
+            let (state, tx, mut receipts) = vm_result.into_inner();
+
+            // If transaction requires contract ids, then extend receipts with
+            // `PanicReason::ContractNotInInputs` for each missing contract id.
+            // The data like `$pc` or `$is` is not available in this case,
+            // because panic generated outside of the execution.
+            if !vm.verifier().missing_contract_inputs.is_empty() {
+                debug_assert!(self.options.dry_run);
+                reverted = true;
+
+                let reason = PanicInstruction::error(
+                    PanicReason::ContractNotInInputs,
+                    op::noop().into(),
+                );
+
+                for contract_id in &vm.verifier().missing_contract_inputs {
+                    receipts.push(Receipt::Panic {
+                        id: ContractId::zeroed(),
+                        reason,
+                        pc: 0,
+                        is: 0,
+                        contract_id: Some(*contract_id),
+                    });
+                }
+            }
+
+            (state, tx, receipts)
+        };
+
         #[cfg(debug_assertions)]
         {
             tx.precompute(&self.consensus_params.chain_id())?;
@@ -1828,7 +1923,6 @@ where
 
         // only commit state changes if execution was a success
         if !reverted {
-            self.log_backtrace(&vm, &receipts);
             let changes = sub_block_db_commit.into_changes();
             storage_tx.commit_changes(changes)?;
         }
@@ -2055,7 +2149,7 @@ where
                 }) => {
                     let contract = ContractRef::new(db, *contract_id);
                     let utxo_info =
-                        contract.validated_utxo(self.options.extra_tx_checks)?;
+                        contract.validated_utxo(self.options.forbid_fake_coins)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
                     *balance_root = contract.balance_root()?;
@@ -2117,7 +2211,7 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        if self.options.extra_tx_checks {
+        if self.options.forbid_fake_coins {
             db.storage::<Coins>()
                 .get(&utxo_id)?
                 .ok_or(ExecutorError::TransactionValidity(
@@ -2134,38 +2228,6 @@ where
             }
             .into();
             Ok(coin)
-        }
-    }
-
-    /// Log a VM backtrace if configured to do so
-    fn log_backtrace<M, T, Tx, Ecal>(
-        &self,
-        vm: &Interpreter<M, VmStorage<T>, Tx, Ecal>,
-        receipts: &[Receipt],
-    ) where
-        M: Memory,
-    {
-        if self.options.backtrace {
-            if let Some(backtrace) = receipts
-                .iter()
-                .find_map(Receipt::result)
-                .copied()
-                .map(|result| FuelBacktrace::from_vm_error(vm, result))
-            {
-                let sp = usize::try_from(backtrace.registers()[RegId::SP]).expect(
-                    "The `$sp` register points to the memory of the VM. \
-                    Because the VM's memory is limited by the `usize` of the system, \
-                    it is impossible to lose higher bits during truncation.",
-                );
-                warn!(
-                    target = "vm",
-                    "Backtrace on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
-                    backtrace.contract(),
-                    backtrace.registers(),
-                    backtrace.call_stack(),
-                    hex::encode(backtrace.memory().read(0usize, sp).expect("`SP` always within stack")), // print stack
-                );
-            }
         }
     }
 
