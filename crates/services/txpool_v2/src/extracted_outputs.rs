@@ -52,17 +52,14 @@ impl ExtractedOutputs {
                     amount,
                     asset_id,
                 } => {
-                    self.coins_created
-                        .entry(tx_id)
-                        .or_default()
-                        .insert(
-                            UtxoId::new(
-                                tx_id,
-                                u16::try_from(idx)
-                                    .expect("Outputs count is less than u16::MAX"),
-                            ),
-                            (*to, *amount, *asset_id),
-                        );
+                    self.coins_created.entry(tx_id).or_default().insert(
+                        UtxoId::new(
+                            tx_id,
+                            u16::try_from(idx)
+                                .expect("Outputs count is less than u16::MAX"),
+                        ),
+                        (*to, *amount, *asset_id),
+                    );
                 }
                 Output::Contract { .. }
                 | Output::Change { .. }
