@@ -243,7 +243,7 @@ impl<T: SignatureVerification> RunnableTask for Task<T> {
                 match request {
                     Some(ReadRequest::GetStatus { tx_id, sender }) => {
                         let status = self.manager.status(&tx_id);
-                        let _ = sender.send(status);
+                        let _ = sender.send(status.cloned());
                         TaskNextAction::Continue
                     }
                     Some(ReadRequest::Subscribe { tx_id, sender }) => {

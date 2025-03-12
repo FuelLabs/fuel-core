@@ -97,9 +97,12 @@ async fn upgrade_consensus_parameters(
     )
     .unwrap();
 
-    let mut tx = upgrade.into();
-    client.estimate_predicates(&mut tx).await.unwrap();
-    client.submit_and_await_commit(&tx).await.unwrap();
+    let tx = upgrade.into();
+    let estimate_predicates = true;
+    client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await
+        .unwrap();
     client
         .produce_blocks(1, None)
         .await
@@ -160,12 +163,11 @@ async fn upgrade_stf(
     root: Bytes32,
 ) {
     for upload in transactions {
-        let mut tx = upload.into();
-        client
-            .estimate_predicates(&mut tx)
-            .await
-            .expect("Should estimate transaction");
-        let result = client.submit_and_await_commit(&tx).await;
+        let tx = upload.into();
+        let estimate_predicates = true;
+        let result = client
+            .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+            .await;
         let result = result.expect("We should be able to upload the bytecode subsection");
         assert!(matches!(result, TransactionStatus::Success { .. }))
     }
@@ -186,9 +188,11 @@ async fn upgrade_stf(
         vec![],
         vec![],
     );
-    let mut tx = upgrade.into();
-    client.estimate_predicates(&mut tx).await.unwrap();
-    let result = client.submit_and_await_commit(&tx).await;
+    let tx = upgrade.into();
+    let estimate_predicates = true;
+    let result = client
+        .submit_and_await_commit_opt(&tx, Some(estimate_predicates))
+        .await;
     let result = result.expect("We should be able to upgrade to the uploaded bytecode");
     assert!(matches!(result, TransactionStatus::Success { .. }));
     client
