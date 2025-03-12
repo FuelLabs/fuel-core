@@ -2,8 +2,8 @@
 source: crates/client/src/client/schema/tx.rs
 expression: query.query
 ---
-mutation Submit($tx: HexString!) {
-  submit(tx: $tx) {
+mutation Submit($tx: HexString!, $estimatePredicates: Boolean) {
+  submit(tx: $tx, estimatePredicates: $estimatePredicates) {
     id
   }
 }

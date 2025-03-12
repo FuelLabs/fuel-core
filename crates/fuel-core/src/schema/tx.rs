@@ -63,6 +63,7 @@ use fuel_core_storage::{
     iter::IterDirection,
     Error as StorageError,
     IsNotFound,
+    PredicateStorageRequirements,
     Result as StorageResult,
 };
 use fuel_core_tx_status_manager::TxStatusMessage;
@@ -91,6 +92,7 @@ use futures::{
 };
 use std::{
     borrow::Cow,
+    future::Future,
     iter,
     sync::Arc,
 };
@@ -431,24 +433,15 @@ impl TxQuery {
     ) -> async_graphql::Result<Transaction> {
         let query = ctx.read_view()?.into_owned();
 
-        let mut tx = FuelTx::from_bytes(&tx.0)?;
+        let tx = FuelTx::from_bytes(&tx.0)?;
 
-        let params = ctx
+        let tx = ctx.estimate_predicates(tx, query).await?;
+        let chain_id = ctx
             .data_unchecked::<ChainInfoProvider>()
-            .current_consensus_params();
+            .current_consensus_params()
+            .chain_id();
 
-        let memory_pool = ctx.data_unchecked::<SharedMemoryPool>();
-        let memory = memory_pool.get_memory().await;
-
-        let parameters = CheckPredicateParams::from(params.as_ref());
-        let tx = tokio_rayon::spawn_fifo(move || {
-            let result = tx.estimate_predicates(&parameters, memory, &query);
-            result.map(|_| tx)
-        })
-        .await
-        .map_err(|err| anyhow::anyhow!("{:?}", err))?;
-
-        Ok(Transaction::from_tx(tx.id(&params.chain_id()), tx))
+        Ok(Transaction::from_tx(tx.id(&chain_id), tx))
     }
 
     #[cfg(feature = "test-helpers")]
@@ -583,18 +576,26 @@ impl TxMutation {
         &self,
         ctx: &Context<'_>,
         tx: HexString,
+        estimate_predicates: Option<bool>,
     ) -> async_graphql::Result<Transaction> {
         let txpool = ctx.data_unchecked::<TxPool>();
-        let params = ctx
-            .data_unchecked::<ChainInfoProvider>()
-            .current_consensus_params();
-        let tx = FuelTx::from_bytes(&tx.0)?;
+        let mut tx = FuelTx::from_bytes(&tx.0)?;
+
+        if estimate_predicates.unwrap_or(false) {
+            let query = ctx.read_view()?.into_owned();
+            tx = ctx.estimate_predicates(tx, query).await?;
+        }
 
         txpool
             .insert(tx.clone())
             .await
             .map_err(|e| anyhow::anyhow!(e))?;
-        let id = tx.id(&params.chain_id());
+
+        let chain_id = ctx
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params()
+            .chain_id();
+        let id = tx.id(&chain_id);
 
         let tx = Transaction(tx, id);
         Ok(tx)
@@ -646,11 +647,14 @@ impl TxStatusSubscription {
         &self,
         ctx: &'a Context<'a>,
         tx: HexString,
+        estimate_predicates: Option<bool>,
     ) -> async_graphql::Result<
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
         use tokio_stream::StreamExt;
-        let subscription = submit_and_await_status(ctx, tx).await?;
+        let subscription =
+            submit_and_await_status(ctx, tx, estimate_predicates.unwrap_or(false))
+                .await?;
 
         Ok(subscription
             .skip_while(|event| matches!(event, Ok(TransactionStatus::Submitted(..))))
@@ -665,16 +669,18 @@ impl TxStatusSubscription {
         &self,
         ctx: &'a Context<'a>,
         tx: HexString,
+        estimate_predicates: Option<bool>,
     ) -> async_graphql::Result<
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
-        submit_and_await_status(ctx, tx).await
+        submit_and_await_status(ctx, tx, estimate_predicates.unwrap_or(false)).await
     }
 }
 
 async fn submit_and_await_status<'a>(
     ctx: &'a Context<'a>,
     tx: HexString,
+    estimate_predicates: bool,
 ) -> async_graphql::Result<
     impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
 > {
@@ -684,8 +690,14 @@ async fn submit_and_await_status<'a>(
     let params = ctx
         .data_unchecked::<ChainInfoProvider>()
         .current_consensus_params();
-    let tx = FuelTx::from_bytes(&tx.0)?;
+    let mut tx = FuelTx::from_bytes(&tx.0)?;
     let tx_id = tx.id(&params.chain_id());
+
+    if estimate_predicates {
+        let query = ctx.read_view()?.into_owned();
+        tx = ctx.estimate_predicates(tx, query).await?;
+    }
+
     let subscription = tx_status_manager.tx_update_subscribe(tx_id).await?;
 
     txpool.insert(tx).await?;
@@ -842,7 +854,13 @@ pub trait ContextExt {
     fn try_find_tx(
         &self,
         id: Bytes32,
-    ) -> impl std::future::Future<Output = StorageResult<Option<FuelTx>>> + Send;
+    ) -> impl Future<Output = StorageResult<Option<FuelTx>>> + Send;
+
+    fn estimate_predicates(
+        &self,
+        tx: FuelTx,
+        query: impl PredicateStorageRequirements + Send + Sync + 'static,
+    ) -> impl Future<Output = anyhow::Result<FuelTx>> + Send;
 }
 
 impl<'a> ContextExt for Context<'a> {
@@ -861,5 +879,41 @@ impl<'a> ContextExt for Context<'a> {
                 result.map(Some)
             }
         }
+    }
+
+    async fn estimate_predicates(
+        &self,
+        mut tx: FuelTx,
+        query: impl PredicateStorageRequirements + Send + Sync + 'static,
+    ) -> anyhow::Result<FuelTx> {
+        let mut has_predicates = false;
+
+        for input in tx.inputs()? {
+            if input.predicate().is_some() {
+                has_predicates = true;
+                break;
+            }
+        }
+
+        if !has_predicates {
+            return Ok(tx);
+        }
+
+        let params = self
+            .data_unchecked::<ChainInfoProvider>()
+            .current_consensus_params();
+
+        let memory_pool = self.data_unchecked::<SharedMemoryPool>();
+        let memory = memory_pool.get_memory().await;
+
+        let parameters = CheckPredicateParams::from(params.as_ref());
+        let tx = tokio_rayon::spawn_fifo(move || {
+            let result = tx.estimate_predicates(&parameters, memory, &query);
+            result.map(|_| tx)
+        })
+        .await
+        .map_err(|err| anyhow::anyhow!("{:?}", err))?;
+
+        Ok(tx)
     }
 }
