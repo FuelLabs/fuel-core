@@ -162,7 +162,7 @@ mod coin {
             .await
             .unwrap();
         assert_eq!(coins_per_asset.len(), 2);
-        assert!(coins_per_asset[0].is_empty());
+        assert!(coins_per_asset[0].len() >= 1);
         assert!(coins_per_asset[0].amount() >= 1);
         assert_eq!(coins_per_asset[1].len(), 1);
     }
@@ -283,8 +283,8 @@ mod coin {
             .coins_to_spend(
                 &owner,
                 vec![
-                    (asset_id_a, 300, Some(MAX as u16)),
-                    (asset_id_b, 300, Some(MAX as u16)),
+                    (asset_id_a, 300, Some(MAX)),
+                    (asset_id_b, 300, Some(MAX)),
                 ],
                 None,
             )
@@ -495,7 +495,7 @@ mod message_coin {
         // not enough inputs
         let coins_per_asset = context
             .client
-            .coins_to_spend(&owner, vec![(base_asset_id, 300, Some(MAX as u16))], None)
+            .coins_to_spend(&owner, vec![(base_asset_id, 300, Some(MAX))], None)
             .await;
         assert!(coins_per_asset.is_err());
         assert_eq!(
@@ -601,7 +601,7 @@ mod all_coins {
             .await
             .unwrap();
         assert_eq!(coins_per_asset.len(), 2);
-        assert!(coins_per_asset[0].is_empty());
+        assert!(coins_per_asset[0].len() >= 1);
         assert!(coins_per_asset[0].amount() >= 1);
         assert_eq!(coins_per_asset[1].len(), 1);
     }
@@ -720,8 +720,8 @@ mod all_coins {
             .coins_to_spend(
                 &owner,
                 vec![
-                    (asset_id_a, 300, Some(MAX as u16)),
-                    (asset_id_b, 300, Some(MAX as u16)),
+                    (asset_id_a, 300, Some(MAX)),
+                    (asset_id_b, 300, Some(MAX)),
                 ],
                 None,
             )

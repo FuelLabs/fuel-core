@@ -88,15 +88,8 @@ pub struct TxPoolArgs {
     pub tx_pending_pool_ttl: humantime::Duration,
 
     /// The max percentage of the `TxPool` that can be used by the `PendingPool`.
-    #[clap(long = "tx-pending-pool-size-percentage", default_value = "50", value_parser = parse_clamped_percentage, env)]
+    #[clap(long = "tx-pending-pool-size-percentage", default_value = "50", env)]
     pub tx_pending_pool_size_percentage: ClampedPercentage,
-}
-
-fn parse_clamped_percentage(
-    s: &str,
-) -> Result<ClampedPercentage, std::num::ParseIntError> {
-    let value = s.parse::<u8>()?;
-    Ok(ClampedPercentage::new(value))
 }
 
 #[cfg(test)]
