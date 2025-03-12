@@ -3,6 +3,7 @@ use fuel_core_types::{
     fuel_tx::Bytes64,
     services::{
         p2p::{
+            DelegatePreConfirmationKey,
             DelegatePublicKey,
             ProtocolSignature,
             Sealed,
@@ -16,8 +17,10 @@ pub struct PreconfirmationSignatureVerification;
 impl SignatureVerification for PreconfirmationSignatureVerification {
     async fn add_new_delegate(
         &mut self,
-        _delegate: DelegatePublicKey,
-        _protocol_signature: ProtocolSignature,
+        _sealed: &Sealed<
+            DelegatePreConfirmationKey<DelegatePublicKey>,
+            ProtocolSignature,
+        >,
     ) -> bool {
         true
     }

@@ -25,6 +25,7 @@ use fuel_core_types::{
     },
     services::{
         p2p::{
+            DelegatePreConfirmationKey,
             DelegatePublicKey,
             GossipData,
             PreConfirmationMessage,
@@ -117,8 +118,7 @@ pub trait SignatureVerification: Send {
     /// Adds a new delegate signature to verify the preconfirmations
     fn add_new_delegate(
         &mut self,
-        delegate: DelegatePublicKey,
-        protocol_signature: ProtocolSignature,
+        sealed: &Sealed<DelegatePreConfirmationKey<DelegatePublicKey>, ProtocolSignature>,
     ) -> impl Future<Output = bool> + Send;
 
     /// Checks pre-confirmation signature
@@ -153,12 +153,7 @@ impl<T: SignatureVerification> Task<T> {
                     "Received new delegate signature from peer: {:?}",
                     sealed.entity.public_key
                 );
-                let Sealed { signature, entity } = sealed;
-                let delegate_key = entity.public_key;
-                let _ = self
-                    .signature_verification
-                    .add_new_delegate(delegate_key, signature)
-                    .await;
+                let _ = self.signature_verification.add_new_delegate(&sealed).await;
                 let drained = std::mem::take(&mut self.early_preconfirmations);
                 for sealed in drained {
                     if self
@@ -438,21 +433,19 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // then
-        let (actual_delegate_key, actual_protocol_signature) = new_delegate_handle
+        let actual = new_delegate_handle
             .new_delegate_receiver
             .recv()
             .await
             .unwrap();
-        let (expected_delegate_key, expected_protocol_signature) =
-            if let P2PPreConfirmationMessage::Delegate(sealed) =
-                delegate_signature_message.data.unwrap()
-            {
-                (sealed.entity.public_key, sealed.signature)
-            } else {
-                panic!("Expected Delegate message");
-            };
-        assert_eq!(actual_delegate_key, expected_delegate_key);
-        assert_eq!(actual_protocol_signature, expected_protocol_signature);
+        let expected = if let PreConfirmationMessage::Delegate(delegate_info) =
+            delegate_signature_message.data.unwrap()
+        {
+            delegate_info
+        } else {
+            panic!("Expected Delegate message");
+        };
+        assert_eq!(actual, expected);
     }
 
     async fn all_streams_return_success(streams: Vec<TxStatusStream>) -> bool {

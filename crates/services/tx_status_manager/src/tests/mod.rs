@@ -25,15 +25,20 @@ mod tests_update_stream_state;
 mod universe;
 mod utils;
 
+use fuel_core_types::services::p2p::DelegatePreConfirmationKey;
 use tracing_subscriber as _;
 
 pub(crate) struct FakeSignatureVerification {
-    new_delegate_sender: mpsc::Sender<(DelegatePublicKey, ProtocolSignature)>,
+    new_delegate_sender: mpsc::Sender<
+        Sealed<DelegatePreConfirmationKey<DelegatePublicKey>, ProtocolSignature>,
+    >,
     preconfirmation_signature_success: Arc<std::sync::atomic::AtomicBool>,
 }
 
 pub(crate) struct FakeSignatureVerificationHandles {
-    pub new_delegate_receiver: mpsc::Receiver<(DelegatePublicKey, ProtocolSignature)>,
+    pub new_delegate_receiver: mpsc::Receiver<
+        Sealed<DelegatePreConfirmationKey<DelegatePublicKey>, ProtocolSignature>,
+    >,
     pub verification_result: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -68,14 +73,10 @@ impl FakeSignatureVerification {
 impl SignatureVerification for FakeSignatureVerification {
     async fn add_new_delegate(
         &mut self,
-        _delegate: DelegatePublicKey,
-        _protocol_signature: ProtocolSignature,
+        sealed: &Sealed<DelegatePreConfirmationKey<DelegatePublicKey>, ProtocolSignature>,
     ) -> bool {
         tracing::debug!("FakeSignatureVerification::add_new_delegate");
-        self.new_delegate_sender
-            .send((_delegate, _protocol_signature))
-            .await
-            .unwrap();
+        self.new_delegate_sender.send(sealed.clone()).await.unwrap();
         true
     }
 
