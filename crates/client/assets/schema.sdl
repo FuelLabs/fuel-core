@@ -1320,8 +1320,8 @@ type Subscription {
 	Returns a stream of status updates for the given transaction id.
 	If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
 	or [`TransactionStatus::Failed`] the stream will return that and end immediately.
-	If the current status is [`TransactionStatus::Submitted`] this will be returned
-	and the stream will wait for a future update.
+	Other, intermediate statuses will also be returned but the stream
+	will remain active and wait for a future updates.
 	
 	This stream will wait forever so it's advised to use within a timeout.
 	
@@ -1337,7 +1337,7 @@ type Subscription {
 		id: TransactionId!
 	): TransactionStatus!
 	"""
-	Submits transaction to the `TxPool` and await either confirmation or failure.
+	Submits transaction to the `TxPool` and await either success or failure.
 	"""
 	submitAndAwait(tx: HexString!): TransactionStatus!
 	"""

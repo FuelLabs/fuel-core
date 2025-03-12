@@ -153,6 +153,21 @@ pub enum TransactionStatus {
     },
 }
 
+impl TransactionStatus {
+    #[cfg(feature = "subscriptions")]
+    pub(super) fn is_final(&self) -> bool {
+        match self {
+            TransactionStatus::Success { .. }
+            | TransactionStatus::Failure { .. }
+            | TransactionStatus::SqueezedOut { .. } => true,
+            TransactionStatus::Submitted { .. }
+            | TransactionStatus::PreconfirmationSuccess { .. }
+            | TransactionStatus::PreconfirmationSqueezedOut { .. }
+            | TransactionStatus::PreconfirmationFailure { .. } => false,
+        }
+    }
+}
+
 impl TryFrom<SchemaTxStatus> for TransactionStatus {
     type Error = ConversionError;
 

@@ -450,6 +450,18 @@ impl TransactionStatus {
             }
         }
     }
+
+    pub fn is_final(&self) -> bool {
+        match self {
+            TransactionStatus::Success(_)
+            | TransactionStatus::Failure(_)
+            | TransactionStatus::SqueezedOut(_) => true,
+            TransactionStatus::Submitted(_)
+            | TransactionStatus::PreconfirmationSuccess(_)
+            | TransactionStatus::PreconfirmationSqueezedOut(_)
+            | TransactionStatus::PreconfirmationFailure(_) => false,
+        }
+    }
 }
 
 impl From<TransactionStatus> for TxStatus {
