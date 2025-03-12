@@ -264,6 +264,7 @@ pub(super) struct PoolWorker<View> {
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
     request_insert_receiver: Receiver<PoolInsertRequest>,
     pool: TxPool,
+    // Transactions waiting for their dependencies to exists
     pending_pool: PendingPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
     notification_sender: Sender<PoolNotification>,
@@ -424,7 +425,8 @@ where
                         tracing::error!("Failed to send removed notification: {}", e);
                     }
                 }
-                let resolved_txs = self.pending_pool.new_known_tx(tx);
+                let resolved_txs =
+                    self.pending_pool.new_known_tx(tx.outputs().iter(), tx.id());
 
                 for (tx, source) in resolved_txs {
                     if let Err(e) = self
@@ -548,8 +550,18 @@ where
     fn preconfirmed_transactions(&mut self, txs: Vec<(TxId, PreconfirmationStatus)>) {
         for (tx_id, status) in txs {
             match status {
-                PreconfirmationStatus::Success { .. }
-                | PreconfirmationStatus::Failure { .. } => {}
+                PreconfirmationStatus::Success { outputs, .. }
+                | PreconfirmationStatus::Failure { outputs, .. } => {
+                    // All of this can be useful in case that we didn't know about the transaction
+                    let resolved = self.pending_pool.new_known_tx(outputs.iter(), tx_id);
+                    // First insert the outputs in the pool to be able to insert the resolved transactions
+                    self.pool
+                        .extracted_outputs
+                        .new_extracted_outputs(outputs.iter(), tx_id);
+                    for (tx, source) in resolved {
+                        self.insert(tx, source);
+                    }
+                }
                 PreconfirmationStatus::SqueezedOut { reason } => {
                     self.remove_skipped_transactions(vec![(
                         tx_id,

@@ -88,6 +88,35 @@ impl ExtractedOutputs {
         }
     }
 
+    pub fn new_extracted_outputs<'a>(
+        &mut self,
+        outputs: impl Iterator<Item = &'a Output>,
+        tx_id: TxId,
+    ) {
+        for output in outputs {
+            match output {
+                Output::ContractCreated { contract_id, .. } => {
+                    self.contract_created.insert(*contract_id, tx_id);
+                }
+                Output::Coin {
+                    to,
+                    amount,
+                    asset_id,
+                } => {
+                    self.coins_created
+                        .entry(tx_id)
+                        .or_default()
+                        .insert(UtxoId::new(tx_id, 0), (*to, *amount, *asset_id));
+                }
+                Output::Contract { .. }
+                | Output::Change { .. }
+                | Output::Variable { .. } => {
+                    continue;
+                }
+            }
+        }
+    }
+
     pub fn new_skipped_transaction(&mut self, tx_id: &TxId) {
         self.new_executed_transaction(tx_id);
     }
