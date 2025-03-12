@@ -143,8 +143,7 @@ pub fn init_sub_services(
     }
 
     let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
-        backtrace: config.vm.backtrace,
-        utxo_validation_default: config.utxo_validation,
+        forbid_fake_coins_default: config.utxo_validation,
         native_executor_version: config.native_executor_version,
         allow_historical_execution: config.historical_execution,
     };
@@ -398,7 +397,6 @@ pub fn init_sub_services(
         utxo_validation: config.utxo_validation,
         debug: config.debug,
         historical_execution: config.historical_execution,
-        vm_backtrace: config.vm.backtrace,
         max_tx: config.txpool.pool_limits.max_txs,
         max_gas: config.txpool.pool_limits.max_gas,
         max_size: config.txpool.pool_limits.max_bytes_size,

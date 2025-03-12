@@ -72,11 +72,14 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
     fn try_from(schema: Receipt) -> Result<Self, Self::Error> {
         Ok(match schema.receipt_type {
             ReceiptType::Call => fuel_tx::Receipt::Call {
-                id: schema.id.map(|id| id.into()).unwrap_or_default(),
+                id: schema
+                    .id
+                    .map(Into::into)
+                    .unwrap_or(fuel_tx::ContractId::zeroed()),
                 to: schema
                     .to
-                    .ok_or_else(|| MissingField("to".to_string()))?
-                    .into(),
+                    .map(Into::into)
+                    .unwrap_or(fuel_tx::ContractId::zeroed()),
                 amount: schema
                     .amount
                     .ok_or_else(|| MissingField("amount".to_string()))?
@@ -107,7 +110,10 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::Return => fuel_tx::Receipt::Return {
-                id: schema.id.map(|id| id.into()).unwrap_or_default(),
+                id: schema
+                    .id
+                    .map(Into::into)
+                    .unwrap_or(fuel_tx::ContractId::zeroed()),
                 val: schema
                     .val
                     .ok_or_else(|| MissingField("val".to_string()))?
@@ -122,7 +128,10 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::ReturnData => fuel_tx::Receipt::ReturnData {
-                id: schema.id.map(|id| id.into()).unwrap_or_default(),
+                id: schema
+                    .id
+                    .map(Into::into)
+                    .unwrap_or(fuel_tx::ContractId::zeroed()),
                 ptr: schema
                     .ptr
                     .ok_or_else(|| MissingField("ptr".to_string()))?
@@ -151,7 +160,10 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::Panic => fuel_tx::Receipt::Panic {
-                id: schema.id.map(|id| id.into()).unwrap_or_default(),
+                id: schema
+                    .id
+                    .map(Into::into)
+                    .unwrap_or(fuel_tx::ContractId::zeroed()),
                 reason: schema
                     .reason
                     .ok_or_else(|| MissingField("reason".to_string()))?
@@ -167,7 +179,10 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                 contract_id: schema.contract_id.map(Into::into),
             },
             ReceiptType::Revert => fuel_tx::Receipt::Revert {
-                id: schema.id.map(|id| id.into()).unwrap_or_default(),
+                id: schema
+                    .id
+                    .map(Into::into)
+                    .unwrap_or(fuel_tx::ContractId::zeroed()),
                 ra: schema
                     .ra
                     .ok_or_else(|| MissingField("ra".to_string()))?
@@ -182,7 +197,10 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::Log => fuel_tx::Receipt::Log {
-                id: schema.id.map(|id| id.into()).unwrap_or_default(),
+                id: schema
+                    .id
+                    .map(Into::into)
+                    .unwrap_or(fuel_tx::ContractId::zeroed()),
                 ra: schema
                     .ra
                     .ok_or_else(|| MissingField("ra".to_string()))?
@@ -209,7 +227,10 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::LogData => fuel_tx::Receipt::LogData {
-                id: schema.id.map(|id| id.into()).unwrap_or_default(),
+                id: schema
+                    .id
+                    .map(Into::into)
+                    .unwrap_or(fuel_tx::ContractId::zeroed()),
                 ra: schema
                     .ra
                     .ok_or_else(|| MissingField("ra".to_string()))?
@@ -246,7 +267,10 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::Transfer => fuel_tx::Receipt::Transfer {
-                id: schema.id.map(|id| id.into()).unwrap_or_default(),
+                id: schema
+                    .id
+                    .map(Into::into)
+                    .unwrap_or(fuel_tx::ContractId::zeroed()),
                 to: schema
                     .to
                     .ok_or_else(|| MissingField("to".to_string()))?
@@ -269,7 +293,10 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
                     .into(),
             },
             ReceiptType::TransferOut => fuel_tx::Receipt::TransferOut {
-                id: schema.id.map(|id| id.into()).unwrap_or_default(),
+                id: schema
+                    .id
+                    .map(Into::into)
+                    .unwrap_or(fuel_tx::ContractId::zeroed()),
                 to: schema
                     .to_address
                     .ok_or_else(|| MissingField("to_address".to_string()))?

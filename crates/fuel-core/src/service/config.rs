@@ -68,7 +68,6 @@ pub struct Config {
     pub executor_number_of_cores: NonZeroUsize,
     pub block_production: Trigger,
     pub predefined_blocks_path: Option<PathBuf>,
-    pub vm: VMConfig,
     pub txpool: TxPoolConfig,
     pub tx_status_manager: TxStatusManagerConfig,
     pub block_producer: fuel_core_producer::Config,
@@ -167,6 +166,8 @@ impl Config {
                 request_body_bytes_limit: 16 * 1024 * 1024,
                 query_log_threshold_time: Duration::from_secs(2),
                 api_request_timeout: Duration::from_secs(60),
+                assemble_tx_dry_run_limit: 3,
+                assemble_tx_estimate_predicates_limit: 5,
                 costs: Default::default(),
                 required_fuel_block_height_tolerance: 10,
                 required_fuel_block_height_timeout: Duration::from_secs(30),
@@ -182,7 +183,6 @@ impl Config {
             snapshot_reader,
             block_production: Trigger::Instant,
             predefined_blocks_path: None,
-            vm: Default::default(),
             txpool: TxPoolConfig {
                 utxo_validation,
                 max_txs_ttl: MAX_TXS_TTL,
@@ -260,11 +260,6 @@ impl From<&Config> for fuel_core_poa::Config {
                 .chain_id(),
         }
     }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct VMConfig {
-    pub backtrace: bool,
 }
 
 #[derive(
