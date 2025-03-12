@@ -3655,7 +3655,6 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.41.7",
- "hex",
  "parking_lot",
  "serde",
  "tracing",
