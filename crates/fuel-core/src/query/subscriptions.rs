@@ -51,15 +51,7 @@ where
         // Keep taking the stream until the oneshot channel is closed.
         .take_until(closed)
         .map(move |status| {
-            let should_close_stream = status.is_final();
-
-            // TODO[RC]: This also closes the stream for Preconfirmation* statuses.
-            let _prev_impl = !matches!(
-                status,
-                TxStatusMessage::Status(TransactionStatus::Submitted(_))
-            ) ;
-
-            if should_close_stream {
+            if status.is_final() {
                 if let Some(close) = close.take() {
                     let _ = close.send(());
                 }
