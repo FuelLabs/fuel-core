@@ -479,8 +479,6 @@ where
                 }
             }
         }
-        self.pending_pool
-            .expire_transactions(self.notification_sender.clone());
     }
 
     fn extract_block_transactions(
@@ -508,9 +506,6 @@ where
         for (tx, source) in resolved_txs {
             self.insert(tx, source);
         }
-
-        self.pending_pool
-            .expire_transactions(self.notification_sender.clone());
     }
 
     fn remove_skipped_transactions(&mut self, parent_txs: Vec<(TxId, Error)>) {
