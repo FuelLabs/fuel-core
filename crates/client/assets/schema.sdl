@@ -1342,8 +1342,8 @@ type Subscription {
 	submitAndAwait(tx: HexString!): TransactionStatus!
 	"""
 	Submits the transaction to the `TxPool` and returns a stream of events.
-	Compared to the `submitAndAwait`, the stream also contains `
-	SubmittedStatus` as an intermediate state.
+	Compared to the `submitAndAwait`, the stream also contains
+	`SubmittedStatus` as an intermediate state.
 	"""
 	submitAndAwaitStatus(tx: HexString!): TransactionStatus!
 	contractStorageSlots(contractId: ContractId!): StorageSlot!
