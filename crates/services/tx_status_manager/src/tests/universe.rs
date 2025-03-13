@@ -8,15 +8,15 @@ use fuel_core_types::fuel_crypto::rand::{
 use parking_lot::Mutex;
 use std::time::Duration;
 
+use super::mocks::MockP2P;
 use crate::{
     config::Config,
     new_service,
+    tests::FakeSignatureVerification,
     update_sender::TxStatusChange,
     Task,
     TxStatusManager,
 };
-
-use super::mocks::MockP2P;
 
 const TX_STATUS_MANAGER_TTL: Duration = Duration::from_secs(5);
 
@@ -60,9 +60,14 @@ impl TestTxStatusManagerUniverse {
         self.tx_status_manager = Some(tx_status_manager.clone());
     }
 
-    pub fn build_service(&self, p2p: Option<MockP2P>) -> ServiceRunner<Task> {
+    pub fn build_service(
+        &self,
+        p2p: Option<MockP2P>,
+    ) -> ServiceRunner<Task<FakeSignatureVerification>> {
         let p2p = p2p.unwrap_or_else(|| MockP2P::new_with_statuses(vec![]));
+        let (signature_verification, _) =
+            FakeSignatureVerification::new_with_handles(true);
 
-        new_service(p2p, self.config.clone())
+        new_service(p2p, signature_verification, self.config.clone())
     }
 }

@@ -25,7 +25,10 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::signer::SignMode;
+use fuel_core_types::{
+    fuel_crypto::PublicKey,
+    signer::SignMode,
+};
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
@@ -41,6 +44,15 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
     tx_receiver::PreconfirmationsReceiver,
 };
 
+use super::{
+    adapters::{
+        FuelBlockSigner,
+        P2PAdapter,
+        TxStatusManagerAdapter,
+    },
+    genesis::create_genesis_block,
+    DbType,
+};
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -58,6 +70,7 @@ use crate::{
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
             ready_signal::ReadySignal,
+            tx_status_manager::signature_verification::PreconfirmationSignatureVerification,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ChainStateInfoProvider,
@@ -74,16 +87,6 @@ use crate::{
         SharedState,
         SubServices,
     },
-};
-
-use super::{
-    adapters::{
-        FuelBlockSigner,
-        P2PAdapter,
-        TxStatusManagerAdapter,
-    },
-    genesis::create_genesis_block,
-    DbType,
 };
 
 pub type PoAService = fuel_core_poa::Service<
@@ -257,8 +260,13 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
     );
 
+    // TODO: Use real values
+    let signature_verification =
+        PreconfirmationSignatureVerification::new(PublicKey::default());
+
     let tx_status_manager = fuel_core_tx_status_manager::new_service(
         p2p_adapter.clone(),
+        signature_verification,
         config.tx_status_manager.clone(),
     );
     let tx_status_manager_adapter =
