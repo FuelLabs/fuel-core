@@ -1,3 +1,4 @@
+use fuel_core_types::clamped_percentage::ClampedPercentage;
 use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
 
 /// DO NOT TOUCH! DEPLOYED TO MAINNET
@@ -23,8 +24,8 @@ pub struct V0Metadata {
 pub struct V0AlgorithmConfig {
     pub starting_gas_price: u64,
     pub min_gas_price: u64,
-    pub gas_price_change_percent: u64,
-    pub gas_price_threshold_percent: u64,
+    pub gas_price_change_percent: ClampedPercentage,
+    pub gas_price_threshold_percent: ClampedPercentage,
 }
 
 impl From<AlgorithmUpdaterV0> for V0Metadata {
@@ -33,9 +34,10 @@ impl From<AlgorithmUpdaterV0> for V0Metadata {
             new_exec_price: updater.new_exec_price,
             l2_block_height: updater.l2_block_height,
             _min_exec_gas_price: updater.min_exec_gas_price,
-            _exec_gas_price_change_percent: updater.exec_gas_price_change_percent,
-            _l2_block_fullness_threshold_percent: updater
-                .l2_block_fullness_threshold_percent,
+            _exec_gas_price_change_percent: *updater.exec_gas_price_change_percent as u64,
+            _l2_block_fullness_threshold_percent: *updater
+                .l2_block_fullness_threshold_percent
+                as u64,
         }
     }
 }
