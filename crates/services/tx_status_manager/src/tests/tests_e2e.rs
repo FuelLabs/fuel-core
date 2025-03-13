@@ -57,27 +57,44 @@ pub(crate) enum StateTransitions {
     Next,
 }
 
-pub(crate) fn validate_tx_update_stream_state(
+pub(crate) fn apply_tx_state_transition(
     state: State,
     transition: StateTransitions,
 ) -> State {
     use State::*;
     use StateTransitions::*;
     match (state, transition) {
-        (Empty, AddMsg(TxStatusMessage::Status(s))) => {
-            if s.is_submitted() {
-                Initial(s)
-            } else {
-                // If not Submitted, it's an early success.
-                EarlySuccess(s)
+        (Empty, AddMsg(TxStatusMessage::Status(s))) => match s {
+            TransactionStatus::Submitted(s) => Submitted(TransactionStatus::Submitted(s)),
+            TransactionStatus::PreConfirmationSuccess(s) => {
+                Preconfirmed(TransactionStatus::PreConfirmationSuccess(s))
             }
-        }
+            TransactionStatus::PreConfirmationFailure(s) => {
+                Preconfirmed(TransactionStatus::PreConfirmationFailure(s))
+            }
+            s => EarlySuccess(s),
+        },
         (Empty, AddMsg(TxStatusMessage::FailedStatus)) => Failed,
         (Empty, AddFailure) => Failed,
-        (Empty | Initial(_), Next) => Empty,
-        (Initial(s1), AddMsg(TxStatusMessage::Status(s2))) => Success(s1, s2),
-        (Initial(s1), AddMsg(TxStatusMessage::FailedStatus)) => LateFailed(s1),
-        (Initial(s), AddFailure) => LateFailed(s),
+        (Empty | Submitted(_) | Preconfirmed(_), Next) => Empty,
+        (
+            Submitted(_),
+            AddMsg(TxStatusMessage::Status(TransactionStatus::Submitted(s))),
+        ) => Submitted(TransactionStatus::Submitted(s)),
+        (
+            Submitted(_),
+            AddMsg(TxStatusMessage::Status(TransactionStatus::PreConfirmationSuccess(s))),
+        ) => Preconfirmed(TransactionStatus::PreConfirmationSuccess(s)),
+        (
+            Submitted(_),
+            AddMsg(TxStatusMessage::Status(TransactionStatus::PreConfirmationFailure(s))),
+        ) => Preconfirmed(TransactionStatus::PreConfirmationFailure(s)),
+        (Submitted(s1), AddMsg(TxStatusMessage::Status(s2))) => Success(s1, s2),
+        (Submitted(s1), AddMsg(TxStatusMessage::FailedStatus)) => LateFailed(s1),
+        (Submitted(s), AddFailure) => LateFailed(s),
+        (Preconfirmed(s1), AddMsg(TxStatusMessage::Status(s2))) => Success(s1, s2),
+        (Preconfirmed(s1), AddMsg(TxStatusMessage::FailedStatus)) => LateFailed(s1),
+        (Preconfirmed(s), AddFailure) => LateFailed(s),
         (_, CloseRecv) => Closed,
         (EarlySuccess(_) | Failed | SenderClosed(_), Next) => Closed,
         (LateFailed(_), Next) => Failed,
@@ -98,10 +115,10 @@ pub(super) fn validate_send(
     msg: TxStatusMessage,
 ) -> State {
     // Add the message to the stream.
-    let state = validate_tx_update_stream_state(state, StateTransitions::AddMsg(msg));
+    let state = apply_tx_state_transition(state, StateTransitions::AddMsg(msg));
 
     // Try to get the next message from the stream.
-    let state = validate_tx_update_stream_state(state, StateTransitions::Next);
+    let state = apply_tx_state_transition(state, StateTransitions::Next);
 
     // Try to send the message to the receiver.
     match tx {
@@ -109,11 +126,11 @@ pub(super) fn validate_send(
         Ok(()) => state,
         // If the receiver is closed, then update the state.
         Err(SendError::Closed) => {
-            validate_tx_update_stream_state(state, StateTransitions::CloseRecv)
+            apply_tx_state_transition(state, StateTransitions::CloseRecv)
         }
         // If the receiver is full, then update the state.
         Err(SendError::Full) => {
-            validate_tx_update_stream_state(state, StateTransitions::AddFailure)
+            apply_tx_state_transition(state, StateTransitions::AddFailure)
         }
     }
 }
