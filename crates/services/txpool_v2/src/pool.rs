@@ -140,36 +140,16 @@ where
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
     ) -> Result<Vec<ArcPoolTx>, InsertionErrorType> {
-        let tx_id = tx.id();
         let insertion_result = self.insert_inner(tx, persistent_storage);
         self.register_transaction_counts();
-        insertion_result.map(|(removed_transactions, creation_instant, executable)| {
-            if executable {
-                self.new_executable_txs_notifier.send_replace(());
-            }
-            let duration = i64::try_from(
-                creation_instant
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .expect("Time can't be less than UNIX EPOCH")
-                    .as_secs(),
-            )
-            .expect("Duration is less than i64::MAX");
-            self.tx_status_manager.status_update(
-                tx_id,
-                TransactionStatus::submitted(Tai64::from_unix(duration)),
-            );
-            removed_transactions
-        })
+        insertion_result
     }
 
     fn insert_inner(
         &mut self,
         tx: std::sync::Arc<PoolTransaction>,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<
-        (Vec<std::sync::Arc<PoolTransaction>>, SystemTime, bool),
-        InsertionErrorType,
-    > {
+    ) -> Result<Vec<std::sync::Arc<PoolTransaction>>, InsertionErrorType> {
         let CanStoreTransaction {
             checked_transaction,
             transactions_to_remove,
@@ -218,10 +198,22 @@ where
             Storage::get(&self.storage, &storage_id).expect("Transaction is set above");
         self.collision_manager.on_stored_transaction(storage_id, tx);
 
+        let duration = i64::try_from(
+            creation_instant
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("Time can't be less than UNIX EPOCH")
+                .as_secs(),
+        )
+        .expect("Duration is less than i64::MAX");
+        self.tx_status_manager.status_update(
+            tx_id,
+            TransactionStatus::submitted(Tai64::from_unix(duration)),
+        );
         // No dependencies directly in the graph and the sorted transactions
         if !has_dependencies {
             self.selection_algorithm
                 .new_executable_transaction(storage_id, tx);
+            self.new_executable_txs_notifier.send_replace(());
         }
 
         let removed_transactions = removed_transactions
@@ -229,7 +221,7 @@ where
             .map(|data| data.transaction)
             .collect::<Vec<_>>();
         self.update_stats();
-        Ok((removed_transactions, creation_instant, !has_dependencies))
+        Ok(removed_transactions)
     }
 
     fn update_stats(&self) {
