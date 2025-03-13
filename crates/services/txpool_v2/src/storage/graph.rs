@@ -45,11 +45,8 @@ use crate::{
         InputValidationError,
         InputValidationErrorType,
     },
+    extracted_outputs::ExtractedOutputs,
     pending_pool::MissingInput,
-    pool::{
-        SavedCoinOutput,
-        SavedOutput,
-    },
     ports::TxPoolPersistentStorage,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
     storage::checked_collision::CheckedTransaction,
@@ -620,7 +617,7 @@ impl Storage for GraphStorage {
         &self,
         transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
-        saved_outputs: &HashSet<SavedOutput>,
+        extracted_outputs: &ExtractedOutputs,
         utxo_validation: bool,
     ) -> Result<(), InputValidationErrorType> {
         let mut missing_inputs = Vec::new();
@@ -671,13 +668,9 @@ impl Storage for GraphStorage {
                                 }
                             }
                             Ok(None) => {
-                                let linked_output = SavedOutput::Coin(SavedCoinOutput {
-                                    utxo_id: *utxo_id,
-                                    to: *owner,
-                                    amount: *amount,
-                                    asset_id: *asset_id,
-                                });
-                                if saved_outputs.contains(&linked_output) {
+                                if extracted_outputs
+                                    .coin_exists(utxo_id, owner, amount, asset_id)
+                                {
                                     continue;
                                 }
                                 missing_inputs.push(MissingInput::Utxo(*utxo_id));
@@ -730,8 +723,7 @@ impl Storage for GraphStorage {
                         match persistent_storage.contract_exist(contract_id) {
                             Ok(true) => {}
                             Ok(false) => {
-                                let linked_output = SavedOutput::Contract(*contract_id);
-                                if saved_outputs.contains(&linked_output) {
+                                if extracted_outputs.contract_exists(contract_id) {
                                     continue;
                                 }
                                 missing_inputs.push(MissingInput::Contract(*contract_id));

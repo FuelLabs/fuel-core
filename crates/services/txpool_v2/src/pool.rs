@@ -1,10 +1,7 @@
 mod collisions;
 
 use std::{
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::HashMap,
     iter,
     time::{
         Instant,
@@ -17,13 +14,7 @@ use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_types::{
     fuel_tx::{
         field::BlobId,
-        Address,
-        AssetId,
-        ContractId,
-        Output,
         TxId,
-        UtxoId,
-        Word,
     },
     services::txpool::{
         ArcPoolTx,
@@ -44,6 +35,7 @@ use crate::{
         InputValidationError,
         InsertionErrorType,
     },
+    extracted_outputs::ExtractedOutputs,
     ports::TxPoolPersistentStorage,
     selection_algorithms::{
         Constraints,
@@ -56,25 +48,14 @@ use crate::{
     },
 };
 
+#[cfg(test)]
+use std::collections::HashSet;
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TxPoolStats {
     pub tx_count: u64,
     pub total_size: u64,
     pub total_gas: u64,
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Eq, Ord)]
-pub(crate) struct SavedCoinOutput {
-    pub utxo_id: UtxoId,
-    pub to: Address,
-    pub amount: Word,
-    pub asset_id: AssetId,
-}
-
-#[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Eq, Ord)]
-pub(crate) enum SavedOutput {
-    Coin(SavedCoinOutput),
-    Contract(ContractId),
 }
 
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
@@ -91,7 +72,7 @@ pub struct Pool<S, SI, CM, SA> {
     /// Mapping from tx_id to storage_id.
     pub(crate) tx_id_to_storage_id: HashMap<TxId, SI>,
     /// All sent outputs when transactions are extracted. Clear when processing a block.
-    pub(crate) extracted_outputs: HashSet<SavedOutput>,
+    pub(crate) extracted_outputs: ExtractedOutputs,
     /// Current pool gas stored.
     pub(crate) current_gas: u64,
     /// Current pool size in bytes.
@@ -118,7 +99,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             selection_algorithm,
             config,
             tx_id_to_storage_id: HashMap::new(),
-            extracted_outputs: HashSet::new(),
+            extracted_outputs: ExtractedOutputs::new(),
             current_gas: 0,
             current_bytes_size: 0,
             pool_stats_sender,
@@ -329,42 +310,6 @@ where
         }
     }
 
-    fn populate_saved_outputs_cache(&mut self, best_txs: &[StorageData]) {
-        for tx in best_txs {
-            for (idx, output) in tx.transaction.outputs().iter().enumerate() {
-                match output {
-                    Output::Coin {
-                        to,
-                        amount,
-                        asset_id,
-                    } => {
-                        self.extracted_outputs.insert(SavedOutput::Coin(
-                            SavedCoinOutput {
-                                utxo_id: UtxoId::new(
-                                    tx.transaction.id(),
-                                    u16::try_from(idx)
-                                        .expect("Outputs count is less than u16::MAX"),
-                                ),
-                                to: *to,
-                                amount: *amount,
-                                asset_id: *asset_id,
-                            },
-                        ));
-                    }
-                    Output::ContractCreated { contract_id, .. } => {
-                        self.extracted_outputs
-                            .insert(SavedOutput::Contract(*contract_id));
-                    }
-                    Output::Contract { .. }
-                    | Output::Change { .. }
-                    | Output::Variable { .. } => {
-                        continue;
-                    }
-                }
-            }
-        }
-    }
-
     /// Extract transactions for a block.
     /// Returns a list of transactions that were selected for the block
     /// based on the constraints given in the configuration and the selection algorithm used.
@@ -377,8 +322,6 @@ where
         let best_txs = self
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
-
-        self.populate_saved_outputs_cache(&best_txs);
 
         if let Some(start) = maybe_start {
             Self::record_select_transaction_time(start)
@@ -393,6 +336,8 @@ where
         let txs = best_txs
             .into_iter()
             .map(|storage_entry| {
+                self.extracted_outputs
+                    .new_extracted_transaction(&storage_entry.transaction);
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
                 storage_entry.transaction
             })
@@ -419,9 +364,9 @@ where
     /// - Remove transaction but keep its dependents and the dependents become executables.
     /// - Notify about possible new executable transactions.
     pub fn process_block(&mut self, tx_ids: impl Iterator<Item = TxId>) {
-        self.extracted_outputs.clear();
         let mut transactions_to_promote = vec![];
         for tx_id in tx_ids {
+            self.extracted_outputs.new_executed_transaction(&tx_id);
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents: Vec<S::StorageIndex> =
                     self.storage.get_direct_dependents(storage_id).collect();
@@ -624,7 +569,8 @@ where
         removed_transactions
     }
 
-    pub fn remove_coin_dependents(&mut self, tx_id: TxId) -> Vec<ArcPoolTx> {
+    pub fn remove_skipped_transaction(&mut self, tx_id: TxId) -> Vec<ArcPoolTx> {
+        self.extracted_outputs.new_skipped_transaction(&tx_id);
         let mut txs_removed = vec![];
         let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
         for dependent in coin_dependents {

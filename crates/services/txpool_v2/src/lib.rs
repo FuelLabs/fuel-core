@@ -44,6 +44,7 @@
 mod collision_manager;
 pub mod config;
 pub mod error;
+mod extracted_outputs;
 mod pending_pool;
 mod pool;
 mod pool_worker;
