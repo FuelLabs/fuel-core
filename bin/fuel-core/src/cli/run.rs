@@ -890,7 +890,7 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "error: invalid value 'alpha' for \
-            '--disable-metrics <DISABLED_METRICS>': Matching variant not found\
+            '--disable-metrics <METRICS>': Matching variant not found\
             \n\nFor more information, try '--help'.\n"
         );
     }
