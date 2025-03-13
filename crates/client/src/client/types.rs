@@ -153,6 +153,20 @@ pub enum TransactionStatus {
     },
 }
 
+impl TransactionStatus {
+    pub fn is_final(&self) -> bool {
+        match self {
+            TransactionStatus::Success { .. }
+            | TransactionStatus::Failure { .. }
+            | TransactionStatus::SqueezedOut { .. }
+            | TransactionStatus::PreconfirmationSqueezedOut { .. } => true,
+            TransactionStatus::Submitted { .. }
+            | TransactionStatus::PreconfirmationSuccess { .. }
+            | TransactionStatus::PreconfirmationFailure { .. } => false,
+        }
+    }
+}
+
 impl TryFrom<SchemaTxStatus> for TransactionStatus {
     type Error = ConversionError;
 
