@@ -238,7 +238,7 @@ impl TaskBuilder {
         let task = PreConfirmationSignatureTask {
             tx_receiver,
             broadcast,
-            parent_signature,
+            parent_signature: Arc::new(parent_signature),
             key_generator,
             current_delegate_key,
             sealed_delegate_message: Sealed { entity, signature },

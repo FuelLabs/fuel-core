@@ -127,7 +127,7 @@ pub struct TestPoolUniverse {
     mock_db: MockDb,
     rng: StdRng,
     pub config: Config,
-    pool: Option<Shared<TxPool>>,
+    pool: Option<Shared<TxPool<MockTxStatusManager>>>,
     mock_tx_status_manager: MockTxStatusManager,
     tx_status_manager_receiver: mpsc::Receiver<(TxId, TransactionStatus)>,
     stats_receiver: Option<tokio::sync::watch::Receiver<TxPoolStats>>,
@@ -185,6 +185,7 @@ impl TestPoolUniverse {
             self.config.clone(),
             tx,
             tx_new_executable_txs,
+            Arc::new(MockTxStatusManager::new(mpsc::channel(100).0)),
         )));
         self.stats_receiver = Some(rx);
         self.pool = Some(pool.clone());
@@ -393,7 +394,7 @@ impl TestPoolUniverse {
         pool.assert_integrity(txs);
     }
 
-    pub fn get_pool(&self) -> Shared<TxPool> {
+    pub fn get_pool(&self) -> Shared<TxPool<MockTxStatusManager>> {
         self.pool.clone().unwrap()
     }
 

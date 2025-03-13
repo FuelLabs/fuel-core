@@ -3,6 +3,7 @@ mod collisions;
 use std::{
     collections::HashMap,
     iter,
+    sync::Arc,
     time::{
         Instant,
         SystemTime,
@@ -19,7 +20,9 @@ use fuel_core_types::{
     services::txpool::{
         ArcPoolTx,
         PoolTransaction,
+        TransactionStatus,
     },
+    tai64::Tai64,
 };
 use num_rational::Ratio;
 
@@ -36,7 +39,10 @@ use crate::{
         InsertionErrorType,
     },
     extracted_outputs::ExtractedOutputs,
-    ports::TxPoolPersistentStorage,
+    ports::{
+        TxPoolPersistentStorage,
+        TxStatusManager as TxStatusManagerTrait,
+    },
     selection_algorithms::{
         Constraints,
         SelectionAlgorithm,
@@ -60,7 +66,7 @@ pub struct TxPoolStats {
 
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
 /// and allowing the selection of transactions for inclusion in a block.
-pub struct Pool<S, SI, CM, SA> {
+pub struct Pool<S, SI, CM, SA, TxStatusManager> {
     /// Configuration of the pool.
     pub(crate) config: Config,
     /// The storage of the pool.
@@ -81,9 +87,11 @@ pub struct Pool<S, SI, CM, SA> {
     pub(crate) pool_stats_sender: tokio::sync::watch::Sender<TxPoolStats>,
     /// New executable transactions notifier.
     pub(crate) new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
+    /// Transaction status manager.
+    pub(crate) tx_status_manager: Arc<TxStatusManager>,
 }
 
-impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
+impl<S, SI, CM, SA, TxStatusManager> Pool<S, SI, CM, SA, TxStatusManager> {
     /// Create a new pool.
     pub fn new(
         storage: S,
@@ -92,6 +100,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
         config: Config,
         pool_stats_sender: tokio::sync::watch::Sender<TxPoolStats>,
         new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
+        tx_status_manager: Arc<TxStatusManager>,
     ) -> Self {
         Pool {
             storage,
@@ -104,6 +113,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             current_bytes_size: 0,
             pool_stats_sender,
             new_executable_txs_notifier,
+            tx_status_manager,
         }
     }
 
@@ -113,11 +123,13 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
     }
 }
 
-impl<S: Storage, CM, SA> Pool<S, S::StorageIndex, CM, SA>
+impl<S: Storage, CM, SA, TxStatusManager>
+    Pool<S, S::StorageIndex, CM, SA, TxStatusManager>
 where
     S: Storage,
     CM: CollisionManager<StorageIndex = S::StorageIndex>,
     SA: SelectionAlgorithm<Storage = S, StorageIndex = S::StorageIndex>,
+    TxStatusManager: TxStatusManagerTrait,
 {
     /// Insert transactions into the pool.
     /// Returns a list of results for each transaction.
@@ -128,16 +140,36 @@ where
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
     ) -> Result<Vec<ArcPoolTx>, InsertionErrorType> {
+        let tx_id = tx.id();
         let insertion_result = self.insert_inner(tx, persistent_storage);
         self.register_transaction_counts();
-        insertion_result
+        insertion_result.map(|(removed_transactions, creation_instant, executable)| {
+            if executable {
+                self.new_executable_txs_notifier.send_replace(());
+            }
+            let duration = i64::try_from(
+                creation_instant
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .expect("Time can't be less than UNIX EPOCH")
+                    .as_secs(),
+            )
+            .expect("Duration is less than i64::MAX");
+            self.tx_status_manager.status_update(
+                tx_id,
+                TransactionStatus::submitted(Tai64::from_unix(duration)),
+            );
+            removed_transactions
+        })
     }
 
     fn insert_inner(
         &mut self,
         tx: std::sync::Arc<PoolTransaction>,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<Vec<std::sync::Arc<PoolTransaction>>, InsertionErrorType> {
+    ) -> Result<
+        (Vec<std::sync::Arc<PoolTransaction>>, SystemTime, bool),
+        InsertionErrorType,
+    > {
         let CanStoreTransaction {
             checked_transaction,
             transactions_to_remove,
@@ -190,7 +222,6 @@ where
         if !has_dependencies {
             self.selection_algorithm
                 .new_executable_transaction(storage_id, tx);
-            self.new_executable_txs_notifier.send_replace(());
         }
 
         let removed_transactions = removed_transactions
@@ -198,7 +229,7 @@ where
             .map(|data| data.transaction)
             .collect::<Vec<_>>();
         self.update_stats();
-        Ok(removed_transactions)
+        Ok((removed_transactions, creation_instant, !has_dependencies))
     }
 
     fn update_stats(&self) {

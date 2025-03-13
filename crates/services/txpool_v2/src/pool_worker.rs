@@ -39,7 +39,10 @@ use crate::{
         RemovedReason,
     },
     pending_pool::PendingPool,
-    ports::TxPoolPersistentStorage,
+    ports::{
+        TxPoolPersistentStorage,
+        TxStatusManager as TxStatusManagerTrait,
+    },
     service::{
         TxInfo,
         TxPool,
@@ -66,13 +69,14 @@ pub(super) struct PoolWorkerInterface {
 }
 
 impl PoolWorkerInterface {
-    pub fn new<View>(
-        tx_pool: TxPool,
+    pub fn new<View, TxStatusManager>(
+        tx_pool: TxPool<TxStatusManager>,
         view_provider: Arc<dyn AtomicView<LatestView = View>>,
         limits: &ServiceChannelLimits,
     ) -> Self
     where
         View: TxPoolPersistentStorage,
+        TxStatusManager: TxStatusManagerTrait,
     {
         let (request_read_sender, request_read_receiver) =
             mpsc::channel(limits.max_pending_read_pool_requests);
@@ -252,22 +256,23 @@ pub(super) enum PoolNotification {
     },
 }
 
-pub(super) struct PoolWorker<View> {
+pub(super) struct PoolWorker<View, TxStatusManager> {
     tx_insert_from_pending_sender: Sender<PoolInsertRequest>,
     thread_management_receiver: Receiver<ThreadManagementRequest>,
     request_remove_receiver: Receiver<PoolRemoveRequest>,
     request_read_receiver: Receiver<PoolReadRequest>,
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
     request_insert_receiver: Receiver<PoolInsertRequest>,
-    pool: TxPool,
+    pool: TxPool<TxStatusManager>,
     pending_pool: PendingPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
     notification_sender: Sender<PoolNotification>,
 }
 
-impl<View> PoolWorker<View>
+impl<View, TxStatusManager> PoolWorker<View, TxStatusManager>
 where
     View: TxPoolPersistentStorage,
+    TxStatusManager: TxStatusManagerTrait,
 {
     pub async fn run(&mut self, pending_pool_expiration_check: &mut Interval) -> bool {
         let mut remove_buffer = vec![];
