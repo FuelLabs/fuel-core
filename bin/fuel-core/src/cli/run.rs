@@ -714,6 +714,7 @@ impl Command {
                 max_tx_update_subscriptions: tx_number_active_subscriptions,
                 subscription_ttl,
                 status_cache_ttl: status_cache_ttl.into(),
+                metrics: disabled_metrics.is_enabled(Module::TxStatusManager),
             },
         };
         Ok(config)
