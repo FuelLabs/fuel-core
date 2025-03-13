@@ -1,4 +1,5 @@
 use super::{
+    compression_adapters::CompressionServiceAdapter,
     BlockImporterAdapter,
     BlockProducerAdapter,
     ChainStateInfoProvider,
@@ -21,6 +22,7 @@ use crate::{
         TxPoolPort,
     },
     graphql_api::ports::{
+        DatabaseDaCompressedBlocks,
         MemoryPool,
         TxStatusManager,
     },
@@ -34,8 +36,13 @@ use crate::{
     },
 };
 use async_trait::async_trait;
+use fuel_core_compression_service::storage::CompressedBlocks;
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    not_found,
+    Result as StorageResult,
+    StorageAsRef,
+};
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_txpool::TxPoolStats;
 use fuel_core_types::{
@@ -254,5 +261,22 @@ impl MemoryPool for SharedMemoryPool {
 
     async fn get_memory(&self) -> Self::Memory {
         self.memory_pool.take_raw().await
+    }
+}
+
+impl DatabaseDaCompressedBlocks for CompressionServiceAdapter {
+    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>> {
+        let block = self
+            .storage()
+            .storage_as_ref::<CompressedBlocks>()
+            .get(height)?
+            .ok_or_else(|| not_found!(CompressedBlocks))?;
+
+        postcard::to_allocvec(&block).map_err(|e| {
+            fuel_core_storage::Error::Codec(anyhow::anyhow!(
+                "Failed to serialize DA compressed block: {}",
+                e
+            ))
+        })
     }
 }

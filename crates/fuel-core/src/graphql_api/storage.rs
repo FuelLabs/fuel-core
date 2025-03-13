@@ -41,7 +41,6 @@ pub mod balances;
 pub mod blocks;
 pub mod coins;
 pub mod contracts;
-pub mod da_compression;
 pub mod messages;
 pub mod old;
 pub mod statistic;
@@ -96,86 +95,14 @@ pub enum Column {
     /// Existence of a key in this column means that the message has been spent.
     /// See [`SpentMessages`](messages::SpentMessages)
     SpentMessages = 13,
-    /// DA compression and postcard serialized blocks.
-    /// See [`DaCompressedBlocks`](da_compression::DaCompressedBlocks)
-    DaCompressedBlocks = 14,
-    /// See [`DaCompressionTemporalRegistryIndex`](da_compression::DaCompressionTemporalRegistryIndex)
-    DaCompressionTemporalRegistryIndex = 15,
-    /// See [`DaCompressionTemporalRegistryTimestamps`](da_compression::DaCompressionTemporalRegistryTimestamps)
-    DaCompressionTemporalRegistryTimestamps = 16,
-    /// See [`DaCompressionTemporalRegistryEvictorCache`](da_compression::DaCompressionTemporalRegistryEvictorCache)
-    DaCompressionTemporalRegistryEvictorCache = 17,
-    /// See [`DaCompressionTemporalRegistryAddress`](da_compression::DaCompressionTemporalRegistryAddress)
-    DaCompressionTemporalRegistryAddress = 18,
-    /// See [`DaCompressionTemporalRegistryAssetId`](da_compression::DaCompressionTemporalRegistryAssetId)
-    DaCompressionTemporalRegistryAssetId = 19,
-    /// See [`DaCompressionTemporalRegistryContractId`](da_compression::DaCompressionTemporalRegistryContractId)
-    DaCompressionTemporalRegistryContractId = 20,
-    /// See [`DaCompressionTemporalRegistryScriptCode`](da_compression::DaCompressionTemporalRegistryScriptCode)
-    DaCompressionTemporalRegistryScriptCode = 21,
-    /// See [`DaCompressionTemporalRegistryPredicateCode`](da_compression::DaCompressionTemporalRegistryPredicateCode)
-    DaCompressionTemporalRegistryPredicateCode = 22,
     /// Coin balances per account and asset.
-    CoinBalances = 23,
+    CoinBalances = 14,
     /// Message balances per account.
-    MessageBalances = 24,
+    MessageBalances = 15,
     /// See [`AssetsInfo`](assets::AssetsInfo)
-    AssetsInfo = 25,
+    AssetsInfo = 16,
     /// Index of the coins that are available to spend.
-    CoinsToSpend = 26,
-    /// See [`DaCompressionTemporalRegistryAddressV2`](da_compression::v2::address::DaCompressionTemporalRegistryAddressV2)
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryAddressV2 = 27,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalAddressMerkleData = 28,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalAddressMerkleMetadata = 29,
-    // See [`DaCompressionTemporalRegistryAssetIdV2`](da_compression::v2::asset_id::DaCompressionTemporalRegistryAssetIdV2)
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryAssetIdV2 = 30,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalAssetIdMerkleData = 31,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalAssetIdMerkleMetadata = 32,
-    /// See [`DaCompressionTemporalRegistryContractIdV2`](da_compression::v2::contract_id::DaCompressionTemporalRegistryContractIdV2)
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryContractIdV2 = 33,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalContractIdMerkleData = 34,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalContractIdMerkleMetadata = 35,
-    /// See [`DaCompressionTemporalRegistryScriptCodeV2`](da_compression::v2::script_code::DaCompressionTemporalRegistryScriptCodeV2)
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryScriptCodeV2 = 36,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalScriptCodeMerkleData = 37,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalScriptCodeMerkleMetadata = 38,
-    /// See [`DaCompressionTemporalRegistryPredicateCodeV2`](da_compression::v2::predicate_code::DaCompressionTemporalRegistryPredicateCodeV2)
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryPredicateCodeV2 = 39,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalPredicateCodeMerkleData = 40,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalPredicateCodeMerkleMetadata = 41,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryIndexV2 = 42,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryIndexMerkleData = 43,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryIndexMerkleMetadata = 44,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryTimestampsV2 = 45,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryTimestampsMerkleData = 46,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryTimestampsMerkleMetadata = 47,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryEvictorCacheV2 = 48,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryEvictorCacheMerkleData = 49,
-    #[cfg(feature = "fault-proving")]
-    DaCompressionTemporalRegistryEvictorCacheMerkleMetadata = 50,
+    CoinsToSpend = 17,
 }
 
 impl Column {

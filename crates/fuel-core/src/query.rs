@@ -9,8 +9,6 @@ mod subscriptions;
 mod tx;
 mod upgrades;
 
-pub mod da_compressed;
-
 // TODO: Remove reexporting of everything
 pub use balance::*;
 pub use message::*;

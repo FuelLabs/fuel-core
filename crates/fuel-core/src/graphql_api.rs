@@ -11,7 +11,6 @@ use std::{
 
 pub mod api_service;
 pub(crate) mod block_height_subscription;
-pub mod da_compression;
 pub mod database;
 pub(crate) mod extensions;
 pub(crate) mod indexation;

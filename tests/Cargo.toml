@@ -38,6 +38,9 @@ fuel-core-benches = { path = "../benches" }
 fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-compression = { path = "../crates/compression" }
+fuel-core-compression-service = { path = "../crates/services/compression", features = [
+  "test-helpers",
+] }
 fuel-core-gas-price-service = { path = "../crates/services/gas_price_service", features = [
   "test-helpers",
 ] }

@@ -24,6 +24,7 @@ use crate::{
         KeyValueView,
     },
 };
+use database_description::compression::CompressionDatabase;
 use fuel_core_chain_config::TableEntry;
 pub use fuel_core_database::Error;
 use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
@@ -442,6 +443,15 @@ impl Modifiable for Database<Relayer> {
                 IterDirection::Reverse,
             ))
             .try_collect()
+        })
+    }
+}
+
+impl Modifiable for Database<CompressionDatabase> {
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all_keys::<fuel_core_compression_service::storage::CompressedBlocks>(Some(IterDirection::Reverse))
+                .try_collect()
         })
     }
 }
