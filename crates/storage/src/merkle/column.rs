@@ -11,7 +11,17 @@ use alloc::{
 /// Almost in the case of all tables we need to prove exclusion of entries,
 /// in the case of malicious block.
 #[repr(u32)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    enum_iterator::Sequence,
+    strum_macros::EnumCount,
+    strum_macros::IntoStaticStr,
+)]
 pub enum MerkleizedColumn<TC> {
     /// The column with the specific data.
     TableColumn(TC),
