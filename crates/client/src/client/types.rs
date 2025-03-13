@@ -154,8 +154,7 @@ pub enum TransactionStatus {
 }
 
 impl TransactionStatus {
-    #[cfg(feature = "subscriptions")]
-    pub(super) fn is_final(&self) -> bool {
+    pub fn is_final(&self) -> bool {
         match self {
             TransactionStatus::Success { .. }
             | TransactionStatus::Failure { .. }
