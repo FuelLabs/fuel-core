@@ -306,7 +306,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn check_preconfirmation_signature__can_track_multipl_delegate_keys() {
+    async fn check_preconfirmation_signature__can_track_multiple_delegate_keys() {
         // given
         let (protocol_secret_key, protocol_public_key) = protocol_key_pair();
         let (delegate_secret_key, delegate_public_key) = delegate_key_pair();
