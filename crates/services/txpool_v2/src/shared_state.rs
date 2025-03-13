@@ -6,7 +6,10 @@ use fuel_core_types::{
         Transaction,
         TxId,
     },
-    services::txpool::ArcPoolTx,
+    services::{
+        preconfirmation::PreconfirmationStatus,
+        txpool::ArcPoolTx,
+    },
 };
 use tokio::sync::{
     mpsc,
@@ -23,7 +26,7 @@ use crate::{
     pool_worker::{
         self,
         PoolReadRequest,
-        PoolRemoveRequest,
+        PoolTxUpdateRequest,
     },
     service::{
         TxInfo,
@@ -34,7 +37,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct SharedState {
-    pub(crate) request_remove_sender: mpsc::Sender<PoolRemoveRequest>,
+    pub(crate) request_remove_sender: mpsc::Sender<PoolTxUpdateRequest>,
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
         mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
@@ -158,7 +161,16 @@ impl SharedState {
 
         if let Err(e) = self
             .request_remove_sender
-            .try_send(PoolRemoveRequest::SkippedTransactions { dependents_ids })
+            .try_send(PoolTxUpdateRequest::SkippedTransactions { dependents_ids })
+        {
+            tracing::error!("Failed to send remove coin dependents request: {}", e);
+        }
+    }
+
+    pub fn notify_preconfirmed_txs(&self, txs: Vec<(TxId, PreconfirmationStatus)>) {
+        if let Err(e) = self
+            .request_remove_sender
+            .try_send(PoolTxUpdateRequest::PreconfirmedTransactions { txs })
         {
             tracing::error!("Failed to send remove coin dependents request: {}", e);
         }

@@ -324,7 +324,7 @@ where
         for height in range_to_remove {
             let expired_txs = self.pruner.height_expiration_txs.remove(&height);
             if let Some(expired_txs) = expired_txs {
-                let result = self.pool_worker.remove_tx_and_coin_dependents((
+                let result = self.pool_worker.expired_transactions((
                     expired_txs,
                     Error::Removed(RemovedReason::Ttl),
                 ));
@@ -691,10 +691,9 @@ where
             }
         }
 
-        let result = self.pool_worker.remove_tx_and_coin_dependents((
-            txs_to_remove,
-            Error::Removed(RemovedReason::Ttl),
-        ));
+        let result = self
+            .pool_worker
+            .expired_transactions((txs_to_remove, Error::Removed(RemovedReason::Ttl)));
 
         if let Err(err) = result {
             tracing::error!("{err}");
