@@ -714,6 +714,8 @@ impl Command {
                 max_tx_update_subscriptions: tx_number_active_subscriptions,
                 subscription_ttl,
                 status_cache_ttl: status_cache_ttl.into(),
+                // TODO: Where can I get this value?
+                protocol_public_key: Default::default(),
             },
         };
         Ok(config)

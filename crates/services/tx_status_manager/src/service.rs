@@ -449,7 +449,7 @@ mod tests {
             let timeout = Duration::from_millis(100);
             let msg = tokio::time::timeout(timeout, stream.next())
                 .await
-                .expect(&format!("This should not timeout: {timeout:?}"))
+                .unwrap_or_else(|_| panic!("This should not timeout: {timeout:?}"))
                 .unwrap();
             match msg {
                 TxStatusMessage::Status(_) => {
@@ -576,7 +576,7 @@ mod tests {
             expiration,
         );
         let delegate_signature_message = valid_sealed_delegate_signature(
-            handles.protocol_signing_key.clone(),
+            handles.protocol_signing_key,
             delegate_verifying_key,
             expiration,
         );
@@ -692,7 +692,7 @@ mod tests {
             expiration,
         );
         let delegate_signature_message = valid_sealed_delegate_signature(
-            handles.protocol_signing_key.clone(),
+            handles.protocol_signing_key,
             delegate_verifying_key,
             expiration,
         );
@@ -756,7 +756,7 @@ mod tests {
             expiration,
         );
         let delegate_signature_message = valid_sealed_delegate_signature(
-            handles.protocol_signing_key.clone(),
+            handles.protocol_signing_key,
             delegate_verifying_key,
             expiration,
         );
@@ -822,7 +822,7 @@ mod tests {
         );
 
         let delegate_signature_message = valid_sealed_delegate_signature(
-            handles.protocol_signing_key.clone(),
+            handles.protocol_signing_key,
             delegate_verifying_key,
             expiration,
         );
@@ -905,7 +905,7 @@ mod tests {
         for expiration_modifier in 0..100u64 {
             let expiration = first_expiration + expiration_modifier;
             let valid_delegate_signature = valid_sealed_delegate_signature(
-                handles.protocol_signing_key.clone(),
+                handles.protocol_signing_key,
                 delegate_public_key,
                 expiration,
             );
