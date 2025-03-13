@@ -12,6 +12,7 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true }
+fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
