@@ -16,13 +16,19 @@ use std::{
     sync::Arc,
     time::SystemTime,
 };
-use tokio::sync::{
-    mpsc,
-    mpsc::{
-        Receiver,
-        Sender,
+use tokio::{
+    sync::{
+        mpsc::{
+            self,
+            Receiver,
+            Sender,
+        },
+        oneshot,
     },
-    oneshot,
+    time::{
+        Interval,
+        MissedTickBehavior,
+    },
 };
 
 use crate::{
@@ -91,6 +97,7 @@ impl PoolWorkerInterface {
                     tracing::error!("Failed to build tokio runtime for pool worker");
                     return;
                 };
+                let pending_pool_tx_ttl = tx_pool.config.pending_pool_tx_ttl;
                 let mut worker = PoolWorker {
                     tx_insert_from_pending_sender,
                     thread_management_receiver,
@@ -104,7 +111,13 @@ impl PoolWorkerInterface {
                     view_provider,
                 };
 
-                tokio_runtime.block_on(async { while !worker.run().await {} });
+                tokio_runtime.block_on(async {
+                    let mut pending_pool_expiration_check =
+                        tokio::time::interval(pending_pool_tx_ttl);
+                    pending_pool_expiration_check
+                        .set_missed_tick_behavior(MissedTickBehavior::Skip);
+                    while !worker.run(&mut pending_pool_expiration_check).await {}
+                });
             }
         });
         Self {
@@ -188,7 +201,7 @@ pub(super) enum PoolRemoveRequest {
     ProcessBlock {
         block_result: SharedImportResult,
     },
-    CoinDependents {
+    SkippedTransactions {
         dependents_ids: Vec<(TxId, Error)>,
     },
     TxAndCoinDependents {
@@ -256,7 +269,7 @@ impl<View> PoolWorker<View>
 where
     View: TxPoolPersistentStorage,
 {
-    pub async fn run(&mut self) -> bool {
+    pub async fn run(&mut self, pending_pool_expiration_check: &mut Interval) -> bool {
         let mut remove_buffer = vec![];
         let mut read_buffer = vec![];
         let mut insert_buffer = vec![];
@@ -287,8 +300,8 @@ where
                         PoolRemoveRequest::ProcessBlock { block_result } => {
                             self.process_block(block_result);
                         }
-                        PoolRemoveRequest::CoinDependents { dependents_ids } => {
-                            self.remove_coin_dependents(dependents_ids);
+                        PoolRemoveRequest::SkippedTransactions { dependents_ids } => {
+                            self.remove_skipped_transactions(dependents_ids);
                         }
                         PoolRemoveRequest::TxAndCoinDependents { tx_and_dependents_ids } => {
                             self.remove_and_coin_dependents(tx_and_dependents_ids);
@@ -329,6 +342,9 @@ where
 
                     self.insert(tx, source);
                 }
+            }
+            _ = pending_pool_expiration_check.tick() => {
+                self.pending_pool.expire_transactions(self.notification_sender.clone());
             }
         }
         false
@@ -454,8 +470,6 @@ where
                 }
             }
         }
-        self.pending_pool
-            .expire_transactions(self.notification_sender.clone());
     }
 
     fn extract_block_transactions(
@@ -483,14 +497,11 @@ where
         for (tx, source) in resolved_txs {
             self.insert(tx, source);
         }
-
-        self.pending_pool
-            .expire_transactions(self.notification_sender.clone());
     }
 
-    fn remove_coin_dependents(&mut self, parent_txs: Vec<(TxId, Error)>) {
+    fn remove_skipped_transactions(&mut self, parent_txs: Vec<(TxId, Error)>) {
         for (tx_id, reason) in parent_txs {
-            let removed = self.pool.remove_coin_dependents(tx_id);
+            let removed = self.pool.remove_skipped_transaction(tx_id);
             for tx in removed {
                 let tx_id = tx.id();
                 if let Err(e) = self.notification_sender.try_send(PoolNotification::Removed {

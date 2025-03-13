@@ -10,7 +10,7 @@ use crate::{
         Error,
         InputValidationErrorType,
     },
-    pool::SavedOutput,
+    extracted_outputs::ExtractedOutputs,
     ports::TxPoolPersistentStorage,
 };
 use fuel_core_types::services::txpool::{
@@ -93,7 +93,7 @@ pub trait Storage {
         &self,
         transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
-        saved_outputs: &HashSet<SavedOutput>,
+        extracted_outputs: &ExtractedOutputs,
         utxo_validation: bool,
     ) -> Result<(), InputValidationErrorType>;
 
