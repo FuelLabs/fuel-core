@@ -29,7 +29,7 @@ use crate::{
     },
 };
 
-use fuel_core_metrics::tx_status_manager_metrics::tx_status_manager_metrics;
+use fuel_core_metrics::tx_status_manager_metrics::metrics_manager;
 
 pub struct Data {
     pruning_queue: VecDeque<(Instant, TxId)>,
@@ -172,24 +172,22 @@ impl TxStatusManager {
             .send(TxUpdate::new(tx_id, tx_status.into()));
 
         if self.metrics {
-            tx_status_manager_metrics()
-                .number_of_prunable_statuses
+            metrics_manager()
+                .prunable_status_count
                 .set(self.data.prunable_statuses.len() as i64);
-            tx_status_manager_metrics()
-                .number_of_non_prunable_statuses
+            metrics_manager()
+                .non_prunable_status_count
                 .set(self.data.non_prunable_statuses.len() as i64);
-            tx_status_manager_metrics()
-                .pruning_queue_length
+            metrics_manager()
+                .pruning_queue_len
                 .set(self.data.pruning_queue.len() as i64);
-            tx_status_manager_metrics()
-                .pruning_queue_oldest_status_age_seconds
-                .set(
-                    self.data
-                        .pruning_queue
-                        .back()
-                        .map(|(time, _)| time.elapsed().as_secs() as i64)
-                        .unwrap_or(0),
-                );
+            metrics_manager().pruning_queue_oldest_status_age_s.set(
+                self.data
+                    .pruning_queue
+                    .back()
+                    .map(|(time, _)| time.elapsed().as_secs() as i64)
+                    .unwrap_or(0),
+            );
         };
     }
 
