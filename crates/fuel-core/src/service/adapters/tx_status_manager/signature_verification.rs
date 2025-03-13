@@ -18,18 +18,17 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::collections::VecDeque;
 
 pub struct PreconfirmationSignatureVerification {
     protocol_pubkey: PublicKey,
-    delegate_keys: VecDeque<(Tai64, DelegatePublicKey)>,
+    delegate_keys: Vec<(Tai64, DelegatePublicKey)>,
 }
 
 impl PreconfirmationSignatureVerification {
     pub fn new(protocol_pubkey: PublicKey) -> Self {
         Self {
             protocol_pubkey,
-            delegate_keys: VecDeque::new(),
+            delegate_keys: Vec::new(),
         }
     }
 
@@ -54,6 +53,11 @@ impl PreconfirmationSignatureVerification {
             }
         }
     }
+
+    fn remove_expired_delegates(&mut self) {
+        let now = Tai64::now();
+        self.delegate_keys.retain(|(exp, _)| exp > &now);
+    }
 }
 
 impl SignatureVerification for PreconfirmationSignatureVerification {
@@ -65,10 +69,11 @@ impl SignatureVerification for PreconfirmationSignatureVerification {
         let bytes = postcard::to_allocvec(&entity).unwrap();
         let message = Message::new(&bytes);
         let verified = signature.verify(&self.protocol_pubkey, &message);
+        self.remove_expired_delegates();
         match verified {
             Ok(_) => {
                 self.delegate_keys
-                    .push_front((entity.expiration, entity.public_key));
+                    .push((entity.expiration, entity.public_key));
                 true
             }
             Err(_) => false,
@@ -80,6 +85,11 @@ impl SignatureVerification for PreconfirmationSignatureVerification {
         sealed: &Sealed<Preconfirmations, Bytes64>,
     ) -> bool {
         let expiration = sealed.entity.expiration;
+        let now = Tai64::now();
+        if now > expiration {
+            tracing::warn!("Preconfirmation signature expired: {now:?} > {expiration:?}");
+            return false;
+        }
         self.delegate_keys
             .iter()
             .find(|(exp, _)| exp == &expiration)
@@ -202,7 +212,7 @@ mod tests {
         let (protocol_secret_key, protocol_public_key) = protocol_key_pair();
         let (delegate_secret_key, delegate_public_key) = delegate_key_pair();
         let mut adapter = PreconfirmationSignatureVerification::new(protocol_public_key);
-        let expiration = Tai64(100u64);
+        let expiration = Tai64(u64::MAX);
         let valid_delegate_signature = valid_sealed_delegate_signature(
             protocol_secret_key,
             delegate_public_key,
@@ -261,6 +271,34 @@ mod tests {
         // when
         let verified = adapter
             .check_preconfirmation_signature(&invalid_pre_confirmation_signature)
+            .await;
+
+        // then
+        assert!(!verified);
+    }
+
+    #[tokio::test]
+    async fn check_preconfirmation_signature__will_not_verify_pre_confirmations_signature_expired_delegate_key(
+    ) {
+        // given
+        let (protocol_secret_key, protocol_public_key) = protocol_key_pair();
+        let (delegate_secret_key, delegate_public_key) = delegate_key_pair();
+        let mut adapter = PreconfirmationSignatureVerification::new(protocol_public_key);
+        let expiration = Tai64::now();
+        let valid_delegate_signature = valid_sealed_delegate_signature(
+            protocol_secret_key,
+            delegate_public_key,
+            expiration,
+        );
+        let valid_pre_confirmation_signature =
+            valid_pre_confirmation_signature(delegate_secret_key, expiration);
+        let _ = adapter.add_new_delegate(&valid_delegate_signature).await;
+
+        // when
+        // `Tai64` only has granularity of seconds, so we need to wait for the next second
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let verified = adapter
+            .check_preconfirmation_signature(&valid_pre_confirmation_signature)
             .await;
 
         // then
