@@ -291,7 +291,7 @@ async fn can_get_message_proof() {
     let output = Output::contract_created(id, state_root);
 
     // Create the contract deploy transaction.
-    let mut contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
+    let contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
         .add_fee_input()
         .add_output(output)
         .finalize_as_transaction();
@@ -370,24 +370,22 @@ async fn can_get_message_proof() {
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    client
-        .estimate_predicates(&mut contract_deploy)
-        .await
-        .expect("Should be able to estimate deploy tx");
-
     // Deploy the contract.
+    let estimate_predicates = true;
     matches!(
-        client.submit_and_await_commit(&contract_deploy).await,
+        client
+            .submit_and_await_commit_opt(&contract_deploy, Some(estimate_predicates))
+            .await,
         Ok(TransactionStatus::Success { .. })
     );
 
-    let mut script = script.into();
-    client
-        .estimate_predicates(&mut script)
-        .await
-        .expect("Should be able to estimate deploy tx");
+    let script = script.into();
     // Call the contract.
-    let tx_status = client.submit_and_await_commit(&script).await.unwrap();
+    let estimate_predicates = true;
+    let tx_status = client
+        .submit_and_await_commit_opt(&script, Some(estimate_predicates))
+        .await
+        .unwrap();
     matches!(tx_status, TransactionStatus::Success { .. });
 
     let receipts = match tx_status {

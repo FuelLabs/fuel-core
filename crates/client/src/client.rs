@@ -12,7 +12,10 @@ use crate::{
             gas_price::EstimateGasPrice,
             message::MessageStatusArgs,
             relayed_tx::RelayedTransactionStatusArgs,
-            tx::DryRunArg,
+            tx::{
+                DryRunArg,
+                TxWithEstimatedPredicatesArg,
+            },
             Tai64Timestamp,
             TransactionId,
         },
@@ -826,30 +829,54 @@ impl FuelClient {
         &self,
         tx: &Transaction,
     ) -> io::Result<types::primitives::TransactionId> {
+        self.submit_opt(tx, None).await
+    }
+
+    pub async fn submit_opt(
+        &self,
+        tx: &Transaction,
+        estimate_predicates: Option<bool>,
+    ) -> io::Result<types::primitives::TransactionId> {
         let tx = tx.clone().to_bytes();
-        let query = schema::tx::Submit::build(TxArg {
+        let query = schema::tx::Submit::build(TxWithEstimatedPredicatesArg {
             tx: HexString(Bytes(tx)),
+            estimate_predicates,
         });
 
         let id = self.query(query).await.map(|r| r.submit)?.id.into();
         Ok(id)
     }
 
-    /// Submit the transaction and wait for it either to be included in
-    /// a block or removed from `TxPool`.
-    ///
-    /// This will wait forever if needed, so consider wrapping this call
-    /// with a `tokio::time::timeout`.
+    /// Similar to [`Self::submit_and_await_commit_opt`], but with default options.
     #[cfg(feature = "subscriptions")]
     pub async fn submit_and_await_commit(
         &self,
         tx: &Transaction,
     ) -> io::Result<TransactionStatus> {
+        self.submit_and_await_commit_opt(tx, None).await
+    }
+
+    /// Submit the transaction and wait for it either to be included in
+    /// a block or removed from `TxPool`.
+    ///
+    /// If `estimate_predicates` is set, the predicates will be estimated before
+    /// the transaction is inserted into transaction pool.
+    ///
+    /// This will wait forever if needed, so consider wrapping this call
+    /// with a `tokio::time::timeout`.
+    #[cfg(feature = "subscriptions")]
+    pub async fn submit_and_await_commit_opt(
+        &self,
+        tx: &Transaction,
+        estimate_predicates: Option<bool>,
+    ) -> io::Result<TransactionStatus> {
         use cynic::SubscriptionBuilder;
         let tx = tx.clone().to_bytes();
-        let s = schema::tx::SubmitAndAwaitSubscription::build(TxArg {
-            tx: HexString(Bytes(tx)),
-        });
+        let s =
+            schema::tx::SubmitAndAwaitSubscription::build(TxWithEstimatedPredicatesArg {
+                tx: HexString(Bytes(tx)),
+                estimate_predicates,
+            });
 
         let mut stream = self.subscribe(s).await?.map(
             |r: io::Result<schema::tx::SubmitAndAwaitSubscription>| {
@@ -872,11 +899,24 @@ impl FuelClient {
         &self,
         tx: &Transaction,
     ) -> io::Result<StatusWithTransaction> {
+        self.submit_and_await_commit_with_tx_opt(tx, None).await
+    }
+
+    /// Similar to [`Self::submit_and_await_commit_opt`], but the status also contains transaction.
+    #[cfg(feature = "subscriptions")]
+    pub async fn submit_and_await_commit_with_tx_opt(
+        &self,
+        tx: &Transaction,
+        estimate_predicates: Option<bool>,
+    ) -> io::Result<StatusWithTransaction> {
         use cynic::SubscriptionBuilder;
         let tx = tx.clone().to_bytes();
-        let s = schema::tx::SubmitAndAwaitSubscriptionWithTransaction::build(TxArg {
-            tx: HexString(Bytes(tx)),
-        });
+        let s = schema::tx::SubmitAndAwaitSubscriptionWithTransaction::build(
+            TxWithEstimatedPredicatesArg {
+                tx: HexString(Bytes(tx)),
+                estimate_predicates,
+            },
+        );
 
         let mut stream = self.subscribe(s).await?.map(
             |r: io::Result<schema::tx::SubmitAndAwaitSubscriptionWithTransaction>| {
@@ -893,19 +933,30 @@ impl FuelClient {
         Ok(status)
     }
 
-    /// Submits the transaction to the `TxPool` and returns a stream of events.
-    /// Compared to the `submit_and_await_commit`, the stream also contains
-    /// `SubmittedStatus` as an intermediate state.
+    /// Similar to [`Self::submit_and_await_commit`], but includes all intermediate states.
     #[cfg(feature = "subscriptions")]
     pub async fn submit_and_await_status<'a>(
         &'a self,
         tx: &'a Transaction,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
+        self.submit_and_await_status_opt(tx, None).await
+    }
+
+    /// Similar to [`Self::submit_and_await_commit_opt`], but includes all intermediate states.
+    #[cfg(feature = "subscriptions")]
+    pub async fn submit_and_await_status_opt<'a>(
+        &'a self,
+        tx: &'a Transaction,
+        estimate_predicates: Option<bool>,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
         let tx = tx.clone().to_bytes();
-        let s = schema::tx::SubmitAndAwaitStatusSubscription::build(TxArg {
-            tx: HexString(Bytes(tx)),
-        });
+        let s = schema::tx::SubmitAndAwaitStatusSubscription::build(
+            TxWithEstimatedPredicatesArg {
+                tx: HexString(Bytes(tx)),
+                estimate_predicates,
+            },
+        );
 
         let stream = self.subscribe(s).await?.map(
             |r: io::Result<schema::tx::SubmitAndAwaitStatusSubscription>| {
