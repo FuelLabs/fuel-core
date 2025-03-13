@@ -80,6 +80,9 @@ pub struct Config {
     pub p2p: Option<P2PConfig<NotInitialized>>,
     #[cfg(feature = "p2p")]
     pub sync: fuel_core_sync::Config,
+    #[cfg(feature = "p2p")]
+    pub pre_confirmation_signature_service:
+        fuel_core_poa::pre_confirmation_signature_service::config::Config,
     #[cfg(feature = "shared-sequencer")]
     pub shared_sequencer: fuel_core_shared_sequencer::Config,
     pub consensus_signer: SignMode,
@@ -204,6 +207,10 @@ impl Config {
             p2p: Some(P2PConfig::<NotInitialized>::default(network_name.as_str())),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
+            #[cfg(feature = "p2p")]
+            pre_confirmation_signature_service:
+                fuel_core_poa::pre_confirmation_signature_service::config::Config::default(
+                ),
             #[cfg(feature = "shared-sequencer")]
             shared_sequencer: fuel_core_shared_sequencer::Config::local_node(),
             consensus_signer: SignMode::Key(fuel_core_types::secrecy::Secret::new(

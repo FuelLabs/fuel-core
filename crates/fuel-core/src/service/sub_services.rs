@@ -148,6 +148,46 @@ pub fn init_sub_services(
         ));
     }
 
+    #[cfg(feature = "p2p")]
+    let p2p_externals = config
+        .p2p
+        .clone()
+        .map(fuel_core_p2p::service::build_shared_state);
+
+    #[cfg(feature = "p2p")]
+    let p2p_adapter = {
+        use crate::service::adapters::PeerReportConfig;
+
+        // Hardcoded for now, but left here to be configurable in the future.
+        // TODO: https://github.com/FuelLabs/fuel-core/issues/1340
+        let peer_report_config = PeerReportConfig {
+            successful_block_import: 5.,
+            missing_block_headers: -100.,
+            bad_block_header: -100.,
+            missing_transactions: -100.,
+            invalid_transactions: -100.,
+        };
+        P2PAdapter::new(
+            p2p_externals.as_ref().map(|ext| ext.0.clone()),
+            peer_report_config,
+        )
+    };
+
+    #[cfg(not(feature = "p2p"))]
+    let p2p_adapter = P2PAdapter::new();
+
+    // TODO: Use real values
+    let signature_verification =
+        PreconfirmationSignatureVerification::new(PublicKey::default());
+
+    let tx_status_manager = fuel_core_tx_status_manager::new_service(
+        p2p_adapter.clone(),
+        signature_verification,
+        config.tx_status_manager.clone(),
+    );
+    let tx_status_manager_adapter =
+        TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
+
     let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
         forbid_fake_coins_default: config.utxo_validation,
         native_executor_version: config.native_executor_version,
@@ -159,6 +199,7 @@ pub fn init_sub_services(
         upgradable_executor_config,
         new_txs_watcher,
         preconfirmation_sender,
+        tx_status_manager_adapter.clone(),
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());
@@ -206,34 +247,6 @@ pub fn init_sub_services(
         ),
     };
 
-    #[cfg(feature = "p2p")]
-    let p2p_externals = config
-        .p2p
-        .clone()
-        .map(fuel_core_p2p::service::build_shared_state);
-
-    #[cfg(feature = "p2p")]
-    let p2p_adapter = {
-        use crate::service::adapters::PeerReportConfig;
-
-        // Hardcoded for now, but left here to be configurable in the future.
-        // TODO: https://github.com/FuelLabs/fuel-core/issues/1340
-        let peer_report_config = PeerReportConfig {
-            successful_block_import: 5.,
-            missing_block_headers: -100.,
-            bad_block_header: -100.,
-            missing_transactions: -100.,
-            invalid_transactions: -100.,
-        };
-        P2PAdapter::new(
-            p2p_externals.as_ref().map(|ext| ext.0.clone()),
-            peer_report_config,
-        )
-    };
-
-    #[cfg(not(feature = "p2p"))]
-    let p2p_adapter = P2PAdapter::new();
-
     let genesis_block_height = *genesis_block.header().height();
     let settings = chain_state_info_provider.clone();
     let block_stream = importer_adapter.events_shared_result();
@@ -262,18 +275,6 @@ pub fn init_sub_services(
         gas_price_algo.clone(),
         universal_gas_price_provider.clone(),
     );
-
-    // TODO: Use real values
-    let signature_verification =
-        PreconfirmationSignatureVerification::new(PublicKey::default());
-
-    let tx_status_manager = fuel_core_tx_status_manager::new_service(
-        p2p_adapter.clone(),
-        signature_verification,
-        config.tx_status_manager.clone(),
-    );
-    let tx_status_manager_adapter =
-        TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
 
     let txpool = fuel_core_txpool::new_service(
         chain_id,

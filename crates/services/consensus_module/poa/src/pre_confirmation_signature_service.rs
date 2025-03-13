@@ -234,7 +234,7 @@ pub fn new_service<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger, Preconfirma
     mut p2p_adapter: Brdcst,
     parent_signature: Arc<Parent>,
     mut key_generator: Gen,
-    mut key_rotation_trigger: Trigger,
+    key_rotation_trigger: Trigger,
 ) -> anyhow::Result<Service<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>>
 where
     TxRcv: TxReceiver<Txs = Preconfirmations>,
@@ -250,8 +250,11 @@ where
     Preconfirmations: serde::Serialize + Send,
 {
     // It's ok to wait because the first rotation is expected to be immediate
-    let expiration = futures::executor::block_on(key_rotation_trigger.next_rotation())
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let expiration = Tai64(
+        Tai64::now()
+            .0
+            .saturating_add(config.key_expiration_interval.as_secs()),
+    );
     let (new_delegate_key, sealed) = futures::executor::block_on(create_delegate_key(
         &mut key_generator,
         &parent_signature,
