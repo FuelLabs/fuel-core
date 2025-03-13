@@ -18,17 +18,18 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+use std::collections::HashMap;
 
 pub struct PreconfirmationSignatureVerification {
     protocol_pubkey: PublicKey,
-    delegate_keys: Vec<(Tai64, DelegatePublicKey)>,
+    delegate_keys: HashMap<Tai64, DelegatePublicKey>,
 }
 
 impl PreconfirmationSignatureVerification {
     pub fn new(protocol_pubkey: PublicKey) -> Self {
         Self {
             protocol_pubkey,
-            delegate_keys: Vec::new(),
+            delegate_keys: HashMap::new(),
         }
     }
 
@@ -56,7 +57,7 @@ impl PreconfirmationSignatureVerification {
 
     fn remove_expired_delegates(&mut self) {
         let now = Tai64::now();
-        self.delegate_keys.retain(|(exp, _)| exp > &now);
+        self.delegate_keys.retain(|exp, _| exp > &now);
     }
 }
 
@@ -73,7 +74,7 @@ impl SignatureVerification for PreconfirmationSignatureVerification {
         match verified {
             Ok(_) => {
                 self.delegate_keys
-                    .push((entity.expiration, entity.public_key));
+                    .insert(entity.expiration, entity.public_key);
                 true
             }
             Err(_) => false,
@@ -91,9 +92,8 @@ impl SignatureVerification for PreconfirmationSignatureVerification {
             return false;
         }
         self.delegate_keys
-            .iter()
-            .find(|(exp, _)| exp == &expiration)
-            .map(|(_, delegate_key)| Self::verify_preconfirmation(delegate_key, sealed))
+            .get(&expiration)
+            .map(|delegate_key| Self::verify_preconfirmation(delegate_key, sealed))
             .unwrap_or(false)
     }
 }
