@@ -304,4 +304,32 @@ mod tests {
         // then
         assert!(!verified);
     }
+
+    #[tokio::test]
+    async fn check_preconfirmation_signature__can_track_multipl_delegate_keys() {
+        // given
+        let (protocol_secret_key, protocol_public_key) = protocol_key_pair();
+        let (delegate_secret_key, delegate_public_key) = delegate_key_pair();
+        let mut adapter = PreconfirmationSignatureVerification::new(protocol_public_key);
+        let first_expiration = Tai64(u64::MAX - 200);
+        for expiration_modifier in 0..100u64 {
+            let expiration = first_expiration + expiration_modifier;
+            let valid_delegate_signature = valid_sealed_delegate_signature(
+                protocol_secret_key,
+                delegate_public_key,
+                expiration,
+            );
+            let _ = adapter.add_new_delegate(&valid_delegate_signature).await;
+        }
+        let valid_pre_confirmation_signature =
+            valid_pre_confirmation_signature(delegate_secret_key, first_expiration);
+
+        // when
+        let verified = adapter
+            .check_preconfirmation_signature(&valid_pre_confirmation_signature)
+            .await;
+
+        // then
+        assert!(verified);
+    }
 }
