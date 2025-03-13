@@ -112,7 +112,6 @@ pub struct Task<T> {
     early_preconfirmations: Vec<Sealed<Preconfirmations, Bytes64>>,
 }
 
-#[allow(dead_code)]
 /// Interface for signature verification of preconfirmations
 pub trait SignatureVerification: Send {
     /// Adds a new delegate signature to verify the preconfirmations
