@@ -262,6 +262,17 @@ impl From<&Config> for fuel_core_poa::Config {
     }
 }
 
+impl From<&Config> for fuel_core_poa::pre_confirmation_signature_service::config::Config {
+    fn from(_value: &Config) -> Self {
+        fuel_core_poa::pre_confirmation_signature_service::config::Config {
+            // TODO
+            echo_delegation_interval: Duration::from_secs(1),
+            key_rotation_interval: Duration::from_secs(10),
+            key_expiration_interval: Duration::from_secs(1),
+        }
+    }
+}
+
 #[derive(
     Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
 )]

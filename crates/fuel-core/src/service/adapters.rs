@@ -38,7 +38,7 @@ use fuel_core_types::{
             Result as ExecutorResult,
             UncommittedResult,
         },
-        preconfirmation::PreconfirmationStatus,
+        preconfirmation::Preconfirmation,
     },
     signer::SignMode,
     tai64::Tai64,
@@ -341,11 +341,11 @@ impl NewTxWaiter {
 
 #[derive(Clone)]
 pub struct PreconfirmationSender {
-    pub sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+    pub sender: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
 }
 
 impl PreconfirmationSender {
-    pub fn new(sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>) -> Self {
+    pub fn new(sender: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>) -> Self {
         Self { sender }
     }
 }
@@ -363,7 +363,7 @@ impl ExecutorAdapter {
         relayer_database: Database<Relayer>,
         config: fuel_core_upgradable_executor::config::Config,
         new_txs_watcher: tokio::sync::watch::Receiver<()>,
-        preconfirmation_sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+        preconfirmation_sender: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);
         let preconfirmation_sender = PreconfirmationSender::new(preconfirmation_sender);

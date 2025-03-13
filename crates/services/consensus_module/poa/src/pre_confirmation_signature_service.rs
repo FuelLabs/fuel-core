@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use error::Result;
 use fuel_core_services::{
     try_or_continue,
@@ -5,6 +7,7 @@ use fuel_core_services::{
     EmptyShared,
     RunnableService,
     RunnableTask,
+    ServiceRunner,
     StateWatcher,
     TaskNextAction,
 };
@@ -31,6 +34,7 @@ use crate::pre_confirmation_signature_service::{
 };
 
 pub mod broadcast;
+pub mod config;
 pub mod error;
 pub mod key_generator;
 pub mod parent_signature;
@@ -54,7 +58,7 @@ pub struct PreConfirmationSignatureTask<
 {
     tx_receiver: TxReceiver,
     broadcast: Broadcast,
-    parent_signature: Parent,
+    parent_signature: Arc<Parent>,
     key_generator: KeyGenerator,
     current_delegate_key: ExpiringKey<DelegateKey>,
     sealed_delegate_message:
@@ -99,7 +103,7 @@ where
 
 async fn create_delegate_key<Gen, DelegateKey, Parent>(
     key_generator: &mut Gen,
-    parent_signature: &Parent,
+    parent_signature: &Arc<Parent>,
     expiration: Tai64,
 ) -> Result<(
     ExpiringKey<DelegateKey>,
@@ -218,4 +222,58 @@ where
     async fn shutdown(self) -> anyhow::Result<()> {
         Ok(())
     }
+}
+
+pub type Service<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger> = ServiceRunner<
+    PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>,
+>;
+
+pub fn new_service<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger, Preconfirmations>(
+    config: config::Config,
+    preconfirmation_receiver: TxRcv,
+    mut p2p_adapter: Brdcst,
+    parent_signature: Arc<Parent>,
+    mut key_generator: Gen,
+    mut key_rotation_trigger: Trigger,
+) -> anyhow::Result<Service<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>>
+where
+    TxRcv: TxReceiver<Txs = Preconfirmations>,
+    Brdcst: Broadcast<
+        DelegateKey = DelegateKey,
+        ParentKey = Parent,
+        Preconfirmations = Preconfirmations,
+    >,
+    Gen: KeyGenerator<Key = DelegateKey>,
+    Trigger: KeyRotationTrigger,
+    DelegateKey: SigningKey,
+    Parent: ParentSignature,
+    Preconfirmations: serde::Serialize + Send,
+{
+    // It's ok to wait because the first rotation is expected to be immediate
+    let expiration = futures::executor::block_on(key_rotation_trigger.next_rotation())
+        .map_err(|e| anyhow::anyhow!(e))?;
+    let (new_delegate_key, sealed) = futures::executor::block_on(create_delegate_key(
+        &mut key_generator,
+        &parent_signature,
+        expiration,
+    ))
+    .map_err(|e| anyhow::anyhow!(e))?;
+
+    if let Err(e) = futures::executor::block_on(
+        p2p_adapter
+            .broadcast_delegate_key(sealed.entity.clone(), sealed.signature.clone()),
+    ) {
+        tracing::error!("Failed to broadcast delegate key: {:?}", e);
+    }
+
+    Ok(Service::new(PreConfirmationSignatureTask {
+        tx_receiver: preconfirmation_receiver,
+        broadcast: p2p_adapter,
+        parent_signature,
+        key_generator,
+        current_delegate_key: new_delegate_key,
+        sealed_delegate_message: sealed,
+        key_rotation_trigger,
+        echo_delegation_trigger: tokio::time::interval(config.echo_delegation_interval),
+    }))
 }

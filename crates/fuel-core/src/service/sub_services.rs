@@ -39,7 +39,6 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
         Ed25519Key,
         Ed25519KeyGenerator,
     },
-    parent_signature::FuelParentSigner,
     trigger::TimeBasedTrigger,
     tx_receiver::PreconfirmationsReceiver,
 };
@@ -124,6 +123,10 @@ pub fn init_sub_services(
     let chain_name = chain_config.chain_name.clone();
     let on_chain_view = database.on_chain().latest_view()?;
     let (new_txs_updater, new_txs_watcher) = tokio::sync::watch::channel(());
+    #[cfg(feature = "p2p")]
+    let (preconfirmation_sender, preconfirmation_receiver) =
+        tokio::sync::mpsc::channel(1024);
+    #[cfg(not(feature = "p2p"))]
     let (preconfirmation_sender, _preconfirmation_receiver) =
         tokio::sync::mpsc::channel(1024);
 
@@ -340,16 +343,31 @@ pub fn init_sub_services(
         InDirectoryPredefinedBlocks::new(config.predefined_blocks_path.clone());
 
     #[cfg(feature = "p2p")]
-    let _pre_confirmation_service: ServiceRunner<
+    let config_preconfirmation: fuel_core_poa::pre_confirmation_signature_service::config::Config =
+        config.into();
+
+    #[cfg(feature = "p2p")]
+    let pre_confirmation_service: ServiceRunner<
         PreConfirmationSignatureTask<
             PreconfirmationsReceiver,
             P2PAdapter,
-            FuelParentSigner,
+            FuelBlockSigner,
             Ed25519KeyGenerator,
             Ed25519Key,
             TimeBasedTrigger<SystemTime>,
         >,
-    >;
+    > = fuel_core_poa::pre_confirmation_signature_service::new_service(
+        config_preconfirmation.clone(),
+        PreconfirmationsReceiver::new(preconfirmation_receiver),
+        p2p_adapter.clone(),
+        signer.clone(),
+        Ed25519KeyGenerator,
+        TimeBasedTrigger::new(
+            SystemTime,
+            config_preconfirmation.key_rotation_interval,
+            config_preconfirmation.key_expiration_interval,
+        ),
+    )?;
 
     let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
@@ -462,6 +480,7 @@ pub fn init_sub_services(
         if let Some(network) = network.take() {
             services.push(Box::new(network));
             services.push(Box::new(sync));
+            services.push(Box::new(pre_confirmation_service))
         }
     }
     #[cfg(feature = "shared-sequencer")]

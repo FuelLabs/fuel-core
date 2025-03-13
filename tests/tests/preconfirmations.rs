@@ -28,6 +28,7 @@ use rand::Rng;
 
 #[tokio::test]
 async fn preconfirmation__received_after_execution() {
+    tracing_subscriber::fmt::init();
     let mut config = Config::local_node();
     let block_production_period = Duration::from_secs(1);
     let address = Address::new([0; 32]);

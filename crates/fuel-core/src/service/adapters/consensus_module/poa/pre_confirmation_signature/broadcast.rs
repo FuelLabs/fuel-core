@@ -1,8 +1,6 @@
 use crate::service::adapters::{
-    consensus_module::poa::pre_confirmation_signature::{
-        key_generator::Ed25519Key,
-        parent_signature::FuelParentSigner,
-    },
+    consensus_module::poa::pre_confirmation_signature::key_generator::Ed25519Key,
+    FuelBlockSigner,
     P2PAdapter,
 };
 use fuel_core_poa::pre_confirmation_signature_service::{
@@ -36,7 +34,7 @@ use fuel_core_types::{
 use std::sync::Arc;
 
 impl Broadcast for P2PAdapter {
-    type ParentKey = FuelParentSigner;
+    type ParentKey = FuelBlockSigner;
     type DelegateKey = Ed25519Key;
     type Preconfirmations = Vec<Preconfirmation>;
 
