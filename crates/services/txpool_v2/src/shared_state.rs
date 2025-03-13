@@ -158,7 +158,7 @@ impl SharedState {
 
         if let Err(e) = self
             .request_remove_sender
-            .try_send(PoolRemoveRequest::CoinDependents { dependents_ids })
+            .try_send(PoolRemoveRequest::SkippedTransactions { dependents_ids })
         {
             tracing::error!("Failed to send remove coin dependents request: {}", e);
         }

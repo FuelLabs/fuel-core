@@ -69,7 +69,7 @@ pub fn tx_status_message_strategy() -> impl Strategy<Value = TxStatusMessage> {
 pub(super) fn state_strategy() -> impl Strategy<Value = State> {
     prop_oneof![
         Just(State::Empty),
-        transaction_status_strategy().prop_map(State::Initial),
+        transaction_status_strategy().prop_map(State::Submitted),
         transaction_status_strategy().prop_map(State::EarlySuccess),
         (transaction_status_strategy(), transaction_status_strategy())
             .prop_map(|(s1, s2)| State::Success(s1, s2)),
