@@ -4020,6 +4020,7 @@ dependencies = [
  "mockall",
  "parking_lot",
  "proptest",
+ "test-case",
  "test-strategy",
  "tokio",
  "tokio-stream",
