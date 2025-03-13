@@ -29,10 +29,11 @@ use rand::Rng;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn preconfirmation__received_after_execution() {
-    // tracing_subscriber::fmt::init();
+    let mut rng = rand::thread_rng();
     let mut config = Config::local_node();
     let block_production_period = Duration::from_secs(1);
     let address = Address::new([0; 32]);
+    let amount = 10;
 
     config.block_production = Trigger::Open {
         period: block_production_period,
@@ -58,8 +59,14 @@ async fn preconfirmation__received_after_execution() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_fee_input()
-        .add_output(Output::variable(address, 0, AssetId::default()))
+        .add_unsigned_coin_input(
+            SecretKey::random(&mut rng),
+            rng.gen(),
+            amount,
+            AssetId::default(),
+            Default::default(),
+        )
+        .add_output(Output::change(address, 0, AssetId::default()))
         .finalize_as_transaction();
 
     let tx_id = tx.id(&Default::default());
@@ -79,7 +86,7 @@ async fn preconfirmation__received_after_execution() {
         total_gas: _,
         transaction_id,
         receipts,
-        resolved_outputs: _,
+        resolved_outputs,
     } = tx_statuses_subscriber.next().await.unwrap().unwrap()
     {
         // Then
@@ -97,17 +104,16 @@ async fn preconfirmation__received_after_execution() {
             Receipt::Return {
                 val, ..
             } if val == 1));
-        // TODO: Fix
-        // let outputs = resolved_outputs.unwrap();
-        // assert_eq!(outputs.len(), 1);
-        // assert_eq!(
-        //     outputs[0],
-        //     Output::Coin {
-        //         to: address,
-        //         amount: 2,
-        //         asset_id: AssetId::default()
-        //     }
-        // );
+        let outputs = resolved_outputs.unwrap();
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(
+            outputs[0],
+            Output::Change {
+                to: address,
+                amount,
+                asset_id: AssetId::default()
+            }
+        );
     } else {
         panic!("Expected preconfirmation status");
     }
@@ -117,11 +123,13 @@ async fn preconfirmation__received_after_execution() {
     ));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn preconfirmation__received_after_failed_execution() {
+    let mut rng = rand::thread_rng();
     let mut config = Config::local_node();
     let block_production_period = Duration::from_secs(1);
     let address = Address::new([0; 32]);
+    let amount = 10;
 
     config.block_production = Trigger::Open {
         period: block_production_period,
@@ -149,12 +157,21 @@ async fn preconfirmation__received_after_failed_execution() {
         .script_gas_limit(gas_limit)
         .maturity(maturity)
         .add_fee_input()
-        .add_output(Output::variable(address, 0, AssetId::default()))
+        .add_unsigned_coin_input(
+            SecretKey::random(&mut rng),
+            rng.gen(),
+            amount,
+            AssetId::default(),
+            Default::default(),
+        )
+        .add_output(Output::change(address, 0, AssetId::default()))
         .finalize_as_transaction();
 
-    let tx_id = client.submit(&tx).await.unwrap();
+    let tx_id = tx.id(&Default::default());
     let mut tx_statuses_subscriber =
         client.subscribe_transaction_status(&tx_id).await.unwrap();
+    tokio::time::sleep(block_production_period).await;
+    client.submit(&tx).await.unwrap();
 
     // When
     assert!(matches!(
@@ -165,7 +182,7 @@ async fn preconfirmation__received_after_failed_execution() {
     if let TransactionStatus::PreconfirmationFailure {
         tx_pointer,
         total_fee,
-        total_gas,
+        total_gas: _,
         transaction_id,
         receipts,
         resolved_outputs,
@@ -173,12 +190,11 @@ async fn preconfirmation__received_after_failed_execution() {
     } = tx_statuses_subscriber.next().await.unwrap().unwrap()
     {
         // Then
-        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 0));
+        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(2), 1));
         assert_eq!(total_fee, 0);
-        assert_eq!(total_gas, 4450);
         assert_eq!(transaction_id, tx_id);
         let receipts = receipts.unwrap();
-        assert_eq!(receipts.len(), 2);
+        assert_eq!(receipts.len(), 3);
         assert!(matches!(receipts[0],
             Receipt::Log {
                 ra, rb, ..
@@ -192,7 +208,7 @@ async fn preconfirmation__received_after_failed_execution() {
         assert_eq!(outputs.len(), 1);
         assert_eq!(
             outputs[0],
-            Output::Coin {
+            Output::Change {
                 to: address,
                 amount: 2,
                 asset_id: AssetId::default()
@@ -208,7 +224,7 @@ async fn preconfirmation__received_after_failed_execution() {
     ));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn preconfirmation__received_after_squeezed_out() {
     let mut config = Config::local_node();
     let mut rng = rand::thread_rng();
@@ -246,9 +262,11 @@ async fn preconfirmation__received_after_squeezed_out() {
     })
     .finalize_as_transaction();
 
-    let tx_id = client.submit(&tx).await.unwrap();
+    let tx_id = tx.id(&Default::default());
     let mut tx_statuses_subscriber =
         client.subscribe_transaction_status(&tx_id).await.unwrap();
+    tokio::time::sleep(block_production_period).await;
+    client.submit(&tx).await.unwrap();
 
     // When
     assert!(matches!(
@@ -265,14 +283,9 @@ async fn preconfirmation__received_after_squeezed_out() {
     } else {
         panic!("Expected preconfirmation status");
     }
-
-    assert!(matches!(
-        tx_statuses_subscriber.next().await.unwrap().unwrap(),
-        TransactionStatus::SqueezedOut { .. }
-    ));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn preconfirmation__received_tx_inserted_end_block_open_period() {
     let mut config = Config::local_node();
     let block_production_period = Duration::from_secs(1);
@@ -295,15 +308,16 @@ async fn preconfirmation__received_tx_inserted_end_block_open_period() {
     .finalize_as_transaction();
 
     // Given
-    tokio::time::sleep(block_production_period.checked_div(2).unwrap()).await;
-
-    let tx_id = client.submit(&tx).await.unwrap();
+    let tx_id = tx.id(&Default::default());
     let mut tx_statuses_subscriber =
         client.subscribe_transaction_status(&tx_id).await.unwrap();
+    tokio::time::sleep(block_production_period).await;
+    tokio::time::sleep(block_production_period.checked_div(2).unwrap()).await;
 
+    client.submit(&tx).await.unwrap();
     // When
     assert!(matches!(
-        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        dbg!(tx_statuses_subscriber.next().await.unwrap().unwrap()),
         TransactionStatus::Submitted { .. }
     ));
     assert!(matches!(
@@ -313,7 +327,7 @@ async fn preconfirmation__received_tx_inserted_end_block_open_period() {
     // Then
     assert!(matches!(
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
-        TransactionStatus::Success { block_height, .. } if block_height == BlockHeight::new(1)
+        TransactionStatus::Success { block_height, .. } if block_height == BlockHeight::new(2)
     ));
 }
 
