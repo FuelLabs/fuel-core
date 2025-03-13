@@ -1,7 +1,7 @@
 use fuel_core_tx_status_manager::service::SignatureVerification;
 use fuel_core_types::{
-    //  ed25519::Signature,
-    // ed25519_dalek::Verifier,
+    ed25519::Signature,
+    ed25519_dalek::Verifier,
     fuel_crypto::{
         Message,
         PublicKey,
@@ -32,6 +32,28 @@ impl PreconfirmationSignatureVerification {
             delegate_keys: VecDeque::new(),
         }
     }
+
+    fn verify_preconfirmation(
+        delegate_key: &DelegatePublicKey,
+        sealed: &Sealed<Preconfirmations, Bytes64>,
+    ) -> bool {
+        let bytes = match postcard::to_allocvec(&sealed.entity) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                tracing::warn!("Failed to serialize preconfirmation: {e:?}");
+                return false;
+            }
+        };
+
+        let signature = Signature::from_bytes(&sealed.signature);
+        match delegate_key.verify(&bytes, &signature) {
+            Ok(_) => true,
+            Err(e) => {
+                tracing::warn!("Failed to verify preconfirmation signature: {e:?}");
+                false
+            }
+        }
+    }
 }
 
 impl SignatureVerification for PreconfirmationSignatureVerification {
@@ -58,23 +80,11 @@ impl SignatureVerification for PreconfirmationSignatureVerification {
         sealed: &Sealed<Preconfirmations, Bytes64>,
     ) -> bool {
         let expiration = sealed.entity.expiration;
-        let delegate_key = self
-            .delegate_keys
+        self.delegate_keys
             .iter()
             .find(|(exp, _)| exp == &expiration)
-            .map(|(_, key)| key);
-        if let Some(_delegate_key) = delegate_key {
-            // let bytes = postcard::to_allocvec(&sealed.entity).unwrap();
-            // let signature = Signature::from_bytes(&sealed.signature);
-            // let verified = delegate_key.verify(&bytes, &signature);
-            // match verified {
-            //     Ok(_) => true,
-            //     Err(_) => false,
-            // }
-            true
-        } else {
-            false
-        }
+            .map(|(_, delegate_key)| Self::verify_preconfirmation(delegate_key, sealed))
+            .unwrap_or(false)
     }
 }
 
@@ -134,6 +144,26 @@ mod tests {
         };
         let bytes = postcard::to_allocvec(&entity).unwrap();
         let typed_signature = delegate_private_key.sign(&bytes);
+        let signature = Bytes64::new(typed_signature.to_bytes());
+        Sealed { entity, signature }
+    }
+
+    fn bad_pre_confirmation_signature(
+        delegate_private_key: DalekSigningKey,
+        expiration: Tai64,
+    ) -> Sealed<Preconfirmations, Bytes64> {
+        let mut mutated_private_key = delegate_private_key.to_bytes();
+        for byte in mutated_private_key.iter_mut() {
+            *byte = byte.wrapping_add(1);
+        }
+        let mutated_delegate_private_key =
+            DalekSigningKey::from_bytes(&mutated_private_key);
+        let entity = Preconfirmations {
+            expiration,
+            preconfirmations: vec![],
+        };
+        let bytes = postcard::to_allocvec(&entity).unwrap();
+        let typed_signature = mutated_delegate_private_key.sign(&bytes);
         let signature = Bytes64::new(typed_signature.to_bytes());
         Sealed { entity, signature }
     }
@@ -205,6 +235,32 @@ mod tests {
         // when
         let verified = adapter
             .check_preconfirmation_signature(&valid_pre_confirmation_signature)
+            .await;
+
+        // then
+        assert!(!verified);
+    }
+
+    #[tokio::test]
+    async fn check_preconfirmation_signature__will_not_verify_pre_confirmations_signature_with_invalid_signature(
+    ) {
+        // given
+        let (protocol_secret_key, protocol_public_key) = protocol_key_pair();
+        let (delegate_secret_key, delegate_public_key) = delegate_key_pair();
+        let mut adapter = PreconfirmationSignatureVerification::new(protocol_public_key);
+        let expiration = Tai64(100u64);
+        let valid_delegate_signature = valid_sealed_delegate_signature(
+            protocol_secret_key,
+            delegate_public_key,
+            expiration,
+        );
+        let invalid_pre_confirmation_signature =
+            bad_pre_confirmation_signature(delegate_secret_key, expiration);
+        let _ = adapter.add_new_delegate(&valid_delegate_signature).await;
+
+        // when
+        let verified = adapter
+            .check_preconfirmation_signature(&invalid_pre_confirmation_signature)
             .await;
 
         // then
