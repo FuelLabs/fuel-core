@@ -455,10 +455,10 @@ impl TransactionStatus {
         match self {
             TransactionStatus::Success(_)
             | TransactionStatus::Failure(_)
-            | TransactionStatus::SqueezedOut(_) => true,
+            | TransactionStatus::SqueezedOut(_)
+            | TransactionStatus::PreconfirmationSqueezedOut(_) => true,
             TransactionStatus::Submitted(_)
             | TransactionStatus::PreconfirmationSuccess(_)
-            | TransactionStatus::PreconfirmationSqueezedOut(_)
             | TransactionStatus::PreconfirmationFailure(_) => false,
         }
     }

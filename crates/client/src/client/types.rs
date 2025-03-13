@@ -159,10 +159,10 @@ impl TransactionStatus {
         match self {
             TransactionStatus::Success { .. }
             | TransactionStatus::Failure { .. }
-            | TransactionStatus::SqueezedOut { .. } => true,
+            | TransactionStatus::SqueezedOut { .. }
+            | TransactionStatus::PreconfirmationSqueezedOut { .. } => true,
             TransactionStatus::Submitted { .. }
             | TransactionStatus::PreconfirmationSuccess { .. }
-            | TransactionStatus::PreconfirmationSqueezedOut { .. }
             | TransactionStatus::PreconfirmationFailure { .. } => false,
         }
     }

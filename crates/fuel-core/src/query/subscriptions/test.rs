@@ -219,9 +219,9 @@ fn next_state(state: TransactionStatus) -> Flow {
         TransactionStatus::PreConfirmationFailure { .. } => {
             Flow::Continue(NotFinal::Preconfirmation)
         }
-        TransactionStatus::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
-        TransactionStatus::PreConfirmationSqueezedOut { .. } => {
-            Flow::Continue(NotFinal::Preconfirmation)
+        TransactionStatus::SqueezedOut { .. }
+        | TransactionStatus::PreConfirmationSqueezedOut { .. } => {
+            Flow::Break(FinalTxStatus::Squeezed)
         }
     }
 }
@@ -296,7 +296,7 @@ impl From<crate::schema::tx::types::TransactionStatus> for TxStatus {
             }
             crate::schema::tx::types::TransactionStatus::PreconfirmationSqueezedOut(
                 _,
-            ) => TxStatus::Preconfirmed,
+            ) => TxStatus::Final(FinalTxStatus::Squeezed),
             crate::schema::tx::types::TransactionStatus::Failure(_) => {
                 TxStatus::Final(FinalTxStatus::Failed)
             }

@@ -608,10 +608,10 @@ pub struct TxStatusSubscription;
 #[Subscription]
 impl TxStatusSubscription {
     /// Returns a stream of status updates for the given transaction id.
-    /// If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
-    /// or [`TransactionStatus::Failed`] the stream will return that and end immediately.
-    /// Other, intermediate statuses will also be returned but the stream
-    /// will remain active and wait for a future updates.
+    /// If the current status is [`TransactionStatus::Success`], [`TransactionStatus::Failed`],
+    /// [`TransactionStatus::SqueezedOut`] or [`TransactionStatus::PreconfirmationSqueezedOut`]
+    /// the stream will return that and end immediately. Other, intermediate statuses
+    /// will also be returned but the stream will remain active and wait for a future updates.
     ///
     /// This stream will wait forever so it's advised to use within a timeout.
     ///
