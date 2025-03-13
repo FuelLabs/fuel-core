@@ -3689,58 +3689,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-core-global-merkle-root-api"
-version = "0.41.7"
-dependencies = [
- "anyhow",
- "async-graphql",
- "async-trait",
- "axum 0.5.17",
- "derive_more 0.99.19",
- "fuel-core-services",
- "fuel-core-storage",
- "fuel-core-types 0.41.7",
- "hex",
- "hyper 0.14.32",
- "reqwest 0.12.12",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "fuel-core-global-merkle-root-service"
-version = "0.41.7"
-dependencies = [
- "anyhow",
- "async-trait",
- "derive_more 0.99.19",
- "fuel-core-global-merkle-root-storage",
- "fuel-core-services",
- "fuel-core-storage",
- "fuel-core-types 0.41.7",
- "rand 0.8.5",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "fuel-core-global-merkle-root-storage"
-version = "0.41.7"
-dependencies = [
- "derive_more 0.99.19",
- "enum-iterator",
- "fuel-core-global-merkle-root-storage",
- "fuel-core-storage",
- "fuel-core-types 0.41.7",
- "num_enum",
- "postcard",
- "rand 0.8.5",
- "strum 0.25.0",
- "strum_macros 0.25.3",
- "tracing",
-]
-
-[[package]]
 name = "fuel-core-importer"
 version = "0.41.7"
 dependencies = [

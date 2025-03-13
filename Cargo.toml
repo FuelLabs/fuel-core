@@ -14,9 +14,6 @@ members = [
   "crates/fuel-gas-price-algorithm",
   "crates/keygen",
   "crates/metrics",
-  "crates/proof_system/global_merkle_root/api",
-  "crates/proof_system/global_merkle_root/service",
-  "crates/proof_system/global_merkle_root/storage",
   "crates/services",
   "crates/services/compression",
   "crates/services/consensus_module",
@@ -100,10 +97,6 @@ fuel-core-upgradable-executor = { version = "0.41.7", path = "./crates/services/
 fuel-core-wasm-executor = { version = "0.41.7", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
 fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
 fuel-gas-price-algorithm = { version = "0.41.7", path = "crates/fuel-gas-price-algorithm" }
-
-# Proof system
-fuel-core-global-merkle-root-storage = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/storage" }
-fuel-core-global-merkle-root-service = { version = "0.41.7", path = "./crates/proof_system/global_merkle_root/service" }
 
 # Fuel dependencies
 fuel-vm-private = { version = "0.60.0", package = "fuel-vm", default-features = false }
