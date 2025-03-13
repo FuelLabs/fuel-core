@@ -27,17 +27,15 @@ use fuel_core_types::{
 use futures::StreamExt;
 use rand::Rng;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[tokio::test]
 async fn preconfirmation__received_after_execution() {
+    tracing_subscriber::fmt::init();
     let mut rng = rand::thread_rng();
     let mut config = Config::local_node();
-    let block_production_period = Duration::from_secs(1);
+    config.block_production = Trigger::Never;
     let address = Address::new([0; 32]);
     let amount = 10;
 
-    config.block_production = Trigger::Open {
-        period: block_production_period,
-    };
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
@@ -72,7 +70,6 @@ async fn preconfirmation__received_after_execution() {
     let tx_id = tx.id(&Default::default());
     let mut tx_statuses_subscriber =
         client.subscribe_transaction_status(&tx_id).await.unwrap();
-    tokio::time::sleep(Duration::from_secs(1)).await;
     client.submit(&tx).await.unwrap();
 
     // When
@@ -80,6 +77,7 @@ async fn preconfirmation__received_after_execution() {
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
         TransactionStatus::Submitted { .. }
     ));
+    client.produce_blocks(1, None).await.unwrap();
     if let TransactionStatus::PreconfirmationSuccess {
         tx_pointer,
         total_fee,
@@ -90,7 +88,7 @@ async fn preconfirmation__received_after_execution() {
     } = tx_statuses_subscriber.next().await.unwrap().unwrap()
     {
         // Then
-        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(2), 1));
+        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 1));
         assert_eq!(total_fee, 0);
         assert_eq!(transaction_id, tx_id);
         let receipts = receipts.unwrap();
@@ -123,17 +121,14 @@ async fn preconfirmation__received_after_execution() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[tokio::test]
 async fn preconfirmation__received_after_failed_execution() {
     let mut rng = rand::thread_rng();
     let mut config = Config::local_node();
-    let block_production_period = Duration::from_secs(1);
+    config.block_production = Trigger::Never;
     let address = Address::new([0; 32]);
     let amount = 10;
 
-    config.block_production = Trigger::Open {
-        period: block_production_period,
-    };
     let srv = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
@@ -156,7 +151,6 @@ async fn preconfirmation__received_after_failed_execution() {
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .maturity(maturity)
-        .add_fee_input()
         .add_unsigned_coin_input(
             SecretKey::random(&mut rng),
             rng.gen(),
@@ -170,7 +164,6 @@ async fn preconfirmation__received_after_failed_execution() {
     let tx_id = tx.id(&Default::default());
     let mut tx_statuses_subscriber =
         client.subscribe_transaction_status(&tx_id).await.unwrap();
-    tokio::time::sleep(block_production_period).await;
     client.submit(&tx).await.unwrap();
 
     // When
@@ -178,7 +171,7 @@ async fn preconfirmation__received_after_failed_execution() {
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
         TransactionStatus::Submitted { .. }
     ));
-
+    client.produce_blocks(1, None).await.unwrap();
     if let TransactionStatus::PreconfirmationFailure {
         tx_pointer,
         total_fee,
@@ -190,7 +183,7 @@ async fn preconfirmation__received_after_failed_execution() {
     } = tx_statuses_subscriber.next().await.unwrap().unwrap()
     {
         // Then
-        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(2), 1));
+        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 1));
         assert_eq!(total_fee, 0);
         assert_eq!(transaction_id, tx_id);
         let receipts = receipts.unwrap();
@@ -210,7 +203,7 @@ async fn preconfirmation__received_after_failed_execution() {
             outputs[0],
             Output::Change {
                 to: address,
-                amount: 2,
+                amount,
                 asset_id: AssetId::default()
             }
         );
@@ -224,15 +217,12 @@ async fn preconfirmation__received_after_failed_execution() {
     ));
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[tokio::test]
 async fn preconfirmation__received_after_squeezed_out() {
     let mut config = Config::local_node();
+    config.block_production = Trigger::Never;
     let mut rng = rand::thread_rng();
-    let block_production_period = Duration::from_secs(1);
 
-    config.block_production = Trigger::Open {
-        period: block_production_period,
-    };
     // Given
     // Disable UTXO validation in TxPool so that the transaction is squeezed out by
     // block production
@@ -265,7 +255,6 @@ async fn preconfirmation__received_after_squeezed_out() {
     let tx_id = tx.id(&Default::default());
     let mut tx_statuses_subscriber =
         client.subscribe_transaction_status(&tx_id).await.unwrap();
-    tokio::time::sleep(block_production_period).await;
     client.submit(&tx).await.unwrap();
 
     // When
@@ -273,6 +262,7 @@ async fn preconfirmation__received_after_squeezed_out() {
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
         TransactionStatus::Submitted { .. }
     ));
+    client.produce_blocks(1, None).await.unwrap();
     if let TransactionStatus::PreconfirmationSqueezedOut {
         transaction_id,
         reason: _,
