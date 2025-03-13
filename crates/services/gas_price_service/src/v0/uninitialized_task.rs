@@ -196,8 +196,8 @@ where
     Metadata: GetMetadataStorage + SetMetadataStorage,
 {
     let min_exec_gas_price = config.min_gas_price;
-    let exec_gas_price_change_percent = config.gas_price_change_percent;
-    let l2_block_fullness_threshold_percent = config.gas_price_threshold_percent;
+    let exec_gas_price_change_percent = *config.gas_price_change_percent as u64;
+    let l2_block_fullness_threshold_percent = *config.gas_price_threshold_percent as u64;
 
     let algorithm_updater;
     if let Some(updater_metadata) = metadata_storage

@@ -3,6 +3,8 @@ use std::{
     num::NonZeroU64,
 };
 
+use fuel_core_types::clamped_percentage::ClampedPercentage;
+
 use crate::utils::cumulative_percentage_change;
 
 #[cfg(test)]
@@ -21,7 +23,7 @@ pub struct AlgorithmV0 {
     /// The block height of the next L2 block
     for_height: u32,
     /// The change percentage per block
-    percentage: u64,
+    percentage: ClampedPercentage,
 }
 
 impl AlgorithmV0 {
@@ -33,7 +35,7 @@ impl AlgorithmV0 {
         cumulative_percentage_change(
             self.new_exec_price,
             self.for_height,
-            self.percentage,
+            *self.percentage as u64,
             height,
         )
     }
@@ -58,12 +60,12 @@ pub struct AlgorithmUpdaterV0 {
     pub min_exec_gas_price: u64,
     /// The Percentage the execution gas price will change in a single block, either increase or decrease
     /// based on the fullness of the last L2 block
-    pub exec_gas_price_change_percent: u64,
+    pub exec_gas_price_change_percent: ClampedPercentage,
     /// The height of the next L2 block
     pub l2_block_height: u32,
     /// The threshold of gas usage above and below which the gas price will increase or decrease
     /// This is a percentage of the total capacity of the L2 block
-    pub l2_block_fullness_threshold_percent: u64,
+    pub l2_block_fullness_threshold_percent: ClampedPercentage,
 }
 
 impl AlgorithmUpdaterV0 {
@@ -78,9 +80,15 @@ impl AlgorithmUpdaterV0 {
         Self {
             new_exec_price: new_exec_price_corrected,
             min_exec_gas_price,
-            exec_gas_price_change_percent,
+            #[allow(clippy::cast_possible_truncation)]
+            exec_gas_price_change_percent: ClampedPercentage::new(
+                exec_gas_price_change_percent as u8,
+            ),
             l2_block_height,
-            l2_block_fullness_threshold_percent,
+            #[allow(clippy::cast_possible_truncation)]
+            l2_block_fullness_threshold_percent: ClampedPercentage::new(
+                l2_block_fullness_threshold_percent as u8,
+            ),
         }
     }
 
@@ -108,9 +116,9 @@ impl AlgorithmUpdaterV0 {
         let fullness_percent = used
             .saturating_mul(100)
             .checked_div(capacity.into())
-            .unwrap_or(self.l2_block_fullness_threshold_percent);
+            .unwrap_or(*self.l2_block_fullness_threshold_percent as u64);
 
-        match fullness_percent.cmp(&self.l2_block_fullness_threshold_percent) {
+        match fullness_percent.cmp(&(*self.l2_block_fullness_threshold_percent as u64)) {
             std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => {
                 let change_amount = self.change_amount(exec_gas_price);
                 exec_gas_price = exec_gas_price.saturating_add(change_amount);
@@ -125,7 +133,7 @@ impl AlgorithmUpdaterV0 {
 
     fn change_amount(&self, principle: u64) -> u64 {
         principle
-            .saturating_mul(self.exec_gas_price_change_percent)
+            .saturating_mul(*self.exec_gas_price_change_percent as u64)
             .saturating_div(100)
     }
 
