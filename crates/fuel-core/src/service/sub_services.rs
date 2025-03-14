@@ -25,10 +25,7 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::{
-    fuel_crypto::PublicKey,
-    signer::SignMode,
-};
+use fuel_core_types::signer::SignMode;
 
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
@@ -175,13 +172,8 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let p2p_adapter = P2PAdapter::new();
 
-    // TODO: Use real values
-    let signature_verification =
-        PreconfirmationSignatureVerification::new(PublicKey::default());
-
     let tx_status_manager = fuel_core_tx_status_manager::new_service(
         p2p_adapter.clone(),
-        signature_verification,
         config.tx_status_manager.clone(),
     );
     let tx_status_manager_adapter =
@@ -274,13 +266,6 @@ pub fn init_sub_services(
         gas_price_algo.clone(),
         universal_gas_price_provider.clone(),
     );
-
-    let tx_status_manager = fuel_core_tx_status_manager::new_service(
-        p2p_adapter.clone(),
-        config.tx_status_manager.clone(),
-    );
-    let tx_status_manager_adapter =
-        TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
 
     let txpool = fuel_core_txpool::new_service(
         chain_id,
