@@ -16,6 +16,7 @@ pub enum Module {
     TxPool,
     GraphQL, // TODO[RC]: Not used... yet.
     GasPrice,
+    TxStatusManager,
 }
 
 /// Configuration for disabling metrics.
