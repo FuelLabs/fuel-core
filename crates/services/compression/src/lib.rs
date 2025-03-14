@@ -18,7 +18,7 @@ pub mod ports;
 pub mod service;
 
 /// Storage traits for the compression service
-mod storage;
+pub mod storage;
 
 /// Result type for compression operations
 pub type Result<T> = core::result::Result<T, errors::CompressionError>;

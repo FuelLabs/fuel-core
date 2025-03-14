@@ -11,6 +11,8 @@ pub struct Config {
     pub status_cache_ttl: Duration,
     /// Protocol Signing Key, i.e. the block signer's public key
     pub protocol_public_key: PublicKey,
+    /// Enable metrics when set to true
+    pub metrics: bool,
 }
 
 #[cfg(feature = "test-helpers")]
@@ -21,6 +23,7 @@ impl Default for Config {
             subscription_ttl: Duration::from_secs(60 * 10),
             status_cache_ttl: Duration::from_secs(5),
             protocol_public_key: PublicKey::default(),
+            metrics: false,
         }
     }
 }
