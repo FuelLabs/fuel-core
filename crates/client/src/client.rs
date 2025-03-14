@@ -1241,7 +1241,7 @@ impl FuelClient {
             .subscribe_transaction_status(id)
             .await?
             .skip_while(|status| {
-                future::ready(matches!(status, Ok(TransactionStatus::Submitted { .. })))
+                future::ready(status.as_ref().map_or(true, |status| !status.is_final()))
             })
             .next()
             .await;

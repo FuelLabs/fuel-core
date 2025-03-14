@@ -253,7 +253,7 @@ impl Config<NotInitialized> {
             database_read_threads: 0,
             tx_pool_threads: 0,
             state: NotInitialized,
-            subscribe_to_pre_confirmations: false,
+            subscribe_to_pre_confirmations: true,
         }
     }
 }

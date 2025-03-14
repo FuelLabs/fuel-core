@@ -139,6 +139,7 @@ pub async fn produce_block_with_tx(rng: &mut StdRng, client: &FuelClient) {
 pub fn config_with_fee() -> Config {
     let mut config = Config::local_node();
     config.utxo_validation = true;
+    config.txpool.utxo_validation = true;
     config.gas_price_config.min_exec_gas_price = 1000;
     config
 }

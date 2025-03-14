@@ -31,6 +31,15 @@ pub enum TxStatusMessage {
     FailedStatus,
 }
 
+impl TxStatusMessage {
+    pub fn is_final(&self) -> bool {
+        match self {
+            TxStatusMessage::Status(transaction_status) => transaction_status.is_final(),
+            TxStatusMessage::FailedStatus => true,
+        }
+    }
+}
+
 impl<E> From<Result<TransactionStatus, E>> for TxStatusMessage {
     fn from(result: Result<TransactionStatus, E>) -> Self {
         match result {

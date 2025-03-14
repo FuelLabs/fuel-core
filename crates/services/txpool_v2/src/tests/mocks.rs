@@ -97,9 +97,7 @@ impl MockTxStatusManager {
 impl ports::TxStatusManager for MockTxStatusManager {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
         let tx = self.tx.clone();
-        tokio::spawn(async move {
-            tx.send((tx_id, tx_status)).await.unwrap();
-        });
+        tx.try_send((tx_id, tx_status)).unwrap();
     }
 }
 

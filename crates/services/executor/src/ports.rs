@@ -21,7 +21,7 @@ use fuel_core_types::{
     fuel_vm::checked_transaction::CheckedTransaction,
     services::{
         executor::Result as ExecutorResult,
-        preconfirmation::PreconfirmationStatus,
+        preconfirmation::Preconfirmation,
         relayer::Event,
     },
 };
@@ -181,14 +181,11 @@ pub trait NewTxWaiterPort: Send {
 pub trait PreconfirmationSenderPort {
     /// Try to send a batch of pre-confirmations. Will succeed only if
     /// it can be directly sent. Otherwise it will return the batch.
-    fn try_send(
-        &self,
-        preconfirmations: Vec<PreconfirmationStatus>,
-    ) -> Vec<PreconfirmationStatus>;
+    fn try_send(&self, preconfirmations: Vec<Preconfirmation>) -> Vec<Preconfirmation>;
 
     /// Send a batch of pre-confirmations, awaiting for the send to be successful.
     fn send(
         &self,
-        preconfirmations: Vec<PreconfirmationStatus>,
+        preconfirmations: Vec<Preconfirmation>,
     ) -> impl Future<Output = ()> + Send;
 }

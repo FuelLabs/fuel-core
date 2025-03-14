@@ -8,15 +8,12 @@ use fuel_core_poa::pre_confirmation_signature_service::{
 use fuel_core_types::{
     fuel_crypto,
     fuel_vm::Signature,
-    signer::SignMode,
 };
 use serde::Serialize;
 
-pub struct FuelParentSigner {
-    mode: SignMode,
-}
+use crate::service::adapters::FuelBlockSigner;
 
-impl ParentSignature for FuelParentSigner {
+impl ParentSignature for FuelBlockSigner {
     type Signature = Signature;
 
     async fn sign<T>(&self, data: &T) -> PoAResult<Self::Signature>

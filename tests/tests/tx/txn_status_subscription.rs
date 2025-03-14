@@ -150,9 +150,11 @@ async fn subscribe_txn_status() {
                             (0, 0) => assert!(matches!(r, fuel_core_client::client::types::TransactionStatus::Submitted{ .. }), "{r:?}"),
                             (0, 1) => assert!(matches!(r, fuel_core_client::client::types::TransactionStatus::SqueezedOut{ .. }), "{r:?}"),
                             (1, 0) => assert!(matches!(r, fuel_core_client::client::types::TransactionStatus::Submitted{ .. }), "{r:?}"),
-                            (1, 1) => assert!(matches!(r, fuel_core_client::client::types::TransactionStatus::Success{ .. }), "{r:?}"),
+                            (1, 1) => assert!(matches!(r, fuel_core_client::client::types::TransactionStatus::PreconfirmationSuccess{ .. }), "{r:?}"),
+                            (1, 2) => assert!(matches!(r, fuel_core_client::client::types::TransactionStatus::Success{ .. }), "{r:?}"),
                             (2, 0) => assert!(matches!(r, fuel_core_client::client::types::TransactionStatus::Submitted{ .. }), "{r:?}"),
-                            (2, 1) => assert!(matches!(r, fuel_core_client::client::types::TransactionStatus::Failure{ .. }), "{r:?}"),
+                            (2, 1) => assert!(matches!(r, fuel_core_client::client::types::TransactionStatus::PreconfirmationFailure{ .. }), "{r:?}"),
+                            (2, 2) => assert!(matches!(r, fuel_core_client::client::types::TransactionStatus::Failure{ .. }), "{r:?}"),
                             _ => unreachable!("{} {} {:?}", txn_idx, event_idx, r),
                         }
                     })

@@ -253,6 +253,7 @@ impl TestSetupBuilder {
         txpool.heavy_work.size_of_verification_queue = self.max_txs;
         txpool.heavy_work.number_threads_to_verify_transactions =
             self.number_threads_pool_verif;
+        txpool.utxo_validation = self.utxo_validation;
 
         let gas_price_config = GasPriceConfig {
             starting_exec_gas_price: self.starting_gas_price,

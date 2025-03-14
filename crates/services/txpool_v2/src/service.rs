@@ -116,11 +116,12 @@ mod pruner;
 mod subscriptions;
 pub(crate) mod verifications;
 
-pub type TxPool = Pool<
+pub type TxPool<TxStatusManager> = Pool<
     GraphStorage,
     <GraphStorage as Storage>::StorageIndex,
     BasicCollisionManager<<GraphStorage as Storage>::StorageIndex>,
     RatioTipGasSelection<GraphStorage>,
+    TxStatusManager,
 >;
 
 pub(crate) type Shared<T> = Arc<RwLock<T>>;
@@ -372,15 +373,6 @@ where
                 expiration,
                 source,
             } => {
-                let duration = time
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .expect("Time can't be less than UNIX EPOCH");
-                // We do it at the top of the function to avoid any inconsistency in case of error
-                let Ok(duration) = i64::try_from(duration.as_secs()) else {
-                    tracing::error!("Failed to convert the duration to i64");
-                    return
-                };
-
                 match source {
                     ExtendedInsertionSource::P2P { from_peer_info } => {
                         let _ = self.p2p.notify_gossip_transaction_validity(
@@ -404,10 +396,6 @@ where
                 }
 
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
-                self.tx_status_manager.status_update(
-                    tx_id,
-                    TransactionStatus::submitted(Tai64::from_unix(duration)),
-                );
 
                 if expiration < u32::MAX.into() {
                     let block_height_expiration = self
@@ -803,6 +791,7 @@ where
 
     let service_channel_limits = config.service_channel_limits;
     let utxo_validation = config.utxo_validation;
+    let tx_status_manager = Arc::new(tx_status_manager);
     let txpool = Pool::new(
         GraphStorage::new(GraphConfig {
             max_txs_chain_count: config.max_txs_chain_count,
@@ -812,6 +801,7 @@ where
         config,
         pool_stats_sender,
         new_txs_notifier.clone(),
+        tx_status_manager.clone(),
     );
 
     // BlockHeight is < 64 bytes, so we can use SeqLock
@@ -847,6 +837,6 @@ where
         shared_state,
         metrics,
         tx_sync_history: Default::default(),
-        tx_status_manager: Arc::new(tx_status_manager),
+        tx_status_manager,
     })
 }

@@ -38,7 +38,7 @@ use fuel_core_types::{
             Result as ExecutorResult,
             UncommittedResult,
         },
-        preconfirmation::PreconfirmationStatus,
+        preconfirmation::Preconfirmation,
     },
     signer::SignMode,
     tai64::Tai64,
@@ -341,12 +341,19 @@ impl NewTxWaiter {
 
 #[derive(Clone)]
 pub struct PreconfirmationSender {
-    pub sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+    pub sender_signature_service: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
+    pub tx_status_manager_adapter: TxStatusManagerAdapter,
 }
 
 impl PreconfirmationSender {
-    pub fn new(sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>) -> Self {
-        Self { sender }
+    pub fn new(
+        sender_signature_service: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
+        tx_status_manager_adapter: TxStatusManagerAdapter,
+    ) -> Self {
+        Self {
+            sender_signature_service,
+            tx_status_manager_adapter,
+        }
     }
 }
 
@@ -363,10 +370,12 @@ impl ExecutorAdapter {
         relayer_database: Database<Relayer>,
         config: fuel_core_upgradable_executor::config::Config,
         new_txs_watcher: tokio::sync::watch::Receiver<()>,
-        preconfirmation_sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+        preconfirmation_sender: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
+        tx_status_manager_adapter: TxStatusManagerAdapter,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);
-        let preconfirmation_sender = PreconfirmationSender::new(preconfirmation_sender);
+        let preconfirmation_sender =
+            PreconfirmationSender::new(preconfirmation_sender, tx_status_manager_adapter);
         Self {
             executor: Arc::new(executor),
             new_txs_watcher,
