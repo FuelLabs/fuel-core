@@ -423,7 +423,7 @@ mod tests {
 
         let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
         let updater_sender = tx_status_change.update_sender.clone();
-        let tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+        let tx_status_manager = TxStatusManager::new(tx_status_change, TTL, false);
         let signing_key = SecretKey::default();
         let protocol_public_key = signing_key.public_key();
         let signature_verification = SignatureVerification::new(protocol_public_key);
