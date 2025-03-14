@@ -11,7 +11,7 @@ pub struct PreconfirmationArgs {
     #[clap(
         long = "preconfirmation-key-expiration-frequency",
         env,
-        default_value = "12m"
+        default_value = "20m"
     )]
     pub key_expiration_interval: humantime::Duration,
     /// The frequency at which the preconfirmation sub-key is echoed to the network
