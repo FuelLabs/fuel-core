@@ -1,3 +1,4 @@
+use crate::tests::PublicKey;
 use std::sync::Arc;
 
 use fuel_core_services::ServiceRunner;
@@ -60,9 +61,10 @@ impl TestTxStatusManagerUniverse {
         self.tx_status_manager = Some(tx_status_manager.clone());
     }
 
-    pub fn build_service(&self, p2p: Option<MockP2P>) -> ServiceRunner<Task> {
+    pub fn build_service(&self, p2p: Option<MockP2P>) -> ServiceRunner<Task<PublicKey>> {
         let p2p = p2p.unwrap_or_else(|| MockP2P::new_with_statuses(vec![]));
+        let arb_pubkey = Default::default();
 
-        new_service(p2p, self.config.clone())
+        new_service(p2p, self.config.clone(), arb_pubkey)
     }
 }

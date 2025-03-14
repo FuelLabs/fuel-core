@@ -32,7 +32,6 @@ test-case = { workspace = true }
 test-strategy = { workspace = true }
 tokio = { workspace = true, features = ["test-util", "macros"] }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]
