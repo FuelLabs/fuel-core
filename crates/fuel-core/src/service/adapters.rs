@@ -66,6 +66,7 @@ use crate::{
 
 pub mod block_importer;
 pub mod chain_state_info_provider;
+pub mod compression_adapters;
 pub mod consensus_module;
 pub mod executor;
 pub mod fuel_gas_price_provider;
@@ -75,6 +76,7 @@ pub mod import_result_provider;
 #[cfg(feature = "p2p")]
 pub mod p2p;
 pub mod producer;
+pub mod ready_signal;
 #[cfg(feature = "relayer")]
 pub mod relayer;
 #[cfg(feature = "shared-sequencer")]
@@ -83,8 +85,6 @@ pub mod shared_sequencer;
 pub mod sync;
 pub mod tx_status_manager;
 pub mod txpool;
-
-pub mod ready_signal;
 
 #[derive(Debug, Clone)]
 pub struct ChainStateInfoProvider {

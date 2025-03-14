@@ -35,10 +35,7 @@ use fuel_core_types::{
 
 use crate::{
     combined_database::CombinedDatabaseConfig,
-    graphql_api::{
-        worker_service::DaCompressionConfig,
-        ServiceConfig as GraphQLConfig,
-    },
+    graphql_api::ServiceConfig as GraphQLConfig,
 };
 
 use fuel_core_types::fuel_types::AssetId;
@@ -72,7 +69,7 @@ pub struct Config {
     pub tx_status_manager: TxStatusManagerConfig,
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
-    pub da_compression: DaCompressionConfig,
+    pub da_compression: DaCompressionMode,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerConfig>,
@@ -195,7 +192,7 @@ impl Config {
             block_producer: fuel_core_producer::Config {
                 ..Default::default()
             },
-            da_compression: DaCompressionConfig::Disabled,
+            da_compression: DaCompressionMode::Disabled,
             gas_price_config,
             block_importer,
             #[cfg(feature = "relayer")]
@@ -323,4 +320,15 @@ impl GasPriceConfig {
             da_poll_interval: Some(Duration::from_secs(1)),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct DaCompressionConfig {
+    pub retention_duration: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub enum DaCompressionMode {
+    Disabled,
+    Enabled(DaCompressionConfig),
 }
