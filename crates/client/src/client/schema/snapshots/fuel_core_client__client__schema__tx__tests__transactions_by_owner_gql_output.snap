@@ -119,10 +119,6 @@ query TransactionsByOwnerQuery($owner: Address!, $after: String, $before: String
           ... on SqueezedOutStatus {
             reason
           }
-          ... on PreconfirmationSqueezedOutStatus {
-            transactionId
-            reason
-          }
           ... on FailureStatus {
             blockHeight
             time

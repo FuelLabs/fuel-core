@@ -105,8 +105,6 @@ enum FinalTxStatus {
     /// The transaction was squeezed out of the txpool (or block)
     /// because it was not valid to include in the block.
     Squeezed,
-    /// The transaction was squeezed out during block production.
-    PreconfirmationSqueeze,
     /// The transaction failed to execute and was included in a block.
     Failed,
 }
@@ -231,7 +229,7 @@ fn next_state(state: TransactionStatus) -> Flow {
         }
         TransactionStatus::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
         TransactionStatus::PreConfirmationSqueezedOut { .. } => {
-            Flow::Break(FinalTxStatus::PreconfirmationSqueeze)
+            Flow::Break(FinalTxStatus::Squeezed)
         }
     }
 }
@@ -304,9 +302,6 @@ impl From<crate::schema::tx::types::TransactionStatus> for TxStatus {
             crate::schema::tx::types::TransactionStatus::SqueezedOut(_) => {
                 TxStatus::Final(FinalTxStatus::Squeezed)
             }
-            crate::schema::tx::types::TransactionStatus::PreconfirmationSqueezedOut(
-                _,
-            ) => TxStatus::Final(FinalTxStatus::PreconfirmationSqueeze),
             crate::schema::tx::types::TransactionStatus::Failure(_) => {
                 TxStatus::Final(FinalTxStatus::Failed)
             }

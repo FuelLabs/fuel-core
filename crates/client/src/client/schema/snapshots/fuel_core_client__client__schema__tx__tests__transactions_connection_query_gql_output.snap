@@ -119,10 +119,6 @@ query TransactionsQuery($after: String, $before: String, $first: Int, $last: Int
           ... on SqueezedOutStatus {
             reason
           }
-          ... on PreconfirmationSqueezedOutStatus {
-            transactionId
-            reason
-          }
           ... on FailureStatus {
             blockHeight
             time

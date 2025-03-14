@@ -116,10 +116,6 @@ query TransactionQuery($id: TransactionId!) {
       ... on SqueezedOutStatus {
         reason
       }
-      ... on PreconfirmationSqueezedOutStatus {
-        transactionId
-        reason
-      }
       ... on FailureStatus {
         blockHeight
         time
