@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    fmt::Debug,
+    sync::Arc,
+};
 
 use error::Result;
 use fuel_core_services::{
@@ -81,7 +84,7 @@ where
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,
     Parent: ParentSignature,
-    Preconfirmations: serde::Serialize + Send,
+    Preconfirmations: serde::Serialize + Send + Debug,
 {
     const NAME: &'static str = "PreconfirmationSignatureTask";
     type SharedData = EmptyShared;
@@ -168,7 +171,7 @@ where
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,
     Parent: ParentSignature,
-    Preconfirmations: serde::Serialize + Send,
+    Preconfirmations: serde::Serialize + Send + Debug,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tracing::debug!("Running pre-confirmation task");
@@ -177,6 +180,7 @@ where
                 TaskNextAction::Stop
             }
             res = self.tx_receiver.receive() => {
+                tracing::debug!("AURELIEN: Res is {:?}", &res);
                 tracing::debug!("Received transactions");
                 let pre_confirmations = try_or_stop!(res);
                 let signature = try_or_stop!(self.current_delegate_key.sign(&pre_confirmations));
@@ -247,7 +251,7 @@ where
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,
     Parent: ParentSignature,
-    Preconfirmations: serde::Serialize + Send,
+    Preconfirmations: serde::Serialize + Send + Debug,
 {
     // It's ok to wait because the first rotation is expected to be immediate
     let expiration = Tai64(
