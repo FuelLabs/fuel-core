@@ -244,10 +244,6 @@ mod tests {
 
     use super::TxStatusManager;
 
-    mockall::mock! {
-        pub TxStatusChange {}
-    }
-
     fn submitted() -> TransactionStatus {
         TransactionStatus::submitted(Tai64::UNIX_EPOCH)
     }
