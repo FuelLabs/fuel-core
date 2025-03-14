@@ -359,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn status_management__all_statuses_work() {
+    fn status_management__can_retrieve_all_statuses() {
         let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
         let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL, false);
 
@@ -485,6 +485,23 @@ mod tests {
             &tx_status_manager,
             vec![tx2_id, tx3_id, tx4_id, tx5_id, tx6_id, tx7_id],
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pruning__works_with_ttl_0() {
+        let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
+        let mut tx_status_manager =
+            TxStatusManager::new(tx_status_change, Duration::from_secs(0), false);
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+
+        // When
+        tx_status_manager.status_update(tx1_id, success());
+        force_pruning(&mut tx_status_manager);
+
+        // Then
+        assert_absence(&tx_status_manager, vec![tx1_id]);
     }
 
     #[tokio::test(start_paused = true)]
