@@ -175,6 +175,7 @@ impl TestPoolUniverse {
 
     pub fn build_pool(&mut self) {
         let (tx_new_executable_txs, _) = tokio::sync::watch::channel(());
+        let (status_sender, status_receiver) = mpsc::channel(1_000_000);
         let (tx, rx) = tokio::sync::watch::channel(TxPoolStats::default());
         let pool = Arc::new(RwLock::new(Pool::new(
             GraphStorage::new(GraphConfig {
@@ -185,9 +186,10 @@ impl TestPoolUniverse {
             self.config.clone(),
             tx,
             tx_new_executable_txs,
-            Arc::new(MockTxStatusManager::new(mpsc::channel(100).0)),
+            Arc::new(MockTxStatusManager::new(status_sender)),
         )));
         self.stats_receiver = Some(rx);
+        self.tx_status_manager_receiver = status_receiver;
         self.pool = Some(pool.clone());
     }
 
