@@ -269,6 +269,7 @@ impl From<&Config> for fuel_core_poa::Config {
     }
 }
 
+#[cfg(feature = "p2p")]
 impl From<&Config> for fuel_core_poa::pre_confirmation_signature_service::config::Config {
     fn from(value: &Config) -> Self {
         fuel_core_poa::pre_confirmation_signature_service::config::Config {
