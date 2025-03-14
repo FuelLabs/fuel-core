@@ -343,6 +343,7 @@ pub fn init_sub_services(
         config.into();
 
     #[cfg(feature = "p2p")]
+    #[allow(clippy::type_complexity)]
     let pre_confirmation_service: Option<
         ServiceRunner<
             PreConfirmationSignatureTask<
