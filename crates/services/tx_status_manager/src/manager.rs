@@ -47,32 +47,24 @@ impl Data {
     }
 
     #[cfg(test)]
-    fn all_but_prunable_statuses(
-        &self,
-    ) -> impl Iterator<Item = (&Bytes32, &(Instant, TransactionStatus))> {
-        self.prunable_statuses
-            .iter()
-            .filter(|(_, (_, status))| TxStatusManager::is_prunable(status))
-    }
-
-    #[cfg(test)]
     fn assert_consistency(&self) {
         use std::collections::HashSet;
-        // There should be a timestamp entry for each registered tx id
-        for (status_tx_id, (status_time, _)) in self.all_but_prunable_statuses() {
+        // Each prunable status should be in the pruning queue
+        for (status_tx_id, (status_time, _)) in &self.prunable_statuses {
             assert!(self
                 .pruning_queue
                 .iter()
                 .any(|(time, tx_id)| tx_id == status_tx_id && time == status_time));
         }
 
-        // There should be a transaction with given id for each timestamp cache
+        // There should be a prunable status with given id for each pruning queue entry
         for (_, tx_id) in self.pruning_queue.iter() {
             assert!(self.prunable_statuses.contains_key(tx_id));
         }
 
-        // The count of transactions in both collections must match
-        let tx_count = self.all_but_prunable_statuses().count();
+        // Pruning queue should have the same number of unique tx_ids as the number
+        // of statuses in the prunable_statuses collection
+        let tx_count = self.prunable_statuses.len();
         let tx_count_from_queue = self
             .pruning_queue
             .iter()
