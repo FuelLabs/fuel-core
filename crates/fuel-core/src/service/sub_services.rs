@@ -69,7 +69,6 @@ use crate::{
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
             ready_signal::ReadySignal,
-            tx_status_manager::signature_verification::PreconfirmationSignatureVerification,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ChainStateInfoProvider,
@@ -275,6 +274,13 @@ pub fn init_sub_services(
         gas_price_algo.clone(),
         universal_gas_price_provider.clone(),
     );
+
+    let tx_status_manager = fuel_core_tx_status_manager::new_service(
+        p2p_adapter.clone(),
+        config.tx_status_manager.clone(),
+    );
+    let tx_status_manager_adapter =
+        TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
 
     let txpool = fuel_core_txpool::new_service(
         chain_id,
