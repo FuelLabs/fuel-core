@@ -427,18 +427,14 @@ mod tests {
 
         let mut received_statuses = vec![];
         let timeout_duration = Duration::from_millis(250);
-        loop {
-            match tokio::time::timeout(timeout_duration, stream.next()).await {
-                Ok(Some(message)) => match message {
-                    TxStatusMessage::Status(s) => received_statuses.push(s),
-                    TxStatusMessage::FailedStatus => panic!("should not happen"),
-                },
-                Ok(None) => break,
-                Err(_) => panic!("timeout"),
-            }
-
-            if received_statuses.len() >= 2 {
-                break; // Exit after receiving expected messages
+        while let Ok(Some(message)) =
+            tokio::time::timeout(timeout_duration, stream.next()).await
+        {
+            match message {
+                TxStatusMessage::Status(s) => received_statuses.push(s),
+                TxStatusMessage::FailedStatus => {
+                    panic!("should not happen");
+                }
             }
         }
 
