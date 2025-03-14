@@ -29,6 +29,8 @@ use crate::{
     },
 };
 
+use fuel_core_metrics::tx_status_manager_metrics::metrics_manager;
+
 pub struct Data {
     pruning_queue: VecDeque<(Instant, TxId)>,
     non_prunable_statuses: HashMap<TxId, TransactionStatus>,
@@ -84,14 +86,16 @@ pub struct TxStatusManager {
     data: Data,
     tx_status_change: TxStatusChange,
     ttl: Duration,
+    metrics: bool,
 }
 
 impl TxStatusManager {
-    pub fn new(tx_status_change: TxStatusChange, ttl: Duration) -> Self {
+    pub fn new(tx_status_change: TxStatusChange, ttl: Duration, metrics: bool) -> Self {
         Self {
             data: Data::empty(),
             tx_status_change,
             ttl,
+            metrics,
         }
     }
 
@@ -166,6 +170,25 @@ impl TxStatusManager {
         self.tx_status_change
             .update_sender
             .send(TxUpdate::new(tx_id, tx_status.into()));
+
+        if self.metrics {
+            metrics_manager()
+                .prunable_status_count
+                .set(self.data.prunable_statuses.len() as i64);
+            metrics_manager()
+                .non_prunable_status_count
+                .set(self.data.non_prunable_statuses.len() as i64);
+            metrics_manager()
+                .pruning_queue_len
+                .set(self.data.pruning_queue.len() as i64);
+            metrics_manager().pruning_queue_oldest_status_age_s.set(
+                self.data
+                    .pruning_queue
+                    .back()
+                    .map(|(time, _)| time.elapsed().as_secs() as i64)
+                    .unwrap_or(0),
+            );
+        };
     }
 
     pub fn status(&self, tx_id: &TxId) -> Option<&TransactionStatus> {
@@ -349,7 +372,8 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn simple_registration() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, false);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -391,7 +415,8 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn prunes_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, false);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -435,7 +460,8 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn prunes_multiple_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, false);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -497,7 +523,8 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn simple_registration() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, false);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -522,7 +549,8 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn prunes_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, false);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -572,7 +600,8 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn prunes_multiple_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, false);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -613,7 +642,8 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn status_preserved_in_cache_when_first_status_expires() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, false);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -663,7 +693,8 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn submitted_status_is_not_pruned_with_ttl() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, false);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -688,7 +719,8 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn update_to_submitted_disables_ttl() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL);
+            let mut tx_status_manager =
+                TxStatusManager::new(tx_status_change, TTL, false);
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -783,7 +815,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-        let mut tx_status_manager = TxStatusManager::new(tx_status_change, ttl);
+        let mut tx_status_manager = TxStatusManager::new(tx_status_change, ttl, false);
         let tx_id_pool = generate_tx_id_pool();
 
         // This will be used to track when each txid was updated so that

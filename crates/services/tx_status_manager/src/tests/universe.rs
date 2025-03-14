@@ -56,6 +56,7 @@ impl TestTxStatusManagerUniverse {
         let tx_status_manager = Arc::new(Mutex::new(TxStatusManager::new(
             tx_status_sender,
             TX_STATUS_MANAGER_TTL,
+            false,
         )));
         self.tx_status_manager = Some(tx_status_manager.clone());
     }

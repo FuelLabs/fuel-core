@@ -216,7 +216,7 @@ where
     let tx_status_sender =
         TxStatusChange::new(config.max_tx_update_subscriptions, config.subscription_ttl);
     let tx_status_manager =
-        TxStatusManager::new(tx_status_sender, config.status_cache_ttl);
+        TxStatusManager::new(tx_status_sender, config.status_cache_ttl, config.metrics);
 
     let (read_requests_sender, read_requests_receiver) =
         mpsc::channel(config.max_tx_update_subscriptions);

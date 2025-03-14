@@ -4013,6 +4013,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "derive_more 0.99.19",
+ "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-tx-status-manager",
  "fuel-core-types 0.41.9",
