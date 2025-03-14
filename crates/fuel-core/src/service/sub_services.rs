@@ -317,6 +317,10 @@ pub fn init_sub_services(
         production_enabled = true;
         tracing::info!("Enabled manual block production because of `debug` flag");
     }
+    if production_enabled && matches!(poa_config.signer, SignMode::Unavailable) {
+        production_enabled = false;
+        tracing::warn!("Disabled block production because of unavailable signer");
+    }
 
     let signer = Arc::new(FuelBlockSigner::new(config.consensus_signer.clone()));
 
@@ -339,27 +343,33 @@ pub fn init_sub_services(
         config.into();
 
     #[cfg(feature = "p2p")]
-    let pre_confirmation_service: ServiceRunner<
-        PreConfirmationSignatureTask<
-            PreconfirmationsReceiver,
-            P2PAdapter,
-            FuelBlockSigner,
-            Ed25519KeyGenerator,
-            Ed25519Key,
-            TimeBasedTrigger<SystemTime>,
+    let pre_confirmation_service: Option<
+        ServiceRunner<
+            PreConfirmationSignatureTask<
+                PreconfirmationsReceiver,
+                P2PAdapter,
+                FuelBlockSigner,
+                Ed25519KeyGenerator,
+                Ed25519Key,
+                TimeBasedTrigger<SystemTime>,
+            >,
         >,
-    > = fuel_core_poa::pre_confirmation_signature_service::new_service(
-        config_preconfirmation.clone(),
-        PreconfirmationsReceiver::new(preconfirmation_receiver),
-        p2p_adapter.clone(),
-        signer.clone(),
-        Ed25519KeyGenerator,
-        TimeBasedTrigger::new(
-            SystemTime,
-            config_preconfirmation.key_rotation_interval,
-            config_preconfirmation.key_expiration_interval,
-        ),
-    )?;
+    > = production_enabled
+        .then(|| {
+            fuel_core_poa::pre_confirmation_signature_service::new_service(
+                config_preconfirmation.clone(),
+                PreconfirmationsReceiver::new(preconfirmation_receiver),
+                p2p_adapter.clone(),
+                signer.clone(),
+                Ed25519KeyGenerator,
+                TimeBasedTrigger::new(
+                    SystemTime,
+                    config_preconfirmation.key_rotation_interval,
+                    config_preconfirmation.key_expiration_interval,
+                ),
+            )
+        })
+        .transpose()?;
 
     let poa = production_enabled.then(|| {
         fuel_core_poa::new_service(
@@ -472,7 +482,9 @@ pub fn init_sub_services(
         if let Some(network) = network.take() {
             services.push(Box::new(network));
             services.push(Box::new(sync));
-            services.push(Box::new(pre_confirmation_service))
+            if let Some(pre_confirmation_service) = pre_confirmation_service {
+                services.push(Box::new(pre_confirmation_service));
+            }
         }
     }
     #[cfg(feature = "shared-sequencer")]
