@@ -20,13 +20,12 @@ use fuel_core_services::{
 use fuel_core_types::{
     ed25519::Signature,
     ed25519_dalek::Verifier,
-    fuel_crypto::{
-        Message,
-        PublicKey,
-    },
+    fuel_crypto::Message,
     fuel_tx::{
+        Address,
         Bytes32,
         Bytes64,
+        Input,
         TxId,
     },
     services::{
@@ -109,23 +108,26 @@ impl SharedData {
     }
 }
 
-pub struct Task {
+pub struct Task<Pubkey> {
     manager: TxStatusManager,
     subscriptions: Subscriptions,
     read_requests_receiver: mpsc::Receiver<ReadRequest>,
     write_requests_receiver: mpsc::UnboundedReceiver<WriteRequest>,
     shared_data: SharedData,
-    signature_verification: SignatureVerification,
-    early_preconfirmations: Vec<Sealed<Preconfirmations, Bytes64>>,
+    signature_verification: SignatureVerification<Pubkey>,
 }
 
-struct SignatureVerification {
-    protocol_pubkey: PublicKey,
+pub trait ProtocolPublicKey: Send {
+    fn latest_address(&self) -> Address;
+}
+
+struct SignatureVerification<Pubkey> {
+    protocol_pubkey: Pubkey,
     delegate_keys: HashMap<Tai64, DelegatePublicKey>,
 }
 
-impl SignatureVerification {
-    pub fn new(protocol_pubkey: PublicKey) -> Self {
+impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
+    pub fn new(protocol_pubkey: Pubkey) -> Self {
         Self {
             protocol_pubkey,
             delegate_keys: HashMap::new(),
@@ -166,16 +168,17 @@ impl SignatureVerification {
         let Sealed { entity, signature } = sealed;
         let bytes = postcard::to_allocvec(&entity).unwrap();
         let message = Message::new(&bytes);
-        let verified = signature.verify(&self.protocol_pubkey, &message);
+        let expected_address = self.protocol_pubkey.latest_address();
+        // let verified = signature.verify(&pubkey, &message);
+        let verified = signature
+            .recover(&message)
+            .map_or(false, |pubkey| Input::owner(&pubkey) == expected_address);
         self.remove_expired_delegates();
-        match verified {
-            Ok(_) => {
-                self.delegate_keys
-                    .insert(entity.expiration, entity.public_key);
-                true
-            }
-            Err(_) => false,
-        }
+        if verified {
+            self.delegate_keys
+                .insert(entity.expiration, entity.public_key);
+        };
+        verified
     }
 
     async fn check_preconfirmation_signature(
@@ -195,7 +198,7 @@ impl SignatureVerification {
     }
 }
 
-impl Task {
+impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
     fn handle_verified_preconfirmation(
         &mut self,
         sealed: Sealed<Preconfirmations, Bytes64>,
@@ -221,18 +224,6 @@ impl Task {
                     sealed.entity.public_key
                 );
                 let _ = self.signature_verification.add_new_delegate(&sealed).await;
-                let drained = std::mem::take(&mut self.early_preconfirmations);
-                for sealed in drained {
-                    if self
-                        .signature_verification
-                        .check_preconfirmation_signature(&sealed)
-                        .await
-                    {
-                        self.handle_verified_preconfirmation(sealed);
-                    } else {
-                        tracing::warn!("Preconfirmation signature verification failed for early preconfirmation, removing it");
-                    }
-                }
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
                 tracing::debug!("Received new preconfirmations from peer");
@@ -243,9 +234,9 @@ impl Task {
                 {
                     self.handle_verified_preconfirmation(sealed);
                 } else {
-                    // TODO: Allow to retry later when a new delegate key is added
-                    tracing::warn!("Preconfirmation signature verification failed, will try once more when a new delegate key is added");
-                    self.early_preconfirmations.push(sealed);
+                    // There is a chance that this is a signature for whom the delegate key hasn't
+                    // arrived yet, in which case the pre-confirmation will be lost
+                    tracing::warn!("Preconfirmation signature verification failed");
                 }
             }
         }
@@ -253,7 +244,7 @@ impl Task {
 }
 
 #[async_trait::async_trait]
-impl RunnableService for Task {
+impl<Pubkey: ProtocolPublicKey> RunnableService for Task<Pubkey> {
     const NAME: &'static str = "TxStatusManagerTask";
     type SharedData = SharedData;
     type Task = Self;
@@ -272,7 +263,7 @@ impl RunnableService for Task {
     }
 }
 
-impl RunnableTask for Task {
+impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
@@ -329,9 +320,14 @@ impl RunnableTask for Task {
     }
 }
 
-pub fn new_service<P2P>(p2p: P2P, config: Config) -> ServiceRunner<Task>
+pub fn new_service<P2P, Pubkey>(
+    p2p: P2P,
+    config: Config,
+    protocol_pubkey: Pubkey,
+) -> ServiceRunner<Task<Pubkey>>
 where
     P2P: P2PSubscriptions<GossipedStatuses = P2PPreConfirmationGossipData>,
+    Pubkey: ProtocolPublicKey,
 {
     let tx_status_from_p2p_stream = p2p.gossiped_tx_statuses();
     let subscriptions = Subscriptions {
@@ -351,7 +347,7 @@ where
         read_requests_sender,
         write_requests_sender,
     };
-    let signature_verification = SignatureVerification::new(config.protocol_public_key);
+    let signature_verification = SignatureVerification::new(protocol_pubkey);
 
     ServiceRunner::new(Task {
         subscriptions,
@@ -360,7 +356,6 @@ where
         write_requests_receiver,
         shared_data,
         signature_verification,
-        early_preconfirmations: Vec::new(),
     })
 }
 
@@ -385,6 +380,7 @@ mod tests {
         },
         fuel_crypto::{
             Message,
+            PublicKey,
             SecretKey,
             Signature,
         },
@@ -410,7 +406,7 @@ mod tests {
         pub protocol_signing_key: SecretKey,
     }
 
-    fn new_task_with_handles() -> (Task, Handles) {
+    fn new_task_with_handles() -> (Task<PublicKey>, Handles) {
         let (read_requests_sender, read_requests_receiver) = mpsc::channel(1);
         let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
         let shared_data = SharedData {
@@ -434,7 +430,6 @@ mod tests {
             write_requests_receiver,
             shared_data,
             signature_verification,
-            early_preconfirmations: Vec::new(),
         };
         let handles = Handles {
             pre_confirmation_updates: sender,
@@ -725,72 +720,6 @@ mod tests {
 
         // then
         assert!(all_streams_timeout(&mut streams).await);
-    }
-
-    #[tokio::test]
-    async fn run__when_pre_confirmations_fail_verification_they_can_be_retried_on_next_delegate_update(
-    ) {
-        // given
-        let (task, handles) = new_task_with_handles();
-
-        let tx_ids = vec![[3u8; 32].into(), [4u8; 32].into()];
-        let preconfirmations = tx_ids
-            .clone()
-            .into_iter()
-            .map(|tx_id| Preconfirmation {
-                tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
-            })
-            .collect();
-        let (delegate_signing_key, delegate_verifying_key) = delegate_key_pair();
-        let expiration = Tai64(u64::MAX);
-        let pre_confirmation_message = valid_pre_confirmation_signature(
-            preconfirmations,
-            delegate_signing_key,
-            expiration,
-        );
-        let delegate_signature_message = valid_sealed_delegate_signature(
-            handles.protocol_signing_key,
-            delegate_verifying_key,
-            expiration,
-        );
-
-        let mut streams = tx_ids
-            .iter()
-            .map(|tx_id| {
-                handles
-                    .update_sender
-                    .try_subscribe::<MpscChannel>(*tx_id)
-                    .unwrap()
-            })
-            .collect::<Vec<_>>();
-        handles
-            .pre_confirmation_updates
-            .send(pre_confirmation_message)
-            .await
-            .unwrap();
-
-        let service = ServiceRunner::new(task);
-        service.start_and_await().await.unwrap();
-
-        assert!(all_streams_timeout(&mut streams).await);
-
-        // when
-        handles
-            .pre_confirmation_updates
-            .send(delegate_signature_message)
-            .await
-            .unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        // then
-        assert!(all_streams_return_success(streams).await);
     }
 
     #[tokio::test]
