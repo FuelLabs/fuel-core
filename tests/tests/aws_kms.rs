@@ -6,7 +6,7 @@ use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::blockchain::consensus::Consensus;
 use test_helpers::fuel_core_driver::FuelCoreDriver;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn can_get_sealed_block_from_poa_produced_block_when_signing_with_kms() {
     use fuel_core_types::fuel_crypto::PublicKey;
     use k256::pkcs8::DecodePublicKey;
