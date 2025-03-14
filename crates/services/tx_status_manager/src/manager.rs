@@ -216,6 +216,7 @@ mod tests {
         time::Duration,
     };
 
+    use futures::StreamExt;
     use test_case::test_case;
 
     use fuel_core_types::{
@@ -228,8 +229,18 @@ mod tests {
         services::txpool::TransactionStatus,
         tai64::Tai64,
     };
+    use tokio::sync::mpsc;
+    use tokio_stream::wrappers::ReceiverStream;
 
-    use crate::update_sender::TxStatusChange;
+    use crate::{
+        update_sender::{
+            CreateChannel,
+            Tx,
+            TxStatusChange,
+        },
+        TxStatusMessage,
+        TxStatusStream,
+    };
 
     use super::TxStatusManager;
 
@@ -348,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn all_statuses_work() {
+    fn status_management__all_statuses_work() {
         let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
         let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL, false);
 
@@ -392,6 +403,55 @@ mod tests {
 
         // Then
         assert_presence_with_status(&tx_status_manager, vec![(tx1_id, submitted())]);
+    }
+
+    #[tokio::test]
+    async fn status_management__status_change_notification_is_sent() {
+        struct Channel;
+        impl CreateChannel for Channel {
+            fn channel() -> (Tx, TxStatusStream) {
+                let (tx, rx) = mpsc::channel(2);
+                let stream = Box::pin(ReceiverStream::new(rx));
+                (Box::new(tx), stream)
+            }
+        }
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+        let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
+        let mut stream = tx_status_change
+            .update_sender
+            .try_subscribe::<Channel>(tx1_id)
+            .unwrap();
+        let mut tx_status_manager = TxStatusManager::new(tx_status_change, TTL, false);
+
+        // When
+        tx_status_manager.status_update(tx1_id, submitted());
+        tx_status_manager.status_update(tx1_id, success());
+
+        let mut received_statuses = vec![];
+        let timeout_duration = Duration::from_millis(250);
+        loop {
+            match tokio::time::timeout(timeout_duration, stream.next()).await {
+                Ok(Some(message)) => match message {
+                    TxStatusMessage::Status(s) => received_statuses.push(s),
+                    TxStatusMessage::FailedStatus => panic!("should not happen"),
+                },
+                Ok(None) => break,
+                Err(_) => panic!("timeout"),
+            }
+
+            if received_statuses.len() >= 2 {
+                break; // Exit after receiving expected messages
+            }
+        }
+
+        // Then
+        assert_eq!(received_statuses.len(), 2);
+        let first = received_statuses.first().unwrap();
+        let second = received_statuses.last().unwrap();
+        assert!(matches!(first, &TransactionStatus::Submitted(_)));
+        assert!(matches!(second, &TransactionStatus::Success(_)));
     }
 
     #[tokio::test(start_paused = true)]
