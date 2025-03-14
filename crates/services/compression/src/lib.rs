@@ -5,8 +5,6 @@
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 #![deny(warnings)]
-// we allow unused for now while incrementally creating this service.
-#![allow(unused)]
 
 /// Configuration for the compression service
 pub mod config;
@@ -16,9 +14,10 @@ pub mod errors;
 pub mod ports;
 /// Service definition for the compression service
 pub mod service;
-
 /// Storage traits for the compression service
 pub mod storage;
+/// Temporal Registry implementations
+pub mod temporal_registry;
 
 /// Result type for compression operations
 pub type Result<T> = core::result::Result<T, errors::CompressionError>;
