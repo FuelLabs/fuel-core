@@ -41,7 +41,7 @@ use rand::{
 };
 
 #[tokio::test]
-async fn preconfirmation__propagate_p2p_after_execution() {
+async fn preconfirmation__propagate_p2p_after_successful_execution() {
     let mut rng = rand::thread_rng();
     let address = Address::new([0; 32]);
     let gas_limit = 1_000_000;
@@ -203,7 +203,6 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
     let gas_limit = 1_000_000;
     let amount = 10;
 
-    // Given
     let script = [
         op::addi(0x10, RegId::ZERO, 0xca),
         op::addi(0x11, RegId::ZERO, 0xba),
@@ -291,7 +290,6 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
         .await
         .expect("Should accept invalid transaction because `utxo_validation = false`.");
 
-    // Then
     assert!(matches!(
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
         TransactionStatus::Submitted { .. }

@@ -28,7 +28,7 @@ use futures::StreamExt;
 use rand::Rng;
 
 #[tokio::test]
-async fn preconfirmation__received_after_execution() {
+async fn preconfirmation__received_after_successful_execution() {
     let mut rng = rand::thread_rng();
     let mut config = Config::local_node();
     config.block_production = Trigger::Never;
@@ -305,7 +305,6 @@ async fn preconfirmation__received_tx_inserted_end_block_open_period() {
                 .await
                 .unwrap()
                 .enumerate()
-                .take(3)
                 .for_each(|(event_idx, r)| async move {
                     let r = r.unwrap();
                     // Then

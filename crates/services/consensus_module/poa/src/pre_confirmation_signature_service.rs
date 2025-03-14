@@ -180,7 +180,6 @@ where
                 TaskNextAction::Stop
             }
             res = self.tx_receiver.receive() => {
-                tracing::debug!("AURELIEN: Res is {:?}", &res);
                 tracing::debug!("Received transactions");
                 let pre_confirmations = try_or_stop!(res);
                 let signature = try_or_stop!(self.current_delegate_key.sign(&pre_confirmations));
