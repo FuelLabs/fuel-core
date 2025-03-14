@@ -115,7 +115,6 @@ pub struct Task<Pubkey> {
     write_requests_receiver: mpsc::UnboundedReceiver<WriteRequest>,
     shared_data: SharedData,
     signature_verification: SignatureVerification<Pubkey>,
-    early_preconfirmations: Vec<Sealed<Preconfirmations, Bytes64>>,
 }
 
 pub trait ProtocolPublicKey: Send {
@@ -225,18 +224,6 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
                     sealed.entity.public_key
                 );
                 let _ = self.signature_verification.add_new_delegate(&sealed).await;
-                let drained = std::mem::take(&mut self.early_preconfirmations);
-                for sealed in drained {
-                    if self
-                        .signature_verification
-                        .check_preconfirmation_signature(&sealed)
-                        .await
-                    {
-                        self.handle_verified_preconfirmation(sealed);
-                    } else {
-                        tracing::warn!("Preconfirmation signature verification failed for early preconfirmation, removing it");
-                    }
-                }
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
                 tracing::debug!("Received new preconfirmations from peer");
@@ -247,8 +234,9 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
                 {
                     self.handle_verified_preconfirmation(sealed);
                 } else {
-                    tracing::warn!("Preconfirmation signature verification failed, will try once more when a new delegate key is added");
-                    self.early_preconfirmations.push(sealed);
+                    // There is a chance that this is a signature for whom the delegate key hasn't
+                    // arrived yet, in which case the pre-confirmation will be lost
+                    tracing::warn!("Preconfirmation signature verification failed");
                 }
             }
         }
@@ -368,7 +356,6 @@ where
         write_requests_receiver,
         shared_data,
         signature_verification,
-        early_preconfirmations: Vec::new(),
     })
 }
 
@@ -443,7 +430,6 @@ mod tests {
             write_requests_receiver,
             shared_data,
             signature_verification,
-            early_preconfirmations: Vec::new(),
         };
         let handles = Handles {
             pre_confirmation_updates: sender,
@@ -734,72 +720,6 @@ mod tests {
 
         // then
         assert!(all_streams_timeout(&mut streams).await);
-    }
-
-    #[tokio::test]
-    async fn run__when_pre_confirmations_fail_verification_they_can_be_retried_on_next_delegate_update(
-    ) {
-        // given
-        let (task, handles) = new_task_with_handles();
-
-        let tx_ids = vec![[3u8; 32].into(), [4u8; 32].into()];
-        let preconfirmations = tx_ids
-            .clone()
-            .into_iter()
-            .map(|tx_id| Preconfirmation {
-                tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
-            })
-            .collect();
-        let (delegate_signing_key, delegate_verifying_key) = delegate_key_pair();
-        let expiration = Tai64(u64::MAX);
-        let pre_confirmation_message = valid_pre_confirmation_signature(
-            preconfirmations,
-            delegate_signing_key,
-            expiration,
-        );
-        let delegate_signature_message = valid_sealed_delegate_signature(
-            handles.protocol_signing_key,
-            delegate_verifying_key,
-            expiration,
-        );
-
-        let mut streams = tx_ids
-            .iter()
-            .map(|tx_id| {
-                handles
-                    .update_sender
-                    .try_subscribe::<MpscChannel>(*tx_id)
-                    .unwrap()
-            })
-            .collect::<Vec<_>>();
-        handles
-            .pre_confirmation_updates
-            .send(pre_confirmation_message)
-            .await
-            .unwrap();
-
-        let service = ServiceRunner::new(task);
-        service.start_and_await().await.unwrap();
-
-        assert!(all_streams_timeout(&mut streams).await);
-
-        // when
-        handles
-            .pre_confirmation_updates
-            .send(delegate_signature_message)
-            .await
-            .unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        // then
-        assert!(all_streams_return_success(streams).await);
     }
 
     #[tokio::test]
