@@ -276,7 +276,7 @@ pub struct Command {
 
     #[cfg_attr(feature = "p2p", clap(flatten))]
     #[cfg(feature = "p2p")]
-    pub pre_confirmation_signature_service_args: preconfirmation_signature_service::Args,
+    pub pre_confirmation_signature_service_args: preconfirmation_signature_service::PreconfirmationArgs,
 
     #[cfg_attr(feature = "shared-sequencer", clap(flatten))]
     #[cfg(feature = "shared-sequencer")]

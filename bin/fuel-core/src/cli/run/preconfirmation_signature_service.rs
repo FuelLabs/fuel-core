@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, clap::Args)]
-pub struct Args {
+pub struct PreconfirmationArgs {
     /// The frequency at which we rotate the preconfirmation sub-key
     #[clap(
         long = "preconfirmation-key-rotation-frequency",
