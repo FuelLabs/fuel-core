@@ -27,6 +27,7 @@ pub mod gas_price_metrics;
 pub mod graphql_metrics;
 pub mod importer;
 pub mod p2p_metrics;
+pub mod tx_status_manager_metrics;
 pub mod txpool_metrics;
 
 static GLOBAL_REGISTER: OnceLock<GlobalRegistry> = OnceLock::new();

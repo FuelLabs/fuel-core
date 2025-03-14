@@ -276,8 +276,8 @@ pub struct Command {
     #[cfg(feature = "shared-sequencer")]
     pub shared_sequencer_args: shared_sequencer::Args,
 
-    #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), env)]
-    pub disabled_metrics: Vec<Module>,
+    #[arg(long = "disable-metrics", value_delimiter = ',', help = fuel_core_metrics::config::help_string(), env = "DISABLE_METRICS")]
+    pub metrics: Vec<Module>,
 
     #[clap(long = "verify-max-da-lag", default_value = "10", env)]
     pub max_da_lag: u64,
@@ -343,7 +343,7 @@ impl Command {
             sync_args,
             #[cfg(feature = "shared-sequencer")]
             shared_sequencer_args,
-            disabled_metrics,
+            metrics,
             max_da_lag,
             max_wait_time,
             tx_pool,
@@ -370,7 +370,7 @@ impl Command {
             da_starting_recorded_height,
         } = gas_price;
 
-        let enabled_metrics = disabled_metrics.list_of_enabled();
+        let enabled_metrics = metrics.list_of_enabled();
 
         if !enabled_metrics.is_empty() {
             info!("`{:?}` metrics are enabled", enabled_metrics);
@@ -401,7 +401,7 @@ impl Command {
         #[cfg(feature = "p2p")]
         let p2p_cfg = p2p_args.into_config(
             chain_config.chain_name.clone(),
-            disabled_metrics.is_enabled(Module::P2P),
+            metrics.is_enabled(Module::P2P),
         )?;
 
         let trigger: Trigger = poa_trigger.into();
@@ -520,10 +520,10 @@ impl Command {
         };
 
         let block_importer = fuel_core::service::config::fuel_core_importer::Config::new(
-            disabled_metrics.is_enabled(Module::Importer),
+            metrics.is_enabled(Module::Importer),
         );
 
-        let gas_price_metrics = disabled_metrics.is_enabled(Module::GasPrice);
+        let gas_price_metrics = metrics.is_enabled(Module::GasPrice);
 
         let da_compression = match da_compression {
             Some(retention) => {
@@ -686,11 +686,11 @@ impl Command {
                 service_channel_limits,
                 pending_pool_tx_ttl: tx_pending_pool_ttl.into(),
                 max_pending_pool_size_percentage: tx_pending_pool_size_percentage,
-                metrics: disabled_metrics.is_enabled(Module::TxPool),
+                metrics: metrics.is_enabled(Module::TxPool),
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,
-                metrics: disabled_metrics.is_enabled(Module::Producer),
+                metrics: metrics.is_enabled(Module::Producer),
             },
             gas_price_config,
             block_importer,
@@ -714,6 +714,7 @@ impl Command {
                 max_tx_update_subscriptions: tx_number_active_subscriptions,
                 subscription_ttl,
                 status_cache_ttl: status_cache_ttl.into(),
+                metrics: metrics.is_enabled(Module::TxStatusManager),
             },
         };
         Ok(config)
@@ -833,7 +834,7 @@ mod tests {
         let command = parse_command(&args).unwrap();
 
         // Then
-        let config = command.disabled_metrics;
+        let config = command.metrics;
         Module::iter().for_each(|module| {
             assert_eq!(config.is_enabled(module), true);
         });
@@ -848,7 +849,7 @@ mod tests {
         let command = parse_command(&args).unwrap();
 
         // Then
-        let config = command.disabled_metrics;
+        let config = command.metrics;
         Module::iter().for_each(|module| {
             assert_eq!(config.is_enabled(module), false);
         });
@@ -868,7 +869,7 @@ mod tests {
         let command = parse_command(&args).unwrap();
 
         // Then
-        let config = command.disabled_metrics;
+        let config = command.metrics;
         assert_eq!(config.is_enabled(Module::TxPool), false);
         assert_eq!(config.is_enabled(Module::Importer), false);
         assert_eq!(config.is_enabled(Module::GraphQL), false);
@@ -889,7 +890,7 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "error: invalid value 'alpha' for \
-            '--disable-metrics <DISABLED_METRICS>': Matching variant not found\
+            '--disable-metrics <METRICS>': Matching variant not found\
             \n\nFor more information, try '--help'.\n"
         );
     }
