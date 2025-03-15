@@ -19,6 +19,8 @@ pub mod evictor_cache;
 pub mod predicate_code;
 pub mod registry_index;
 pub mod script_code;
+// TODO: https://github.com/FuelLabs/fuel-core/issues/2842
+pub mod timestamps;
 
 /// Merkleized Address table type alias
 pub type Address = Merkleized<address::Address>;
@@ -40,6 +42,9 @@ pub type ScriptCode = Merkleized<script_code::ScriptCode>;
 
 /// Merkleized RegistryIndex table type alias
 pub type RegistryIndex = Merkleized<registry_index::RegistryIndex>;
+
+/// Merkleized Timestamps table type alias
+pub type Timestamps = Merkleized<timestamps::Timestamps>;
 
 /// Re-export to match api
 pub use compressed_blocks::CompressedBlocks;

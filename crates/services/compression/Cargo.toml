@@ -12,10 +12,15 @@ repository = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 enum-iterator = { workspace = true }
+fuel-core-chain-config = { workspace = true, features = [
+  "test-helpers",
+], optional = true }
 fuel-core-compression = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true }
+futures = { workspace = true }
+paste = { workspace = true }
 rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 strum = { workspace = true, features = ["derive"] }
@@ -26,11 +31,14 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-compression-service = { path = ".", features = ["test-helpers"] }
+tokio-stream = { workspace = true }
 
 [features]
 test-helpers = [
+  "fuel-core-services/test-helpers",
   "fuel-core-types/test-helpers",
   "fuel-core-storage/test-helpers",
   "fuel-core-compression/test-helpers",
   "dep:rand",
+  "dep:fuel-core-chain-config",
 ]
