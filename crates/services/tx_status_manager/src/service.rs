@@ -161,7 +161,7 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
         self.delegate_keys.retain(|exp, _| exp > &now);
     }
 
-    async fn add_new_delegate(
+    fn add_new_delegate(
         &mut self,
         sealed: &Sealed<DelegatePreConfirmationKey<DelegatePublicKey>, ProtocolSignature>,
     ) -> bool {
@@ -169,7 +169,6 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
         let bytes = postcard::to_allocvec(&entity).unwrap();
         let message = Message::new(&bytes);
         let expected_address = self.protocol_pubkey.latest_address();
-        // let verified = signature.verify(&pubkey, &message);
         let verified = signature
             .recover(&message)
             .map_or(false, |pubkey| Input::owner(&pubkey) == expected_address);
@@ -181,7 +180,7 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
         verified
     }
 
-    async fn check_preconfirmation_signature(
+    fn check_preconfirmation_signature(
         &mut self,
         sealed: &Sealed<Preconfirmations, Bytes64>,
     ) -> bool {
@@ -213,7 +212,7 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
         );
     }
 
-    async fn new_preconfirmations_from_p2p(
+    fn new_preconfirmations_from_p2p(
         &mut self,
         preconfirmations: P2PPreConfirmationMessage,
     ) {
@@ -223,14 +222,13 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
                     "Received new delegate signature from peer: {:?}",
                     sealed.entity.public_key
                 );
-                let _ = self.signature_verification.add_new_delegate(&sealed).await;
+                let _ = self.signature_verification.add_new_delegate(&sealed);
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
                 tracing::debug!("Received new preconfirmations from peer");
                 if self
                     .signature_verification
                     .check_preconfirmation_signature(&sealed)
-                    .await
                 {
                     self.handle_verified_preconfirmation(sealed);
                 } else {
