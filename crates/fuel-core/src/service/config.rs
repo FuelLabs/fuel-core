@@ -26,7 +26,6 @@ use fuel_core_p2p::config::{
 pub use fuel_core_poa::Trigger;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
-use fuel_core_tx_status_manager::config::Config as TxStatusManagerConfig;
 use fuel_core_txpool::config::Config as TxPoolConfig;
 use fuel_core_types::{
     blockchain::header::StateTransitionBytecodeVersion,
@@ -41,7 +40,6 @@ use crate::{
     },
 };
 
-use fuel_core_types::fuel_types::AssetId;
 #[cfg(feature = "parallel-executor")]
 use std::num::NonZeroUsize;
 
@@ -68,8 +66,8 @@ pub struct Config {
     pub executor_number_of_cores: NonZeroUsize,
     pub block_production: Trigger,
     pub predefined_blocks_path: Option<PathBuf>,
+    pub vm: VMConfig,
     pub txpool: TxPoolConfig,
-    pub tx_status_manager: TxStatusManagerConfig,
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
     pub da_compression: DaCompressionConfig,
@@ -147,8 +145,6 @@ impl Config {
         let network_name = snapshot_reader.chain_config().chain_name.clone();
         let gas_price_config = GasPriceConfig::local_node();
 
-        const MAX_TXS_TTL: Duration = Duration::from_secs(60 * 100000000);
-
         Self {
             graphql_config: GraphQLConfig {
                 addr: std::net::SocketAddr::new(
@@ -166,8 +162,6 @@ impl Config {
                 request_body_bytes_limit: 16 * 1024 * 1024,
                 query_log_threshold_time: Duration::from_secs(2),
                 api_request_timeout: Duration::from_secs(60),
-                assemble_tx_dry_run_limit: 3,
-                assemble_tx_estimate_predicates_limit: 5,
                 costs: Default::default(),
                 required_fuel_block_height_tolerance: 10,
                 required_fuel_block_height_timeout: Duration::from_secs(30),
@@ -183,13 +177,10 @@ impl Config {
             snapshot_reader,
             block_production: Trigger::Instant,
             predefined_blocks_path: None,
+            vm: Default::default(),
             txpool: TxPoolConfig {
                 utxo_validation,
-                max_txs_ttl: MAX_TXS_TTL,
-                ..Default::default()
-            },
-            tx_status_manager: TxStatusManagerConfig {
-                subscription_ttl: MAX_TXS_TTL,
+                max_txs_ttl: Duration::from_secs(60 * 100000000),
                 ..Default::default()
             },
             block_producer: fuel_core_producer::Config {
@@ -234,14 +225,6 @@ impl Config {
 
         self
     }
-
-    pub fn base_asset_id(&self) -> AssetId {
-        *self
-            .snapshot_reader
-            .chain_config()
-            .consensus_parameters
-            .base_asset_id()
-    }
 }
 
 impl From<&Config> for fuel_core_poa::Config {
@@ -262,6 +245,11 @@ impl From<&Config> for fuel_core_poa::Config {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct VMConfig {
+    pub backtrace: bool,
+}
+
 #[derive(
     Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
 )]
@@ -273,6 +261,8 @@ pub enum DbType {
 
 #[derive(Clone, Debug)]
 pub struct GasPriceConfig {
+    /// Whether the gas price estimation service is enabled
+    pub enabled: bool,
     pub starting_exec_gas_price: u64,
     pub exec_gas_price_change_percent: u16,
     pub min_exec_gas_price: u64,
@@ -294,33 +284,27 @@ pub struct GasPriceConfig {
 }
 
 impl GasPriceConfig {
-    #[cfg(feature = "test-helpers")]
     pub fn local_node() -> GasPriceConfig {
-        let starting_gas_price = 0;
-        let gas_price_change_percent = 0;
-        let min_gas_price = 0;
-        let gas_price_threshold_percent = 50;
-        let gas_price_metrics = false;
-
         GasPriceConfig {
-            starting_exec_gas_price: starting_gas_price,
-            exec_gas_price_change_percent: gas_price_change_percent,
-            min_exec_gas_price: min_gas_price,
-            exec_gas_price_threshold_percent: gas_price_threshold_percent,
-            da_gas_price_factor: NonZeroU64::new(100).expect("100 is not zero"),
+            enabled: true,
+            starting_exec_gas_price: 0,
+            exec_gas_price_change_percent: 10,
+            min_exec_gas_price: 0,
+            exec_gas_price_threshold_percent: 80,
+            da_committer_url: None,
+            da_poll_interval: None,
+            da_gas_price_factor: NonZeroU64::new(1).unwrap(),
             starting_recorded_height: None,
             min_da_gas_price: 0,
-            max_da_gas_price: 1,
-            max_da_gas_price_change_percent: 0,
+            max_da_gas_price: u64::MAX,
+            max_da_gas_price_change_percent: 10,
             da_gas_price_p_component: 0,
             da_gas_price_d_component: 0,
-            gas_price_metrics,
-            activity_normal_range_size: 0,
-            activity_capped_range_size: 0,
-            activity_decrease_range_size: 0,
-            da_committer_url: None,
-            block_activity_threshold: 0,
-            da_poll_interval: Some(Duration::from_secs(1)),
+            gas_price_metrics: false,
+            activity_normal_range_size: 100,
+            activity_capped_range_size: 100,
+            activity_decrease_range_size: 100,
+            block_activity_threshold: 80,
         }
     }
 }
