@@ -196,7 +196,6 @@ pub enum TransactionStatus {
     SuccessStatus(SuccessStatus),
     PreconfirmationSuccessStatus(PreconfirmationSuccessStatus),
     SqueezedOutStatus(SqueezedOutStatus),
-    PreconfirmationSqueezedOutStatus(PreconfirmationSqueezedOutStatus),
     FailureStatus(FailureStatus),
     PreconfirmationFailureStatus(PreconfirmationFailureStatus),
     #[cynic(fallback)]
@@ -214,7 +213,6 @@ pub enum StatusWithTransaction {
     SuccessStatus(SuccessStatusWithTransaction),
     PreconfirmationSuccessStatus(PreconfirmationSuccessStatusWithTransaction),
     SqueezedOutStatus(SqueezedOutStatus),
-    PreconfirmationSqueezedOutStatus(PreconfirmationSqueezedOutStatus),
     FailureStatus(FailureStatusWithTransaction),
     PreconfirmationFailureStatus(PreconfirmationFailureStatusWithTransaction),
     #[cynic(fallback)]
@@ -332,13 +330,6 @@ pub struct PreconfirmationFailureStatusWithTransaction {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SqueezedOutStatus {
-    pub reason: String,
-}
-
-#[derive(cynic::QueryFragment, Clone, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
-pub struct PreconfirmationSqueezedOutStatus {
-    pub transaction_id: TransactionId,
     pub reason: String,
 }
 
