@@ -51,12 +51,7 @@ where
         // Keep taking the stream until the oneshot channel is closed.
         .take_until(closed)
         .map(move |status| {
-            // Close the stream if the transaction is anything other than
-            // `Submitted`.
-            if !matches!(
-                 status,
-                 TxStatusMessage::Status(TransactionStatus::Submitted(_))
-             ) {
+            if status.is_final() {
                 if let Some(close) = close.take() {
                     let _ = close.send(());
                 }

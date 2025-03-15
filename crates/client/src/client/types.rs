@@ -129,10 +129,6 @@ pub enum TransactionStatus {
     SqueezedOut {
         reason: String,
     },
-    PreconfirmationSqueezedOut {
-        transaction_id: TxId,
-        reason: String,
-    },
     Failure {
         block_height: BlockHeight,
         time: Tai64,
@@ -151,6 +147,19 @@ pub enum TransactionStatus {
         resolved_outputs: Option<Vec<Output>>,
         reason: String,
     },
+}
+
+impl TransactionStatus {
+    pub fn is_final(&self) -> bool {
+        match self {
+            TransactionStatus::Success { .. }
+            | TransactionStatus::Failure { .. }
+            | TransactionStatus::SqueezedOut { .. } => true,
+            TransactionStatus::Submitted { .. }
+            | TransactionStatus::PreconfirmationSuccess { .. }
+            | TransactionStatus::PreconfirmationFailure { .. } => false,
+        }
+    }
 }
 
 impl TryFrom<SchemaTxStatus> for TransactionStatus {
@@ -246,12 +255,6 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
             SchemaTxStatus::SqueezedOutStatus(s) => {
                 TransactionStatus::SqueezedOut { reason: s.reason }
             }
-            SchemaTxStatus::PreconfirmationSqueezedOutStatus(s) => {
-                TransactionStatus::PreconfirmationSqueezedOut {
-                    reason: s.reason,
-                    transaction_id: s.transaction_id.into(),
-                }
-            }
             SchemaTxStatus::Unknown => {
                 return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
             }
@@ -281,10 +284,6 @@ pub enum StatusWithTransaction {
         resolved_outputs: Option<Vec<Output>>,
     },
     SqueezedOut {
-        reason: String,
-    },
-    PreconfirmationSqueezedOut {
-        transaction_id: TxId,
         reason: String,
     },
     Failure {
@@ -403,12 +402,6 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
 
             SchemaStatusWithTx::SqueezedOutStatus(s) => {
                 StatusWithTransaction::SqueezedOut { reason: s.reason }
-            }
-            SchemaStatusWithTx::PreconfirmationSqueezedOutStatus(s) => {
-                StatusWithTransaction::PreconfirmationSqueezedOut {
-                    reason: s.reason,
-                    transaction_id: s.transaction_id.into(),
-                }
             }
             SchemaStatusWithTx::Unknown => {
                 return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
