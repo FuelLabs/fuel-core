@@ -19,9 +19,9 @@ fn arb_metadata_with_l2_height(l2_height: BlockHeight) -> UpdaterMetadata {
     let inner = AlgorithmUpdaterV0 {
         new_exec_price: 100,
         min_exec_gas_price: 12,
-        exec_gas_price_change_percent: 2,
+        exec_gas_price_change_percent: 2.into(),
         l2_block_height: l2_height.into(),
-        l2_block_fullness_threshold_percent: 0,
+        l2_block_fullness_threshold_percent: 0.into(),
     };
     inner.into()
 }

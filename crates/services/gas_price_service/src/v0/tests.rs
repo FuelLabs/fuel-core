@@ -50,6 +50,7 @@ use fuel_core_types::{
         block::Block,
         header::ConsensusParametersVersion,
     },
+    clamped_percentage::ClampedPercentage,
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::block_importer::{
@@ -123,8 +124,8 @@ fn arbitrary_config() -> V0AlgorithmConfig {
     V0AlgorithmConfig {
         starting_gas_price: 100,
         min_gas_price: 0,
-        gas_price_change_percent: 10,
-        gas_price_threshold_percent: 0,
+        gas_price_change_percent: ClampedPercentage::new(10),
+        gas_price_threshold_percent: ClampedPercentage::new(0),
     }
 }
 
@@ -142,8 +143,8 @@ fn different_arb_config() -> V0AlgorithmConfig {
     V0AlgorithmConfig {
         starting_gas_price: 200,
         min_gas_price: 0,
-        gas_price_change_percent: 20,
-        gas_price_threshold_percent: 0,
+        gas_price_change_percent: ClampedPercentage::new(20),
+        gas_price_threshold_percent: ClampedPercentage::new(0),
     }
 }
 
