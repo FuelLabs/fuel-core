@@ -41,6 +41,15 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
     tx_receiver::PreconfirmationsReceiver,
 };
 
+use super::{
+    adapters::{
+        FuelBlockSigner,
+        P2PAdapter,
+        TxStatusManagerAdapter,
+    },
+    genesis::create_genesis_block,
+    DbType,
+};
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -58,6 +67,7 @@ use crate::{
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
             ready_signal::ReadySignal,
+            tx_status_manager::ConsensusConfigProtocolPublicKey,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ChainStateInfoProvider,
@@ -74,16 +84,6 @@ use crate::{
         SharedState,
         SubServices,
     },
-};
-
-use super::{
-    adapters::{
-        FuelBlockSigner,
-        P2PAdapter,
-        TxStatusManagerAdapter,
-    },
-    genesis::create_genesis_block,
-    DbType,
 };
 
 pub type PoAService = fuel_core_poa::Service<
@@ -257,9 +257,13 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
     );
 
+    let protocol_pubkey =
+        ConsensusConfigProtocolPublicKey::new(chain_config.consensus.clone());
+
     let tx_status_manager = fuel_core_tx_status_manager::new_service(
         p2p_adapter.clone(),
         config.tx_status_manager.clone(),
+        protocol_pubkey,
     );
     let tx_status_manager_adapter =
         TxStatusManagerAdapter::new(tx_status_manager.shared.clone());

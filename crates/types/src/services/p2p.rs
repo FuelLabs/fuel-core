@@ -29,7 +29,7 @@ use std::{
     time::SystemTime,
 };
 
-use tai64::Tai64;
+pub use tai64::Tai64;
 
 /// Contains types and logic for Peer Reputation
 pub mod peer_reputation;

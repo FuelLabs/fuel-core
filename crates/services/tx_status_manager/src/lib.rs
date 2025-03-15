@@ -9,7 +9,7 @@ pub mod config;
 mod error;
 mod manager;
 pub mod ports;
-mod service;
+pub mod service;
 mod subscriptions;
 mod tx_status_stream;
 mod update_sender;

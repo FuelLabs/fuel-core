@@ -37,17 +37,17 @@ pub struct PoAV2 {
 
 impl PoAV2 {
     pub fn new(
-        genesis_signing_key: Address,
-        signing_key_overrides: BTreeMap<BlockHeight, Address>,
+        genesis_signing_key_address: Address,
+        signing_key_address_overrides: BTreeMap<BlockHeight, Address>,
     ) -> Self {
         PoAV2 {
-            genesis_signing_key,
-            signing_key_overrides,
+            genesis_signing_key: genesis_signing_key_address,
+            signing_key_overrides: signing_key_address_overrides,
         }
     }
 
-    /// Returns the signing key for the given block height.
-    pub fn signing_key_at(&self, height: BlockHeight) -> Address {
+    /// Returns the address for the signing key at block height.
+    pub fn address_for_height(&self, height: BlockHeight) -> Address {
         if self.signing_key_overrides.is_empty() {
             self.genesis_signing_key
         } else {
@@ -58,6 +58,15 @@ impl PoAV2 {
                 .cloned()
                 .unwrap_or(self.genesis_signing_key)
         }
+    }
+
+    /// Returns the address of the latest signing key for the given block height.
+    pub fn latest_address(&self) -> Address {
+        self.signing_key_overrides
+            .last_key_value()
+            .map(|(_, key)| key)
+            .cloned()
+            .unwrap_or(self.genesis_signing_key)
     }
 
     /// Returns overrides for all the signing keys.
@@ -73,10 +82,12 @@ impl PoAV2 {
 
 #[cfg(test)]
 mod tests {
+    #![allow(non_snake_case)]
+
     use super::*;
 
     #[test]
-    fn signing_key_at_works() {
+    fn address_at_height__returns_expected_values() {
         // Given
         let genesis_signing_key = Address::from([1; 32]);
         let signing_key_after_10 = Address::from([2; 32]);
@@ -95,16 +106,16 @@ mod tests {
         };
 
         // When/Then
-        assert_eq!(poa.signing_key_at(0u32.into()), genesis_signing_key);
-        assert_eq!(poa.signing_key_at(9u32.into()), genesis_signing_key);
-        assert_eq!(poa.signing_key_at(10u32.into()), signing_key_after_10);
-        assert_eq!(poa.signing_key_at(19u32.into()), signing_key_after_10);
-        assert_eq!(poa.signing_key_at(20u32.into()), signing_key_after_20);
-        assert_eq!(poa.signing_key_at(29u32.into()), signing_key_after_20);
-        assert_eq!(poa.signing_key_at(30u32.into()), signing_key_after_30);
-        assert_eq!(poa.signing_key_at(40u32.into()), signing_key_after_30);
+        assert_eq!(poa.address_for_height(0u32.into()), genesis_signing_key);
+        assert_eq!(poa.address_for_height(9u32.into()), genesis_signing_key);
+        assert_eq!(poa.address_for_height(10u32.into()), signing_key_after_10);
+        assert_eq!(poa.address_for_height(19u32.into()), signing_key_after_10);
+        assert_eq!(poa.address_for_height(20u32.into()), signing_key_after_20);
+        assert_eq!(poa.address_for_height(29u32.into()), signing_key_after_20);
+        assert_eq!(poa.address_for_height(30u32.into()), signing_key_after_30);
+        assert_eq!(poa.address_for_height(40u32.into()), signing_key_after_30);
         assert_eq!(
-            poa.signing_key_at(4_000_000u32.into()),
+            poa.address_for_height(4_000_000u32.into()),
             signing_key_after_30
         );
     }

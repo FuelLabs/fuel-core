@@ -4027,6 +4027,7 @@ dependencies = [
  "futures",
  "mockall",
  "parking_lot",
+ "postcard",
  "proptest",
  "test-case",
  "test-strategy",
