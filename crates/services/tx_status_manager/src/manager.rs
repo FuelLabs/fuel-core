@@ -616,6 +616,7 @@ mod tests {
     ) {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
+        // Given
         let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
         let mut tx_status_manager = TxStatusManager::new(tx_status_change, ttl, false);
         let tx_id_pool = generate_tx_id_pool();
@@ -625,6 +626,7 @@ mod tests {
         let mut update_times = HashMap::new();
         let mut non_prunable_ids = HashSet::new();
 
+        // When
         // Simulate flow of time and transaction updates
         for action in actions {
             match action {
@@ -664,7 +666,8 @@ mod tests {
         tx_status_manager.status_update(final_tx_id.into(), failure());
         update_times.insert(final_tx_id, Instant::now());
 
-        // Verify that only recent transactions are present
+        // Then
+        // Verify that only expected statuses are present
         let (recent_tx_ids, not_recent_tx_ids): (Vec<_>, Vec<_>) = update_times
             .iter()
             .partition(|(_, &time)| time + ttl > Instant::now());
