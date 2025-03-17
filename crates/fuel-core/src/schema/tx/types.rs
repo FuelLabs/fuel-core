@@ -76,7 +76,10 @@ use fuel_core_types::{
         Executable,
         TxId,
     },
-    fuel_types::canonical::Serialize,
+    fuel_types::{
+        canonical::Serialize,
+        BlockHeight,
+    },
     fuel_vm::ProgramState as VmProgramState,
     services::{
         executor::{
@@ -148,6 +151,17 @@ pub enum TransactionStatus {
     SqueezedOut(SqueezedOutStatus),
     Failure(FailureStatus),
     PreconfirmationFailure(PreconfirmationFailureStatus),
+}
+
+impl TransactionStatus {
+    /// Returns the inclusion height of a particular transaction status
+    pub fn inclusion_height(&self) -> Option<BlockHeight> {
+        match self {
+            Self::Success(success_status) => success_status.status.block_height.into(),
+            Self::Failure(failure_status) => failure_status.status.block_height.into(),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug)]

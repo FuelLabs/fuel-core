@@ -12,7 +12,6 @@ use crate::{
     },
     fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     p2p::Multiaddr,
-    schema::tx::types::TransactionStatus,
     service::{
         Config,
         FuelService,
@@ -40,7 +39,10 @@ use fuel_core_poa::{
     Trigger,
 };
 use fuel_core_storage::{
-    transactional::AtomicView,
+    transactional::{
+        AtomicView,
+        HistoricalView,
+    },
     StorageAsRef,
 };
 use fuel_core_types::{
@@ -571,6 +573,7 @@ impl Node {
     /// Wait for the node to reach consistency with the given transactions.
     pub async fn consistency(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         let db = self.node.shared.database.off_chain();
+        let mut latest_height = None;
         loop {
             let not_found = not_found_txs(db, txs);
 
@@ -587,9 +590,38 @@ impl Node {
                     result = wait_transaction.next() => {
                         let status = result.unwrap().unwrap();
 
-                        if matches!(status, TransactionStatus::Failure { .. })
-                            || matches!(status, TransactionStatus::Success { .. }) {
-                            break
+                        match (latest_height, status.inclusion_height()) {
+                            (Some(ref mut latest_height), Some(inclusion_height)) => {
+                                if inclusion_height > *latest_height {
+                                    *latest_height = inclusion_height;
+                                }
+                                break;
+                            }
+                            (None, Some(inclusion_height)) => {
+                                latest_height = Some(inclusion_height);
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ = self.node.await_shutdown() => {
+                        panic!("Got a stop signal")
+                    }
+                }
+            }
+        }
+
+        if let Some(latest_height) = latest_height {
+            let gas_price_database = self.node.shared.database.gas_price();
+            let mut db_consistency_ticker =
+                tokio::time::interval(std::time::Duration::from_millis(50));
+            loop {
+                tokio::select! {
+                    _ = db_consistency_ticker.tick() => {
+                        let gas_price_height = gas_price_database.latest_height().unwrap();
+
+                        if gas_price_height >= latest_height {
+                            break;
                         }
                     }
                     _ = self.node.await_shutdown() => {
