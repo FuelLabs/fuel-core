@@ -283,7 +283,7 @@ async fn rollback_chain_to_same_height_1000() -> anyhow::Result<()> {
     .await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn rollback_to__should_work_with_empty_gas_price_database() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
     let mut rng = StdRng::seed_from_u64(1234);
