@@ -22,13 +22,15 @@ use fuel_core::{
         CombinedDatabaseConfig,
     },
     fuel_core_graphql_api::{
-        worker_service::DaCompressionConfig,
         Costs,
         ServiceConfig as GraphQLConfig,
     },
     producer::Config as ProducerConfig,
     service::{
-        config::Trigger,
+        config::{
+            DaCompressionMode,
+            Trigger,
+        },
         genesis::NotifyCancel,
         Config,
         DbType,
@@ -526,12 +528,12 @@ impl Command {
         let gas_price_metrics = metrics.is_enabled(Module::GasPrice);
 
         let da_compression = match da_compression {
-            Some(retention) => {
-                DaCompressionConfig::Enabled(fuel_core_compression::Config {
-                    temporal_registry_retention: retention.into(),
-                })
-            }
-            None => DaCompressionConfig::Disabled,
+            Some(retention_duration) => DaCompressionMode::Enabled(
+                fuel_core::service::config::DaCompressionConfig {
+                    retention_duration: retention_duration.into(),
+                },
+            ),
+            None => DaCompressionMode::Disabled,
         };
 
         let TxPoolArgs {

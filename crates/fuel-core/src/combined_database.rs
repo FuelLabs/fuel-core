@@ -7,6 +7,7 @@ use crate::state::{
 use crate::{
     database::{
         database_description::{
+            compression::CompressionDatabase,
             gas_price::GasPriceDatabase,
             off_chain::OffChain,
             on_chain::OnChain,
@@ -55,6 +56,7 @@ pub struct CombinedDatabase {
     off_chain: Database<OffChain>,
     relayer: Database<Relayer>,
     gas_price: Database<GasPriceDatabase>,
+    compression: Database<CompressionDatabase>,
 }
 
 impl CombinedDatabase {
@@ -63,12 +65,14 @@ impl CombinedDatabase {
         off_chain: Database<OffChain>,
         relayer: Database<Relayer>,
         gas_price: Database<GasPriceDatabase>,
+        compression: Database<CompressionDatabase>,
     ) -> Self {
         Self {
             on_chain,
             off_chain,
             relayer,
             gas_price,
+            compression,
         }
     }
 
@@ -78,6 +82,7 @@ impl CombinedDatabase {
         crate::state::rocks_db::RocksDb::<OffChain>::prune(path)?;
         crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
         crate::state::rocks_db::RocksDb::<GasPriceDatabase>::prune(path)?;
+        crate::state::rocks_db::RocksDb::<CompressionDatabase>::prune(path)?;
         Ok(())
     }
 
@@ -118,6 +123,9 @@ impl CombinedDatabase {
         crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(db_dir, temp_dir)
             .trace_err("Failed to backup gas-price database")?;
 
+        crate::state::rocks_db::RocksDb::<CompressionDatabase>::backup(db_dir, temp_dir)
+            .trace_err("Failed to backup compression database")?;
+
         Ok(())
     }
 
@@ -149,22 +157,28 @@ impl CombinedDatabase {
         temp_restore_dir: &std::path::Path,
     ) -> crate::database::Result<()> {
         crate::state::rocks_db::RocksDb::<OnChain>::restore(temp_restore_dir, backup_dir)
-            .trace_err("Failed to backup on-chain database")?;
+            .trace_err("Failed to restore on-chain database")?;
 
         crate::state::rocks_db::RocksDb::<OffChain>::restore(
             temp_restore_dir,
             backup_dir,
         )
-        .trace_err("Failed to backup off-chain database")?;
+        .trace_err("Failed to restore off-chain database")?;
 
         crate::state::rocks_db::RocksDb::<Relayer>::restore(temp_restore_dir, backup_dir)
-            .trace_err("Failed to backup relayer database")?;
+            .trace_err("Failed to restore relayer database")?;
 
         crate::state::rocks_db::RocksDb::<GasPriceDatabase>::restore(
             temp_restore_dir,
             backup_dir,
         )
-        .trace_err("Failed to backup gas-price database")?;
+        .trace_err("Failed to restore gas-price database")?;
+
+        crate::state::rocks_db::RocksDb::<CompressionDatabase>::restore(
+            temp_restore_dir,
+            backup_dir,
+        )
+        .trace_err("Failed to restore compression database")?;
 
         Ok(())
     }
@@ -215,11 +229,20 @@ impl CombinedDatabase {
                 ..database_config
             },
         )?;
+        let compression = Database::open_rocksdb(
+            path,
+            state_rewind_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
+        )?;
         Ok(Self {
             on_chain,
             off_chain,
             relayer,
             gas_price,
+            compression,
         })
     }
 
@@ -234,6 +257,7 @@ impl CombinedDatabase {
             off_chain: Database::rocksdb_temp(state_rewind_policy, database_config)?,
             relayer: Default::default(),
             gas_price: Default::default(),
+            compression: Default::default(),
         })
     }
 
@@ -278,6 +302,7 @@ impl CombinedDatabase {
             Database::in_memory(),
             Database::in_memory(),
             Database::in_memory(),
+            Database::in_memory(),
         )
     }
 
@@ -286,11 +311,16 @@ impl CombinedDatabase {
         self.off_chain.check_version()?;
         self.relayer.check_version()?;
         self.gas_price.check_version()?;
+        self.compression.check_version()?;
         Ok(())
     }
 
     pub fn on_chain(&self) -> &Database<OnChain> {
         &self.on_chain
+    }
+
+    pub fn compression(&self) -> &Database<CompressionDatabase> {
+        &self.compression
     }
 
     #[cfg(any(feature = "test-helpers", test))]

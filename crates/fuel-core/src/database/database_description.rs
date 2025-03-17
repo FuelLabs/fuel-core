@@ -7,6 +7,7 @@ use fuel_core_types::{
 use std::collections::HashSet;
 use strum::IntoEnumIterator;
 
+pub mod compression;
 pub mod gas_price;
 pub mod off_chain;
 pub mod on_chain;
