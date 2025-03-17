@@ -74,7 +74,7 @@ impl Data {
     }
 }
 
-pub struct TxStatusManager {
+pub(super) struct TxStatusManager {
     data: Data,
     tx_status_change: TxStatusChange,
     ttl: Duration,
