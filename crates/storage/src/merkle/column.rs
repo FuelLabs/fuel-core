@@ -19,7 +19,6 @@ use alloc::{
     Eq,
     Hash,
     enum_iterator::Sequence,
-    strum_macros::EnumCount,
     strum_macros::IntoStaticStr,
 )]
 pub enum MerkleizedColumn<TC> {
@@ -29,6 +28,16 @@ pub enum MerkleizedColumn<TC> {
     MerkleDataColumn(TC),
     /// The merkle metadata column.
     MerkleMetadataColumn,
+}
+
+impl<TC> strum::EnumCount for MerkleizedColumn<TC>
+where
+    TC: strum::EnumCount + AsU32,
+{
+    /// The total count of variants in the enum.
+    /// Since we have two columns for each table column and one for the merkle data,
+    /// we have to multiply the count of the table columns by 2 and add one for the merkle metadata.
+    const COUNT: usize = TC::COUNT * 2 + 1;
 }
 
 /// The trait to convert the column to the `u32`.
@@ -42,9 +51,7 @@ where
     TC: strum::EnumCount + AsU32,
 {
     /// The total count of variants in the enum.
-    /// Since we have two columns for each table column and one for the merkle data,
-    /// we have to multiply the count of the table columns by 2 and add one for the merkle metadata.
-    pub const COUNT: usize = TC::COUNT * 2 + 1;
+    pub const COUNT: usize = <Self as strum::EnumCount>::COUNT;
 
     /// The start of the merkle data columns.
     pub const MERKLE_DATA_COLUMNS_START: u32 = u16::MAX as u32;
@@ -56,7 +63,9 @@ where
             Self::MerkleDataColumn(column) => {
                 Self::MERKLE_DATA_COLUMNS_START.wrapping_add(column.as_u32())
             }
-            Self::MerkleMetadataColumn => u32::MAX,
+            Self::MerkleMetadataColumn => {
+                Self::COUNT.checked_sub(1).unwrap().try_into().unwrap()
+            }
         }
     }
 }
