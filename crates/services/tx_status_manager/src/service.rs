@@ -161,7 +161,7 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
         self.delegate_keys.retain(|exp, _| exp > &now);
     }
 
-    async fn add_new_delegate(
+    fn add_new_delegate(
         &mut self,
         sealed: &Sealed<DelegatePreConfirmationKey<DelegatePublicKey>, ProtocolSignature>,
     ) -> bool {
@@ -169,7 +169,6 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
         let bytes = postcard::to_allocvec(&entity).unwrap();
         let message = Message::new(&bytes);
         let expected_address = self.protocol_pubkey.latest_address();
-        // let verified = signature.verify(&pubkey, &message);
         let verified = signature
             .recover(&message)
             .map_or(false, |pubkey| Input::owner(&pubkey) == expected_address);
@@ -181,7 +180,7 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
         verified
     }
 
-    async fn check_preconfirmation_signature(
+    fn check_preconfirmation_signature(
         &mut self,
         sealed: &Sealed<Preconfirmations, Bytes64>,
     ) -> bool {
@@ -213,7 +212,7 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
         );
     }
 
-    async fn new_preconfirmations_from_p2p(
+    fn new_preconfirmations_from_p2p(
         &mut self,
         preconfirmations: P2PPreConfirmationMessage,
     ) {
@@ -223,20 +222,24 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
                     "Received new delegate signature from peer: {:?}",
                     sealed.entity.public_key
                 );
-                let _ = self.signature_verification.add_new_delegate(&sealed).await;
+                // TODO: Report peer for sending invalid delegation
+                //  https://github.com/FuelLabs/fuel-core/issues/2872
+                let _ = self.signature_verification.add_new_delegate(&sealed);
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
                 tracing::debug!("Received new preconfirmations from peer");
                 if self
                     .signature_verification
                     .check_preconfirmation_signature(&sealed)
-                    .await
                 {
                     self.handle_verified_preconfirmation(sealed);
                 } else {
                     // There is a chance that this is a signature for whom the delegate key hasn't
                     // arrived yet, in which case the pre-confirmation will be lost
                     tracing::warn!("Preconfirmation signature verification failed");
+
+                    // TODO: Report peer for sending invalid preconfirmation
+                    //  https://github.com/FuelLabs/fuel-core/issues/2872
                 }
             }
         }
@@ -275,7 +278,7 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
             tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
                 if let Some(GossipData { data, .. }) = tx_status_from_p2p {
                     if let Some(msg) = data {
-                        self.new_preconfirmations_from_p2p(msg).await;
+                        self.new_preconfirmations_from_p2p(msg);
                     }
                     TaskNextAction::Continue
                 } else {
@@ -520,20 +523,11 @@ mod tests {
         }
         let mutated_delegate_private_key =
             DalekSigningKey::from_bytes(&mutated_private_key);
-        let entity = Preconfirmations {
-            expiration,
+        valid_pre_confirmation_signature(
             preconfirmations,
-        };
-        let bytes = postcard::to_allocvec(&entity).unwrap();
-        let typed_signature = mutated_delegate_private_key.sign(&bytes);
-        let signature = Bytes64::new(typed_signature.to_bytes());
-        let sealed = Sealed { entity, signature };
-        let inner = P2PPreConfirmationMessage::Preconfirmations(sealed);
-        GossipData {
-            data: Some(inner),
-            peer_id: Default::default(),
-            message_id: vec![],
-        }
+            mutated_delegate_private_key,
+            expiration,
+        )
     }
 
     fn delegate_key_pair() -> (DalekSigningKey, DalekVerifyingKey) {

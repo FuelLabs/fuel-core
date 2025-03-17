@@ -296,7 +296,7 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
         .finalize_as_transaction();
     core.client.submit_and_await_commit(&tx).await.unwrap();
 
-    let TransactionStatus::PreconfirmationSqueezedOut { reason, .. } =
+    let TransactionStatus::SqueezedOut { reason, .. } =
         core.client.submit_and_await_commit(&tx).await.unwrap()
     else {
         panic!("Expected transaction to be squeezed out")

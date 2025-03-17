@@ -262,13 +262,10 @@ async fn preconfirmation__received_after_squeezed_out() {
         TransactionStatus::Submitted { .. }
     ));
     client.produce_blocks(1, None).await.unwrap();
-    if let TransactionStatus::PreconfirmationSqueezedOut {
-        transaction_id,
-        reason: _,
-    } = tx_statuses_subscriber.next().await.unwrap().unwrap()
+    if let TransactionStatus::SqueezedOut { reason: _ } =
+        tx_statuses_subscriber.next().await.unwrap().unwrap()
     {
         // Then
-        assert_eq!(transaction_id, tx_id);
     } else {
         panic!("Expected preconfirmation status");
     }

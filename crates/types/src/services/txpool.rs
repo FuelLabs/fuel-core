@@ -619,6 +619,14 @@ pub mod statuses {
         }
     }
 
+    impl From<&PreConfirmationSqueezedOut> for SqueezedOut {
+        fn from(value: &PreConfirmationSqueezedOut) -> Self {
+            Self {
+                reason: value.reason.clone(),
+            }
+        }
+    }
+
     /// Transaction was squeezed out from block producer
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Clone, Debug, PartialEq, Eq)]
