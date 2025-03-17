@@ -124,6 +124,7 @@ pub async fn produce_block_with_tx(rng: &mut StdRng, client: &FuelClient) {
             Default::default(),
         ))
         .finalize_as_transaction();
+   tracing::info!("Sending tx");
     let status = client
         .submit_and_await_commit(&script_tx)
         .await
@@ -132,6 +133,7 @@ pub async fn produce_block_with_tx(rng: &mut StdRng, client: &FuelClient) {
         matches!(status, TransactionStatus::Success { .. }),
         "{status:?}"
     );
+    tracing::info!("Status received: {:?}", status);
 }
 
 /// Returns a config that enables utxo validation and sets a minimum gas price.

@@ -239,6 +239,7 @@ where
                 if let Some(result) = block_result {
                     self.import_block(result)
                 } else {
+                    tracing::warn!("Failed to get the imported block");
                     TaskNextAction::Stop
                 }
             }
@@ -252,6 +253,7 @@ where
                     self.process_notification(notification);
                     TaskNextAction::Continue
                 } else {
+                    tracing::warn!("Failed to get the notification from the pool worker");
                     TaskNextAction::Stop
                 }
             }
@@ -272,6 +274,7 @@ where
                     }
                     TaskNextAction::Continue
                 } else {
+                    tracing::warn!("Failed to get the new transaction from P2P");
                     TaskNextAction::Stop
                 }
             }
@@ -281,6 +284,7 @@ where
                     self.manage_new_peer_subscribed(peer_id);
                     TaskNextAction::Continue
                 } else {
+                    tracing::warn!("Failed to get the new peer subscribed");
                     TaskNextAction::Stop
                 }
             }

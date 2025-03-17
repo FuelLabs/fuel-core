@@ -179,9 +179,9 @@ where
     #[tracing::instrument(skip_all)]
     /// Execute imports until a shutdown is requested.
     pub async fn import(&mut self, shutdown: &mut StateWatcher) -> anyhow::Result<bool> {
-        self.import_inner(shutdown).await?;
+        dbg!(self.import_inner(shutdown).await)?;
 
-        Ok(wait_for_notify_or_shutdown(&self.notify, shutdown).await)
+        Ok(dbg!(wait_for_notify_or_shutdown(&self.notify, shutdown).await))
     }
 
     async fn import_inner(&mut self, shutdown: &StateWatcher) -> anyhow::Result<()> {

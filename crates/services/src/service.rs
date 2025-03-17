@@ -114,6 +114,7 @@ impl From<Result<bool, anyhow::Error>> for TaskNextAction {
                 if should_continue {
                     TaskNextAction::Continue
                 } else {
+                    tracing::info!("Stopping the task with boolean");
                     TaskNextAction::Stop
                 }
             }
@@ -152,6 +153,7 @@ macro_rules! try_or_stop {
             Ok(val) => val,
             Err(err) => {
                 $custom(&err);
+                tracing::warn!("error in macro try or stop");
                 return TaskNextAction::Stop;
             }
         }
@@ -414,8 +416,10 @@ async fn run<S>(
     });
 
     let got_panic = run_task(&mut task, state, &metric).await;
+    tracing::info!("Task {:?} is stopping, panic ?: {:?}", S::NAME, got_panic.is_some());
 
     let got_panic = shutdown_task(S::NAME, task, got_panic).await;
+    tracing::info!("Task {:?} is stopping2, panic ?: {:?}", S::NAME, got_panic.is_some());
 
     if let Some(panic) = got_panic {
         std::panic::resume_unwind(panic)

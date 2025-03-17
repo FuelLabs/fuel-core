@@ -235,6 +235,7 @@ impl TaskBuilder {
         let (broadcast, broadcast_delegation_key_handle, broadcast_tx_handle) =
             self.get_broadcast();
         let (tx_receiver, tx_sender_handle) = self.get_tx_receiver();
+        tracing::info!("LOOOOL");
         let task = PreConfirmationSignatureTask {
             tx_receiver,
             broadcast,

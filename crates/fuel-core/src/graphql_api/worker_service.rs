@@ -699,6 +699,7 @@ where
             biased;
 
             _ = watcher.while_started() => {
+                tracing::info!("GraphQL_Off_Chain_Worker shutting down");
                 TaskNextAction::Stop
             }
 
@@ -712,12 +713,14 @@ where
                         if self.continue_on_error {
                             TaskNextAction::ErrorContinue(e)
                         } else {
+                            tracing::warn!("Error processing block: {}", e);
                             TaskNextAction::Stop
                         }
                     } else {
                         TaskNextAction::Continue
                     }
                 } else {
+                    tracing::info!("Block importer stream is closed");
                     TaskNextAction::Stop
                 }
             }

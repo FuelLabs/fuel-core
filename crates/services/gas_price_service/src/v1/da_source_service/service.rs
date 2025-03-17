@@ -191,6 +191,7 @@ where
         tokio::select! {
             biased;
             _ = state_watcher.while_started() => {
+                tracing::info!("DaSourceService shutting down");
                 TaskNextAction::Stop
             }
             _ = self.poll_interval.tick() => {

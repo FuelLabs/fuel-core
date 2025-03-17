@@ -453,16 +453,19 @@ impl RunnableTask for Task {
     #[tracing::instrument(skip_all)]
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         let mut stop_signals = vec![];
+        tracing::debug!("services len: {}", self.services.len());
         for service in self.services.iter() {
             stop_signals.push(service.await_stop())
         }
         stop_signals.push(Box::pin(watcher.while_started()));
 
-        let (result, _, _) = futures::future::select_all(stop_signals).await;
+        let (result, idx, _) = futures::future::select_all(stop_signals).await;
+        tracing::debug!("result: {:?}, idx: {:?}", result, idx);        
 
         if let Err(err) = result {
             tracing::error!("Got an error during listen for shutdown: {}", err);
         }
+        tracing::debug!("AURELIEN");
 
         // We received the stop signal from any of one source, so stop this service and
         // all sub-services.

@@ -212,6 +212,7 @@ impl RunnableTask for Task {
     async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
         match self.server.as_mut().await {
             Ok(()) => {
+                tracing::warn!("GraphQL server stopped");
                 // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
                 // error or stop signal.
                 TaskNextAction::Stop

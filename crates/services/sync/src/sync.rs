@@ -19,6 +19,7 @@ use crate::state::State;
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug)]
 pub(crate) enum IncomingHeight {
     Observed(BlockHeight),
     Committed(BlockHeight),
@@ -53,7 +54,7 @@ impl SyncHeights {
     /// Sync the state from the height stream.
     /// This stream never blocks or errors.
     pub(crate) async fn sync(&mut self) -> Option<()> {
-        let height = self.height_stream.next().await?;
+        let height = dbg!(self.height_stream.next().await)?;
         let state_change = match height {
             IncomingHeight::Committed(height) => {
                 self.state.apply(|s| s.commit(*height));
@@ -65,6 +66,7 @@ impl SyncHeights {
         if state_change {
             self.notify.notify_one();
         }
+        dbg!("synced");
         Some(())
     }
 

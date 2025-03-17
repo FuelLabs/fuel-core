@@ -120,7 +120,10 @@ where
 {
     async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
         match self.sync_heights.sync().await {
-            None => TaskNextAction::Stop,
+            None => {
+                tracing::info!("SyncTask shutting down");
+                TaskNextAction::Stop
+            },
             Some(_) => TaskNextAction::Continue,
         }
     }

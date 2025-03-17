@@ -285,6 +285,7 @@ async fn rollback_chain_to_same_height_1000() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn rollback_to__should_work_with_empty_gas_price_database() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
     let mut rng = StdRng::seed_from_u64(1234);
     let driver = FuelCoreDriver::spawn_feeless(&[
         "--debug",
@@ -299,9 +300,13 @@ async fn rollback_to__should_work_with_empty_gas_price_database() -> anyhow::Res
     const TOTAL_BLOCKS: u64 = 500;
     for _ in 0..TOTAL_BLOCKS {
         produce_block_with_tx(&mut rng, &driver.client).await;
+        tracing::info!("Produced a block");
     }
+    tracing::info!("Produced all blocks");
     let temp_dir = driver.kill().await;
     std::fs::remove_dir_all(temp_dir.path().join("gas_price")).unwrap();
+
+    tracing::warn!("Starting rollback");
 
     // When
     let args = [

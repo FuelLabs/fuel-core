@@ -360,8 +360,9 @@ pub fn init_sub_services(
                 TimeBasedTrigger<SystemTime>,
             >,
         >,
-    > = production_enabled
+    > = (production_enabled && config.p2p.is_some())
         .then(|| {
+            tracing::info!("Starting pre_confirmation_service");
             fuel_core_poa::pre_confirmation_signature_service::new_service(
                 config_preconfirmation.clone(),
                 PreconfirmationsReceiver::new(preconfirmation_receiver),
@@ -478,31 +479,46 @@ pub fn init_sub_services(
         Box::new(chain_state_info_provider_service),
     ];
 
+    tracing::info!("gas price service started");
+    tracing::info!("txpool service started");
+    tracing::info!("chain state info provider service started");
+
     #[cfg(feature = "relayer")]
     if let Some(relayer) = relayer_service {
         services.push(Box::new(relayer));
+        tracing::info!("relayer service started");
     }
 
     #[cfg(feature = "p2p")]
     {
         if let Some(network) = network.take() {
             services.push(Box::new(network));
+            tracing::info!("network service started");
             services.push(Box::new(sync));
+            tracing::info!("sync service started");
             if let Some(pre_confirmation_service) = pre_confirmation_service {
                 services.push(Box::new(pre_confirmation_service));
+                tracing::info!("pre_confirmation_service started");
             }
         }
     }
     #[cfg(feature = "shared-sequencer")]
-    services.push(Box::new(shared_sequencer));
+    {
+        services.push(Box::new(shared_sequencer));
+        tracing::info!("shared sequencer service started");
+    }
 
     services.push(Box::new(graph_ql));
+    tracing::info!("graphql service started");
     services.push(Box::new(graphql_worker));
+    tracing::info!("graphql worker service started");
     services.push(Box::new(tx_status_manager));
+    tracing::info!("tx status manager service started");
 
     // always make sure that the block producer is inserted last
     if let Some(poa) = poa {
         services.push(Box::new(poa));
+        tracing::info!("poa service started");
     }
 
     Ok((services, shared))

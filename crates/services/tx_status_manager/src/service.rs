@@ -272,47 +272,63 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
             biased;
 
             _ = watcher.while_started() => {
+                tracing::debug!("Task stopped");
                 TaskNextAction::Stop
             }
 
             tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
+                tracing::debug!("Received new tx status from P2P");
                 if let Some(GossipData { data, .. }) = tx_status_from_p2p {
                     if let Some(msg) = data {
+                        tracing::debug!("Received new P2P message");
                         self.new_preconfirmations_from_p2p(msg);
                     }
                     TaskNextAction::Continue
                 } else {
+                    tracing::warn!("P2P tx status stream closed");
                     TaskNextAction::Stop
                 }
             }
 
             request = self.write_requests_receiver.recv() => {
+                tracing::debug!("Received write request");
                 match request {
                     Some(WriteRequest::UpdateStatus { tx_id, status }) => {
+                        tracing::debug!("Updating tx status");
                         self.manager.status_update(tx_id, status);
                         TaskNextAction::Continue
                     }
                     Some(WriteRequest::NotifySkipped { tx_ids_and_reason }) => {
+                        tracing::debug!("Notifying skipped txs");
                         self.manager.notify_skipped_txs(tx_ids_and_reason);
                         TaskNextAction::Continue
                     }
-                    None => TaskNextAction::Stop,
+                    None => {
+                        tracing::warn!("Write requests channel closed");
+                        TaskNextAction::Stop
+                    },
                 }
             }
 
             request = self.read_requests_receiver.recv() => {
+                tracing::debug!("Received read request");
                 match request {
                     Some(ReadRequest::GetStatus { tx_id, sender }) => {
+                        tracing::debug!("Getting tx status");
                         let status = self.manager.status(&tx_id);
                         let _ = sender.send(status.cloned());
                         TaskNextAction::Continue
                     }
                     Some(ReadRequest::Subscribe { tx_id, sender }) => {
+                        tracing::debug!("Subscribing to tx updates");
                         let result = self.manager.tx_update_subscribe(tx_id);
                         let _ = sender.send(result);
                         TaskNextAction::Continue
                     }
-                    None => TaskNextAction::Stop,
+                    None => {
+                        tracing::warn!("Read requests channel closed");
+                        TaskNextAction::Stop
+                    },
                 }
             }
         }

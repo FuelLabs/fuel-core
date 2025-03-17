@@ -956,6 +956,7 @@ where
                     let _ = self.p2p_service.update_block_height(latest_block_height);
                     TaskNextAction::Continue
                 } else {
+                    tracing::error!("Failed to get the next block height");
                     TaskNextAction::Stop
                 }
             },
