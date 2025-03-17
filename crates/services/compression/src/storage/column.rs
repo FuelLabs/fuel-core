@@ -1,14 +1,11 @@
 //! Column enum for the database.
 
-use fuel_core_storage::{
-    kv_store::StorageColumn,
-    merkle::{
-        column::{
-            AsU32,
-            MerkleizedColumn,
-        },
-        sparse::MerkleizedTableColumn,
+use fuel_core_storage::merkle::{
+    column::{
+        AsU32,
+        MerkleizedColumn,
     },
+    sparse::MerkleizedTableColumn,
 };
 
 /// Enum representing the columns in the storage.
@@ -41,21 +38,13 @@ pub enum CompressionColumn {
     RegistryIndex = 6,
     /// Keeps track of keys to remove, see [`EvictorCache`](crate::storage::evictor_cache::EvictorCache)
     EvictorCache = 7,
+    /// Keeps track of timestamps, will be removed eventually, see [`Timestamps`](crate::storage::timestamps::Timestamps)
+    Timestamps = 8,
 }
 
 impl AsU32 for CompressionColumn {
     fn as_u32(&self) -> u32 {
         *self as u32
-    }
-}
-
-impl StorageColumn for CompressionColumn {
-    fn name(&self) -> String {
-        format!("{:?}", self)
-    }
-
-    fn id(&self) -> u32 {
-        self.as_u32()
     }
 }
 
