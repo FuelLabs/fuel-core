@@ -31,7 +31,7 @@ pub fn verify_consensus(
         ConsensusConfig::PoAV2(poa) => {
             let id = header.id();
             let m = id.as_message();
-            let signing_key = poa.signing_key_at(*header.height());
+            let signing_key = poa.address_for_height(*header.height());
             consensus
                 .signature
                 .recover(m)
