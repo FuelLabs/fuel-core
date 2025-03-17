@@ -86,7 +86,7 @@ fn transfer_transaction(min_amount: u64, rng: &mut StdRng) -> Transaction {
     builder.finalize_as_transaction()
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn validate_block_at_any_height__only_transfers() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
     let driver = FuelCoreDriver::spawn_feeless(&[
@@ -239,7 +239,7 @@ async fn rollback_existing_chain_to_target_height_and_verify(
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn rollback_chain_to_genesis() -> anyhow::Result<()> {
     let genesis_block_height = 0;
     let blocks_in_the_chain = 100;
@@ -250,7 +250,7 @@ async fn rollback_chain_to_genesis() -> anyhow::Result<()> {
     .await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn rollback_chain_to_middle() -> anyhow::Result<()> {
     let target_rollback_block_height = 50;
     let blocks_in_the_chain = 100;
@@ -261,7 +261,7 @@ async fn rollback_chain_to_middle() -> anyhow::Result<()> {
     .await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn rollback_chain_to_same_height() -> anyhow::Result<()> {
     let target_rollback_block_height = 100;
     let blocks_in_the_chain = 100;
@@ -272,7 +272,7 @@ async fn rollback_chain_to_same_height() -> anyhow::Result<()> {
     .await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn rollback_chain_to_same_height_1000() -> anyhow::Result<()> {
     let target_rollback_block_height = 800;
     let blocks_in_the_chain = 1000;
@@ -283,7 +283,7 @@ async fn rollback_chain_to_same_height_1000() -> anyhow::Result<()> {
     .await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn rollback_to__should_work_with_empty_gas_price_database() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
     let driver = FuelCoreDriver::spawn_feeless(&[
@@ -320,7 +320,7 @@ async fn rollback_to__should_work_with_empty_gas_price_database() -> anyhow::Res
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn backup_and_restore__should_work_with_state_rewind() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
     let driver = FuelCoreDriver::spawn_feeless(&[
@@ -402,7 +402,7 @@ async fn backup_and_restore__should_work_with_state_rewind() -> anyhow::Result<(
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
     let poa_secret = SecretKey::random(&mut rng);
@@ -510,7 +510,7 @@ async fn dry_run__correct_utxoid_state_in_past_blocks() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn dry_run__correct_contract_state_in_past_blocks() -> anyhow::Result<()> {
     let mut rng = StdRng::seed_from_u64(1234);
     let driver = FuelCoreDriver::spawn_feeless(&[

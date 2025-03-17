@@ -25,7 +25,7 @@ use tempfile::TempDir; // Used for writing assertions // Run programs
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn works_in_local_env() {
     // setup a local node
     let srv = setup_dev_node().await;
@@ -36,7 +36,7 @@ async fn works_in_local_env() {
 }
 
 // Spins up a node for each wallet and verifies that the suite works across multiple nodes
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn works_in_multinode_local_env() {
     use fuel_core::p2p_test_helpers::*;
     use fuel_core_types::{
