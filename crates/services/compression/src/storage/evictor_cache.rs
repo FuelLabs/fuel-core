@@ -2,14 +2,8 @@
 
 use fuel_core_storage::{
     blueprint::plain::Plain,
-    codec::{
-        postcard::Postcard,
-        raw::Raw,
-    },
-    merkle::{
-        column::MerkleizedColumn,
-        sparse::MerkleizedTableColumn,
-    },
+    codec::postcard::Postcard,
+    merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
     Mappable,
 };
