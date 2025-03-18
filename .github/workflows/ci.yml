@@ -6,9 +6,9 @@ on:
     branches:
       - master
   pull_request:
-    types: [ opened, synchronize, reopened, labeled, unlabeled ]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   release:
-    types: [ published ]
+    types: [published]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -33,13 +33,16 @@ jobs:
   check-changelog:
     name: Check Changelog
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Check for a file with the PR number in a sub-directory of the .changes directory" or "no changelog" label.
         run: |
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "Not a pull request."
+            exit 0
+          fi
           pr_number_file=$(echo $GITHUB_REF | cut -d'/' -f3).md
           if [[ $(find .changes/ -type f -name $pr_number_file -print -quit) ]]; then
             echo "File $pr_number_file exists."
@@ -141,8 +144,7 @@ jobs:
             args: run -p fuel-core --no-default-features
           - command: nextest
             args: run -p fuel-core --lib executor --features wasm-executor
-            env:
-              FUEL_ALWAYS_USE_WASM=true
+            env: FUEL_ALWAYS_USE_WASM=true
           - command: nextest
             args: run -p fuel-core-client --no-default-features
           - command: nextest
@@ -392,7 +394,7 @@ jobs:
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cross
-          cache-key: '${{ matrix.job.target }}'
+          cache-key: "${{ matrix.job.target }}"
 
       - name: Build fuel-core and fuel-core-keygen
         run: |
