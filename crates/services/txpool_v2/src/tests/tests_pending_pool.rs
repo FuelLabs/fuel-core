@@ -24,8 +24,7 @@ async fn test_tx__keep_missing_input_and_resolved_when_input_submitted() {
     let tx2_id = tx2.id(&Default::default());
 
     let service = universe.build_service(None, None);
-    let start_result = service.start_and_await().await.unwrap();
-    dbg!(&start_result);
+    service.start_and_await().await.unwrap();
 
     // Given
     let ids = vec![tx2_id];
@@ -66,8 +65,7 @@ async fn test_tx__return_error_expired() {
     let tx2_id = tx2.id(&Default::default());
 
     let service = universe.build_service(None, None);
-    let x = service.start_and_await().await.unwrap();
-    dbg!(&x);
+    service.start_and_await().await.unwrap();
 
     // When
     service.shared.try_insert(vec![tx2.clone()]).unwrap();

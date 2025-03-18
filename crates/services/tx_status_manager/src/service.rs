@@ -174,12 +174,11 @@ impl RunnableTask for Task {
                         TaskNextAction::Continue
                     }
                     Some(WriteRequest::NotifySkipped { tx_ids_and_reason }) => {
-                        dbg!("3.2");
+                        // TODO[RC]: This part not tested by TxStatusManager service tests yet.
                         self.manager.notify_skipped_txs(tx_ids_and_reason);
                         TaskNextAction::Continue
                     }
                     None => {
-                        dbg!("3.3");
                         TaskNextAction::Stop
                     },
                 }
@@ -193,13 +192,12 @@ impl RunnableTask for Task {
                         TaskNextAction::Continue
                     }
                     Some(ReadRequest::Subscribe { tx_id, sender }) => {
-                        dbg!("TODO: 4.2");
+                        // TODO[RC]: This part not tested by TxStatusManager service tests yet.
                         let result = self.manager.tx_update_subscribe(tx_id);
                         let _ = sender.send(result);
                         TaskNextAction::Continue
                     }
                     None => {
-                        dbg!("TODO: 4.3");
                         TaskNextAction::Stop
                     },
                 }
@@ -978,10 +976,7 @@ mod tests {
 
     #[tokio::main(start_paused = true, flavor = "current_thread")]
     #[allow(clippy::arithmetic_side_effects)]
-    async fn _run__correctly_prunes_old_statuses(
-        ttl: Duration,
-        actions: Vec<Action>,
-    ) {
+    async fn _run__correctly_prunes_old_statuses(ttl: Duration, actions: Vec<Action>) {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         // Given
