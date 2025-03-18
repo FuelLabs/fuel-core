@@ -404,7 +404,6 @@ mod tests {
             },
             preconfirmation::{
                 Preconfirmation,
-                PreconfirmationStatus,
                 Preconfirmations,
             },
             txpool::TransactionStatus,
@@ -477,22 +476,6 @@ mod tests {
 
             pub fn success() -> PreconfirmationStatus {
                 PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: Default::default(),
-                    total_fee: Default::default(),
-                    receipts: Default::default(),
-                    outputs: Default::default(),
-                }
-            }
-
-            pub fn squeezed_out() -> PreconfirmationStatus {
-                PreconfirmationStatus::SqueezedOut {
-                    reason: "fishy preconfirmation".to_string(),
-                }
-            }
-
-            pub fn failure() -> PreconfirmationStatus {
-                PreconfirmationStatus::Failure {
                     tx_pointer: Default::default(),
                     total_gas: Default::default(),
                     total_fee: Default::default(),
@@ -839,89 +822,6 @@ mod tests {
         for (item, &validator) in received_statuses.iter().zip(validators.iter()) {
             assert!(validator(item));
         }
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn run__can_process_preconfirmation_messages_from_p2p() {
-        let (task, handles) = new_task_with_handles(TTL);
-        let service = ServiceRunner::new(task);
-        service.start_and_await().await.unwrap();
-
-        let (delegate_signing_key, _delegate_verifying_key) = delegate_key_pair();
-        let expiration = Tai64(u64::MAX);
-
-        // Given
-        let tx1_id = [1u8; 32].into();
-        let tx2_id = [2u8; 32].into();
-        let tx3_id = [3u8; 32].into();
-        let tx_ids = vec![
-            (tx1_id, status::preconfirmation::success()),
-            (tx2_id, status::preconfirmation::squeezed_out()),
-            (tx3_id, status::preconfirmation::failure()),
-        ];
-        let stream_tx1 = handles
-            .tx_status_change
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx1_id)
-            .unwrap();
-        let stream_tx2 = handles
-            .tx_status_change
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx2_id)
-            .unwrap();
-        let stream_tx3 = handles
-            .tx_status_change
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx3_id)
-            .unwrap();
-        let preconfirmations = tx_ids
-            .clone()
-            .into_iter()
-            .map(|(tx_id, status)| Preconfirmation { tx_id, status })
-            .collect();
-
-        let entity = Preconfirmations {
-            expiration,
-            preconfirmations,
-        };
-        let bytes = postcard::to_allocvec(&entity).unwrap();
-        let typed_signature = delegate_signing_key.sign(&bytes);
-        let signature = Bytes64::new(typed_signature.to_bytes());
-        let sealed = Sealed { entity, signature };
-        let inner = P2PPreConfirmationMessage::Preconfirmations(sealed);
-
-        // When
-        handles
-            .pre_confirmation_updates
-            .send(GossipData::new(inner, vec![], vec![]))
-            .await
-            .unwrap();
-        tokio::time::advance(Duration::from_millis(100)).await;
-
-        // Then
-        let expected_statuses = vec![
-            (tx1_id, status::transaction::preconfirmation_success()),
-            (tx2_id, status::transaction::preconfirmation_squeezed_out()),
-            (tx3_id, status::transaction::preconfirmation_failure()),
-        ];
-        assert_presence_with_status(&handles.read_requests_sender, expected_statuses)
-            .await;
-
-        assert_status_change_notifications(
-            &[|s| matches!(s, &TransactionStatus::PreConfirmationSuccess(_))],
-            stream_tx1,
-        )
-        .await;
-        assert_status_change_notifications(
-            &[|s| matches!(s, &TransactionStatus::PreConfirmationSqueezedOut(_))],
-            stream_tx2,
-        )
-        .await;
-        assert_status_change_notifications(
-            &[|s| matches!(s, &TransactionStatus::PreConfirmationFailure(_))],
-            stream_tx3,
-        )
-        .await;
     }
 
     #[tokio::test(start_paused = true)]
@@ -1314,13 +1214,7 @@ mod tests {
             .into_iter()
             .map(|tx_id| Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: status::preconfirmation::success(),
             })
             .collect();
         let (delegate_signing_key, delegate_verifying_key) = delegate_key_pair();
@@ -1377,13 +1271,7 @@ mod tests {
             .into_iter()
             .map(|tx_id| Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: status::preconfirmation::success(),
             })
             .collect();
         let (delegate_signing_key, _) = delegate_key_pair();
@@ -1430,13 +1318,7 @@ mod tests {
             .into_iter()
             .map(|tx_id| Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: status::preconfirmation::success(),
             })
             .collect();
         let (delegate_signing_key, delegate_verifying_key) = delegate_key_pair();
@@ -1493,13 +1375,7 @@ mod tests {
             .into_iter()
             .map(|tx_id| Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: status::preconfirmation::success(),
             })
             .collect();
         let (delegate_signing_key, delegate_verifying_key) = delegate_key_pair();
@@ -1563,13 +1439,7 @@ mod tests {
             .into_iter()
             .map(|tx_id| Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: status::preconfirmation::success(),
             })
             .collect();
         let valid_pre_confirmation_message = valid_pre_confirmation_signature(
