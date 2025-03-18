@@ -264,10 +264,7 @@ mod tests {
             rngs::StdRng,
             SeedableRng,
         },
-        fuel_tx::{
-            Bytes32,
-            Bytes64,
-        },
+        fuel_tx::Bytes32,
         services::{
             p2p::{
                 GossipData,
@@ -280,7 +277,6 @@ mod tests {
             },
             txpool::TransactionStatus,
         },
-        tai64::Tai64,
     };
     use futures::StreamExt;
     use status::transaction::{
