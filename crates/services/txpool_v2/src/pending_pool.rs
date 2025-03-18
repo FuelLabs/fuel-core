@@ -229,16 +229,13 @@ impl PendingPool {
     }
 
     // We expect it to be called a lot (every new tx in the pool).
-    pub fn new_known_tx(
+    pub fn new_known_tx<'a>(
         &mut self,
-        new_known_tx: ArcPoolTx,
+        new_known_tx_outputs: impl Iterator<Item = &'a Output>,
+        new_known_tx_id: TxId,
     ) -> Vec<(ArcPoolTx, InsertionSource)> {
         let mut res = Vec::new();
-        self.new_known_tx_inner(
-            new_known_tx.outputs().iter(),
-            new_known_tx.id(),
-            &mut res,
-        );
+        self.new_known_tx_inner(new_known_tx_outputs, new_known_tx_id, &mut res);
         res
     }
 
@@ -436,8 +433,8 @@ mod tests {
             },
             vec![MissingInput::Utxo(utxo)],
         );
-        let resolved_txs = pending_pool.new_known_tx(dependency_tx.clone());
-
+        let resolved_txs =
+            pending_pool.new_known_tx(dependency_tx.outputs().iter(), dependency_tx.id());
         // Then
         assert_eq!(resolved_txs.len(), 1);
         assert_eq!(resolved_txs[0].0.id(), dependent_tx.id());
@@ -487,8 +484,8 @@ mod tests {
             },
             vec![MissingInput::Contract(contract_id)],
         );
-        let resolved_txs = pending_pool.new_known_tx(dependency_tx.clone());
-
+        let resolved_txs =
+            pending_pool.new_known_tx(dependency_tx.outputs().iter(), dependency_tx.id());
         // Then
         assert_eq!(resolved_txs.len(), 1);
         assert_eq!(resolved_txs[0].0.id(), dependent_tx.id());
@@ -531,8 +528,8 @@ mod tests {
             },
             vec![MissingInput::Utxo(utxo)],
         );
-        let resolved_txs = pending_pool.new_known_tx(dependency_tx.clone());
-
+        let resolved_txs =
+            pending_pool.new_known_tx(dependency_tx.outputs().iter(), dependency_tx.id());
         // Then
         assert_eq!(resolved_txs.len(), 2);
         assert!(pending_pool.is_empty());
@@ -576,8 +573,8 @@ mod tests {
             },
             vec![MissingInput::Utxo(utxo_1), MissingInput::Utxo(utxo_2)],
         );
-        let resolved_txs = pending_pool.new_known_tx(dependency_tx.clone());
-
+        let resolved_txs =
+            pending_pool.new_known_tx(dependency_tx.outputs().iter(), dependency_tx.id());
         // Then
         assert_eq!(resolved_txs.len(), 1);
         assert_eq!(resolved_txs[0].0.id(), dependent_tx.id());

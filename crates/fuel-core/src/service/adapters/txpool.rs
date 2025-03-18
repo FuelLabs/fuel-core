@@ -236,4 +236,10 @@ impl TxStatusManager for TxStatusManagerAdapter {
         self.tx_status_manager_shared_data
             .update_status(tx_id, tx_status);
     }
+
+    fn get_status_update_listener(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(TxId, TransactionStatus)> {
+        self.tx_status_manager_shared_data.subscribe_all_updates()
+    }
 }

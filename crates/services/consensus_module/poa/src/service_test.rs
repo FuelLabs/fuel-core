@@ -242,7 +242,6 @@ impl WaitForReadySignal for FakeBlockProductionReadySignal {
 }
 
 pub type TestPoAService = Service<
-    MockTransactionPool,
     MockBlockProducer,
     MockBlockImporter,
     FakeBlockSigner,
@@ -276,7 +275,6 @@ impl MockTransactionPool {
             let (sender, _) = watch::channel(());
             move || sender.subscribe()
         });
-        txpool.expect_notify_skipped_txs().returning(|_| {});
         txpool
     }
 
@@ -289,7 +287,6 @@ impl MockTransactionPool {
             let sender = new_txs_notifier.clone();
             move || sender.subscribe()
         });
-        txpool.expect_notify_skipped_txs().returning(|_| {});
 
         TxPoolContext {
             txpool,
@@ -364,9 +361,10 @@ async fn remove_skipped_transactions() {
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
 
-    let mut txpool = MockTransactionPool::no_tx_updates();
+    let txpool = MockTransactionPool::no_tx_updates();
     // Test created for only for this check.
-    txpool
+    let mut tx_status_manager = MockTxStatusManager::new();
+    tx_status_manager
         .expect_notify_skipped_txs()
         .returning(move |skipped_ids| {
             let skipped_ids: Vec<_> = skipped_ids.into_iter().map(|(id, _)| id).collect();
@@ -386,8 +384,6 @@ async fn remove_skipped_transactions() {
             assert_eq!(skipped_transactions.len(), TX_NUM);
             assert_eq!(skipped_transactions, skipped_ids);
         });
-
-    let tx_status_manager = MockTxStatusManager::no_skipped_status_updates();
 
     let signer = SignMode::Key(Secret::new(secret_key.into()));
 

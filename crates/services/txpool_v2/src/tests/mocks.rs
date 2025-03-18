@@ -86,11 +86,18 @@ pub struct Data {
 #[derive(Clone)]
 pub struct MockTxStatusManager {
     tx: Sender<(TxId, TransactionStatus)>,
+    tx_all_update_sender: tokio::sync::broadcast::Sender<(TxId, TransactionStatus)>,
 }
 
 impl MockTxStatusManager {
-    pub fn new(tx: Sender<(TxId, TransactionStatus)>) -> Self {
-        Self { tx }
+    pub fn new(
+        tx_all_update_sender: tokio::sync::broadcast::Sender<(TxId, TransactionStatus)>,
+        tx: Sender<(TxId, TransactionStatus)>,
+    ) -> Self {
+        Self {
+            tx_all_update_sender,
+            tx,
+        }
     }
 }
 
@@ -100,6 +107,12 @@ impl ports::TxStatusManager for MockTxStatusManager {
         tokio::spawn(async move {
             tx.send((tx_id, tx_status)).await.unwrap();
         });
+    }
+
+    fn get_status_update_listener(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(TxId, TransactionStatus)> {
+        self.tx_all_update_sender.subscribe()
     }
 }
 

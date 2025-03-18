@@ -85,14 +85,25 @@ impl Data {
 pub struct TxStatusManager {
     data: Data,
     tx_status_change: TxStatusChange,
+    // Used to inform other parts of the system about the status of a transaction
+    tx_status_change_sender: tokio::sync::broadcast::Sender<(TxId, TransactionStatus)>,
     ttl: Duration,
     metrics: bool,
 }
 
 impl TxStatusManager {
-    pub fn new(tx_status_change: TxStatusChange, ttl: Duration, metrics: bool) -> Self {
+    pub fn new(
+        tx_status_change_sender: tokio::sync::broadcast::Sender<(
+            TxId,
+            TransactionStatus,
+        )>,
+        tx_status_change: TxStatusChange,
+        ttl: Duration,
+        metrics: bool,
+    ) -> Self {
         Self {
             data: Data::empty(),
+            tx_status_change_sender,
             tx_status_change,
             ttl,
             metrics,
@@ -169,7 +180,11 @@ impl TxStatusManager {
 
         self.tx_status_change
             .update_sender
-            .send(TxUpdate::new(tx_id, tx_status.into()));
+            .send(TxUpdate::new(tx_id, tx_status.clone().into()));
+
+        if let Err(e) = self.tx_status_change_sender.send((tx_id, tx_status)) {
+            tracing::error!(%e, "failed to send tx status update");
+        }
 
         if self.metrics {
             metrics_manager()
@@ -372,8 +387,13 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn simple_registration() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, false);
+            let (tx_status_change_sender, _) = tokio::sync::broadcast::channel(100);
+            let mut tx_status_manager = TxStatusManager::new(
+                tx_status_change_sender,
+                tx_status_change,
+                TTL,
+                false,
+            );
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -415,8 +435,13 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn prunes_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, false);
+            let (tx_status_change_sender, _) = tokio::sync::broadcast::channel(100);
+            let mut tx_status_manager = TxStatusManager::new(
+                tx_status_change_sender,
+                tx_status_change,
+                TTL,
+                false,
+            );
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -460,8 +485,13 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn prunes_multiple_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, false);
+            let (tx_status_change_sender, _) = tokio::sync::broadcast::channel(100);
+            let mut tx_status_manager = TxStatusManager::new(
+                tx_status_change_sender,
+                tx_status_change,
+                TTL,
+                false,
+            );
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -523,8 +553,13 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn simple_registration() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, false);
+            let (tx_status_change_sender, _) = tokio::sync::broadcast::channel(100);
+            let mut tx_status_manager = TxStatusManager::new(
+                tx_status_change_sender,
+                tx_status_change,
+                TTL,
+                false,
+            );
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -549,8 +584,13 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn prunes_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, false);
+            let (tx_status_change_sender, _) = tokio::sync::broadcast::channel(100);
+            let mut tx_status_manager = TxStatusManager::new(
+                tx_status_change_sender,
+                tx_status_change,
+                TTL,
+                false,
+            );
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -600,8 +640,13 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn prunes_multiple_old_statuses() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, false);
+            let (tx_status_change_sender, _) = tokio::sync::broadcast::channel(100);
+            let mut tx_status_manager = TxStatusManager::new(
+                tx_status_change_sender,
+                tx_status_change,
+                TTL,
+                false,
+            );
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -642,8 +687,13 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn status_preserved_in_cache_when_first_status_expires() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, false);
+            let (tx_status_change_sender, _) = tokio::sync::broadcast::channel(100);
+            let mut tx_status_manager = TxStatusManager::new(
+                tx_status_change_sender,
+                tx_status_change,
+                TTL,
+                false,
+            );
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -693,8 +743,13 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn submitted_status_is_not_pruned_with_ttl() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, false);
+            let (tx_status_change_sender, _) = tokio::sync::broadcast::channel(100);
+            let mut tx_status_manager = TxStatusManager::new(
+                tx_status_change_sender,
+                tx_status_change,
+                TTL,
+                false,
+            );
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -719,8 +774,13 @@ mod tests {
         #[tokio::test(start_paused = true)]
         async fn update_to_submitted_disables_ttl() {
             let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-            let mut tx_status_manager =
-                TxStatusManager::new(tx_status_change, TTL, false);
+            let (tx_status_change_sender, _) = tokio::sync::broadcast::channel(100);
+            let mut tx_status_manager = TxStatusManager::new(
+                tx_status_change_sender,
+                tx_status_change,
+                TTL,
+                false,
+            );
 
             let tx1_id = [1u8; 32].into();
             let tx2_id = [2u8; 32].into();
@@ -815,7 +875,9 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-        let mut tx_status_manager = TxStatusManager::new(tx_status_change, ttl, false);
+        let (tx_status_change_sender, _) = tokio::sync::broadcast::channel(100);
+        let mut tx_status_manager =
+            TxStatusManager::new(tx_status_change_sender, tx_status_change, TTL, false);
         let tx_id_pool = generate_tx_id_pool();
 
         // This will be used to track when each txid was updated so that

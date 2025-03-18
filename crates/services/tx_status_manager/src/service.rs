@@ -73,10 +73,20 @@ enum WriteRequest {
     },
 }
 
-#[derive(Clone)]
 pub struct SharedData {
     read_requests_sender: mpsc::Sender<ReadRequest>,
     write_requests_sender: mpsc::UnboundedSender<WriteRequest>,
+    tx_status_receiver: tokio::sync::broadcast::Receiver<(TxId, TransactionStatus)>,
+}
+
+impl Clone for SharedData {
+    fn clone(&self) -> Self {
+        Self {
+            read_requests_sender: self.read_requests_sender.clone(),
+            write_requests_sender: self.write_requests_sender.clone(),
+            tx_status_receiver: self.tx_status_receiver.resubscribe(),
+        }
+    }
 }
 
 impl SharedData {
@@ -105,6 +115,12 @@ impl SharedData {
     pub fn notify_skipped(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
         let request = WriteRequest::NotifySkipped { tx_ids_and_reason };
         let _ = self.write_requests_sender.send(request);
+    }
+
+    pub fn subscribe_all_updates(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(TxId, TransactionStatus)> {
+        self.tx_status_receiver.resubscribe()
     }
 }
 
@@ -333,14 +349,20 @@ where
     Pubkey: ProtocolPublicKey,
 {
     let tx_status_from_p2p_stream = p2p.gossiped_tx_statuses();
+    let (tx_status_sender, tx_status_receiver) =
+        tokio::sync::broadcast::channel(config.max_tx_update_subscriptions);
     let subscriptions = Subscriptions {
         new_tx_status: tx_status_from_p2p_stream,
     };
 
-    let tx_status_sender =
+    let tx_update_sender =
         TxStatusChange::new(config.max_tx_update_subscriptions, config.subscription_ttl);
-    let tx_status_manager =
-        TxStatusManager::new(tx_status_sender, config.status_cache_ttl, config.metrics);
+    let tx_status_manager = TxStatusManager::new(
+        tx_status_sender,
+        tx_update_sender,
+        config.status_cache_ttl,
+        config.metrics,
+    );
 
     let (read_requests_sender, read_requests_receiver) =
         mpsc::channel(config.max_tx_update_subscriptions);
@@ -349,6 +371,7 @@ where
     let shared_data = SharedData {
         read_requests_sender,
         write_requests_sender,
+        tx_status_receiver,
     };
     let signature_verification = SignatureVerification::new(protocol_pubkey);
 
@@ -399,6 +422,7 @@ mod tests {
         },
     };
     use std::time::Duration;
+    use tokio::sync::broadcast;
     use tokio_stream::wrappers::ReceiverStream;
 
     const TTL: Duration = Duration::from_secs(4);
@@ -412,9 +436,11 @@ mod tests {
     fn new_task_with_handles() -> (Task<PublicKey>, Handles) {
         let (read_requests_sender, read_requests_receiver) = mpsc::channel(1);
         let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
+        let (tx_status_sender, tx_status_receiver) = broadcast::channel(10000);
         let shared_data = SharedData {
             read_requests_sender,
             write_requests_sender,
+            tx_status_receiver,
         };
         let (sender, receiver) = mpsc::channel(1_000);
         let new_tx_status = Box::pin(ReceiverStream::new(receiver));
@@ -422,7 +448,8 @@ mod tests {
 
         let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
         let updater_sender = tx_status_change.update_sender.clone();
-        let tx_status_manager = TxStatusManager::new(tx_status_change, TTL, false);
+        let tx_status_manager =
+            TxStatusManager::new(tx_status_sender, tx_status_change, TTL, false);
         let signing_key = SecretKey::default();
         let protocol_public_key = signing_key.public_key();
         let signature_verification = SignatureVerification::new(protocol_public_key);

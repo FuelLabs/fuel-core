@@ -136,14 +136,15 @@ pub struct TestPoolUniverse {
 impl Default for TestPoolUniverse {
     fn default() -> Self {
         let (tx, rx) = mpsc::channel(100);
-
+        let (tx_all_status_sender, _tx_all_status_receiver) =
+            tokio::sync::broadcast::channel(1000);
         Self {
             mock_db: MockDb::default(),
             rng: StdRng::seed_from_u64(0),
             config: Default::default(),
             pool: None,
             stats_receiver: None,
-            mock_tx_status_manager: MockTxStatusManager::new(tx),
+            mock_tx_status_manager: MockTxStatusManager::new(tx_all_status_sender, tx),
             tx_status_manager_receiver: rx,
         }
     }

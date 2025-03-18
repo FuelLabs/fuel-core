@@ -39,6 +39,10 @@ pub use fuel_core_storage::transactional::AtomicView;
 
 pub trait TxStatusManager: Send + Sync + 'static {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus);
+
+    fn get_status_update_listener(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(TxId, TransactionStatus)>;
 }
 
 pub trait BlockImporter {

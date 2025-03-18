@@ -42,6 +42,45 @@ impl Default for ExtractedOutputs {
 }
 
 impl ExtractedOutputs {
+    pub fn new_extracted_outputs<'a>(
+        &mut self,
+        outputs: impl Iterator<Item = &'a Output>,
+        tx_id: TxId,
+    ) {
+        for (idx, output) in outputs.enumerate() {
+            match output {
+                Output::ContractCreated { contract_id, .. } => {
+                    self.contract_created.insert(*contract_id, tx_id);
+                }
+                Output::Coin {
+                    to,
+                    amount,
+                    asset_id,
+                }
+                | Output::Change {
+                    amount,
+                    asset_id,
+                    to,
+                }
+                | Output::Variable {
+                    amount,
+                    asset_id,
+                    to,
+                } => {
+                    let idx =
+                        u16::try_from(idx).expect("Outputs count is less than u16::MAX");
+                    self.coins_created
+                        .entry(tx_id)
+                        .or_default()
+                        .insert(idx, (*to, *amount, *asset_id));
+                }
+                Output::Contract { .. } => {
+                    continue;
+                }
+            }
+        }
+    }
+
     pub fn new_extracted_transaction(&mut self, tx: &ArcPoolTx) {
         let tx_id = tx.id();
         for (idx, output) in tx.outputs().iter().enumerate() {
