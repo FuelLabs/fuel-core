@@ -153,7 +153,6 @@ impl RunnableTask for Task {
             biased;
 
             _ = watcher.while_started() => {
-                dbg!("1");
                 TaskNextAction::Stop
             }
 
@@ -172,10 +171,8 @@ impl RunnableTask for Task {
             }
 
             request = self.write_requests_receiver.recv() => {
-                dbg!("3");
                 match request {
                     Some(WriteRequest::UpdateStatus { tx_id, status }) => {
-                        dbg!("3.1");
                         self.manager.status_update(tx_id, status);
                         TaskNextAction::Continue
                     }
@@ -192,22 +189,20 @@ impl RunnableTask for Task {
             }
 
             request = self.read_requests_receiver.recv() => {
-                dbg!("4");
                 match request {
                     Some(ReadRequest::GetStatus { tx_id, sender }) => {
-                        dbg!("4.1");
                         let status = self.manager.status(&tx_id);
                         let _ = sender.send(status.cloned());
                         TaskNextAction::Continue
                     }
                     Some(ReadRequest::Subscribe { tx_id, sender }) => {
-                        dbg!("4.2");
+                        dbg!("TODO: 4.2");
                         let result = self.manager.tx_update_subscribe(tx_id);
                         let _ = sender.send(result);
                         TaskNextAction::Continue
                     }
                     None => {
-                        dbg!("4.3");
+                        dbg!("TODO: 4.3");
                         TaskNextAction::Stop
                     },
                 }
@@ -216,8 +211,6 @@ impl RunnableTask for Task {
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        panic!();
-        dbg!("5");
         Ok(())
     }
 }
@@ -257,13 +250,20 @@ where
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
-    use std::time::Duration;
+    use std::{
+        collections::HashSet,
+        time::Duration,
+    };
 
     use fuel_core_services::{
         Service,
         ServiceRunner,
     };
     use fuel_core_types::{
+        fuel_crypto::rand::{
+            rngs::StdRng,
+            SeedableRng,
+        },
         fuel_tx::{
             Bytes32,
             Bytes64,
@@ -283,9 +283,16 @@ mod tests {
         tai64::Tai64,
     };
     use futures::StreamExt;
-    use tokio::sync::{
-        mpsc,
-        oneshot,
+    use status::transaction::{
+        random_prunable_tx_status,
+        random_tx_status,
+    };
+    use tokio::{
+        sync::{
+            mpsc,
+            oneshot,
+        },
+        time::Instant,
     };
     use tokio_stream::wrappers::ReceiverStream;
 
@@ -293,7 +300,11 @@ mod tests {
         manager::TxStatusManager,
         ports::P2PPreConfirmationMessage,
         subscriptions::Subscriptions,
-        update_sender::TxStatusChange,
+        update_sender::{
+            MpscChannel,
+            TxStatusChange,
+        },
+        TxStatusMessage,
     };
 
     use super::{
@@ -308,12 +319,16 @@ mod tests {
         VerifyingKey as DalekVerifyingKey,
     };
 
+    const MORE_THAN_TTL: Duration = Duration::from_secs(5);
     const TTL: Duration = Duration::from_secs(4);
+    const HALF_OF_TTL: Duration = Duration::from_secs(2);
+    const QUART_OF_TTL: Duration = Duration::from_secs(1);
 
     struct Handles {
         pub subscriptions_sender: mpsc::Sender<GossipData<P2PPreConfirmationMessage>>,
         pub write_requests_sender: mpsc::UnboundedSender<WriteRequest>,
         pub read_requests_sender: mpsc::Sender<ReadRequest>,
+        pub tx_status_change: TxStatusChange,
     }
 
     pub(super) mod status {
@@ -417,7 +432,7 @@ mod tests {
         }
     }
 
-    fn new_task_with_handles() -> (Task, Handles) {
+    fn new_task_with_handles(ttl: Duration) -> (Task, Handles) {
         let (read_requests_sender, read_requests_receiver) = mpsc::channel(1);
         let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
         let shared_data = SharedData {
@@ -425,18 +440,15 @@ mod tests {
             write_requests_sender: write_requests_sender.clone(),
         };
 
-        //
-        //
-        // let _updater_sender = tx_status_change.update_sender.clone();
-
         let (sender, receiver) = mpsc::channel(1_000);
         let new_tx_status = Box::pin(ReceiverStream::new(receiver));
         let subscriptions = Subscriptions { new_tx_status };
         let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
-        let manager = TxStatusManager::new(tx_status_change, TTL, false);
+        let manager = TxStatusManager::new(tx_status_change.clone(), ttl, false);
 
         let handles = Handles {
             subscriptions_sender: sender,
+            tx_status_change,
             write_requests_sender,
             read_requests_sender,
         };
@@ -458,6 +470,132 @@ mod tests {
         let secret_key = DalekSigningKey::from_bytes(&secret_key);
         let public_key = secret_key.verifying_key();
         (secret_key, public_key)
+    }
+
+    async fn send_status_updates(
+        updates: &[(Bytes32, TransactionStatus)],
+        sender: &mpsc::UnboundedSender<WriteRequest>,
+    ) {
+        updates.iter().for_each(|(tx_id, status)| {
+            sender
+                .send(WriteRequest::UpdateStatus {
+                    tx_id: *tx_id,
+                    status: status.clone(),
+                })
+                .unwrap();
+        });
+        tokio::time::advance(Duration::from_millis(100)).await;
+    }
+
+    fn pruning_tx_id() -> Bytes32 {
+        let marker: u64 = 0xDEADBEEF;
+        let mut id = [0u8; 32];
+        id[0..8].copy_from_slice(&marker.to_le_bytes());
+        id.into()
+    }
+
+    async fn force_pruning(sender: &mpsc::UnboundedSender<WriteRequest>) {
+        let id = pruning_tx_id();
+        sender
+            .send(WriteRequest::UpdateStatus {
+                tx_id: id,
+                status: status::transaction::failure(),
+            })
+            .unwrap();
+        tokio::time::advance(Duration::from_millis(100)).await;
+    }
+
+    async fn assert_presence_with_status(
+        status_read: &mpsc::Sender<ReadRequest>,
+        txs: Vec<(Bytes32, TransactionStatus)>,
+    ) {
+        for (id, status) in txs.iter() {
+            let response = get_status(status_read, id).await;
+            assert_eq!(response, Some(status.clone()));
+        }
+    }
+
+    async fn get_status(
+        status_read: &mpsc::Sender<ReadRequest>,
+        id: &Bytes32,
+    ) -> Option<TransactionStatus> {
+        let (sender, receiver) = oneshot::channel();
+        status_read
+            .send(ReadRequest::GetStatus {
+                tx_id: (*id).into(),
+                sender,
+            })
+            .await
+            .unwrap();
+
+        let response = receiver.await.unwrap();
+        response
+    }
+
+    async fn assert_status<F>(
+        status_read: &mpsc::Sender<ReadRequest>,
+        txs: Vec<Bytes32>,
+        pred: F,
+    ) where
+        F: Fn(Option<TransactionStatus>) -> bool,
+    {
+        for id in txs.iter() {
+            let (sender, receiver) = oneshot::channel();
+            status_read
+                .send(ReadRequest::GetStatus {
+                    tx_id: (*id).into(),
+                    sender,
+                })
+                .await
+                .unwrap();
+
+            let response = receiver.await.unwrap();
+            dbg!(&response);
+            assert!(pred(response));
+        }
+    }
+
+    async fn assert_presence(status_read: &mpsc::Sender<ReadRequest>, txs: Vec<Bytes32>) {
+        assert_status(status_read, txs, |s| s.is_some()).await;
+    }
+
+    async fn assert_absence(status_read: &mpsc::Sender<ReadRequest>, txs: Vec<Bytes32>) {
+        assert_status(status_read, txs, |s| s.is_none()).await;
+    }
+
+    async fn assert_status_change_notifications(
+        tx_id: Bytes32,
+        tx_status_change: &TxStatusChange,
+        validators: &[for<'a> fn(&'a TransactionStatus) -> bool],
+    ) {
+        let mut stream = tx_status_change
+            .update_sender
+            .try_subscribe::<MpscChannel>(tx_id)
+            .unwrap();
+        let mut received_statuses = vec![];
+        let timeout_duration = Duration::from_millis(250);
+        while let Ok(Some(message)) =
+            tokio::time::timeout(timeout_duration, stream.next()).await
+        {
+            match message {
+                TxStatusMessage::Status(s) => received_statuses.push(s),
+                TxStatusMessage::FailedStatus => {
+                    panic!("should not happen");
+                }
+            }
+        }
+
+        assert_eq!(received_statuses.len(), validators.len(), "Length mismatch");
+        for (i, (item, &validator)) in
+            received_statuses.iter().zip(validators.iter()).enumerate()
+        {
+            assert!(
+                validator(item),
+                "Validation failed at index {}: {:?}",
+                i,
+                item
+            );
+        }
     }
 
     /*
@@ -515,20 +653,20 @@ mod tests {
     }
     */
 
-    #[tokio::test]
-    async fn status_management__can_register_preconfirmation_messages() {
-        let (task, handles) = new_task_with_handles();
+    #[tokio::test(start_paused = true)]
+    async fn run__can_store_and_retrieve_all_statuses() {
+        let (task, handles) = new_task_with_handles(TTL);
         let service = ServiceRunner::new(task);
         service.start_and_await().await.unwrap();
 
         // Given
-        let tx1_id: Bytes32 = [1u8; 32].into();
-        let tx2_id: Bytes32 = [2u8; 32].into();
-        let tx3_id: Bytes32 = [3u8; 32].into();
-        let tx4_id: Bytes32 = [4u8; 32].into();
-        let tx5_id: Bytes32 = [5u8; 32].into();
-        let tx6_id: Bytes32 = [6u8; 32].into();
-        let tx7_id: Bytes32 = [7u8; 32].into();
+        let tx1_id = [1u8; 32].into();
+        let tx2_id = [2u8; 32].into();
+        let tx3_id = [3u8; 32].into();
+        let tx4_id = [4u8; 32].into();
+        let tx5_id = [5u8; 32].into();
+        let tx6_id = [6u8; 32].into();
+        let tx7_id = [7u8; 32].into();
         let status_updates = vec![
             (tx1_id, status::transaction::submitted()),
             (tx2_id, status::transaction::success()),
@@ -540,58 +678,354 @@ mod tests {
         ];
 
         // When
+        send_status_updates(&status_updates, &handles.write_requests_sender).await;
+
+        // Then
+        assert_presence_with_status(&handles.read_requests_sender, status_updates).await;
+
+        service.stop_and_await().await.unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn run__non_prunable_is_returned_when_both_prunable_and_non_prunable_are_present(
+    ) {
+        let (task, handles) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+        let status_updates = vec![
+            (tx1_id, status::transaction::success()),
+            (tx1_id, status::transaction::submitted()),
+        ];
+
+        // When
+        send_status_updates(&status_updates, &handles.write_requests_sender).await;
+
+        // Then
+        assert_presence_with_status(
+            &handles.read_requests_sender,
+            vec![(tx1_id, status::transaction::submitted())],
+        )
+        .await;
+
+        service.stop_and_await().await.unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn run__only_prunable_statuses_are_pruned() {
+        let (task, handles) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+        let tx2_id = [2u8; 32].into();
+        let tx3_id = [3u8; 32].into();
+        let tx4_id = [4u8; 32].into();
+        let tx5_id = [5u8; 32].into();
+        let tx6_id = [6u8; 32].into();
+        let tx7_id = [7u8; 32].into();
+        let status_updates = vec![
+            (tx1_id, status::transaction::submitted()),
+            (tx2_id, status::transaction::success()),
+            (tx3_id, status::transaction::preconfirmation_success()),
+            (tx4_id, status::transaction::squeezed_out()),
+            (tx5_id, status::transaction::preconfirmation_squeezed_out()),
+            (tx6_id, status::transaction::failure()),
+            (tx7_id, status::transaction::preconfirmation_failure()),
+        ];
+
+        // When
+        send_status_updates(&status_updates, &handles.write_requests_sender).await;
+        tokio::time::advance(MORE_THAN_TTL).await;
+        force_pruning(&handles.write_requests_sender).await;
+
+        // Then
+        assert_presence(&handles.read_requests_sender, vec![tx1_id]).await;
+        assert_absence(
+            &handles.read_requests_sender,
+            vec![tx2_id, tx3_id, tx4_id, tx5_id, tx6_id, tx7_id],
+        )
+        .await;
+
+        service.stop_and_await().await.unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn run__pruning_works_with_ttl_0() {
+        let (task, handles) = new_task_with_handles(Duration::from_secs(0));
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+        let status_updates = vec![(tx1_id, status::transaction::success())];
+
+        // When
+        send_status_updates(&status_updates, &handles.write_requests_sender).await;
+        force_pruning(&handles.write_requests_sender).await;
+
+        // Then
+        assert_absence(&handles.read_requests_sender, vec![tx1_id]).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn run__does_not_prune_when_ttl_not_passed() {
+        let (task, handles) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+        let status_updates = vec![(tx1_id, status::transaction::success())];
+
+        // When
+        send_status_updates(&status_updates, &handles.write_requests_sender).await;
+        tokio::time::advance(HALF_OF_TTL).await;
+        force_pruning(&handles.write_requests_sender).await;
+
+        // Then
+        assert_presence(&handles.read_requests_sender, vec![tx1_id]).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn run__prunes_when_the_same_tx_is_updated_from_non_prunable_to_prunable_status(
+    ) {
+        let (task, handles) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+        let status_updates = vec![
+            (tx1_id, status::transaction::submitted()),
+            (tx1_id, status::transaction::success()),
+        ];
+
+        // When
+        send_status_updates(&status_updates, &handles.write_requests_sender).await;
+        tokio::time::advance(MORE_THAN_TTL).await;
+        force_pruning(&handles.write_requests_sender).await;
+
+        // Then
+        assert_absence(&handles.read_requests_sender, vec![tx1_id]).await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn run__status_update_resets_the_pruning_time() {
+        let (task, handles) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+        let tx2_id = [2u8; 32].into();
+        let status_updates = vec![
+            (tx1_id, status::transaction::success()),
+            (tx2_id, status::transaction::success()),
+        ];
+
+        // When
+        send_status_updates(&status_updates, &handles.write_requests_sender).await;
+        tokio::time::advance(HALF_OF_TTL).await;
+
+        let status_updates = vec![(tx1_id, status::transaction::failure())];
+        send_status_updates(&status_updates, &handles.write_requests_sender).await;
+        tokio::time::advance(HALF_OF_TTL + QUART_OF_TTL).await;
+        force_pruning(&handles.write_requests_sender).await;
+
+        // Then
+        assert_presence_with_status(
+            &handles.read_requests_sender,
+            vec![(tx1_id, status::transaction::failure())],
+        )
+        .await;
+        assert_absence(&handles.read_requests_sender, vec![tx2_id]).await;
+    }
+
+    #[tokio::test]
+    async fn run__notifies_about_status_changes() {
+        let (task, handles) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+        let status_updates = vec![
+            (tx1_id, status::transaction::submitted()),
+            (tx1_id, status::transaction::success()),
+        ];
+
+        // When
         status_updates.iter().for_each(|(tx_id, status)| {
             handles
                 .write_requests_sender
                 .send(WriteRequest::UpdateStatus {
-                    tx_id: (*tx_id).into(),
+                    tx_id: *tx_id,
                     status: status.clone(),
                 })
                 .unwrap();
         });
 
-        assert_presence_with_status(
-            handles.read_requests_sender,
-            vec![(tx1_id, status::transaction::submitted())],
+        // Then
+        assert_status_change_notifications(
+            tx1_id,
+            &handles.tx_status_change,
+            &[
+                |s| matches!(s, &TransactionStatus::Submitted(_)),
+                |s| matches!(s, &TransactionStatus::Success(_)),
+            ],
         )
         .await;
 
-        // let msg = receiver.await;
-        // println!("Received status response: {:?}", msg);
-
-        // let res = service.stop_and_await().await.unwrap();
-        // println!("Service stopped: {:?}", res);
-        // dbg!(&res);
-
-        // Then
-        // TODO: Also check statuses themselves, not only presence
-        // for (tx_id, _) in tx_ids {
-        //     assert!(
-        //         task.manager.status(&tx_id).is_some(),
-        //         "tx_id {:?} should be present",
-        //         tx_id
-        //     );
-        // }
-
-        // Also check notifications...
+        service.stop_and_await().await.unwrap();
     }
 
-    async fn assert_presence_with_status(
-        status_read: mpsc::Sender<ReadRequest>,
-        txs: Vec<(Bytes32, TransactionStatus)>,
-    ) {
-        for (id, status) in txs.iter() {
-            let (sender, receiver) = oneshot::channel();
-            status_read
-                .send(ReadRequest::GetStatus {
-                    tx_id: (*id).into(),
-                    sender,
-                })
-                .await
-                .unwrap();
+    use proptest::prelude::*;
+    use std::collections::HashMap;
 
-            let response = receiver.await.unwrap();
-            assert_eq!(response, Some(status.clone()));
+    const TX_ID_POOL_SIZE: usize = 20;
+    const MIN_ACTIONS: usize = 50;
+    const MAX_ACTIONS: usize = 1000;
+    const MIN_TTL: u64 = 10;
+    const MAX_TTL: u64 = 360;
+
+    #[derive(Debug, Clone)]
+    enum Action {
+        UpdateStatus { tx_id_index: usize },
+        AdvanceTime { seconds: u64 },
+    }
+
+    // How to select an ID from the pool
+    fn tx_id_index_strategy(pool_size: usize) -> impl Strategy<Value = usize> {
+        0..pool_size
+    }
+
+    // Possible values for TTL
+    fn ttl_strategy(min_ttl: u64, max_ttl: u64) -> impl Strategy<Value = Duration> {
+        (min_ttl..=max_ttl).prop_map(Duration::from_secs)
+    }
+
+    // Custom strategy to generate a sequence of actions
+    fn actions_strategy(
+        min_actions: usize,
+        max_actions: usize,
+    ) -> impl Strategy<Value = Vec<Action>> {
+        let update_status_strategy = (tx_id_index_strategy(TX_ID_POOL_SIZE))
+            .prop_map(|tx_id_index| Action::UpdateStatus { tx_id_index });
+
+        let advance_time_strategy =
+            (1..=MAX_TTL / 2).prop_map(|seconds| Action::AdvanceTime { seconds });
+
+        prop::collection::vec(
+            prop_oneof![update_status_strategy, advance_time_strategy],
+            min_actions..max_actions,
+        )
+    }
+
+    // Generate a pool of unique transaction IDs
+    fn generate_tx_id_pool() -> Vec<[u8; 32]> {
+        (0..TX_ID_POOL_SIZE)
+            .map(|i| {
+                let mut tx_id = [0u8; 32];
+                tx_id[0..8].copy_from_slice(&(i as u64).to_le_bytes());
+                tx_id
+            })
+            .collect()
+    }
+
+    #[tokio::main(start_paused = true, flavor = "current_thread")]
+    #[allow(clippy::arithmetic_side_effects)]
+    async fn _pruning__correctly_prunes_old_statuses(
+        ttl: Duration,
+        actions: Vec<Action>,
+    ) {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+
+        // Given
+        let (task, handles) = new_task_with_handles(ttl);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        let tx_id_pool = generate_tx_id_pool();
+
+        // This will be used to track when each txid was updated so that
+        // we can do the final assert against the TTL.
+        let mut update_times = HashMap::new();
+        let mut non_prunable_ids = HashSet::new();
+
+        // When
+        // Simulate flow of time and transaction updates
+        for action in actions {
+            match action {
+                Action::UpdateStatus { tx_id_index } => {
+                    let tx_id = tx_id_pool[tx_id_index];
+
+                    // Make sure we'll never update back to submitted
+                    let current_tx_status =
+                        get_status(&handles.read_requests_sender, &tx_id.into()).await;
+                    let new_tx_status = match current_tx_status {
+                        Some(_) => random_prunable_tx_status(&mut rng),
+                        None => random_tx_status(&mut rng),
+                    };
+
+                    if TxStatusManager::is_prunable(&new_tx_status) {
+                        update_times.insert(tx_id, Instant::now());
+                        non_prunable_ids.remove(&tx_id);
+                    } else {
+                        non_prunable_ids.insert(tx_id);
+                    }
+                    let status_updates = vec![(tx_id.into(), new_tx_status)];
+                    send_status_updates(&status_updates, &handles.write_requests_sender)
+                        .await;
+                }
+                Action::AdvanceTime { seconds } => {
+                    tokio::time::advance(Duration::from_secs(seconds)).await;
+                }
+            }
+        }
+
+        // Trigger the final pruning, making sure we use ID that is not
+        // in the pool
+        force_pruning(&handles.write_requests_sender);
+        update_times.insert(pruning_tx_id().into(), Instant::now());
+
+        // Then
+        // Verify that only expected statuses are present
+        let (recent_tx_ids, not_recent_tx_ids): (Vec<_>, Vec<_>) = update_times
+            .iter()
+            .partition(|(_, &time)| time + ttl > Instant::now());
+
+        assert_presence(
+            &handles.read_requests_sender,
+            recent_tx_ids
+                .into_iter()
+                .map(|(tx_id, _)| (*tx_id).into())
+                .chain(non_prunable_ids.iter().cloned().map(Into::into))
+                .collect(),
+        );
+        assert_absence(
+            &handles.read_requests_sender,
+            not_recent_tx_ids
+                .into_iter()
+                .filter(|(tx_id, _)| !non_prunable_ids.contains(*tx_id))
+                .map(|(tx_id, _)| (*tx_id).into())
+                .collect(),
+        );
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100))]
+
+        #[test]
+        #[allow(clippy::arithmetic_side_effects)]
+        fn pruning__correctly_prunes_old_statuses(
+            ttl in ttl_strategy(MIN_TTL, MAX_TTL),
+            actions in actions_strategy(MIN_ACTIONS, MAX_ACTIONS)
+        ) {
+            _pruning__correctly_prunes_old_statuses(ttl, actions);
         }
     }
 }
