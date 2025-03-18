@@ -4,7 +4,11 @@ use crate::ports::{
     P2PSubscriptions,
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_types::services::p2p::GossipData;
+use fuel_core_types::services::p2p::{
+    GossipData,
+    GossipsubMessageAcceptance,
+    GossipsubMessageInfo,
+};
 
 mockall::mock! {
     pub P2P {}
@@ -13,6 +17,12 @@ mockall::mock! {
         type GossipedStatuses = P2PPreConfirmationGossipData;
 
         fn gossiped_tx_statuses(&self) -> BoxStream<<MockP2P as P2PSubscriptions>::GossipedStatuses>;
+
+        fn notify_gossip_transaction_validity(
+            &self,
+            message_info: GossipsubMessageInfo,
+            validity: GossipsubMessageAcceptance,
+        ) -> anyhow::Result<()>;
     }
 }
 

@@ -61,7 +61,7 @@ impl TestTxStatusManagerUniverse {
         self.tx_status_manager = Some(tx_status_manager.clone());
     }
 
-    pub fn build_service(&self, p2p: Option<MockP2P>) -> ServiceRunner<Task<PublicKey>> {
+    pub fn build_service(&self, p2p: Option<MockP2P>) -> ServiceRunner<Task<PublicKey, MockP2P>> {
         let p2p = p2p.unwrap_or_else(|| MockP2P::new_with_statuses(vec![]));
         let arb_pubkey = Default::default();
 

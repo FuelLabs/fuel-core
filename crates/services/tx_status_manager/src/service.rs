@@ -33,6 +33,9 @@ use fuel_core_types::{
             DelegatePreConfirmationKey,
             DelegatePublicKey,
             GossipData,
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
+            PeerId,
             PreConfirmationMessage,
             ProtocolSignature,
             Sealed,
@@ -108,13 +111,14 @@ impl SharedData {
     }
 }
 
-pub struct Task<Pubkey> {
+pub struct Task<Pubkey, P2P> {
     manager: TxStatusManager,
     subscriptions: Subscriptions,
     read_requests_receiver: mpsc::Receiver<ReadRequest>,
     write_requests_receiver: mpsc::UnboundedReceiver<WriteRequest>,
     shared_data: SharedData,
     signature_verification: SignatureVerification<Pubkey>,
+    p2p: P2P,
 }
 
 pub trait ProtocolPublicKey: Send {
@@ -197,7 +201,7 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
     }
 }
 
-impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
+impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
     fn handle_verified_preconfirmation(
         &mut self,
         sealed: Sealed<Preconfirmations, Bytes64>,
@@ -215,6 +219,8 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
     fn new_preconfirmations_from_p2p(
         &mut self,
         preconfirmations: P2PPreConfirmationMessage,
+        message_id: Vec<u8>,
+        peer_id: PeerId,
     ) {
         match preconfirmations {
             PreConfirmationMessage::Delegate(sealed) => {
@@ -224,7 +230,19 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
                 );
                 // TODO: Report peer for sending invalid delegation
                 //  https://github.com/FuelLabs/fuel-core/issues/2872
-                let _ = self.signature_verification.add_new_delegate(&sealed);
+                if !self.signature_verification.add_new_delegate(&sealed) {
+                    if let Err(e) = self.p2p.notify_gossip_transaction_validity(
+                        GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        },
+                        GossipsubMessageAcceptance::Reject,
+                    ) {
+                        tracing::warn!(
+                            "Failed to notify gossip transaction validity: {e:?}"
+                        );
+                    }
+                }
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
                 tracing::debug!("Received new preconfirmations from peer");
@@ -238,8 +256,17 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
                     // arrived yet, in which case the pre-confirmation will be lost
                     tracing::warn!("Preconfirmation signature verification failed");
 
-                    // TODO: Report peer for sending invalid preconfirmation
-                    //  https://github.com/FuelLabs/fuel-core/issues/2872
+                    if let Err(e) = self.p2p.notify_gossip_transaction_validity(
+                        GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        },
+                        GossipsubMessageAcceptance::Reject,
+                    ) {
+                        tracing::warn!(
+                            "Failed to notify gossip transaction validity: {e:?}"
+                        );
+                    }
                 }
             }
         }
@@ -247,7 +274,9 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
 }
 
 #[async_trait::async_trait]
-impl<Pubkey: ProtocolPublicKey> RunnableService for Task<Pubkey> {
+impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> RunnableService
+    for Task<Pubkey, P2P>
+{
     const NAME: &'static str = "TxStatusManagerTask";
     type SharedData = SharedData;
     type Task = Self;
@@ -266,7 +295,9 @@ impl<Pubkey: ProtocolPublicKey> RunnableService for Task<Pubkey> {
     }
 }
 
-impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
+impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> RunnableTask
+    for Task<Pubkey, P2P>
+{
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
@@ -276,9 +307,9 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
             }
 
             tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
-                if let Some(GossipData { data, .. }) = tx_status_from_p2p {
+                if let Some(GossipData { data, message_id, peer_id }) = tx_status_from_p2p {
                     if let Some(msg) = data {
-                        self.new_preconfirmations_from_p2p(msg);
+                        self.new_preconfirmations_from_p2p(msg, message_id, peer_id);
                     }
                     TaskNextAction::Continue
                 } else {
@@ -327,7 +358,7 @@ pub fn new_service<P2P, Pubkey>(
     p2p: P2P,
     config: Config,
     protocol_pubkey: Pubkey,
-) -> ServiceRunner<Task<Pubkey>>
+) -> ServiceRunner<Task<Pubkey, P2P>>
 where
     P2P: P2PSubscriptions<GossipedStatuses = P2PPreConfirmationGossipData>,
     Pubkey: ProtocolPublicKey,
@@ -359,6 +390,7 @@ where
         write_requests_receiver,
         shared_data,
         signature_verification,
+        p2p,
     })
 }
 
@@ -374,7 +406,7 @@ mod tests {
         },
         TxStatusMessage,
     };
-    use fuel_core_services::Service;
+    use fuel_core_services::{stream::BoxStream, Service};
     use fuel_core_types::{
         ed25519_dalek::{
             Signer,
@@ -409,13 +441,32 @@ mod tests {
         pub protocol_signing_key: SecretKey,
     }
 
-    fn new_task_with_handles() -> (Task<PublicKey>, Handles) {
+    pub struct MockP2P;
+    
+    impl P2PSubscriptions for MockP2P {
+        type GossipedStatuses = P2PPreConfirmationGossipData;
+
+        fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
+            Box::pin(tokio_stream::empty())
+        }
+
+        fn notify_gossip_transaction_validity(
+            &self,
+            _message_info: GossipsubMessageInfo,
+            _validity: GossipsubMessageAcceptance,
+        ) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn new_task_with_handles() -> (Task<PublicKey, MockP2P>, Handles) {
         let (read_requests_sender, read_requests_receiver) = mpsc::channel(1);
         let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
         let shared_data = SharedData {
             read_requests_sender,
             write_requests_sender,
         };
+        let mock_p2p = MockP2P;
         let (sender, receiver) = mpsc::channel(1_000);
         let new_tx_status = Box::pin(ReceiverStream::new(receiver));
         let subscriptions = Subscriptions { new_tx_status };
@@ -433,6 +484,7 @@ mod tests {
             write_requests_receiver,
             shared_data,
             signature_verification,
+            p2p: mock_p2p,
         };
         let handles = Handles {
             pre_confirmation_updates: sender,
