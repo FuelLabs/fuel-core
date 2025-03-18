@@ -712,7 +712,7 @@ async fn submit_and_await_status<'a>(
                 Err(anyhow::anyhow!("Failed to get transaction status").into())
             }
         })
-        .take(10))
+        .take(3))
 }
 
 struct StatusChangeState<'a> {
