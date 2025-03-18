@@ -11,7 +11,7 @@ Fuel client implementation.
 
 | Network  | Version |
 |----------|---------|
-| Fuel Ignition | 0.40.4 |
+| Fuel Ignition | 0.41.9 |
 | Testnet | 0.41.9 |
 | Devnet | 0.41.9 |
 
@@ -75,7 +75,7 @@ git clone https://github.com/FuelLabs/fuel-core.git
 
 Go to the latest release tag for ignition on the `fuel-core` repository :
 ```
-git checkout v0.41.6
+git checkout v0.42.0
 ```
 
 Build your node binary:
