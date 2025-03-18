@@ -235,21 +235,13 @@ pub(super) enum PreconfirmedStatus {
 }
 
 impl PreconfirmedStatus {
-    pub fn outputs<'a>(&'a self) -> Option<impl Iterator<Item = &'a Output>> {
+    pub fn outputs(&self) -> Option<impl Iterator<Item = &'_ Output>> {
         match self {
             PreconfirmedStatus::Success(success) => {
-                if let Some(outputs) = &success.outputs {
-                    Some(outputs.iter())
-                } else {
-                    None
-                }
+                success.outputs.as_ref().map(|outputs| outputs.iter())
             }
             PreconfirmedStatus::Failure(failure) => {
-                if let Some(outputs) = &failure.outputs {
-                    Some(outputs.iter())
-                } else {
-                    None
-                }
+                failure.outputs.as_ref().map(|outputs| outputs.iter())
             }
         }
     }
