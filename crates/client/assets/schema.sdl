@@ -903,11 +903,6 @@ type PreconfirmationFailureStatus {
 	resolvedOutputs: [Output!]
 }
 
-type PreconfirmationSqueezedOutStatus {
-	transactionId: TransactionId!
-	reason: String!
-}
-
 type PreconfirmationSuccessStatus {
 	txPointer: TxPointer!
 	totalGas: U64!
@@ -1318,10 +1313,10 @@ type SubmittedStatus {
 type Subscription {
 	"""
 	Returns a stream of status updates for the given transaction id.
-	If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
-	or [`TransactionStatus::Failed`] the stream will return that and end immediately.
-	If the current status is [`TransactionStatus::Submitted`] this will be returned
-	and the stream will wait for a future update.
+	If the current status is [`TransactionStatus::Success`], [`TransactionStatus::Failed`],
+	or [`TransactionStatus::SqueezedOut`] the stream will return that and end immediately.
+	Other, intermediate statuses will also be returned but the stream will remain active
+	and wait for a future updates.
 	
 	This stream will wait forever so it's advised to use within a timeout.
 	
@@ -1337,13 +1332,13 @@ type Subscription {
 		id: TransactionId!
 	): TransactionStatus!
 	"""
-	Submits transaction to the `TxPool` and await either confirmation or failure.
+	Submits transaction to the `TxPool` and await either success or failure.
 	"""
 	submitAndAwait(tx: HexString!, estimatePredicates: Boolean): TransactionStatus!
 	"""
 	Submits the transaction to the `TxPool` and returns a stream of events.
-	Compared to the `submitAndAwait`, the stream also contains `
-	SubmittedStatus` as an intermediate state.
+	Compared to the `submitAndAwait`, the stream also contains
+	`SubmittedStatus` as an intermediate state.
 	"""
 	submitAndAwaitStatus(tx: HexString!, estimatePredicates: Boolean): TransactionStatus!
 	contractStorageSlots(contractId: ContractId!): StorageSlot!
@@ -1436,7 +1431,7 @@ type TransactionEdge {
 
 scalar TransactionId
 
-union TransactionStatus = SubmittedStatus | SuccessStatus | PreconfirmationSuccessStatus | SqueezedOutStatus | PreconfirmationSqueezedOutStatus | FailureStatus | PreconfirmationFailureStatus
+union TransactionStatus = SubmittedStatus | SuccessStatus | PreconfirmationSuccessStatus | SqueezedOutStatus | FailureStatus | PreconfirmationFailureStatus
 
 type TxParameters {
 	version: TxParametersVersion!

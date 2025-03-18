@@ -3,8 +3,9 @@ FROM rust:1.81.0 AS chef
 RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown
 WORKDIR /build/
 # hadolint ignore=DL3008
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+    && apt-get install -y libclang-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

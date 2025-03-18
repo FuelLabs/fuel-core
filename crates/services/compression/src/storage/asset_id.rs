@@ -6,10 +6,7 @@ use fuel_core_storage::{
         postcard::Postcard,
         raw::Raw,
     },
-    merkle::{
-        column::MerkleizedColumn,
-        sparse::MerkleizedTableColumn,
-    },
+    merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
     Mappable,
 };

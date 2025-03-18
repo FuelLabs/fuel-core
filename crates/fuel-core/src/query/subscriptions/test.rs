@@ -83,10 +83,18 @@ fn squeezed_during_block_production() -> TransactionStatus {
 /// Final indicates that the transaction has reached one of the final statuses (Success, Squeezed, or Failed).
 #[derive(Debug, Clone, PartialEq, Eq, Arbitrary)]
 enum TxStatus {
-    /// The transaction has been submitted
-    Submitted,
+    /// The transaction has not reached a final status
+    NotFinal(NotFinalTxStatus),
     /// The transaction has reached a final status
     Final(FinalTxStatus),
+}
+
+/// Struct representing a submitted transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Arbitrary)]
+enum NotFinalTxStatus {
+    Submitted,
+    PreconfirmationSuccess,
+    PreconfirmationFailure,
 }
 
 /// Represents the final transaction statuses (Success, Squeezed, Failed).
@@ -94,19 +102,11 @@ enum TxStatus {
 enum FinalTxStatus {
     /// The transaction was successfully included in a block.
     Success,
-    /// The transaction has been executed, but the full block has not been produced yet.
-    PreconfirmationSuccess,
     /// The transaction was squeezed out of the txpool (or block)
     /// because it was not valid to include in the block.
     Squeezed,
-    /// Transaction was eligible for execution and inclusion in the block but
-    /// it was squeezed out by block producer.
-    PreconfirmationSqueezedOut,
     /// The transaction failed to execute and was included in a block.
     Failed,
-    /// Transaction was eligible for execution and inclusion in the block but
-    /// it failed during the execution.
-    PreconfirmationFailure,
 }
 
 /// Strategy to generate an Option<TransactionStatus>
@@ -149,12 +149,8 @@ fn input_stream() -> impl Strategy<Value = Vec<TxStatusMessage>> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Arbitrary)]
 struct Error;
 
-/// Struct representing a submitted transaction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Arbitrary)]
-struct Submitted;
-
 /// A model of the transaction status change functions control flow.
-type Flow = ControlFlow<FinalTxStatus, Submitted>;
+type Flow = ControlFlow<FinalTxStatus, NotFinalTxStatus>;
 
 /// The `transaction_status_change_model` function is a simplified version of the real
 /// `transaction_status_change` function. It takes an `Option` and an `Iterator` as input
@@ -182,8 +178,18 @@ fn transaction_status_change_model(
         .try_fold(Vec::new(), |mut out, state| match state {
             TxStatusMessage::Status(status) => match next_state(status) {
                 // If the next state is "Continue" with "Submitted" status, push it to the output vector
-                Flow::Continue(Submitted) => {
-                    out.push(Ok(TxStatus::Submitted));
+                Flow::Continue(not_final_status) => {
+                    match not_final_status {
+                        NotFinalTxStatus::Submitted => {
+                            out.push(Ok(TxStatus::NotFinal(NotFinalTxStatus::Submitted)))
+                        }
+                        NotFinalTxStatus::PreconfirmationSuccess => out.push(Ok(
+                            TxStatus::NotFinal(NotFinalTxStatus::PreconfirmationSuccess),
+                        )),
+                        NotFinalTxStatus::PreconfirmationFailure => out.push(Ok(
+                            TxStatus::NotFinal(NotFinalTxStatus::PreconfirmationFailure),
+                        )),
+                    }
                     ControlFlow::Continue(out)
                 }
                 // If the next state is "Break" with a final status, push it to the output vector
@@ -210,18 +216,20 @@ fn transaction_status_change_model(
 /// The flow continues only for `Submitted` status, otherwise it breaks with appropriate status.
 fn next_state(state: TransactionStatus) -> Flow {
     match state {
-        TransactionStatus::Submitted { .. } => Flow::Continue(Submitted),
+        TransactionStatus::Submitted { .. } => {
+            Flow::Continue(NotFinalTxStatus::Submitted)
+        }
         TransactionStatus::Success { .. } => Flow::Break(FinalTxStatus::Success),
         TransactionStatus::PreConfirmationSuccess { .. } => {
-            Flow::Break(FinalTxStatus::PreconfirmationSuccess)
+            Flow::Continue(NotFinalTxStatus::PreconfirmationSuccess)
         }
         TransactionStatus::Failure { .. } => Flow::Break(FinalTxStatus::Failed),
         TransactionStatus::PreConfirmationFailure { .. } => {
-            Flow::Break(FinalTxStatus::PreconfirmationFailure)
+            Flow::Continue(NotFinalTxStatus::PreconfirmationFailure)
         }
         TransactionStatus::SqueezedOut { .. } => Flow::Break(FinalTxStatus::Squeezed),
         TransactionStatus::PreConfirmationSqueezedOut { .. } => {
-            Flow::Break(FinalTxStatus::PreconfirmationSqueezedOut)
+            Flow::Break(FinalTxStatus::Squeezed)
         }
     }
 }
@@ -283,25 +291,22 @@ impl From<crate::schema::tx::types::TransactionStatus> for TxStatus {
     fn from(status: crate::schema::tx::types::TransactionStatus) -> Self {
         match status {
             crate::schema::tx::types::TransactionStatus::Submitted(_) => {
-                TxStatus::Submitted
+                TxStatus::NotFinal(NotFinalTxStatus::Submitted)
             }
             crate::schema::tx::types::TransactionStatus::Success(_) => {
                 TxStatus::Final(FinalTxStatus::Success)
             }
             crate::schema::tx::types::TransactionStatus::PreconfirmationSuccess(_) => {
-                TxStatus::Final(FinalTxStatus::PreconfirmationSuccess)
+                TxStatus::NotFinal(NotFinalTxStatus::PreconfirmationSuccess)
             }
             crate::schema::tx::types::TransactionStatus::SqueezedOut(_) => {
                 TxStatus::Final(FinalTxStatus::Squeezed)
             }
-            crate::schema::tx::types::TransactionStatus::PreconfirmationSqueezedOut(
-                _,
-            ) => TxStatus::Final(FinalTxStatus::PreconfirmationSqueezedOut),
             crate::schema::tx::types::TransactionStatus::Failure(_) => {
                 TxStatus::Final(FinalTxStatus::Failed)
             }
             crate::schema::tx::types::TransactionStatus::PreconfirmationFailure(_) => {
-                TxStatus::Final(FinalTxStatus::PreconfirmationFailure)
+                TxStatus::NotFinal(NotFinalTxStatus::PreconfirmationFailure)
             }
         }
     }

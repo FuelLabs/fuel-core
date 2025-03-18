@@ -608,10 +608,10 @@ pub struct TxStatusSubscription;
 #[Subscription]
 impl TxStatusSubscription {
     /// Returns a stream of status updates for the given transaction id.
-    /// If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
-    /// or [`TransactionStatus::Failed`] the stream will return that and end immediately.
-    /// If the current status is [`TransactionStatus::Submitted`] this will be returned
-    /// and the stream will wait for a future update.
+    /// If the current status is [`TransactionStatus::Success`], [`TransactionStatus::Failed`],
+    /// or [`TransactionStatus::SqueezedOut`] the stream will return that and end immediately.
+    /// Other, intermediate statuses will also be returned but the stream will remain active
+    /// and wait for a future updates.
     ///
     /// This stream will wait forever so it's advised to use within a timeout.
     ///
@@ -641,7 +641,7 @@ impl TxStatusSubscription {
         )
     }
 
-    /// Submits transaction to the `TxPool` and await either confirmation or failure.
+    /// Submits transaction to the `TxPool` and await either success or failure.
     #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
     async fn submit_and_await<'a>(
         &self,
@@ -657,13 +657,13 @@ impl TxStatusSubscription {
                 .await?;
 
         Ok(subscription
-            .skip_while(|event| matches!(event, Ok(TransactionStatus::Submitted(..))))
+            .skip_while(|event| event.as_ref().map_or(true, |status| !status.is_final()))
             .take(1))
     }
 
     /// Submits the transaction to the `TxPool` and returns a stream of events.
-    /// Compared to the `submitAndAwait`, the stream also contains `
-    /// SubmittedStatus` as an intermediate state.
+    /// Compared to the `submitAndAwait`, the stream also contains
+    /// `SubmittedStatus` as an intermediate state.
     #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
     async fn submit_and_await_status<'a>(
         &self,
