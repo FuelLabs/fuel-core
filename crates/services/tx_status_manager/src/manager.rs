@@ -208,37 +208,12 @@ impl TxStatusManager {
 }
 
 #[cfg(test)]
-#[allow(non_snake_case)]
 mod tests {
-    use std::{
-        collections::HashSet,
-        time::Duration,
-    };
-
-    use futures::StreamExt;
     use test_case::test_case;
 
     use fuel_core_types::{
-        fuel_crypto::rand::{
-            rngs::StdRng,
-            seq::SliceRandom,
-            SeedableRng,
-        },
-        fuel_tx::Bytes32,
         services::txpool::TransactionStatus,
         tai64::Tai64,
-    };
-    use tokio::sync::mpsc;
-    use tokio_stream::wrappers::ReceiverStream;
-
-    use crate::{
-        update_sender::{
-            CreateChannel,
-            Tx,
-            TxStatusChange,
-        },
-        TxStatusMessage,
-        TxStatusStream,
     };
 
     use super::TxStatusManager;

@@ -272,7 +272,6 @@ mod tests {
             },
             preconfirmation::{
                 Preconfirmation,
-                PreconfirmationStatus,
                 Preconfirmations,
             },
             txpool::TransactionStatus,
@@ -545,14 +544,13 @@ mod tests {
         let (sender, receiver) = oneshot::channel();
         status_read
             .send(ReadRequest::GetStatus {
-                tx_id: (*id).into(),
+                tx_id: (*id),
                 sender,
             })
             .await
             .unwrap();
 
-        let response = receiver.await.unwrap();
-        response
+        receiver.await.unwrap()
     }
 
     async fn assert_status<F>(
@@ -566,7 +564,7 @@ mod tests {
             let (sender, receiver) = oneshot::channel();
             status_read
                 .send(ReadRequest::GetStatus {
-                    tx_id: (*id).into(),
+                    tx_id: (*id),
                     sender,
                 })
                 .await
@@ -586,8 +584,6 @@ mod tests {
     }
 
     async fn assert_status_change_notifications(
-        tx_id: Bytes32,
-        tx_status_change: &TxStatusChange,
         validators: &[for<'a> fn(&'a TransactionStatus) -> bool],
         mut stream: BoxStream<'_, TxStatusMessage>,
     ) {
@@ -605,9 +601,7 @@ mod tests {
         }
 
         assert_eq!(received_statuses.len(), validators.len(), "Length mismatch");
-        for (i, (item, &validator)) in
-            received_statuses.iter().zip(validators.iter()).enumerate()
-        {
+        for (item, &validator) in received_statuses.iter().zip(validators.iter()) {
             assert!(validator(item));
         }
     }
@@ -679,22 +673,16 @@ mod tests {
             .await;
 
         assert_status_change_notifications(
-            tx1_id,
-            &handles.tx_status_change,
             &[|s| matches!(s, &TransactionStatus::PreConfirmationSuccess(_))],
             stream_tx1,
         )
         .await;
         assert_status_change_notifications(
-            tx2_id,
-            &handles.tx_status_change,
             &[|s| matches!(s, &TransactionStatus::PreConfirmationSqueezedOut(_))],
             stream_tx2,
         )
         .await;
         assert_status_change_notifications(
-            tx3_id,
-            &handles.tx_status_change,
             &[|s| matches!(s, &TransactionStatus::PreConfirmationFailure(_))],
             stream_tx3,
         )
@@ -901,7 +889,7 @@ mod tests {
 
         // Given
         let tx1_id = [1u8; 32].into();
-        let status_updates = vec![
+        let status_updates = [
             (tx1_id, status::transaction::submitted()),
             (tx1_id, status::transaction::success()),
         ];
@@ -924,8 +912,6 @@ mod tests {
 
         // Then
         assert_status_change_notifications(
-            tx1_id,
-            &handles.tx_status_change,
             &[
                 |s| matches!(s, &TransactionStatus::Submitted(_)),
                 |s| matches!(s, &TransactionStatus::Success(_)),
@@ -992,7 +978,7 @@ mod tests {
 
     #[tokio::main(start_paused = true, flavor = "current_thread")]
     #[allow(clippy::arithmetic_side_effects)]
-    async fn _pruning__correctly_prunes_old_statuses(
+    async fn _run__correctly_prunes_old_statuses(
         ttl: Duration,
         actions: Vec<Action>,
     ) {
@@ -1077,11 +1063,11 @@ mod tests {
 
         #[test]
         #[allow(clippy::arithmetic_side_effects)]
-        fn pruning__correctly_prunes_old_statuses(
+        fn run__correctly_prunes_old_statuses(
             ttl in ttl_strategy(MIN_TTL, MAX_TTL),
             actions in actions_strategy(MIN_ACTIONS, MAX_ACTIONS)
         ) {
-            _pruning__correctly_prunes_old_statuses(ttl, actions);
+            _run__correctly_prunes_old_statuses(ttl, actions);
         }
     }
 }
