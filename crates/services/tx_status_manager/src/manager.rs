@@ -91,7 +91,7 @@ impl TxStatusManager {
         }
     }
 
-    fn is_prunable(status: &TransactionStatus) -> bool {
+    pub(crate) fn is_prunable(status: &TransactionStatus) -> bool {
         !matches!(status, TransactionStatus::Submitted(_))
     }
 
