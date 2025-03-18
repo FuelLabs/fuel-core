@@ -92,7 +92,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - `submit_and_await`
   - `submit_and_await_status`
   
-  The change is backward compatible with all SDKs. The change is not forward-compatible with Rust SDK in the case of the `estiamte_predicates` flag set.
+  The change is backward compatible with all SDKs. The change is not forward-compatible with Rust SDK in the case of the `estimate_predicates` flag set.
 - [2844](https://github.com/FuelLabs/fuel-core/pull/2844): Implement DA compression in `fuel-core-compression-service`.
 - [2845](https://github.com/FuelLabs/fuel-core/pull/2845): New status to manage the pre confirmation status send in `TxUpdateSender`.
 - [2855](https://github.com/FuelLabs/fuel-core/pull/2855): Add an expiration interval check for pending pool and refactor extracted_outputs to not rely on block creation/process sequence.
