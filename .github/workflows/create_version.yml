@@ -50,6 +50,8 @@ jobs:
                 for file in "${files[@]}"; do
                   filename=$(basename "$file" .md)
                   content=$(cat "$file")
+                  # Ident by two spaces every new line
+                  content=$(echo -e "$content" | awk 'NR==1{print $0; next} {print "  " $0}')
                   VERSION_TEXT+="- [${filename}](https://github.com/FuelLabs/fuel-core/pull/${filename}): ${content}\n"
                 done
               fi
