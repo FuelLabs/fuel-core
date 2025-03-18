@@ -406,7 +406,10 @@ mod tests {
         },
         TxStatusMessage,
     };
-    use fuel_core_services::{stream::BoxStream, Service};
+    use fuel_core_services::{
+        stream::BoxStream,
+        Service,
+    };
     use fuel_core_types::{
         ed25519_dalek::{
             Signer,
@@ -442,7 +445,7 @@ mod tests {
     }
 
     pub struct MockP2P;
-    
+
     impl P2PSubscriptions for MockP2P {
         type GossipedStatuses = P2PPreConfirmationGossipData;
 
