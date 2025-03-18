@@ -452,6 +452,19 @@ pub enum TransactionStatus {
 }
 
 impl TransactionStatus {
+    /// Returns `true` if the status is considered "final".
+    pub fn is_final(&self) -> bool {
+        match self {
+            TransactionStatus::Success(_)
+            | TransactionStatus::Failure(_)
+            | TransactionStatus::SqueezedOut(_)
+            | TransactionStatus::PreConfirmationSqueezedOut(_) => true,
+            TransactionStatus::Submitted(_)
+            | TransactionStatus::PreConfirmationSuccess(_)
+            | TransactionStatus::PreConfirmationFailure(_) => false,
+        }
+    }
+
     /// Returns `true` if the status is `Submitted`.
     pub fn is_submitted(&self) -> bool {
         matches!(self, Self::Submitted { .. })
@@ -602,6 +615,14 @@ pub mod statuses {
         fn default() -> Self {
             Self {
                 reason: "Default reason".to_string(),
+            }
+        }
+    }
+
+    impl From<&PreConfirmationSqueezedOut> for SqueezedOut {
+        fn from(value: &PreConfirmationSqueezedOut) -> Self {
+            Self {
+                reason: value.reason.clone(),
             }
         }
     }

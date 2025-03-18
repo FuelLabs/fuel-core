@@ -146,7 +146,6 @@ pub enum TransactionStatus {
     Success(SuccessStatus),
     PreconfirmationSuccess(PreconfirmationSuccessStatus),
     SqueezedOut(SqueezedOutStatus),
-    PreconfirmationSqueezedOut(PreconfirmationSqueezedOutStatus),
     Failure(FailureStatus),
     PreconfirmationFailure(PreconfirmationFailureStatus),
 }
@@ -399,23 +398,6 @@ impl SqueezedOutStatus {
     }
 }
 
-#[derive(Debug)]
-pub struct PreconfirmationSqueezedOutStatus {
-    pub tx_id: TxId,
-    pub status: Arc<txpool::statuses::PreConfirmationSqueezedOut>,
-}
-
-#[Object]
-impl PreconfirmationSqueezedOutStatus {
-    async fn transaction_id(&self) -> TransactionId {
-        self.tx_id.into()
-    }
-
-    async fn reason(&self) -> String {
-        self.status.reason.clone()
-    }
-}
-
 impl TransactionStatus {
     pub fn new(tx_id: TxId, tx_status: TxStatus) -> Self {
         match tx_status {
@@ -438,9 +420,10 @@ impl TransactionStatus {
                 })
             }
             TxStatus::PreConfirmationSqueezedOut(status) => {
-                TransactionStatus::PreconfirmationSqueezedOut(
-                    PreconfirmationSqueezedOutStatus { status, tx_id },
-                )
+                TransactionStatus::SqueezedOut(SqueezedOutStatus {
+                    tx_id,
+                    status: Arc::new(status.as_ref().into()),
+                })
             }
             TxStatus::PreConfirmationFailure(status) => {
                 TransactionStatus::PreconfirmationFailure(PreconfirmationFailureStatus {
@@ -450,34 +433,15 @@ impl TransactionStatus {
             }
         }
     }
-}
 
-impl From<TransactionStatus> for TxStatus {
-    fn from(s: TransactionStatus) -> Self {
-        match s {
-            TransactionStatus::Submitted(SubmittedStatus(timestamp)) => {
-                TxStatus::submitted(timestamp)
-            }
-            TransactionStatus::Success(SuccessStatus { status, .. }) => {
-                TxStatus::Success(status)
-            }
-            TransactionStatus::SqueezedOut(SqueezedOutStatus { status, .. }) => {
-                TxStatus::SqueezedOut(status)
-            }
-            TransactionStatus::Failure(FailureStatus { status, .. }) => {
-                TxStatus::Failure(status)
-            }
-            TransactionStatus::PreconfirmationSuccess(PreconfirmationSuccessStatus {
-                status,
-                ..
-            }) => TxStatus::PreConfirmationSuccess(status),
-            TransactionStatus::PreconfirmationSqueezedOut(
-                PreconfirmationSqueezedOutStatus { status, .. },
-            ) => TxStatus::PreConfirmationSqueezedOut(status),
-            TransactionStatus::PreconfirmationFailure(PreconfirmationFailureStatus {
-                status,
-                ..
-            }) => TxStatus::PreConfirmationFailure(status),
+    pub fn is_final(&self) -> bool {
+        match self {
+            TransactionStatus::Success(_)
+            | TransactionStatus::Failure(_)
+            | TransactionStatus::SqueezedOut(_) => true,
+            TransactionStatus::Submitted(_)
+            | TransactionStatus::PreconfirmationSuccess(_)
+            | TransactionStatus::PreconfirmationFailure(_) => false,
         }
     }
 }
