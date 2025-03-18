@@ -6,9 +6,9 @@ on:
     branches:
       - master
   pull_request:
-    types: [ opened, synchronize, reopened, labeled, unlabeled ]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   release:
-    types: [ published ]
+    types: [published]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -116,6 +116,8 @@ jobs:
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   cargo-verifications:
+    if: >-
+      always() && (needs.check-changelog.result == 'success' || needs.check-changelog.result == null)
     needs:
       - lint-toml-files
       - prevent-openssl
@@ -145,8 +147,7 @@ jobs:
             args: run -p fuel-core --no-default-features
           - command: nextest
             args: run -p fuel-core --lib executor --features wasm-executor
-            env:
-              FUEL_ALWAYS_USE_WASM=true
+            env: FUEL_ALWAYS_USE_WASM=true
           - command: nextest
             args: run -p fuel-core-client --no-default-features
           - command: nextest
@@ -230,7 +231,7 @@ jobs:
           ignore-unpublished-changes: true
 
   cargo-test-kms:
-    if: github.event.repository.fork == false
+    if: github.event.repository.fork == false && always() && (needs.check-changelog.result == 'success' || needs.check-changelog.result == null)
     needs:
       - rustfmt
       - check-changelog
@@ -396,7 +397,7 @@ jobs:
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cross
-          cache-key: '${{ matrix.job.target }}'
+          cache-key: "${{ matrix.job.target }}"
 
       - name: Build fuel-core and fuel-core-keygen
         run: |
