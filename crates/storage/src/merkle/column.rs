@@ -57,23 +57,21 @@ where
     pub const MERKLE_DATA_COLUMNS_START: u32 = u16::MAX as u32;
 
     /// The merkle metadata column
-    pub const MERKLE_METADATA_COLUMN: u32 = {
-        assert!(Self::COUNT <= u32::MAX as usize);
-        // this is fine, because we already performed an assertion above
-        // see https://github.com/rust-lang/rust-clippy/issues/9613
-        #[allow(clippy::cast_possible_truncation)]
-        let column_index = (Self::COUNT as u32).saturating_sub(1);
-        assert!(column_index > 0);
-        column_index
-    };
+    // we set it to 0, since any future column updates will be added after this column
+    pub const MERKLE_METADATA_COLUMN: u32 = 0;
+
+    #[inline]
+    fn with_metadata_offset(column: u32) -> u32 {
+        column.wrapping_add(Self::MERKLE_METADATA_COLUMN + 1)
+    }
 
     /// Returns the `u32` representation of the `Column`.
     pub fn as_u32(&self) -> u32 {
         match self {
-            Self::TableColumn(column) => column.as_u32(),
-            Self::MerkleDataColumn(column) => {
-                Self::MERKLE_DATA_COLUMNS_START.wrapping_add(column.as_u32())
-            }
+            Self::TableColumn(column) => Self::with_metadata_offset(column.as_u32()),
+            Self::MerkleDataColumn(column) => Self::with_metadata_offset(
+                Self::MERKLE_DATA_COLUMNS_START.wrapping_add(column.as_u32()),
+            ),
             Self::MerkleMetadataColumn => Self::MERKLE_METADATA_COLUMN,
         }
     }
