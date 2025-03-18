@@ -87,7 +87,6 @@ use crate::{
 };
 
 pub type PoAService = fuel_core_poa::Service<
-    TxPoolAdapter,
     BlockProducerAdapter,
     BlockImporterAdapter,
     SignMode,
