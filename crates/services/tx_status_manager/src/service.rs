@@ -157,15 +157,12 @@ impl RunnableTask for Task {
             }
 
             tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
-                dbg!("2");
                 if let Some(GossipData { data, .. }) = tx_status_from_p2p {
                     if let Some(msg) = data {
                         self.new_preconfirmations_from_p2p(msg);
                     }
-                    dbg!("2.1");
                     TaskNextAction::Continue
                 } else {
-                    dbg!("2.2");
                     TaskNextAction::Stop
                 }
             }
@@ -264,7 +261,10 @@ mod tests {
             rngs::StdRng,
             SeedableRng,
         },
-        fuel_tx::Bytes32,
+        fuel_tx::{
+            Bytes32,
+            Bytes64,
+        },
         services::{
             p2p::{
                 GossipData,
@@ -277,8 +277,12 @@ mod tests {
             },
             txpool::TransactionStatus,
         },
+        tai64::Tai64,
     };
-    use futures::StreamExt;
+    use futures::{
+        stream::BoxStream,
+        StreamExt,
+    };
     use status::transaction::{
         random_prunable_tx_status,
         random_tx_status,
@@ -343,7 +347,7 @@ mod tests {
 
             pub fn squeezed_out() -> PreconfirmationStatus {
                 PreconfirmationStatus::SqueezedOut {
-                    reason: "fishy transaction".to_string(),
+                    reason: "fishy preconfirmation".to_string(),
                 }
             }
 
@@ -359,12 +363,20 @@ mod tests {
         }
 
         pub(super) mod transaction {
+            use std::sync::Arc;
+
             use fuel_core_types::{
                 fuel_crypto::rand::{
                     rngs::StdRng,
                     seq::SliceRandom,
                 },
-                services::txpool::TransactionStatus,
+                services::txpool::{
+                    statuses::{
+                        PreConfirmationFailure,
+                        PreConfirmationSuccess,
+                    },
+                    TransactionStatus,
+                },
                 tai64::Tai64,
             };
 
@@ -379,7 +391,14 @@ mod tests {
             }
 
             pub fn preconfirmation_success() -> TransactionStatus {
-                TransactionStatus::PreConfirmationSuccess(Default::default())
+                let inner = PreConfirmationSuccess {
+                    tx_pointer: Default::default(),
+                    total_gas: Default::default(),
+                    total_fee: Default::default(),
+                    receipts: Some(vec![]),
+                    outputs: Some(vec![]),
+                };
+                TransactionStatus::PreConfirmationSuccess(Arc::new(inner))
             }
 
             pub fn squeezed_out() -> TransactionStatus {
@@ -397,7 +416,15 @@ mod tests {
             }
 
             pub fn preconfirmation_failure() -> TransactionStatus {
-                TransactionStatus::PreConfirmationFailure(Default::default())
+                let inner = PreConfirmationFailure {
+                    tx_pointer: Default::default(),
+                    total_gas: Default::default(),
+                    total_fee: Default::default(),
+                    receipts: Some(vec![]),
+                    outputs: Some(vec![]),
+                    reason: "None".to_string(),
+                };
+                TransactionStatus::PreConfirmationFailure(Arc::new(inner))
             }
 
             pub fn all_statuses() -> [TransactionStatus; 7] {
@@ -546,7 +573,6 @@ mod tests {
                 .unwrap();
 
             let response = receiver.await.unwrap();
-            dbg!(&response);
             assert!(pred(response));
         }
     }
@@ -563,11 +589,8 @@ mod tests {
         tx_id: Bytes32,
         tx_status_change: &TxStatusChange,
         validators: &[for<'a> fn(&'a TransactionStatus) -> bool],
+        mut stream: BoxStream<'_, TxStatusMessage>,
     ) {
-        let mut stream = tx_status_change
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx_id)
-            .unwrap();
         let mut received_statuses = vec![];
         let timeout_duration = Duration::from_millis(250);
         while let Ok(Some(message)) =
@@ -585,21 +608,15 @@ mod tests {
         for (i, (item, &validator)) in
             received_statuses.iter().zip(validators.iter()).enumerate()
         {
-            assert!(
-                validator(item),
-                "Validation failed at index {}: {:?}",
-                i,
-                item
-            );
+            assert!(validator(item));
         }
     }
 
-    /*
-    P2P preparation
-
-    #[tokio::test]
-    async fn status_management__can_register_preconfirmation_messages() {
-        let (task, handles) = new_task_with_handles();
+    #[tokio::test(start_paused = true)]
+    async fn run__can_process_preconfirmation_messages_from_p2p() {
+        let (task, handles) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
 
         let (delegate_signing_key, _delegate_verifying_key) = delegate_key_pair();
         let expiration = Tai64(u64::MAX);
@@ -609,10 +626,25 @@ mod tests {
         let tx2_id = [2u8; 32].into();
         let tx3_id = [3u8; 32].into();
         let tx_ids = vec![
-            (tx1_id, success()),
-            (tx2_id, squeezed_out()),
-            (tx3_id, failure()),
+            (tx1_id, status::preconfirmation::success()),
+            (tx2_id, status::preconfirmation::squeezed_out()),
+            (tx3_id, status::preconfirmation::failure()),
         ];
+        let stream_tx1 = handles
+            .tx_status_change
+            .update_sender
+            .try_subscribe::<MpscChannel>(tx1_id)
+            .unwrap();
+        let stream_tx2 = handles
+            .tx_status_change
+            .update_sender
+            .try_subscribe::<MpscChannel>(tx2_id)
+            .unwrap();
+        let stream_tx3 = handles
+            .tx_status_change
+            .update_sender
+            .try_subscribe::<MpscChannel>(tx3_id)
+            .unwrap();
         let preconfirmations = tx_ids
             .clone()
             .into_iter()
@@ -629,25 +661,45 @@ mod tests {
         let sealed = Sealed { entity, signature };
         let inner = P2PPreConfirmationMessage::Preconfirmations(sealed);
 
-        let service = ServiceRunner::new(task);
-        service.start_and_await().await.unwrap();
-
         // When
-        handles.write_requests_sender.send(inner).unwrap();
+        handles
+            .subscriptions_sender
+            .send(GossipData::new(inner, vec![], vec![]))
+            .await
+            .unwrap();
+        tokio::time::advance(Duration::from_millis(100)).await;
 
         // Then
-        // TODO: Also check statuses themselves, not only presence
-        // for (tx_id, _) in tx_ids {
-        //     assert!(
-        //         task.manager.status(&tx_id).is_some(),
-        //         "tx_id {:?} should be present",
-        //         tx_id
-        //     );
-        // }
+        let expected_statuses = vec![
+            (tx1_id, status::transaction::preconfirmation_success()),
+            (tx2_id, status::transaction::preconfirmation_squeezed_out()),
+            (tx3_id, status::transaction::preconfirmation_failure()),
+        ];
+        assert_presence_with_status(&handles.read_requests_sender, expected_statuses)
+            .await;
 
-        // Also check notifications...
+        assert_status_change_notifications(
+            tx1_id,
+            &handles.tx_status_change,
+            &[|s| matches!(s, &TransactionStatus::PreConfirmationSuccess(_))],
+            stream_tx1,
+        )
+        .await;
+        assert_status_change_notifications(
+            tx2_id,
+            &handles.tx_status_change,
+            &[|s| matches!(s, &TransactionStatus::PreConfirmationSqueezedOut(_))],
+            stream_tx2,
+        )
+        .await;
+        assert_status_change_notifications(
+            tx3_id,
+            &handles.tx_status_change,
+            &[|s| matches!(s, &TransactionStatus::PreConfirmationFailure(_))],
+            stream_tx3,
+        )
+        .await;
     }
-    */
 
     #[tokio::test(start_paused = true)]
     async fn run__can_store_and_retrieve_all_statuses() {
@@ -853,6 +905,11 @@ mod tests {
             (tx1_id, status::transaction::submitted()),
             (tx1_id, status::transaction::success()),
         ];
+        let stream = handles
+            .tx_status_change
+            .update_sender
+            .try_subscribe::<MpscChannel>(tx1_id)
+            .unwrap();
 
         // When
         status_updates.iter().for_each(|(tx_id, status)| {
@@ -873,6 +930,7 @@ mod tests {
                 |s| matches!(s, &TransactionStatus::Submitted(_)),
                 |s| matches!(s, &TransactionStatus::Success(_)),
             ],
+            stream,
         )
         .await;
 
@@ -985,7 +1043,7 @@ mod tests {
 
         // Trigger the final pruning, making sure we use ID that is not
         // in the pool
-        force_pruning(&handles.write_requests_sender);
+        force_pruning(&handles.write_requests_sender).await;
         update_times.insert(pruning_tx_id().into(), Instant::now());
 
         // Then
@@ -1001,7 +1059,8 @@ mod tests {
                 .map(|(tx_id, _)| (*tx_id).into())
                 .chain(non_prunable_ids.iter().cloned().map(Into::into))
                 .collect(),
-        );
+        )
+        .await;
         assert_absence(
             &handles.read_requests_sender,
             not_recent_tx_ids
@@ -1009,7 +1068,8 @@ mod tests {
                 .filter(|(tx_id, _)| !non_prunable_ids.contains(*tx_id))
                 .map(|(tx_id, _)| (*tx_id).into())
                 .collect(),
-        );
+        )
+        .await;
     }
 
     proptest! {
