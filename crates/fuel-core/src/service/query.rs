@@ -65,9 +65,7 @@ impl FuelService {
             .consensus_parameters
             .chain_id());
         let stream = self.transaction_status_change(id).await?.filter(|status| {
-            futures::future::ready(
-                status.as_ref().is_ok_and(|status| status.is_final()),
-            )
+            futures::future::ready(status.as_ref().is_ok_and(|status| status.is_final()))
         });
         futures::pin_mut!(stream);
         self.submit(tx).await?;

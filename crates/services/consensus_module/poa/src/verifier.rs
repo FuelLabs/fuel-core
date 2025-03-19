@@ -25,7 +25,8 @@ pub fn verify_consensus(
             let m = id.as_message();
             consensus
                 .signature
-                .recover(m).is_ok_and(|k| Input::owner(&k) == *signing_key)
+                .recover(m)
+                .is_ok_and(|k| Input::owner(&k) == *signing_key)
         }
         ConsensusConfig::PoAV2(poa) => {
             let id = header.id();
@@ -33,7 +34,8 @@ pub fn verify_consensus(
             let signing_key = poa.address_for_height(*header.height());
             consensus
                 .signature
-                .recover(m).is_ok_and(|k| Input::owner(&k) == signing_key)
+                .recover(m)
+                .is_ok_and(|k| Input::owner(&k) == signing_key)
         }
     }
 }
