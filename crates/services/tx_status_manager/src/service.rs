@@ -310,7 +310,6 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
                         TaskNextAction::Continue
                     }
                     Some(ReadRequest::Subscribe { tx_id, sender }) => {
-                        // TODO[RC]: This part not tested by TxStatusManager service tests yet.
                         let result = self.manager.tx_update_subscribe(tx_id);
                         let _ = sender.send(result);
                         TaskNextAction::Continue
@@ -467,7 +466,6 @@ mod tests {
         pub pre_confirmation_updates: mpsc::Sender<GossipData<P2PPreConfirmationMessage>>,
         pub write_requests_sender: mpsc::UnboundedSender<WriteRequest>,
         pub read_requests_sender: mpsc::Sender<ReadRequest>,
-        pub tx_status_change: TxStatusChange,
         pub update_sender: UpdateSender,
         pub protocol_signing_key: SecretKey,
     }
@@ -600,7 +598,6 @@ mod tests {
 
         let handles = Handles {
             pre_confirmation_updates: sender,
-            tx_status_change,
             write_requests_sender,
             read_requests_sender,
             update_sender,
@@ -793,6 +790,16 @@ mod tests {
             let response = receiver.await.unwrap();
             assert!(pred(response));
         }
+    }
+
+    async fn subscribe_to_status_change(
+        tx_id: Bytes32,
+        read_requests_sender: &mpsc::Sender<ReadRequest>,
+    ) -> BoxStream<'_, TxStatusMessage> {
+        let (sender, receiver) = oneshot::channel();
+        let request = ReadRequest::Subscribe { tx_id, sender };
+        read_requests_sender.send(request).await.unwrap();
+        receiver.await.unwrap().unwrap()
     }
 
     async fn assert_presence(status_read: &mpsc::Sender<ReadRequest>, txs: Vec<Bytes32>) {
@@ -1043,11 +1050,8 @@ mod tests {
             (tx1_id, status::transaction::submitted()),
             (tx1_id, status::transaction::success()),
         ];
-        let stream = handles
-            .tx_status_change
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx1_id)
-            .unwrap();
+        let stream =
+            subscribe_to_status_change(tx1_id, &handles.read_requests_sender).await;
 
         // When
         send_status_updates(&status_updates, &handles.write_requests_sender).await;
@@ -1076,16 +1080,10 @@ mod tests {
         let tx2_id = [2u8; 32].into();
         let tx_ids_and_reason =
             vec![(tx1_id, "reason_1".into()), (tx2_id, "reason_2".into())];
-        let stream_tx1 = handles
-            .tx_status_change
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx1_id)
-            .unwrap();
-        let stream_tx2 = handles
-            .tx_status_change
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx2_id)
-            .unwrap();
+        let stream_tx1 =
+            subscribe_to_status_change(tx1_id, &handles.read_requests_sender).await;
+        let stream_tx2 =
+            subscribe_to_status_change(tx2_id, &handles.read_requests_sender).await;
 
         // When
         handles
@@ -1125,11 +1123,8 @@ mod tests {
         let tx1_id = [1u8; 32].into();
         let tx_ids_and_reason =
             vec![(tx1_id, "reason_1".into()), (tx1_id, "reason_2".into())];
-        let stream_tx1 = handles
-            .tx_status_change
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx1_id)
-            .unwrap();
+        let stream_tx1 =
+            subscribe_to_status_change(tx1_id, &handles.read_requests_sender).await;
 
         // When
         handles
