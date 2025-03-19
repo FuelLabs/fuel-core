@@ -54,9 +54,9 @@ use fuel_core_types::{
         interpreter::MemoryInstance,
         predicate::EmptyStorage,
     },
-    services::txpool::{
-        ArcPoolTx,
-        TransactionStatus,
+    services::{
+        transaction_status::TransactionStatus,
+        txpool::ArcPoolTx,
     },
 };
 use parking_lot::RwLock;

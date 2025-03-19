@@ -17,10 +17,12 @@ use fuel_core_types::{
         field::BlobId,
         TxId,
     },
-    services::txpool::{
-        ArcPoolTx,
-        PoolTransaction,
-        TransactionStatus,
+    services::{
+        transaction_status::TransactionStatus,
+        txpool::{
+            ArcPoolTx,
+            PoolTransaction,
+        },
     },
     tai64::Tai64,
 };

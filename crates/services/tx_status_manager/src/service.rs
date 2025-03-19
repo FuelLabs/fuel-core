@@ -41,7 +41,7 @@ use fuel_core_types::{
             Preconfirmation,
             Preconfirmations,
         },
-        txpool::TransactionStatus,
+        transaction_status::TransactionStatus,
     },
     tai64::Tai64,
 };
@@ -396,9 +396,13 @@ mod tests {
                 PreconfirmationStatus,
                 Preconfirmations,
             },
+            transaction_status,
         },
     };
-    use std::time::Duration;
+    use std::{
+        sync::Arc,
+        time::Duration,
+    };
     use tokio_stream::wrappers::ReceiverStream;
 
     const TTL: Duration = Duration::from_secs(4);
@@ -548,13 +552,15 @@ mod tests {
             .into_iter()
             .map(|tx_id| Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: PreconfirmationStatus::Success(Arc::new(
+                    transaction_status::statuses::PreConfirmationSuccess {
+                        tx_pointer: Default::default(),
+                        total_gas: 0,
+                        total_fee: 0,
+                        receipts: Some(vec![]),
+                        outputs: Some(vec![]),
+                    },
+                )),
             })
             .collect();
         let (delegate_signing_key, delegate_verifying_key) = delegate_key_pair();
@@ -611,13 +617,15 @@ mod tests {
             .into_iter()
             .map(|tx_id| Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: PreconfirmationStatus::Success(Arc::new(
+                    transaction_status::statuses::PreConfirmationSuccess {
+                        tx_pointer: Default::default(),
+                        total_gas: 0,
+                        total_fee: 0,
+                        receipts: Some(vec![]),
+                        outputs: Some(vec![]),
+                    },
+                )),
             })
             .collect();
         let (delegate_signing_key, _) = delegate_key_pair();
@@ -664,13 +672,15 @@ mod tests {
             .into_iter()
             .map(|tx_id| Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: PreconfirmationStatus::Success(Arc::new(
+                    transaction_status::statuses::PreConfirmationSuccess {
+                        tx_pointer: Default::default(),
+                        total_gas: 0,
+                        total_fee: 0,
+                        receipts: Some(vec![]),
+                        outputs: Some(vec![]),
+                    },
+                )),
             })
             .collect();
         let (delegate_signing_key, delegate_verifying_key) = delegate_key_pair();
@@ -727,13 +737,15 @@ mod tests {
             .into_iter()
             .map(|tx_id| Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: PreconfirmationStatus::Success(Arc::new(
+                    transaction_status::statuses::PreConfirmationSuccess {
+                        tx_pointer: Default::default(),
+                        total_gas: 0,
+                        total_fee: 0,
+                        receipts: Some(vec![]),
+                        outputs: Some(vec![]),
+                    },
+                )),
             })
             .collect();
         let (delegate_signing_key, delegate_verifying_key) = delegate_key_pair();
@@ -797,13 +809,15 @@ mod tests {
             .into_iter()
             .map(|tx_id| Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: PreconfirmationStatus::Success(Arc::new(
+                    transaction_status::statuses::PreConfirmationSuccess {
+                        tx_pointer: Default::default(),
+                        total_gas: 0,
+                        total_fee: 0,
+                        receipts: Some(vec![]),
+                        outputs: Some(vec![]),
+                    },
+                )),
             })
             .collect();
         let valid_pre_confirmation_message = valid_pre_confirmation_signature(

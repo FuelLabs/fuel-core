@@ -81,10 +81,8 @@ use fuel_core_types::{
             PeerId,
             TransactionGossipData,
         },
-        txpool::{
-            ArcPoolTx,
-            TransactionStatus,
-        },
+        transaction_status::TransactionStatus,
+        txpool::ArcPoolTx,
     },
     tai64::Tai64,
 };

@@ -5,7 +5,7 @@ use std::{
 
 use fuel_core_types::{
     fuel_tx::Bytes32,
-    services::txpool::TransactionStatus,
+    services::transaction_status::TransactionStatus,
 };
 use proptest::{
     prelude::*,

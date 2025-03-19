@@ -58,7 +58,7 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             PeerId,
         },
-        txpool::TransactionStatus,
+        transaction_status::TransactionStatus,
     },
 };
 use std::{

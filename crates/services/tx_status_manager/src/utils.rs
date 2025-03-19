@@ -2,7 +2,7 @@ use fuel_core_types::{
     blockchain::block::Block,
     services::{
         executor::TransactionExecutionResult,
-        txpool::TransactionExecutionStatus,
+        transaction_status::TransactionExecutionStatus,
     },
 };
 

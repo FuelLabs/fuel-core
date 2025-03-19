@@ -14,7 +14,7 @@ use fuel_core_types::{
         Bytes32,
         TxId,
     },
-    services::txpool::TransactionStatus,
+    services::transaction_status::TransactionStatus,
 };
 
 use crate::{
@@ -232,7 +232,7 @@ mod tests {
             SeedableRng,
         },
         fuel_tx::Bytes32,
-        services::txpool::TransactionStatus,
+        services::transaction_status::TransactionStatus,
         tai64::Tai64,
     };
 

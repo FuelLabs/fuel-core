@@ -8,11 +8,11 @@ use tai64::Tai64;
 
 #[cfg(not(feature = "std"))]
 use alloc::{
-    string::String,
+    sync::Arc,
     vec::Vec,
 };
 
-use super::txpool;
+use super::transaction_status;
 /// A collection of pre-confirmations that have been signed by a delegate
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -34,28 +34,14 @@ pub struct Preconfirmation {
     pub status: PreconfirmationStatus,
 }
 
-#[cfg(feature = "std")]
 /// Status of a transaction that has been pre-confirmed by block producer
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PreconfirmationStatus {
     /// Transaction was squeezed out by the tx pool
-    SqueezedOut(Arc<txpool::statuses::PreConfirmationSqueezedOut>),
+    SqueezedOut(Arc<transaction_status::statuses::PreConfirmationSqueezedOut>),
     /// Transaction has been confirmed and will be included in block_height
-    Success(Arc<txpool::statuses::PreConfirmationSuccess>),
+    Success(Arc<transaction_status::statuses::PreConfirmationSuccess>),
     /// Transaction will not be included in a block, rejected at `block_height`
-    Failure(Arc<txpool::statuses::PreConfirmationFailure>),
-}
-
-#[cfg(not(feature = "std"))]
-/// Status of a transaction that has been pre-confirmed by block producer
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum PreconfirmationStatus {
-    /// Transaction was squeezed out by the tx pool
-    SqueezedOut(txpool::statuses::PreConfirmationSqueezedOut),
-    /// Transaction has been confirmed and will be included in block_height
-    Success(txpool::statuses::PreConfirmationSuccess),
-    /// Transaction will not be included in a block, rejected at `block_height`
-    Failure(txpool::statuses::PreConfirmationFailure),
+    Failure(Arc<transaction_status::statuses::PreConfirmationFailure>),
 }

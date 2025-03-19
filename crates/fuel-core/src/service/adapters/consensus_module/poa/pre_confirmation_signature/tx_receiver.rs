@@ -51,10 +51,18 @@ impl TxReceiver for PreconfirmationsReceiver {
 mod tests {
     #![allow(non_snake_case)]
 
+    use std::sync::Arc;
+
     use super::*;
     use fuel_core_types::{
         fuel_tx::TxId,
-        services::preconfirmation::PreconfirmationStatus,
+        services::{
+            preconfirmation::PreconfirmationStatus,
+            transaction_status::statuses::{
+                PreConfirmationSqueezedOut,
+                PreConfirmationSuccess,
+            },
+        },
     };
 
     #[tokio::test]
@@ -63,19 +71,23 @@ mod tests {
         let txs = vec![
             Preconfirmation {
                 tx_id: TxId::default(),
-                status: PreconfirmationStatus::SqueezedOut {
-                    reason: "Dummy reason".to_string(),
-                },
+                status: PreconfirmationStatus::SqueezedOut(Arc::new(
+                    PreConfirmationSqueezedOut {
+                        reason: "Dummy reason".to_string(),
+                    },
+                )),
             },
             Preconfirmation {
                 tx_id: TxId::default(),
-                status: PreconfirmationStatus::Success {
-                    tx_pointer: Default::default(),
-                    total_gas: 0,
-                    total_fee: 0,
-                    receipts: vec![],
-                    outputs: vec![],
-                },
+                status: PreconfirmationStatus::Success(Arc::new(
+                    PreConfirmationSuccess {
+                        tx_pointer: Default::default(),
+                        total_gas: 0,
+                        total_fee: 0,
+                        receipts: Some(vec![]),
+                        outputs: Some(vec![]),
+                    },
+                )),
             },
         ];
 
