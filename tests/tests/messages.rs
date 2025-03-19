@@ -487,9 +487,7 @@ async fn can_get_message_proof() {
                 .message_proof
                 .proof_set
                 .iter()
-                .cloned()
-                .map(Bytes32::from)
-                .collect();
+                .cloned().collect();
             assert!(verify_merkle(
                 result.message_block_header.message_outbox_root,
                 &generated_message_id,
@@ -521,9 +519,7 @@ async fn can_get_message_proof() {
                 .block_proof
                 .proof_set
                 .iter()
-                .cloned()
-                .map(Bytes32::from)
-                .collect();
+                .cloned().collect();
             let blocks_count = result.commit_block_header.height;
             assert!(verify_merkle(
                 result.commit_block_header.prev_root,

@@ -36,7 +36,7 @@ impl<'a, Description> ChangesIterator<'a, Description> {
     }
 }
 
-impl<'a, Column> KeyValueInspect for ChangesIterator<'a, Column>
+impl<Column> KeyValueInspect for ChangesIterator<'_, Column>
 where
     Column: StorageColumn,
 {
@@ -80,7 +80,7 @@ where
     }
 }
 
-impl<'a, Column> IterableStore for ChangesIterator<'a, Column>
+impl<Column> IterableStore for ChangesIterator<'_, Column>
 where
     Column: StorageColumn,
 {

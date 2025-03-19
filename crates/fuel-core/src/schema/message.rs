@@ -117,9 +117,7 @@ impl MessageQuery {
 
                 let messages = messages.map(|result| {
                     result
-                        .map(|message| ((*message.nonce()).into(), message.into()))
-                        .map_err(Into::into)
-                });
+                        .map(|message| ((*message.nonce()).into(), message.into()))});
 
                 Ok(messages)
             },

@@ -239,12 +239,12 @@ impl KeypairArg {
         let path = PathBuf::from_str(s);
         let Ok(pathbuf) = path;
         if pathbuf.exists() {
-            return Ok(KeypairArg::Path(pathbuf))
+            Ok(KeypairArg::Path(pathbuf))
         } else {
-            return Err(anyhow!(
+            Err(anyhow!(
                 "path `{pathbuf:?}` does not exist for keypair argument"
             ))
-        };
+        }
     }
 }
 

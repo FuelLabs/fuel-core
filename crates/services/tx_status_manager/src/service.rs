@@ -170,8 +170,7 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
         let message = Message::new(&bytes);
         let expected_address = self.protocol_pubkey.latest_address();
         let verified = signature
-            .recover(&message)
-            .map_or(false, |pubkey| Input::owner(&pubkey) == expected_address);
+            .recover(&message).is_ok_and(|pubkey| Input::owner(&pubkey) == expected_address);
         self.remove_expired_delegates();
         if verified {
             self.delegate_keys
