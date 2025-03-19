@@ -134,3 +134,4 @@ fault-proving = [
   "fuel-core-importer/fault-proving",
   "fuel-core-poa/fault-proving",
 ]
+serde = []
