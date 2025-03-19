@@ -293,7 +293,6 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
                         TaskNextAction::Continue
                     }
                     Some(WriteRequest::NotifySkipped { tx_ids_and_reason }) => {
-                        // TODO[RC]: This part not tested by TxStatusManager service tests yet.
                         self.manager.notify_skipped_txs(tx_ids_and_reason);
                         TaskNextAction::Continue
                     }
@@ -406,7 +405,10 @@ mod tests {
                 Preconfirmation,
                 Preconfirmations,
             },
-            txpool::TransactionStatus,
+            txpool::{
+                statuses::SqueezedOut,
+                TransactionStatus,
+            },
         },
         tai64::Tai64,
     };
@@ -1062,24 +1064,87 @@ mod tests {
 
         service.stop_and_await().await.unwrap();
     }
+
+    #[tokio::test]
+    async fn run__notifies_about_skipped_txs() {
+        let (task, handles) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+        let tx2_id = [2u8; 32].into();
+        let tx_ids_and_reason =
+            vec![(tx1_id, "reason_1".into()), (tx2_id, "reason_2".into())];
+        let stream_tx1 = handles
+            .tx_status_change
+            .update_sender
+            .try_subscribe::<MpscChannel>(tx1_id)
+            .unwrap();
+        let stream_tx2 = handles
+            .tx_status_change
+            .update_sender
+            .try_subscribe::<MpscChannel>(tx2_id)
+            .unwrap();
+
         // When
-        status_updates.iter().for_each(|(tx_id, status)| {
-            handles
-                .write_requests_sender
-                .send(WriteRequest::UpdateStatus {
-                    tx_id: *tx_id,
-                    status: status.clone(),
-                })
-                .unwrap();
-        });
+        handles
+            .write_requests_sender
+            .send(WriteRequest::NotifySkipped { tx_ids_and_reason })
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Then
         assert_status_change_notifications(
-            &[
-                |s| matches!(s, &TransactionStatus::Submitted(_)),
-                |s| matches!(s, &TransactionStatus::Success(_)),
-            ],
-            stream,
+            &[|s| matches!(s, TransactionStatus::SqueezedOut(reason) if **reason == SqueezedOut {
+                reason: "Transaction has been skipped during block insertion: reason_1"
+                    .to_string(),
+            })],
+            stream_tx1,
+        )
+        .await;
+        assert_status_change_notifications(
+            &[|s| matches!(s, TransactionStatus::SqueezedOut(reason) if **reason == SqueezedOut {
+                reason: "Transaction has been skipped during block insertion: reason_2"
+                    .to_string(),
+            })],
+            stream_tx2,
+        )
+        .await;
+
+        service.stop_and_await().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn run__notifies_about_skipped_txs__single_notification_per_tx_id() {
+        let (task, handles) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Given
+        let tx1_id = [1u8; 32].into();
+        let tx_ids_and_reason =
+            vec![(tx1_id, "reason_1".into()), (tx1_id, "reason_2".into())];
+        let stream_tx1 = handles
+            .tx_status_change
+            .update_sender
+            .try_subscribe::<MpscChannel>(tx1_id)
+            .unwrap();
+
+        // When
+        handles
+            .write_requests_sender
+            .send(WriteRequest::NotifySkipped { tx_ids_and_reason })
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Then
+        assert_status_change_notifications(
+            &[|s| matches!(s, TransactionStatus::SqueezedOut(reason) if **reason == SqueezedOut {
+                reason: "Transaction has been skipped during block insertion: reason_1"
+                    .to_string(),
+            })],
+            stream_tx1,
         )
         .await;
 
