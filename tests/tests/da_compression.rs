@@ -185,6 +185,6 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
         .da_compressed_block(block_height)
         .await
         .unwrap()
-        .unwrap();
+        .expect("Compressed block not available from validator");
     let _: VersionedCompressedBlock = postcard::from_bytes(&compressed_block).unwrap();
 }
