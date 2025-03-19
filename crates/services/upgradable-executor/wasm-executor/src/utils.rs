@@ -134,6 +134,7 @@ pub enum ReturnType {
 /// versions of the return without introducing new host functions.
 #[cfg(not(feature = "std"))]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum ReturnType {
     /// WASM executor doesn't use this variant, so from its perspective it is empty.
     ExecutionV0,
