@@ -14,11 +14,7 @@ use fuel_core_gas_price_service::v1::{
     uninitialized_task::new_gas_price_service_v1,
 };
 
-#[cfg(feature = "p2p")]
-use fuel_core_poa::pre_confirmation_signature_service::PreConfirmationSignatureTask;
 use fuel_core_poa::Trigger;
-#[cfg(feature = "p2p")]
-use fuel_core_services::ServiceRunner;
 use fuel_core_storage::{
     self,
     transactional::AtomicView,
@@ -32,10 +28,7 @@ use crate::relayer::Config as RelayerConfig;
 
 #[cfg(feature = "p2p")]
 use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
-    key_generator::{
-        Ed25519Key,
-        Ed25519KeyGenerator,
-    },
+    key_generator::Ed25519KeyGenerator,
     trigger::TimeBasedTrigger,
     tx_receiver::PreconfirmationsReceiver,
 };
@@ -327,7 +320,7 @@ pub fn init_sub_services(
         tracing::warn!("Disabled block production because of unavailable signer");
     }
 
-    let signer = Arc::new(FuelBlockSigner::new(config.consensus_signer.clone()));
+    let signer = FuelBlockSigner::new(config.consensus_signer.clone());
 
     #[cfg(feature = "shared-sequencer")]
     let shared_sequencer = {
@@ -336,7 +329,7 @@ pub fn init_sub_services(
         fuel_core_shared_sequencer::service::new_service(
             importer_adapter.clone(),
             config,
-            signer.clone(),
+            Arc::new(signer.clone()),
         )?
     };
 
@@ -349,18 +342,7 @@ pub fn init_sub_services(
 
     #[cfg(feature = "p2p")]
     #[allow(clippy::type_complexity)]
-    let pre_confirmation_service: Option<
-        ServiceRunner<
-            PreConfirmationSignatureTask<
-                PreconfirmationsReceiver,
-                P2PAdapter,
-                FuelBlockSigner,
-                Ed25519KeyGenerator,
-                Ed25519Key,
-                TimeBasedTrigger<SystemTime>,
-            >,
-        >,
-    > = production_enabled
+    let pre_confirmation_service = production_enabled
         .then(|| {
             fuel_core_poa::pre_confirmation_signature_service::new_service(
                 config_preconfirmation.clone(),
@@ -386,7 +368,7 @@ pub fn init_sub_services(
             producer_adapter.clone(),
             importer_adapter.clone(),
             p2p_adapter.clone(),
-            signer,
+            Arc::new(signer),
             predefined_blocks,
             SystemTime,
             block_production_ready_signal,

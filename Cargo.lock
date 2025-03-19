@@ -3811,7 +3811,6 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.42.0",
- "futures",
  "mockall",
  "rand 0.8.5",
  "serde",

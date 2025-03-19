@@ -487,6 +487,7 @@ impl TxStatusManagerAdapter {
     }
 }
 
+#[derive(Clone)]
 pub struct FuelBlockSigner {
     mode: SignMode,
 }
