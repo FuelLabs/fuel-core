@@ -36,7 +36,7 @@ pub trait ExtractItem: Send + Sync + 'static {
     fn starts_with(item: &Self::Item, prefix: &[u8]) -> bool;
 }
 
-impl<'a, D: DBAccess, R> Iterator for RocksDBKeyIterator<'a, D, R>
+impl<D: DBAccess, R> Iterator for RocksDBKeyIterator<'_, D, R>
 where
     R: ExtractItem,
 {

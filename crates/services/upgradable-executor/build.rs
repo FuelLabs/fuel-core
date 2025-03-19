@@ -17,6 +17,21 @@ fn main() {
 
 #[cfg(feature = "wasm-executor")]
 fn build_wasm() {
+    // Check if wasm-tools is available
+    if !Command::new("wasm-tools")
+        .arg("--version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+    {
+        println!("cargo:warning=wasm-tools not found! This is required for building the WASM executor.");
+        println!("cargo:warning=Please install wasm-tools using one of these methods:");
+        println!("cargo:warning=  - cargo install wasm-tools");
+        println!("cargo:warning=  - brew install wasm-tools       (on macOS)");
+        println!("cargo:warning=  - your system package manager");
+        panic!("wasm-tools is required but not found");
+    }
+
     let out_dir = env::var_os("OUT_DIR").expect("The output directory is not set");
     let dest_path = Path::new(&out_dir);
     let bin_dir = format!("--root={}", dest_path.to_string_lossy());
@@ -79,6 +94,8 @@ fn build_wasm() {
     cargo.env("CARGO_PROFILE_RELEASE_OPT_LEVEL", "3");
     cargo.env("CARGO_PROFILE_RELEASE_STRIP", "symbols");
     cargo.env("CARGO_PROFILE_RELEASE_DEBUG", "false");
+    cargo.env("RUSTFLAGS", "-Ctarget-cpu=mvp");
+
     if env::var("CARGO_CFG_COVERAGE").is_ok() {
         // wasm doesn't support coverage
         cargo.env("CARGO_ENCODED_RUSTFLAGS", "");
@@ -100,6 +117,61 @@ fn build_wasm() {
             panic!("\n{:#?}", err);
         }
     }
+
+    // Canonicalize the WASM binary
+    let wasm_path = dest_path.join("bin").join("fuel-core-wasm-executor.wasm");
+    if let Err(e) = canonicalize_wasm(&wasm_path) {
+        panic!("Failed to canonicalize WASM binary: {}", e);
+    }
+}
+
+#[cfg(feature = "wasm-executor")]
+// The WASM binary produced by the 1.85.0 compiler may contain non-canonical LEB128 encodings
+// (e.g. encoding 0 as 80 80 80 80 00 instead of just 00). While these are valid per the
+// spec, some runtimes (like wasmtime) require canonical encodings in MVP mode.
+//
+// To fix this, we convert the WASM to text format (WAT) and back, which ensures
+// canonical LEB128 encodings in the final binary.
+fn canonicalize_wasm(wasm_path: &Path) -> Result<(), String> {
+    let temp_wat = wasm_path.with_extension("temp.wat");
+    let temp_wasm = wasm_path.with_extension("temp.wasm");
+
+    // Step 1: Convert to WAT
+    let status = Command::new("wasm-tools")
+        .arg("print")
+        .arg(wasm_path)
+        .arg("-o")
+        .arg(&temp_wat)
+        .status()
+        .map_err(|e| format!("Failed to run wasm-tools print: {}", e))?;
+
+    if !status.success() {
+        return Err("wasm-tools print failed".to_string());
+    }
+
+    // Step 2: Convert back to WASM (this produces canonical LEB128s)
+    let status = Command::new("wasm-tools")
+        .arg("parse")
+        .arg(&temp_wat)
+        .arg("-o")
+        .arg(&temp_wasm)
+        .status()
+        .map_err(|e| format!("Failed to run wasm-tools parse: {}", e))?;
+
+    if !status.success() {
+        return Err("wasm-tools parse failed".to_string());
+    }
+
+    // Step 3: Replace original with canonical version
+    std::fs::rename(&temp_wasm, wasm_path)
+        .map_err(|e| format!("Failed to replace WASM with canonical version: {}", e))?;
+
+    // Clean up temporary WAT file
+    if let Err(e) = std::fs::remove_file(&temp_wat) {
+        eprintln!("Warning: Failed to clean up temporary WAT file: {}", e);
+    }
+
+    Ok(())
 }
 
 #[cfg(feature = "wasm-executor")]

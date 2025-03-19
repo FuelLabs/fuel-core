@@ -237,18 +237,14 @@ impl KeypairArg {
             return Ok(KeypairArg::InlineSecret(secret))
         }
         let path = PathBuf::from_str(s);
-        if let Ok(pathbuf) = path {
-            if pathbuf.exists() {
-                return Ok(KeypairArg::Path(pathbuf))
-            } else {
-                return Err(anyhow!(
-                    "path `{pathbuf:?}` does not exist for keypair argument"
-                ))
-            }
+        let Ok(pathbuf) = path;
+        if pathbuf.exists() {
+            Ok(KeypairArg::Path(pathbuf))
+        } else {
+            Err(anyhow!(
+                "path `{pathbuf:?}` does not exist for keypair argument"
+            ))
         }
-        Err(anyhow!(
-            "invalid keypair argument, neither a valid key or path"
-        ))
     }
 }
 

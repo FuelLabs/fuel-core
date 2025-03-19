@@ -16,6 +16,7 @@ license = { workspace = true }
 name = "fuel-core-trace"
 publish = false
 repository = { workspace = true }
+rust-version = { workspace = true }
 version = { workspace = true }
 
 [dependencies]

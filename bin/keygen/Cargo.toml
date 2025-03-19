@@ -6,6 +6,7 @@ homepage = { workspace = true }
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "Apache-2.0"
 repository = { workspace = true }
+rust-version = { workspace = true }
 description = "Command line utilities for fuel-core key management"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

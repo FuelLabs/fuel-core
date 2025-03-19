@@ -22,7 +22,7 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
   AWS_ECR_ORG: fuellabs
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.81.0
+  RUST_VERSION: 1.85.0
   RUST_VERSION_FMT: nightly-2023-10-29
   RUST_VERSION_COV: nightly-2024-06-05
   RUSTFLAGS: -D warnings
@@ -185,6 +185,8 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: "wasm32-unknown-unknown"
           components: "clippy"
+      - name: Install wasm-tools
+        run: cargo install wasm-tools@1.228.0
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
@@ -222,6 +224,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: "wasm32-unknown-unknown"
+      - name: Install wasm-tools
+        run: cargo install wasm-tools@1.228.0
       - name: Publish crate check
         uses: FuelLabs/publish-crates@v1
         with:
@@ -252,6 +256,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
+      - name: Install wasm-tools
+        run: cargo install wasm-tools@1.228.0
       - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
@@ -307,6 +313,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: "wasm32-unknown-unknown"
+
+      - name: Install wasm-tools
+        run: cargo install wasm-tools@1.228.0
 
       - name: Publish crate
         uses: FuelLabs/publish-crates@v1
@@ -391,6 +400,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.job.target }},"wasm32-unknown-unknown"
+
+      - name: Install wasm-tools
+        run: cargo install wasm-tools@1.228.0
 
       - name: Install cross
         uses: baptiste0928/cargo-install@v1

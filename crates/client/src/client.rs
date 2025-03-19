@@ -1097,12 +1097,9 @@ impl FuelClient {
             },
         );
 
-        self.query(query).await.map(|r| {
-            r.contract_balance_values
-                .into_iter()
-                .map(Into::into)
-                .collect()
-        })
+        self.query(query)
+            .await
+            .map(|r| r.contract_balance_values.into_iter().collect())
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
