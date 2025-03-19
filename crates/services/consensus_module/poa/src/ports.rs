@@ -36,7 +36,10 @@ pub trait TransactionPool: Send + Sync {
 
 #[cfg_attr(test, mockall::automock)]
 pub trait TxStatusManager: Send + Sync {
-    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
+    fn notify_skipped_txs(
+        &self,
+        tx_ids_and_reasons: Vec<(Bytes32, String)>,
+    ) -> impl std::future::Future<Output = ()> + Send;
 }
 
 /// The source of transactions for the block.

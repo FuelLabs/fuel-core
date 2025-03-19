@@ -304,7 +304,7 @@ impl MockTxStatusManager {
         let mut tx_status_manager = MockTxStatusManager::default();
         tx_status_manager
             .expect_notify_skipped_txs()
-            .returning(|_| {});
+            .returning(|_| Box::pin(async move {}));
         tx_status_manager
     }
 }

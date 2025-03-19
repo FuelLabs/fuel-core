@@ -129,12 +129,16 @@ impl SharedData {
 
     pub async fn update_preconfirmations(&self, preconfirmations: Vec<Preconfirmation>) {
         let request = WriteRequest::UpdatePreconfirmations { preconfirmations };
-        let _ = self.write_requests_sender.send(request);
+        if let Err(e) = self.write_requests_sender.send(request).await {
+            tracing::error!("Failed to send preconfirmations: {:?}", e);
+        }
     }
 
-    pub fn notify_skipped(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
+    pub async fn notify_skipped(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
         let request = WriteRequest::NotifySkipped { tx_ids_and_reason };
-        let _ = self.write_requests_sender.send(request);
+        if let Err(e) = self.write_requests_sender.send(request).await {
+            tracing::error!("Failed to send skipped txs: {:?}", e);
+        }
     }
 }
 
@@ -533,7 +537,18 @@ mod tests {
             use std::sync::Arc;
 
             use fuel_core_types::{
-                fuel_crypto::rand::{rngs::StdRng, seq::SliceRandom}, services::transaction_status::{statuses::{PreConfirmationFailure, PreConfirmationSuccess}, TransactionStatus}, tai64::Tai64
+                fuel_crypto::rand::{
+                    rngs::StdRng,
+                    seq::SliceRandom,
+                },
+                services::transaction_status::{
+                    statuses::{
+                        PreConfirmationFailure,
+                        PreConfirmationSuccess,
+                    },
+                    TransactionStatus,
+                },
+                tai64::Tai64,
             };
 
             use crate::manager::TxStatusManager;

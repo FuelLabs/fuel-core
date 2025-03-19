@@ -394,7 +394,9 @@ where
                 tx_ids_to_remove.push((tx_id, err.to_string()));
             }
             self.txpool.notify_skipped_txs(tx_ids_to_remove.clone());
-            self.tx_status_manager.notify_skipped_txs(tx_ids_to_remove);
+            self.tx_status_manager
+                .notify_skipped_txs(tx_ids_to_remove)
+                .await;
         }
 
         // Sign the block and seal it
