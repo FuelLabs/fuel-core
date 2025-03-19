@@ -106,17 +106,17 @@ impl PreconfirmationSenderPort for PreconfirmationSender {
     async fn send(&self, preconfirmations: Vec<Preconfirmation>) {
         // If the receiver is closed, it means no one is listening to the preconfirmations and so we can drop them.
         // We don't consider this an error.
-        let _ = self.sender_signature_service.send(preconfirmations).await;
+        let _ = self
+            .sender_signature_service
+            .send(preconfirmations.clone())
+            .await;
+        self.tx_status_manager_adapter
+            .tx_status_manager_shared_data
+            .update_preconfirmations(preconfirmations)
+            .await;
     }
 
     fn try_send(&self, preconfirmations: Vec<Preconfirmation>) -> Vec<Preconfirmation> {
-        for preconfirmation in &preconfirmations {
-            let tx_id = preconfirmation.tx_id;
-            let status = preconfirmation.status.clone();
-            self.tx_status_manager_adapter
-                .tx_status_manager_shared_data
-                .update_status(tx_id, status.into());
-        }
         match self.sender_signature_service.try_send(preconfirmations) {
             Ok(()) => vec![],
             // If the receiver is closed, it means no one is listening to the preconfirmations and so we can drop them.

@@ -68,6 +68,9 @@ enum WriteRequest {
         tx_id: TxId,
         status: TransactionStatus,
     },
+    UpdatePreconfirmations {
+        preconfirmations: Vec<Preconfirmation>,
+    },
     NotifySkipped {
         tx_ids_and_reason: Vec<(Bytes32, String)>,
     },
@@ -76,7 +79,7 @@ enum WriteRequest {
 #[derive(Clone)]
 pub struct SharedData {
     read_requests_sender: mpsc::Sender<ReadRequest>,
-    write_requests_sender: mpsc::UnboundedSender<WriteRequest>,
+    write_requests_sender: mpsc::Sender<WriteRequest>,
 }
 
 impl SharedData {
@@ -97,8 +100,35 @@ impl SharedData {
         receiver.await?
     }
 
-    pub fn update_status(&self, tx_id: TxId, status: TransactionStatus) {
+    pub fn blocking_update_status(&self, tx_id: TxId, status: TransactionStatus) {
         let request = WriteRequest::UpdateStatus { tx_id, status };
+        let _ = self.write_requests_sender.blocking_send(request);
+    }
+
+    pub fn try_update_preconfirmations(
+        &self,
+        preconfirmations: Vec<Preconfirmation>,
+    ) -> Result<(), Vec<Preconfirmation>> {
+        let request = WriteRequest::UpdatePreconfirmations { preconfirmations };
+        match self.write_requests_sender.try_send(request) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if let WriteRequest::UpdatePreconfirmations { preconfirmations } =
+                    e.into_inner()
+                {
+                    Err(preconfirmations)
+                } else {
+                    // SAFETY: Building the WriteRequest::UpdatePreconfirmation variant just above
+                    panic!(
+                        "Wrong WriteRequest variant it should be UpdatePreconfirmations"
+                    );
+                }
+            }
+        }
+    }
+
+    pub async fn update_preconfirmations(&self, preconfirmations: Vec<Preconfirmation>) {
+        let request = WriteRequest::UpdatePreconfirmations { preconfirmations };
         let _ = self.write_requests_sender.send(request);
     }
 
@@ -112,7 +142,7 @@ pub struct Task<Pubkey> {
     manager: TxStatusManager,
     subscriptions: Subscriptions,
     read_requests_receiver: mpsc::Receiver<ReadRequest>,
-    write_requests_receiver: mpsc::UnboundedReceiver<WriteRequest>,
+    write_requests_receiver: mpsc::Receiver<WriteRequest>,
     shared_data: SharedData,
     signature_verification: SignatureVerification<Pubkey>,
 }
@@ -292,6 +322,12 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
                         self.manager.status_update(tx_id, status);
                         TaskNextAction::Continue
                     }
+                    Some(WriteRequest::UpdatePreconfirmations { preconfirmations }) => {
+                        for preconfirmation in preconfirmations {
+                            self.manager.status_update(preconfirmation.tx_id, preconfirmation.status.into());
+                        }
+                        TaskNextAction::Continue
+                    }
                     Some(WriteRequest::NotifySkipped { tx_ids_and_reason }) => {
                         self.manager.notify_skipped_txs(tx_ids_and_reason);
                         TaskNextAction::Continue
@@ -344,7 +380,8 @@ where
 
     let (read_requests_sender, read_requests_receiver) =
         mpsc::channel(config.max_tx_update_subscriptions);
-    let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
+    // TODO: Configurable buffer size
+    let (write_requests_sender, write_requests_receiver) = mpsc::channel(100_000);
 
     let shared_data = SharedData {
         read_requests_sender,
@@ -415,7 +452,7 @@ mod tests {
 
     fn new_task_with_handles() -> (Task<PublicKey>, Handles) {
         let (read_requests_sender, read_requests_receiver) = mpsc::channel(1);
-        let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
+        let (write_requests_sender, write_requests_receiver) = mpsc::channel(100_000);
         let shared_data = SharedData {
             read_requests_sender,
             write_requests_sender,
