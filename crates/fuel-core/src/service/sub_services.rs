@@ -461,6 +461,7 @@ pub fn init_sub_services(
         executor,
         config: config.clone(),
         tx_status_manager: tx_status_manager_adapter,
+        compression: compression_service.as_ref().map(|c| c.shared.clone()),
     };
 
     #[allow(unused_mut)]

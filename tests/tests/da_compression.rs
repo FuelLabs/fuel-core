@@ -91,6 +91,7 @@ async fn can_fetch_da_compressed_block_from_graphql() {
             panic!("unexpected result {other:?}")
         }
     };
+    srv.await_compression_synced().await.unwrap();
 
     let block = client
         .da_compressed_block(block_height)
@@ -176,22 +177,14 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     // Insert some txs
     let expected = producer.insert_txs().await;
     validator.consistency_20s(&expected).await;
+    validator.node.await_compression_synced().await.unwrap();
 
     let block_height = 1u32.into();
 
-    // loop for a bit to give the validator's compression service time to catch up
-    tokio::time::timeout(Duration::from_secs(10), async {
-        loop {
-            if let Some(compressed_block) =
-                v_client.da_compressed_block(block_height).await.unwrap()
-            {
-                let _: VersionedCompressedBlock =
-                    postcard::from_bytes(&compressed_block).unwrap();
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-    })
-    .await
-    .unwrap();
+    let compressed_block = v_client
+        .da_compressed_block(block_height)
+        .await
+        .unwrap()
+        .unwrap();
+    let _: VersionedCompressedBlock = postcard::from_bytes(&compressed_block).unwrap();
 }
