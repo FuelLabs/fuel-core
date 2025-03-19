@@ -351,7 +351,7 @@ impl OffChainIterableKeyValueView {
         start: Option<CoinBalancesKey>,
         direction: IterDirection,
         base_asset_id: &'a AssetId,
-    ) -> BoxedIter<'_, Result<(AssetId, u128), StorageError>> {
+    ) -> BoxedIter<'a, Result<(AssetId, u128), StorageError>> {
         self.iter_all_filtered_keys::<CoinBalances, _>(
             Some(owner),
             start.as_ref(),
@@ -382,7 +382,7 @@ impl OffChainIterableKeyValueView {
         owner: &Address,
         base_asset_id: &'a AssetId,
         direction: IterDirection,
-    ) -> BoxedIter<'_, Result<(AssetId, u128), StorageError>> {
+    ) -> BoxedIter<'a, Result<(AssetId, u128), StorageError>> {
         let start = start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
         let base_asset_balance = self.base_asset_balance(base_asset_id, owner);
         let non_base_asset_balance =
@@ -397,7 +397,7 @@ impl OffChainIterableKeyValueView {
         owner: &Address,
         base_asset_id: &'a AssetId,
         direction: IterDirection,
-    ) -> BoxedIter<'_, Result<(AssetId, u128), StorageError>> {
+    ) -> BoxedIter<'a, Result<(AssetId, u128), StorageError>> {
         let base_asset_balance = self.base_asset_balance(base_asset_id, owner);
         let non_base_asset_balances =
             self.non_base_asset_balances(owner, None, direction, base_asset_id);
