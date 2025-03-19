@@ -824,6 +824,19 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_start_stop() {
+        let (task, _) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Double start will return false.
+        assert!(service.start().is_err(), "double start should fail");
+
+        let state = service.stop_and_await().await.unwrap();
+        assert!(state.stopped());
+    }
+
     #[tokio::test(start_paused = true)]
     async fn run__can_store_and_retrieve_all_statuses() {
         let (task, handles) = new_task_with_handles(TTL);
