@@ -113,7 +113,6 @@ async fn can_fetch_da_compressed_block_from_graphql() {
     };
     let decompressed = decompress(
         fuel_core_compression::Config {
-            // todo: better way to do this
             temporal_registry_retention: compression_config.retention_duration,
         },
         db_tx,
