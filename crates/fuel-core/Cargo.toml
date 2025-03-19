@@ -8,6 +8,7 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = { workspace = true }
 name = "fuel-core"
 repository = { workspace = true }
+rust-version = { workspace = true }
 version = { workspace = true }
 
 [dependencies]

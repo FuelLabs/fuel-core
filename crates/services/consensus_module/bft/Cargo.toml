@@ -7,4 +7,5 @@ homepage = { workspace = true }
 keywords = ["blockchain", "fuel", "consensus", "bft"]
 license = { workspace = true }
 repository = { workspace = true }
+rust-version = { workspace = true }
 description = "Fuel Core BFT"

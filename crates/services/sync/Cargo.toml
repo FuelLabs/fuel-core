@@ -7,6 +7,7 @@ keywords = ["blockchain", "fuel", "fuel-vm"]
 license = { workspace = true }
 name = "fuel-core-sync"
 repository = { workspace = true }
+rust-version = { workspace = true }
 version = { workspace = true }
 
 [dependencies]
