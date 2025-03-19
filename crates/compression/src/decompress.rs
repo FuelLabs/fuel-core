@@ -367,6 +367,7 @@ mod tests {
     #[tokio::test]
     async fn decompress_block_with_unknown_version() {
         #[derive(Clone, Serialize, Deserialize)]
+        #[allow(clippy::large_enum_variant)]
         enum CompressedBlockWithNewVersions {
             V0(crate::CompressedBlockPayloadV0),
             NewVersion(u32),

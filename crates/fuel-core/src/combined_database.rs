@@ -514,8 +514,8 @@ impl CombinedDatabase {
             }
 
             // If both off-chain and gas price heights are synced, break
-            if off_chain_height.map_or(true, |h| h <= on_chain_height)
-                && gas_price_height.map_or(true, |h| h <= on_chain_height)
+            if off_chain_height.is_none_or(|h| h <= on_chain_height)
+                && gas_price_height.is_none_or(|h| h <= on_chain_height)
             {
                 break;
             }

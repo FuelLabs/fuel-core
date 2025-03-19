@@ -720,7 +720,7 @@ struct StatusChangeState<'a> {
     tx_status_manager: &'a DynTxStatusManager,
 }
 
-impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
+impl TxnStatusChangeState for StatusChangeState<'_> {
     async fn get_tx_status(
         &self,
         id: Bytes32,
@@ -863,7 +863,7 @@ pub trait ContextExt {
     ) -> impl Future<Output = anyhow::Result<FuelTx>> + Send;
 }
 
-impl<'a> ContextExt for Context<'a> {
+impl ContextExt for Context<'_> {
     async fn try_find_tx(&self, id: Bytes32) -> StorageResult<Option<FuelTx>> {
         let query = self.read_view()?;
         let txpool = self.data_unchecked::<TxPool>();

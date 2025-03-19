@@ -366,7 +366,7 @@ impl<A, B> VisitorCons<A, B> {
     }
 }
 
-impl<'a> Visitor<'a> for VisitorNil {}
+impl Visitor<'_> for VisitorNil {}
 
 impl<'a, A, B> Visitor<'a> for VisitorCons<A, B>
 where

@@ -26,7 +26,7 @@ pub fn verify_consensus(
             consensus
                 .signature
                 .recover(m)
-                .map_or(false, |k| Input::owner(&k) == *signing_key)
+                .is_ok_and(|k| Input::owner(&k) == *signing_key)
         }
         ConsensusConfig::PoAV2(poa) => {
             let id = header.id();
@@ -35,7 +35,7 @@ pub fn verify_consensus(
             consensus
                 .signature
                 .recover(m)
-                .map_or(false, |k| Input::owner(&k) == signing_key)
+                .is_ok_and(|k| Input::owner(&k) == signing_key)
         }
     }
 }
