@@ -53,7 +53,11 @@ use fuel_core_types::{
         contract::ContractUtxoInfo,
         RelayedTransaction,
     },
-    fuel_asm::Word,
+    fuel_asm::{
+        op,
+        PanicInstruction,
+        Word
+    },
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
         field::{
@@ -94,6 +98,7 @@ use fuel_core_types::{
         TxPointer,
         UniqueIdentifier,
         UtxoId,
+        PanicReason
     },
     fuel_types::{
         canonical::Deserialize,
@@ -116,7 +121,9 @@ use fuel_core_types::{
             ExecutableTransaction,
             InterpreterParams,
             MemoryInstance,
+            NotSupportedEcal,
         },
+        verification,
         state::StateTransition,
         Interpreter,
         ProgramState,
@@ -162,17 +169,8 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use fuel_core_types::{
-    fuel_asm::{
-        op,
-        PanicInstruction,
-    },
-    fuel_tx::PanicReason,
-    fuel_vm::{
-        interpreter::NotSupportedEcal,
-        verification,
-    },
-};
+
+
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
@@ -275,13 +273,10 @@ fn convert_tx_execution_result_to_preconfirmation(
             total_gas,
             total_fee,
             ..
-        } => PreconfirmationStatus::Success {
-            total_gas: *total_gas,
-            total_fee: *total_fee,
-            tx_pointer,
-            receipts: receipts.clone(),
-            outputs: dynamic_outputs,
-        },
+        } => {
+            #[cfg(feature = "std")]
+            PreconfirmationStatus::Success()
+        }
         TransactionExecutionResult::Failed {
             receipts,
             total_gas,

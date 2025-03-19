@@ -491,47 +491,11 @@ impl TransactionStatus {
 impl From<PreconfirmationStatus> for TransactionStatus {
     fn from(value: PreconfirmationStatus) -> Self {
         match value {
-            PreconfirmationStatus::SqueezedOut { reason } => {
-                TransactionStatus::PreConfirmationSqueezedOut(
-                    statuses::PreConfirmationSqueezedOut { reason }.into(),
-                )
+            PreconfirmationStatus::SqueezedOut(s) => {
+                TransactionStatus::PreConfirmationSqueezedOut(s)
             }
-            PreconfirmationStatus::Success {
-                tx_pointer,
-                total_gas,
-                total_fee,
-                receipts,
-                outputs,
-            } => TransactionStatus::PreConfirmationSuccess(
-                statuses::PreConfirmationSuccess {
-                    tx_pointer,
-                    total_gas,
-                    total_fee,
-                    receipts: Some(receipts),
-                    outputs: Some(outputs),
-                }
-                .into(),
-            ),
-            PreconfirmationStatus::Failure {
-                tx_pointer,
-                total_gas,
-                total_fee,
-                receipts,
-                outputs,
-            } => {
-                let reason = TransactionExecutionResult::reason(&receipts, &None);
-                TransactionStatus::PreConfirmationFailure(
-                    statuses::PreConfirmationFailure {
-                        tx_pointer,
-                        total_gas,
-                        total_fee,
-                        receipts: Some(receipts),
-                        outputs: Some(outputs),
-                        reason,
-                    }
-                    .into(),
-                )
-            }
+            PreconfirmationStatus::Success(s) => TransactionStatus::PreConfirmationSuccess(s),
+            PreconfirmationStatus::Failure(s) => TransactionStatus::PreConfirmationFailure(s),
         }
     }
 }

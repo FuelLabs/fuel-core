@@ -16,17 +16,14 @@ use super::{
 use crate::services::preconfirmation::PreconfirmationStatus;
 use crate::{
     fuel_tx::Transaction,
-    fuel_types::BlockHeight,
+    fuel_types::BlockHeight, services::txpool::statuses::PreConfirmationSqueezedOut,
 };
 use std::{
-    collections::HashSet,
-    fmt::{
+    collections::HashSet, fmt::{
         Debug,
         Display,
         Formatter,
-    },
-    str::FromStr,
-    time::SystemTime,
+    }, str::FromStr, time::SystemTime
 };
 
 pub use tai64::Tai64;
@@ -129,14 +126,15 @@ impl<DP, S> PreConfirmationMessage<DP, crate::fuel_tx::Bytes64, S> {
             fuel_tx::TxId,
             services::preconfirmation::Preconfirmation,
         };
+        use std::sync::Arc;
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
             entity: Preconfirmations {
                 expiration: Tai64::UNIX_EPOCH,
                 preconfirmations: vec![Preconfirmation {
                     tx_id: TxId::default(),
-                    status: PreconfirmationStatus::SqueezedOut {
+                    status: PreconfirmationStatus::SqueezedOut(Arc::new(PreConfirmationSqueezedOut {
                         reason: "Dummy reason".to_string(),
-                    },
+                    })),
                 }],
             },
             signature: crate::fuel_tx::Bytes64::default(),

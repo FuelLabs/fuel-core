@@ -1,11 +1,9 @@
 //! The module containing all types related to the preconfirmation service.
 
-use crate::fuel_tx::{
-    Receipt,
-    TxId,
-    TxPointer,
-};
-use fuel_vm_private::fuel_tx::Output;
+#[cfg(feature = "std")]
+use std::sync::Arc;
+
+use crate::fuel_tx::TxId;
 use tai64::Tai64;
 
 #[cfg(not(feature = "std"))]
@@ -13,6 +11,8 @@ use alloc::{
     string::String,
     vec::Vec,
 };
+
+use super::txpool;
 /// A collection of pre-confirmations that have been signed by a delegate
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -34,39 +34,28 @@ pub struct Preconfirmation {
     pub status: PreconfirmationStatus,
 }
 
+#[cfg(feature = "std")]
 /// Status of a transaction that has been pre-confirmed by block producer
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PreconfirmationStatus {
     /// Transaction was squeezed out by the tx pool
-    SqueezedOut {
-        /// Reason the transaction was squeezed out
-        reason: String,
-    },
+    SqueezedOut(Arc<txpool::statuses::PreConfirmationSqueezedOut>),
     /// Transaction has been confirmed and will be included in block_height
-    Success {
-        /// Transaction pointer within the block.
-        tx_pointer: TxPointer,
-        /// The total gas used by the transaction.
-        total_gas: u64,
-        /// The total fee paid by the transaction.
-        total_fee: u64,
-        /// Receipts produced by the transaction during execution.
-        receipts: Vec<Receipt>,
-        /// Dynamic outputs produced by the transaction during execution.
-        outputs: Vec<Output>,
-    },
+    Success(Arc<txpool::statuses::PreConfirmationSuccess>),
     /// Transaction will not be included in a block, rejected at `block_height`
-    Failure {
-        /// Transaction pointer within the block.
-        tx_pointer: TxPointer,
-        /// The total gas used by the transaction.
-        total_gas: u64,
-        /// The total fee paid by the transaction.
-        total_fee: u64,
-        /// Receipts produced by the transaction during execution.
-        receipts: Vec<Receipt>,
-        /// Dynamic outputs produced by the transaction during execution.
-        outputs: Vec<Output>,
-    },
+    Failure(Arc<txpool::statuses::PreConfirmationFailure>),
+}
+
+#[cfg(not(feature = "std"))]
+/// Status of a transaction that has been pre-confirmed by block producer
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum PreconfirmationStatus {
+    /// Transaction was squeezed out by the tx pool
+    SqueezedOut(txpool::statuses::PreConfirmationSqueezedOut),
+    /// Transaction has been confirmed and will be included in block_height
+    Success(txpool::statuses::PreConfirmationSuccess),
+    /// Transaction will not be included in a block, rejected at `block_height`
+    Failure(txpool::statuses::PreConfirmationFailure),
 }
