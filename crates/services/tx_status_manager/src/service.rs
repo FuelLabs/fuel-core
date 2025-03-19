@@ -1029,7 +1029,7 @@ mod tests {
         assert_absence(&handles.read_requests_sender, vec![tx2_id]).await;
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn run__notifies_about_status_changes() {
         let (task, handles) = new_task_with_handles(TTL);
         let service = ServiceRunner::new(task);
@@ -1047,6 +1047,21 @@ mod tests {
             .try_subscribe::<MpscChannel>(tx1_id)
             .unwrap();
 
+        // When
+        send_status_updates(&status_updates, &handles.write_requests_sender).await;
+
+        // Then
+        assert_status_change_notifications(
+            &[
+                |s| matches!(s, &TransactionStatus::Submitted(_)),
+                |s| matches!(s, &TransactionStatus::Success(_)),
+            ],
+            stream,
+        )
+        .await;
+
+        service.stop_and_await().await.unwrap();
+    }
         // When
         status_updates.iter().for_each(|(tx_id, status)| {
             handles
