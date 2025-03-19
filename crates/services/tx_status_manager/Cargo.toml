@@ -25,8 +25,12 @@ tracing = { workspace = true }
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-tx-status-manager = { path = ".", features = ["test-helpers"] }
-fuel-core-types = { path = "./../../types", features = ["test-helpers"] }
+fuel-core-types = { path = "./../../types", features = [
+  "test-helpers",
+  "serde",
+] }
 mockall = { workspace = true }
+postcard = { workspace = true }
 proptest = { workspace = true }
 test-case = { workspace = true }
 test-strategy = { workspace = true }
