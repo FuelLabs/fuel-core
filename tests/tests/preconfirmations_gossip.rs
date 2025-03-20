@@ -47,12 +47,13 @@ use rand::{
     SeedableRng,
 };
 
-fn config_with_preconfirmations() -> Config {
+fn config_with_preconfirmations(block_production_period: Duration) -> Config {
     let mut config = Config::local_node();
 
     config.p2p.as_mut().unwrap().subscribe_to_pre_confirmations = true;
+    config.pre_confirmation_signature_service.key_rotation_interval = block_production_period.checked_div(4).unwrap();
     config.block_production = Trigger::Open {
-        period: Duration::from_secs(5),
+        period: block_production_period
     };
 
     config
@@ -62,6 +63,7 @@ fn config_with_preconfirmations() -> Config {
 async fn preconfirmation__propagate_p2p_after_successful_execution() {
     let mut rng = rand::thread_rng();
     let address = Address::new([0; 32]);
+    let block_production_period = Duration::from_secs(8);
     let gas_limit = 1_000_000;
     let amount = 10;
 
@@ -132,11 +134,14 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
                 )
             })
         }),
-        Some(config_with_preconfirmations()),
+        Some(config_with_preconfirmations(block_production_period)),
     )
     .await;
 
     let sentry = &validators[0];
+
+    // Sleep to let time for exchange preconfirmations delegate public keys
+    tokio::time::sleep(block_production_period.checked_div(2).unwrap()).await;
 
     // When
     let client_sentry = FuelClient::from(sentry.node.bound_address);
@@ -199,6 +204,7 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
 async fn preconfirmation__propagate_p2p_after_failed_execution() {
     let mut rng = rand::thread_rng();
     let address = Address::new([0; 32]);
+    let block_production_period = Duration::from_secs(8);
     let gas_limit = 1_000_000;
     let amount = 10;
 
@@ -269,11 +275,14 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
                 )
             })
         }),
-        Some(config_with_preconfirmations()),
+        Some(config_with_preconfirmations(block_production_period)),
     )
     .await;
 
     let sentry = &validators[0];
+
+    // Sleep to let time for exchange preconfirmations delegate public keys
+    tokio::time::sleep(block_production_period.checked_div(2).unwrap()).await;
 
     // When
     let client_sentry = FuelClient::from(sentry.node.bound_address);
@@ -336,6 +345,7 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
 async fn preconfirmation__propagate_p2p_after_squeezed_out_on_producer() {
     let mut rng = rand::thread_rng();
 
+    let block_production_period = Duration::from_secs(8);
     let gas_limit = 1_000_000;
     let tx = TransactionBuilder::script(
         vec![op::ret(RegId::ONE)].into_iter().collect(),
@@ -402,11 +412,14 @@ async fn preconfirmation__propagate_p2p_after_squeezed_out_on_producer() {
                 )
             })
         }),
-        Some(config_with_preconfirmations()),
+        Some(config_with_preconfirmations(block_production_period)),
     )
     .await;
 
     let sentry = &validators[0];
+
+    // Sleep to let time for exchange preconfirmations delegate public keys
+    tokio::time::sleep(block_production_period.checked_div(2).unwrap()).await;
 
     // When
     let client_sentry = FuelClient::from(sentry.node.bound_address);
