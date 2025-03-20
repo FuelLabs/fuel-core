@@ -8,6 +8,7 @@ use fuel_core_types::{
     services::{
         block_importer::SharedImportResult,
         p2p::GossipsubMessageInfo,
+        transaction_status::TransactionStatus,
         txpool::ArcPoolTx,
     },
 };
@@ -36,7 +37,6 @@ use crate::{
     error::{
         Error,
         InsertionErrorType,
-        RemovedReason,
     },
     pending_pool::PendingPool,
     ports::{
@@ -206,7 +206,7 @@ pub(super) enum PoolRemoveRequest {
         block_result: SharedImportResult,
     },
     SkippedTransactions {
-        dependents_ids: Vec<(TxId, Error)>,
+        dependents_ids: Vec<TxId>,
     },
     TxAndCoinDependents {
         tx_and_dependents_ids: (Vec<TxId>, Error),
@@ -249,10 +249,6 @@ pub(super) enum PoolNotification {
         tx_id: TxId,
         error: Error,
         source: InsertionSource,
-    },
-    Removed {
-        tx_id: TxId,
-        error: Error,
     },
 }
 
@@ -378,7 +374,7 @@ where
         let res = self.pool.insert(tx.clone(), &view);
 
         match res {
-            Ok(removed_txs) => {
+            Ok(()) => {
                 let extended_source = match source {
                     InsertionSource::P2P { from_peer_info } => {
                         ExtendedInsertionSource::P2P { from_peer_info }
@@ -408,19 +404,6 @@ where
                         })
                 {
                     tracing::error!("Failed to send inserted notification: {}", e);
-                }
-
-                for tx in removed_txs {
-                    let removed_tx_id = tx.id();
-                    if let Err(e) =
-                        self.notification_sender
-                            .try_send(PoolNotification::Removed {
-                                tx_id: removed_tx_id,
-                                error: Error::Removed(RemovedReason::LessWorth(tx_id)),
-                            })
-                    {
-                        tracing::error!("Failed to send removed notification: {}", e);
-                    }
                 }
                 let resolved_txs = self.pending_pool.new_known_tx(tx);
 
@@ -504,38 +487,17 @@ where
         }
     }
 
-    fn remove_skipped_transactions(&mut self, parent_txs: Vec<(TxId, Error)>) {
-        for (tx_id, reason) in parent_txs {
-            let removed = self.pool.remove_skipped_transaction(tx_id);
-            for tx in removed {
-                let tx_id = tx.id();
-                if let Err(e) = self.notification_sender.try_send(PoolNotification::Removed {
-                    tx_id,
-                    error: Error::SkippedTransaction(
-                        format!("Parent transaction with id: {tx_id}, was removed because of: {reason}")
-                    )
-                }) {
-                    tracing::error!("Failed to send removed notification: {}", e);
-                }
-            }
+    fn remove_skipped_transactions(&mut self, parent_txs: Vec<TxId>) {
+        for tx_id in parent_txs {
+            self.pool.remove_skipped_transaction(tx_id);
         }
     }
 
     fn remove_and_coin_dependents(&mut self, tx_ids: (Vec<TxId>, Error)) {
         let (tx_ids, error) = tx_ids;
-        let removed = self.pool.remove_transaction_and_dependents(tx_ids);
-        for tx in removed {
-            let tx_id = tx.id();
-            if let Err(e) = self
-                .notification_sender
-                .try_send(PoolNotification::Removed {
-                    tx_id,
-                    error: error.clone(),
-                })
-            {
-                tracing::error!("Failed to send removed notification: {}", e);
-            }
-        }
+        let tx_status = TransactionStatus::squeezed_out(error.to_string());
+        self.pool
+            .remove_transaction_and_dependents(tx_ids, tx_status);
     }
 
     fn get_tx_ids(&mut self, max_txs: usize, tx_ids_sender: oneshot::Sender<Vec<TxId>>) {

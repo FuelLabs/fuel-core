@@ -257,10 +257,7 @@ impl TestPoolUniverse {
     }
 
     // Returns the added transaction and the list of transactions that were removed from the pool
-    pub fn verify_and_insert(
-        &mut self,
-        tx: Transaction,
-    ) -> Result<(ArcPoolTx, Vec<ArcPoolTx>), Error> {
+    pub fn verify_and_insert(&mut self, tx: Transaction) -> Result<ArcPoolTx, Error> {
         if let Some(pool) = &self.pool {
             let mut mock_chain_state_info_provider =
                 MockChainStateInfoProvider::default();
@@ -280,15 +277,14 @@ impl TestPoolUniverse {
             let tx =
                 verification.perform_all_verifications(tx, Default::default(), true)?;
             let tx = Arc::new(tx);
-            Ok((
-                tx.clone(),
-                pool.write()
-                    .insert(tx, &self.mock_db)
-                    .map_err(|e| match e {
-                        InsertionErrorType::Error(e) => e,
-                        InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
-                    })?,
-            ))
+            pool.write()
+                .insert(tx.clone(), &self.mock_db)
+                .map_err(|e| match e {
+                    InsertionErrorType::Error(e) => e,
+                    InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
+                })?;
+
+            Ok(tx)
         } else {
             panic!("Pool needs to be built first");
         }
@@ -298,7 +294,7 @@ impl TestPoolUniverse {
         &mut self,
         tx: Transaction,
         gas_price: GasPrice,
-    ) -> Result<Vec<ArcPoolTx>, Error> {
+    ) -> Result<(), Error> {
         if let Some(pool) = &self.pool {
             let mut mock_chain_state_info = MockChainStateInfoProvider::default();
             mock_chain_state_info
@@ -332,7 +328,7 @@ impl TestPoolUniverse {
         tx: Transaction,
         consensus_params: ConsensusParameters,
         wasm_checker: MockWasmChecker,
-    ) -> Result<Vec<ArcPoolTx>, Error> {
+    ) -> Result<(), Error> {
         if let Some(pool) = &self.pool {
             let mut mock_chain_state_info_provider =
                 MockChainStateInfoProvider::default();
@@ -474,6 +470,17 @@ impl TestPoolUniverse {
     ) {
         self.await_expected_tx_statuses(tx_ids, |status| {
             matches!(status, TransactionStatus::Submitted { .. })
+        })
+        .await
+        .unwrap();
+    }
+
+    pub(crate) async fn await_expected_tx_statuses_squeeze_out(
+        &mut self,
+        tx_ids: Vec<TxId>,
+    ) {
+        self.await_expected_tx_statuses(tx_ids, |status| {
+            matches!(status, TransactionStatus::SqueezedOut { .. })
         })
         .await
         .unwrap();

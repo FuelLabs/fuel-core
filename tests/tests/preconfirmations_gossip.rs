@@ -4,12 +4,15 @@ use std::hash::{
     Hasher,
 };
 
-use fuel_core::p2p_test_helpers::{
-    make_nodes,
-    BootstrapSetup,
-    Nodes,
-    ProducerSetup,
-    ValidatorSetup,
+use fuel_core::{
+    p2p_test_helpers::{
+        make_nodes,
+        BootstrapSetup,
+        Nodes,
+        ProducerSetup,
+        ValidatorSetup,
+    },
+    service::Config,
 };
 use fuel_core_client::client::{
     types::TransactionStatus,
@@ -39,6 +42,14 @@ use rand::{
     Rng,
     SeedableRng,
 };
+
+fn config_with_preconfirmations() -> Config {
+    let mut config = Config::local_node();
+
+    config.p2p.as_mut().unwrap().subscribe_to_pre_confirmations = true;
+
+    config
+}
 
 #[tokio::test]
 async fn preconfirmation__propagate_p2p_after_successful_execution() {
@@ -91,9 +102,9 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
     // Create a producer for each key pair and a set of validators that share
     // the same key pair.
     let Nodes {
-        producers: _dont_drop1,
+        producers: _producers,
         validators,
-        bootstrap_nodes: _dont_drop2,
+        bootstrap_nodes: _dont_drop,
     } = make_nodes(
         pub_keys
             .iter()
@@ -114,25 +125,18 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
                 )
             })
         }),
-        None,
+        Some(config_with_preconfirmations()),
     )
     .await;
 
     let sentry = &validators[0];
-    let authority = &validators[0];
 
     // When
     let client_sentry = FuelClient::from(sentry.node.bound_address);
     let mut tx_statuses_subscriber = client_sentry
-        .subscribe_transaction_status(&tx_id)
+        .submit_and_await_status(&tx)
         .await
         .expect("Should be able to subscribe for events");
-
-    sentry
-        .node
-        .submit(tx)
-        .await
-        .expect("Should accept invalid transaction because `utxo_validation = false`.");
 
     // Then
     assert!(matches!(
@@ -140,19 +144,7 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
         TransactionStatus::Submitted { .. }
     ));
 
-    authority
-        .node
-        .shared
-        .poa_adapter
-        .manually_produce_blocks(
-            None,
-            fuel_core_poa::service::Mode::Blocks {
-                number_of_blocks: 1,
-            },
-        )
-        .await
-        .unwrap();
-
+    let status = tx_statuses_subscriber.next().await.unwrap().unwrap();
     if let TransactionStatus::PreconfirmationSuccess {
         tx_pointer,
         total_fee,
@@ -160,7 +152,7 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
         transaction_id,
         receipts,
         resolved_outputs,
-    } = tx_statuses_subscriber.next().await.unwrap().unwrap()
+    } = status.clone()
     {
         // Then
         assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 1));
@@ -188,7 +180,7 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
             }
         );
     } else {
-        panic!("Expected preconfirmation status");
+        panic!("Expected preconfirmation status, got {status:?}");
     }
     assert!(matches!(
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
@@ -247,9 +239,9 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
     // Create a producer for each key pair and a set of validators that share
     // the same key pair.
     let Nodes {
-        producers: _dont_drop1,
+        producers: _producers,
         validators,
-        bootstrap_nodes: _dont_drop2,
+        bootstrap_nodes: _dont_drop,
     } = make_nodes(
         pub_keys
             .iter()
@@ -270,43 +262,24 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
                 )
             })
         }),
-        None,
+        Some(config_with_preconfirmations()),
     )
     .await;
 
     let sentry = &validators[0];
-    let authority = &validators[0];
 
     // When
     let client_sentry = FuelClient::from(sentry.node.bound_address);
     let mut tx_statuses_subscriber = client_sentry
-        .subscribe_transaction_status(&tx_id)
+        .submit_and_await_status(&tx)
         .await
         .expect("Should be able to subscribe for events");
-
-    sentry
-        .node
-        .submit(tx)
-        .await
-        .expect("Should accept invalid transaction because `utxo_validation = false`.");
 
     assert!(matches!(
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
         TransactionStatus::Submitted { .. }
     ));
 
-    authority
-        .node
-        .shared
-        .poa_adapter
-        .manually_produce_blocks(
-            None,
-            fuel_core_poa::service::Mode::Blocks {
-                number_of_blocks: 1,
-            },
-        )
-        .await
-        .unwrap();
     if let TransactionStatus::PreconfirmationFailure {
         tx_pointer,
         total_fee,
@@ -349,5 +322,99 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
     assert!(matches!(
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
         TransactionStatus::Failure { .. }
+    ));
+}
+
+#[tokio::test]
+async fn preconfirmation__propagate_p2p_after_squeezed_out_on_producer() {
+    let mut rng = rand::thread_rng();
+
+    let gas_limit = 1_000_000;
+    let tx = TransactionBuilder::script(
+        vec![op::ret(RegId::ONE)].into_iter().collect(),
+        vec![],
+    )
+    .script_gas_limit(gas_limit)
+    .add_unsigned_coin_input(
+        SecretKey::random(&mut rng),
+        rng.gen(),
+        10,
+        Default::default(),
+        Default::default(),
+    )
+    .add_output(Output::Change {
+        to: Default::default(),
+        amount: 0,
+        asset_id: Default::default(),
+    })
+    .finalize_as_transaction();
+
+    // Create a random seed based on the test parameters.
+    let mut hasher = DefaultHasher::new();
+    let num_txs = 1;
+    let num_validators = 1;
+    let num_partitions = 1;
+    (num_txs, num_validators, num_partitions, line!()).hash(&mut hasher);
+    let mut rng = StdRng::seed_from_u64(hasher.finish());
+
+    // Create a set of key pairs.
+    let secrets: Vec<_> = (0..1).map(|_| SecretKey::random(&mut rng)).collect();
+    let pub_keys: Vec<_> = secrets
+        .clone()
+        .into_iter()
+        .map(|secret| Input::owner(&secret.public_key()))
+        .collect();
+
+    // Create a producer for each key pair and a set of validators that share
+    // the same key pair.
+
+    // Given
+    // Disable UTXO validation in TxPool so that the transaction is squeezed out by
+    // block production
+    let Nodes {
+        producers: _producers,
+        validators,
+        bootstrap_nodes: _dont_drop,
+    } = make_nodes(
+        pub_keys
+            .iter()
+            .map(|pub_key| Some(BootstrapSetup::new(*pub_key))),
+        secrets.clone().into_iter().enumerate().map(|(i, secret)| {
+            Some(
+                ProducerSetup::new(secret)
+                    .with_name(format!("{}:producer", pub_keys[i]))
+                    .utxo_validation(true),
+            )
+        }),
+        pub_keys.iter().flat_map(|pub_key| {
+            (0..num_validators).map(move |i| {
+                Some(
+                    ValidatorSetup::new(*pub_key)
+                        .with_name(format!("{pub_key}:{i}"))
+                        .utxo_validation(false),
+                )
+            })
+        }),
+        Some(config_with_preconfirmations()),
+    )
+    .await;
+
+    let sentry = &validators[0];
+
+    // When
+    let client_sentry = FuelClient::from(sentry.node.bound_address);
+    let mut tx_statuses_subscriber = client_sentry
+        .submit_and_await_status(&tx)
+        .await
+        .expect("Should be able to subscribe for events");
+
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::SqueezedOut { .. }
     ));
 }

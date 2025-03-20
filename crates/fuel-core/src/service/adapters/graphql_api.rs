@@ -186,8 +186,7 @@ impl worker::TxStatusCompletion for TxStatusManagerAdapter {
         status: TransactionStatus,
     ) {
         tracing::info!("Transaction {id} successfully included in block {block_height}");
-        self.tx_status_manager_shared_data
-            .blocking_update_status(id, status);
+        self.tx_status_manager_shared_data.update_status(id, status);
     }
 }
 

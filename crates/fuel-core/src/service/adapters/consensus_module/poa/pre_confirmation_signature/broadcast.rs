@@ -101,7 +101,6 @@ mod tests {
         services::{
             p2p::ProtocolSignature,
             preconfirmation::PreconfirmationStatus,
-            transaction_status::statuses::PreConfirmationFailure,
         },
     };
 
@@ -115,14 +114,13 @@ mod tests {
         let mut adapter = P2PAdapter::new(service, peer_report_config);
         let preconfirmations = vec![Preconfirmation {
             tx_id: Default::default(),
-            status: PreconfirmationStatus::Failure(Arc::new(PreConfirmationFailure {
+            status: PreconfirmationStatus::Failure {
                 tx_pointer: Default::default(),
                 total_gas: 0,
                 total_fee: 0,
-                receipts: Some(vec![]),
-                outputs: Some(vec![]),
-                reason: "Dummy reason".to_string(),
-            })),
+                receipts: vec![],
+                outputs: vec![],
+            },
         }];
         let signature = ed25519::Signature::from_bytes(&[5u8; 64]);
         let expiration = Tai64::UNIX_EPOCH;
@@ -178,6 +176,7 @@ mod tests {
         let delegate = DelegatePreConfirmationKey {
             public_key: Default::default(),
             expiration,
+            nonce: 0,
         };
         let signature = ProtocolSignature::from_bytes([5u8; 64]);
 
@@ -210,6 +209,7 @@ mod tests {
         let entity = DelegatePreConfirmationKey {
             public_key: delegate_key,
             expiration,
+            nonce: 0,
         };
         match &**inner {
             PreConfirmationMessage::Delegate(signed_by_block_producer_delegation) => {

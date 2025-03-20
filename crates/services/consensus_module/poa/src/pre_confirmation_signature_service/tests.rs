@@ -229,6 +229,7 @@ impl TaskBuilder {
         let entity = DelegatePreConfirmationKey {
             public_key: Bytes32::zeroed(),
             expiration: Tai64::UNIX_EPOCH,
+            nonce: 0,
         };
         let signature = parent_signature.dummy_signature.clone();
         let period = self.period.unwrap_or(Duration::from_secs(60 * 60));
@@ -374,6 +375,7 @@ async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_sig
         data: DelegatePreConfirmationKey {
             public_key: Bytes32::zeroed(),
             expiration: expiration_time,
+            nonce: 0,
         },
         dummy_signature: dummy_signature.into(),
     };
@@ -420,6 +422,7 @@ async fn run__will_rebroadcast_generated_key_with_correct_signature_after_1_seco
         data: DelegatePreConfirmationKey {
             public_key: Bytes32::zeroed(),
             expiration: expiration_time,
+            nonce: 0,
         },
         dummy_signature: dummy_signature.into(),
     };

@@ -99,6 +99,12 @@ impl ports::TxStatusManager for MockTxStatusManager {
         let tx = self.tx.clone();
         tx.try_send((tx_id, tx_status)).unwrap();
     }
+
+    fn statuses_update(&self, statuses: Vec<(TxId, TransactionStatus)>) {
+        for (tx_id, tx_status) in statuses {
+            self.status_update(tx_id, tx_status);
+        }
+    }
 }
 
 #[derive(Clone, Default)]

@@ -4096,6 +4096,7 @@ dependencies = [
  "fuel-core-types 0.42.0",
  "fuel-vm 0.60.0",
  "k256",
+ "postcard",
  "rand 0.8.5",
  "secrecy",
  "serde",

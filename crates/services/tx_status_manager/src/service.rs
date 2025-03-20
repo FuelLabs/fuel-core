@@ -68,6 +68,9 @@ enum WriteRequest {
         tx_id: TxId,
         status: TransactionStatus,
     },
+    UpdateStatuses {
+        statuses: Vec<(TxId, TransactionStatus)>,
+    },
     UpdatePreconfirmations {
         preconfirmations: Vec<Preconfirmation>,
     },
@@ -79,7 +82,7 @@ enum WriteRequest {
 #[derive(Clone)]
 pub struct SharedData {
     read_requests_sender: mpsc::Sender<ReadRequest>,
-    write_requests_sender: mpsc::Sender<WriteRequest>,
+    write_requests_sender: mpsc::UnboundedSender<WriteRequest>,
 }
 
 impl SharedData {
@@ -100,43 +103,26 @@ impl SharedData {
         receiver.await?
     }
 
-    pub fn blocking_update_status(&self, tx_id: TxId, status: TransactionStatus) {
+    pub fn update_status(&self, tx_id: TxId, status: TransactionStatus) {
         let request = WriteRequest::UpdateStatus { tx_id, status };
-        let _ = self.write_requests_sender.blocking_send(request);
+        let _ = self.write_requests_sender.send(request);
     }
 
-    pub fn try_update_preconfirmations(
-        &self,
-        preconfirmations: Vec<Preconfirmation>,
-    ) -> Result<(), Vec<Preconfirmation>> {
-        let request = WriteRequest::UpdatePreconfirmations { preconfirmations };
-        match self.write_requests_sender.try_send(request) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                if let WriteRequest::UpdatePreconfirmations { preconfirmations } =
-                    e.into_inner()
-                {
-                    Err(preconfirmations)
-                } else {
-                    // SAFETY: Building the WriteRequest::UpdatePreconfirmation variant just above
-                    panic!(
-                        "Wrong WriteRequest variant it should be UpdatePreconfirmations"
-                    );
-                }
-            }
-        }
+    pub fn update_statuses(&self, statuses: Vec<(TxId, TransactionStatus)>) {
+        let request = WriteRequest::UpdateStatuses { statuses };
+        let _ = self.write_requests_sender.send(request);
     }
 
-    pub async fn update_preconfirmations(&self, preconfirmations: Vec<Preconfirmation>) {
+    pub fn update_preconfirmations(&self, preconfirmations: Vec<Preconfirmation>) {
         let request = WriteRequest::UpdatePreconfirmations { preconfirmations };
-        if let Err(e) = self.write_requests_sender.send(request).await {
+        if let Err(e) = self.write_requests_sender.send(request) {
             tracing::error!("Failed to send preconfirmations: {:?}", e);
         }
     }
 
-    pub async fn notify_skipped(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
+    pub fn notify_skipped(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
         let request = WriteRequest::NotifySkipped { tx_ids_and_reason };
-        if let Err(e) = self.write_requests_sender.send(request).await {
+        if let Err(e) = self.write_requests_sender.send(request) {
             tracing::error!("Failed to send skipped txs: {:?}", e);
         }
     }
@@ -146,7 +132,7 @@ pub struct Task<Pubkey> {
     manager: TxStatusManager,
     subscriptions: Subscriptions,
     read_requests_receiver: mpsc::Receiver<ReadRequest>,
-    write_requests_receiver: mpsc::Receiver<WriteRequest>,
+    write_requests_receiver: mpsc::UnboundedReceiver<WriteRequest>,
     shared_data: SharedData,
     signature_verification: SignatureVerification<Pubkey>,
 }
@@ -326,6 +312,12 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
                         self.manager.status_update(tx_id, status);
                         TaskNextAction::Continue
                     }
+                    Some(WriteRequest::UpdateStatuses { statuses }) => {
+                        for (tx_id, status) in statuses {
+                            self.manager.status_update(tx_id, status);
+                        }
+                        TaskNextAction::Continue
+                    }
                     Some(WriteRequest::UpdatePreconfirmations { preconfirmations }) => {
                         for preconfirmation in preconfirmations {
                             self.manager.status_update(preconfirmation.tx_id, preconfirmation.status.into());
@@ -390,8 +382,7 @@ where
 
     let (read_requests_sender, read_requests_receiver) =
         mpsc::channel(config.max_tx_update_subscriptions);
-    // TODO: Configurable buffer size
-    let (write_requests_sender, write_requests_receiver) = mpsc::channel(100_000);
+    let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
 
     let shared_data = SharedData {
         read_requests_sender,
@@ -504,7 +495,7 @@ mod tests {
 
     struct Handles {
         pub pre_confirmation_updates: mpsc::Sender<GossipData<P2PPreConfirmationMessage>>,
-        pub write_requests_sender: mpsc::Sender<WriteRequest>,
+        pub write_requests_sender: mpsc::UnboundedSender<WriteRequest>,
         pub read_requests_sender: mpsc::Sender<ReadRequest>,
         pub tx_status_change: TxStatusChange,
         pub update_sender: UpdateSender,
@@ -513,23 +504,17 @@ mod tests {
 
     pub(super) mod status {
         pub(super) mod preconfirmation {
-            use std::sync::Arc;
 
-            use fuel_core_types::services::{
-                preconfirmation::PreconfirmationStatus,
-                transaction_status,
-            };
+            use fuel_core_types::services::preconfirmation::PreconfirmationStatus;
 
             pub fn success() -> PreconfirmationStatus {
-                PreconfirmationStatus::Success(Arc::new(
-                    transaction_status::statuses::PreConfirmationSuccess {
-                        tx_pointer: Default::default(),
-                        total_gas: Default::default(),
-                        total_fee: Default::default(),
-                        receipts: Some(vec![]),
-                        outputs: Some(vec![]),
-                    },
-                ))
+                PreconfirmationStatus::Success {
+                    tx_pointer: Default::default(),
+                    total_gas: Default::default(),
+                    total_fee: Default::default(),
+                    receipts: vec![],
+                    outputs: vec![],
+                }
             }
         }
 
@@ -628,7 +613,7 @@ mod tests {
 
     fn new_task_with_handles(ttl: Duration) -> (Task<PublicKey>, Handles) {
         let (read_requests_sender, read_requests_receiver) = mpsc::channel(1);
-        let (write_requests_sender, write_requests_receiver) = mpsc::channel(100_000);
+        let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
         let shared_data = SharedData {
             read_requests_sender: read_requests_sender.clone(),
             write_requests_sender: write_requests_sender.clone(),
@@ -701,6 +686,7 @@ mod tests {
         let entity = DelegatePreConfirmationKey {
             public_key: delegate_public_key,
             expiration,
+            nonce: 0,
         };
         let bytes = postcard::to_allocvec(&entity).unwrap();
         let message = Message::new(&bytes);
@@ -762,11 +748,11 @@ mod tests {
 
     async fn send_status_updates(
         updates: &[(Bytes32, TransactionStatus)],
-        sender: &mpsc::Sender<WriteRequest>,
+        sender: &mpsc::UnboundedSender<WriteRequest>,
     ) {
         updates.iter().for_each(|(tx_id, status)| {
             sender
-                .try_send(WriteRequest::UpdateStatus {
+                .send(WriteRequest::UpdateStatus {
                     tx_id: *tx_id,
                     status: status.clone(),
                 })
@@ -782,10 +768,10 @@ mod tests {
         id.into()
     }
 
-    async fn force_pruning(sender: &mpsc::Sender<WriteRequest>) {
+    async fn force_pruning(sender: &mpsc::UnboundedSender<WriteRequest>) {
         let id = pruning_tx_id();
         sender
-            .try_send(WriteRequest::UpdateStatus {
+            .send(WriteRequest::UpdateStatus {
                 tx_id: id,
                 status: status::transaction::failure(),
             })
@@ -1086,7 +1072,7 @@ mod tests {
         status_updates.iter().for_each(|(tx_id, status)| {
             handles
                 .write_requests_sender
-                .try_send(WriteRequest::UpdateStatus {
+                .send(WriteRequest::UpdateStatus {
                     tx_id: *tx_id,
                     status: status.clone(),
                 })

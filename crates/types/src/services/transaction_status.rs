@@ -7,13 +7,13 @@ use crate::{
         TxPointer,
     },
     fuel_vm::ProgramState,
-    services::preconfirmation::PreconfirmationStatus,
+    services::{
+        executor::TransactionExecutionResult,
+        preconfirmation::PreconfirmationStatus,
+    },
 };
 use fuel_vm_private::fuel_types::BlockHeight;
 use tai64::Tai64;
-
-#[cfg(feature = "std")]
-use crate::services::executor::TransactionExecutionResult;
 
 #[cfg(feature = "std")]
 use std::sync::Arc;
@@ -197,14 +197,46 @@ impl TransactionStatus {
 impl From<PreconfirmationStatus> for TransactionStatus {
     fn from(value: PreconfirmationStatus) -> Self {
         match value {
-            PreconfirmationStatus::SqueezedOut(s) => {
-                TransactionStatus::PreConfirmationSqueezedOut(s)
+            PreconfirmationStatus::SqueezedOut { reason } => {
+                TransactionStatus::PreConfirmationSqueezedOut(
+                    statuses::PreConfirmationSqueezedOut { reason }.into(),
+                )
             }
-            PreconfirmationStatus::Success(s) => {
-                TransactionStatus::PreConfirmationSuccess(s)
-            }
-            PreconfirmationStatus::Failure(s) => {
-                TransactionStatus::PreConfirmationFailure(s)
+            PreconfirmationStatus::Success {
+                tx_pointer,
+                total_gas,
+                total_fee,
+                receipts,
+                outputs,
+            } => TransactionStatus::PreConfirmationSuccess(
+                statuses::PreConfirmationSuccess {
+                    tx_pointer,
+                    total_gas,
+                    total_fee,
+                    receipts: Some(receipts),
+                    outputs: Some(outputs),
+                }
+                .into(),
+            ),
+            PreconfirmationStatus::Failure {
+                tx_pointer,
+                total_gas,
+                total_fee,
+                receipts,
+                outputs,
+            } => {
+                let reason = TransactionExecutionResult::reason(&receipts, &None);
+                TransactionStatus::PreConfirmationFailure(
+                    statuses::PreConfirmationFailure {
+                        tx_pointer,
+                        total_gas,
+                        total_fee,
+                        receipts: Some(receipts),
+                        outputs: Some(outputs),
+                        reason,
+                    }
+                    .into(),
+                )
             }
         }
     }

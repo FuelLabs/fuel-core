@@ -148,7 +148,6 @@ use fuel_core_types::{
             PreconfirmationStatus,
         },
         relayer::Event,
-        transaction_status,
     },
 };
 use parking_lot::Mutex as ParkingMutex;
@@ -158,16 +157,10 @@ use tracing::{
 };
 
 #[cfg(feature = "std")]
-use std::{
-    borrow::Cow,
-    sync::Arc,
-};
+use std::borrow::Cow;
 
 #[cfg(not(feature = "std"))]
-use alloc::{
-    borrow::Cow,
-    sync::Arc,
-};
+use alloc::borrow::Cow;
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -278,39 +271,25 @@ fn convert_tx_execution_result_to_preconfirmation(
             total_gas,
             total_fee,
             ..
-        } => PreconfirmationStatus::Success(Arc::new(
-            transaction_status::statuses::PreConfirmationSuccess {
-                total_gas: *total_gas,
-                total_fee: *total_fee,
-                tx_pointer,
-                receipts: Some(receipts.clone()),
-                outputs: Some(dynamic_outputs),
-            },
-        )),
+        } => PreconfirmationStatus::Success {
+            total_gas: *total_gas,
+            total_fee: *total_fee,
+            tx_pointer,
+            receipts: receipts.clone(),
+            outputs: dynamic_outputs,
+        },
         TransactionExecutionResult::Failed {
             receipts,
             total_gas,
             total_fee,
-            #[cfg(feature = "std")]
-            result,
             ..
-        } => {
-            #[cfg(feature = "std")]
-            let reason = TransactionExecutionResult::reason(receipts, result);
-            #[cfg(not(feature = "std"))]
-            let reason = "Transaction execution failed".to_string();
-
-            PreconfirmationStatus::Failure(Arc::new(
-                transaction_status::statuses::PreConfirmationFailure {
-                    total_gas: *total_gas,
-                    total_fee: *total_fee,
-                    tx_pointer,
-                    receipts: Some(receipts.clone()),
-                    outputs: Some(dynamic_outputs),
-                    reason,
-                },
-            ))
-        }
+        } => PreconfirmationStatus::Failure {
+            total_gas: *total_gas,
+            total_fee: *total_fee,
+            tx_pointer,
+            receipts: receipts.clone(),
+            outputs: dynamic_outputs,
+        },
     };
     Preconfirmation { tx_id, status }
 }
@@ -840,11 +819,9 @@ where
                     Err(err) => {
                         status.push(Preconfirmation {
                             tx_id,
-                            status: PreconfirmationStatus::SqueezedOut(Arc::new(
-                                transaction_status::statuses::PreConfirmationSqueezedOut {
-                                    reason: err.to_string(),
-                                },
-                            )),
+                            status: PreconfirmationStatus::SqueezedOut {
+                                reason: err.to_string(),
+                            },
                         });
                         data.skipped_transactions.push((tx_id, err));
                     }

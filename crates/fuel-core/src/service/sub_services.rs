@@ -117,8 +117,7 @@ pub fn init_sub_services(
     let (preconfirmation_sender, preconfirmation_receiver) =
         tokio::sync::mpsc::channel(1024);
     #[cfg(not(feature = "p2p"))]
-    let (preconfirmation_sender, _preconfirmation_receiver) =
-        tokio::sync::mpsc::channel(1024);
+    let (preconfirmation_sender, _) = tokio::sync::mpsc::channel(1024);
 
     let genesis_block = on_chain_view
         .genesis_block()?
@@ -311,13 +310,12 @@ pub fn init_sub_services(
     let poa_config: fuel_core_poa::Config = config.into();
     let mut production_enabled = !matches!(poa_config.trigger, Trigger::Never);
 
-    if !production_enabled && config.debug {
+    if !production_enabled
+        && config.debug
+        && !matches!(poa_config.signer, SignMode::Unavailable)
+    {
         production_enabled = true;
         tracing::info!("Enabled manual block production because of `debug` flag");
-    }
-    if production_enabled && matches!(poa_config.signer, SignMode::Unavailable) {
-        production_enabled = false;
-        tracing::warn!("Disabled block production because of unavailable signer");
     }
 
     let signer = FuelBlockSigner::new(config.consensus_signer.clone());
@@ -341,7 +339,6 @@ pub fn init_sub_services(
         config.into();
 
     #[cfg(feature = "p2p")]
-    #[allow(clippy::type_complexity)]
     let pre_confirmation_service = production_enabled
         .then(|| {
             fuel_core_poa::pre_confirmation_signature_service::new_service(

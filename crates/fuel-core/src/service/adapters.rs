@@ -1,4 +1,8 @@
 use std::sync::Arc;
+use tokio::sync::{
+    mpsc,
+    watch,
+};
 
 use fuel_core_consensus_module::{
     block_verifier::Verifier,
@@ -329,25 +333,25 @@ impl TransactionsSource {
 }
 
 pub struct NewTxWaiter {
-    pub receiver: tokio::sync::watch::Receiver<()>,
+    pub receiver: watch::Receiver<()>,
     pub timeout: Instant,
 }
 
 impl NewTxWaiter {
-    pub fn new(receiver: tokio::sync::watch::Receiver<()>, timeout: Instant) -> Self {
+    pub fn new(receiver: watch::Receiver<()>, timeout: Instant) -> Self {
         Self { receiver, timeout }
     }
 }
 
 #[derive(Clone)]
 pub struct PreconfirmationSender {
-    pub sender_signature_service: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
+    pub sender_signature_service: mpsc::Sender<Vec<Preconfirmation>>,
     pub tx_status_manager_adapter: TxStatusManagerAdapter,
 }
 
 impl PreconfirmationSender {
     pub fn new(
-        sender_signature_service: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
+        sender_signature_service: mpsc::Sender<Vec<Preconfirmation>>,
         tx_status_manager_adapter: TxStatusManagerAdapter,
     ) -> Self {
         Self {
@@ -360,7 +364,7 @@ impl PreconfirmationSender {
 #[derive(Clone)]
 pub struct ExecutorAdapter {
     pub(crate) executor: Arc<Executor<Database, Database<Relayer>>>,
-    pub new_txs_watcher: tokio::sync::watch::Receiver<()>,
+    pub new_txs_watcher: watch::Receiver<()>,
     pub preconfirmation_sender: PreconfirmationSender,
 }
 
@@ -369,8 +373,8 @@ impl ExecutorAdapter {
         database: Database,
         relayer_database: Database<Relayer>,
         config: fuel_core_upgradable_executor::config::Config,
-        new_txs_watcher: tokio::sync::watch::Receiver<()>,
-        preconfirmation_sender: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
+        new_txs_watcher: watch::Receiver<()>,
+        preconfirmation_sender: mpsc::Sender<Vec<Preconfirmation>>,
         tx_status_manager_adapter: TxStatusManagerAdapter,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);

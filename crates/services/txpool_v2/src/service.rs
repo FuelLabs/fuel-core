@@ -409,6 +409,7 @@ where
                 error,
                 source,
             } => {
+                let tx_status = TransactionStatus::squeezed_out(error.to_string());
                 match source {
                     InsertionSource::P2P { from_peer_info } => {
                         let _ = self.p2p.notify_gossip_transaction_validity(
@@ -418,21 +419,12 @@ where
                     }
                     InsertionSource::RPC { response_channel } => {
                         if let Some(channel) = response_channel {
-                            let _ = channel.send(Err(error.clone()));
+                            let _ = channel.send(Err(error));
                         }
                     }
                 }
 
-                self.tx_status_manager.status_update(
-                    tx_id,
-                    TransactionStatus::squeezed_out(error.to_string()),
-                );
-            }
-            PoolNotification::Removed { tx_id, error } => {
-                self.tx_status_manager.status_update(
-                    tx_id,
-                    TransactionStatus::squeezed_out(error.to_string()),
-                );
+                self.tx_status_manager.status_update(tx_id, tx_status);
             }
         }
     }

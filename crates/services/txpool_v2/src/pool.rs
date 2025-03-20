@@ -56,6 +56,7 @@ use crate::{
     },
 };
 
+use crate::error::RemovedReason;
 #[cfg(test)]
 use std::collections::HashSet;
 
@@ -135,13 +136,11 @@ where
 {
     /// Insert transactions into the pool.
     /// Returns a list of results for each transaction.
-    /// Each result is a list of transactions that were removed from the pool
-    /// because of the insertion of the new transaction.
     pub fn insert(
         &mut self,
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<Vec<ArcPoolTx>, InsertionErrorType> {
+    ) -> Result<(), InsertionErrorType> {
         let insertion_result = self.insert_inner(tx, persistent_storage);
         self.register_transaction_counts();
         insertion_result
@@ -149,9 +148,9 @@ where
 
     fn insert_inner(
         &mut self,
-        tx: std::sync::Arc<PoolTransaction>,
+        tx: Arc<PoolTransaction>,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<Vec<std::sync::Arc<PoolTransaction>>, InsertionErrorType> {
+    ) -> Result<(), InsertionErrorType> {
         let CanStoreTransaction {
             checked_transaction,
             transactions_to_remove,
@@ -218,12 +217,21 @@ where
             self.new_executable_txs_notifier.send_replace(());
         }
 
+        let error = TransactionStatus::squeezed_out(
+            Error::Removed(RemovedReason::LessWorth(tx_id)).to_string(),
+        );
         let removed_transactions = removed_transactions
             .into_iter()
-            .map(|data| data.transaction)
+            .map(|data| {
+                let removed_tx_id = data.transaction.id();
+
+                (removed_tx_id, error.clone())
+            })
             .collect::<Vec<_>>();
+        self.tx_status_manager.statuses_update(removed_transactions);
+
         self.update_stats();
-        Ok(removed_transactions)
+        Ok(())
     }
 
     fn update_stats(&self) {
@@ -576,7 +584,8 @@ where
     pub fn remove_transaction_and_dependents(
         &mut self,
         tx_ids: Vec<TxId>,
-    ) -> Vec<ArcPoolTx> {
+        tx_status: TransactionStatus,
+    ) {
         let mut removed_transactions = vec![];
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
@@ -584,31 +593,29 @@ where
                     .storage
                     .remove_transaction_and_dependents_subtree(storage_id);
                 self.update_components_and_caches_on_removal(removed.iter());
-                removed_transactions
-                    .extend(removed.into_iter().map(|data| data.transaction));
+                removed_transactions.extend(removed.into_iter().map(|data| {
+                    let tx_id = data.transaction.id();
+
+                    (tx_id, tx_status.clone())
+                }));
             }
         }
 
+        self.tx_status_manager.statuses_update(removed_transactions);
         self.update_stats();
-
-        removed_transactions
     }
 
-    pub fn remove_skipped_transaction(&mut self, tx_id: TxId) -> Vec<ArcPoolTx> {
+    pub fn remove_skipped_transaction(&mut self, tx_id: TxId) {
         self.extracted_outputs.new_skipped_transaction(&tx_id);
-        let mut txs_removed = vec![];
         let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
         for dependent in coin_dependents {
             let removed = self
                 .storage
                 .remove_transaction_and_dependents_subtree(dependent);
             self.update_components_and_caches_on_removal(removed.iter());
-            txs_removed.extend(removed.into_iter().map(|data| data.transaction));
         }
 
         self.update_stats();
-
-        txs_removed
     }
 
     fn check_blob_does_not_exist(

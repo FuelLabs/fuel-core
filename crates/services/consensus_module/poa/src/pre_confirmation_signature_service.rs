@@ -170,6 +170,7 @@ where
     let message = DelegatePreConfirmationKey {
         public_key,
         expiration,
+        nonce: 0,
     };
 
     const MAX_ATTEMPTS: usize = 5;
@@ -258,6 +259,7 @@ where
             }
             _ = self.echo_delegation_trigger.tick() => {
                 tracing::debug!("Echo delegation trigger");
+                self.sealed_delegate_message.entity.nonce = self.sealed_delegate_message.entity.nonce.saturating_add(1);
                 let sealed = self.sealed_delegate_message.clone();
 
                 try_or_continue!(

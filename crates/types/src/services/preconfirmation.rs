@@ -1,18 +1,19 @@
 //! The module containing all types related to the preconfirmation service.
 
-#[cfg(feature = "std")]
-use std::sync::Arc;
-
-use crate::fuel_tx::TxId;
+use crate::fuel_tx::{
+    Receipt,
+    TxId,
+    TxPointer,
+};
+use fuel_vm_private::fuel_tx::Output;
 use tai64::Tai64;
 
 #[cfg(not(feature = "std"))]
 use alloc::{
-    sync::Arc,
+    string::String,
     vec::Vec,
 };
 
-use super::transaction_status;
 /// A collection of pre-confirmations that have been signed by a delegate
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -39,9 +40,34 @@ pub struct Preconfirmation {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PreconfirmationStatus {
     /// Transaction was squeezed out by the tx pool
-    SqueezedOut(Arc<transaction_status::statuses::PreConfirmationSqueezedOut>),
+    SqueezedOut {
+        /// Reason the transaction was squeezed out
+        reason: String,
+    },
     /// Transaction has been confirmed and will be included in block_height
-    Success(Arc<transaction_status::statuses::PreConfirmationSuccess>),
+    Success {
+        /// Transaction pointer within the block.
+        tx_pointer: TxPointer,
+        /// The total gas used by the transaction.
+        total_gas: u64,
+        /// The total fee paid by the transaction.
+        total_fee: u64,
+        /// Receipts produced by the transaction during execution.
+        receipts: Vec<Receipt>,
+        /// Dynamic outputs produced by the transaction during execution.
+        outputs: Vec<Output>,
+    },
     /// Transaction will not be included in a block, rejected at `block_height`
-    Failure(Arc<transaction_status::statuses::PreConfirmationFailure>),
+    Failure {
+        /// Transaction pointer within the block.
+        tx_pointer: TxPointer,
+        /// The total gas used by the transaction.
+        total_gas: u64,
+        /// The total fee paid by the transaction.
+        total_fee: u64,
+        /// Receipts produced by the transaction during execution.
+        receipts: Vec<Receipt>,
+        /// Dynamic outputs produced by the transaction during execution.
+        outputs: Vec<Output>,
+    },
 }

@@ -423,6 +423,7 @@ pub async fn make_nodes(
             overrides,
         );
         node_config.block_production = Trigger::Never;
+        node_config.consensus_signer = SignMode::Unavailable;
 
         if let Some(ValidatorSetup {
             pub_key,

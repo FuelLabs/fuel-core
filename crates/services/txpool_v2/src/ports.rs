@@ -39,6 +39,8 @@ pub use fuel_core_storage::transactional::AtomicView;
 
 pub trait TxStatusManager: Send + Sync + 'static {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus);
+
+    fn statuses_update(&self, statuses: Vec<(TxId, TransactionStatus)>);
 }
 
 pub trait BlockImporter {

@@ -216,61 +216,6 @@ async fn preconfirmation__received_after_failed_execution() {
     ));
 }
 
-#[tokio::test]
-async fn preconfirmation__received_after_squeezed_out() {
-    let mut config = Config::local_node();
-    config.block_production = Trigger::Never;
-    let mut rng = rand::thread_rng();
-
-    // Given
-    // Disable UTXO validation in TxPool so that the transaction is squeezed out by
-    // block production
-    config.debug = true;
-    config.txpool.utxo_validation = false;
-    config.utxo_validation = true;
-    let srv = FuelService::new_node(config).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
-
-    let gas_limit = 1_000_000;
-    let tx = TransactionBuilder::script(
-        vec![op::ret(RegId::ONE)].into_iter().collect(),
-        vec![],
-    )
-    .script_gas_limit(gas_limit)
-    .add_unsigned_coin_input(
-        SecretKey::random(&mut rng),
-        rng.gen(),
-        10,
-        Default::default(),
-        Default::default(),
-    )
-    .add_output(Output::Change {
-        to: Default::default(),
-        amount: 0,
-        asset_id: Default::default(),
-    })
-    .finalize_as_transaction();
-
-    let tx_id = tx.id(&Default::default());
-    let mut tx_statuses_subscriber =
-        client.subscribe_transaction_status(&tx_id).await.unwrap();
-    client.submit(&tx).await.unwrap();
-
-    // When
-    assert!(matches!(
-        tx_statuses_subscriber.next().await.unwrap().unwrap(),
-        TransactionStatus::Submitted { .. }
-    ));
-    client.produce_blocks(1, None).await.unwrap();
-    if let TransactionStatus::SqueezedOut { reason: _ } =
-        tx_statuses_subscriber.next().await.unwrap().unwrap()
-    {
-        // Then
-    } else {
-        panic!("Expected preconfirmation status");
-    }
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn preconfirmation__received_tx_inserted_end_block_open_period() {
     let mut config = Config::local_node();

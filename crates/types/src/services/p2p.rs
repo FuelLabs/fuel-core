@@ -17,7 +17,6 @@ use crate::services::preconfirmation::PreconfirmationStatus;
 use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::transaction_status::statuses::PreConfirmationSqueezedOut,
 };
 use std::{
     collections::HashSet,
@@ -104,6 +103,8 @@ pub struct DelegatePreConfirmationKey<P> {
     /// to use to verify the pre-confirmations--serves the second purpose of being a nonce of
     /// each key
     pub expiration: Tai64,
+    /// The nonce of the p2p message to make it unique.
+    pub nonce: u64,
 }
 
 /// A signed key delegation
@@ -130,17 +131,14 @@ impl<DP, S> PreConfirmationMessage<DP, crate::fuel_tx::Bytes64, S> {
             fuel_tx::TxId,
             services::preconfirmation::Preconfirmation,
         };
-        use std::sync::Arc;
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
             entity: Preconfirmations {
                 expiration: Tai64::UNIX_EPOCH,
                 preconfirmations: vec![Preconfirmation {
                     tx_id: TxId::default(),
-                    status: PreconfirmationStatus::SqueezedOut(Arc::new(
-                        PreConfirmationSqueezedOut {
-                            reason: "Dummy reason".to_string(),
-                        },
-                    )),
+                    status: PreconfirmationStatus::SqueezedOut {
+                        reason: "Dummy reason".to_string(),
+                    },
                 }],
             },
             signature: crate::fuel_tx::Bytes64::default(),
@@ -293,22 +291,57 @@ impl Serialize for NetworkableTransactionPool {
     where
         S: serde::Serializer,
     {
+        use crate::fuel_tx::{
+            Blob,
+            Create,
+            Script,
+            Upgrade,
+            Upload,
+        };
+
+        #[cfg(debug_assertions)]
+        // When a new variant is added to `Transaction`, the `TransactionRef`
+        // must also be updated to match the new variant.
+        // This match statement will trigger a compilation error if a new variant is added.
+        // Don't add a `_` wildcard to this match statement, instead handle new variant.
+        {
+            match Transaction::default_test_tx() {
+                Transaction::Script(_) => {}
+                Transaction::Create(_) => {}
+                Transaction::Mint(_) => {}
+                Transaction::Upgrade(_) => {}
+                Transaction::Upload(_) => {}
+                Transaction::Blob(_) => {}
+            }
+        }
+
+        #[derive(serde::Serialize)]
+        enum TransactionRef<'a> {
+            Script(&'a Script),
+            Create(&'a Create),
+            #[allow(dead_code)]
+            Mint,
+            Upgrade(&'a Upgrade),
+            Upload(&'a Upload),
+            Blob(&'a Blob),
+        }
+
         match self {
             NetworkableTransactionPool::PoolTransaction(tx) => match (*tx).as_ref() {
-                PoolTransaction::Script(script, _) => {
-                    script.transaction().serialize(serializer)
+                PoolTransaction::Script(tx, _) => {
+                    TransactionRef::Script(tx.transaction()).serialize(serializer)
                 }
-                PoolTransaction::Create(create, _) => {
-                    create.transaction().serialize(serializer)
+                PoolTransaction::Create(tx, _) => {
+                    TransactionRef::Create(tx.transaction()).serialize(serializer)
                 }
-                PoolTransaction::Blob(blob, _) => {
-                    blob.transaction().serialize(serializer)
+                PoolTransaction::Blob(tx, _) => {
+                    TransactionRef::Blob(tx.transaction()).serialize(serializer)
                 }
-                PoolTransaction::Upgrade(upgrade, _) => {
-                    upgrade.transaction().serialize(serializer)
+                PoolTransaction::Upgrade(tx, _) => {
+                    TransactionRef::Upgrade(tx.transaction()).serialize(serializer)
                 }
-                PoolTransaction::Upload(upload, _) => {
-                    upload.transaction().serialize(serializer)
+                PoolTransaction::Upload(tx, _) => {
+                    TransactionRef::Upload(tx.transaction()).serialize(serializer)
                 }
             },
             NetworkableTransactionPool::Transaction(tx) => tx.serialize(serializer),
@@ -337,5 +370,27 @@ impl TryFrom<NetworkableTransactionPool> for Transaction {
             NetworkableTransactionPool::Transaction(tx) => Ok(tx),
             _ => Err("Cannot convert to transaction"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        fuel_tx::Transaction,
+        services::p2p::NetworkableTransactionPool,
+    };
+
+    #[test]
+    fn ser_der() {
+        // Given
+        let transaction = Transaction::default_test_tx();
+        let expected = NetworkableTransactionPool::Transaction(transaction.clone());
+        let bytes = postcard::to_allocvec(&expected).unwrap();
+
+        // When
+        let actual: NetworkableTransactionPool = postcard::from_bytes(&bytes).unwrap();
+
+        // Then
+        assert_eq!(actual, expected);
     }
 }

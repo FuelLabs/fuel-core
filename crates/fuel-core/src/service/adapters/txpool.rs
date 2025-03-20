@@ -234,6 +234,10 @@ impl ChainStateInfoProviderTrait for ChainStateInfoProvider {
 impl TxStatusManager for TxStatusManagerAdapter {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
         self.tx_status_manager_shared_data
-            .blocking_update_status(tx_id, tx_status);
+            .update_status(tx_id, tx_status);
+    }
+
+    fn statuses_update(&self, statuses: Vec<(TxId, TransactionStatus)>) {
+        self.tx_status_manager_shared_data.update_statuses(statuses);
     }
 }
