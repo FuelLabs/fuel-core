@@ -107,6 +107,7 @@ anyhow = "1.0"
 async-graphql = { version = "7.0.11", features = [
   "graphiql",
   "tracing",
+  "tokio",
 ], default-features = false }
 async-trait = "0.1"
 aws-sdk-kms = "1.37"

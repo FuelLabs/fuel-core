@@ -15,6 +15,11 @@ use crate::{
 };
 use anyhow::Context;
 use clap::Parser;
+#[cfg(feature = "rocksdb")]
+use fuel_core::state::rocks_db::{
+    ColumnsPolicy,
+    DatabaseConfig,
+};
 use fuel_core::{
     chain_config::default_consensus_dev_key,
     combined_database::{
@@ -36,10 +41,6 @@ use fuel_core::{
         DbType,
         RelayerConsensusConfig,
     },
-    state::rocks_db::{
-        ColumnsPolicy,
-        DatabaseConfig,
-    },
     tx_status_manager::config::Config as TxStatusManagerConfig,
     txpool::config::{
         BlackList,
@@ -53,6 +54,11 @@ use fuel_core::{
         fuel_vm::SecretKey,
         secrecy::Secret,
     },
+};
+#[cfg(feature = "rocksdb")]
+use rlimit::{
+    getrlimit,
+    Resource,
 };
 
 use fuel_core_chain_config::{
@@ -74,10 +80,6 @@ use pyroscope::{
 use pyroscope_pprofrs::{
     pprof_backend,
     PprofConfig,
-};
-use rlimit::{
-    getrlimit,
-    Resource,
 };
 use std::{
     env,
@@ -107,16 +109,16 @@ mod p2p;
 #[cfg(feature = "shared-sequencer")]
 mod shared_sequencer;
 
-mod consensus;
-mod gas_price;
-mod graphql;
+pub mod consensus;
+pub mod gas_price;
+pub mod graphql;
 #[cfg(feature = "p2p")]
-mod preconfirmation_signature_service;
-mod profiling;
+pub mod preconfirmation_signature_service;
+pub mod profiling;
 #[cfg(feature = "relayer")]
-mod relayer;
-mod tx_pool;
-mod tx_status_manager;
+pub mod relayer;
+pub mod tx_pool;
+pub mod tx_status_manager;
 
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]

@@ -10,11 +10,11 @@ use humantime::Duration;
 #[derive(Debug, Clone, clap::Args)]
 pub struct PoATriggerArgs {
     #[clap(flatten)]
-    instant: Instant,
+    pub instant: Instant,
     #[clap(flatten)]
-    interval: Interval,
+    pub interval: Interval,
     #[clap(flatten)]
-    open: Open,
+    pub open: Open,
 }
 
 // Convert from arg struct to PoATrigger enum
@@ -46,16 +46,16 @@ impl From<PoATriggerArgs> for PoATrigger {
 #[clap(
     group = ArgGroup::new("instant-mode").args(&["instant"]).conflicts_with_all(&["interval-mode", "open-mode"]),
 )]
-struct Instant {
+pub struct Instant {
     /// Use instant block production mode.
     /// Newly submitted txs will immediately trigger the production of the next block.
     /// Cannot be combined with other poa flags.
     #[arg(long = "poa-instant", default_value = "true", value_parser, env)]
-    instant: Boolean,
+    pub instant: Boolean,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-enum Boolean {
+pub enum Boolean {
     True,
     False,
 }
@@ -64,7 +64,7 @@ enum Boolean {
 #[clap(
     group = ArgGroup::new("interval-mode").args(&["block_time"]).conflicts_with_all(&["instant-mode", "open-mode"]),
 )]
-struct Interval {
+pub struct Interval {
     /// Interval trigger option.
     /// Produces blocks on a fixed interval regardless of txpool activity.
     /// Cannot be combined with other poa flags.
@@ -76,7 +76,7 @@ struct Interval {
 #[clap(
     group = ArgGroup::new("open-mode").args(&["period"]).conflicts_with_all(&["instant-mode", "interval-mode"]),
 )]
-struct Open {
+pub struct Open {
     /// Opens the block production immediately and keeps it open for the specified period.
     /// After period is over, the block is produced.
     /// Cannot be combined with other poa flags.

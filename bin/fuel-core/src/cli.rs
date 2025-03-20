@@ -138,6 +138,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
             #[cfg(feature = "rocksdb")]
             Fuel::Snapshot(command) => snapshot::exec(command).await,
             Fuel::GenerateFeeContract(command) => fee_contract::exec(command).await,
+            #[cfg(feature = "rocksdb")]
             Fuel::Rollback(command) => rollback::exec(command).await,
         },
         Err(e) => {

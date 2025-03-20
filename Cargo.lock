@@ -375,6 +375,7 @@ dependencies = [
  "serde_urlencoded",
  "static_assertions_next",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
  "tracing-futures",
 ]
@@ -3479,6 +3480,7 @@ dependencies = [
  "dotenvy",
  "fuel-core",
  "fuel-core-chain-config",
+ "fuel-core-client",
  "fuel-core-metrics",
  "fuel-core-poa",
  "fuel-core-shared-sequencer",
@@ -3486,6 +3488,7 @@ dependencies = [
  "fuel-core-types 0.42.0",
  "hex",
  "humantime",
+ "indicatif",
  "itertools 0.12.1",
  "pretty_assertions",
  "pyroscope",
