@@ -128,7 +128,7 @@ pub struct TestPoolUniverse {
     rng: StdRng,
     pub config: Config,
     pool: Option<Shared<TxPool>>,
-    mock_tx_status_manager: MockTxStatusManager,
+    pub mock_tx_status_manager: MockTxStatusManager,
     tx_status_manager_receiver: mpsc::Receiver<(TxId, TransactionStatus)>,
     stats_receiver: Option<tokio::sync::watch::Receiver<TxPoolStats>>,
 }
@@ -250,6 +250,19 @@ impl TestPoolUniverse {
         tx_builder.tip(tip);
         tx_builder.max_fee_limit(10000);
         tx_builder.expiration(DEFAULT_EXPIRATION_HEIGHT);
+        tx_builder.finalize().into()
+    }
+
+    pub fn build_mint_transaction(&mut self) -> Transaction {
+        let tx_builder = TransactionBuilder::mint(
+            0u32.into(),
+            0,
+            Default::default(),
+            Default::default(),
+            1,
+            AssetId::BASE,
+            Default::default(),
+        );
         tx_builder.finalize().into()
     }
 
