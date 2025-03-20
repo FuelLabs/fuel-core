@@ -53,3 +53,5 @@ version-36-fuel-core-client = { version = "0.36.0", package = "fuel-core-client"
 version-36-fuel-core-services = { version = "0.36.0", package = "fuel-core-services" }
 version-36-fuel-core-gas-price-service = { version = "0.36.0", package = "fuel-core-gas-price-service" }
 version-36-fuel-core-storage = { version = "0.36.0", package = "fuel-core-storage" }
+# pin async-graphql because they bumped msrv in a patch release
+async-graphql = "=7.0.15"
