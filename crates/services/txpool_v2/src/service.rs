@@ -357,7 +357,7 @@ where
                         transaction,
                         None,
                         Some(response_channel),
-                        false
+                        false,
                     );
 
                     self.transaction_verifier_process
@@ -385,7 +385,7 @@ where
                             GossipsubMessageAcceptance::Accept,
                         );
                     }
-                    ExtendedInsertionSource::P2PSync => {},
+                    ExtendedInsertionSource::P2PSync => {}
                     ExtendedInsertionSource::RPC {
                         response_channel,
                         tx,
@@ -426,7 +426,7 @@ where
                         );
                         self.tx_status_manager.status_update(tx_id, tx_status);
                     }
-                    InsertionSource::P2PSync => {},
+                    InsertionSource::P2PSync => {}
                     InsertionSource::RPC { response_channel } => {
                         if let Some(channel) = response_channel {
                             let _ = channel.send(Err(error));
@@ -438,7 +438,11 @@ where
         }
     }
 
-    fn insert_transactions(&self, transactions: Vec<Arc<Transaction>>, from_p2p_sync: bool) {
+    fn insert_transactions(
+        &self,
+        transactions: Vec<Arc<Transaction>>,
+        from_p2p_sync: bool,
+    ) {
         for transaction in transactions {
             let Ok(reservation) = self.transaction_verifier_process.reserve() else {
                 tracing::error!("Failed to insert transactions: Out of capacity");

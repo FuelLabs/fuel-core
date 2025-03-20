@@ -384,7 +384,8 @@ async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_sig
 }
 
 #[tokio::test]
-async fn run__will_rebroadcast_generated_key_with_correct_signature_after_1_second() {
+async fn run__will_rebroadcast_generated_key_with_correct_signature_after_1_second_with_nonce_increased(
+) {
     // Given
     let period = Duration::from_secs(1);
     let generated_key = "some generated key";
@@ -427,7 +428,10 @@ async fn run__will_rebroadcast_generated_key_with_correct_signature_after_1_seco
         dummy_signature: dummy_signature.into(),
     };
 
-    assert_eq!(actual_1, actual_2);
+    assert_eq!(actual_1.data.expiration, actual_2.data.expiration);
+    assert_eq!(actual_1.data.public_key, actual_2.data.public_key);
+    assert_eq!(actual_1.data.nonce.saturating_add(1), actual_2.data.nonce);
+    assert_eq!(actual_1.dummy_signature, actual_2.dummy_signature);
     assert_eq!(expected, actual_1);
 }
 
