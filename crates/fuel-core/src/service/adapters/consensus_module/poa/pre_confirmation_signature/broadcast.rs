@@ -94,8 +94,12 @@ mod tests {
         ed25519_dalek::VerifyingKey,
         services::{
             p2p::ProtocolSignature,
-            preconfirmation::PreconfirmationStatus,
+            preconfirmation::{
+                Preconfirmation,
+                PreconfirmationStatus,
+            },
         },
+        tai64::Tai64,
     };
 
     #[tokio::test]
@@ -136,7 +140,7 @@ mod tests {
                 &inner,
                 &preconfirmations.preconfirmations,
                 &Bytes64::new(signature.to_bytes()),
-                &expiration,
+                preconfirmations.expiration,
             )
         ));
     }
@@ -145,15 +149,12 @@ mod tests {
         inner: &Arc<P2PPreConfirmationMessage>,
         preconfirmations: &[Preconfirmation],
         signature: &Bytes64,
-        expiration: &Tai64,
+        expiration: Tai64,
     ) -> bool {
-        let entity = Preconfirmations {
-            expiration: *expiration,
-            preconfirmations: preconfirmations.to_vec(),
-        };
         match &**inner {
             PreConfirmationMessage::Preconfirmations(signed_preconfirmation) => {
-                signed_preconfirmation.entity == entity
+                signed_preconfirmation.entity.preconfirmations == preconfirmations
+                    && signed_preconfirmation.entity.expiration == expiration
                     && signed_preconfirmation.signature == *signature
             }
             _ => false,
