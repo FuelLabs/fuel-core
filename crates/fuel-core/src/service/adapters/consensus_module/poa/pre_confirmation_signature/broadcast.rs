@@ -24,35 +24,29 @@ use fuel_core_types::{
             SignedByBlockProducerDelegation,
             SignedPreconfirmationByDelegate,
         },
-        preconfirmation::{
-            Preconfirmation,
-            Preconfirmations,
-        },
+        preconfirmation::Preconfirmations,
     },
-    tai64::Tai64,
 };
 use std::sync::Arc;
 
 impl Broadcast for P2PAdapter {
     type ParentKey = FuelBlockSigner;
     type DelegateKey = Ed25519Key;
-    type Preconfirmations = Vec<Preconfirmation>;
+    type Preconfirmations = Preconfirmations;
 
     async fn broadcast_preconfirmations(
         &mut self,
         preconfirmations: Self::Preconfirmations,
         signature: <Self::DelegateKey as SigningKey>::Signature,
-        expiration: Tai64,
     ) -> PreConfServiceResult<()> {
         if let Some(p2p) = &self.service {
-            let entity = Preconfirmations {
-                expiration,
-                preconfirmations,
-            };
             let signature_bytes = signature.to_bytes();
             let signature = Bytes64::new(signature_bytes);
             let preconfirmations = Arc::new(PreConfirmationMessage::Preconfirmations(
-                SignedPreconfirmationByDelegate { entity, signature },
+                SignedPreconfirmationByDelegate {
+                    entity: preconfirmations,
+                    signature,
+                },
             ));
             p2p.broadcast_preconfirmations(preconfirmations)
                 .map_err(|e| PreConfServiceError::Broadcast(format!("{e:?}")))?;
@@ -112,22 +106,24 @@ mod tests {
         let peer_report_config = PeerReportConfig::default();
         let service = Some(shared_state);
         let mut adapter = P2PAdapter::new(service, peer_report_config);
-        let preconfirmations = vec![Preconfirmation {
-            tx_id: Default::default(),
-            status: PreconfirmationStatus::Failure {
-                tx_pointer: Default::default(),
-                total_gas: 0,
-                total_fee: 0,
-                receipts: vec![],
-                outputs: vec![],
-            },
-        }];
+        let preconfirmations = Preconfirmations {
+            preconfirmations: vec![Preconfirmation {
+                tx_id: Default::default(),
+                status: PreconfirmationStatus::Failure {
+                    tx_pointer: Default::default(),
+                    total_gas: 0,
+                    total_fee: 0,
+                    receipts: vec![],
+                    outputs: vec![],
+                },
+            }],
+            expiration: Tai64::UNIX_EPOCH,
+        };
         let signature = ed25519::Signature::from_bytes(&[5u8; 64]);
-        let expiration = Tai64::UNIX_EPOCH;
 
         // when
         adapter
-            .broadcast_preconfirmations(preconfirmations.clone(), signature, expiration)
+            .broadcast_preconfirmations(preconfirmations.clone(), signature)
             .await
             .unwrap();
 
@@ -138,7 +134,7 @@ mod tests {
             TaskRequest::BroadcastPreConfirmations(inner)
             if pre_conf_matches_expected_values(
                 &inner,
-                &preconfirmations,
+                &preconfirmations.preconfirmations,
                 &Bytes64::new(signature.to_bytes()),
                 &expiration,
             )

@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 use error::Result;
 use fuel_core_services::{
     try_or_continue,
@@ -12,9 +10,15 @@ use fuel_core_services::{
     TaskNextAction,
 };
 use fuel_core_types::{
-    services::p2p::{
-        DelegatePreConfirmationKey,
-        Sealed,
+    services::{
+        p2p::{
+            DelegatePreConfirmationKey,
+            Sealed,
+        },
+        preconfirmation::{
+            Preconfirmation,
+            Preconfirmations,
+        },
     },
     tai64::Tai64,
 };
@@ -85,10 +89,10 @@ pub struct PreConfirmationSignatureTask<
 }
 
 #[async_trait::async_trait]
-impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableService
+impl<Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableService
     for UninitializedPreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, Trigger>
 where
-    TxRcv: TxReceiver<Txs = Preconfirmations>,
+    TxRcv: TxReceiver<Txs = Vec<Preconfirmation>>,
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
         ParentKey = Parent,
@@ -98,7 +102,6 @@ where
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,
     Parent: ParentSignature,
-    Preconfirmations: serde::Serialize + Send + Debug,
 {
     const NAME: &'static str = "PreconfirmationSignatureTask";
     type SharedData = EmptyShared;
@@ -206,10 +209,10 @@ where
     Ok((new_delegate_key, sealed))
 }
 
-impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableTask
+impl<Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableTask
     for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
-    TxRcv: TxReceiver<Txs = Preconfirmations>,
+    TxRcv: TxReceiver<Txs = Vec<Preconfirmation>>,
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
         ParentKey = Parent,
@@ -219,7 +222,6 @@ where
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,
     Parent: ParentSignature,
-    Preconfirmations: serde::Serialize + Send + Debug,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tracing::debug!("Running pre-confirmation task");
@@ -229,11 +231,15 @@ where
             }
             res = self.tx_receiver.receive() => {
                 tracing::debug!("Received transactions");
-                let pre_confirmations = try_or_stop!(res);
-                let signature = try_or_stop!(self.current_delegate_key.sign(&pre_confirmations));
+                let preconfirmations = try_or_stop!(res);
                 let expiration = self.current_delegate_key.expiration();
+                let pre_confirmations = Preconfirmations {
+                    expiration,
+                    preconfirmations,
+                };
+                let signature = try_or_stop!(self.current_delegate_key.sign(&pre_confirmations));
                 try_or_continue!(
-                    self.broadcast.broadcast_preconfirmations(pre_confirmations, signature, expiration).await,
+                    self.broadcast.broadcast_preconfirmations(pre_confirmations, signature).await,
                     |err| tracing::error!("Failed to broadcast pre-confirmations: {:?}", err)
                 );
                 TaskNextAction::Continue
@@ -280,7 +286,7 @@ pub type Service<TxRcv, Brdcst, Parent, Gen, Trigger> = ServiceRunner<
     UninitializedPreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, Trigger>,
 >;
 
-pub fn new_service<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger, Preconfirmations>(
+pub fn new_service<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>(
     config: config::Config,
     preconfirmation_receiver: TxRcv,
     p2p_adapter: Brdcst,
@@ -289,7 +295,7 @@ pub fn new_service<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger, Preconfirma
     key_rotation_trigger: Trigger,
 ) -> anyhow::Result<Service<TxRcv, Brdcst, Parent, Gen, Trigger>>
 where
-    TxRcv: TxReceiver<Txs = Preconfirmations>,
+    TxRcv: TxReceiver<Txs = Vec<Preconfirmation>>,
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
         ParentKey = Parent,
@@ -299,7 +305,6 @@ where
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,
     Parent: ParentSignature,
-    Preconfirmations: serde::Serialize + Send + Debug,
 {
     Ok(Service::new(UninitializedPreConfirmationSignatureTask {
         tx_receiver: preconfirmation_receiver,

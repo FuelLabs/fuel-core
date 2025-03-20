@@ -158,7 +158,7 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
         delegate_key: &DelegatePublicKey,
         sealed: &Sealed<Preconfirmations, Bytes64>,
     ) -> bool {
-        let bytes = match postcard::to_allocvec(&sealed.entity.preconfirmations) {
+        let bytes = match postcard::to_allocvec(&sealed.entity) {
             Ok(bytes) => bytes,
             Err(e) => {
                 tracing::warn!("Failed to serialize preconfirmation: {e:?}");

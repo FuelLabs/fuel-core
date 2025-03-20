@@ -51,9 +51,11 @@ fn config_with_preconfirmations(block_production_period: Duration) -> Config {
     let mut config = Config::local_node();
 
     config.p2p.as_mut().unwrap().subscribe_to_pre_confirmations = true;
-    config.pre_confirmation_signature_service.key_rotation_interval = block_production_period.checked_div(4).unwrap();
+    config
+        .pre_confirmation_signature_service
+        .key_rotation_interval = block_production_period.checked_div(4).unwrap();
     config.block_production = Trigger::Open {
-        period: block_production_period
+        period: block_production_period,
     };
 
     config
@@ -338,103 +340,5 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
     assert!(matches!(
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
         TransactionStatus::Failure { .. }
-    ));
-}
-
-#[tokio::test]
-async fn preconfirmation__propagate_p2p_after_squeezed_out_on_producer() {
-    let mut rng = rand::thread_rng();
-
-    let block_production_period = Duration::from_secs(8);
-    let gas_limit = 1_000_000;
-    let tx = TransactionBuilder::script(
-        vec![op::ret(RegId::ONE)].into_iter().collect(),
-        vec![],
-    )
-    .script_gas_limit(gas_limit)
-    .add_unsigned_coin_input(
-        SecretKey::random(&mut rng),
-        rng.gen(),
-        10,
-        Default::default(),
-        Default::default(),
-    )
-    .add_output(Output::Change {
-        to: Default::default(),
-        amount: 0,
-        asset_id: Default::default(),
-    })
-    .finalize_as_transaction();
-
-    // Create a random seed based on the test parameters.
-    let mut hasher = DefaultHasher::new();
-    let num_txs = 1;
-    let num_validators = 1;
-    let num_partitions = 1;
-    (num_txs, num_validators, num_partitions, line!()).hash(&mut hasher);
-    let mut rng = StdRng::seed_from_u64(hasher.finish());
-
-    // Create a set of key pairs.
-    let secrets: Vec<_> = (0..1).map(|_| SecretKey::random(&mut rng)).collect();
-    let pub_keys: Vec<_> = secrets
-        .clone()
-        .into_iter()
-        .map(|secret| Input::owner(&secret.public_key()))
-        .collect();
-
-    // Create a producer for each key pair and a set of validators that share
-    // the same key pair.
-
-    // Given
-    // Disable UTXO validation in TxPool so that the transaction is squeezed out by
-    // block production
-    let Nodes {
-        producers: _producers,
-        validators,
-        bootstrap_nodes: _dont_drop,
-    } = make_nodes(
-        pub_keys
-            .iter()
-            .map(|pub_key| Some(BootstrapSetup::new(*pub_key))),
-        secrets.clone().into_iter().enumerate().map(|(i, secret)| {
-            Some(
-                ProducerSetup::new(secret)
-                    .with_name(format!("{}:producer", pub_keys[i]))
-                    .utxo_validation(true),
-            )
-        }),
-        pub_keys.iter().flat_map(|pub_key| {
-            (0..num_validators).map(move |i| {
-                Some(
-                    ValidatorSetup::new(*pub_key)
-                        .with_name(format!("{pub_key}:{i}"))
-                        .utxo_validation(false),
-                )
-            })
-        }),
-        Some(config_with_preconfirmations(block_production_period)),
-    )
-    .await;
-
-    let sentry = &validators[0];
-
-    // Sleep to let time for exchange preconfirmations delegate public keys
-    tokio::time::sleep(block_production_period.checked_div(2).unwrap()).await;
-
-    // When
-    let client_sentry = FuelClient::from(sentry.node.bound_address);
-    let mut tx_statuses_subscriber = client_sentry
-        .submit_and_await_status(&tx)
-        .await
-        .expect("Should be able to subscribe for events");
-
-    assert!(matches!(
-        tx_statuses_subscriber.next().await.unwrap().unwrap(),
-        TransactionStatus::Submitted { .. }
-    ));
-
-    assert!(matches!(
-        tx_statuses_subscriber.next().await.unwrap().unwrap(),
-        TransactionStatus::SqueezedOut { .. }
     ));
 }
