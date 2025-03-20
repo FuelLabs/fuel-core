@@ -160,6 +160,7 @@ impl TryFrom<TxInfo> for TransactionStatus {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
 pub enum WritePoolRequest {
     InsertTxs {
         transactions: Vec<Arc<Transaction>>,

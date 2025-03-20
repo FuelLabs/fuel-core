@@ -299,7 +299,7 @@ impl Serialize for NetworkableTransactionPool {
             Upload,
         };
 
-        #[cfg(debug_assertions)]
+        #[cfg(all(debug_assertions, feature = "test-helpers"))]
         // When a new variant is added to `Transaction`, the `TransactionRef`
         // must also be updated to match the new variant.
         // This match statement will trigger a compilation error if a new variant is added.
