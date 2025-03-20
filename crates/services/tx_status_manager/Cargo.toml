@@ -29,9 +29,13 @@ fuel-core-types = { path = "./../../types", features = [
   "test-helpers",
   "serde",
 ] }
+insta = { workspace = true }
 mockall = { workspace = true }
 postcard = { workspace = true }
 proptest = { workspace = true }
+public-api = "0.44.2"
+rustdoc-json = "0.9.5"
+rustup-toolchain = "0.1.10"
 test-case = { workspace = true }
 test-strategy = { workspace = true }
 tokio = { workspace = true, features = ["test-util", "macros"] }
