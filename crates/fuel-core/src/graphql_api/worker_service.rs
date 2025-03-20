@@ -208,7 +208,7 @@ where
         for status in result.tx_status.iter() {
             let tx_id = status.id;
             let status = from_executor_to_status(block, status.result.clone());
-            
+
             // TODO[RC]: Need a test which fails when the line below is commented.
             self.tx_status_manager
                 .send_complete(tx_id, height, status.into());

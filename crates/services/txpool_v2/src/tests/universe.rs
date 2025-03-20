@@ -128,7 +128,7 @@ pub struct TestPoolUniverse {
     rng: StdRng,
     pub config: Config,
     pool: Option<Shared<TxPool>>,
-    pub mock_tx_status_manager: MockTxStatusManager,
+    mock_tx_status_manager: MockTxStatusManager,
     tx_status_manager_receiver: mpsc::Receiver<(TxId, TransactionStatus)>,
     stats_receiver: Option<tokio::sync::watch::Receiver<TxPoolStats>>,
 }
