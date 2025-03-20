@@ -420,11 +420,10 @@ where
                     InsertionSource::RPC { response_channel } => {
                         if let Some(channel) = response_channel {
                             let _ = channel.send(Err(error));
+                            self.tx_status_manager.status_update(tx_id, tx_status);
                         }
                     }
                 }
-
-                self.tx_status_manager.status_update(tx_id, tx_status);
             }
         }
     }
