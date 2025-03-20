@@ -7,3 +7,9 @@ pub mod cli;
 pub use fuel_core::service::FuelService;
 
 use tikv_jemallocator as _; // Used only by the binary
+
+#[cfg(feature = "avail")]
+use fuel_core_client as _;
+
+#[cfg(feature = "avail")]
+use indicatif as _;
