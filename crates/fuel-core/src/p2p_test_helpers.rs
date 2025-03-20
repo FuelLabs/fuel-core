@@ -364,7 +364,6 @@ pub async fn make_nodes(
         );
 
         let mut test_txs = Vec::with_capacity(0);
-        node_config.block_production = Trigger::Instant;
 
         if let Some((
             ProducerSetup {

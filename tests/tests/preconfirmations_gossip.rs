@@ -1,7 +1,10 @@
-use std::hash::{
-    DefaultHasher,
-    Hash,
-    Hasher,
+use std::{
+    hash::{
+        DefaultHasher,
+        Hash,
+        Hasher,
+    },
+    time::Duration,
 };
 
 use fuel_core::{
@@ -18,6 +21,7 @@ use fuel_core_client::client::{
     types::TransactionStatus,
     FuelClient,
 };
+use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::{
         op,
@@ -47,6 +51,9 @@ fn config_with_preconfirmations() -> Config {
     let mut config = Config::local_node();
 
     config.p2p.as_mut().unwrap().subscribe_to_pre_confirmations = true;
+    config.block_production = Trigger::Open {
+        period: Duration::from_secs(5),
+    };
 
     config
 }
