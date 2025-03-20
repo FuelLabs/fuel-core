@@ -164,6 +164,9 @@ pub enum WritePoolRequest {
     InsertTxs {
         transactions: Vec<Arc<Transaction>>,
     },
+    InsertTxsSync {
+        transactions: Vec<Arc<Transaction>>,
+    },
     InsertTx {
         transaction: Arc<Transaction>,
         response_channel: oneshot::Sender<Result<(), Error>>,
@@ -340,7 +343,10 @@ where
     fn process_write(&self, write_pool_request: WritePoolRequest) {
         match write_pool_request {
             WritePoolRequest::InsertTxs { transactions } => {
-                self.insert_transactions(transactions);
+                self.insert_transactions(transactions, false);
+            }
+            WritePoolRequest::InsertTxsSync { transactions } => {
+                self.insert_transactions(transactions, true);
             }
             WritePoolRequest::InsertTx {
                 transaction,
@@ -351,6 +357,7 @@ where
                         transaction,
                         None,
                         Some(response_channel),
+                        false
                     );
 
                     self.transaction_verifier_process
@@ -378,6 +385,7 @@ where
                             GossipsubMessageAcceptance::Accept,
                         );
                     }
+                    ExtendedInsertionSource::P2PSync => {},
                     ExtendedInsertionSource::RPC {
                         response_channel,
                         tx,
@@ -416,25 +424,27 @@ where
                             from_peer_info,
                             GossipsubMessageAcceptance::Ignore,
                         );
+                        self.tx_status_manager.status_update(tx_id, tx_status);
                     }
+                    InsertionSource::P2PSync => {},
                     InsertionSource::RPC { response_channel } => {
                         if let Some(channel) = response_channel {
                             let _ = channel.send(Err(error));
-                            self.tx_status_manager.status_update(tx_id, tx_status);
                         }
+                        self.tx_status_manager.status_update(tx_id, tx_status);
                     }
                 }
             }
         }
     }
 
-    fn insert_transactions(&self, transactions: Vec<Arc<Transaction>>) {
+    fn insert_transactions(&self, transactions: Vec<Arc<Transaction>>, from_p2p_sync: bool) {
         for transaction in transactions {
             let Ok(reservation) = self.transaction_verifier_process.reserve() else {
                 tracing::error!("Failed to insert transactions: Out of capacity");
                 continue
             };
-            let op = self.insert_transaction(transaction, None, None);
+            let op = self.insert_transaction(transaction, None, None, from_p2p_sync);
 
             self.transaction_verifier_process
                 .spawn_reserved(reservation, op);
@@ -446,6 +456,7 @@ where
         transaction: Arc<Transaction>,
         from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
+        from_p2p_sync: bool,
     ) -> impl FnOnce() + Send + 'static {
         let metrics = self.metrics;
         if metrics {
@@ -516,6 +527,8 @@ where
 
             let source = if let Some(from_peer_info) = from_peer_info {
                 InsertionSource::P2P { from_peer_info }
+            } else if from_p2p_sync {
+                InsertionSource::P2PSync
             } else {
                 InsertionSource::RPC { response_channel }
             };
@@ -557,7 +570,7 @@ where
             message_id,
             peer_id,
         });
-        let op = self.insert_transaction(Arc::new(tx), info, None);
+        let op = self.insert_transaction(Arc::new(tx), info, None, false);
         self.transaction_verifier_process
             .spawn_reserved(reservation, op);
     }
@@ -645,7 +658,7 @@ where
 
                 // Verifying and insert them, not a big deal if we fail to insert them
                 let _ = txs_insert_sender
-                    .try_send(WritePoolRequest::InsertTxs { transactions: txs });
+                    .try_send(WritePoolRequest::InsertTxsSync { transactions: txs });
             }
         });
     }

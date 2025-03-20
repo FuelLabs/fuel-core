@@ -182,6 +182,7 @@ pub(super) enum InsertionSource {
     P2P {
         from_peer_info: GossipsubMessageInfo,
     },
+    P2PSync,
     RPC {
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
     },
@@ -232,6 +233,7 @@ pub(super) enum ExtendedInsertionSource {
     P2P {
         from_peer_info: GossipsubMessageInfo,
     },
+    P2PSync,
     RPC {
         tx: Arc<Transaction>,
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
@@ -379,6 +381,7 @@ where
                     InsertionSource::P2P { from_peer_info } => {
                         ExtendedInsertionSource::P2P { from_peer_info }
                     }
+                    InsertionSource::P2PSync => ExtendedInsertionSource::P2PSync,
                     InsertionSource::RPC { response_channel } => {
                         let tx: Transaction = self
                             .pool
