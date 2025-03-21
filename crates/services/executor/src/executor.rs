@@ -169,6 +169,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use fuel_core_types::fuel_tx::input::coin::{
+    DataCoinPredicate,
+    DataCoinSigned,
+};
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
@@ -1948,7 +1952,9 @@ where
         for input in inputs {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                | Input::DataCoinSigned(DataCoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
+                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. }) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         if !coin.matches_input(input).unwrap_or_default() {
                             return Err(
@@ -2267,6 +2273,21 @@ where
                     to,
                     db,
                 )?,
+                Output::DataCoin {
+                    amount,
+                    asset_id,
+                    to,
+                    data_hash,
+                } => Self::insert_data_coin(
+                    block_height,
+                    execution_data,
+                    utxo_id,
+                    amount,
+                    asset_id,
+                    to,
+                    data_hash,
+                    db,
+                )?,
                 Output::Contract(contract) => {
                     if let Some(Input::Contract(input::contract::Contract {
                         contract_id,
@@ -2329,6 +2350,43 @@ where
         amount: &Word,
         asset_id: &AssetId,
         to: &Address,
+        db: &mut TxStorageTransaction<T>,
+    ) -> ExecutorResult<()>
+    where
+        T: KeyValueInspect<Column = Column>,
+    {
+        // Only insert a coin output if it has some amount.
+        // This is because variable or transfer outputs won't have any value
+        // if there's a revert or panic and shouldn't be added to the utxo set.
+        if *amount > Word::MIN {
+            let coin = CompressedCoinV1 {
+                owner: *to,
+                amount: *amount,
+                asset_id: *asset_id,
+                tx_pointer: TxPointer::new(block_height, execution_data.tx_count),
+            }
+            .into();
+
+            if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
+                return Err(ExecutorError::OutputAlreadyExists)
+            }
+            execution_data
+                .events
+                .push(ExecutorEvent::CoinCreated(coin.uncompress(utxo_id)));
+        }
+
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn insert_data_coin<T>(
+        block_height: BlockHeight,
+        execution_data: &mut ExecutionData,
+        utxo_id: UtxoId,
+        amount: &Word,
+        asset_id: &AssetId,
+        to: &Address,
+        _data_hash: &Bytes32,
         db: &mut TxStorageTransaction<T>,
     ) -> ExecutorResult<()>
     where
