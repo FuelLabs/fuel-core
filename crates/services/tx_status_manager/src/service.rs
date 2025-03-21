@@ -513,10 +513,11 @@ mod tests {
             _message_info: GossipsubMessageInfo,
             _validity: GossipsubMessageAcceptance,
         ) -> anyhow::Result<()> {
-            Ok(self
-                .p2p_notify_validity_sender
-                .try_send((_message_info, _validity))
-                .unwrap())
+            self
+            .p2p_notify_validity_sender
+            .try_send((_message_info, _validity))
+            .unwrap();
+            Ok(())
         }
     }
 
