@@ -1,4 +1,4 @@
-#[cfg(not(any(feature = "p2p", feature = "relayer", feature = "rocksdb")))]
+#[cfg(not(any(feature = "p2p", feature = "relayer")))]
 #[cfg(feature = "avail")]
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
@@ -28,12 +28,16 @@ async fn main() -> anyhow::Result<()> {
     let ip = "127.0.0.1";
     let port = 4000;
 
+    // fuel_core_bin::cli::init_logging();
+
     #[allow(deprecated)]
     let cmd = run::Command {
         service_name: "avail-fuel-core".to_string(),
         max_database_cache_size: Some(100_000_000),
         database_path: current_dir()?.join("db"),
-        database_type: DbType::InMemory, // do we want rocksdb instead?
+        database_type: DbType::RocksDb,
+        rocksdb_max_fds: -1,
+        state_rewind_duration: humantime::Duration::from_str("0s")?,
         snapshot: None,                  // probably need custom snapshot
         db_prune: true,
         continue_on_error: true,
@@ -98,17 +102,17 @@ async fn main() -> anyhow::Result<()> {
         graphql: run::graphql::GraphQLArgs {
             ip: ip.parse()?,
             port,
-            graphql_number_of_threads: 8, // could be tuned
+            graphql_number_of_threads: 10, // could be tuned
             database_batch_size: 2_000,
             graphql_max_depth: 16,
-            graphql_max_complexity: 80_000,
+            graphql_max_complexity: 800_000,
             graphql_max_recursive_depth: 24,
             max_queries_resolver_recursive_depth: 1,
             max_queries_directives: 10,
-            graphql_max_concurrent_queries: 20_000_000, // could be tuned
+            graphql_max_concurrent_queries: 200_000_000, // could be tuned
             graphql_request_body_bytes_limit: 1048576,
             query_log_threshold_time: humantime::Duration::from_str("2s")?,
-            api_request_timeout: humantime::Duration::from_str("30s")?,
+            api_request_timeout: humantime::Duration::from_str("100s")?,
             assemble_tx_dry_run_limit: 3,
             assemble_tx_estimate_predicates_limit: 10,
             required_fuel_block_height_tolerance: 10,
@@ -225,7 +229,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(any(feature = "p2p", feature = "relayer", feature = "rocksdb"))]
+#[cfg(any(feature = "p2p", feature = "relayer"))]
 #[cfg(not(feature = "avail"))]
 fn main() {
     panic!("The feature `p2p`, `relayer` & `rocksdb` are not supported in this binary. Only feature `avail` is supported. Run with `cargo run --bin fuel-core-avail -p fuel-core-bin --no-default-features --features avail`");

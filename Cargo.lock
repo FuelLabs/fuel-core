@@ -375,6 +375,7 @@ dependencies = [
  "serde_urlencoded",
  "static_assertions_next",
  "thiserror 1.0.69",
+ "tokio",
  "tracing",
  "tracing-futures",
 ]
