@@ -41,7 +41,10 @@ use fuel_core_types::{
             Preconfirmation,
             Preconfirmations,
         },
-        transaction_status::TransactionStatus,
+        transaction_status::{
+            statuses,
+            TransactionStatus,
+        },
     },
     tai64::Tai64,
 };
@@ -69,7 +72,7 @@ enum WriteRequest {
         status: TransactionStatus,
     },
     UpdateStatuses {
-        statuses: Vec<(TxId, TransactionStatus)>,
+        statuses: Vec<(TxId, statuses::SqueezedOut)>,
     },
     UpdatePreconfirmations {
         preconfirmations: Vec<Preconfirmation>,
@@ -108,7 +111,7 @@ impl SharedData {
         let _ = self.write_requests_sender.send(request);
     }
 
-    pub fn update_statuses(&self, statuses: Vec<(TxId, TransactionStatus)>) {
+    pub fn update_statuses(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>) {
         let request = WriteRequest::UpdateStatuses { statuses };
         let _ = self.write_requests_sender.send(request);
     }
@@ -237,14 +240,14 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
         preconfirmations: P2PPreConfirmationMessage,
     ) {
         match preconfirmations {
-            PreConfirmationMessage::Delegate(sealed) => {
+            PreConfirmationMessage::Delegate { seal, .. } => {
                 tracing::debug!(
                     "Received new delegate signature from peer: {:?}",
-                    sealed.entity.public_key
+                    seal.entity.public_key
                 );
                 // TODO: Report peer for sending invalid delegation
                 //  https://github.com/FuelLabs/fuel-core/issues/2872
-                let _ = self.signature_verification.add_new_delegate(&sealed);
+                let _ = self.signature_verification.add_new_delegate(&seal);
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
                 tracing::debug!("Received new preconfirmations from peer");
@@ -314,7 +317,7 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
                     }
                     Some(WriteRequest::UpdateStatuses { statuses }) => {
                         for (tx_id, status) in statuses {
-                            self.manager.status_update(tx_id, status);
+                            self.manager.status_update(tx_id, status.into());
                         }
                         TaskNextAction::Continue
                     }
@@ -686,13 +689,12 @@ mod tests {
         let entity = DelegatePreConfirmationKey {
             public_key: delegate_public_key,
             expiration,
-            nonce: 0,
         };
         let bytes = postcard::to_allocvec(&entity).unwrap();
         let message = Message::new(&bytes);
         let signature = Signature::sign(&protocol_secret_key, &message);
-        let sealed = Sealed { entity, signature };
-        let inner = P2PPreConfirmationMessage::Delegate(sealed);
+        let seal = Sealed { entity, signature };
+        let inner = P2PPreConfirmationMessage::Delegate { seal, nonce: 0 };
         GossipData {
             data: Some(inner),
             peer_id: Default::default(),

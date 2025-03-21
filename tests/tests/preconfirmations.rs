@@ -67,9 +67,7 @@ async fn preconfirmation__received_after_successful_execution() {
         .finalize_as_transaction();
 
     let tx_id = tx.id(&Default::default());
-    let mut tx_statuses_subscriber =
-        client.subscribe_transaction_status(&tx_id).await.unwrap();
-    client.submit(&tx).await.unwrap();
+    let mut tx_statuses_subscriber = client.submit_and_await_status(&tx).await.unwrap();
 
     // When
     assert!(matches!(
@@ -161,9 +159,7 @@ async fn preconfirmation__received_after_failed_execution() {
         .finalize_as_transaction();
 
     let tx_id = tx.id(&Default::default());
-    let mut tx_statuses_subscriber =
-        client.subscribe_transaction_status(&tx_id).await.unwrap();
-    client.submit(&tx).await.unwrap();
+    let mut tx_statuses_subscriber = client.submit_and_await_status(&tx).await.unwrap();
 
     // When
     assert!(matches!(
@@ -238,36 +234,25 @@ async fn preconfirmation__received_tx_inserted_end_block_open_period() {
     .add_output(Output::variable(address, 0, AssetId::default()))
     .finalize_as_transaction();
 
-    let tx_id = tx.id(&Default::default());
-    let jh = tokio::spawn({
-        let client = client.clone();
-        async move {
-            let _ = client
-                .subscribe_transaction_status(&tx_id)
-                .await
-                .unwrap()
-                .enumerate()
-                .for_each(|(event_idx, r)| async move {
-                    let r = r.unwrap();
-                    // Then
-                    match (event_idx, r) {
-                        (0, TransactionStatus::Submitted { .. }) => {}
-                        (1, TransactionStatus::PreconfirmationSuccess { .. }) => {}
-                        (2, TransactionStatus::Success { block_height, .. }) => {
-                            assert_eq!(block_height, BlockHeight::new(1));
-                        }
-                        (_, r) => panic!("Unexpected event: {:?}", r),
-                    }
-                })
-                .await;
-        }
-    });
-
     // When
-    tokio::time::sleep(block_production_period.checked_div(2).unwrap()).await;
-    client.submit(&tx).await.unwrap();
-
-    jh.await.unwrap();
+    client
+        .submit_and_await_status(&tx)
+        .await
+        .unwrap()
+        .enumerate()
+        .for_each(|(event_idx, r)| async move {
+            let r = r.unwrap();
+            // Then
+            match (event_idx, r) {
+                (0, TransactionStatus::Submitted { .. }) => {}
+                (1, TransactionStatus::PreconfirmationSuccess { .. }) => {}
+                (2, TransactionStatus::Success { block_height, .. }) => {
+                    assert_eq!(block_height, BlockHeight::new(1));
+                }
+                (_, r) => panic!("Unexpected event: {:?}", r),
+            }
+        })
+        .await;
 }
 
 #[tokio::test]
@@ -318,14 +303,8 @@ async fn preconfirmation__received_after_execution__multiple_txs() {
     .finalize_as_transaction();
 
     // Given
-    let tx_id1 = tx1.id(&Default::default());
-    let tx_id2 = tx2.id(&Default::default());
-    let mut tx_statuses_subscriber1 =
-        client.subscribe_transaction_status(&tx_id1).await.unwrap();
-    let mut tx_statuses_subscriber2 =
-        client.subscribe_transaction_status(&tx_id2).await.unwrap();
-    client.submit(&tx1).await.unwrap();
-    client.submit(&tx2).await.unwrap();
+    let mut tx_statuses_subscriber1 = client.submit_and_await_status(&tx1).await.unwrap();
+    let mut tx_statuses_subscriber2 = client.submit_and_await_status(&tx2).await.unwrap();
 
     // When
     assert!(matches!(

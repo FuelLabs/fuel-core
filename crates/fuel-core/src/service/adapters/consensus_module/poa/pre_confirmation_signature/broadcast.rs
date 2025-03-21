@@ -58,14 +58,15 @@ impl Broadcast for P2PAdapter {
     async fn broadcast_delegate_key(
         &mut self,
         delegate: DelegatePreConfirmationKey<PublicKey<Self>>,
+        nonce: u64,
         signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> PreConfServiceResult<()> {
         if let Some(p2p) = &self.service {
-            let sealed = SignedByBlockProducerDelegation {
+            let seal = SignedByBlockProducerDelegation {
                 entity: delegate,
                 signature,
             };
-            let delegate_key = Arc::new(PreConfirmationMessage::Delegate(sealed));
+            let delegate_key = Arc::new(PreConfirmationMessage::Delegate { seal, nonce });
             p2p.broadcast_preconfirmations(delegate_key)
                 .map_err(|e| PreConfServiceError::Broadcast(format!("{e:?}")))?;
         }
@@ -173,13 +174,12 @@ mod tests {
         let delegate = DelegatePreConfirmationKey {
             public_key: Default::default(),
             expiration,
-            nonce: 0,
         };
         let signature = ProtocolSignature::from_bytes([5u8; 64]);
 
         // when
         adapter
-            .broadcast_delegate_key(delegate.clone(), signature)
+            .broadcast_delegate_key(delegate.clone(), 0, signature)
             .await
             .unwrap();
 
@@ -206,10 +206,12 @@ mod tests {
         let entity = DelegatePreConfirmationKey {
             public_key: delegate_key,
             expiration,
-            nonce: 0,
         };
         match &**inner {
-            PreConfirmationMessage::Delegate(signed_by_block_producer_delegation) => {
+            PreConfirmationMessage::Delegate {
+                seal: signed_by_block_producer_delegation,
+                ..
+            } => {
                 signed_by_block_producer_delegation.entity == entity
                     && signed_by_block_producer_delegation.signature == *signature
             }

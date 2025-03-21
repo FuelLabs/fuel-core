@@ -57,6 +57,7 @@ use crate::{
 };
 
 use crate::error::RemovedReason;
+use fuel_core_types::services::transaction_status::statuses;
 #[cfg(test)]
 use std::collections::HashSet;
 
@@ -217,18 +218,20 @@ where
             self.new_executable_txs_notifier.send_replace(());
         }
 
-        let error = TransactionStatus::squeezed_out(
-            Error::Removed(RemovedReason::LessWorth(tx_id)).to_string(),
-        );
+        let status = statuses::SqueezedOut {
+            reason: Error::Removed(RemovedReason::LessWorth(tx_id)).to_string(),
+        };
+
         let removed_transactions = removed_transactions
             .into_iter()
             .map(|data| {
                 let removed_tx_id = data.transaction.id();
 
-                (removed_tx_id, error.clone())
+                (removed_tx_id, status.clone())
             })
             .collect::<Vec<_>>();
-        self.tx_status_manager.statuses_update(removed_transactions);
+        self.tx_status_manager
+            .squeezed_out_txs(removed_transactions);
 
         self.update_stats();
         Ok(())
@@ -584,7 +587,7 @@ where
     pub fn remove_transaction_and_dependents(
         &mut self,
         tx_ids: Vec<TxId>,
-        tx_status: TransactionStatus,
+        tx_status: statuses::SqueezedOut,
     ) {
         let mut removed_transactions = vec![];
         for tx_id in tx_ids {
@@ -601,7 +604,8 @@ where
             }
         }
 
-        self.tx_status_manager.statuses_update(removed_transactions);
+        self.tx_status_manager
+            .squeezed_out_txs(removed_transactions);
         self.update_stats();
     }
 

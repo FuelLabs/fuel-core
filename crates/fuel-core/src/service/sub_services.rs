@@ -66,6 +66,7 @@ use crate::{
             ExecutorAdapter,
             MaybeRelayerAdapter,
             PoAAdapter,
+            PreconfirmationSender,
             SharedMemoryPool,
             SystemTime,
             TxPoolAdapter,
@@ -175,6 +176,10 @@ pub fn init_sub_services(
     );
     let tx_status_manager_adapter =
         TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
+    let preconfirmation_sender = PreconfirmationSender::new(
+        preconfirmation_sender,
+        tx_status_manager_adapter.clone(),
+    );
 
     let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
         forbid_fake_coins_default: config.utxo_validation,
@@ -186,8 +191,7 @@ pub fn init_sub_services(
         database.relayer().clone(),
         upgradable_executor_config,
         new_txs_watcher,
-        preconfirmation_sender,
-        tx_status_manager_adapter.clone(),
+        preconfirmation_sender.clone(),
     );
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());
@@ -275,7 +279,7 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
         executor.clone(),
         new_txs_updater,
-        tx_status_manager_adapter.clone(),
+        preconfirmation_sender,
     );
     let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 

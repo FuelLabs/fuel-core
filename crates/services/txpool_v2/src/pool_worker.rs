@@ -8,7 +8,7 @@ use fuel_core_types::{
     services::{
         block_importer::SharedImportResult,
         p2p::GossipsubMessageInfo,
-        transaction_status::TransactionStatus,
+        transaction_status::statuses,
         txpool::ArcPoolTx,
     },
 };
@@ -182,7 +182,6 @@ pub(super) enum InsertionSource {
     P2P {
         from_peer_info: GossipsubMessageInfo,
     },
-    P2PSync,
     RPC {
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
     },
@@ -233,7 +232,6 @@ pub(super) enum ExtendedInsertionSource {
     P2P {
         from_peer_info: GossipsubMessageInfo,
     },
-    P2PSync,
     RPC {
         tx: Arc<Transaction>,
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
@@ -381,7 +379,6 @@ where
                     InsertionSource::P2P { from_peer_info } => {
                         ExtendedInsertionSource::P2P { from_peer_info }
                     }
-                    InsertionSource::P2PSync => ExtendedInsertionSource::P2PSync,
                     InsertionSource::RPC { response_channel } => {
                         let tx: Transaction = self
                             .pool
@@ -498,7 +495,9 @@ where
 
     fn remove_and_coin_dependents(&mut self, tx_ids: (Vec<TxId>, Error)) {
         let (tx_ids, error) = tx_ids;
-        let tx_status = TransactionStatus::squeezed_out(error.to_string());
+        let tx_status = statuses::SqueezedOut {
+            reason: error.to_string(),
+        };
         self.pool
             .remove_transaction_and_dependents(tx_ids, tx_status);
     }

@@ -103,8 +103,6 @@ pub struct DelegatePreConfirmationKey<P> {
     /// to use to verify the pre-confirmations--serves the second purpose of being a nonce of
     /// each key
     pub expiration: Tai64,
-    /// The nonce of the p2p message to make it unique.
-    pub nonce: u64,
 }
 
 /// A signed key delegation
@@ -118,7 +116,12 @@ pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreConfirmationMessage<DP, DS, S> {
     /// Notification of key delegation
-    Delegate(SignedByBlockProducerDelegation<DP, S>),
+    Delegate {
+        /// The sealed key delegation.
+        seal: SignedByBlockProducerDelegation<DP, S>,
+        /// The nonce of the p2p message to make it unique.
+        nonce: u64,
+    },
     /// Notification of pre-confirmations
     Preconfirmations(SignedPreconfirmationByDelegate<DS>),
 }

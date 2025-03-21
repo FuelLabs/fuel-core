@@ -58,7 +58,10 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             PeerId,
         },
-        transaction_status::TransactionStatus,
+        transaction_status::{
+            statuses,
+            TransactionStatus,
+        },
     },
 };
 use std::{
@@ -100,9 +103,9 @@ impl ports::TxStatusManager for MockTxStatusManager {
         tx.try_send((tx_id, tx_status)).unwrap();
     }
 
-    fn statuses_update(&self, statuses: Vec<(TxId, TransactionStatus)>) {
+    fn squeezed_out_txs(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>) {
         for (tx_id, tx_status) in statuses {
-            self.status_update(tx_id, tx_status);
+            self.status_update(tx_id, tx_status.into());
         }
     }
 }

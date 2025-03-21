@@ -333,6 +333,12 @@ pub mod statuses {
         }
     }
 
+    impl From<SqueezedOut> for TransactionStatus {
+        fn from(value: SqueezedOut) -> Self {
+            TransactionStatus::SqueezedOut(value.into())
+        }
+    }
+
     /// Transaction was squeezed out from block producer
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Clone, Debug, PartialEq, Eq)]

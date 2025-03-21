@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
 use tokio::sync::{
     mpsc,
     watch,
@@ -374,12 +377,9 @@ impl ExecutorAdapter {
         relayer_database: Database<Relayer>,
         config: fuel_core_upgradable_executor::config::Config,
         new_txs_watcher: watch::Receiver<()>,
-        preconfirmation_sender: mpsc::Sender<Vec<Preconfirmation>>,
-        tx_status_manager_adapter: TxStatusManagerAdapter,
+        preconfirmation_sender: PreconfirmationSender,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);
-        let preconfirmation_sender =
-            PreconfirmationSender::new(preconfirmation_sender, tx_status_manager_adapter);
         Self {
             executor: Arc::new(executor),
             new_txs_watcher,
@@ -473,6 +473,14 @@ impl BlockImporterAdapter {
 #[derive(Clone)]
 pub struct TxStatusManagerAdapter {
     tx_status_manager_shared_data: SharedData,
+}
+
+impl Deref for TxStatusManagerAdapter {
+    type Target = SharedData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tx_status_manager_shared_data
+    }
 }
 
 impl TxStatusManagerAdapter {

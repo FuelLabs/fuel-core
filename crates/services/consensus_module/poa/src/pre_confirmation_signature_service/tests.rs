@@ -72,6 +72,7 @@ impl Broadcast for FakeBroadcast {
     async fn broadcast_delegate_key(
         &mut self,
         data: DelegatePreConfirmationKey<PublicKey<Self>>,
+        _: u64,
         signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> Result<()> {
         let delegate_key = FakeParentSignedData {
@@ -226,7 +227,6 @@ impl TaskBuilder {
         let entity = DelegatePreConfirmationKey {
             public_key: Bytes32::zeroed(),
             expiration: Tai64::UNIX_EPOCH,
-            nonce: 0,
         };
         let signature = parent_signature.dummy_signature.clone();
         let period = self.period.unwrap_or(Duration::from_secs(60 * 60));
@@ -240,6 +240,7 @@ impl TaskBuilder {
             key_generator,
             current_delegate_key,
             sealed_delegate_message: Sealed { entity, signature },
+            nonce: 0,
             key_rotation_trigger,
             echo_delegation_trigger: tokio::time::interval(period),
         };
@@ -372,7 +373,6 @@ async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_sig
         data: DelegatePreConfirmationKey {
             public_key: Bytes32::zeroed(),
             expiration: expiration_time,
-            nonce: 0,
         },
         dummy_signature: dummy_signature.into(),
     };
@@ -381,8 +381,7 @@ async fn run__key_rotation_trigger_will_broadcast_generated_key_with_correct_sig
 }
 
 #[tokio::test]
-async fn run__will_rebroadcast_generated_key_with_correct_signature_after_1_second_with_nonce_increased(
-) {
+async fn run__will_rebroadcast_generated_key_with_correct_signature_after_1_second() {
     // Given
     let period = Duration::from_secs(1);
     let generated_key = "some generated key";
@@ -420,14 +419,12 @@ async fn run__will_rebroadcast_generated_key_with_correct_signature_after_1_seco
         data: DelegatePreConfirmationKey {
             public_key: Bytes32::zeroed(),
             expiration: expiration_time,
-            nonce: 0,
         },
         dummy_signature: dummy_signature.into(),
     };
 
     assert_eq!(actual_1.data.expiration, actual_2.data.expiration);
     assert_eq!(actual_1.data.public_key, actual_2.data.public_key);
-    assert_eq!(actual_1.data.nonce.saturating_add(1), actual_2.data.nonce);
     assert_eq!(actual_1.dummy_signature, actual_2.dummy_signature);
     assert_eq!(expected, actual_1);
 }
