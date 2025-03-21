@@ -2,7 +2,6 @@ use self::indexation::error::IndexationError;
 
 use super::{
     block_height_subscription,
-    da_compression::da_compress_block,
     indexation,
     storage::old::{
         OldFuelBlockConsensus,
@@ -116,21 +115,13 @@ pub(crate) struct Context<'a, TxStatusManager, BlockImporter, OnChain, OffChain>
     pub(crate) block_importer: BlockImporter,
     pub(crate) on_chain_database: OnChain,
     pub(crate) off_chain_database: OffChain,
-    pub(crate) da_compression_config: DaCompressionConfig,
     pub(crate) continue_on_error: bool,
     pub(crate) consensus_parameters: &'a ConsensusParameters,
-}
-
-#[derive(Debug, Clone)]
-pub enum DaCompressionConfig {
-    Disabled,
-    Enabled(fuel_core_compression::config::Config),
 }
 
 /// The initialization task recovers the state of the GraphQL service database on startup.
 pub struct InitializeTask<TxStatusManager, BlockImporter, OnChain, OffChain> {
     chain_id: ChainId,
-    da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
     tx_status_manager: TxStatusManager,
     blocks_events: BoxStream<SharedImportResult>,
@@ -148,7 +139,6 @@ pub struct Task<TxStatusManager, D> {
     block_importer: BoxStream<SharedImportResult>,
     database: D,
     chain_id: ChainId,
-    da_compression_config: DaCompressionConfig,
     continue_on_error: bool,
     balances_indexation_enabled: bool,
     coins_to_spend_indexation_enabled: bool,
@@ -195,13 +185,6 @@ where
             self.coins_to_spend_indexation_enabled,
             &self.base_asset_id,
         )?;
-
-        match self.da_compression_config {
-            DaCompressionConfig::Disabled => {}
-            DaCompressionConfig::Enabled(config) => {
-                da_compress_block(config, block, &result.events, &mut transaction)?;
-            }
-        }
 
         transaction.commit()?;
 
@@ -607,7 +590,6 @@ where
 
         let InitializeTask {
             chain_id,
-            da_compression_config,
             tx_status_manager,
             block_importer,
             blocks_events,
@@ -623,7 +605,6 @@ where
             block_importer: blocks_events,
             database: off_chain_database,
             chain_id,
-            da_compression_config,
             continue_on_error,
             balances_indexation_enabled,
             coins_to_spend_indexation_enabled,
@@ -756,7 +737,6 @@ where
         block_importer,
         on_chain_database,
         off_chain_database,
-        da_compression_config,
         continue_on_error,
         consensus_parameters,
     } = context;
@@ -770,7 +750,6 @@ where
         on_chain_database,
         off_chain_database,
         chain_id: consensus_parameters.chain_id(),
-        da_compression_config,
         continue_on_error,
         base_asset_id: *consensus_parameters.base_asset_id(),
         block_height_subscription_handler: block_height_subscription::Handler::new(

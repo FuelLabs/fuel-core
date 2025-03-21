@@ -27,6 +27,8 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use fuel_core_types::signer::SignMode;
 
+use fuel_core_compression_service::service::new_service as new_compression_service;
+
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
 
@@ -43,10 +45,12 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
 
 use super::{
     adapters::{
+        compression_adapters::CompressionServiceAdapter,
         FuelBlockSigner,
         P2PAdapter,
         TxStatusManagerAdapter,
     },
+    config::DaCompressionMode,
     genesis::create_genesis_block,
     DbType,
 };
@@ -57,7 +61,9 @@ use crate::{
         self,
         Config as GraphQLConfig,
     },
-    graphql_api::worker_service,
+    graphql_api::worker_service::{
+        self,
+    },
     schema::build_schema,
     service::{
         adapters::{
@@ -377,6 +383,23 @@ pub fn init_sub_services(
         config.sync,
     )?;
 
+    // we allow the consumers of the database access even
+    // when the compression service is disabled
+    let compression_service_adapter =
+        CompressionServiceAdapter::new(database.compression().clone());
+
+    let compression_service = match &config.da_compression {
+        DaCompressionMode::Disabled => None,
+        DaCompressionMode::Enabled(cfg) => Some(
+            new_compression_service(
+                importer_adapter.clone(),
+                database.compression().clone(),
+                cfg.clone(),
+            )
+            .map_err(|e| anyhow::anyhow!(e))?,
+        ),
+    };
+
     let schema = crate::schema::dap::init(build_schema(), config.debug)
         .data(database.on_chain().clone());
 
@@ -387,7 +410,6 @@ pub fn init_sub_services(
         block_importer: graphql_block_importer,
         on_chain_database: database.on_chain().clone(),
         off_chain_database: database.off_chain().clone(),
-        da_compression_config: config.da_compression.clone(),
         continue_on_error: config.continue_on_error,
         consensus_parameters: &chain_config.consensus_parameters,
     };
@@ -423,6 +445,7 @@ pub fn init_sub_services(
         Box::new(chain_state_info_provider),
         SharedMemoryPool::new(config.memory_pool_size),
         graphql_block_height_subscription_handle,
+        Box::new(compression_service_adapter),
     )?;
 
     let shared = SharedState {
@@ -438,6 +461,7 @@ pub fn init_sub_services(
         executor,
         config: config.clone(),
         tx_status_manager: tx_status_manager_adapter,
+        compression: compression_service.as_ref().map(|c| c.shared.clone()),
     };
 
     #[allow(unused_mut)]
@@ -466,6 +490,10 @@ pub fn init_sub_services(
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
     services.push(Box::new(tx_status_manager));
+
+    if let Some(compression_service) = compression_service {
+        services.push(Box::new(compression_service));
+    }
 
     // always make sure that the block producer is inserted last
     if let Some(poa) = poa {

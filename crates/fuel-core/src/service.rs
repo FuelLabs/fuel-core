@@ -91,6 +91,8 @@ pub struct SharedState {
     pub executor: ExecutorAdapter,
     /// The config of the service.
     pub config: Config,
+    /// The compression service shared data.
+    pub compression: Option<fuel_core_compression_service::service::SharedData>,
 }
 
 pub struct FuelService {
@@ -186,6 +188,7 @@ impl FuelService {
             Default::default(),
             Default::default(),
             Default::default(),
+            Default::default(),
         );
         Self::from_combined_database(combined_database, config).await
     }
@@ -222,6 +225,14 @@ impl FuelService {
     pub async fn await_relayer_synced(&self) -> anyhow::Result<()> {
         if let Some(relayer_handle) = &self.runner.shared.relayer {
             relayer_handle.await_synced().await?;
+        }
+        Ok(())
+    }
+
+    /// Wait for the compression service to be in sync with L2 height
+    pub async fn await_compression_synced(&self) -> anyhow::Result<()> {
+        if let Some(sync_observer) = &self.runner.shared.compression {
+            sync_observer.await_synced().await?;
         }
         Ok(())
     }
