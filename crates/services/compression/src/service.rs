@@ -106,23 +106,17 @@ where
         block_with_metadata: &crate::ports::block_source::BlockWithMetadata,
     ) -> crate::Result<()> {
         // set the status to not synced
-        if let Err(err) = self
-            .sync_notifier
+        self.sync_notifier
             .send(crate::sync_state::SyncState::NotSynced)
-        {
-            tracing::error!("Failed to set sync status to not synced: {:?}", err);
-        }
+            .ok();
         // compress the block
         self.compress_block(block_with_metadata)?;
         // set the status to synced
-        if let Err(err) = self
-            .sync_notifier
+        self.sync_notifier
             .send(crate::sync_state::SyncState::Synced(
                 block_with_metadata.height(),
             ))
-        {
-            tracing::error!("Failed to set sync status to synced: {:?}", err);
-        }
+            .ok();
         Ok(())
     }
 }
