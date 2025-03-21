@@ -9,6 +9,7 @@ pub mod p2p;
 pub mod preconfirmation;
 pub mod relayer;
 pub mod shared_sequencer;
+pub mod transaction_status;
 #[cfg(feature = "std")]
 pub mod txpool;
 

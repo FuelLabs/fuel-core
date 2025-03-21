@@ -71,7 +71,7 @@ use fuel_core_types::{
             TransactionExecutionStatus,
         },
         p2p::PeerInfo,
-        txpool::TransactionStatus,
+        transaction_status::TransactionStatus,
     },
     tai64::Tai64,
 };

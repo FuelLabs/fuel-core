@@ -10,7 +10,7 @@ use fuel_core_storage::StorageAsRef;
 use fuel_core_types::{
     fuel_tx::Bytes32,
     fuel_types::BlockHeight,
-    services::txpool::TransactionStatus,
+    services::transaction_status::TransactionStatus,
 };
 use std::sync::Arc;
 

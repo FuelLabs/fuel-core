@@ -114,6 +114,7 @@ test-helpers = [
   "fuel-core-services/test-helpers",
   "fuel-core-shared-sequencer?/test-helpers",
   "fuel-core-importer/test-helpers",
+  "fuel-core-poa/test-helpers",
   "dep:mockall",
 ]
 # features to enable in production, but increase build times

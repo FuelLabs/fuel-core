@@ -41,7 +41,10 @@ use fuel_core_types::{
             Preconfirmation,
             Preconfirmations,
         },
-        txpool::TransactionStatus,
+        transaction_status::{
+            statuses,
+            TransactionStatus,
+        },
     },
     tai64::Tai64,
 };
@@ -67,6 +70,12 @@ enum WriteRequest {
     UpdateStatus {
         tx_id: TxId,
         status: TransactionStatus,
+    },
+    UpdateStatuses {
+        statuses: Vec<(TxId, statuses::SqueezedOut)>,
+    },
+    UpdatePreconfirmations {
+        preconfirmations: Vec<Preconfirmation>,
     },
     NotifySkipped {
         tx_ids_and_reason: Vec<(Bytes32, String)>,
@@ -102,9 +111,23 @@ impl SharedData {
         let _ = self.write_requests_sender.send(request);
     }
 
+    pub fn update_statuses(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>) {
+        let request = WriteRequest::UpdateStatuses { statuses };
+        let _ = self.write_requests_sender.send(request);
+    }
+
+    pub fn update_preconfirmations(&self, preconfirmations: Vec<Preconfirmation>) {
+        let request = WriteRequest::UpdatePreconfirmations { preconfirmations };
+        if let Err(e) = self.write_requests_sender.send(request) {
+            tracing::error!("Failed to send preconfirmations: {:?}", e);
+        }
+    }
+
     pub fn notify_skipped(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
         let request = WriteRequest::NotifySkipped { tx_ids_and_reason };
-        let _ = self.write_requests_sender.send(request);
+        if let Err(e) = self.write_requests_sender.send(request) {
+            tracing::error!("Failed to send skipped txs: {:?}", e);
+        }
     }
 }
 
@@ -217,14 +240,14 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
         preconfirmations: P2PPreConfirmationMessage,
     ) {
         match preconfirmations {
-            PreConfirmationMessage::Delegate(sealed) => {
+            PreConfirmationMessage::Delegate { seal, .. } => {
                 tracing::debug!(
                     "Received new delegate signature from peer: {:?}",
-                    sealed.entity.public_key
+                    seal.entity.public_key
                 );
                 // TODO: Report peer for sending invalid delegation
                 //  https://github.com/FuelLabs/fuel-core/issues/2872
-                let _ = self.signature_verification.add_new_delegate(&sealed);
+                let _ = self.signature_verification.add_new_delegate(&seal);
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
                 tracing::debug!("Received new preconfirmations from peer");
@@ -290,6 +313,18 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
                 match request {
                     Some(WriteRequest::UpdateStatus { tx_id, status }) => {
                         self.manager.status_update(tx_id, status);
+                        TaskNextAction::Continue
+                    }
+                    Some(WriteRequest::UpdateStatuses { statuses }) => {
+                        for (tx_id, status) in statuses {
+                            self.manager.status_update(tx_id, status.into());
+                        }
+                        TaskNextAction::Continue
+                    }
+                    Some(WriteRequest::UpdatePreconfirmations { preconfirmations }) => {
+                        for preconfirmation in preconfirmations {
+                            self.manager.status_update(preconfirmation.tx_id, preconfirmation.status.into());
+                        }
                         TaskNextAction::Continue
                     }
                     Some(WriteRequest::NotifySkipped { tx_ids_and_reason }) => {
@@ -406,7 +441,7 @@ mod tests {
                 Preconfirmation,
                 Preconfirmations,
             },
-            txpool::TransactionStatus,
+            transaction_status::TransactionStatus,
         },
         tai64::Tai64,
     };
@@ -472,6 +507,7 @@ mod tests {
 
     pub(super) mod status {
         pub(super) mod preconfirmation {
+
             use fuel_core_types::services::preconfirmation::PreconfirmationStatus;
 
             pub fn success() -> PreconfirmationStatus {
@@ -479,8 +515,8 @@ mod tests {
                     tx_pointer: Default::default(),
                     total_gas: Default::default(),
                     total_fee: Default::default(),
-                    receipts: Default::default(),
-                    outputs: Default::default(),
+                    receipts: vec![],
+                    outputs: vec![],
                 }
             }
         }
@@ -493,7 +529,7 @@ mod tests {
                     rngs::StdRng,
                     seq::SliceRandom,
                 },
-                services::txpool::{
+                services::transaction_status::{
                     statuses::{
                         PreConfirmationFailure,
                         PreConfirmationSuccess,
@@ -657,8 +693,8 @@ mod tests {
         let bytes = postcard::to_allocvec(&entity).unwrap();
         let message = Message::new(&bytes);
         let signature = Signature::sign(&protocol_secret_key, &message);
-        let sealed = Sealed { entity, signature };
-        let inner = P2PPreConfirmationMessage::Delegate(sealed);
+        let seal = Sealed { entity, signature };
+        let inner = P2PPreConfirmationMessage::Delegate { seal, nonce: 0 };
         GossipData {
             data: Some(inner),
             peer_id: Default::default(),

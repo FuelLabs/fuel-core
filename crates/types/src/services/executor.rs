@@ -242,9 +242,10 @@ impl TransactionExecutionResult {
         }
     }
 
-    #[cfg(feature = "std")]
     /// Get the reason of the failed transaction execution.
     pub fn reason(receipts: &[Receipt], state: &Option<ProgramState>) -> String {
+        use alloc::format;
+
         receipts
             .iter()
             .find_map(|receipt| match receipt {

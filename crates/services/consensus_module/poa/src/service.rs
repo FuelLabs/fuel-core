@@ -252,10 +252,23 @@ where
             },
             RequestType::Trigger => {
                 let now = self.clock.now();
-                if now > self.last_timestamp {
-                    Ok(now)
-                } else {
-                    self.next_time(RequestType::Manual)
+                match self.trigger {
+                    Trigger::Open { period } => {
+                        let expected_timestamp =
+                            increase_time(self.last_timestamp, period)?;
+                        if now > expected_timestamp {
+                            Ok(now)
+                        } else {
+                            Ok(expected_timestamp)
+                        }
+                    }
+                    _ => {
+                        if now > self.last_timestamp {
+                            Ok(now)
+                        } else {
+                            self.next_time(RequestType::Manual)
+                        }
+                    }
                 }
             }
         }
@@ -393,7 +406,9 @@ where
             );
                 tx_ids_to_remove.push((tx_id, err.to_string()));
             }
-            self.txpool.notify_skipped_txs(tx_ids_to_remove.clone());
+            self.txpool.notify_skipped_txs(
+                tx_ids_to_remove.iter().map(|(tx_id, _)| *tx_id).collect(),
+            );
             self.tx_status_manager.notify_skipped_txs(tx_ids_to_remove);
         }
 
@@ -415,7 +430,10 @@ where
         // Update last block time
         self.last_height = height;
         self.last_timestamp = block_time;
-        self.last_block_created = last_block_created;
+        self.last_block_created = match self.trigger {
+            Trigger::Open { .. } => deadline.max(last_block_created),
+            _ => last_block_created,
+        };
 
         Ok(())
     }

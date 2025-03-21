@@ -4,8 +4,8 @@ use crate::{
         BlockImporterAdapter,
         ChainStateInfoProvider,
         P2PAdapter,
+        PreconfirmationSender,
         StaticGasPrice,
-        TxStatusManagerAdapter,
     },
 };
 use fuel_core_services::stream::BoxStream;
@@ -50,7 +50,14 @@ use fuel_core_types::{
             PeerId,
             TransactionGossipData,
         },
-        txpool::TransactionStatus,
+        preconfirmation::{
+            Preconfirmation,
+            PreconfirmationStatus,
+        },
+        transaction_status::{
+            statuses,
+            TransactionStatus,
+        },
     },
 };
 use std::sync::Arc;
@@ -231,9 +238,40 @@ impl ChainStateInfoProviderTrait for ChainStateInfoProvider {
     }
 }
 
-impl TxStatusManager for TxStatusManagerAdapter {
+impl TxStatusManager for PreconfirmationSender {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
-        self.tx_status_manager_shared_data
+        let permit = self.sender_signature_service.try_reserve();
+
+        if let Ok(permit) = permit {
+            if let TransactionStatus::SqueezedOut(status) = &tx_status {
+                let preconfirmation = Preconfirmation {
+                    tx_id,
+                    status: PreconfirmationStatus::SqueezedOut {
+                        reason: status.reason.clone(),
+                    },
+                };
+                permit.send(vec![preconfirmation]);
+            }
+        }
+
+        self.tx_status_manager_adapter
             .update_status(tx_id, tx_status);
+    }
+
+    fn squeezed_out_txs(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>) {
+        let permit = self.sender_signature_service.try_reserve();
+        if let Ok(permit) = permit {
+            let preconfirmations = statuses
+                .iter()
+                .map(|(tx_id, status)| Preconfirmation {
+                    tx_id: *tx_id,
+                    status: PreconfirmationStatus::SqueezedOut {
+                        reason: status.reason.clone(),
+                    },
+                })
+                .collect();
+            permit.send(preconfirmations);
+        }
+        self.tx_status_manager_adapter.update_statuses(statuses);
     }
 }

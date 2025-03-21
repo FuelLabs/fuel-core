@@ -49,6 +49,8 @@ mod node_info;
 #[cfg(not(feature = "only-p2p"))]
 mod poa;
 #[cfg(not(feature = "only-p2p"))]
+mod preconfirmations;
+#[cfg(not(feature = "only-p2p"))]
 mod recovery;
 #[cfg(not(feature = "only-p2p"))]
 mod regenesis;
@@ -71,6 +73,8 @@ mod tx;
 #[cfg(not(feature = "only-p2p"))]
 mod vm_storage;
 
+#[cfg(feature = "only-p2p")]
+mod preconfirmations_gossip;
 #[cfg(feature = "only-p2p")]
 mod sync;
 #[cfg(feature = "only-p2p")]
