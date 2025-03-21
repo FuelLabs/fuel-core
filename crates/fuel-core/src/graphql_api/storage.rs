@@ -95,14 +95,32 @@ pub enum Column {
     /// Existence of a key in this column means that the message has been spent.
     /// See [`SpentMessages`](messages::SpentMessages)
     SpentMessages = 13,
+    /// OLD & UNUSED DA compression and postcard serialized blocks.
+    DaCompressedBlocks = 14,
+    /// OLD & UNUSED See [`DaCompressionTemporalRegistryIndex`](da_compression::DaCompressionTemporalRegistryIndex)
+    DaCompressionTemporalRegistryIndex = 15,
+    /// OLD & UNUSED See [`DaCompressionTemporalRegistryTimestamps`](da_compression::DaCompressionTemporalRegistryTimestamps)
+    DaCompressionTemporalRegistryTimestamps = 16,
+    /// OLD & UNUSED See [`DaCompressionTemporalRegistryEvictorCache`](da_compression::DaCompressionTemporalRegistryEvictorCache)
+    DaCompressionTemporalRegistryEvictorCache = 17,
+    /// OLD & UNUSED See [`DaCompressionTemporalRegistryAddress`](da_compression::DaCompressionTemporalRegistryAddress)
+    DaCompressionTemporalRegistryAddress = 18,
+    /// OLD & UNUSED See [`DaCompressionTemporalRegistryAssetId`](da_compression::DaCompressionTemporalRegistryAssetId)
+    DaCompressionTemporalRegistryAssetId = 19,
+    /// OLD & UNUSED See [`DaCompressionTemporalRegistryContractId`](da_compression::DaCompressionTemporalRegistryContractId)
+    DaCompressionTemporalRegistryContractId = 20,
+    /// OLD & UNUSED See [`DaCompressionTemporalRegistryScriptCode`](da_compression::DaCompressionTemporalRegistryScriptCode)
+    DaCompressionTemporalRegistryScriptCode = 21,
+    /// OLD & UNUSED See [`DaCompressionTemporalRegistryPredicateCode`](da_compression::DaCompressionTemporalRegistryPredicateCode)
+    DaCompressionTemporalRegistryPredicateCode = 22,
     /// Coin balances per account and asset.
-    CoinBalances = 14,
+    CoinBalances = 23,
     /// Message balances per account.
-    MessageBalances = 15,
+    MessageBalances = 24,
     /// See [`AssetsInfo`](assets::AssetsInfo)
-    AssetsInfo = 16,
+    AssetsInfo = 25,
     /// Index of the coins that are available to spend.
-    CoinsToSpend = 17,
+    CoinsToSpend = 26,
 }
 
 impl Column {
