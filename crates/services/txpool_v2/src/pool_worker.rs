@@ -493,13 +493,19 @@ where
     }
 
     fn remove_skipped_transaction(&mut self, id: TxId, reason: String) {
-        self.pool.remove_skipped_transaction(id, statuses::SqueezedOut { reason: Error::SkippedTransaction(
-            format!("Parent (or your) transaction with id: {id}, was removed because of: {reason}")
-        ).to_string()});
+        self.pool.remove_skipped_transaction(
+            id,
+            statuses::SqueezedOut {
+                reason: Error::SkippedTransaction(format!(
+                    "Parent transaction with id: {id}, was removed because of: {reason}"
+                ))
+                .to_string(),
+            },
+        );
     }
 
     fn remove_expired_transactions(&mut self, tx_ids: Vec<TxId>) {
-        self.pool.remove_transaction_and_dependents(
+        self.pool.remove_transactions_and_dependents(
             tx_ids,
             statuses::SqueezedOut {
                 reason: Error::Removed(crate::error::RemovedReason::Ttl).to_string(),

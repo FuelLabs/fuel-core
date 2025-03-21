@@ -586,7 +586,7 @@ where
     }
 
     /// Remove transaction and its dependents.
-    pub fn remove_transaction_and_dependents(
+    pub fn remove_transactions_and_dependents(
         &mut self,
         tx_ids: Vec<TxId>,
         tx_status: statuses::SqueezedOut,
@@ -617,7 +617,24 @@ where
         tx_status: statuses::SqueezedOut,
     ) {
         self.extracted_outputs.new_skipped_transaction(&tx_id);
-        self.remove_transaction_and_dependents(vec![tx_id], tx_status);
+        // TODO: need to also get contract user if the squeezed out was the contract creator.
+        let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
+        for dependent in coin_dependents {
+            let removed = self
+                .storage
+                .remove_transaction_and_dependents_subtree(dependent);
+            self.update_components_and_caches_on_removal(removed.iter());
+            // It's not needed to inform the status manager about the skipped transaction herself
+            // because he give the information but we need to inform him about the dependents
+            // that will be deleted
+            for removed in removed {
+                let tx_id = removed.transaction.id();
+                self.tx_status_manager
+                    .status_update(tx_id, tx_status.clone().into());
+            }
+        }
+
+        self.update_stats();
     }
 
     fn check_blob_does_not_exist(

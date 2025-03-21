@@ -2,7 +2,10 @@ use crate::error::{
     CollisionReason,
     Error,
 };
-use fuel_core_types::services::txpool::PoolTransaction;
+use fuel_core_types::{
+    fuel_tx::TxId,
+    services::txpool::PoolTransaction,
+};
 use std::collections::HashMap;
 
 use crate::storage::StorageData;
@@ -20,6 +23,9 @@ pub trait CollisionManager {
         &self,
         transaction: &PoolTransaction,
     ) -> Result<Collisions<Self::StorageIndex>, Error>;
+
+    /// Get spenders of coins UTXO created by a transaction ID.
+    fn get_coins_spenders(&self, tx_creator_id: &TxId) -> Vec<Self::StorageIndex>;
 
     /// Inform the collision manager that a transaction was stored.
     fn on_stored_transaction(

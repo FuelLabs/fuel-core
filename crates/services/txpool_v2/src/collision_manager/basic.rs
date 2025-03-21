@@ -26,6 +26,7 @@ use fuel_core_types::{
         ContractId,
         Input,
         Output,
+        TxId,
         UtxoId,
     },
     fuel_types::Nonce,
@@ -165,6 +166,13 @@ where
     StorageIndex: Copy + Debug + Hash + PartialEq + Eq,
 {
     type StorageIndex = StorageIndex;
+
+    fn get_coins_spenders(&self, tx_creator_id: &TxId) -> Vec<Self::StorageIndex> {
+        self.coins_spenders
+            .range(UtxoId::new(*tx_creator_id, 0)..UtxoId::new(*tx_creator_id, u16::MAX))
+            .map(|(_, storage_id)| *storage_id)
+            .collect()
+    }
 
     fn find_collisions(
         &self,
