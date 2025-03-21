@@ -1,7 +1,11 @@
 use crate::{
     config::CompressionConfig,
     ports::{
-        block_source::BlockSource,
+        block_source::{
+            block_helpers,
+            BlockSource,
+            BlockWithMetadata,
+        },
         compression_storage::{
             CompressionStorage,
             WriteCompressedBlock,
@@ -71,7 +75,7 @@ where
 {
     fn compress_block(
         &mut self,
-        block_with_metadata: &crate::ports::block_source::BlockWithMetadata,
+        block_with_metadata: &BlockWithMetadata,
     ) -> crate::Result<()> {
         let mut storage_tx = self.storage.write_transaction();
 
@@ -80,19 +84,21 @@ where
             compression_storage: CompressionStorageWrapper {
                 storage_tx: &mut storage_tx,
             },
-            block_events: block_with_metadata.events(),
+            block_events: block_helpers::events(block_with_metadata),
         };
         let compressed_block = compress(
             self.config.into(),
             compression_context,
-            block_with_metadata.block(),
+            block_helpers::block(block_with_metadata),
         )
         .now_or_never()
         .expect("The current implementation should resolve all futures instantly")
         .map_err(crate::errors::CompressionError::FailedToCompressBlock)?;
 
-        storage_tx
-            .write_compressed_block(&block_with_metadata.height(), &compressed_block)?;
+        storage_tx.write_compressed_block(
+            block_helpers::height(block_with_metadata),
+            &compressed_block,
+        )?;
 
         storage_tx
             .commit()
@@ -103,26 +109,20 @@ where
 
     fn handle_new_block(
         &mut self,
-        block_with_metadata: &crate::ports::block_source::BlockWithMetadata,
+        block_with_metadata: &BlockWithMetadata,
     ) -> crate::Result<()> {
         // set the status to not synced
-        if let Err(err) = self
-            .sync_notifier
+        self.sync_notifier
             .send(crate::sync_state::SyncState::NotSynced)
-        {
-            tracing::error!("Failed to set sync status to not synced: {:?}", err);
-        }
+            .ok();
         // compress the block
         self.compress_block(block_with_metadata)?;
         // set the status to synced
-        if let Err(err) = self
-            .sync_notifier
+        self.sync_notifier
             .send(crate::sync_state::SyncState::Synced(
-                block_with_metadata.height(),
+                *block_helpers::height(block_with_metadata),
             ))
-        {
-            tracing::error!("Failed to set sync status to synced: {:?}", err);
-        }
+            .ok();
         Ok(())
     }
 }
@@ -203,7 +203,7 @@ where
                         fuel_core_services::TaskNextAction::Stop
                     }
                     Some(block_with_metadata) => {
-                        tracing::debug!("Got new block: {:?}", block_with_metadata.height());
+                        tracing::debug!("Got new block: {:?}", block_helpers::height(&block_with_metadata));
                         if let Err(e) = self.handle_new_block(&block_with_metadata) {
                             tracing::error!("Error handling new block: {:?}", e);
                             return fuel_core_services::TaskNextAction::ErrorContinue(anyhow::anyhow!(e));
@@ -245,7 +245,10 @@ where
 mod tests {
     use super::*;
     use crate::{
-        ports::block_source::BlockWithMetadata,
+        ports::block_source::{
+            block_helpers,
+            BlockWithMetadata,
+        },
         storage,
     };
     use fuel_core_services::{
@@ -358,7 +361,7 @@ mod tests {
     async fn compression_service__run__compresses_blocks() {
         // given
         // we provide a block source that will return a block upon calling .next()
-        let block_with_metadata = BlockWithMetadata::default();
+        let block_with_metadata = block_helpers::default();
         let block_source = MockBlockSource::new(vec![block_with_metadata]);
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();

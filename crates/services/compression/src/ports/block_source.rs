@@ -1,35 +1,37 @@
 use fuel_core_services::stream::BoxStream;
-
-/// Block with metadata needed for compression
-#[cfg_attr(feature = "test-helpers", derive(Default))]
-#[derive(Clone, Debug)]
-pub struct BlockWithMetadata {
-    block: fuel_core_types::blockchain::block::Block,
-    // todo: perhaps slice with lifetime? (https://github.com/FuelLabs/fuel-core/issues/2870)
-    events: Vec<fuel_core_types::services::executor::Event>,
-}
+pub(crate) use fuel_core_types::services::block_importer::SharedImportResult as BlockWithMetadata;
 
 pub(crate) type BlockHeight = u32;
 
-impl BlockWithMetadata {
-    /// Create a new block with metadata
-    pub fn new(
-        block: fuel_core_types::blockchain::block::Block,
-        events: Vec<fuel_core_types::services::executor::Event>,
-    ) -> Self {
-        Self { block, events }
+// we can't define a newtype that wraps over SharedImportResult because its `dyn Deref`
+pub(crate) mod block_helpers {
+    use super::*;
+
+    /// Get events from BlockWithMetadata
+    pub(crate) fn events(
+        block_with_metadata: &BlockWithMetadata,
+    ) -> &[fuel_core_types::services::executor::Event] {
+        block_with_metadata.events.as_ref()
     }
 
-    pub(crate) fn height(&self) -> BlockHeight {
-        (*self.block.header().height()).into()
+    /// Get sealed block from BlockWithMetadata
+    pub(crate) fn block(
+        block_with_metadata: &BlockWithMetadata,
+    ) -> &fuel_core_types::blockchain::block::Block {
+        &block_with_metadata.sealed_block.entity
     }
 
-    pub(crate) fn events(&self) -> &[fuel_core_types::services::executor::Event] {
-        &self.events
+    /// Get block height from BlockWithMetadata
+    pub(crate) fn height(block_with_metadata: &BlockWithMetadata) -> &BlockHeight {
+        block(block_with_metadata).header().height()
     }
 
-    pub(crate) fn block(&self) -> &fuel_core_types::blockchain::block::Block {
-        &self.block
+    /// Get the default BlockWithMetadata
+    #[cfg(test)]
+    pub fn default() -> BlockWithMetadata {
+        std::sync::Arc::new(
+            fuel_core_types::services::block_importer::ImportResult::default(),
+        )
     }
 }
 
@@ -39,5 +41,5 @@ pub type BlockStream = BoxStream<BlockWithMetadata>;
 /// Port for L2 blocks source
 pub trait BlockSource {
     /// Should provide a stream of blocks with metadata
-    fn subscribe(&self) -> BoxStream<BlockWithMetadata>;
+    fn subscribe(&self) -> BlockStream;
 }
