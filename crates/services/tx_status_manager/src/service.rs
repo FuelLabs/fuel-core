@@ -494,7 +494,10 @@ mod tests {
     const HALF_OF_TTL: Duration = Duration::from_secs(2);
     const QUART_OF_TTL: Duration = Duration::from_secs(1);
 
-    pub struct MockP2P;
+    pub struct MockP2P {
+        p2p_notify_validity_sender:
+            mpsc::Sender<(GossipsubMessageInfo, GossipsubMessageAcceptance)>,
+    }
 
     impl P2PSubscriptions for MockP2P {
         type GossipedStatuses = P2PPreConfirmationGossipData;
@@ -510,7 +513,10 @@ mod tests {
             _message_info: GossipsubMessageInfo,
             _validity: GossipsubMessageAcceptance,
         ) -> anyhow::Result<()> {
-            Ok(())
+            Ok(self
+                .p2p_notify_validity_sender
+                .try_send((_message_info, _validity))
+                .unwrap())
         }
     }
 
@@ -521,6 +527,8 @@ mod tests {
         pub tx_status_change: TxStatusChange,
         pub update_sender: UpdateSender,
         pub protocol_signing_key: SecretKey,
+        pub p2p_notify_validity_receiver:
+            mpsc::Receiver<(GossipsubMessageInfo, GossipsubMessageAcceptance)>,
     }
 
     pub(super) mod status {
@@ -633,6 +641,7 @@ mod tests {
 
     fn new_task_with_handles(ttl: Duration) -> (Task<PublicKey, MockP2P>, Handles) {
         let (read_requests_sender, read_requests_receiver) = mpsc::channel(1);
+        let (p2p_notify_validity_sender, p2p_notify_validity_receiver) = mpsc::channel(1);
         let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
         let shared_data = SharedData {
             read_requests_sender: read_requests_sender.clone(),
@@ -655,6 +664,7 @@ mod tests {
             read_requests_sender,
             update_sender,
             protocol_signing_key: signing_key,
+            p2p_notify_validity_receiver,
         };
 
         let task = Task {
@@ -664,7 +674,9 @@ mod tests {
             write_requests_receiver,
             shared_data,
             signature_verification,
-            p2p: MockP2P,
+            p2p: MockP2P {
+                p2p_notify_validity_sender,
+            },
         };
 
         (task, handles)
@@ -1363,7 +1375,7 @@ mod tests {
     #[tokio::test]
     async fn run__when_pre_confirmations_bad_signature_then_do_not_send() {
         // given
-        let (task, handles) = new_task_with_handles(TTL);
+        let (task, mut handles) = new_task_with_handles(TTL);
 
         let tx_ids = vec![[3u8; 32].into(), [4u8; 32].into()];
         let preconfirmations = tx_ids
@@ -1414,6 +1426,10 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // then
+        assert_eq!(
+            handles.p2p_notify_validity_receiver.try_recv().unwrap().1,
+            GossipsubMessageAcceptance::Reject
+        );
         assert!(all_streams_timeout(&mut streams).await);
     }
 
