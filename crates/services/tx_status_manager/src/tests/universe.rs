@@ -12,10 +12,10 @@ use std::time::Duration;
 use super::mocks::MockP2P;
 use crate::{
     config::Config,
+    manager::TxStatusManager,
     new_service,
     update_sender::TxStatusChange,
     Task,
-    TxStatusManager,
 };
 
 const TX_STATUS_MANAGER_TTL: Duration = Duration::from_secs(5);

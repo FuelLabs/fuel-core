@@ -15,7 +15,6 @@ mod tx_status_stream;
 mod update_sender;
 pub mod utils;
 
-pub use manager::TxStatusManager;
 pub use service::{
     new_service,
     SharedData,
