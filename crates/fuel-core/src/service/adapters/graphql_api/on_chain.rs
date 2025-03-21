@@ -32,7 +32,6 @@ use fuel_core_storage::{
     },
     ContractsAssetKey,
     ContractsStateKey,
-    Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
 };
@@ -106,7 +105,6 @@ impl DatabaseMessages for OnChainIterableKeyValueView {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Message>> {
         self.all_messages(start_message_id, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
             .into_boxed()
     }
 
@@ -128,7 +126,6 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
                 amount: entry.value,
                 asset_id: *entry.key.asset_id(),
             })
-            .map(|res| res.map_err(StorageError::from))
             .into_boxed()
     }
 

@@ -101,17 +101,13 @@ async fn contract_storage_values_create_tx() {
     let slots_before = client
         .contract_slots_values(
             &contract_id,
-            Some(height_before.into()),
+            Some(height_before),
             storage_to_request.clone(),
         )
         .await
         .unwrap();
     let slots_after = client
-        .contract_slots_values(
-            &contract_id,
-            Some(height_after.into()),
-            storage_to_request,
-        )
+        .contract_slots_values(&contract_id, Some(height_after), storage_to_request)
         .await
         .unwrap();
 

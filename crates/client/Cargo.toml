@@ -8,6 +8,7 @@ homepage = { workspace = true }
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = { workspace = true }
 repository = { workspace = true }
+rust-version = { workspace = true }
 description = "Tx client and schema specification."
 
 [dependencies]

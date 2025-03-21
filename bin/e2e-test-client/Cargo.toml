@@ -7,6 +7,7 @@ homepage = { workspace = true }
 keywords = ["blockchain", "cryptocurrencies"]
 license = { workspace = true }
 repository = { workspace = true }
+rust-version = { workspace = true }
 version = { workspace = true }
 name = "fuel-core-e2e-client"
 publish = false

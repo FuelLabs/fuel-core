@@ -8,6 +8,7 @@ homepage = { workspace = true }
 keywords = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
+rust-version = { workspace = true }
 description = "Create to create command line utilities for fuel-core key management"
 
 [dependencies]

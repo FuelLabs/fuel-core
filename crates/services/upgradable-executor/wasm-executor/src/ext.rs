@@ -22,7 +22,7 @@ where
     marker: PhantomData<fn() -> &'a T>,
 }
 
-impl<'a, T> Ptr32<'a, T>
+impl<T> Ptr32<'_, T>
 where
     T: ?Sized,
 {
@@ -53,7 +53,7 @@ where
     marker: PhantomData<fn() -> &'a mut T>,
 }
 
-impl<'a, T> Ptr32Mut<'a, T>
+impl<T> Ptr32Mut<'_, T>
 where
     T: ?Sized,
 {

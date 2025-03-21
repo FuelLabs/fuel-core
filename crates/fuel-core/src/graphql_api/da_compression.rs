@@ -480,7 +480,7 @@ mod v2_impl_temporal_registry {
     impl_temporal_registry_v2!(PredicateCode);
 }
 
-impl<'a, Tx> UtxoIdToPointer for CompressDbTx<'a, Tx> {
+impl<Tx> UtxoIdToPointer for CompressDbTx<'_, Tx> {
     fn lookup(
         &self,
         utxo_id: fuel_core_types::fuel_tx::UtxoId,
@@ -503,7 +503,7 @@ impl<'a, Tx> UtxoIdToPointer for CompressDbTx<'a, Tx> {
     }
 }
 
-impl<'a, Tx, Onchain> HistoryLookup for DecompressDbTx<'a, Tx, Onchain>
+impl<Tx, Onchain> HistoryLookup for DecompressDbTx<'_, Tx, Onchain>
 where
     Onchain: StorageInspect<Coins, Error = fuel_core_storage::Error>
         + StorageInspect<Messages, Error = fuel_core_storage::Error>

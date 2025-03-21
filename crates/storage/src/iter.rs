@@ -32,7 +32,7 @@ pub struct BoxedIter<'a, T> {
     iter: Box<dyn Iterator<Item = T> + 'a + Send>,
 }
 
-impl<'a, T> Iterator for BoxedIter<'a, T> {
+impl<T> Iterator for BoxedIter<'_, T> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {

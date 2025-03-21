@@ -38,7 +38,7 @@ pub trait Decode<T> {
     fn decode(&self, bytes: &[u8]) -> Result<T, Self::Error>;
 }
 
-impl<'a> Encoder for Cow<'a, [u8]> {
+impl Encoder for Cow<'_, [u8]> {
     fn into_bytes(self) -> Vec<u8> {
         self.into_owned()
     }
