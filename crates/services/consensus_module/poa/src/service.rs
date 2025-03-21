@@ -394,6 +394,8 @@ where
                 tx_ids_to_remove.push((tx_id, err.to_string()));
             }
             self.txpool.notify_skipped_txs(tx_ids_to_remove.clone());
+
+            // TODO[RC]: Need a test which fails when the line below is commented.
             self.tx_status_manager.notify_skipped_txs(tx_ids_to_remove);
         }
 
