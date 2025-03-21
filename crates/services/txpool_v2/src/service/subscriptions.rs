@@ -8,7 +8,7 @@ use fuel_core_types::{
             PeerId,
             TransactionGossipData,
         },
-        txpool::TransactionStatus,
+        transaction_status::TransactionStatus,
     },
 };
 use tokio::sync::mpsc;

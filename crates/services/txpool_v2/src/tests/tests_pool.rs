@@ -76,7 +76,7 @@ fn insert_one_tx_succeeds() {
 
     // Then
     assert!(result.is_ok());
-    let tx = result.unwrap().0;
+    let tx = result.unwrap();
     universe.assert_pool_integrity(&[tx]);
 }
 
@@ -194,7 +194,7 @@ fn insert__tx2_succeeds_after_dependent_tx1() {
     // Then
     assert!(result1.is_ok());
     assert!(result2.is_ok());
-    universe.assert_pool_integrity(&[result1.unwrap().0, result2.unwrap().0]);
+    universe.assert_pool_integrity(&[result1.unwrap(), result2.unwrap()]);
 }
 
 #[test]
@@ -232,7 +232,7 @@ fn insert__tx2_collided_on_contract_id() {
     .add_input(gas_coin)
     .add_output(create_contract_output(contract_id))
     .finalize_as_transaction();
-    let tx = universe.verify_and_insert(tx).unwrap().0;
+    let tx = universe.verify_and_insert(tx).unwrap();
 
     // When
     let result2 = universe.verify_and_insert(tx_faulty);
@@ -269,7 +269,7 @@ fn insert__tx_with_dependency_on_invalid_utxo_type() {
         universe.random_predicate(AssetId::BASE, TEST_COIN_AMOUNT, Some(utxo_id));
     let tx_faulty =
         universe.build_script_transaction(Some(vec![random_predicate]), None, 0);
-    let tx = universe.verify_and_insert(tx).unwrap().0;
+    let tx = universe.verify_and_insert(tx).unwrap();
 
     // When
     let result2 = universe.verify_and_insert(tx_faulty);
@@ -293,7 +293,7 @@ fn insert__already_known_tx_returns_error() {
 
     // Given
     let tx = universe.build_script_transaction(None, None, 0);
-    let pool_tx = universe.verify_and_insert(tx.clone()).unwrap().0;
+    let pool_tx = universe.verify_and_insert(tx.clone()).unwrap();
 
     // When
     let result2 = universe.verify_and_insert(tx.clone());
@@ -327,8 +327,8 @@ fn insert__unknown_utxo_returns_error() {
     universe.assert_pool_integrity(&[]);
 }
 
-#[test]
-fn insert__higher_priced_tx_removes_lower_priced_tx() {
+#[tokio::test]
+async fn insert__higher_priced_tx_removes_lower_priced_tx() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -344,8 +344,10 @@ fn insert__higher_priced_tx_removes_lower_priced_tx() {
     let result = universe.verify_and_insert(tx2).unwrap();
 
     // Then
-    assert_eq!(result.1[0].id(), tx_id);
-    universe.assert_pool_integrity(&[result.0]);
+    universe
+        .await_expected_tx_statuses_squeeze_out(vec![tx_id])
+        .await;
+    universe.assert_pool_integrity(&[result]);
 }
 
 #[test]
@@ -361,8 +363,8 @@ fn insert__colliding_dependent_and_underpriced_returns_error() {
     // Given
     let tx2 = universe.build_script_transaction(Some(vec![input.clone()]), None, 20);
     let tx3 = universe.build_script_transaction(Some(vec![input]), None, 10);
-    let tx1 = universe.verify_and_insert(tx1).unwrap().0;
-    let tx2 = universe.verify_and_insert(tx2).unwrap().0;
+    let tx1 = universe.verify_and_insert(tx1).unwrap();
+    let tx2 = universe.verify_and_insert(tx2).unwrap();
 
     // When
     let result3 = universe.verify_and_insert(tx3);
@@ -413,11 +415,11 @@ fn insert_dependent_contract_creation() {
     // Then
     assert!(result1.is_ok());
     assert!(result2.is_ok());
-    universe.assert_pool_integrity(&[result1.unwrap().0, result2.unwrap().0]);
+    universe.assert_pool_integrity(&[result1.unwrap(), result2.unwrap()]);
 }
 
-#[test]
-fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
+#[tokio::test]
+async fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -444,15 +446,15 @@ fn insert_more_priced_tx3_removes_tx1_and_dependent_tx2() {
     let result3 = universe.verify_and_insert(tx3);
 
     // Then
-    let (pool_tx, removed_txs) = result3.unwrap();
-    assert_eq!(removed_txs.len(), 2);
-    assert_eq!(removed_txs[0].id(), tx1_id);
-    assert_eq!(removed_txs[1].id(), tx2_id);
+    let pool_tx = result3.unwrap();
+    universe
+        .await_expected_tx_statuses_squeeze_out(vec![tx1_id, tx2_id])
+        .await;
     universe.assert_pool_integrity(&[pool_tx]);
 }
 
-#[test]
-fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
+#[tokio::test]
+async fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -477,13 +479,11 @@ fn insert_more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
 
     // Then
     assert!(result2.is_ok());
-    let removed_txs = result2.unwrap().1;
-    assert_eq!(removed_txs.len(), 1);
-    assert_eq!(removed_txs[0].id(), tx1_id);
     assert!(result3.is_ok());
-    let (pool_tx, removed_txs) = result3.unwrap();
-    assert_eq!(removed_txs.len(), 1);
-    assert_eq!(removed_txs[0].id(), tx2_id);
+    universe
+        .await_expected_tx_statuses_squeeze_out(vec![tx1_id, tx2_id])
+        .await;
+    let pool_tx = result3.unwrap();
     universe.assert_pool_integrity(&[pool_tx]);
 }
 
@@ -502,7 +502,7 @@ fn insert__tx_limit_hit() {
     // Given
     let tx1 = universe.build_script_transaction(None, None, 10);
     let tx2 = universe.build_script_transaction(None, None, 0);
-    let pool_tx = universe.verify_and_insert(tx1).unwrap().0;
+    let pool_tx = universe.verify_and_insert(tx1).unwrap();
 
     // When
     let result2 = universe.verify_and_insert(tx2);
@@ -537,7 +537,7 @@ fn insert__tx_gas_limit() {
         ..Default::default()
     });
     universe.build_pool();
-    let pool_tx = universe.verify_and_insert(tx1).unwrap().0;
+    let pool_tx = universe.verify_and_insert(tx1).unwrap();
 
     // When
     let result2 = universe.verify_and_insert(tx2);
@@ -572,7 +572,7 @@ fn insert__tx_bytes_limit() {
         ..Default::default()
     });
     universe.build_pool();
-    let pool_tx = universe.verify_and_insert(tx1).unwrap().0;
+    let pool_tx = universe.verify_and_insert(tx1).unwrap();
 
     // When
     let result2 = universe.verify_and_insert(tx2);
@@ -601,8 +601,8 @@ fn insert__dependency_chain_length_hit() {
     let input = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
 
     let tx3 = universe.build_script_transaction(Some(vec![input]), None, 0);
-    let tx1 = universe.verify_and_insert(tx1).unwrap().0;
-    let tx2 = universe.verify_and_insert(tx2).unwrap().0;
+    let tx1 = universe.verify_and_insert(tx1).unwrap();
+    let tx2 = universe.verify_and_insert(tx2).unwrap();
 
     // When
     let result3 = universe.verify_and_insert(tx3);
@@ -921,7 +921,7 @@ fn insert_tx_when_input_message_id_exists_in_db() {
     // When
     let pool_tx = universe.verify_and_insert(tx)
     // Then
-    .unwrap().0;
+    .unwrap();
     universe.assert_pool_integrity(&[pool_tx]);
 }
 
@@ -969,7 +969,7 @@ fn insert__tx_tip_lower_than_another_tx_with_same_message_id() {
     );
 
     // When
-    let pool_tx = universe.verify_and_insert(tx_high).unwrap().0;
+    let pool_tx = universe.verify_and_insert(tx_high).unwrap();
     let err = universe.verify_and_insert(tx_low).unwrap_err();
 
     // Then
@@ -979,8 +979,8 @@ fn insert__tx_tip_lower_than_another_tx_with_same_message_id() {
     universe.assert_pool_integrity(&[pool_tx]);
 }
 
-#[test]
-fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
+#[tokio::test]
+async fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
 
@@ -1010,9 +1010,10 @@ fn insert_tx_tip_higher_than_another_tx_with_same_message_id() {
     // Then
     assert!(result1.is_ok());
     assert!(result2.is_ok());
-    let (pool_tx, removed_txs) = result2.unwrap();
-    assert_eq!(removed_txs.len(), 1);
-    assert_eq!(removed_txs[0].id(), tx_high_id);
+    let pool_tx = result2.unwrap();
+    universe
+        .await_expected_tx_statuses_squeeze_out(vec![tx_high_id])
+        .await;
     universe.assert_pool_integrity(&[pool_tx]);
 }
 
@@ -1049,7 +1050,7 @@ fn insert_again_message_after_squeeze_with_even_lower_tip() {
     assert!(result1.is_ok());
     assert!(result2.is_ok());
     assert!(result3.is_ok());
-    universe.assert_pool_integrity(&[result2.unwrap().0, result3.unwrap().0]);
+    universe.assert_pool_integrity(&[result2.unwrap(), result3.unwrap()]);
 }
 
 #[test]
@@ -1179,7 +1180,7 @@ fn insert_tx_with_blob() {
     // When
     let pool_tx = universe.verify_and_insert(tx)
     // Then
-    .unwrap().0;
+    .unwrap();
     universe.assert_pool_integrity(&[pool_tx]);
 }
 
@@ -1202,7 +1203,7 @@ fn insert__tx_with_blob_already_inserted_at_higher_tip() {
     .add_fee_input()
     .finalize_as_transaction();
 
-    let pool_tx = universe.verify_and_insert(tx).unwrap().0;
+    let pool_tx = universe.verify_and_insert(tx).unwrap();
 
     let same_blob_tx = TransactionBuilder::blob(BlobBody {
         id: blob_id,
@@ -1256,7 +1257,7 @@ fn insert_tx_with_blob_already_insert_at_lower_tip() {
 
     // Then
     assert!(result.is_ok());
-    universe.assert_pool_integrity(&[result.unwrap().0]);
+    universe.assert_pool_integrity(&[result.unwrap()]);
 }
 
 #[test]
@@ -1269,7 +1270,7 @@ fn verify_and_insert__when_dependent_tx_is_extracted_new_tx_still_accepted() {
     let (output_a, unset_input) = universe.create_output_and_input();
     let dependency_tx =
         universe.build_script_transaction(inputs.clone(), Some(vec![output_a]), 1);
-    let mut pool_dependency_tx = universe.verify_and_insert(dependency_tx).unwrap().0;
+    let mut pool_dependency_tx = universe.verify_and_insert(dependency_tx).unwrap();
     inputs = Some(vec![
         unset_input.into_input(UtxoId::new(pool_dependency_tx.id(), 0))
     ]);
@@ -1293,7 +1294,7 @@ fn verify_and_insert__when_dependent_tx_is_extracted_new_tx_still_accepted() {
         assert_eq!(pool_dependency_tx.id(), txs[0].id());
 
         // Then
-        pool_dependency_tx = universe.verify_and_insert(dependent_tx).unwrap().0;
+        pool_dependency_tx = universe.verify_and_insert(dependent_tx).unwrap();
         let input_a = new_unset_input.into_input(UtxoId::new(pool_dependency_tx.id(), 0));
         inputs = Some(vec![input_a.clone()]);
     }
@@ -1349,8 +1350,8 @@ fn insert__if_tx3_depends_and_collides_with_tx2() {
     // Given
     // tx3 {inputs: {coinA, coinB}, outputs:{}, tip: 20}
     let input_b = unset_input.into_input(UtxoId::new(tx2.id(&Default::default()), 0));
-    let tx1 = universe.verify_and_insert(tx1).unwrap().0;
-    let tx2 = universe.verify_and_insert(tx2).unwrap().0;
+    let tx1 = universe.verify_and_insert(tx1).unwrap();
+    let tx2 = universe.verify_and_insert(tx2).unwrap();
 
     let tx3 = universe.build_script_transaction(Some(vec![input_a, input_b]), None, 20);
 

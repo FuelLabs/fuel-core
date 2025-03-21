@@ -5,13 +5,20 @@ use fuel_core_services::{
     EmptyShared,
     RunnableService,
     RunnableTask,
+    ServiceRunner,
     StateWatcher,
     TaskNextAction,
 };
 use fuel_core_types::{
-    services::p2p::{
-        DelegatePreConfirmationKey,
-        Sealed,
+    services::{
+        p2p::{
+            DelegatePreConfirmationKey,
+            Sealed,
+        },
+        preconfirmation::{
+            Preconfirmation,
+            Preconfirmations,
+        },
     },
     tai64::Tai64,
 };
@@ -31,6 +38,7 @@ use crate::pre_confirmation_signature_service::{
 };
 
 pub mod broadcast;
+pub mod config;
 pub mod error;
 pub mod key_generator;
 pub mod parent_signature;
@@ -40,6 +48,23 @@ pub mod tx_receiver;
 
 #[cfg(test)]
 pub mod tests;
+
+pub struct UninitializedPreConfirmationSignatureTask<
+    TxReceiver,
+    Broadcast,
+    Parent,
+    KeyGenerator,
+    KeyRotationTrigger,
+> where
+    Parent: ParentSignature,
+{
+    tx_receiver: TxReceiver,
+    broadcast: Broadcast,
+    parent_signature: Parent,
+    key_generator: KeyGenerator,
+    key_rotation_trigger: KeyRotationTrigger,
+    echo_delegation_trigger: Interval,
+}
 
 pub struct PreConfirmationSignatureTask<
     TxReceiver,
@@ -59,15 +84,16 @@ pub struct PreConfirmationSignatureTask<
     current_delegate_key: ExpiringKey<DelegateKey>,
     sealed_delegate_message:
         Sealed<DelegatePreConfirmationKey<DelegateKey::PublicKey>, Parent::Signature>,
+    nonce: u64,
     key_rotation_trigger: KeyRotationTrigger,
     echo_delegation_trigger: Interval,
 }
 
 #[async_trait::async_trait]
-impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableService
-    for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
+impl<Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableService
+    for UninitializedPreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, Trigger>
 where
-    TxRcv: TxReceiver<Txs = Preconfirmations>,
+    TxRcv: TxReceiver<Txs = Vec<Preconfirmation>>,
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
         ParentKey = Parent,
@@ -77,11 +103,11 @@ where
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,
     Parent: ParentSignature,
-    Preconfirmations: serde::Serialize + Send,
 {
     const NAME: &'static str = "PreconfirmationSignatureTask";
     type SharedData = EmptyShared;
-    type Task = Self;
+    type Task =
+        PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -93,7 +119,46 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        Ok(self)
+        let Self {
+            tx_receiver,
+            mut broadcast,
+            parent_signature,
+            mut key_generator,
+            mut key_rotation_trigger,
+            echo_delegation_trigger,
+        } = self;
+
+        // The first key rotation is triggered immediately
+        let expiration = key_rotation_trigger.next_rotation().await?;
+        let (new_delegate_key, sealed) =
+            create_delegate_key(&mut key_generator, &parent_signature, expiration)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+
+        let mut nonce = 0;
+        if let Err(e) = broadcast
+            .broadcast_delegate_key(
+                sealed.entity.clone(),
+                nonce,
+                sealed.signature.clone(),
+            )
+            .await
+        {
+            tracing::error!("Failed to broadcast delegate key: {:?}", e);
+        }
+        nonce = nonce.saturating_add(1);
+        let initialized_task = PreConfirmationSignatureTask {
+            tx_receiver,
+            broadcast,
+            parent_signature,
+            key_generator,
+            current_delegate_key: new_delegate_key,
+            sealed_delegate_message: sealed,
+            nonce,
+            key_rotation_trigger,
+            echo_delegation_trigger,
+        };
+        Ok(initialized_task)
     }
 }
 
@@ -151,10 +216,10 @@ where
     Ok((new_delegate_key, sealed))
 }
 
-impl<Preconfirmations, Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableTask
+impl<Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableTask
     for PreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>
 where
-    TxRcv: TxReceiver<Txs = Preconfirmations>,
+    TxRcv: TxReceiver<Txs = Vec<Preconfirmation>>,
     Brdcst: Broadcast<
         DelegateKey = DelegateKey,
         ParentKey = Parent,
@@ -164,7 +229,6 @@ where
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,
     Parent: ParentSignature,
-    Preconfirmations: serde::Serialize + Send,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tracing::debug!("Running pre-confirmation task");
@@ -174,11 +238,15 @@ where
             }
             res = self.tx_receiver.receive() => {
                 tracing::debug!("Received transactions");
-                let pre_confirmations = try_or_stop!(res);
-                let signature = try_or_stop!(self.current_delegate_key.sign(&pre_confirmations));
+                let preconfirmations = try_or_stop!(res);
                 let expiration = self.current_delegate_key.expiration();
+                let pre_confirmations = Preconfirmations {
+                    expiration,
+                    preconfirmations,
+                };
+                let signature = try_or_stop!(self.current_delegate_key.sign(&pre_confirmations));
                 try_or_continue!(
-                    self.broadcast.broadcast_preconfirmations(pre_confirmations, signature, expiration).await,
+                    self.broadcast.broadcast_preconfirmations(pre_confirmations, signature).await,
                     |err| tracing::error!("Failed to broadcast pre-confirmations: {:?}", err)
                 );
                 TaskNextAction::Continue
@@ -195,11 +263,13 @@ where
 
                 self.current_delegate_key = new_delegate_key;
                 self.sealed_delegate_message = sealed.clone();
+                self.nonce = 0;
 
                 try_or_continue!(
-                    self.broadcast.broadcast_delegate_key(sealed.entity, sealed.signature).await,
+                    self.broadcast.broadcast_delegate_key(sealed.entity, self.nonce, sealed.signature).await,
                     |err| tracing::error!("Failed to broadcast newly generated delegate key: {:?}", err)
                 );
+                self.nonce = self.nonce.saturating_add(1);
                 TaskNextAction::Continue
             }
             _ = self.echo_delegation_trigger.tick() => {
@@ -207,9 +277,10 @@ where
                 let sealed = self.sealed_delegate_message.clone();
 
                 try_or_continue!(
-                    self.broadcast.broadcast_delegate_key(sealed.entity, sealed.signature).await,
+                    self.broadcast.broadcast_delegate_key(sealed.entity, self.nonce, sealed.signature).await,
                     |err| tracing::error!("Failed to re-broadcast delegate key: {:?}", err)
                 );
+                self.nonce = self.nonce.saturating_add(1);
                 TaskNextAction::Continue
             }
         }
@@ -218,4 +289,38 @@ where
     async fn shutdown(self) -> anyhow::Result<()> {
         Ok(())
     }
+}
+
+pub type Service<TxRcv, Brdcst, Parent, Gen, Trigger> = ServiceRunner<
+    UninitializedPreConfirmationSignatureTask<TxRcv, Brdcst, Parent, Gen, Trigger>,
+>;
+
+pub fn new_service<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>(
+    config: config::Config,
+    preconfirmation_receiver: TxRcv,
+    p2p_adapter: Brdcst,
+    parent_signature: Parent,
+    key_generator: Gen,
+    key_rotation_trigger: Trigger,
+) -> anyhow::Result<Service<TxRcv, Brdcst, Parent, Gen, Trigger>>
+where
+    TxRcv: TxReceiver<Txs = Vec<Preconfirmation>>,
+    Brdcst: Broadcast<
+        DelegateKey = DelegateKey,
+        ParentKey = Parent,
+        Preconfirmations = Preconfirmations,
+    >,
+    Gen: KeyGenerator<Key = DelegateKey>,
+    Trigger: KeyRotationTrigger,
+    DelegateKey: SigningKey,
+    Parent: ParentSignature,
+{
+    Ok(Service::new(UninitializedPreConfirmationSignatureTask {
+        tx_receiver: preconfirmation_receiver,
+        broadcast: p2p_adapter,
+        parent_signature,
+        key_generator,
+        key_rotation_trigger,
+        echo_delegation_trigger: tokio::time::interval(config.echo_delegation_interval),
+    }))
 }

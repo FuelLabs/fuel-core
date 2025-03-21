@@ -1,4 +1,11 @@
-use std::sync::Arc;
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
+use tokio::sync::{
+    mpsc,
+    watch,
+};
 
 use fuel_core_consensus_module::{
     block_verifier::Verifier,
@@ -38,7 +45,7 @@ use fuel_core_types::{
             Result as ExecutorResult,
             UncommittedResult,
         },
-        preconfirmation::PreconfirmationStatus,
+        preconfirmation::Preconfirmation,
     },
     signer::SignMode,
     tai64::Tai64,
@@ -329,31 +336,38 @@ impl TransactionsSource {
 }
 
 pub struct NewTxWaiter {
-    pub receiver: tokio::sync::watch::Receiver<()>,
+    pub receiver: watch::Receiver<()>,
     pub timeout: Instant,
 }
 
 impl NewTxWaiter {
-    pub fn new(receiver: tokio::sync::watch::Receiver<()>, timeout: Instant) -> Self {
+    pub fn new(receiver: watch::Receiver<()>, timeout: Instant) -> Self {
         Self { receiver, timeout }
     }
 }
 
 #[derive(Clone)]
 pub struct PreconfirmationSender {
-    pub sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+    pub sender_signature_service: mpsc::Sender<Vec<Preconfirmation>>,
+    pub tx_status_manager_adapter: TxStatusManagerAdapter,
 }
 
 impl PreconfirmationSender {
-    pub fn new(sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>) -> Self {
-        Self { sender }
+    pub fn new(
+        sender_signature_service: mpsc::Sender<Vec<Preconfirmation>>,
+        tx_status_manager_adapter: TxStatusManagerAdapter,
+    ) -> Self {
+        Self {
+            sender_signature_service,
+            tx_status_manager_adapter,
+        }
     }
 }
 
 #[derive(Clone)]
 pub struct ExecutorAdapter {
     pub(crate) executor: Arc<Executor<Database, Database<Relayer>>>,
-    pub new_txs_watcher: tokio::sync::watch::Receiver<()>,
+    pub new_txs_watcher: watch::Receiver<()>,
     pub preconfirmation_sender: PreconfirmationSender,
 }
 
@@ -362,11 +376,10 @@ impl ExecutorAdapter {
         database: Database,
         relayer_database: Database<Relayer>,
         config: fuel_core_upgradable_executor::config::Config,
-        new_txs_watcher: tokio::sync::watch::Receiver<()>,
-        preconfirmation_sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+        new_txs_watcher: watch::Receiver<()>,
+        preconfirmation_sender: PreconfirmationSender,
     ) -> Self {
         let executor = Executor::new(database, relayer_database, config);
-        let preconfirmation_sender = PreconfirmationSender::new(preconfirmation_sender);
         Self {
             executor: Arc::new(executor),
             new_txs_watcher,
@@ -462,6 +475,14 @@ pub struct TxStatusManagerAdapter {
     tx_status_manager_shared_data: SharedData,
 }
 
+impl Deref for TxStatusManagerAdapter {
+    type Target = SharedData;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tx_status_manager_shared_data
+    }
+}
+
 impl TxStatusManagerAdapter {
     pub fn new(tx_status_manager_shared_data: SharedData) -> Self {
         Self {
@@ -478,6 +499,7 @@ impl TxStatusManagerAdapter {
     }
 }
 
+#[derive(Clone)]
 pub struct FuelBlockSigner {
     mode: SignMode,
 }

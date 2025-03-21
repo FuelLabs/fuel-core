@@ -4,7 +4,7 @@ use fuel_core_types::{
         UniqueIdentifier,
         UtxoId,
     },
-    services::txpool::TransactionStatus,
+    services::transaction_status::TransactionStatus,
 };
 
 use crate::tests::universe::TestPoolUniverse;

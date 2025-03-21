@@ -506,3 +506,32 @@ async fn interval_trigger_even_if_queued_tx_events() {
     });
     block_creation_waiter.notified().await;
 }
+
+#[tokio::test]
+async fn open_trigger__produce_blocks_in_time() {
+    // Given
+    let open_time = Duration::from_secs(10);
+    let offset = Duration::from_secs(1);
+    let mut ctx = DefaultContext::new(Config {
+        trigger: Trigger::Open { period: open_time },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    })
+    .await;
+    let expected_block_time = ctx.now().0.checked_add(open_time.as_secs()).unwrap();
+
+    // When
+    time::sleep(offset).await;
+    ctx.advance_time_with_tokio();
+    let receive_before_closed = ctx.block_import.try_recv();
+
+    time::sleep(open_time).await;
+    let receive_after_open = ctx.block_import.try_recv();
+
+    // Then
+    assert!(receive_before_closed.is_err());
+    assert!(receive_after_open.is_ok());
+    let block_time = receive_after_open.unwrap().entity.header().time();
+    assert_eq!(block_time.0, expected_block_time);
+}

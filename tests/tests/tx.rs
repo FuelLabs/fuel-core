@@ -390,6 +390,11 @@ async fn submit_and_await_status() {
         intermediate_status,
         TransactionStatus::Submitted { .. }
     ));
+    let preconfirmation_status = status_stream.next().await.unwrap().unwrap();
+    assert!(matches!(
+        preconfirmation_status,
+        TransactionStatus::PreconfirmationSuccess { .. }
+    ));
     let final_status = status_stream.next().await.unwrap().unwrap();
     assert!(matches!(final_status, TransactionStatus::Success { .. }));
 }

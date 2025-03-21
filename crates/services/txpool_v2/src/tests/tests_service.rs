@@ -11,7 +11,7 @@ use fuel_core_types::{
     fuel_types::ChainId,
     services::{
         block_importer::ImportResult,
-        txpool::TransactionStatus,
+        transaction_status::TransactionStatus,
     },
 };
 use std::{

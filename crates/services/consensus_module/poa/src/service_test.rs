@@ -367,7 +367,6 @@ async fn remove_skipped_transactions() {
     tx_status_manager
         .expect_notify_skipped_txs()
         .returning(move |skipped_ids| {
-            let skipped_ids: Vec<_> = skipped_ids.into_iter().map(|(id, _)| id).collect();
             // Transform transactions into ids.
             let skipped_transactions: Vec<_> = skipped_transactions
                 .iter()
@@ -382,7 +381,13 @@ async fn remove_skipped_transactions() {
             // Check that `TxPool::remove_txs` was called with the same ids in the same order.
             assert_eq!(skipped_ids.len(), TX_NUM);
             assert_eq!(skipped_transactions.len(), TX_NUM);
-            assert_eq!(skipped_transactions, skipped_ids);
+            assert_eq!(
+                skipped_transactions,
+                skipped_ids
+                    .into_iter()
+                    .map(|(id, _)| id)
+                    .collect::<Vec<_>>()
+            );
         });
 
     let signer = SignMode::Key(Secret::new(secret_key.into()));

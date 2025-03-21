@@ -32,7 +32,7 @@ use fuel_core_types::{
         Bytes32,
     },
     fuel_types::BlockHeight,
-    services::txpool::TransactionExecutionStatus,
+    services::transaction_status::TransactionExecutionStatus,
 };
 use statistic::StatisticTable;
 

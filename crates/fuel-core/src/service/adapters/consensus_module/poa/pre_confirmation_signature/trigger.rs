@@ -17,9 +17,11 @@ pub struct TimeBasedTrigger<T> {
 
 impl<T> TimeBasedTrigger<T> {
     pub fn new(time: T, rotation_interval: Duration, expiration: Duration) -> Self {
+        let mut interval = tokio::time::interval(rotation_interval);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         Self {
             time,
-            interval: tokio::time::interval(rotation_interval),
+            interval,
             expiration,
         }
     }

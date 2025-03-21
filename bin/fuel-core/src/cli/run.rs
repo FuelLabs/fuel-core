@@ -108,6 +108,8 @@ mod shared_sequencer;
 mod consensus;
 mod gas_price;
 mod graphql;
+#[cfg(feature = "p2p")]
+mod preconfirmation_signature_service;
 mod profiling;
 #[cfg(feature = "relayer")]
 mod relayer;
@@ -272,6 +274,11 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
 
+    #[cfg_attr(feature = "p2p", clap(flatten))]
+    #[cfg(feature = "p2p")]
+    pub pre_confirmation_signature_service_args:
+        preconfirmation_signature_service::PreconfirmationArgs,
+
     #[cfg_attr(feature = "shared-sequencer", clap(flatten))]
     #[cfg(feature = "shared-sequencer")]
     pub shared_sequencer_args: shared_sequencer::Args,
@@ -341,6 +348,8 @@ impl Command {
             p2p_args,
             #[cfg(feature = "p2p")]
             sync_args,
+            #[cfg(feature = "p2p")]
+            pre_confirmation_signature_service_args,
             #[cfg(feature = "shared-sequencer")]
             shared_sequencer_args,
             metrics,
@@ -403,6 +412,17 @@ impl Command {
             chain_config.chain_name.clone(),
             metrics.is_enabled(Module::P2P),
         )?;
+
+        #[cfg(feature = "p2p")]
+        let preconfirmation_signature_service_config =
+            fuel_core_poa::pre_confirmation_signature_service::config::Config {
+                key_rotation_interval: *pre_confirmation_signature_service_args
+                    .key_rotation_interval,
+                key_expiration_interval: *pre_confirmation_signature_service_args
+                    .key_expiration_interval,
+                echo_delegation_interval: *pre_confirmation_signature_service_args
+                    .echo_delegation_interval,
+            };
 
         let trigger: Trigger = poa_trigger.into();
 
@@ -701,6 +721,8 @@ impl Command {
             p2p: p2p_cfg,
             #[cfg(feature = "p2p")]
             sync: sync_args.into(),
+            #[cfg(feature = "p2p")]
+            pre_confirmation_signature_service: preconfirmation_signature_service_config,
             #[cfg(feature = "shared-sequencer")]
             shared_sequencer: shared_sequencer_args.try_into()?,
             consensus_signer,
