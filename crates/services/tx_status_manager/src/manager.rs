@@ -266,3 +266,56 @@ impl TxStatusManager {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use test_case::test_case;
+
+    use fuel_core_types::{
+        services::transaction_status::TransactionStatus,
+        tai64::Tai64,
+    };
+
+    use super::TxStatusManager;
+
+    fn submitted() -> TransactionStatus {
+        TransactionStatus::submitted(Tai64::UNIX_EPOCH)
+    }
+
+    fn success() -> TransactionStatus {
+        TransactionStatus::Success(Default::default())
+    }
+
+    fn preconfirmation_success() -> TransactionStatus {
+        TransactionStatus::PreConfirmationSuccess(Default::default())
+    }
+
+    fn squeezed_out() -> TransactionStatus {
+        TransactionStatus::squeezed_out("fishy tx".to_string())
+    }
+
+    fn preconfirmation_squeezed_out() -> TransactionStatus {
+        TransactionStatus::preconfirmation_squeezed_out(
+            "fishy preconfirmation".to_string(),
+        )
+    }
+
+    fn failure() -> TransactionStatus {
+        TransactionStatus::Failure(Default::default())
+    }
+
+    fn preconfirmation_failure() -> TransactionStatus {
+        TransactionStatus::PreConfirmationFailure(Default::default())
+    }
+
+    #[test_case(submitted() => false)]
+    #[test_case(success() => true)]
+    #[test_case(preconfirmation_success() => true)]
+    #[test_case(squeezed_out() => true)]
+    #[test_case(preconfirmation_squeezed_out() => true)]
+    #[test_case(failure() => true)]
+    #[test_case(preconfirmation_failure() => true)]
+    fn is_prunable(status: TransactionStatus) -> bool {
+        TxStatusManager::is_prunable(&status)
+    }
+}

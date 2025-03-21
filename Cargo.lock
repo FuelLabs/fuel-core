@@ -4034,6 +4034,7 @@ dependencies = [
  "parking_lot",
  "postcard",
  "proptest",
+ "test-case",
  "test-strategy",
  "tokio",
  "tokio-stream",
