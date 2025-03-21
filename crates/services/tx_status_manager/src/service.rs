@@ -1168,7 +1168,7 @@ mod tests {
         // Verify that only expected statuses are present
         let (recent_tx_ids, not_recent_tx_ids): (Vec<_>, Vec<_>) = update_times
             .iter()
-            .partition(|(_, &time)| time + ttl > Instant::now());
+            .partition(|(_, &time)| time + ttl >= Instant::now());
 
         assert_presence(
             &handles.read_requests_sender,
