@@ -7,6 +7,8 @@ use fuel_core_types::{
         input::coin::{
             CoinPredicate,
             CoinSigned,
+            DataCoinPredicate,
+            DataCoinSigned,
         },
         Address,
         AssetId,
@@ -57,12 +59,19 @@ impl ExtractedOutputs {
                     to,
                     amount,
                     asset_id,
+                }
+                | Output::DataCoin {
+                    to,
+                    amount,
+                    asset_id,
+                    ..
                 } => {
                     self.coins_created.entry(tx_id).or_default().insert(
                         u16::try_from(idx).expect("Outputs count is less than u16::MAX"),
                         (*to, *amount, *asset_id),
                     );
                 }
+
                 Output::Contract { .. }
                 | Output::Change { .. }
                 | Output::Variable { .. } => {
@@ -73,7 +82,9 @@ impl ExtractedOutputs {
         for input in tx.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                | Input::DataCoinSigned(DataCoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
+                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. }) => {
                     self.coins_created
                         .entry(*utxo_id.tx_id())
                         .and_modify(|coins| {

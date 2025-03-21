@@ -736,7 +736,9 @@ where
 
         let has_spendable_input = script.inputs().iter().any(|input| match input {
             Input::CoinSigned(_)
+            | Input::DataCoinSigned(_)
             | Input::CoinPredicate(_)
+            | Input::DataCoinPredicate(_)
             | Input::MessageCoinSigned(_)
             | Input::MessageCoinPredicate(_) => true,
             Input::MessageDataSigned(_)

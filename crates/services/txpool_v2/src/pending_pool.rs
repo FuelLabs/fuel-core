@@ -148,6 +148,7 @@ impl PendingPool {
     ) {
         let missing_input = match output {
             Output::Coin { .. } => MissingInput::Utxo(utxo_id),
+            Output::DataCoin { .. } => MissingInput::Utxo(utxo_id),
             Output::ContractCreated { contract_id, .. } => {
                 MissingInput::Contract(*contract_id)
             }
